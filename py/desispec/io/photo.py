@@ -14,8 +14,8 @@ from astropy.table import Table, vstack
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
-def get_targetdirs(tileid, fiberassign_dir=None):
-    """Get all the targeting directories used to build a given fiberassign catalog.
+def gather_targetdirs(tileid, fiberassign_dir=None):
+    """Gather all the targeting directories used to build a given fiberassign catalog.
 
     Args:
         tileid (int): tile number
@@ -89,9 +89,7 @@ def get_targetdirs(tileid, fiberassign_dir=None):
     return targetdirs
 
 def _targetphot_datamodel():
-    """Initialize the targetphot data model by reading a nominal targeting catalog.
-
-    """
+    """Initialize the targetphot data model by reading a nominal targeting catalog."""
     #from pkg_resources import resource_filename
     
     #datamodel_file = resource_filename('desitarget.test', 't/targets.fits')
@@ -122,8 +120,8 @@ def _targetphot_datamodel():
         
     return datamodel
 
-def build_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
-                     racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
+                      racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
@@ -131,7 +129,7 @@ def build_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
           (required) columns: TARGETID, RACOLUMN, DECCOLUMN
         tileids (int scalar or array): set of tileids corresponding to the input
           targets (required if targetdirs is None)
-        targetdirs (int scalar or array): output of get_targetdirs corresponding
+        targetdirs (int scalar or array): output of gather_targetdirs corresponding
           to the input targets (required if tileids is None)
 
     Returns a table of targeting photometry using a consistent data model across
@@ -156,7 +154,7 @@ def build_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
 
     # Get the unique list of targetdirs
     if targetdirs is None:
-        targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(np.atleast_1d(tileids))]))
+        targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(np.atleast_1d(tileids))]))
     
     datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(input_cat))))
@@ -286,4 +284,340 @@ def build_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
     
+    return out
+
+def _tractorphot_datamodel():
+    """Initialize the tractorphot data model for DR9 photometry."""
+
+    #datamodel_file = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits'
+    #datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
+    #for col in datamodel.colnames:
+    #    datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
+    #datamodel['BRICK_PRIMARY'] = True
+    
+    #for col in datamodel.colnames:
+        #print("('{}', {}, '{}'),".format(col, datamodel[col].shape, datamodel[col].dtype))
+
+    COLS = [
+        ('RELEASE', (1,), '>i2'),
+        ('BRICKID', (1,), '>i4'),
+        ('BRICKNAME', (1,), '<U8'),
+        ('OBJID', (1,), '>i4'),
+        ('BRICK_PRIMARY', (1,), 'bool'),
+        ('MASKBITS', (1,), '>i2'),
+        ('FITBITS', (1,), '>i2'),
+        ('TYPE', (1,), '<U3'),
+        ('RA', (1,), '>f8'),
+        ('DEC', (1,), '>f8'),
+        ('RA_IVAR', (1,), '>f4'),
+        ('DEC_IVAR', (1,), '>f4'),
+        ('BX', (1,), '>f4'),
+        ('BY', (1,), '>f4'),
+        ('DCHISQ', (1, 5), '>f4'),
+        ('EBV', (1,), '>f4'),
+        ('MJD_MIN', (1,), '>f8'),
+        ('MJD_MAX', (1,), '>f8'),
+        ('REF_CAT', (1,), '<U2'),
+        ('REF_ID', (1,), '>i8'),
+        ('PMRA', (1,), '>f4'),
+        ('PMDEC', (1,), '>f4'),
+        ('PARALLAX', (1,), '>f4'),
+        ('PMRA_IVAR', (1,), '>f4'),
+        ('PMDEC_IVAR', (1,), '>f4'),
+        ('PARALLAX_IVAR', (1,), '>f4'),
+        ('REF_EPOCH', (1,), '>f4'),
+        ('GAIA_PHOT_G_MEAN_MAG', (1,), '>f4'),
+        ('GAIA_PHOT_G_MEAN_FLUX_OVER_ERROR', (1,), '>f4'),
+        ('GAIA_PHOT_G_N_OBS', (1,), '>i2'),
+        ('GAIA_PHOT_BP_MEAN_MAG', (1,), '>f4'),
+        ('GAIA_PHOT_BP_MEAN_FLUX_OVER_ERROR', (1,), '>f4'),
+        ('GAIA_PHOT_BP_N_OBS', (1,), '>i2'),
+        ('GAIA_PHOT_RP_MEAN_MAG', (1,), '>f4'),
+        ('GAIA_PHOT_RP_MEAN_FLUX_OVER_ERROR', (1,), '>f4'),
+        ('GAIA_PHOT_RP_N_OBS', (1,), '>i2'),
+        ('GAIA_PHOT_VARIABLE_FLAG', (1,), 'bool'),
+        ('GAIA_ASTROMETRIC_EXCESS_NOISE', (1,), '>f4'),
+        ('GAIA_ASTROMETRIC_EXCESS_NOISE_SIG', (1,), '>f4'),
+        ('GAIA_ASTROMETRIC_N_OBS_AL', (1,), '>i2'),
+        ('GAIA_ASTROMETRIC_N_GOOD_OBS_AL', (1,), '>i2'),
+        ('GAIA_ASTROMETRIC_WEIGHT_AL', (1,), '>f4'),
+        ('GAIA_DUPLICATED_SOURCE', (1,), 'bool'),
+        ('GAIA_A_G_VAL', (1,), '>f4'),
+        ('GAIA_E_BP_MIN_RP_VAL', (1,), '>f4'),
+        ('GAIA_PHOT_BP_RP_EXCESS_FACTOR', (1,), '>f4'),
+        ('GAIA_ASTROMETRIC_SIGMA5D_MAX', (1,), '>f4'),
+        ('GAIA_ASTROMETRIC_PARAMS_SOLVED', (1,), 'uint8'),
+        ('FLUX_G', (1,), '>f4'),
+        ('FLUX_R', (1,), '>f4'),
+        ('FLUX_Z', (1,), '>f4'),
+        ('FLUX_W1', (1,), '>f4'),
+        ('FLUX_W2', (1,), '>f4'),
+        ('FLUX_W3', (1,), '>f4'),
+        ('FLUX_W4', (1,), '>f4'),
+        ('FLUX_IVAR_G', (1,), '>f4'),
+        ('FLUX_IVAR_R', (1,), '>f4'),
+        ('FLUX_IVAR_Z', (1,), '>f4'),
+        ('FLUX_IVAR_W1', (1,), '>f4'),
+        ('FLUX_IVAR_W2', (1,), '>f4'),
+        ('FLUX_IVAR_W3', (1,), '>f4'),
+        ('FLUX_IVAR_W4', (1,), '>f4'),
+        ('FIBERFLUX_G', (1,), '>f4'),
+        ('FIBERFLUX_R', (1,), '>f4'),
+        ('FIBERFLUX_Z', (1,), '>f4'),
+        ('FIBERTOTFLUX_G', (1,), '>f4'),
+        ('FIBERTOTFLUX_R', (1,), '>f4'),
+        ('FIBERTOTFLUX_Z', (1,), '>f4'),
+        ('APFLUX_G', (1, 8), '>f4'),
+        ('APFLUX_R', (1, 8), '>f4'),
+        ('APFLUX_Z', (1, 8), '>f4'),
+        ('APFLUX_RESID_G', (1, 8), '>f4'),
+        ('APFLUX_RESID_R', (1, 8), '>f4'),
+        ('APFLUX_RESID_Z', (1, 8), '>f4'),
+        ('APFLUX_BLOBRESID_G', (1, 8), '>f4'),
+        ('APFLUX_BLOBRESID_R', (1, 8), '>f4'),
+        ('APFLUX_BLOBRESID_Z', (1, 8), '>f4'),
+        ('APFLUX_IVAR_G', (1, 8), '>f4'),
+        ('APFLUX_IVAR_R', (1, 8), '>f4'),
+        ('APFLUX_IVAR_Z', (1, 8), '>f4'),
+        ('APFLUX_MASKED_G', (1, 8), '>f4'),
+        ('APFLUX_MASKED_R', (1, 8), '>f4'),
+        ('APFLUX_MASKED_Z', (1, 8), '>f4'),
+        ('APFLUX_W1', (1, 5), '>f4'),
+        ('APFLUX_W2', (1, 5), '>f4'),
+        ('APFLUX_W3', (1, 5), '>f4'),
+        ('APFLUX_W4', (1, 5), '>f4'),
+        ('APFLUX_RESID_W1', (1, 5), '>f4'),
+        ('APFLUX_RESID_W2', (1, 5), '>f4'),
+        ('APFLUX_RESID_W3', (1, 5), '>f4'),
+        ('APFLUX_RESID_W4', (1, 5), '>f4'),
+        ('APFLUX_IVAR_W1', (1, 5), '>f4'),
+        ('APFLUX_IVAR_W2', (1, 5), '>f4'),
+        ('APFLUX_IVAR_W3', (1, 5), '>f4'),
+        ('APFLUX_IVAR_W4', (1, 5), '>f4'),
+        ('MW_TRANSMISSION_G', (1,), '>f4'),
+        ('MW_TRANSMISSION_R', (1,), '>f4'),
+        ('MW_TRANSMISSION_Z', (1,), '>f4'),
+        ('MW_TRANSMISSION_W1', (1,), '>f4'),
+        ('MW_TRANSMISSION_W2', (1,), '>f4'),
+        ('MW_TRANSMISSION_W3', (1,), '>f4'),
+        ('MW_TRANSMISSION_W4', (1,), '>f4'),
+        ('NOBS_G', (1,), '>i2'),
+        ('NOBS_R', (1,), '>i2'),
+        ('NOBS_Z', (1,), '>i2'),
+        ('NOBS_W1', (1,), '>i2'),
+        ('NOBS_W2', (1,), '>i2'),
+        ('NOBS_W3', (1,), '>i2'),
+        ('NOBS_W4', (1,), '>i2'),
+        ('RCHISQ_G', (1,), '>f4'),
+        ('RCHISQ_R', (1,), '>f4'),
+        ('RCHISQ_Z', (1,), '>f4'),
+        ('RCHISQ_W1', (1,), '>f4'),
+        ('RCHISQ_W2', (1,), '>f4'),
+        ('RCHISQ_W3', (1,), '>f4'),
+        ('RCHISQ_W4', (1,), '>f4'),
+        ('FRACFLUX_G', (1,), '>f4'),
+        ('FRACFLUX_R', (1,), '>f4'),
+        ('FRACFLUX_Z', (1,), '>f4'),
+        ('FRACFLUX_W1', (1,), '>f4'),
+        ('FRACFLUX_W2', (1,), '>f4'),
+        ('FRACFLUX_W3', (1,), '>f4'),
+        ('FRACFLUX_W4', (1,), '>f4'),
+        ('FRACMASKED_G', (1,), '>f4'),
+        ('FRACMASKED_R', (1,), '>f4'),
+        ('FRACMASKED_Z', (1,), '>f4'),
+        ('FRACIN_G', (1,), '>f4'),
+        ('FRACIN_R', (1,), '>f4'),
+        ('FRACIN_Z', (1,), '>f4'),
+        ('ANYMASK_G', (1,), '>i2'),
+        ('ANYMASK_R', (1,), '>i2'),
+        ('ANYMASK_Z', (1,), '>i2'),
+        ('ALLMASK_G', (1,), '>i2'),
+        ('ALLMASK_R', (1,), '>i2'),
+        ('ALLMASK_Z', (1,), '>i2'),
+        ('WISEMASK_W1', (1,), 'uint8'),
+        ('WISEMASK_W2', (1,), 'uint8'),
+        ('PSFSIZE_G', (1,), '>f4'),
+        ('PSFSIZE_R', (1,), '>f4'),
+        ('PSFSIZE_Z', (1,), '>f4'),
+        ('PSFDEPTH_G', (1,), '>f4'),
+        ('PSFDEPTH_R', (1,), '>f4'),
+        ('PSFDEPTH_Z', (1,), '>f4'),
+        ('GALDEPTH_G', (1,), '>f4'),
+        ('GALDEPTH_R', (1,), '>f4'),
+        ('GALDEPTH_Z', (1,), '>f4'),
+        ('NEA_G', (1,), '>f4'),
+        ('NEA_R', (1,), '>f4'),
+        ('NEA_Z', (1,), '>f4'),
+        ('BLOB_NEA_G', (1,), '>f4'),
+        ('BLOB_NEA_R', (1,), '>f4'),
+        ('BLOB_NEA_Z', (1,), '>f4'),
+        ('PSFDEPTH_W1', (1,), '>f4'),
+        ('PSFDEPTH_W2', (1,), '>f4'),
+        ('PSFDEPTH_W3', (1,), '>f4'),
+        ('PSFDEPTH_W4', (1,), '>f4'),
+        ('WISE_COADD_ID', (1,), '<U8'),
+        ('WISE_X', (1,), '>f4'),
+        ('WISE_Y', (1,), '>f4'),
+        ('LC_FLUX_W1', (1, 15), '>f4'),
+        ('LC_FLUX_W2', (1, 15), '>f4'),
+        ('LC_FLUX_IVAR_W1', (1, 15), '>f4'),
+        ('LC_FLUX_IVAR_W2', (1, 15), '>f4'),
+        ('LC_NOBS_W1', (1, 15), '>i2'),
+        ('LC_NOBS_W2', (1, 15), '>i2'),
+        ('LC_FRACFLUX_W1', (1, 15), '>f4'),
+        ('LC_FRACFLUX_W2', (1, 15), '>f4'),
+        ('LC_RCHISQ_W1', (1, 15), '>f4'),
+        ('LC_RCHISQ_W2', (1, 15), '>f4'),
+        ('LC_MJD_W1', (1, 15), '>f8'),
+        ('LC_MJD_W2', (1, 15), '>f8'),
+        ('LC_EPOCH_INDEX_W1', (1, 15), '>i2'),
+        ('LC_EPOCH_INDEX_W2', (1, 15), '>i2'),
+        ('SERSIC', (1,), '>f4'),
+        ('SERSIC_IVAR', (1,), '>f4'),
+        ('SHAPE_R', (1,), '>f4'),
+        ('SHAPE_R_IVAR', (1,), '>f4'),
+        ('SHAPE_E1', (1,), '>f4'),
+        ('SHAPE_E1_IVAR', (1,), '>f4'),
+        ('SHAPE_E2', (1,), '>f4'),
+        ('SHAPE_E2_IVAR', (1,), '>f4'),
+        # added columns
+        ('LS_ID', (1,), '>i4'),
+        ('TARGETID', (1,), '>i8'),
+        ]
+        
+    datamodel = Table()
+    for col in COLS:
+        datamodel[col[0]] = np.zeros(shape=col[1], dtype=col[2])
+    datamodel['BRICK_PRIMARY'] = True        
+
+    return datamodel 
+    
+def gather_tractorphot(input_cat, dr9dir=None):
+    """Retrieve the Tractor catalog for all the objects in this catalog (one brick).
+
+    Args:
+        input_cat (astropy.table.Table): input table with the following
+          (required) columns: TARGETID, BRICKNAME, RELEASE, BRICKID, BRICK_OBJID,
+          PHOTSYS, TARGET_RA, TARGET_DEC
+
+    Returns a table of targeting photometry using a consistent data model across
+    primary (DR9) targets, secondary targets, and targets of opportunity.
+
+    """
+    from desitarget.io import desitarget_resolve_dec
+
+    if dr9dir is None:
+        dr9dir = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9'
+
+    assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
+    brick = input_cat['BRICKNAME'][0]
+    
+    idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) * (input_cat['BRICK_OBJID'] > 0))[0]
+    ipos = np.delete(np.arange(len(input_cat)), idr9)
+
+    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(input_cat))))
+    out['TARGETID'] = input_cat['TARGETID']
+    
+    # DR9 targeting photometry exists
+    if len(idr9) > 0:
+        assert(np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0]))
+    
+        # find the catalog
+        photsys = input_cat['PHOTSYS'][idr9][0]
+    
+        if photsys == 'S':
+            region = 'south'
+        elif photsys == 'N':
+            region = 'north'
+    
+        #raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in input_cat['RA']])
+        tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+    
+        if not os.path.isfile(tractorfile):
+            log.warning('Unable to find Tractor catalog {}'.format(tractorfile))
+            raise IOError
+
+        # Some commissioning and SV targets can have brick_primary==False, so don't require it here.
+        #<Table length=1>
+        #     TARGETID     BRICKNAME BRICKID BRICK_OBJID RELEASE CMX_TARGET DESI_TARGET   SV1_DESI_TARGET   SV2_DESI_TARGET SV3_DESI_TARGET SCND_TARGET
+        #      int64          str8    int32     int32     int16    int64       int64           int64             int64           int64         int64
+        #----------------- --------- ------- ----------- ------- ---------- ----------- ------------------- --------------- --------------- -----------
+        #39628509856927757  0352p315  503252        4109    9010          0           0 2305843009213693952               0               0           0
+        #<Table length=1>
+        #     TARGETID         TARGET_RA          TARGET_DEC     TILEID SURVEY PROGRAM
+        #      int64            float64            float64       int32   str7    str6
+        #----------------- ------------------ ------------------ ------ ------ -------
+        #39628509856927757 35.333944142134406 31.496490061792002  80611    sv1  bright
+
+        _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
+        #I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], input_cat['BRICK_OBJID']))[0]
+        I = np.where(np.isin(_tractor['OBJID'], input_cat['BRICK_OBJID'][idr9]))[0]
+
+        ## Some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e.,
+        ## not populated). However, there should always be a match here because
+        ## we "repair" brick_objid in the main function.
+        #if len(I) == 0: 
+        #    return Table()
+
+        tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
+    
+        # sort explicitly in order to ensure order
+        srt = np.hstack([np.where(objid == tractor_dr9['OBJID'])[0] for objid in input_cat['BRICK_OBJID'][idr9]])
+        tractor_dr9 = tractor_dr9[srt]
+        assert(np.all((tractor_dr9['BRICKID'] == input_cat['BRICKID'][idr9])*(tractor_dr9['OBJID'] == input_cat['BRICK_OBJID'][idr9])))
+
+        tractor_dr9['TARGETID'] = input_cat['TARGETID'][idr9]
+
+        out[idr9] = tractor_dr9
+        del tractor_dr9
+        
+    # use positional matching
+    if len(ipos) > 0:
+        rad = 1.0 * u.arcsec
+
+        # resolve north/south
+        tractorfile_north = os.path.join(dr9dir, 'north', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        tractorfile_south = os.path.join(dr9dir, 'south', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
+            tractorfile = tractorfile_north
+        elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+            tractorfile = tractorfile_south
+        elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+            if np.median(input_cat['TARGET_DEC'][ipos]) < desitarget_resolve_dec():
+                tractorfile = tractorfile_south
+            else:
+                tractorfile = tractorfile_north
+        elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
+            return out
+                
+        _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
+        iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
+        _tractor = _tractor[iprimary] 
+        coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
+
+        # Some targets can appear twice (with different targetids), so
+        # to make sure we do it right, we have to loop. Example:
+        #
+        #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
+        #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
+        # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
+        # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
+        # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
+
+        for indx_cat, (ra, dec, targetid) in enumerate(zip(input_cat['TARGET_RA'][ipos],
+                                                           input_cat['TARGET_DEC'][ipos],
+                                                           input_cat['TARGETID'][ipos])):
+            
+            coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+            indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
+            if d2d < rad:
+                _tractor = Table(fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True))
+                _tractor['TARGETID'] = targetid
+                out[ipos[indx_cat]] = _tractor[0]
+
+    # Add a unique DR9 identifier.
+    out['LS_ID'] = (out['RELEASE'] << 40) | (out['BRICKID'] << 16) | (out['OBJID'])
+
+    assert(np.all(input_cat['TARGETID'] == out['TARGETID']))
+
     return out

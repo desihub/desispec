@@ -50,39 +50,28 @@ import astropy
 from astropy.io import fits
 from astropy.table import Table, vstack, join
 import astropy.units as u
-from astropy.coordinates import SkyCoord, match_coordinates_sky
+from astropy.coordinates import SkyCoord
 
 from desispec.io import specprod_root
-
 from desimodel.footprint import radec2pix
 from desitarget.targets import decode_targetid
-from desitarget.io import release_to_photsys, desitarget_resolve_dec
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
 desi_root = os.environ.get('DESI_ROOT')
 fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
-dr9dir = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9'
 
 bricksfile = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'
 
-TARGETINGBITCOLS = [
-    'CMX_TARGET',
-    'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET',
-    'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET',
-    'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET',
-    'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET',
-    'SCND_TARGET',
-    'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
-    ]
-
-def _resolve(cat, split=desitarget_resolve_dec()):
+def _resolve(cat):
     # "Resolve" whether the target is in the north or south. The
     # algorithm here is taken from desitarget.targets.resolve, which was
     # written by ADM. (Note we can't use that method directly because we
     # don't necessarily have photsys or release).
     from desitarget.geomask import is_in_gal_box, pixarea2nside
+    from desitarget.io import desitarget_resolve_dec
+    split = desitarget_resolve_dec()
 
     nside = pixarea2nside(1)
     theta, phi = np.radians(90-cat['TARGET_DEC']), np.radians(cat['TARGET_RA'])
@@ -139,6 +128,7 @@ def read_one_potential_targets(tileid):
     
     # Old code to populate the brick columns. However, this procedure is not
     # correct for secondary targets, so don't do it.
+    #from desitarget.io import release_to_photsys
     #bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
     #out['BRICKID'] = brickid[keep]
     #out['OBJID'] = objid[keep]
@@ -171,115 +161,11 @@ def cache_one_catalog(cachefile):
 def _tractorphot_one(args):
     return tractorphot_one(*args)
 
-def tractorphot_one(cat, bricks, datamodel):
-    """Retrieve the Tractor catalog for all the objects in this catalog (one brick)."""
-
-    assert(np.all(cat['BRICKNAME'] == cat['BRICKNAME'][0]))
-    brick = cat['BRICKNAME'][0]
-    
-    idr9 = np.where((cat['RELEASE'] > 0) * (cat['BRICKID'] > 0) * (cat['BRICK_OBJID'] > 0))[0]
-    ipos = np.delete(np.arange(len(cat)), idr9)
-
-    out = Table(np.hstack(np.repeat(datamodel, len(cat))))
-    out['TARGETID'] = cat['TARGETID']
-    
-    # DR9 targeting photometry exists
-    if len(idr9) > 0:
-        assert(np.all(cat['PHOTSYS'][idr9] == cat['PHOTSYS'][idr9][0]))
-    
-        # find the catalog
-        photsys = cat['PHOTSYS'][idr9][0]
-    
-        if photsys == 'S':
-            region = 'south'
-        elif photsys == 'N':
-            region = 'north'
-    
-        #raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in cat['RA']])
-        tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
-    
-        if not os.path.isfile(tractorfile):
-            log.warning('Unable to find Tractor catalog {}'.format(tractorfile))
-            raise IOError
-
-        # Some commissioning and SV targets can have brick_primary==False, so don't require it here.
-        #<Table length=1>
-        #     TARGETID     BRICKNAME BRICKID BRICK_OBJID RELEASE CMX_TARGET DESI_TARGET   SV1_DESI_TARGET   SV2_DESI_TARGET SV3_DESI_TARGET SCND_TARGET
-        #      int64          str8    int32     int32     int16    int64       int64           int64             int64           int64         int64
-        #----------------- --------- ------- ----------- ------- ---------- ----------- ------------------- --------------- --------------- -----------
-        #39628509856927757  0352p315  503252        4109    9010          0           0 2305843009213693952               0               0           0
-        #<Table length=1>
-        #     TARGETID         TARGET_RA          TARGET_DEC     TILEID SURVEY PROGRAM
-        #      int64            float64            float64       int32   str7    str6
-        #----------------- ------------------ ------------------ ------ ------ -------
-        #39628509856927757 35.333944142134406 31.496490061792002  80611    sv1  bright
-
-        _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
-        #I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
-        I = np.where(np.isin(_tractor['OBJID'], cat['BRICK_OBJID'][idr9]))[0]
-
-        ## Some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e.,
-        ## not populated). However, there should always be a match here because
-        ## we "repair" brick_objid in the main function.
-        #if len(I) == 0: 
-        #    return Table()
-
-        tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
-    
-        # sort explicitly in order to ensure order
-        srt = np.hstack([np.where(objid == tractor_dr9['OBJID'])[0] for objid in cat['BRICK_OBJID'][idr9]])
-        tractor_dr9 = tractor_dr9[srt]
-        assert(np.all((tractor_dr9['BRICKID'] == cat['BRICKID'][idr9])*(tractor_dr9['OBJID'] == cat['BRICK_OBJID'][idr9])))
-
-        tractor_dr9['TARGETID'] = cat['TARGETID'][idr9]
-
-        out[idr9] = tractor_dr9
-        del tractor_dr9
-        
-    # use positional matching
-    if len(ipos) > 0:
-        rad = 1.0 * u.arcsec
-
-        # resolve north/south
-        tractorfile_north = os.path.join(dr9dir, 'north', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
-        tractorfile_south = os.path.join(dr9dir, 'south', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
-        if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
-            tractorfile = tractorfile_north
-        elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
-            tractorfile = tractorfile_south
-        elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
-            if np.median(cat['TARGET_DEC'][ipos]) < desitarget_resolve_dec():
-                tractorfile = tractorfile_south
-            else:
-                tractorfile = tractorfile_north
-        elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
-            return out
-                
-        _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
-        iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
-        _tractor = _tractor[iprimary] 
-        coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
-
-        # Some targets can appear twice (with different targetids), so
-        # to make sure we do it right, we have to loop. Example:
-        #
-        #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
-        #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
-        # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
-        # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
-        # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
-
-        for indx_cat, (ra, dec, targetid) in enumerate(zip(cat['TARGET_RA'][ipos], cat['TARGET_DEC'][ipos], cat['TARGETID'][ipos])):
-            coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
-            indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
-            if d2d < rad:
-                _tractor = Table(fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True))
-                _tractor['TARGETID'] = targetid
-                out[ipos[indx_cat]] = _tractor[0]
-
-    assert(np.all(cat['TARGETID'] == out['TARGETID']))
-
-    return out
+def tractorphot_one(cat, bricks=None):
+    """Retrieve the Tractor catalog for all the objects in one brick."""
+    from desispec.io.photo import gather_tractorphot
+    tractorphot = gather_tractorphot(cat, bricks=bricks)
+    return tractorphot
 
 def _targetphot_one(args):
     return targetphot_one(*args)
@@ -287,13 +173,13 @@ def _targetphot_one(args):
 def targetphot_one(input_cat, tileids, photocache=None, racolumn='TARGET_RA',
                    deccolumn='TARGET_DEC'):
     """Build the targetphot catalog for all the objects on a single tile."""
-    from desispec.io.photo import build_targetphot
+    from desispec.io.photo import gather_targetphot, gather_targetdirs
 
     # Get the unique list of targetdirs
-    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
+    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
     
-    targetphot = build_targetphot(input_cat, targetdirs=targetdirs, photocache=photocache,
-                                  racolumn=racolumn, deccolumn=deccolumn)
+    targetphot = gather_targetphot(input_cat, targetdirs=targetdirs, photocache=photocache,
+                                   racolumn=racolumn, deccolumn=deccolumn)
     return targetphot
 
 def _get_secondary_targetdirs():
@@ -442,7 +328,7 @@ def main():
             return
 
         # Optionally cache the targetids of all the secondary target
-        # catalogs. This cache is used in desispec.io.photo.build_targetphot.
+        # catalogs. This cache is used in desispec.io.photo.gather_targetphot.
         if args.no_secondarycache:
             photocache = {}
         else:
@@ -613,20 +499,15 @@ def main():
         minicat['TARGET_DEC'] = zcat['TARGET_DEC']
 
         # Some secondary programs (e.g., 39632961435338613, 39632966921487347)
-        # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Fix those here
+        # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Unpack those here
         # using decode_targetid.
         fix = np.where((minicat['BRICKNAME'] != '') * (minicat['BRICK_OBJID'] == 0))[0]
         if len(fix) > 0:
-            log.info('Repairing BRICK_OBJID for {} objects using decode_targetid'.format(len(fix)))
+            log.info('Inferring BRICK_OBJID for {} objects using decode_targetid'.format(len(fix)))
             fix_objid, fix_brickid, _, _, _, _ = decode_targetid(minicat['TARGETID'][fix])
             assert(np.all(fix_brickid == minicat['BRICKID'][fix]))
             minicat['BRICK_OBJID'][fix] = fix_objid
 
-        datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0, upper=True))
-        for col in datamodel.colnames:
-            datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        datamodel['BRICK_PRIMARY'] = True
-        
         # Infer brickname from the survey-bricks.fits file
         inobrickname = np.where(minicat['BRICKNAME'] == '')[0]
         if len(inobrickname) > 0:
@@ -652,7 +533,8 @@ def main():
             #minicat['BRICKNAME'][inobrickname] = bricks[indx_bricks]['BRICKNAME']
             
             # Get the brickname in parallel.
-            mpargs = [[bricks, ra, dec] for ra, dec in zip(minicat[inobrickname]['TARGET_RA'], minicat[inobrickname]['TARGET_DEC'])]
+            mpargs = [[bricks, ra, dec] for ra, dec in zip(minicat[inobrickname]['TARGET_RA'],
+                                                           minicat[inobrickname]['TARGET_DEC'])]
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
                     bricknames = P.map(_get_brickname, mpargs)
@@ -685,7 +567,7 @@ def main():
             mpargs = []
             for brick in set(bricknames):
                 J = np.where(brick == bricknames)[0]
-                mpargs.append([minicat[I[J]], bricks, datamodel])
+                mpargs.append([minicat[I[J]], bricks])
                 
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
