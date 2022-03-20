@@ -49,20 +49,17 @@ import healpy as hp
 import astropy
 from astropy.io import fits
 from astropy.table import Table, vstack, join
-import astropy.units as u
-from astropy.coordinates import SkyCoord
 
 from desispec.io import specprod_root
 from desimodel.footprint import radec2pix
 from desitarget.targets import decode_targetid
+from desiutil.brick import brickname
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
 desi_root = os.environ.get('DESI_ROOT')
 fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
-
-bricksfile = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'
 
 def _resolve(cat):
     # "Resolve" whether the target is in the north or south. The
@@ -161,10 +158,10 @@ def cache_one_catalog(cachefile):
 def _tractorphot_one(args):
     return tractorphot_one(*args)
 
-def tractorphot_one(cat, bricks=None):
+def tractorphot_one(cat):
     """Retrieve the Tractor catalog for all the objects in one brick."""
     from desispec.io.photo import gather_tractorphot
-    tractorphot = gather_tractorphot(cat, bricks=bricks)
+    tractorphot = gather_tractorphot(cat)
     return tractorphot
 
 def _targetphot_one(args):
@@ -508,42 +505,11 @@ def main():
             assert(np.all(fix_brickid == minicat['BRICKID'][fix]))
             minicat['BRICK_OBJID'][fix] = fix_objid
 
-        # Infer brickname from the survey-bricks.fits file
         inobrickname = np.where(minicat['BRICKNAME'] == '')[0]
         if len(inobrickname) > 0:
             log.info('Inferring brickname for {:,} objects'.format(len(inobrickname)))
+            minicat['BRICKNAME'][inobrickname] = brickname(minicat['TARGET_RA'][inobrickname], minicat['TARGET_DEC'][inobrickname])
 
-            if not os.path.isfile(bricksfile):
-                log.warning('{} not found'.format(bricksfile))
-                raise IOError
-            log.info('Reading {}'.format(bricksfile))
-            bricks = Table(fitsio.read(bricksfile))
-
-            # Coordinate-matching on the brick center doesn't work because you
-            # can be on the edge of a given brick and end up closer to the
-            # center of the *wrong* brick! E.g., 39628417158614201, (RA,
-            # Dec)=(195.2896551546565, 27.124626805141048) is 460.99 arcsec from
-            # 1952p270 (which is correct) but 453.74 arcsec from 1953p272 (which
-            # is incorrect):
-            # https://www.legacysurvey.org/viewer/?ra=195.2896551546565&dec=27.124626805141048&layer=ls-dr9&zoom=16&bricks&sources-dr9
-
-            #coord_bricks = SkyCoord(ra=bricks['RA']*u.deg, dec=bricks['DEC']*u.deg)
-            #coord_nobrickname = SkyCoord(ra=minicat['TARGET_RA'][inobrickname]*u.deg, dec=minicat['TARGET_DEC'][inobrickname]*u.deg)
-            #indx_bricks, d2d, _ = match_coordinates_sky(coord_nobrickname, coord_bricks)
-            #minicat['BRICKNAME'][inobrickname] = bricks[indx_bricks]['BRICKNAME']
-            
-            # Get the brickname in parallel.
-            mpargs = [[bricks, ra, dec] for ra, dec in zip(minicat[inobrickname]['TARGET_RA'],
-                                                           minicat[inobrickname]['TARGET_DEC'])]
-            if args.mp > 1:
-                with multiprocessing.Pool(args.mp) as P:
-                    bricknames = P.map(_get_brickname, mpargs)
-            else:
-                bricknames = [_get_brickname(mparg) for mparg in mpargs]
-            minicat['BRICKNAME'][inobrickname] = np.hstack(bricknames)
-        else:
-            bricks = None
-            
         assert(np.all(minicat['BRICKNAME'] != ''))
 
         # Loop over args.filenside healpixels and multiprocess over bricks. We
@@ -555,19 +521,18 @@ def main():
 
         missing = []
         for ipix, pixel in enumerate(set(pixels)):
-            #if pixel != 40:
-            #if ipix+1 != 6:
+            #if ipix < 3:
             #    continue
             log.info('Working on healpix {}/{} (nside={})'.format(ipix+1, npix, args.filenside))
 
             I = np.where(pixel == pixels)[0]
             bricknames = minicat['BRICKNAME'][I]
-            
+
             log.info('Dividing the sample into {} unique bricks.'.format(len(set(bricknames))))
             mpargs = []
             for brick in set(bricknames):
                 J = np.where(brick == bricknames)[0]
-                mpargs.append([minicat[I[J]], bricks])
+                mpargs.append([minicat[I[J]]])
                 
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
