@@ -234,16 +234,16 @@ def _build_secondarycache(mp=1):
     #    ])
     
     cachefiles = np.hstack([
-        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
-         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
-         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+        [#'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
          '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
          '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
          '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
@@ -262,9 +262,9 @@ def _build_secondarycache(mp=1):
     #        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
     
     mpargs = []
-    for cachefile in cachefiles:
-        if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
-            continue
+    for cachefile in np.unique(cachefiles):
+        #if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
+        #    continue
         mpargs.append([cachefile])
     if mp > 1:
         with multiprocessing.Pool(mp) as P:

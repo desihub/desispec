@@ -310,7 +310,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                 if 'dedicated' in targetdir:
                     targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
                 else:
-                    targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits'))
+                    #targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # do not use
+                    targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
             else:
                 targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
         elif 'ToO' in targetdir:
@@ -411,7 +412,6 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     if len(photo) == 0:
         log.warning('No targeting photometry found.')
         raise ValueError
-        photo = [out] # empty set
 
     # np.hstack will sometimes complain even if the tables are identical...
     #photo = Table(np.hstack(photo))
@@ -426,6 +426,11 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     I = np.where(np.isin(out['TARGETID'], photo['TARGETID']))[0]
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
+
+    check = (out['RA'] != 0) * (out['DEC'] != 0)
+    if np.sum(check) > 0:
+        log.warning('RA and DEC are missing for {} objects.'.format(np.sum(check)))
+        raise ValueError
 
     if columns is not None:
         out = out[columns]
