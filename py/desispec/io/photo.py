@@ -644,7 +644,7 @@ def _tractorphot_datamodel(from_file=False):
 
     return datamodel 
 
-def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match):
+def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, deccolumn):
     """Support routine for gather_tractorphot."""
 
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
@@ -743,8 +743,8 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match):
         # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
         # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
 
-        for indx_cat, (ra, dec, targetid) in enumerate(zip(input_cat['TARGET_RA'][ipos],
-                                                           input_cat['TARGET_DEC'][ipos],
+        for indx_cat, (ra, dec, targetid) in enumerate(zip(input_cat[racolumn][ipos],
+                                                           input_cat[deccolumn][ipos],
                                                            input_cat['TARGETID'][ipos])):
             
             coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
@@ -762,7 +762,8 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match):
 
     return out
 
-def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0, columns=None):
+def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
+                       dr9dir=None, radius_match=1.0, columns=None):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick).
 
     Args:
@@ -785,7 +786,7 @@ def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0, columns=None):
         log.warning('No objects in input catalog.')
         return Table()
 
-    for col in ['TARGETID', 'TARGET_RA', 'TARGET_DEC']:
+    for col in ['TARGETID', racolumn, deccolumn]:
         if col not in input_cat.colnames:
             log.warning('Missing required input column {}'.format(col))
             raise ValueError
@@ -823,7 +824,8 @@ def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0, columns=None):
     inobrickname = np.where(input_cat['BRICKNAME'] == '')[0]
     if len(inobrickname) > 0:
         log.debug('Inferring brickname for {:,} objects'.format(len(inobrickname)))
-        input_cat['BRICKNAME'][inobrickname] = brickname(input_cat['TARGET_RA'][inobrickname], input_cat['TARGET_DEC'][inobrickname])
+        input_cat['BRICKNAME'][inobrickname] = brickname(input_cat[racolumn][inobrickname],
+                                                         input_cat[deccolumn][inobrickname])
 
     # Split into unique brickname(s).
     bricknames = input_cat['BRICKNAME']
@@ -831,7 +833,7 @@ def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0, columns=None):
     out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(input_cat))))
     for brickname in set(bricknames):
         I = np.where(brickname == bricknames)[0]
-        out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match)
+        out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)
 
     if columns is not None:
         out = out[columns]

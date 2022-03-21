@@ -158,10 +158,10 @@ def cache_one_catalog(cachefile):
 def _tractorphot_one(args):
     return tractorphot_one(*args)
 
-def tractorphot_one(cat):
+def tractorphot_one(cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
     """Retrieve the Tractor catalog for all the objects in one brick."""
     from desispec.io.photo import gather_tractorphot
-    tractorphot = gather_tractorphot(cat)
+    tractorphot = gather_tractorphot(cat, racolumn=racolumn, deccolumn=deccolumn)
     return tractorphot
 
 def _targetphot_one(args):
@@ -458,9 +458,11 @@ def main():
         if args.potential_targets:        
             zcatfile = os.path.join(args.outdir, 'targetphot-potential-targets-zcat-{}.fits'.format(args.outprefix))
             targetfile = os.path.join(args.outdir, 'targetphot-potential-targets-{}.fits'.format(args.outprefix))
+            racolumn, deccolumn = 'RA', 'DEC'
         else:
             zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
             targetfile = os.path.join(args.outdir, 'targetphot-{}.fits'.format(args.outprefix))
+            racolumn, deccolumn = 'TARGET_RA', 'TARGET_DEC'
             
         if not os.path.isfile(targetfile):
             log.warning('Targeting photometric catalog {} missing'.format(targetfile))
@@ -495,9 +497,9 @@ def main():
         assert(np.all(cat['TARGETID'] == zcat['TARGETID']))
         
         # Create a mini-cat that we'll use for the searching.
-        minicat = cat['TARGETID', 'PHOTSYS', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'RA', 'DEC']
-        minicat['TARGET_RA'] = zcat['TARGET_RA']
-        minicat['TARGET_DEC'] = zcat['TARGET_DEC']
+        minicat = cat['TARGETID', 'PHOTSYS', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID']#, 'RA', 'DEC']
+        minicat[racolumn] = zcat[racolumn]
+        minicat[deccolumn] = zcat[deccolumn]
 
         # Some secondary programs (e.g., 39632961435338613, 39632966921487347)
         # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Unpack those here
@@ -512,7 +514,8 @@ def main():
         inobrickname = np.where(minicat['BRICKNAME'] == '')[0]
         if len(inobrickname) > 0:
             log.info('Inferring brickname for {:,} objects'.format(len(inobrickname)))
-            minicat['BRICKNAME'][inobrickname] = brickname(minicat['TARGET_RA'][inobrickname], minicat['TARGET_DEC'][inobrickname])
+            minicat['BRICKNAME'][inobrickname] = brickname(minicat[racolumn][inobrickname],
+                                                           minicat[deccolumn][inobrickname])
 
         assert(np.all(minicat['BRICKNAME'] != ''))
 
@@ -520,7 +523,7 @@ def main():
         # could/should MPI-parallelize over healpixels.
         log.info('Gathering Tractor photometry for {:,} objects'.format(len(minicat)))
 
-        pixels = radec2pix(args.filenside, minicat['TARGET_RA'], minicat['TARGET_DEC'])
+        pixels = radec2pix(args.filenside, minicat[racolumn], minicat[deccolumn])
         npix = len(set(pixels))
 
         missing = []
@@ -536,7 +539,7 @@ def main():
             mpargs = []
             for brick in set(bricknames):
                 J = np.where(brick == bricknames)[0]
-                mpargs.append([minicat[I[J]]])
+                mpargs.append([minicat[I[J]], racolumn, deccolumn])
                 
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
