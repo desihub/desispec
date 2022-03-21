@@ -722,7 +722,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
         elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
             tractorfile = tractorfile_south
         elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
-            if np.median(input_cat['TARGET_DEC'][ipos]) < desitarget_resolve_dec():
+            if np.median(input_cat[deccolumn][ipos]) < desitarget_resolve_dec():
                 tractorfile = tractorfile_south
             else:
                 tractorfile = tractorfile_north
