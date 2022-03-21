@@ -51,8 +51,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     targetdirs = [fahdr['TARG']]
     for moretarg in ['TARG2', 'TARG3', 'TARG4']:
         if moretarg in fahdr:
-            if 'gaia' not in fahdr[moretarg]: # skip if we have it already
-                targetdirs += [fahdr[moretarg]]
+            targetdirs += [fahdr[moretarg]]
 
     # Any secondary targets or ToOs?
     if 'SCND' in fahdr:
@@ -333,6 +332,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                         targetfiles.append(_targetfile)
 
         targetfiles = np.unique(targetfiles)
+        #print(targetfiles)
 
         if len(targetfiles) == 0:
             continue
@@ -407,6 +407,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                 del photo1
                 photofiles.append(targetfile)
                 photo.append(_photo)
+                #if input_cat['TILEID'][0] == 80615:
+                #    pdb.set_trace()
 
     # backup programs have no target catalog photometry at all
     if len(photo) == 0:
@@ -427,10 +429,10 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
 
-    check = (out['RA'] != 0) * (out['DEC'] != 0)
-    if np.sum(check) > 0:
-        log.warning('RA and DEC are missing for {} objects.'.format(np.sum(check)))
-        raise ValueError
+    #check = (out['RA'] == 0) * (out['DEC'] == 0)
+    #if np.sum(check) > 0:
+    #    log.warning('RA and DEC are missing for {} objects'.format(np.sum(check)))
+    #    #raise ValueError
 
     if columns is not None:
         out = out[columns]

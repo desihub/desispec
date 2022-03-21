@@ -366,7 +366,8 @@ def main():
         else:
             # Read all the zpix catalogs in parallel.
             zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
-            #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv3-dark-cumulative.fits'))
+            #print('Hack!!!')
+            #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv1-other-cumulative.fits'))
             mpargs = []
             for zcatfile in zcatfiles:
                 mpargs.append([zcatfile])
@@ -375,7 +376,7 @@ def main():
                     zcat = P.map(_read_one_zcat, mpargs)
             else:
                 zcat = [read_one_zcat(mparg[0]) for mparg in mpargs]
-    
+
             # Stack, remove negative targetids and sky fibers, and then select just
             # the unique TARGETIDs.
             zcat = vstack(zcat)
@@ -390,6 +391,9 @@ def main():
             zcat = zcat[uindx]
             zcat = zcat[np.argsort(zcat['TARGETID'])]
 
+            #print('Hack!!!')
+            #zcat = zcat[zcat['TILEID'] == 80736]
+                
             if rand is not None:
                 J = rand.choice(len(zcat), size=args.ntest, replace=False)
                 zcat = zcat[J]
@@ -419,7 +423,7 @@ def main():
         if len(out) > 0:
             out = vstack(out)
             out = out[np.argsort(out['TARGETID'])]
-    
+
             out.meta['EXTNAME'] = 'TARGETPHOT'
             log.info('Writing {:,} objects to {}'.format(len(out), outfile))
             out.write(outfile, overwrite=True)
