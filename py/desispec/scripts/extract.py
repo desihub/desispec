@@ -66,7 +66,7 @@ def parse(options=None):
     #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
     parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
     parser.add_argument("--gpu-specter", action="store_true", help="use gpu_specter instead of specter")
-    parser.add_argument("--gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
+    parser.add_argument("--use-gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
     parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
     parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
 
@@ -169,7 +169,7 @@ def gpu_specter_check_input_options(args):
         msg = 'specmin ({}) must begin at a bundle boundary'.format(args.specmin)
         return False, msg
 
-    if args.gpu:
+    if args.use_gpu:
         is_numba_cuda_available = False
         try:
             import numba.cuda
@@ -242,7 +242,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             'ivar': img.ivar*((img.mask & extractmaskval)==0)
         }
         #- If GPU, move image and ivar arrays to device
-        if args.gpu:
+        if args.use_gpu:
             import cupy as cp
             image['image'] = cp.asarray(image['image'])
             image['ivar'] = cp.asarray(image['ivar'])
@@ -361,7 +361,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             args.regularize,
             args.psferr,
             coordinator.work_comm,             # mpi parameters
-            args.gpu,                          # gpu parameters
+            args.use_gpu,                      # gpu parameters
             loglevel=None,
             timing=core_timing,
             wavepad_frac=args.wavepad_frac,

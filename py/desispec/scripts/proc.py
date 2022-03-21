@@ -734,8 +734,8 @@ def main(args=None, comm=None):
             run_extraction = True
 
             #- Set extraction subcomm group size
-            subcomm_extract_size = args.subcomm_extract_size
-            if subcomm_extract_size is None:
+            extract_subcomm_size = args.extract_subcomm_size
+            if extract_subcomm_size is None:
                 if args.gpuextract and len(cmds) > 0:
                     #- GPU extraction with gpu_specter
                     #-
@@ -748,29 +748,29 @@ def main(args=None, comm=None):
                         log.info(f"{rank} found {ngpus} gpus")
                     extract_ranks_per_gpu = 5
                     extract_ranks_io = 2
-                    subcomm_extract_size = extract_ranks_io + ngpus * extract_ranks_per_gpu
+                    extract_subcomm_size = extract_ranks_io + ngpus * extract_ranks_per_gpu
                 elif args.gpuspecter:
                     #- CPU extraction with gpu_specter
                     #-
                     #- If the subcommunicator size is not provided (default), use 16
                     #- ranks. On Perlmutter GPU nodes this results in good performance.
-                    subcomm_extract_size = 16
+                    extract_subcomm_size = 16
                 else:
                     #- CPU extraction with specter
                     #-
                     #- If the subcommunicator size is not provided (default), use 20
                     #- ranks, one per bundle
-                    subcomm_extract_size = 20
-                    if (rank == 0) and (size%subcomm_extract_size != 0):
+                    extract_subcomm_size = 20
+                    if (rank == 0) and (size%extract_subcomm_size != 0):
                         log.warning('MPI size={} should be evenly divisible by {}'.format(
-                            size, subcomm_extract_size))
+                            size, extract_subcomm_size))
 
             #- Create the subcomm group for ranks that will perform extraction
             if args.gpuextract and len(cmds) > 0:
                 #- GPU extraction with gpu_specter
                 extract_group = 0
                 num_extract_groups = 1
-                extract_ranks = list(range(subcomm_extract_size))
+                extract_ranks = list(range(extract_subcomm_size))
                 if rank in extract_ranks:
                     extract_incl = comm.group.Incl(extract_ranks)
                     comm_extract = comm.Create_group(extract_incl)
@@ -780,8 +780,8 @@ def main(args=None, comm=None):
                     run_extraction=False
             else:
                 #- CPU extraction with gpu_specter or specter
-                extract_group = rank // subcomm_extract_size
-                num_extract_groups = (size + subcomm_extract_size - 1) // subcomm_extract_size
+                extract_group = rank // extract_subcomm_size
+                num_extract_groups = (size + extract_subcomm_size - 1) // extract_subcomm_size
                 comm_extract = comm.Split(color=extract_group)
 
             #- Run the extractions
