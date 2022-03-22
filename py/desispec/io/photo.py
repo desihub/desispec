@@ -51,7 +51,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     targetdirs = [fahdr['TARG']]
     for moretarg in ['TARG2', 'TARG3', 'TARG4']:
         if moretarg in fahdr:
-            targetdirs += [fahdr[moretarg]]
+            targetdirs += [fahdr[moretarg]]            
 
     # Any secondary targets or ToOs?
     if 'SCND' in fahdr:
@@ -70,7 +70,8 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
             
         if os.path.isfile(TOOfile):
             targetdirs += [TOOfile]
-    
+
+    cmxtargetdir = None
     for ii, targetdir in enumerate(targetdirs):
         # for secondary targets, targetdir can be a filename
         if targetdir[-4:] == 'fits': # fragile...
@@ -82,13 +83,33 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
                 targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
             if 'afternoon_planning' in targetdir:
                 targetdir = targetdir.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
+
+        # special-case first-light / cmx targets
+        if 'catalogs/dr9/0.47.0/targets/cmx/resolve/no-obscon/' in targetdir:
+            cmxtargetdir = '/global/cfs/cdirs/desi/target/catalogs/gaiadr2/0.47.0/targets/cmx/resolve/supp/'
             
         if os.path.isdir(targetdir) or os.path.isfile(targetdir):
             log.debug('Found targets directory or file {}'.format(targetdir))
             targetdirs[ii] = targetdir
         else:
             #log.warning('Targets directory or file {} not found.'.format(targetdir))
-            continue
+            pass
+
+    if cmxtargetdir is not None:
+        if os.path.isdir(cmxtargetdir):
+            log.debug('Found targets directory or file {}'.format(cmxtargetdir))
+            targetdirs = targetdirs + [cmxtargetdir]
+
+    # Special-case an early / first-light / commissioning tile where the
+    # fiberassign header is incomplete. From Adam Myers on 2022-Mar-22: "The SV1
+    # target (39633154205551487) appears to be from the dr9m release that we
+    # used for part of commissioning (and, maybe SV0, too?) I'm not sure how a
+    # target from early SV would only appear in dr9m . It's a strange one."
+    if tileid == 80736:
+        dr9mdir = '/global/cfs/cdirs/desi/target/catalogs/dr9m/0.44.0/targets/sv1/resolve/dark/'
+        if os.path.isdir(dr9mdir):
+            log.debug('Found targets directory or file {}'.format(dr9mdir))
+            targetdirs = targetdirs + [dr9mdir]
 
     targetdirs = np.unique(np.hstack(targetdirs))
         

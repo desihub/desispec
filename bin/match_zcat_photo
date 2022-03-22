@@ -366,7 +366,6 @@ def main():
         else:
             # Read all the zpix catalogs in parallel.
             zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
-            #print('Hack!!!')
             #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv1-other-cumulative.fits'))
             mpargs = []
             for zcatfile in zcatfiles:
@@ -391,9 +390,6 @@ def main():
             zcat = zcat[uindx]
             zcat = zcat[np.argsort(zcat['TARGETID'])]
 
-            #print('Hack!!!')
-            #zcat = zcat[zcat['TILEID'] == 80736]
-                
             if rand is not None:
                 J = rand.choice(len(zcat), size=args.ntest, replace=False)
                 zcat = zcat[J]
@@ -423,6 +419,8 @@ def main():
         if len(out) > 0:
             out = vstack(out)
             out = out[np.argsort(out['TARGETID'])]
+
+            pdb.set_trace()
 
             out.meta['EXTNAME'] = 'TARGETPHOT'
             log.info('Writing {:,} objects to {}'.format(len(out), outfile))
@@ -480,16 +478,6 @@ def main():
             log.info('Reading {}'.format(zcatfile))
             zcat = Table(fitsio.read(zcatfile, rows=J))
         else:
-            #print('Hack!!!!!')
-            #_tar = fitsio.read(targetfile, columns='TARGETID')
-            #_junk = fitsio.read(os.path.join(args.outdir, 'tractorphot-validate-fuji.fits'), columns=['TARGETID', 'BRICKNAME_ZCAT'])
-            #_junk = _junk[_junk['BRICKNAME_ZCAT'] == '']
-            #_I = np.where(np.isin(_tar, _junk['TARGETID']))[0]
-            #_tar = fitsio.read(targetfile, columns='TARGETID')
-            #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347, 39628509856927757]))
-            # 39628509856927757  0352p315  503252        4109    9010 # brick_primary==False
-            #_I = np.where(np.isin(_tar, [39628509856927757]))[0]
-            #cat = Table(fitsio.read(targetfile, rows=_I))            
             log.info('Reading {}'.format(targetfile))
             cat = Table(fitsio.read(targetfile))
             log.info('Reading {}'.format(zcatfile))

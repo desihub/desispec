@@ -18,15 +18,20 @@ class TestFibermap(unittest.TestCase):
 
     def setUp(self):
         from astropy.table import Table
-  
+
+        # for testing gather_targetphot and gather_tractorphot
+        
         # sv3-dark (secondary), sv1-bright (primary), main-dark (secondary), main-dark (primary, south), main-dark (primary, north)
         input_cat = Table()
         input_cat['TARGETID'] = [929413348720641, 39627061832191195, 2253225356951552, 39627565329026280, 39633086782113662]
         input_cat['TARGET_RA'] = [216.615157366494, 59.237567466068484, 217.118753472706, 195.3373716438542, 230.3357972402121]
         input_cat['TARGET_DEC'] = [1.61111164514945, -31.46536118661697, 1.40073953879623, -9.135959353230087, 40.614361185571525]
-        tileids = [280, 80638, 1086, 1573, 1766]
         self.input_cat = input_cat
-        self.tileids
+        self.tileids = [280, 80638, 1086, 1573, 1766]
+
+        out = Table() # table containing a selection of both targetphot and tractorphot columns
+        
+        self.phot = out
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
@@ -56,23 +61,6 @@ class TestFibermap(unittest.TestCase):
 
         import pdb ; pdb.set_trace()
 
-        truedirs = {
-            # sv1
-            '80613': ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/'],
-            # sv3 including ToOs
-            '19': ['/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/sv3/ToO/ToO.ecsv',
-                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
-                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright'],
-            # main
-            '2070': ['/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
-                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark']
-                   }
-
-        #import pdb ; pdb.set_trace()
-        for tileid in truedirs.keys():
-            targetdirs = gather_targetdirs(int(tileid))
-            #print(tileid, targetdirs, truedirs[tileid])
-            self.assertTrue(np.all(targetdirs == truedirs[tileid]))
 
     #@unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     #def test_missing_input_files(self):
