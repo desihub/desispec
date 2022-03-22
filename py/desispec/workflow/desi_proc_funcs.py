@@ -310,15 +310,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
-        if system_name == 'perlmutter-gpu':
-            ncores, runtime = 32, 25
-        else:
-            ncores, runtime = 20 * nspectro, 25
+        ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
-        if system_name == 'perlmutter-gpu':
-            ncores, runtime = 32, 30
-        else:
-            ncores, runtime = 20 * nspectro, 30
+        ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('CCDCALIB'):
@@ -503,6 +497,17 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
+    if jobdesc.upper() in ('FLAT', 'TESTFLAT', 'SKY',
+        'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR') and system_name == 'perlmutter-gpu':
+        gpuextract = False
+        if cmdline is not None:
+            if '--gpuextract' in cmdline:
+                gpuextract = True
+        elif '--gpuextract' in sys.argv:
+            gpuextract = True
+        if gpuextract:
+            ncores, nodes, runtime = 32, 1, 30
+
     #- derive from cmdline or sys.argv whether this is a nightlybias job
     nightlybias = False
     if cmdline is not None:
@@ -541,18 +546,15 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     with open(scriptfile, 'w') as fx:
         fx.write('#!/bin/bash -l\n\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
+        fx.write('#SBATCH --qos {}\n'.format(queue))
         for opts in batch_config['batch_opts']:
             fx.write('#SBATCH {}\n'.format(opts))
         if batch_opts is not None:
             fx.write('#SBATCH {}\n'.format(batch_opts))
         if system_name == 'perlmutter-gpu':
-            # default queue realtime not available on perlmutter-gpu, so set to regular
-            fx.write('#SBATCH --qos regular\n'.format(queue))
             # perlmutter-gpu requires projects name with "_g" appended
             fx.write('#SBATCH --account desi_g\n')
-            fx.write('#SBATCH --gpus-per-node={}\n'.format(gpus_per_node))
         else:
-            fx.write('#SBATCH --qos {}\n'.format(queue))
             fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
@@ -601,12 +603,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
+        mps_wrapper=''
         if jobdesc.lower() == 'arc':
             fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         else:
             fx.write("export OMP_NUM_THREADS=1\n")
         if system_name == 'perlmutter-gpu':
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
+            mps_wrapper='desi_mps_wrapper'
 
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
@@ -647,7 +651,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
                 fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
-                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd}'
+                srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                    +mps_wrapper+f' {cmd}')
                 if jobdesc.lower() in ['science', 'prestdstar']:
                     srun += ' --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))

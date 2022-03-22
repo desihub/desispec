@@ -701,7 +701,7 @@ def main(args=None, comm=None):
                     cmd += ' --mpi'
 
                 if args.gpuextract:
-                    cmd += ' --gpu'
+                    cmd += ' --use-gpu'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     log.info('Include barycentric correction')
