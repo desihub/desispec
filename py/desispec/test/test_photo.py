@@ -29,9 +29,20 @@ class TestFibermap(unittest.TestCase):
         self.input_cat = input_cat
         self.tileids = [280, 80638, 1086, 1573, 1766]
 
-        out = Table() # table containing a selection of both targetphot and tractorphot columns
-        
-        self.phot = out
+        # targetphot results
+        targetphot = Table() 
+        targetphot['FLUX_R'] = np.array([0.0, 22.768417, 0.0, 2.0220177, 0.3754208]).astype('f4')
+        targetphot['FLUX_W1'] = np.array([0.0, 38.42719, 0.0, 8.39509, 1.7937177]).astype('f4')
+        targetphot['FLUX_IVAR_W2'] = np.array([0.0, 0.72876793, 0.0, 0.53684264, 1.5837417]).astype('f4')
+        targetphot['NUMOBS_INIT'] = np.array([1,1,1,4,9]).astype(np.int64)
+        self.targetphot = targetphot
+
+        # tractorphot results
+        tractorphot = Table() 
+        tractorphot['FLUX_R'] = np.array([0.0, 22.768417, 0.4996462, 2.0220177, 0.3754208]).astype('f4')
+        tractorphot['FLUX_IVAR_W1'] = np.array([0.0, 2.6306653, 2.2135038, 2.3442872, 6.2124352]).astype('f4')
+        tractorphot['LS_ID'] = np.array([0, 9906610122001627, 9906622040377206, 9906617989139688, 9907735053993854]).astype(np.int64)
+        self.tractorphot = tractorphot
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
@@ -57,45 +68,17 @@ class TestFibermap(unittest.TestCase):
     def test_gather_targetphot(self):
         """Test that we get the correct targeting photometry for an input set of objects."""
 
-        targetphot = gather_targetphot(input_cat, tileids=tileids)
+        targetphot = gather_targetphot(self.input_cat, tileids=self.tileids)
+        for col in self.targetphot.colnames:
+            self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
-        import pdb ; pdb.set_trace()
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    def test_gather_targetphot(self):
+        """Test that we get the correct Tractor photometry for an input set of objects."""
 
-
-    #@unittest.skipUnless(standard_nersc_environment, "not at NERSC")
-    #def test_missing_input_files(self):
-    #    """Test creation of fibermaps with missing input files"""
-    #    #- missing coordinates file for this exposure
-    #    night, expid = 20200219, 51053
-    #    with self.assertRaises(FileNotFoundError):
-    #        fm = assemble_fibermap(night, expid)
-    #
-    #    #- But should work with force=True
-    #    fm = assemble_fibermap(night, expid, force=True)
-    #
-    #    #- ...albeit with FIBER_X/Y == 0
-    #    assert np.all(fm['FIBERMAP'].data['FIBER_X'] == 0.0)
-    #    assert np.all(fm['FIBERMAP'].data['FIBER_Y'] == 0.0)
-    #
-    #@unittest.skipUnless(standard_nersc_environment, "not at NERSC")
-    #def test_missing_input_columns(self):
-    #    """Test creation of fibermaps with missing input columns"""
-    #    #- second exposure of split, missing fiber location information
-    #    #- in coordinates file, but info is present in previous exposure
-    #    #- that was same tile and first in sequence
-    #    fm1 = assemble_fibermap(20210406, 83714)['FIBERMAP'].data
-    #    fm2 = assemble_fibermap(20210406, 83715)['FIBERMAP'].data
-    #
-    #    def nanequal(a, b):
-    #        """Compare two arrays treating NaN==NaN"""
-    #        return np.equal(a, b, where=~np.isnan(a))
-    #
-    #    assert np.all(nanequal(fm1['FIBER_X'], fm2['FIBER_X']))
-    #    assert np.all(nanequal(fm1['FIBER_Y'], fm2['FIBER_Y']))
-    #    assert np.all(nanequal(fm1['FIBER_RA'], fm2['FIBER_RA']))
-    #    assert np.all(nanequal(fm1['FIBER_DEC'], fm2['FIBER_DEC']))
-    #    assert np.all(nanequal(fm1['DELTA_X'], fm2['DELTA_X']))
-    #    assert np.all(nanequal(fm1['DELTA_Y'], fm2['DELTA_Y']))
+        tractorphot = gather_tractorphot(self.input_cat)
+        for col in self.tractorphot.colnames:
+            self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -420,8 +420,6 @@ def main():
             out = vstack(out)
             out = out[np.argsort(out['TARGETID'])]
 
-            pdb.set_trace()
-
             out.meta['EXTNAME'] = 'TARGETPHOT'
             log.info('Writing {:,} objects to {}'.format(len(out), outfile))
             out.write(outfile, overwrite=True)
