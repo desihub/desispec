@@ -766,11 +766,12 @@ def main(args=None, comm=None):
 
             #- Create subcomm groups
             if args.gpuextract:
-                #- GPU extraction
-                extract_incl = comm.group.Incl(extract_ranks)
-                comm_extract = comm.Create_group(extract_incl)
-                from gpu_specter.mpi import ParallelIOCoordinator
-                coordinator = ParallelIOCoordinator(comm_extract)
+                if rank in extract_ranks:
+                    #- GPU extraction
+                    extract_incl = comm.group.Incl(extract_ranks)
+                    comm_extract = comm.Create_group(extract_incl)
+                    from gpu_specter.mpi import ParallelIOCoordinator
+                    coordinator = ParallelIOCoordinator(comm_extract)
             else:
                 #- CPU extraction
                 comm_extract = comm.Split(color=extract_group)
