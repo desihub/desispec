@@ -734,7 +734,7 @@ def main(args=None, comm=None):
             if args.gpuextract:
                 import cupy as cp
                 ngpus = cp.cuda.runtime.getDeviceCount()
-                if rank == 0:
+                if rank == 0 and len(cmds)>0:
                     log.info(f"{rank} found {ngpus} gpus")
 
             #- Set extraction subcomm group size
@@ -765,7 +765,7 @@ def main(args=None, comm=None):
             extract_ranks = list(range(num_extract_groups*extract_subcomm_size))
 
             #- Create subcomm groups
-            if args.gpuextract:
+            if args.gpuextract and len(cmds)>0:
                 if rank in extract_ranks:
                     #- GPU extraction
                     extract_incl = comm.group.Incl(extract_ranks)
@@ -776,7 +776,7 @@ def main(args=None, comm=None):
                 #- CPU extraction
                 comm_extract = comm.Split(color=extract_group)
 
-            if rank in extract_ranks:
+            if rank in extract_ranks and len(cmds)>0:
                 #- Run the extractions
                 for i in range(extract_group, len(args.cameras), num_extract_groups):
                     camera = args.cameras[i]
@@ -796,13 +796,13 @@ def main(args=None, comm=None):
                         else:
                             #- CPU extraction with specter
                             desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
-            else:
+            elif len(cmds)>0:
                 #- Skip this rank
                 log.warning(f'rank {rank} idle during extraction step')
 
             comm.barrier()
 
-        else:
+        elif len(cmds)>0:
             log.warning('running extractions without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
                 if camera in cmds:
