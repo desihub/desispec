@@ -747,7 +747,7 @@ def main(args=None, comm=None):
                 elif args.gpuspecter:
                     #- CPU extraction with gpu_specter uses
                     #- 16 ranks.
-                    extract_subcomm_size = 18
+                    extract_subcomm_size = 16
                 else:
                     #- CPU extraction with specter uses
                     #- 20 ranks.
