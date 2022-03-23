@@ -735,8 +735,6 @@ def main(args=None, comm=None):
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
 
-            run_extraction = True
-
             #- Set extraction subcomm group size
             extract_subcomm_size = args.extract_subcomm_size
             if extract_subcomm_size is None:
