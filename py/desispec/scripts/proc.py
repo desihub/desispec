@@ -702,10 +702,6 @@ def main(args=None, comm=None):
 
                 if args.gpuextract:
                     cmd += ' --use-gpu'
-                    import cupy as cp
-                    ngpus = cp.cuda.runtime.getDeviceCount()
-                    if rank == 0:
-                        log.info(f"{rank} found {ngpus} gpus")
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     log.info('Include barycentric correction')
@@ -734,6 +730,12 @@ def main(args=None, comm=None):
             cmds = comm.bcast(cmds, root=0)
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
+
+            if args.gpuextract:
+                import cupy as cp
+                ngpus = cp.cuda.runtime.getDeviceCount()
+                if rank == 0:
+                    log.info(f"{rank} found {ngpus} gpus")
 
             #- Set extraction subcomm group size
             extract_subcomm_size = args.extract_subcomm_size
