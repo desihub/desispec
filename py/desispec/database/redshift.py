@@ -1339,7 +1339,7 @@ def setup_db(options=None, **kwargs):
         tab.schema = schemaname
     if overwrite:
         Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine)
     log.info("Finished creating tables.")
     return postgresql
 
