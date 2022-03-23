@@ -702,6 +702,10 @@ def main(args=None, comm=None):
 
                 if args.gpuextract:
                     cmd += ' --use-gpu'
+                    import cupy as cp
+                    ngpus = cp.cuda.runtime.getDeviceCount()
+                    if rank == 0:
+                        log.info(f"{rank} found {ngpus} gpus")
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     log.info('Include barycentric correction')
@@ -736,73 +740,64 @@ def main(args=None, comm=None):
             #- Set extraction subcomm group size
             extract_subcomm_size = args.extract_subcomm_size
             if extract_subcomm_size is None:
-                if args.gpuextract and len(cmds) > 0:
-                    #- GPU extraction with gpu_specter
-                    #-
-                    #- If the subcommunicator size is not provided (default), use 5
-                    #- ranks per available GPU plus 2 ranks for IO. On Perlmutter GPU
-                    #- nodes this results in good performance.
-                    import cupy as cp
-                    ngpus = cp.cuda.runtime.getDeviceCount()
-                    if rank == 0:
-                        log.info(f"{rank} found {ngpus} gpus")
-                    extract_ranks_per_gpu = 5
-                    extract_ranks_io = 2
-                    extract_subcomm_size = extract_ranks_io + ngpus * extract_ranks_per_gpu
+                if args.gpuextract:
+                    #- GPU extraction with gpu_specter uses
+                    #- 5 ranks per GPU plus 2 for IO.
+                    extract_subcomm_size = 2 + 5 * ngpus
                 elif args.gpuspecter:
-                    #- CPU extraction with gpu_specter
-                    #-
-                    #- If the subcommunicator size is not provided (default), use 16
-                    #- ranks. On Perlmutter GPU nodes this results in good performance.
-                    extract_subcomm_size = 16
+                    #- CPU extraction with gpu_specter uses
+                    #- 16 ranks.
+                    extract_subcomm_size = 18
                 else:
-                    #- CPU extraction with specter
-                    #-
-                    #- If the subcommunicator size is not provided (default), use 20
-                    #- ranks, one per bundle
+                    #- CPU extraction with specter uses
+                    #- 20 ranks.
                     extract_subcomm_size = 20
-                    if (rank == 0) and (size%extract_subcomm_size != 0):
-                        log.warning('MPI size={} should be evenly divisible by {}'.format(
-                            size, extract_subcomm_size))
 
-            #- Create the subcomm group for ranks that will perform extraction
-            if args.gpuextract and len(cmds) > 0:
-                #- GPU extraction with gpu_specter
-                extract_group = 0
+            #- Create list of ranks that will perform extraction
+            if args.gpuextract:
+                #- GPU extraction uses only one extraction group
+                extract_group      = 0
                 num_extract_groups = 1
-                extract_ranks = list(range(extract_subcomm_size))
-                if rank in extract_ranks:
-                    extract_incl = comm.group.Incl(extract_ranks)
-                    comm_extract = comm.Create_group(extract_incl)
-                    from gpu_specter.mpi import ParallelIOCoordinator
-                    coordinator = ParallelIOCoordinator(comm_extract)
-                else:
-                    run_extraction=False
             else:
-                #- CPU extraction with gpu_specter or specter
-                extract_group = rank // extract_subcomm_size
-                num_extract_groups = (size + extract_subcomm_size - 1) // extract_subcomm_size
+                #- CPU extraction uses as many extraction groups as possible
+                extract_group      = rank // extract_subcomm_size
+                num_extract_groups = size // extract_subcomm_size
+            extract_ranks = list(range(num_extract_groups*extract_subcomm_size))
+
+            #- Create subcomm groups
+            if args.gpuextract:
+                #- GPU extraction
+                extract_incl = comm.group.Incl(extract_ranks)
+                comm_extract = comm.Create_group(extract_incl)
+                from gpu_specter.mpi import ParallelIOCoordinator
+                coordinator = ParallelIOCoordinator(comm_extract)
+            else:
+                #- CPU extraction
                 comm_extract = comm.Split(color=extract_group)
 
-            #- Run the extractions
-            for i in range(extract_group, len(args.cameras), num_extract_groups):
-                camera = args.cameras[i]
-                if camera in cmds and run_extraction:
-                    cmdargs = cmds[camera].split()[1:]
-                    extract_args = desispec.scripts.extract.parse(cmdargs)
+            if rank in extract_ranks:
+                #- Run the extractions
+                for i in range(extract_group, len(args.cameras), num_extract_groups):
+                    camera = args.cameras[i]
+                    if camera in cmds:
+                        cmdargs = cmds[camera].split()[1:]
+                        extract_args = desispec.scripts.extract.parse(cmdargs)
 
-                    if comm_extract.rank == 0:
-                        print('RUNNING: {}'.format(cmds[camera]))
+                        if comm_extract.rank == 0:
+                            print('RUNNING: {}'.format(cmds[camera]))
 
-                    if args.gpuextract:
-                        #- GPU extraction with gpu_specter
-                        desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
-                    elif args.gpuspecter:
-                        #- CPU extraction with gpu_specter
-                        desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
-                    else:
-                        #- CPU extraction with specter
-                        desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                        if args.gpuextract:
+                            #- GPU extraction with gpu_specter
+                            desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                        elif args.gpuspecter:
+                            #- CPU extraction with gpu_specter
+                            desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
+                        else:
+                            #- CPU extraction with specter
+                            desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+            else:
+                #- Skip this rank
+                log.warning(f'rank {rank} idle during extraction step')
 
             comm.barrier()
 
