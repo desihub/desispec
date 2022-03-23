@@ -581,7 +581,7 @@ def main():
         miss = Table(fitsio.read(missfile))
         
         zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
-        #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'zpix-sv3-dark.fits'))
+        #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'zpix-special-*.fits'))
         #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv1-other-cumulative.fits'))        
         for zcatfile in zcatfiles:
             log.info('Validating {}'.format(zcatfile))
@@ -645,7 +645,12 @@ def main():
         if len(outcat) > 0:
             _outcat = vstack(outcat)
             _outzcat = vstack(outzcat)
-            
+            # curse you, astropy!
+            import numpy.ma as ma
+            for col in _outzcat.colnames:
+                if ma.is_masked(_outzcat[col]):
+                    _outzcat[col] = ma.getdata(_outzcat[col])
+
             outcat = _outcat['TARGETID', 'RA', 'DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
             outzcat = _outzcat['TARGETID', 'TARGET_RA', 'TARGET_DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
 
@@ -662,16 +667,28 @@ def main():
             out = Table()
             for ii in np.arange(len(zcols)):
                 out[zcols[ii]] = outzcat[zcols[ii]]
-                out[tractorcols[ii]] = outcat[tractorcols[ii]]
+                out[tractorcols[ii]] = outcat[tractorcols[ii]]            
+            for col in [
+                    'FA_TARGET', 'CMX_TARGET',
+                    'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET',
+                    'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET',
+                    'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET',
+                    'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET',
+                    'SCND_TARGET',
+                    'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
+                    ]:
+                out[col] = np.zeros(shape=(1,), dtype=np.int64)
 
             # add brick_primary, survey, program, and the targeting bits
             out['BRICK_PRIMARY'] = _outcat['BRICK_PRIMARY']
             for col in _outzcat.colnames:
-                if '_TARGET' in col:
+                if '_TARGET' in col and col in _outzcat.colnames:
+                    #print(col, _outzcat[col])
                     out[col] = _outzcat[col]
+
             out['SURVEY'] = _outzcat['SURVEY']
             out['PROGRAM'] = _outzcat['PROGRAM']
-    
+
             outfile = os.path.join(args.outdir, 'tractorphot-validate-{}.fits'.format(args.outprefix))
             out.write(outfile, overwrite=True)
 
