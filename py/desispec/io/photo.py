@@ -26,7 +26,9 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
         tileid (int): tile number
         fiberassign_dir (str, optional): directory to fiberassign tables
 
-    Returns a list of all the unique targeting directories.
+    Given a single tile, return a list of all the unique targeting directories
+    used to run fiberassign to generate that tile. If there are TOOs on the
+    tile, return the TOO filename itself, not just the directory.
 
     """
     from astropy.io import fits
