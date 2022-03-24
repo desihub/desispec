@@ -234,32 +234,32 @@ def _build_secondarycache(mp=1):
     #    ])
     
     cachefiles = np.hstack([
-        [#'$DESI_ROOT/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         #'$DESI_ROOT/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
-         #'$DESI_ROOT/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         #'$DESI_ROOT/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         #'$DESI_ROOT/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
-         '$DESI_ROOT/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
-         '$DESI_ROOT/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
-        glob('$DESI_ROOT/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
+        [#os.environ.get('DESI_ROOT')+'//target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
+         #os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         #os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
+         os.environ.get('DESI_ROOT')+'/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
+        glob(os.environ.get('DESI_ROOT')+'/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
         ])
     
     #cachefiles = np.hstack([
-    #        ['$DESI_ROOT/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-    #         '$DESI_ROOT/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-    #         '$DESI_ROOT/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+    #        [os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+    #         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+    #         os.environ.get('DESI_ROOT')+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
     #         ],
-    #        glob('$DESI_ROOT/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
+    #        glob(os.environ.get('DESI_ROOT')+'/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
     
     mpargs = []
     for cachefile in np.unique(cachefiles):

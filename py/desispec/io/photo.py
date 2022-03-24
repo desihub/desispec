@@ -284,7 +284,8 @@ def _targetphot_datamodel(from_file=False):
     return datamodel
 
 def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
-                      racolumn='TARGET_RA', deccolumn='TARGET_DEC', columns=None):
+                      racolumn='TARGET_RA', deccolumn='TARGET_DEC', columns=None,
+                      fiberassign_dir=None):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
@@ -295,6 +296,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
         targetdirs (int scalar or array): output of gather_targetdirs corresponding
           to the input targets (required if tileids is None)
         columns (str array): return this subset of columns
+        fiberassign_dir (str, optional): directory to fiberassign tables
 
     Returns a table of targeting photometry using a consistent data model across
     primary (DR9) targets, secondary targets, and targets of opportunity.
@@ -318,7 +320,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
 
     # Get the unique list of targetdirs
     if targetdirs is None:
-        targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(np.atleast_1d(tileids))]))
+        targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
+                                          for tileid in set(np.atleast_1d(tileids))]))
     
     datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(input_cat))))
