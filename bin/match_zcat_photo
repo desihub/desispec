@@ -56,55 +56,49 @@ from desitarget.targets import decode_targetid
 from desiutil.brick import brickname
 
 from desiutil.log import get_logger, DEBUG
-log = get_logger()#DEBUG)
+log = get_logger()
 
 desi_root = os.environ.get('DESI_ROOT')
 fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
 
-def _resolve(cat):
-    # "Resolve" whether the target is in the north or south. The
-    # algorithm here is taken from desitarget.targets.resolve, which was
-    # written by ADM. (Note we can't use that method directly because we
-    # don't necessarily have photsys or release).
-    from desitarget.geomask import is_in_gal_box, pixarea2nside
-    from desitarget.io import desitarget_resolve_dec
-    split = desitarget_resolve_dec()
-
-    nside = pixarea2nside(1)
-    theta, phi = np.radians(90-cat['TARGET_DEC']), np.radians(cat['TARGET_RA'])
-    pixnum = hp.ang2pix(nside, theta, phi, nest=True)
-    # ADM find the pixels north of the Galactic plane...
-    allpix = np.arange(hp.nside2npix(nside))
-    theta, phi = hp.pix2ang(nside, allpix, nest=True)
-    ra, dec = np.degrees(phi), 90-np.degrees(theta)
-    pixn = is_in_gal_box([ra, dec], [0., 360., 0., 90.], radec=True)
-    # ADM which objects are in pixels north of the Galactic plane.
-    galn = pixn[pixnum]
-    return (cat['TARGET_DEC'] >= split) & galn # True=North
-
-def _get_brickname(args):
-    return get_brickname(*args)
-
-def get_brickname(bricks, ra, dec):
-    I = (ra >= bricks['RA1']) * (ra <= bricks['RA2']) * (dec >= bricks['DEC1']) * (dec <= bricks['DEC2'])
-    return bricks['BRICKNAME'][I][0]
-    
 def _read_one_zcat(args):
+    """Multiprocessing wrapper."""
     return read_one_zcat(*args) 
 
 def read_one_zcat(catfile):
+    """Read a single redshift catalog, e.g., ztile-sv1-dark-cumulative.fits.
+
+    Args:
+        catfile (str): full path to a given redshift catalog
+
+    Returns an astropy.table.Table with the following columns needed to do the
+    downstream matching and to enable QA: TARGETID, TILEID, TARGET_RA,
+    TARGET_DEC, PETAL_LOC.
+
+    """
     log.info('Reading {}'.format(catfile))
     hdr = fitsio.read_header(catfile, ext='ZCATALOG')
     survey, program = hdr['SURVEY'], hdr['PROGRAM']
-    cat = Table(fitsio.read(catfile, ext='ZCATALOG', columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC', 'PETAL_LOC']))
+    cat = Table(fitsio.read(catfile, ext='ZCATALOG', columns=[
+        'TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC', 'PETAL_LOC']))
     cat['SURVEY'] = survey
     cat['PROGRAM'] = program
     return cat
 
 def _read_one_potential_targets(args):
+    """Multiprocessing wrapper."""
     return read_one_potential_targets(*args) 
 
 def read_one_potential_targets(tileid):
+    """Read the potential targets in a given fiberassign tile.
+
+    Args:
+        tileid (int): tile ID number
+
+    Returns an astropy.table.Table with the following columns needed downstream:
+    TARGETID, RA, DEC.
+
+    """
     stileid = '{:06d}'.format(tileid)
     fiberfile = os.path.join(fiberassign_dir, stileid[:3], 'fiberassign-{}.fits.gz'.format(stileid))
     #log.info('Reading {}'.format(fiberfile))
@@ -143,9 +137,21 @@ def read_one_potential_targets(tileid):
     return out
 
 def _cache_one_catalog(args):
+    """Multiprocessing wrapper."""
     return cache_one_catalog(*args) 
 
 def cache_one_catalog(cachefile):
+    """Cache a single (secondary) targeting catalog, e.g.,
+    $DESI_ROOT/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits
+
+    Args:
+        cachefile (str): full path to a targeting catalog.
+
+    Returns a dictionary mapping the input filename to either an np.ndarray of
+    TARGETID values (for a non-TOO catalog) and a full astropy.table.Table for
+    an input TOO catalog name.
+
+    """
     log.info('Caching {}'.format(cachefile))
     if '.ecsv' in cachefile:
         cat = Table.read(cachefile, guess=False, format='ascii.ecsv')
@@ -156,25 +162,26 @@ def cache_one_catalog(cachefile):
     return {key: cat}
 
 def _tractorphot_one(args):
+    """Multiprocessing wrapper."""
     return tractorphot_one(*args)
 
 def tractorphot_one(cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
-    """Retrieve the Tractor catalog for all the objects in one brick."""
+    """Simple wrapper on desispec.io.photo.gather_tractorphot."""
     from desispec.io.photo import gather_tractorphot
     tractorphot = gather_tractorphot(cat, racolumn=racolumn, deccolumn=deccolumn)
     return tractorphot
 
 def _targetphot_one(args):
+    """Multiprocessing wrapper."""
     return targetphot_one(*args)
 
 def targetphot_one(input_cat, tileids, photocache=None, racolumn='TARGET_RA',
                    deccolumn='TARGET_DEC'):
-    """Build the targetphot catalog for all the objects on a single tile."""
+    """Simple wrapper on desispec.io.photo.gather_targetphot."""
     from desispec.io.photo import gather_targetphot, gather_targetdirs
 
     # Get the unique list of targetdirs
-    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
-    
+    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))    
     targetphot = gather_targetphot(input_cat, targetdirs=targetdirs, photocache=photocache,
                                    racolumn=racolumn, deccolumn=deccolumn)
     return targetphot
@@ -182,12 +189,11 @@ def targetphot_one(input_cat, tileids, photocache=None, racolumn='TARGET_RA',
 def _get_secondary_targetdirs():
     """Scrape all fiberassign headers to find which secondary catalogs are ever used.
 
-    This list of files can then be cached (separately).
+    The list of files returned by this script (after being run once) can then be
+    cached using the photocache dictionary.
 
     """
     fiberfiles = np.hstack(glob(os.path.join(fiberassign_dir, '???', 'fiberassign-*.fits*')))
-    #I = rand.choice(len(fiberfiles), size=50, replace=False) # for testing
-    #fiberfiles = fiberfiles[I]
     targetdirs = []
     for ii, fiberfile in enumerate(fiberfiles):
         if ii % 500 == 0:
@@ -626,7 +632,7 @@ def main():
 
                 diff = (cat['BRICKID'] != _zcat['BRICKID'])
                 diff = np.logical_or(diff, cat['OBJID'] != _zcat['BRICK_OBJID'])
-                #diff = np.logical_or(diff, cat['flux_g'] != _zcat['FLUX_R'])
+                #diff = np.logical_or(diff, cat['flux_g'] != _zcat['FLUX_G'])
                 #diff = np.logical_or(diff, cat['flux_r'] != _zcat['FLUX_R'])
                 #diff = np.logical_or(diff, cat['flux_z'] != _zcat['FLUX_Z'])
                 #diff = np.logical_or(diff, cat['flux_w1'] != _zcat['FLUX_W1'])
