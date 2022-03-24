@@ -86,7 +86,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
 
         # special-case first-light / cmx targets
         if 'catalogs/dr9/0.47.0/targets/cmx/resolve/no-obscon/' in targetdir:
-            cmxtargetdir = '/global/cfs/cdirs/desi/target/catalogs/gaiadr2/0.47.0/targets/cmx/resolve/supp/'
+            cmxtargetdir = os.environ.get('DESI_ROOT')+'/target/catalogs/gaiadr2/0.47.0/targets/cmx/resolve/supp/'
             
         if os.path.isdir(targetdir) or os.path.isfile(targetdir):
             log.debug('Found targets directory or file {}'.format(targetdir))
@@ -106,7 +106,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     # used for part of commissioning (and, maybe SV0, too?) I'm not sure how a
     # target from early SV would only appear in dr9m . It's a strange one."
     if tileid == 80736:
-        dr9mdir = '/global/cfs/cdirs/desi/target/catalogs/dr9m/0.44.0/targets/sv1/resolve/dark/'
+        dr9mdir = os.environ.get('DESI_ROOT')+'/target/catalogs/dr9m/0.44.0/targets/sv1/resolve/dark/'
         if os.path.isdir(dr9mdir):
             log.debug('Found targets directory or file {}'.format(dr9mdir))
             targetdirs = targetdirs + [dr9mdir]
@@ -347,7 +347,6 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
             if np.sum(notnan) > 0:
                 pixlist = radec2pix(filenside, input_cat[racolumn][notnan], input_cat[deccolumn][notnan])
                 for pix in set(pixlist):
-                    # /global/cfs/cdirs/desi/target/catalogs/gaiadr2/0.48.0/targets/sv1/resolve/supp/sv1targets-supp-hp-128.fits doesn't exist...
                     _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix) # fragile
                     if os.path.isfile(_targetfile):
                         targetfiles.append(_targetfile)
@@ -362,8 +361,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
             # If this is a secondary target catalog or ToO, use the photocache
             # (if it exists). Also note that secondary target catalogs are
             # missing some or all of the DR9 photometry columns we need, so only
-            # copy what exists, e.g.,
-            # /global/cfs/cdirs/desi/spectro/redux/everest/healpix/sv3/bright/153/15343/redrock-sv3-bright-15343.fits
+            # copy what exists.
             if photocache is not None and targetfile in photocache.keys():
                 if type(photocache[targetfile]) == astropy.table.Table:
                     I = np.where(np.isin(photocache[targetfile]['TARGETID'], input_cat['TARGETID']))[0]
@@ -464,7 +462,7 @@ def _tractorphot_datamodel(from_file=False):
     """Initialize the tractorphot data model for DR9 photometry."""
 
     if from_file:
-        datamodel_file = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits'
+        datamodel_file = os.environ.get('DESI_ROOT')+'/external/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits'
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
         for col in datamodel.colnames:
             datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
@@ -821,7 +819,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
             input_cat[col[0]] = np.zeros(col[1], dtype=col[2])
 
     if dr9dir is None:
-        dr9dir = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9'
+        dr9dir = os.environ.get('DESI_ROOT')+'/external/legacysurvey/dr9'
 
     if not os.path.isdir(dr9dir):
         log.warning('DR9 directory {} not found.'.format(dr9dir))
