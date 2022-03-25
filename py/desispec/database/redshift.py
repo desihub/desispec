@@ -620,7 +620,7 @@ class Fiberassign(SchemaMixin, Base):
     # target = relationship("Target", back_populates="fiberassign")
 
     def __repr__(self):
-        return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
+        return "Fiberassign(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
 
 
 class Potential(SchemaMixin, Base):
@@ -1307,7 +1307,9 @@ def setup_db(options=None, **kwargs):
         #     event.listen(Base.metadata, 'before_create',
         #                  DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
         event.listen(Base.metadata, 'before_create',
-                     DDL('CREATE SCHEMA IF NOT EXISTS {0}'.format(schemaname)))
+                     DDL(f'CREATE SCHEMA IF NOT EXISTS {schema};'))
+        event.listen(Base.metadata, 'after_create',
+                     DDL(f'GRANT USAGE ON SCHEMA {schema} TO desi; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO desi; GRANT SELECT ON ALL SEQUENCES IN SCHEMA {schema} TO desi;'))
     #
     # Create the file.
     #
