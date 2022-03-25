@@ -435,8 +435,6 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                 del photo1
                 photofiles.append(targetfile)
                 photo.append(_photo)
-                #if input_cat['TILEID'][0] == 80615:
-                #    pdb.set_trace()
 
     # backup programs have no target catalog photometry at all
     if len(photo) == 0:
