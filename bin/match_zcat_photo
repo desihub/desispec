@@ -341,8 +341,9 @@ def main():
             # Assume that the nominal/parent zcat catalog has been previously generated.
             parent_zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
             if not os.path.isfile(parent_zcatfile):
-                log.warning('Targeting photometric catalog {} missing'.format(parent_zcatfile))
-                raise IOError
+                errmsg = 'Targeting photometric catalog {} missing'.format(parent_zcatfile)
+                log.critical(errmsg)
+                raise IOError(errmsg)
             log.info('Reading {}'.format(parent_zcatfile))
             parent_zcat = Table(fitsio.read(parent_zcatfile))
 
@@ -467,12 +468,14 @@ def main():
             racolumn, deccolumn = 'TARGET_RA', 'TARGET_DEC'
             
         if not os.path.isfile(targetfile):
-            log.warning('Targeting photometric catalog {} missing'.format(targetfile))
-            raise IOError
+            errmsg = 'Targeting photometric catalog {} missing'.format(targetfile)
+            log.critical(errmsg)
+            raise IOError(errmsg)
 
         if not os.path.isfile(zcatfile):
-            log.warning('Targeting redshift catalog {} missing'.format(zcatfile))
-            raise IOError
+            errmsg = 'Targeting redshift catalog {} missing'.format(zcatfile)
+            log.critical(errmsg)
+            raise IOError(errmsg)
 
         if rand is not None:
             N = fitsio.FITS(targetfile)[1].get_nrows()

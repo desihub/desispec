@@ -43,7 +43,9 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     if not os.path.isfile(fiberfile):
         fiberfile = fiberfile.replace('.gz', '')
         if not os.path.isfile(fiberfile):
-            log.warning('Fiber assignment file {} not found!'.format(fiberfile))
+            errmsg = 'Fiber assignment file {} not found!'.format(fiberfile)
+            log.critical(errmsg)
+            raise IOError(errmsg)
     log.debug('Reading {} header.'.format(fiberfile))
     # old versions of fitsio can't handle CONTINUE header cards!
     #fahdr = fitsio.read_header(fiberfile, ext=0)
@@ -136,8 +138,9 @@ def _targetphot_datamodel(from_file=False):
         datamodel_file = os.path.join(os.environ.get('DESI_ROOT'), 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
                                       'main', 'resolve', 'dark', 'targets-dark-hp-0.fits')
         if not os.path.isfile(datamodel_file):
-            log.warning('Unable to establish the data model using {}'.format(datamodel_file))
-            raise IOError
+            errmsg = 'Unable to establish the data model using {}'.format(datamodel_file)
+            log.critical(errmsg)
+            raise IOError(errmsg)
         
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
         for col in datamodel.colnames:
@@ -311,12 +314,14 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
 
     for col in ['TARGETID', racolumn, deccolumn]:
         if col not in input_cat.colnames:
-            log.warning('Missing required input column {}'.format(col))
-            raise ValueError
+            errmsg = 'Missing required input column {}'.format(col)
+            log.critical(errmsg)
+            raise ValueError(errmsg)
 
     if targetdirs is None and tileids is None:
-        log.warning('Must provide tileids or targetdirs input.')
-        raise ValueError
+        errmsg = 'Must provide tileids or targetdirs input.'
+        log.critical(errmsg)
+        raise ValueError(errmsg)
 
     # Get the unique list of targetdirs
     if targetdirs is None:
@@ -436,8 +441,9 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
 
     # backup programs have no target catalog photometry at all
     if len(photo) == 0:
-        log.warning('No targeting photometry found.')
-        raise ValueError
+        errmsg = 'No targeting photometry found.'
+        log.critical(errmsg)
+        raise ValueError(errmsg)
 
     # np.hstack will sometimes complain even if the tables are identical...
     #photo = Table(np.hstack(photo))
@@ -452,11 +458,6 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     I = np.where(np.isin(out['TARGETID'], photo['TARGETID']))[0]
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
-
-    #check = (out['RA'] == 0) * (out['DEC'] == 0)
-    #if np.sum(check) > 0:
-    #    log.warning('RA and DEC are missing for {} objects'.format(np.sum(check)))
-    #    #raise ValueError
 
     if columns is not None:
         out = out[columns]
@@ -696,8 +697,9 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
         tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
     
         if not os.path.isfile(tractorfile):
-            log.warning('Unable to find Tractor catalog {}'.format(tractorfile))
-            raise IOError
+            errmsg = 'Unable to find Tractor catalog {}'.format(tractorfile)
+            log.critical(errmsg)
+            raise IOError(errmsg)
 
         # Some commissioning and SV targets can have brick_primary==False, so don't require it here.
         #<Table length=1>
@@ -812,8 +814,9 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
 
     for col in ['TARGETID', racolumn, deccolumn]:
         if col not in input_cat.colnames:
-            log.warning('Missing required input column {}'.format(col))
-            raise ValueError
+            errmsg = 'Missing required input column {}'.format(col)
+            log.critical(errmsg)
+            raise ValueError(errmsg)
 
     # If these columns don't exist, add them with blank entries:
     COLS = [('RELEASE', (1,), '>i2'), ('BRICKID', (1,), '>i4'), 
@@ -827,8 +830,9 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         dr9dir = os.environ.get('DESI_ROOT')+'/external/legacysurvey/dr9'
 
     if not os.path.isdir(dr9dir):
-        log.warning('DR9 directory {} not found.'.format(dr9dir))
-        raise IOError
+        errmsg = 'DR9 directory {} not found.'.format(dr9dir)
+        log.critical(errmsg)
+        raise IOError(errmsg)
 
     ## Some secondary programs (e.g., 39632961435338613, 39632966921487347)
     ## have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Unpack those here
