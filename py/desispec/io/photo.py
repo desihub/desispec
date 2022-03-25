@@ -329,7 +329,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                                           for tileid in set(np.atleast_1d(tileids))]))
     
     datamodel = _targetphot_datamodel()
-    out = Table(np.hstack(np.repeat(datamodel, len(input_cat))))
+    out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
 
     photo, photofiles = [], []
@@ -362,7 +362,6 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                         targetfiles.append(_targetfile)
 
         targetfiles = np.unique(targetfiles)
-        #print(targetfiles)
 
         if len(targetfiles) == 0:
             continue
@@ -678,7 +677,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
     idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) * (input_cat['BRICK_OBJID'] > 0))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
 
-    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(input_cat))))
+    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
     
     # DR9 targeting photometry exists
@@ -858,7 +857,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     # Split into unique brickname(s).
     bricknames = input_cat['BRICKNAME']
 
-    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(input_cat))))
+    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
     for brickname in set(bricknames):
         I = np.where(brickname == bricknames)[0]
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)

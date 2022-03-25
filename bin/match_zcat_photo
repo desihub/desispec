@@ -370,6 +370,8 @@ def main():
 
             log.info('Found {:,} unique TARGETIDs from {:,} unique tiles.'.format(
                 len(zcat), len(set(zcat['TILEID']))))
+
+            RACOLUMN, DECCOLUMN = 'RA', 'DEC'            
         else:
             # Read all the zpix catalogs in parallel.
             zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
@@ -403,19 +405,19 @@ def main():
             
             log.info('Found {:,} unique TARGETIDs and {:,} unique tiles from {} redshift catalogs'.format(
                 len(zcat), len(set(zcat['TILEID'])), len(zcatfiles)))
+
+            RACOLUMN, DECCOLUMN = 'TARGET_RA', 'TARGET_DEC'
     
-        if args.potential_targets:
-            # Multiprocess over tiles
-            log.info('Dividing the sample into {} unique tiles.'.format(len(set(zcat['TILEID']))))
-            mpargs = [[zcat[zcat['TILEID'] == tileid], tileid, photocache, 'RA', 'DEC'] for tileid in set(zcat['TILEID'])]
-        else:
-            # Multiprocess over nside=8 healpixels which is how the
-            # non-secondary targeting catalogs are organized on-disk.
-            tileids = np.unique(zcat['TILEID'])
-            pixels = radec2pix(8, zcat['TARGET_RA'], zcat['TARGET_DEC'])
-            log.info('Dividing the sample into {} nside=8 healpixels.'.format(len(set(pixels))))
-            mpargs = [[zcat[pixel == pixels], tileids, photocache, 'TARGET_RA', 'TARGET_DEC'] for pixel in set(pixels)]
-                    
+        # Multiprocess over tiles. Note: originally we multiprocessed the
+        # non-potential targets over nside=8 healpixels which is how the
+        # non-secondary targeting catalogs are organized on-disk. However, this
+        # is problematic because you can have the same target appear in both SV1
+        # and SV3 without enough discriminating information in
+        # desispec.io.photo.gather_targetphot to determine which object was
+        # actually targeted. Multiprocessing over tiles solves this issue.
+        log.info('Dividing the sample into {} unique tiles.'.format(len(set(zcat['TILEID']))))
+        mpargs = [[zcat[zcat['TILEID'] == tileid], tileid, photocache, RACOLUMN, DECCOLUMN] for tileid in set(zcat['TILEID'])]
+        
         if args.mp > 1:
             with multiprocessing.Pool(args.mp) as P:
                 out = P.map(_targetphot_one, mpargs)
