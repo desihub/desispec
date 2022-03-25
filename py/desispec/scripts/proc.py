@@ -694,6 +694,15 @@ def main(args=None, comm=None):
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.1'
 
+                if args.gpuspecter:
+                    cmd += ' --gpu-specter'
+                    #- default for CPU is nsubbundles=6 but gpu_specter only allows 1, 5, or 25
+                    cmd += ' --nsubbundles 5'
+                    cmd += ' --mpi'
+
+                if args.gpuextract:
+                    cmd += ' --use-gpu'
+
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     log.info('Include barycentric correction')
                     cmd += ' --barycentric-correction'
@@ -722,40 +731,94 @@ def main(args=None, comm=None):
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
 
-            #- split communicator by 20 (number of bundles)
-            extract_size = 20
-            if (rank == 0) and (size%extract_size != 0):
-                log.warning('MPI size={} should be evenly divisible by {}'.format(
-                    size, extract_size))
+            if args.gpuextract:
+                import cupy as cp
+                ngpus = cp.cuda.runtime.getDeviceCount()
+                if rank == 0 and len(cmds)>0:
+                    log.info(f"{rank} found {ngpus} gpus")
 
-            extract_group = rank // extract_size
-            num_extract_groups = (size + extract_size - 1) // extract_size
-            comm_extract = comm.Split(color=extract_group)
+            #- Set extraction subcomm group size
+            extract_subcomm_size = args.extract_subcomm_size
+            if extract_subcomm_size is None:
+                if args.gpuextract:
+                    #- GPU extraction with gpu_specter uses
+                    #- 5 ranks per GPU plus 2 for IO.
+                    extract_subcomm_size = 2 + 5 * ngpus
+                elif args.gpuspecter:
+                    #- CPU extraction with gpu_specter uses
+                    #- 16 ranks.
+                    extract_subcomm_size = 16
+                else:
+                    #- CPU extraction with specter uses
+                    #- 20 ranks.
+                    extract_subcomm_size = 20
 
-            for i in range(extract_group, len(args.cameras), num_extract_groups):
-                camera = args.cameras[i]
-                if camera in cmds:
-                    cmdargs = cmds[camera].split()[1:]
-                    extract_args = desispec.scripts.extract.parse(cmdargs)
+            #- Create list of ranks that will perform extraction
+            if args.gpuextract:
+                #- GPU extraction uses only one extraction group
+                extract_group      = 0
+                num_extract_groups = 1
+            else:
+                #- CPU extraction uses as many extraction groups as possible
+                extract_group      = rank // extract_subcomm_size
+                num_extract_groups = size // extract_subcomm_size
+            extract_ranks = list(range(num_extract_groups*extract_subcomm_size))
 
-                    if comm_extract.rank == 0:
-                        print('RUNNING: {}'.format(cmds[camera]))
+            #- Create subcomm groups
+            if args.gpuextract and len(cmds)>0:
+                if rank in extract_ranks:
+                    #- GPU extraction
+                    extract_incl = comm.group.Incl(extract_ranks)
+                    comm_extract = comm.Create_group(extract_incl)
+                    from gpu_specter.mpi import ParallelIOCoordinator
+                    coordinator = ParallelIOCoordinator(comm_extract)
+            else:
+                #- CPU extraction
+                comm_extract = comm.Split(color=extract_group)
 
-                    desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
-                    if comm_extract.rank == 0:
-                        for outfile in outputs[camera]:
-                            if not os.path.exists(outfile):
-                                log.error(f'Camera {camera} extraction missing output {outfile}')
-                                error_count += 1
+            if rank in extract_ranks and len(cmds)>0:
+                #- Run the extractions
+                for i in range(extract_group, len(args.cameras), num_extract_groups):
+                    camera = args.cameras[i]
+                    if camera in cmds:
+                        cmdargs = cmds[camera].split()[1:]
+                        extract_args = desispec.scripts.extract.parse(cmdargs)
+
+                        if comm_extract.rank == 0:
+                            print('RUNNING: {}'.format(cmds[camera]))
+
+                        if args.gpuextract:
+                            #- GPU extraction with gpu_specter
+                            desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                        elif args.gpuspecter:
+                            #- CPU extraction with gpu_specter
+                            desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
+                        else:
+                            #- CPU extraction with specter
+                            desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+            elif len(cmds)>0:
+                #- Skip this rank
+                log.warning(f'rank {rank} idle during extraction step')
 
             comm.barrier()
 
-        else:
+        elif len(cmds)>0:
             log.warning('running extractions without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
                 if camera in cmds:
                     err = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
                     if err != 0:
+                        error_count += 1
+
+        #- check for missing output files and log
+        for camera in args.cameras:
+            if camera in cmds:
+                for outfile in outputs[camera]:
+                    if not os.path.exists(outfile):
+                        if comm is not None:
+                            if comm.rank > 0:
+                                continue
+                        log.error(f'Camera {camera} extraction missing output {outfile}')
                         error_count += 1
 
         timer.stop('extract')
