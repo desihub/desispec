@@ -66,7 +66,6 @@ class TestParallel(unittest.TestCase):
 
         # Now try it with many workers and fewer tasks
         bal = dist_balanced(self.npipetasks, self.pipeworkers)
-        #print(bal)
         assert(len(bal) == self.pipecheck)
         off = 0
         for w in bal:
@@ -77,7 +76,6 @@ class TestParallel(unittest.TestCase):
         # 3 workers and 5 tasks, 2nd task size=3, others size=1
         #   solution is [[0],[1],[2,3,4]] i.e. workload of [1,3,3]
         assert(dist_discrete_all([1,3,1,1,1],3)==[[0],[1],[2,3,4]])
-
 
     def test_turns(self):
 
