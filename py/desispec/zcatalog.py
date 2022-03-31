@@ -1,13 +1,11 @@
 """
-The zcatalog.py script contains the following utility functions for redshift
-catalogs:
+The zcatalog.py script contains the following utility functions for redshift catalogs:
 
 (1) find_primary_spectra: 
 
-Given an input table with possibly multiple spectra per TARGETID, this function
-returns arrays for a primary flag (whether a spectrum is the primary ["best"]
-spectrum based on the ZWARN value and on a sort column [default='TSNR2_LRG'])
-and for the number of spectra per TARGETID.
+Given an input table with possibly multiple spectra per TARGETID, this function returns arrays for
+a primary flag (whether a spectrum is the primary ["best"] spectrum based on the ZWARN value and 
+on a sort column [default='TSNR2_LRG']) and for the number of spectra per TARGETID.
 
 Usage:
 ------
@@ -15,26 +13,23 @@ Usage:
 
 (2) create_summary_catalog:
 
-This function combines individual redshift catalogs from a given release into
-a single compilation catalog. The output catalog is saved in a FITS file in a
-user-specified location and filename.
+This function combines individual redshift catalogs from a given release into a single compilation 
+catalog. The output catalog is saved in a FITS file in a user-specified location and filename. 
 
-This function can be used for 'fuji' (SV) or 'guadalupe' (Main) by setting the
-keyword `specprod`.  By default, this function aggregates all the columns for
-the redshift catalogs, and adds columns to quantify the number of coadded
-spectra listed in the catalogs for each TARGETID and to identify the
-primary ("best") spectrum out of them using the `find_primary_spectra` function.
-Optionally, the script can return a list of pre-selected "summary" column, or
-a list of user-specified columns via the `columns_list` keyword.
+This function can be used for 'fuji' (EDR) or 'guadalupe' (Main) by setting the keyword `specprod`.
+By default, this function aggregates all the columns for the redshift catalogs, and adds columns to 
+quantify the number of coadded spectra listed in the catalogs for each TARGETID and to identify the 
+primary ("best") spectrum out of them using the `find_primary_spectra` function. Optionally, the 
+script can return a list of pre-selected "summary" column, or a list of user-specified 
+columns via the `columns_list` keyword. 
 
 Usage:
 ------
-   create_summary_catalog(specprod, survey_name, specgroup='zpix',
-           all_columns = True, columns_list=None,
-           output_filename='./zcat-all.fits')
+   create_summary_catalog(specprod, specgroup = 'zpix', all_columns = True, \
+                          columns_list = None, output_filename = './zcat-all.fits')
 
 Ragadeepika Pucha, Stephanie Juneau, and DESI data team 
-Version: 2022, March 17th
+Version: 2022, March 31st
 """
 
 ####################################################################################################
@@ -48,7 +43,6 @@ from astropy.table import Table, Column, vstack, join
 
 ## DESI related functions
 from desispec.io import specprod_root
-from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
 
 ####################################################################################################
@@ -58,28 +52,24 @@ log = get_logger()
 
 def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     """
-    Function to select the best "primary" spectrum for objects with multiple
-    (coadded) spectra.
+    Function to select the best "primary" spectrum for objects with multiple (coadded) spectra.
     
     The best spectrum is selected based on the following steps: 
     1. Spectra with ZWARN=0 are given top preference.
-    2. Among multiple entries with ZWARN=0, spectra with the highest value of
-       'sort_column' are given the preference.
-    3. If there are no spectra with ZWARN=0, spectra with the highest value of
-       'sort_column' are given the preference.
+    2. Among multiple entries with ZWARN=0, spectra with the highest value of 'sort_column' 
+       are given the preference. 
+    3. If there are no spectra with ZWARN=0, spectra with the highest value of 'sort_column' 
+       are given the preference.
     
     Parameters
     ----------
     table : Numpy array or Astropy Table
-        The input table should be a redshift catalog, with at least the
-        following columns:
+        The input table should be a redshift catalog, with at least the following columns: 
         'TARGETID', 'ZWARN' and the sort_column (Default:'TSNR2_LRG')
         Additional columns will be ignored.
     sort_column : str
-        Column name that will be used to select the best spectrum.
-        Default = 'TSNR2_LRG'
-        The higher values of the column will be considered as better
-        (descending order).
+        Column name that will be used to select the best spectrum. Default = 'TSNR2_LRG'
+        The higher values of the column will be considered as better (descending order).
         
     Returns
     -------
@@ -152,13 +142,11 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 ####################################################################################################
 ####################################################################################################
 
-def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
-                           all_columns=True, columns_list=None,
-                           output_filename='./zcat-all.fits'):
+def create_summary_catalog(specprod, specgroup = 'zpix', \
+                           all_columns = True, columns_list = None, output_filename = './zcat-all.fits'):
     """
-    This function combines all the individual redshift catalogs for either
-    'zpix' or 'ztile' with the desired columns (all columns, or a pre-selected
-    list, or a user-given list).
+    This function combines all the individual redshift catalogs for either 'zpix' or 'ztile' 
+    with the desired columns (all columns, or a pre-selected list, or a user-given list).
     It further adds 'NSPEC' and 'PRIMARY' columns, two for SV(or MAIN),
     and two for the entire combined redshift catalog.
     
@@ -169,25 +157,19 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
         Internal Release Name for the DESI Spectral Release
         This is required to create the directory path for the redshift catalogs.
         (fuji|guadalupe|other names in the future)
-        
-    survey_name : str
-        'sv' or 'main'. This is required for adding survey-based primary flags 
-        and also for defining the list of '*_TARGET' columns.
     
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
         
     all_columns : bool
-        Whether or not to include all the columns into the final table.
-        Default is True.
+        Whether or not to include all the columns into the final table. Default is True.
     
     columns_list : list 
         If all_columns = False, list of columns to include in the final table.
-        If None, a list of pre-decided summary columns will be used.
-        Default is None.
-        The 'SV/MAIN' primary flag columns as well as the primary flag columns
-        for the entire catalog witll be included.
+        If None, a list of pre-decided summary columns will be used. Default is None.
+        The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
+        catalog witll be included.
         
     output_filename : str
         Path+Filename for the output summary redshift catalog.
@@ -197,8 +179,8 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
     Returns
     -------
     
-    None. Saves a FITS file at the location and file name specified by
-        `output_filename` with the summary redshift catalog in HDU1.
+    None. The function saves a FITS file at the location and file name specified by `output_filename` 
+          with the summary redshift catalog in HDU1.
 
     """
     
@@ -214,17 +196,9 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
         
     ## Initial check 2
     ## If specgroup = something else by mistake  
-    if specgroup not in ('zpix', 'ztile'):
-        errmsg = f"{specgroup=} should be 'zpix' or 'ztile'"
-        log.error(errmsg)
-        raise ValueError(errmsg)
-        
-    ## Initial check 3
-    ## Check that survey_name is either sv or main
-    if survey_name not in ('sv', 'main'):
-        errmsg = f"{survey_name=} should be 'sv' or 'main'"
-        log.error(errmsg)
-        raise ValueError(errmsg)
+    if (specgroup != 'zpix')&(specgroup != 'ztile'):
+        log.error(f'"{specgroup}" not recognized')
+        raise NameError(f'"{specgroup}" not recognized')
         
     ######################################################################################
     
@@ -234,7 +208,7 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
     ## Find all the filenames for a given specgroup
     if (specgroup == 'zpix'):
         ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{zcat_dir}/zpix*')
+        zcat = glob(f'{zcat_dir}/zpix*.fits')
     elif (specgroup == 'ztile'):
         ## List of all ztile* catalogs, considering only cumulative catalogs
         zcat = glob(f'{zcat_dir}/ztile*cumulative.fits')
@@ -256,7 +230,6 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
         program = arr[2].split('.')[0]
         
         ## Load the ZCATALOG table, along with the meta data
-        log.info(f'Reading {filename}')
         t = Table.read(filename, hdu = 'ZCATALOG')
 
         ## Removing the SURVEY and PROGRAM metadata
@@ -295,67 +268,79 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
     tab['ZCAT_NSPEC'] = nspec
     tab['ZCAT_PRIMARY'] = specprim
     
-    ## Adding empty columns for SV|MAIN NSPEC and PRIMARY
-    col1 = Column(np.array([0]*len(tab)), name = f'{survey_name.upper()}_NSPEC', dtype = '>i2')
-    col2 = Column(np.array([0]*len(tab)), name = f'{survey_name.upper()}_PRIMARY', dtype = 'bool')
-    tab.add_columns([col1, col2])
+    ############################### Adding SV/Main Primary Flags ##################################
     
-    ## Selecting primary spectra for targets within just SV or MAIN depending on the survey_name
-    ## For SV, it selects the primary spectra out of SV1+SV2+SV3 for every individual TARGETID
-    ## Ignores cmx+special in SV
-    ## For Main, it selects the primary spectra just for 'main' and ignores 'special'
-    is_survey = np.char.startswith(tab['SURVEY'].astype(str).data, survey_name)
-    nspec, specprim = find_primary_spectra(tab[is_survey])
-    tab[f'{survey_name.upper()}_NSPEC'][is_survey] = nspec
-    tab[f'{survey_name.upper()}_PRIMARY'][is_survey] = specprim
+    survey_col = tab['SURVEY'].astype(str)
     
+    ## Check if SV1|SV2|SV3 targets are available and add SV Primary Flag columns
+    if ('sv1' in survey_col)|('sv2' in survey_col)|('sv3' in survey_col):
+        ## Add empty columns for SV NSPEC and PRIMARY
+        col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i4')
+        col2 = Column(np.array([0]*len(tab)), name = 'SV_PRIMARY', dtype = 'bool')
+        tab.add_columns([col1, col2])
+        
+        ## Selecting primary spectra for targets within just SV 
+        ## For SV, it selects the primary spectra out of SV1+SV2+SV3 for every individual TARGETID
+        ## Ignores cmx+special in SV
+        is_sv = np.char.startswith(survey_col.data, 'sv')
+        nspec, specprim = find_primary_spectra(tab[is_sv])
+        tab['SV_NSPEC'][is_sv] = nspec
+        tab['SV_PRIMARY'][is_sv] = specprim
+        
+    ## Check if 'main' targets are available and add Main Primary Flag Columns
+    if ('main' in survey_col):
+        ## Add empty columns for Main NSPEC and PRIMARY
+        col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i4')
+        col2 = Column(np.array([0]*len(tab)), name = 'MAIN_PRIMARY', dtype = 'bool')
+        tab.add_columns([col1, col2])
+        
+        ## Selecting primary spectra for targets within just MAIN
+        ## It selects the primary spectra just for 'main' and ignores 'special'
+        is_main = (survey_col.data == 'main')
+        nspec, specprim = find_primary_spectra(tab[is_main])
+        tab['MAIN_NSPEC'][is_main] = nspec
+        tab['MAIN_PRIMARY'][is_main] = specprim
+        
+    ###############################################################################################
+        
     ## For convenience, sort by SURVEY, PROGRAM, and (HEALPIX or TILEID) 
     if (specgroup == 'zpix'):
         tab.sort(['SURVEY', 'PROGRAM', 'HEALPIX'])
     elif (specgroup == 'ztile'):
-        tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT'])
-            
+        tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT'])            
         
     ## Convert the masked column table to normal astropy table and select required columns
-    final_table = update_table_columns(table = tab, survey_name = survey_name, specgroup = specgroup, \
+    final_table = update_table_columns(table = tab, specgroup = specgroup, \
                                        all_columns = all_columns, columns_list = columns_list)
            
     final_table.meta['EXTNAME'] = 'ZCATALOG'
-    tmpout = get_tempfilename(output_filename)
-    final_table.write(tmpout, overwrite = True)
-    os.rename(tmpout, output_filename)
-    log.info(f'Wrote {output_filename}')
+    final_table.write(output_filename, overwrite = True)
     
 ####################################################################################################
 ####################################################################################################
 
-def update_table_columns(table, survey_name, specgroup = 'zpix', all_columns = True, columns_list = None):
+def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_list = None):
     """
-    fills the '*TARGET' masked columns and returns the final table
+    This function fills the '*TARGET' masked columns and returns the final table 
     with the required columns. 
     
     Parameters
     ----------
     
     table : Astropy Table
-    
-    survey_name : str
-        'sv' or 'main'. This is for defining the list of '*_TARGET' columns.
         
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
         
     all_columns : bool
-        Whether or not to include all the columns into the final table.
-        Default is True.
+        Whether or not to include all the columns into the final table. Default is True.
     
     columns_list : list 
         If all_columns = False, list of columns to include in the final table.
-        If None, a list of pre-decided summary columns will be used.
-        Default is None.
-        The 'SV/MAIN' primary flag columns as well as the primary flag columns
-        for the entire catalog witll be included.
+        If None, a list of pre-decided summary columns will be used. Default is None.
+        The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
+        catalog witll be included.
         
     Returns
     -------
@@ -367,18 +352,20 @@ def update_table_columns(table, survey_name, specgroup = 'zpix', all_columns = T
     ## Due to stacking tables with different columns,
     ## We have *TARGET columns that are Masked. We need to fill the empty columns with zero.
     ## This is important - otherwise Astropy fills the table with different values.
-    if (survey_name == 'sv'):
-        ## Making a list of all the '*_TARGET* columns 
-        ## This is for rearranging the columns into proper order
-        target_cols = ['CMX_TARGET', 'DESI_TARGET','BGS_TARGET','MWS_TARGET', 'SCND_TARGET',
-                       'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 
-                       'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 
-                       'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET']
-    else:
-        ## Making a list of all the '*_TARGET* columns 
-        ## This is for rearranging the columns into proper order
-        target_cols = ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']
-        
+    
+    ## Array of all columns:
+    tab_cols = np.array(table.colnames)
+    
+    ## Pick out columns ending with '_TARGET'
+    sel = np.char.endswith(tab_cols, '_TARGET')
+    
+    ## This include FA_TARGET -- which needs to be removed
+    ## Make a list of all the '*_TARGET' columns, which contain DESI targetting information
+    ## This is both for correcting the masked columns, as well as 
+    ## for rearranging the columns into a proper order
+    target_cols = list(tab_cols[sel])
+    target_cols.remove('FA_TARGET')
+
     for col in target_cols:
         ## Fill the *TARGET columns that are masked with 0
         table[col].fill_value = 0
@@ -392,9 +379,20 @@ def update_table_columns(table, survey_name, specgroup = 'zpix', all_columns = T
     ## If no input user-list of columns is given, a pre-selected list of columns is used 
     ## to create a summary redshift catalog
     
-    ## Keeping the primary flag columns separate to add in the end
-    primary_cols = [f'{survey_name.upper()}_NSPEC', f'{survey_name.upper()}_PRIMARY', 
-                                 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
+    ## Find all the existing NSPEC and PRIMARY flag columns and order them
+    nspec_cols = list(tab_cols[np.char.endswith(tab_cols, '_NSPEC')])
+    prim_cols = list(tab_cols[np.char.endswith(tab_cols, '_PRIMARY')])
+    nspec_cols.sort()
+    prim_cols.sort()
+
+    ## Ordering the primary columns
+    ## If SV/MAIN flag columns also exist, the order is - 
+    ## MAIN_NSPEC, MAIN_PRIMARY, SV_NSPEC, SV_PRIMARY, ZCAT_NSPEC, ZCAT_PRIMARY
+    ## This is to add these columns separately in the end
+    primary_cols = []
+    for xx in range(len(nspec_cols)):
+        primary_cols.append(nspec_cols[xx])
+        primary_cols.append(prim_cols[xx])
     
     if all_columns:
         ## Rearranging the columns to order all the *TARGET columns together
@@ -444,3 +442,4 @@ def update_table_columns(table, survey_name, specgroup = 'zpix', all_columns = T
     
 ####################################################################################################
 ####################################################################################################
+
