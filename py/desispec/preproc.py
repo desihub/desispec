@@ -836,7 +836,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
                 #TODO: make this less hacky.
         
-        if darkfinder and darkfinder.haskey['DARK']:
+        if darkfinder and darkfinder.haskey('DARK'):
             dark_filename = darkfinder.findfile("DARK")
         else:
             dark_filename = cfinder.findfile("DARK")
