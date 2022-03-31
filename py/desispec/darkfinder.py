@@ -196,7 +196,7 @@ class DarkFinder(CalibFinder) :
         log.debug("Use spectrograph hardware identifier SMY")
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
         if yaml_file is None :
-            yaml_file = "{}/dark_config/{}_dark.yaml".format(self.directory,specid,cameraid)
+            yaml_file = "{}/dark_config/{}_dark.yaml".format(self.directory,cameraid)
 
         if not os.path.isfile(yaml_file) :
             log.error("Cannot read {}".format(yaml_file))
