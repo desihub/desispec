@@ -191,12 +191,12 @@ class DarkFinder(CalibFinder) :
         if not os.path.isdir(self.directory):
             raise IOError("Dark directory {} not found".format(self.directory))
 
-        #TODO: potentially add a check here that just gets back the respective data from the parent class for early dates (before 09/21)
+        #TODO: potentially add a checks here e.g. for files that are too early?
         
         log.debug("Use spectrograph hardware identifier SMY")
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
         if yaml_file is None :
-            yaml_file = "{}/dark_config/{}.yaml".format(self.directory,specid,cameraid)
+            yaml_file = "{}/dark_config/{}_dark.yaml".format(self.directory,specid,cameraid)
 
         if not os.path.isfile(yaml_file) :
             log.error("Cannot read {}".format(yaml_file))
@@ -209,6 +209,8 @@ class DarkFinder(CalibFinder) :
         data   = yaml.safe_load(stream)
         stream.close()
 
+        #TODO: potentially add a check here e.g. for matching the config of the DARKs to the CCDCONFIG
+
 
         if not cameraid in data :
             log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))
@@ -217,6 +219,7 @@ class DarkFinder(CalibFinder) :
         data=data[cameraid]
         log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
         log.debug("Finding matching version ...")
+        
         #TODO: decide on how to define the version exactly
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
