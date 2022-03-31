@@ -12,7 +12,7 @@ import yaml
 import os.path
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
-from calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder
 
 def parse_date_obs(value):
     '''
@@ -219,7 +219,7 @@ class DarkFinder(CalibFinder) :
         data=data[cameraid]
         log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
         log.debug("Finding matching version ...")
-        
+
         #TODO: decide on how to define the version exactly
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
