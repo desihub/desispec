@@ -20,6 +20,8 @@ from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
 from desiutil import depend
 from desispec.calibfinder import CalibFinder
+from desispec.darkfinder import DarkFinder
+
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
@@ -640,7 +642,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False):
+            keep_overscan_cols=False, dark_calibration_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -736,15 +738,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     header = header.copy()
     depend.setdep(header, 'DESI_SPECTRO_CALIB', os.getenv('DESI_SPECTRO_CALIB'))
+    depend.setdep(header, 'DESI_SPECTRO_DARK', os.getenv('DESI_SPECTRO_DARK'))
+
 
     for key in ['DESI_SPECTRO_REDUX', 'SPECPROD']:
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
     cfinder = None
-
+    darkfinder = None
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
+
+    if dark_calibration_filename is not False:
+        darkfinder = DarkFinder([header, primary_header], yaml_file=dark_calibration_filename)
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
@@ -786,7 +793,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     # Set bias image, as desired
     if bias_img is None:
         #- will try biasnight first, then default bias
-        bias = get_calibration_image(cfinder,"BIAS",bias,header)
+        if darkfinder and darkfinder.haskey("BIAS"):
+            bias = get_calibration_image(darkfinder,"BIAS",bias,header)
+        else:
+            bias = get_calibration_image(cfinder,"BIAS",bias,header)
     else:
         bias = bias_img
 
@@ -813,7 +823,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     readnoise = np.zeros_like(image)
 
     #- Load dark
-    if cfinder and cfinder.haskey("DARK") and (dark is not False):
+    if cfinder and (cfinder.haskey("DARK") or (darkfinder and darkfinder.haskey("DARK"))) and (dark is not False):
+
 
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
@@ -823,8 +834,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             exptime_key="EXPTIME"
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
-
-        dark_filename = cfinder.findfile("DARK")
+                #TODO: make this less hacky.
+        
+        if darkfinder and darkfinder.haskey['DARK']:
+            dark_filename = darkfinder.findfile("DARK")
+        else:
+            dark_filename = cfinder.findfile("DARK")
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
@@ -928,6 +943,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         if not nodarktrail and cfinder is not None :
             if cfinder.haskey("DARKTRAILAMP%s"%amp) :
+                #TODO: should those go into the DARK files, probably not, but need to check
                 log.info("Perform a dark trail correction before fitting the overscan region")
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
