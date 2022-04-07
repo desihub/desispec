@@ -488,14 +488,7 @@ def get_petalqa_props(key):
             config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"],
             "mean",
         )
-    if key == "TSNR2FRA":
-        short, precision, okmin, okmax, combine = (
-            "TSNR2FRA",
-            2,
-            config["exposure_qa"]["tsnr2_petal_minfrac"],
-            config["exposure_qa"]["tsnr2_petal_maxfrac"],
-            "mean",
-        )
+    # AR TSNR2FRA removed (https://github.com/desihub/desispec/pull/1722)
     if key in ["BTHRUFRAC", "RTHRUFRAC", "ZTHRUFRAC", "THRUFRAC"]:
         short, precision, okmin, okmax = (
             key,
@@ -535,7 +528,7 @@ def print_petal_infos(ax, petalqa, fiberqa):
         "NGOODPOS",
         "NSTDSTAR",
         "STARRMS",
-        "TSNR2FRA",
+        # "TSNR2FRA",
         "BTHRUFRAC",
         "RTHRUFRAC",
         "ZTHRUFRAC",
@@ -635,7 +628,7 @@ def print_petal_infos(ax, petalqa, fiberqa):
 
         if show_bad_petal_cause :
             val=""
-            for cause in ["BADPETALPOS","BADPETALSKY","BADPETALSTDSTAR","BADPETALFLUXCAL","BADPETALSNR","BADREADNOISE"] :
+            for cause in ["BADPETALPOS","BADPETALSKY","BADPETALSTDSTAR","BADPETALFLUXCAL","BADREADNOISE"] :
                 n1 = np.sum(fiberqa["PETAL_LOC"]==i)
                 n2 = np.sum((fiberqa["PETAL_LOC"]==i)&(fiberqa["QAFIBERSTATUS"]&fibermask.mask(cause)>0))
                 cause = cause.replace("BADPETAL","")

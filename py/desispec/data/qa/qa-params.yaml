@@ -29,8 +29,6 @@ exposure_qa:
  # tsnr parameters
  tsnr2_band : r
  tsnr2_key : TSNR2_LRG_R
- tsnr2_petal_minfrac : 0.5
- tsnr2_petal_maxfrac : 2.
  tsnr2_for_efftime_dark : 'TSNR2_ELG'
  tsnr2_for_efftime_bright : 'TSNR2_BGS'
  tsnr2_for_efftime_backup : 'TSNR2_BGS'
