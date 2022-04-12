@@ -142,8 +142,20 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 ####################################################################################################
 ####################################################################################################
 
+def _get_survey_program_from_filename(filename):
+    """
+    Return SURVEY,PROGRAM parsed from zpix/ztile filename; fragile!
+    """
+    # zpix-SURVEY-PROGRAM.fits or ztile-SURVEY-PROGRAM-SPECGROUP.fits
+    base = os.path.splitext(os.path.basename(filename))[0]
+    arr = base.split('-')
+    survey = arr[1]
+    program = arr[2]
+    return survey, program
+
 def create_summary_catalog(specprod, specgroup = 'zpix', \
-                           all_columns = True, columns_list = None, output_filename = './zcat-all.fits'):
+                           all_columns = True, columns_list = None,
+                           output_filename = './zcat-all.fits'):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile' 
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -192,13 +204,15 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     specred_dir = specprod_root(specprod)    
     if (os.path.isdir(specred_dir) == False):
         log.error(f'"{specprod}" directory does not exist')
-        raise OSError(f'"{specprod}" directory does not exist')
+        raise ValueError(f'"{specprod}" directory does not exist')
         
     ## Initial check 2
     ## If specgroup = something else by mistake  
-    if (specgroup != 'zpix')&(specgroup != 'ztile'):
-        log.error(f'"{specgroup}" not recognized')
-        raise NameError(f'"{specgroup}" not recognized')
+    valid_specgroups = ('zpix', 'ztile')
+    if specgroup not in valid_specgroups:
+        errmsg = f'{specgroup=} not recognized, should be one of {valid_specgroups}'
+        log.error(errmsg)
+        raise ValueError(errmsg)
         
     ######################################################################################
     
@@ -208,10 +222,10 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     ## Find all the filenames for a given specgroup
     if (specgroup == 'zpix'):
         ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{zcat_dir}/zpix*.fits')
+        zcat = glob(f'{zcat_dir}/zpix-*.fits')
     elif (specgroup == 'ztile'):
         ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{zcat_dir}/ztile*cumulative.fits')
+        zcat = glob(f'{zcat_dir}/ztile-*cumulative.fits')
                     
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
@@ -224,18 +238,30 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     
     ## Looping through the different zcatalogs and adding the survey and program columns
     for filename in zcat:
-        arr = filename.split('-')
-        ## Filename can be used to get the survey and program of the given redshift catalog
-        survey = arr[1]
-        program = arr[2].split('.')[0]
+        basefile = os.path.basename(filename)
         
         ## Load the ZCATALOG table, along with the meta data
+        log.debug(f'Reading {filename}')
         t = Table.read(filename, hdu = 'ZCATALOG')
 
-        ## Removing the SURVEY and PROGRAM metadata
-        ## This is because we are stacking catalogs from multiple surveys and programs
-        del t.meta['SURVEY']
-        del t.meta['PROGRAM']
+        ## Get SURVEY and PROGRAM from header, then remove from header
+        ## because we are stacking catalogs from multiple surveys and programs
+        if 'SURVEY' in t.meta:
+            survey = t.meta['SURVEY']
+            del t.meta['SURVEY']
+        else:
+            # parse filename if needed, but complain about it
+            survey = _get_survey_program_from_filename(filename)[0]
+            log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
+
+        if 'PROGRAM' in t.meta:
+            program = t.meta['PROGRAM']
+            del t.meta['PROGRAM']
+        else:
+            program = _get_survey_program_from_filename(filename)[1]
+            log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
+
+        log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
         ## We keep the rest of the meta data 
 
         ## Add the SURVEY and PROGRAM columns
@@ -265,6 +291,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     ## Replacing the existing 'ZCAT_NSPEC' and 'ZCAT_PRIMARY'
     ## If all_columns = False, and user-list does not contain this column -
     ## these columns will be added 
+    log.debug('Updating ZCAT_PRIMARY and ZCAT_NSPEC')
     tab['ZCAT_NSPEC'] = nspec
     tab['ZCAT_PRIMARY'] = specprim
     
@@ -274,6 +301,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     
     ## Check if SV1|SV2|SV3 targets are available and add SV Primary Flag columns
     if ('sv1' in survey_col)|('sv2' in survey_col)|('sv3' in survey_col):
+        log.debug('Found SV inputs; adding SV_PRIMARY and SV_NSPEC columns')
         ## Add empty columns for SV NSPEC and PRIMARY
         col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i4')
         col2 = Column(np.array([0]*len(tab)), name = 'SV_PRIMARY', dtype = 'bool')
@@ -289,6 +317,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
         
     ## Check if 'main' targets are available and add Main Primary Flag Columns
     if ('main' in survey_col):
+        log.debug('Found main survey inputs; adding MAIN_PRIMARY and MAIN_NSPEC columns')
         ## Add empty columns for Main NSPEC and PRIMARY
         col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i4')
         col2 = Column(np.array([0]*len(tab)), name = 'MAIN_PRIMARY', dtype = 'bool')
@@ -315,6 +344,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
            
     final_table.meta['EXTNAME'] = 'ZCATALOG'
     final_table.write(output_filename, overwrite = True)
+    log.debug(f'Wrote {output_filename}')
     
 ####################################################################################################
 ####################################################################################################
