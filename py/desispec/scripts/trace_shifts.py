@@ -234,8 +234,9 @@ def fit_trace_shifts(image,args) :
         degxy=0
         degyx=0
         degyy=0
-
-    while(True) : # loop because polynomial degrees could be reduced
+    
+    nloops = 10
+    while(nloops > 0) : # loop because polynomial degrees could be reduced
 
         log.info("polynomial fit of measured offsets with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
         try :
@@ -283,6 +284,11 @@ def fit_trace_shifts(image,args) :
         else :
             # error is ok, so we quit the loop
             break
+
+        nloop -= 1
+        if nloop == 0:
+            log.warn('Hit iteration limit. Setting degxx=degxy=degyx=degyy=0')
+            degxx, degxy, degyx, degyy = 0, 0, 0, 0
 
     # write this for debugging
     if args.outoffsets :
