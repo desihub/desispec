@@ -239,8 +239,8 @@ def fit_trace_shifts(image,args) :
     while (nloops > 0) : # loop because polynomial degrees could be reduced
 
         # Fallback to avoid infinite loops: track iterations and cut off after 10.
-        nloop -= 1
-        if nloop == 0:
+        nloops -= 1
+        if nloops == 0:
             log.warn('Hit iteration limit. Setting degxx=degxy=degyx=degyy=0')
             degxx, degxy, degyx, degyy = 0, 0, 0, 0
 
