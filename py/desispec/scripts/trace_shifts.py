@@ -234,9 +234,12 @@ def fit_trace_shifts(image,args) :
         degxy=0
         degyx=0
         degyy=0
+    
+    n = 0
+    nloops = max(degxx, degyx) + max(degxy, degyy)
+    while True: # loop because polynomial degrees could be reduced
 
-    while(True) : # loop because polynomial degrees could be reduced
-
+        # Try fitting offsets.
         log.info("polynomial fit of measured offsets with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
         try :
             dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(z=dx,ez=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
@@ -274,15 +277,20 @@ def fit_trace_shifts(image,args) :
             if merr != 100000. :
                 log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
 
-            if degxy>0 and degyy>0 and degxy>degxx and degyy>degyx : # first along wavelength
+            if (degxy>0 or degyy>0) and (degxy>degxx or degyy>degyx): # first along wavelength
                 if degxy>0 : degxy-=1
                 if degyy>0 : degyy-=1
-            else : # then along fiber
+            else :                                                  # then along fiber
                 if degxx>0 : degxx-=1
                 if degyx>0 : degyx-=1
         else :
             # error is ok, so we quit the loop
             break
+
+        # Sanity check to ensure looping is not infinite.
+        n += 1
+        if n > nloops:
+            raise RuntimeError(f'Maximum fit iterations {nloops} exceeded.')
 
     # write this for debugging
     if args.outoffsets :
