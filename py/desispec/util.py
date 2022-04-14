@@ -2,6 +2,7 @@
 Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
+import argparse
 
 import os
 import sys
@@ -85,22 +86,17 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
 
     #- run command
     if isinstance(cmd, collections.abc.Callable):
+        #- TODO: should we check outputs before returning when cmd is callable?
         if args is None:
-            args = []
-
-        try:
+            return cmd()
+        elif isinstance(args, argparse.Namespace):
+            return cmd(args)
+        else:
             return cmd(*args)
-        except Exception as e:
-            import traceback
-            lines = traceback.format_exception(*sys.exc_info())
-            for line in lines:
-                line = line.strip()
-                log.error(f'{line}')
-            log.critical(f"FAILED {cmd=} with {args=}")
-            raise e
-
     else:
         if args is None:
+            #- TODO: print warning? deprecate?
+            # raise RuntimeError("Do not use!")
             err = sp.call(cmd, shell=True)
         else:
             raise ValueError("Don't provide args unless cmd is function")

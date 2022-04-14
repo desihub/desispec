@@ -308,7 +308,9 @@ def main(args=None, comm=None):
                 for flat in inflats_for_camera[camera]:
                     cmd += f" {flat} "
                 num_cmd += 1
-                err = runcmd(cmd, inputs=inflats_for_camera[camera], outputs=[ofile, ])
+                cmdargs = cmd.split()[1:]
+                average_fiberflat_args = desispec.scripts.average_fiberflat.parse(cmdargs)
+                err = runcmd(desispec.scripts.average_fiberflat.main, args=average_fiberflat_args, inputs=inflats_for_camera[camera], outputs=[ofile, ])
                 if err:
                     num_err += 1
             else:
@@ -324,7 +326,9 @@ def main(args=None, comm=None):
             for flat in flats_for_arm[camera_arm]:
                 cmd += f" {flat} "
             num_cmd += 1
-            err = runcmd(cmd, inputs=flats_for_arm[camera_arm], outputs=[])
+            cmdargs = cmd.split()[1:]
+            autocalib_fiberflat_args = desispec.scripts.autocalib_fiberflat.parse(cmdargs)
+            err = runcmd(desispec.scripts.autocalib_fiberflat.main, args=autocalib_fiberflat_args, inputs=flats_for_arm[camera_arm], outputs=[])
             if err:
                 num_err += 1
 
