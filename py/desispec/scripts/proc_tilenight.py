@@ -16,22 +16,6 @@ from astropy.io import fits
 
 from astropy.table import Table,vstack
 
-import glob
-import desiutil.timer
-import desispec.io
-from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword, decode_camword, parse_cameras
-from desispec.io.util import validate_badamps
-from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
-from desispec.fiberflat import apply_fiberflat
-from desispec.sky import subtract_sky
-from desispec.util import runcmd
-import desispec.scripts.extract
-import desispec.scripts.specex
-import desispec.scripts.stdstars
-import desispec.scripts.nightly_bias
-from desispec.maskbits import ccdmask
-
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
@@ -55,8 +39,6 @@ def parse(options=None):
 def main(args=None, comm=None):
     if args is None:
         args = parse()
-    # elif isinstance(args, (list, tuple)):
-    #     args = parse(args)
 
     log = get_logger()
     error_count = 0
