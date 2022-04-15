@@ -69,7 +69,7 @@ def read_sky(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..sky import SkyModel
     log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
@@ -78,6 +78,7 @@ def read_sky(filename) :
         filename = findfile('sky', night, expid, camera)
 
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header

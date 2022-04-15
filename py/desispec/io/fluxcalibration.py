@@ -16,7 +16,7 @@ from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 from desiutil.io import encode_table
 
-from .util import fitsheader, native_endian, makepath
+from .util import fitsheader, native_endian, makepath, checkgzip
 from . import iotime
 
 def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
@@ -90,6 +90,7 @@ def read_stdstar_models(filename):
     """
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False) as fx:
         flux = native_endian(fx['FLUX'].data.astype('f8'))
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
@@ -161,6 +162,7 @@ def read_flux_calibration(filename):
     from ..fluxcalibration import FluxCalib
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False, uint=True) as fx:
         calib = native_endian(fx[0].data.astype('f8'))
         ivar = native_endian(fx["IVAR"].data.astype('f8'))
@@ -246,6 +248,7 @@ def read_average_flux_calibration(filename):
     from ..averagefluxcalibration import AverageFluxCalib
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False, uint=True) as fx:
         average_calib = native_endian(fx[0].data.astype('f8'))
         atmospheric_extinction = native_endian(fx["ATERM"].data.astype('f8'))
@@ -309,6 +312,7 @@ def read_stdstar_templates(stellarmodelfile):
     """
     log = get_logger()
     t0 = time.time()
+    stellarmodelfile = checkgzip(stellarmodelfile)
     phdu=fits.open(stellarmodelfile, memmap=False)
 
     #- New templates have wavelength in HDU 2

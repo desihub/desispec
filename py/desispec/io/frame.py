@@ -19,7 +19,7 @@ from desiutil.log import get_logger
 from ..frame import Frame
 from .fibermap import read_fibermap
 from .meta import findfile, get_nights, get_exposures
-from .util import fitsheader, native_endian, makepath
+from .util import fitsheader, native_endian, makepath, checkgzip
 from . import iotime
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):
@@ -132,6 +132,7 @@ def read_meta_frame(filename, extname=0):
         meta: dict or astropy.fits.header
 
     """
+    filename = checkgzip(filename)
     with fits.open(filename, uint=True, memmap=False) as fx:
         hdr = fx[extname].header
     return hdr
@@ -152,6 +153,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     log = get_logger()
+    filename = checkgzip(filename)
 
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
@@ -253,7 +255,6 @@ def search_for_framefile(frame_file, specprod_dir=None):
 
     Returns:
         mfile: str,  full path to frame_file if found else raise error
-
     """
     log=get_logger()
     # Parse frame file

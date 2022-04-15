@@ -25,7 +25,7 @@ from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 from desiutil.log import get_logger
 
-from .util import fitsheader, native_endian, add_columns
+from .util import fitsheader, native_endian, add_columns, checkgzip
 from . import iotime
 
 from .frame import read_frame
@@ -199,6 +199,7 @@ def read_spectra(infile, single=False):
 
     """
     log = get_logger()
+    infile = checkgzip(infile)
     ftype = np.float64
     if single:
         ftype = np.float32
@@ -318,6 +319,7 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         The object containing the data read from disk.
 
     """
+    filename = checkgzip(filename)
     fr = read_frame(filename)
     if fr.fibermap is None:
         raise RuntimeError("reading Frame files into Spectra only supported if a fibermap exists")
@@ -412,7 +414,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits')
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*')
 
     if len(specfiles) == 0:
         raise ValueError(f'No spectra found in {tiledir}')

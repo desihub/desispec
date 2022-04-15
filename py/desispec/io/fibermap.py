@@ -275,6 +275,7 @@ def read_fibermap(filename):
     #- to change every place that reads a fibermap.
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
 
     fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
     fibermap = Table(fibermap)

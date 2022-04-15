@@ -14,6 +14,7 @@ from desiutil.io import yamlify
 from desispec.io import findfile, read_meta_frame
 from desispec.io.util import makepath
 from desiutil.log import get_logger
+from .util import checkgzip
 # log=get_logger()
 
 
@@ -27,6 +28,7 @@ def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
     Returns:
 
     """
+    frame_file = checkgzip(frame_file)
     frame_meta = read_meta_frame(frame_file)
     night = frame_meta['NIGHT'].strip()
     camera = frame_meta['CAMERA'].strip()
@@ -81,6 +83,7 @@ def read_qa_frame(filename):
         filename = findfile('qa', night, expid, camera)
 
     # Read
+    filename = checkgzip(filename)
     qa_data = read_qa_data(filename)
 
     # Instantiate

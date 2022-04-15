@@ -49,7 +49,7 @@ def read_skycorr(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..skycorr import SkyCorr
     log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
@@ -58,6 +58,7 @@ def read_skycorr(filename) :
         filename = findfile('skycorr', night, expid, camera)
 
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header
@@ -110,11 +111,12 @@ def read_skycorr_pca(filename) :
     """Read sky correction pca file and return SkyCorrPCA object.
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..skycorr import SkyCorrPCA
 
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header

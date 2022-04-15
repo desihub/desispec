@@ -19,7 +19,7 @@ from desiutil.log import get_logger
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
-from .util import fitsheader, native_endian, makepath
+from .util import fitsheader, native_endian, makepath, checkgzip
 from . import iotime
 
 def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
@@ -101,6 +101,7 @@ def read_fiberflat(filename):
 
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, uint=True, memmap=False) as fx:
         header    = fx[0].header
         fiberflat = native_endian(fx[0].data.astype('f8'))

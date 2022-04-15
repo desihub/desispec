@@ -13,6 +13,7 @@ import numpy as np
 from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from . import iotime
+from .util import checkgzip
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
@@ -87,6 +88,7 @@ def read_image(filename):
     Returns desispec.image.Image object from input file
     """
     log = get_logger()
+    filename = checkgzip(filename)
     t0 = time.time()
     with fits.open(filename, uint=True, memmap=False) as fx:
         image = native_endian(fx['IMAGE'].data).astype(np.float64)

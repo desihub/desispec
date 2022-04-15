@@ -3,7 +3,7 @@ import fitsio
 import astropy.io.fits as fits
 from desiutil.log import get_logger
 from .meta import findfile
-from .util import native_endian
+from .util import native_endian, checkgzip
 
 def get_humidity(night,expid,camera) :
     log=get_logger()
@@ -37,7 +37,7 @@ def read_fiberflat_vs_humidity(filename):
         wave is 1D [nwave] (and in Angstrom)
         header (fits header)
     """
-
+    filename = checkgzip(filename)
     with fits.open(filename, uint=True, memmap=False) as fx:
         header = fx[0].header
         wave  = native_endian(fx["WAVELENGTH"].data.astype('f8'))
