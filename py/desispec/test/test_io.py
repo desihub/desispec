@@ -754,7 +754,7 @@ class TestIO(unittest.TestCase):
         file2 = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                     os.environ['SPECPROD'],'exposures',str(kwargs['night']),
                     '{expid:08d}'.format(**kwargs),
-                    'sky-{camera}-{expid:08d}.fits'.format(**kwargs))
+                    'sky-{camera}-{expid:08d}.fits.gz'.format(**kwargs))
 
         self.assertEqual(file1, file2)
 
@@ -824,13 +824,13 @@ class TestIO(unittest.TestCase):
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'],
                          'healpix', 'main', 'bright', '52', '5286',
-                         'spectra-main-bright-5286.fits')
+                         'spectra-main-bright-5286.fits.gz')
         self.assertEqual(a, b)
         a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'], 'tiles', 'cumulative',
                          '68000', '20200314',
-                         'spectra-2-68000-thru20200314.fits')
+                         'spectra-2-68000-thru20200314.fits.gz')
         self.assertEqual(a, b)
 
         #- cumulative vs. pernight
@@ -849,6 +849,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits.gz'))
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
 
@@ -859,6 +861,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits.gz'))  #- no "thru"
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
 
@@ -874,6 +878,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits.gz'))  #- exp not thru
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
@@ -966,7 +972,7 @@ class TestIO(unittest.TestCase):
         with open(x,'a') as f:
             pass
         # Find it
-        mfile = search_for_framefile('frame-b0-000123.fits')
+        mfile = search_for_framefile('frame-b0-000123.fits.gz')
         self.assertEqual(x, mfile)
 
     def test_get_reduced_frames(self):
@@ -1034,7 +1040,7 @@ class TestIO(unittest.TestCase):
         paths = download(filename)
         self.assertEqual(paths[0], filename)
         self.assertTrue(os.path.exists(paths[0]))
-        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits',
+        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits.gz',
                                          auth=_auth_cache['data.desi.lbl.gov'])
         n.authenticators.assert_called_once_with('data.desi.lbl.gov')
         #
