@@ -12,6 +12,8 @@ import yaml
 import glob
 from astropy.table import Table,vstack
 
+from desispec.io.util import checkgzip
+
 from desiutil.log import get_logger
 
 
@@ -301,12 +303,19 @@ def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
     nok=0
     for spectro in range(10) :
 
-        coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        if not os.path.isfile(coadd_filename) :
+        # coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
+        coadd_filename = findfile('coadd', night=night, tile=tileid, spectrograph=spectro, groupname='cumulative', specprod_dir=specprod_dir)
+        try:
+            coadd_filename = checkgzip(coadd_filename)
+        except FileNotFoundError:
             if warn : log.warning("missing {}".format(coadd_filename))
             continue
-        redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        if not os.path.isfile(redrock_filename) :
+            
+        # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
+        redrock_filename = findfile('redrock', night=night, tile=tileid, spectrograph=spectro, groupname='cumulative', specprod_dir=specprod_dir)
+        try:
+            redrock_filename = checkgzip(redrock_filename)
+        except FileNotFoundError:
             if warn : log.warning("missing {}".format(redrock_filename))
             continue
 

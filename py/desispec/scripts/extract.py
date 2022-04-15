@@ -639,7 +639,7 @@ def main_mpi(args, comm=None, timing=None):
         myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
 
     # get the root output file
-    outpat = re.compile(r'(.*)\.fits')
+    outpat = re.compile(r'(.*)\.fits(\.gz)?')
     outmat = outpat.match(args.output)
     if outmat is None:
         raise RuntimeError("extraction output file should have .fits extension")
