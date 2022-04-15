@@ -96,7 +96,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             for line in lines:
                 line = line.strip()
                 log.error(f'{line}')
-            log.critical("FAILED {cmd=} with {args=}".format(err, cmd))
+            log.critical(f"FAILED {cmd=} with {args=}")
             raise e
 
     else:
