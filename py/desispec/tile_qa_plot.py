@@ -881,7 +881,7 @@ def get_expids_efftimes(tileqafits, prod):
             if len(spectra_fns) == 0:
                 tiledir = os.path.dirname(
                     findfile(
-                        "spectra", tile=tileid, groupname=groupname, night=night, spectrograph=0
+                        "spectra", tile=tileid, groupname=groupname, night=night, spectrograph=0, specprod_dir=prod
                     )
                 )
                 tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
@@ -1105,7 +1105,7 @@ def get_tilecov(
     if outpng is not None:
         # AR cbar settings
         cmin = 0
-        # AR for "regular" programs, setting cmax to the 
+        # AR for "regular" programs, setting cmax to the
         # AR    designed max. npass (though considering future possibility
         # AR    to have more pass, e.g. for mainBRIGHT, hence the np.max())
         refcmaxs = {
