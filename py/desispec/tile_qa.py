@@ -272,9 +272,20 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj]*((exposure_fiberqa_tables['QAFIBERSTATUS'][jj]&bad_fibers_mask)==0))
 
-    # set bit of LOWEFFTIME per fiber
+    # AR set bit of LOWEFFTIME per fiber using the median of EBV>0 fibers, with a EBVFAC-like dependence
+    # AR (see https://github.com/desihub/desispec/pull/1722)
     minimal_efftime = qa_params["tile_qa"]["fiber_rel_mintfrac"]*exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]
-    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"]<minimal_efftime)[0]
+    ebvfac_coeff = 2.165
+    ebvfac_fibers = 10. ** (ebvfac_coeff * tile_fiberqa_table["EBV"] / 2.5)
+    sel = tile_fiberqa_table["EBV"] > 0
+    if sel.sum() == 0:
+        ebvmed = 0
+        log.info("zero fibers with EBV>0 -> setting ebvmed=0 for LOWEFFTIME criterion")
+    else:
+        ebvmed = np.median(tile_fiberqa_table["EBV"][sel])
+        log.info("using {} EBV>0 fibers to set ebvmed={:.2f}".format(sel.sum(), ebvmed))
+    ebvfac_med = 10. ** (ebvfac_coeff * ebvmed / 2.5)
+    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"] * (ebvfac_fibers / ebvfac_med) ** 2 < minimal_efftime)[0]
     tile_fiberqa_table['QAFIBERSTATUS'][low_efftime_fibers] |= fibermask.mask("LOWEFFTIME")
 
     # good fibers are the fibers with efftime above the threshold
@@ -289,7 +300,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
     tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=np.int16)
     # all of these will be means of inputs, so get float32 output dtype
-    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME',
+    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'NCFRAME',
           'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',
           'BTHRUFRAC', 'RTHRUFRAC', 'ZTHRUFRAC']
     for k in keys :

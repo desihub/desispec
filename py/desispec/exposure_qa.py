@@ -89,7 +89,6 @@ def compute_exposure_qa(night, expid, specprod_dir):
     poorposition=(dist_mm>qa_params["poor_fiber_offset_mm"])
     fiberqa_table['QAFIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
 
-    petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
     fiberqa_table["EFFTIME_SPEC"]=np.zeros(fiberqa_table["TARGETID"].size, dtype=np.float32)
@@ -102,7 +101,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petalqa_table["NGOODFIB"]=np.zeros(npetal,dtype=np.int16)
     petalqa_table["NSTDSTAR"]=np.zeros(npetal,dtype=np.int16)
     petalqa_table["STARRMS"]=np.zeros(npetal,dtype=np.float32)
-    petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=np.float32)
+    # petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["NCFRAME"]=np.zeros(npetal,dtype=np.int16)
     petalqa_table["BSKYTHRURMS"]=np.zeros(npetal,dtype=np.float32)
@@ -296,11 +295,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
             continue
         scores = fitsio.read(cframe_filename,"SCORES")
         print(scores.dtype.names)
-        tsnr2_key  = qa_params["tsnr2_key"]
-        tsnr2_vals = scores[tsnr2_key]
-        good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions_mask)==0)
-        petal_tsnr2[petal] = np.median(tsnr2_vals[good])
-        log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
+
+        # AR the tsnr2_petals computation has been removed
+        # https://github.com/desihub/desispec/pull/1722
 
         tsnr2_for_efftime_vals = np.zeros(entries.size)
         for band in ["B","R","Z"] :
@@ -363,21 +360,6 @@ def compute_exposure_qa(night, expid, specprod_dir):
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
 
-    petal_tsnr2_frac = np.zeros(npetal)
-    if np.all(petal_tsnr2==0) :
-         fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALSNR")
-         log.error("all petals have TSNR2=0")
-    else :
-        mean_tsnr2 = np.mean(petal_tsnr2[petal_tsnr2!=0])
-        petal_tsnr2_frac = petal_tsnr2/mean_tsnr2
-        for petal in petal_locs :
-            petalqa_table["TSNR2FRA"][petal]=petal_tsnr2_frac[petal]
-        badpetals=(petal_tsnr2_frac<qa_params["tsnr2_petal_minfrac"])|(petal_tsnr2_frac>qa_params["tsnr2_petal_maxfrac"])
-        for petal in np.where(badpetals)[0] :
-            entries=(fiberqa_table['PETAL_LOC'] == petal)
-            fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSNR")
-            log.warning("petal #{} TSNR2 frac = {:3.2f}".format(petal,petal_tsnr2_frac[petal]))
-
     # count bad fibers
     for petal in petal_locs :
         entries=(fiberqa_table['PETAL_LOC'] == petal)
@@ -391,12 +373,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fiberqa_table.meta["WORSTRDN"]=worst_rdnoise
     if len(good_fibers) > 0 :
         fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
-        fiberqa_table.meta["PMINEXPF"]=np.min(petal_tsnr2_frac[good_petals])
-        fiberqa_table.meta["PMAXEXPF"]=np.max(petal_tsnr2_frac[good_petals])
         fiberqa_table.meta['EFFTIME']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
     else:
-        fiberqa_table.meta["PMINEXPF"]=0.0
-        fiberqa_table.meta["PMAXEXPF"]=0.0
         fiberqa_table.meta['EFFTIME']=0.0
 
     if frame_header is not None :
