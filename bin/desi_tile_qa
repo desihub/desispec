@@ -217,7 +217,7 @@ def main():
 
             if os.path.exists(qafitsfile) and not os.path.exists(qapngfile):
                 log.info(f'Trying again on '+os.path.basename(qapngfile))
-                _wrap_make_tile_qa_plot(qafitsfile, args.outdir)
+                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod)
 
     if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
