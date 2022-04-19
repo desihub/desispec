@@ -35,6 +35,19 @@ class SkyGradPCA(object):
         self.header = header
 
 
+def configure_for_xyr(skygradpca, x, y, R, skyfibers=None):
+    skygradpca.dx = x - np.mean(x)
+    skygradpca.dy = y - np.mean(y)
+    meanR = np.sum(R) / len(R)
+    deconvskygradpca = np.zeros_like(skygradpca.flux)
+    for i in range(skygradpca.nspec):
+        deconvskygradpca[i] = np.linalg.solve(
+            meanR.T.dot(meanR).toarray(),
+            meanR.T.dot(skygradpca.flux[i]))
+    skygradpca.deconvflux = deconvskygradpca
+    skygradpca.skyfibers = skyfibers
+
+
 # let's gather a lot of skies and do a PCA
 def gather_skies(fn=None, camera='r', petal=0, n=np.inf, heliocor=True,
                  tpcorr_power=1, include_mean_sky=True,
