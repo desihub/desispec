@@ -2,13 +2,44 @@
 desispec Change Log
 ===================
 
-0.52.0 (unreleased)
+0.52.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.52.0 (2022-04-19)
+-------------------
+
+Used to create combined ``zcatalog/zall-*.fits`` files in fuji and guadalupe.
+
+* qproc/nightwatch: fix deggy=0 for traceshifts (PR `#1719`_).
+* Ignore overscan rows with large cosmic charge deposit in nearby columns
+  (PR `#1720`_)
+* Add tools to create combined/summary catalogs for specprods (PR `#1721`_).
+* tile QA: highlight secondary-only fibers in z vs. fiber (PR `#1729`_).
+* Enable GPUs on perlmutter in rrdesi_mpi slurm script (PR `#1730`_, `#1734`_).
+* Adjust main survey minimum exposure efftime_etc (PR `#1731`_).
 * Warning files produced by QSO afterburners will now be called
   ``.misscamera.txt`` (PR `#1732`_).
+* Cleanup: make ``find_overscan_cosmic_trails`` separate function for testing
+  (PR `#1733`_).
+* Pipeline: add CTE flat class to dashboard so it reflects expected files
+  (PR `#1736`_).
+* Fix traceshift infinite iteration bug (PR `#1742`_).
+* Fix doctest config for GitHub actions (PR `#1744`_).
 
+.. _`#1719`: https://github.com/desihub/desispec/pull/1719
+.. _`#1720`: https://github.com/desihub/desispec/pull/1720
+.. _`#1721`: https://github.com/desihub/desispec/pull/1721
+.. _`#1729`: https://github.com/desihub/desispec/pull/1729
+.. _`#1730`: https://github.com/desihub/desispec/pull/1730
+.. _`#1731`: https://github.com/desihub/desispec/pull/1731
 .. _`#1732`: https://github.com/desihub/desispec/pull/1732
+.. _`#1733`: https://github.com/desihub/desispec/pull/1733
+.. _`#1734`: https://github.com/desihub/desispec/pull/1734
+.. _`#1736`: https://github.com/desihub/desispec/pull/1736
+.. _`#1742`: https://github.com/desihub/desispec/pull/1742
+.. _`#1744`: https://github.com/desihub/desispec/pull/1744
 
 0.51.13 (2022-02-28)
 --------------------
