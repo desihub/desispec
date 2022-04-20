@@ -20,6 +20,7 @@ from ..frame import Frame
 from .fibermap import read_fibermap
 from .meta import findfile, get_nights, get_exposures
 from .util import fitsheader, native_endian, makepath, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):
@@ -114,8 +115,9 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
                         hdu.header[key] = (value, frame.scores_comments[value])
 
     t0 = time.time()
-    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 

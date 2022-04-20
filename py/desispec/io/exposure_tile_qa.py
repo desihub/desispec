@@ -11,6 +11,8 @@ from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 
+from .util import get_tempfilename
+
 def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     """Writes an exposure-qa fits file.
 
@@ -30,7 +32,7 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     if not os.path.isdir(outdir) :
         os.makedirs(outdir)
 
-    tmpfile = filename+'.tmp'
+    tmpfile = get_tempfilename(filename)
     hdus.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, filename)
 
@@ -72,7 +74,7 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     if not os.path.isdir(outdir) :
         os.makedirs(outdir)
 
-    tmpfile = filename+'.tmp'
+    tmpfile = get_tempfilename(filename)
     hdus.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, filename)
 

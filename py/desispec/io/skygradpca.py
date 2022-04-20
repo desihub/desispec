@@ -12,7 +12,7 @@ from astropy.io import fits
 from desiutil.log import get_logger
 
 from . import iotime
-
+from .util import get_tempfilename
 
 def write_skygradpca(outfile, skygradpca):
     """Write sky model.
@@ -35,8 +35,9 @@ def write_skygradpca(outfile, skygradpca):
     hx.append(fits.ImageHDU(skygradpca.wave.astype('f8'), name='WAVELENGTH'))
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
     return outfile

@@ -27,6 +27,7 @@ from astropy.table import Table, hstack, vstack
 from desiutil.log import get_logger
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
+from desispec.io.util import get_tempfilename
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -381,7 +382,7 @@ if args.header is not None:
             header[key] = value
 
 log.info(f'Writing {args.outfile}')
-tmpfile = args.outfile + '.tmp'
+tmpfile = get_tempfilename(args.outfile)
 fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
 
 if not args.minimal and expfm is not None:

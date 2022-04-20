@@ -12,6 +12,7 @@ from desiutil.log import get_logger
 import numpy as np
 
 from . import iotime
+from .util import get_tempfilename
 
 def write_skycorr(outfile, skycorr):
     """Write sky model.
@@ -36,8 +37,9 @@ def write_skycorr(outfile, skycorr):
     hx['DWAVE'].header['BUNIT'] = 'Angstrom'
     hx['DLSF'].header['BUNIT'] = 'Angstrom'
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
     return outfile
@@ -101,8 +103,9 @@ def write_skycorr_pca(outfile, skycorrpca):
     hx.append( fits.ImageHDU(skycorrpca.wave.astype('f8'), name='WAVELENGTH'))
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
     return outfile

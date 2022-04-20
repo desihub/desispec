@@ -4,6 +4,7 @@ Tools to regroup spectra in individual exposures by healpix on the sky
 
 import glob, os, sys, time, json
 from collections import Counter, OrderedDict
+import gzip, shutil
 
 import numpy as np
 
@@ -17,6 +18,7 @@ from desiutil.log import get_logger
 import desiutil.depend
 
 from . import io
+from .io.util import get_tempfilename
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -400,7 +402,11 @@ class SpectraLite(object):
         if dirname != '':
             os.makedirs(dirname, exist_ok=True)
 
-        tmpout = filename + '.tmp'
+        #- Have to first write non-gzip so that we can append
+        if filename.endswith('.gz'):
+            tmpout = get_tempfilename(filename[-3:])
+        else:
+            tmpout = get_tempfilename(filename)
 
         #- work around c/fitsio bug that appends spaces to string column values
         #- by using astropy Table to write fibermap
@@ -444,7 +450,16 @@ class SpectraLite(object):
             fitsio.write(tmpout, self.mask[band], extname=upperband+'_MASK', compress='gzip')
             fitsio.write(tmpout, self.resolution_data[band], extname=upperband+'_RESOLUTION')
 
-        os.rename(tmpout, filename)
+        #- compress if needed (via another tempfile), otherwise just rename
+        if filename.endswith('.gz'):
+            tmpoutgz = get_tempfilename(filename)
+            with open(tmpout, 'rb') as f_in:
+                with gzip.open(tmpoutgz, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            os.rename(tmpoutgz, filename)
+            os.remove(tmpout)
+        else:
+            os.rename(tmpout, filename)
 
     @classmethod
     def read(cls, filename):

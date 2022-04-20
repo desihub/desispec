@@ -13,7 +13,7 @@ import numpy as np
 from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from . import iotime
-from .util import checkgzip
+from .util import checkgzip, get_tempfilename
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
@@ -76,8 +76,9 @@ def write_image(outfile, image, meta=None):
         hx.append(fmhdu)
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 

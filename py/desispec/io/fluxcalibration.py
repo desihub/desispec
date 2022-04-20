@@ -17,6 +17,7 @@ from desiutil.log import get_logger
 from desiutil.io import encode_table
 
 from .util import fitsheader, native_endian, makepath, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
@@ -72,7 +73,7 @@ def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
     hdulist.append(inhdu)
 
     t0 = time.time()
-    tmpfile = norm_modelfile+".tmp"
+    tmpfile = get_tempfilename(norm_modelfile)
     hdulist.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
     duration = time.time() - t0
@@ -147,8 +148,9 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
         hx.append( fits.convenience.table_to_hdu(fibermap) )
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -232,8 +234,9 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
         hx[-1].header['FSTNIGHT'] = averagefluxcalib.first_night
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 

@@ -26,6 +26,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 from .frame import read_frame
@@ -175,8 +176,9 @@ def write_spectra(outfile, spec, units=None):
         all_hdus.append(fits.convenience.table_to_hdu(extra_catalog))
 
     t0 = time.time()
-    all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
-    os.rename("{}.tmp".format(outfile), outfile)
+    tmpfile = get_tempfilename(outfile)
+    all_hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
