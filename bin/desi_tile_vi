@@ -183,9 +183,12 @@ def main():
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
     selection = (tiles_table["ZDONE"]=="false")
-    selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
-    selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
-                  (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
+    if requested_tileids is None:
+        # if the user has specifically requested some tileids, show them
+        # to them!  Only filter if requested_tileids is not None
+        selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
+        selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
+                      (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
     if args.new :
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
