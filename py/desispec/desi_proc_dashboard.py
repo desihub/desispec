@@ -554,7 +554,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         elif ftype == 'biasnight':
             ext = 'fits.gz'
         else:
-            ext = 'fits'
+            ext = 'fits*'  #- .fits or .fits.gz
         fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
                                             cam=cam, ext=ext)
         return len(glob.glob(fileglob))
