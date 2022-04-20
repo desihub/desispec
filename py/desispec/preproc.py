@@ -599,8 +599,8 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def find_overscan_cosmic_trails(rawimage, ov_col, col_width=10,
-        threshold=50000., smooth=100):
+def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,
+        threshold=25000., smooth=100):
     """
     Find overscan columns that might be impacted by a trail from bright cosmic
 
@@ -626,11 +626,13 @@ def find_overscan_cosmic_trails(rawimage, ov_col, col_width=10,
         active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
 
     # measure sum over columns in band
-    active_col_val = np.sum(rawimage[active_col].astype(float),axis=1)
+    active_col_val = np.max(rawimage[active_col].astype(float),axis=1)
     # subtract median filter (to limit effect of neighboring truly bright fiber)
     active_col_val -= median_filter(active_col_val, smooth)
     # flag rows with large signal in active region
     badrows=(active_col_val>threshold)
+    med_overscan_col = median_filter(overscan_values, 20)
+    badrows &= np.abs(overscan_values-med_overscan_col) > 2.
 
     return badrows, active_col_val
 
@@ -958,7 +960,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             rdnoise[j]=r
 
         # find rows impacted by a large cosmic charge deposit
-        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col)
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
         if np.any(badrows) :
             log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
                 camera,amp,np.where(badrows)[0],active_col_val[badrows]))
