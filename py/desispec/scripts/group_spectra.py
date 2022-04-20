@@ -11,7 +11,11 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from .. import io
+<<<<<<< HEAD
 from ..io.meta import shorten_filename
+=======
+from ..io.util import checkgzip
+>>>>>>> 2240ec68... group_spectra support gzip or not
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
@@ -112,16 +116,19 @@ def main(args=None):
     log.info(f'Reading {len(framefiles)} framefiles')
     foundframefiles = list()
     for filename in framefiles:
-        if os.path.exists(filename):
-            foundframefiles.append(filename)
-            log.debug('Reading %s', filename)
-            frame = FrameLite.read(filename)
-            night = frame.meta['NIGHT']
-            expid = frame.meta['EXPID']
-            camera = frame.meta['CAMERA']
-            frames[(night, expid, camera)] = frame
-        else:
-            log.error(f'Missing {filename} but continuing anyway')
+        try:
+            filename = checkgzip(filename)
+        except FileNotFoundError:
+            log.warning(f'Missing {filename} but continueing anyway')
+            continue
+
+        foundframefiles.append(filename)
+        log.debug('Reading %s', filename)
+        frame = FrameLite.read(filename)
+        night = frame.meta['NIGHT']
+        expid = frame.meta['EXPID']
+        camera = frame.meta['CAMERA']
+        frames[(night, expid, camera)] = frame
 
     if len(frames) == 0:
         log.critical('No input frames found')
