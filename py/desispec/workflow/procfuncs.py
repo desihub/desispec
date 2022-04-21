@@ -454,8 +454,23 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         current_qid = int(time.time() - 1.6e9)
         time.sleep(1)
     else:
-        current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
-        current_qid = int(current_qid.strip(' \t\n'))
+        #- sbatch sometimes fails; try several times before giving up
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
+                current_qid = int(current_qid.strip(' \t\n'))
+                break
+            except subprocess.CalledProcessError as err:
+                log.error(f'{jobname} submission failed: {batch_params}')
+                log.error(f'{jobname} {err.output=}')
+                if attempt < max_attempts - 1:
+                    log.info('Sleeping 60 seconds then retrying')
+                    time.sleep(60)
+        else:  #- for/else happens if loop doesn't succeed
+            msg = f'{jobname} submission failed {max_attempts} times; exiting'
+            log.critical(msg)
+            raise RuntimeError(msg)
 
     log.info(batch_params)
     log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
