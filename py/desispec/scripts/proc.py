@@ -457,6 +457,9 @@ def main(args=None, comm=None):
         timer.start('traceshift')
 
         if rank == 0 and args.traceshift :
+            log.warning('desi_proc option --traceshift is deprecated because this is now the default')
+
+        if rank == 0 and (not args.no_traceshift) :
             log.info('Starting traceshift at {}'.format(time.asctime()))
 
         for i in range(rank, len(args.cameras), size):
@@ -465,7 +468,7 @@ def main(args=None, comm=None):
             inpsf  = input_psf[camera]
             outpsf = findfile('psf', args.night, args.expid, camera)
             if not os.path.isfile(outpsf) :
-                if args.traceshift :
+                if (not args.no_traceshift) :
                     cmd = "desi_compute_trace_shifts"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --psf {}".format(inpsf)
@@ -1195,7 +1198,7 @@ def main(args=None, comm=None):
                 try:
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.stdstars.parse(cmdargs)
-                    err = runcmd(desispec.scripts.stdstars.main, 
+                    err = runcmd(desispec.scripts.stdstars.main,
                         args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
                     )
                 except:
