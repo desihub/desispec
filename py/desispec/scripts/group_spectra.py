@@ -14,6 +14,7 @@ from .. import io
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
+from ..coaddition import coadd
 
 def parse(options=None):
     import argparse
@@ -39,6 +40,10 @@ def parse(options=None):
             help="input frame files; ignore --reduxdir, --nights, --nside")
     parser.add_argument("-o", "--outfile", type=str,
             help="output spectra filename")
+    parser.add_argument("-c", "--coaddfile", type=str,
+            help="output coadded spectra filename")
+    parser.add_argument("--onetile", action="store_true",
+            help="input spectra are from a single tile")
 
     if options is None:
         args = parser.parse_args()
@@ -82,8 +87,19 @@ def main(args=None):
         log.info('Combining into spectra')
         spectra = frames2spectra(frames)
 
-        log.info('Writing {}'.format(args.outfile))
-        spectra.write(args.outfile, header=header)
+        ### TODO: use io.spectra.write_spectra() instead?
+        if args.outfile is not None:
+            log.info('Writing {}'.format(args.outfile))
+            spectra.write(args.outfile, header=header)
+            log.info('Done at {}'.format(time.asctime()))
+
+        if args.coaddfile is not None:
+            log.info('Coadding spectra')
+            coadd(spectra, onetile=args.onetile)
+            ### TODO: update header
+            log.info('Writing {}'.format(args.coaddfile))
+            spectra.write(args.coaddfile, header=header)
+
         log.info('Done at {}'.format(time.asctime()))
 
         return 0
@@ -126,8 +142,19 @@ def main(args=None):
     log.info('Combining into spectra')
     spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
 
-    log.info('Writing {}'.format(args.outfile))
-    spectra.write(args.outfile, header=header)
+    ### TODO: use io.spectra.write_spectra() instead?
+    if args.outfile is not None:
+        log.info('Writing {}'.format(args.outfile))
+        spectra.write(args.outfile, header=header)
+
+    if args.coaddfile is not None:
+        log.info('Coadding spectra')
+        coadd(spectra, onetile=args.onetile)
+        ### TODO: update header
+        log.info('Writing {}'.format(args.coaddfile))
+        # spectra.write(args.coaddfile, header=header)
+        io.write_spectra(args.coaddfile, spectra)
+
     log.info('Done at {}'.format(time.asctime()))
 
     return 0

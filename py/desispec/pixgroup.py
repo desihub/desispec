@@ -296,9 +296,9 @@ class SpectraLite(object):
         self.ivar = ivar.copy()
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
-        self.fibermap = fibermap
-        self.exp_fibermap = exp_fibermap
-        self.scores = scores
+        self.fibermap = Table(fibermap)
+        self.exp_fibermap = Table(exp_fibermap)
+        self.scores = Table(scores)
 
         #- for compatibility with full Spectra objects
         self.meta = None
@@ -409,13 +409,18 @@ class SpectraLite(object):
             expfm.meta['EXTNAME'] = 'EXP_FIBERMAP'
             hdus.append(fits.convenience.table_to_hdu(expfm))
 
+        if self.scores is not None:
+            scores = Table(self.scores)
+            scores.meta['EXTNAME'] = 'SCORES'
+            hdus.append(fits.convenience.table_to_hdu(scores))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
         #- See https://github.com/esheldon/fitsio/issues/150 for why
         #- these are written one-by-one
-        if self.scores is not None:
-            fitsio.write(tmpout, self.scores, extname='SCORES')
+        ### if self.scores is not None:
+        ###     fitsio.write(tmpout, self.scores, extname='SCORES')
 
         for band in sorted(self.bands):
             upperband = band.upper()
