@@ -44,7 +44,8 @@ def get_shared_desi_proc_parser():
                                                     " Numbers only assumes you want to reduce R, B, and Z " +
                                                     "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
     parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
-    parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
+    parser.add_argument("--traceshift", action="store_true", help="(deprecated)")
+    parser.add_argument("--no-traceshift", action="store_true", help="Do not shift traces")
     parser.add_argument('--maxstdstars', type=int, default=None, \
                         help='Maximum number of stdstars to include')
     parser.add_argument("--psf", type=str, required=False, default=None,
