@@ -180,33 +180,38 @@ class Schedule:
     
     def _work(self):
         """
-        Listen for job assignments and run workfunc         
+        Listen for job assignments and run workfunc
+        Return sum of workfunc return values
         """
+        sum_retvals = 0
         # listen for job assignments from the scheduler
         while True:
             self.comm.Recv(self.job_buff,source=0) # receive assignment from rank=0 scheduler
             job = self.job_buff[0]                 # unpack job index
-            if job < 0: return                     # job < 0 means no more jobs to do
+            if job < 0: return sum_retvals         # job < 0 means no more jobs to do
             try:
-                self._workfunc(self.groupcomm,job) # call work function for job
+                ret_val=self._workfunc(self.groupcomm,job) # call work function for job
+                sum_retvals += ret_val
             except Exception as e:
                 self.log.error(f'FAILED: call to workfunc for job {job}'+
                                f' on rank {self.rank}')
                 self.log.error(e)
             self.comm.Isend(self.job_buff,dest=0)  # send non-blocking message on completion
-            
-        return
+
+        return sum_retvals
 
     def run(self):
         """
-        Run schedulers and workers for this object          
+        Run schedulers and workers for this object and return
+        worker return value
         """
+        ret_val = 0
         # main function of class
         if self.rank==0:
             self._schedule() # run scheduler on rank = 0
         elif self.group < self.ngroups:
-            self._work()     # run worker on all other ranks
+            ret_val=self._work()     # run worker on all other ranks
 
         self.comm.barrier()
 
-        return
+        return ret_val

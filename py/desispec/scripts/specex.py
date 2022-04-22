@@ -220,7 +220,12 @@ def main(args, comm=None):
             sys.stdout.flush()
             time.sleep(5.)
 
-            merge_psf(inputs,outfits)
+            try:
+                merge_psf(inputs,outfits)
+            except Exception as e:
+                log.error(e)
+                log.error("merging failed for {}".format(outfits))
+                failcount += 1
 
             log.info('done merging')
 
@@ -304,14 +309,15 @@ def run(comm,cmds,cameras):
         njobs = len(cameras) times, each time using group_size processes with a new 
         value of job in the range 0 to len(cameras)-1.  
         '''
-      
+
+        error_count = 0
         rank = comm.Get_rank()
         camera = cameras[job]
         if not camera in cmds:
             log.error(f'FAILED: commands for camera {camera} not found for'+
                       f' MPI group ranks {rank}-{rank+group_size-1}')
-            return        
-        if camera in cmds:
+            error_count += 1
+        else:
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
             if rank == 0:
@@ -327,16 +333,16 @@ def run(comm,cmds,cameras):
                                f' on camera {camera}')
                      log.error('FAILED: {}'.format(cmds[camera]))
                      log.error(e)
+                     error_count += 1
             if rank == 0:
                 specex_time = time.time() - t0
                 log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
 
-        return
+        return error_count
 
     sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
-    sc.run()
 
-    return
+    return sc.run()
 
 def compatible(head1, head2) :
     """

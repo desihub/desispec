@@ -565,7 +565,9 @@ def main(args=None, comm=None):
 
         if comm is not None:
             cmds = comm.bcast(cmds, root=0)
-            desispec.scripts.specex.run(comm,cmds,args.cameras)
+            err = desispec.scripts.specex.run(comm,cmds,args.cameras)
+            if err != 0:
+                error_count += 1
         else:
             log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
