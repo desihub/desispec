@@ -159,7 +159,8 @@ def write_spectra(outfile, spec, units=None):
         scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
         scores_tbl.meta['EXTNAME'] = 'SCORES'
         all_hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
-        if spec.scores_comments is not None : # add comments in header
+        # add comments in header
+        if hasattr(spec, 'scores_comments') and spec.scores_comments is not None:
             hdu=all_hdus['SCORES']
             for i in range(1,999):
                 key = 'TTYPE'+str(i)

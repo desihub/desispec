@@ -59,98 +59,96 @@ def main(args=None):
     if args is None:
         args = parse()
 
-    if args.inframes is None and args.expfile is None:
+    if (args.inframes is None) and (args.expfile is None):
         log.critical('Must provide --inframes or --expfile')
         sys.exit(1)
+    if (args.inframes is not None) and (args.expfile is not None):
+        log.critical('Must use --inframes or --expfile but not both')
+        sys.exit(1)
 
-    header = dict()
-    if args.header is not None:
-        for keyval in args.header:
-            key, value = keyval.split('=', maxsplit=1)
-            try:
-                header[key] = int(value)
-            except ValueError:
-                header[key] = value
+    log.info('Starting at {}'.format(time.asctime()))
 
-    #- Combining a set of frame files instead of a healpix?
+    #- get list of frames from args.inframes or args.expfile
     if args.inframes is not None:
-        log.info('Starting at {}'.format(time.asctime()))
-        log.info('Reading {} frame files'.format(len(args.inframes)))
-        frames = dict()
-        for filename in args.inframes:
+        framefiles = args.inframes
+    else:
+        assert args.expfile is not None
+        nightexp = Table.read(args.expfile)
+
+        keep = np.ones(len(nightexp), dtype=bool)
+        if args.survey is not None:
+            log.info(f'Filtering by SURVEY={args.survey}')
+            keep &= nightexp['SURVEY'] == args.survey
+
+        if args.faprogram is not None:
+            log.info(f'Filtering by FAPRGRM={args.faprogram}')
+            keep &= nightexp['FAPRGRM'] == args.faprogram
+
+        if args.healpix is not None:
+            keep &= nightexp['HEALPIX'] == args.healpix
+
+        if args.nights is not None:
+            nights = [int(x) for x in args.nights.split(',')]
+            keep &= np.isin(nightexp['NIGHT'], nights)
+
+        nightexp = nightexp[keep]
+        if len(nightexp) == 0:
+            log.critical('No exposures passed filters')
+            sys.exit(13)
+
+        framefiles = list()
+        for night, expid, spectro in nightexp['NIGHT', 'EXPID', 'SPECTRO']:
+            for band in ['b', 'r', 'z']:
+                camera = band+str(spectro)
+                framefile = io.findfile('cframe', night, expid, camera,
+                    specprod_dir=args.reduxdir)
+                framefiles.append(framefile)
+
+    frames = dict()
+    log.info(f'Reading {len(framefiles)} framefiles')
+    for filename in framefiles:
+        if os.path.exists(filename):
+            log.debug('Reading %s', filename)
             frame = FrameLite.read(filename)
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             camera = frame.meta['CAMERA']
             frames[(night, expid, camera)] = frame
+        else:
+            log.error(f'Missing {filename} but continuing anyway')
 
-        log.info('Combining into spectra')
-        spectra = frames2spectra(frames)
-
-        ### TODO: use io.spectra.write_spectra() instead?
-        if args.outfile is not None:
-            log.info('Writing {}'.format(args.outfile))
-            spectra.write(args.outfile, header=header)
-            log.info('Done at {}'.format(time.asctime()))
-
-        if args.coaddfile is not None:
-            log.info('Coadding spectra')
-            coadd(spectra, onetile=args.onetile)
-            ### TODO: update header
-            log.info('Writing {}'.format(args.coaddfile))
-            spectra.write(args.coaddfile, header=header)
-
-        log.info('Done at {}'.format(time.asctime()))
-
-        return 0
-
-    #- otherwise args.expfile must be set
-    nightexp = Table.read(args.expfile)
-
-    keep = np.ones(len(nightexp), dtype=bool)
-    if args.survey is not None:
-        log.info(f'Filtering by SURVEY={args.survey}')
-        keep &= nightexp['SURVEY'] == args.survey
-
-    if args.faprogram is not None:
-        log.info(f'Filtering by FAPRGRM={args.faprogram}')
-        keep &= nightexp['FAPRGRM'] == args.faprogram
-
-    if args.healpix is not None:
-        keep &= nightexp['HEALPIX'] == args.healpix
-
-    if args.nights is not None:
-        nights = [int(x) for x in args.nights.split(',')]
-        keep &= np.isin(nightexp['NIGHT'], nights)
-
-    nightexp = nightexp[keep]
-    if len(nightexp) == 0:
-        log.critical('No exposures passed filters')
-        sys.exit(13)
-
-    frames = dict()
-    for night, expid, spectro in nightexp['NIGHT', 'EXPID', 'SPECTRO']:
-        for band in ['b', 'r', 'z']:
-            camera = band+str(spectro)
-            framefile = io.findfile('cframe', night, expid, camera,
-                specprod_dir=args.reduxdir)
-            if os.path.exists(framefile):
-                frames[(night, expid, camera)] = FrameLite.read(framefile)
-            else:
-                log.warning(f'Missing {framefile}')
+    if len(frames) == 0:
+        log.critical('No input frames found')
+        sys.exit(1)
 
     log.info('Combining into spectra')
-    spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
+    spectra = frames2spectra(frames)
 
-    ### TODO: use io.spectra.write_spectra() instead?
+    #- Add optional header keywords if requested
+    if args.header is not None:
+        if spectra.meta is None:
+            spectra.meta = dict()
+
+        for keyval in args.header:
+            key, value = keyval.split('=', maxsplit=1)
+            try:
+                spectra.meta[key] = int(value)
+            except ValueError:
+                try:
+                    spectra.meta[key] = float(value)
+                except ValueError:
+                    spectra.meta[key] = value
+
     if args.outfile is not None:
         log.info('Writing {}'.format(args.outfile))
-        spectra.write(args.outfile, header=header)
+        # spectra.write(args.outfile, header=header)
+        io.write_spectra(args.outfile, spectra)
+        log.info('Done at {}'.format(time.asctime()))
 
     if args.coaddfile is not None:
         log.info('Coadding spectra')
+        #- in-place coadd updates spectra object
         coadd(spectra, onetile=args.onetile)
-        ### TODO: update header
         log.info('Writing {}'.format(args.coaddfile))
         # spectra.write(args.coaddfile, header=header)
         io.write_spectra(args.coaddfile, spectra)
@@ -158,3 +156,4 @@ def main(args=None):
     log.info('Done at {}'.format(time.asctime()))
 
     return 0
+
