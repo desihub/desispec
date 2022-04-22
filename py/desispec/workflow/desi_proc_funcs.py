@@ -367,6 +367,12 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     if jobdesc not in ['ARC', 'TESTARC']:
         runtime *= config['timefactor']
 
+    #- Add additional overhead factor if needed
+    if 'NERSC_RUNTIME_OVERHEAD' in os.environ:
+        t = os.environ['NERSC_RUNTIME_OVERHEAD']
+        log.info(f'Adding $NERSC_RUNTIME_OVERHEAD={t} minutes to batch runtime request')
+        runtime += float(runtime)
+
     return ncores, nodes, runtime
 
 def get_desi_proc_batch_file_path(night,reduxdir=None):
