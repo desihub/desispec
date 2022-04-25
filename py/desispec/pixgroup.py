@@ -297,8 +297,17 @@ class SpectraLite(object):
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
         self.fibermap = Table(fibermap)
-        self.exp_fibermap = Table(exp_fibermap)
-        self.scores = Table(scores)
+
+        #- optional tables
+        if exp_fibermap is not None:
+            self.exp_fibermap = Table(exp_fibermap)
+        else:
+            self.exp_fibermap = None
+
+        if scores is not None:
+            self.scores = Table(scores)
+        else:
+            self.scores = None
 
         #- for compatibility with full Spectra objects
         self.meta = None

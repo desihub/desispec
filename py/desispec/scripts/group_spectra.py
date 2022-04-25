@@ -11,6 +11,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from .. import io
+from ..io.meta import shorten_filename
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
@@ -106,8 +107,10 @@ def main(args=None):
 
     frames = dict()
     log.info(f'Reading {len(framefiles)} framefiles')
+    foundframefiles = list()
     for filename in framefiles:
         if os.path.exists(filename):
+            foundframefiles.append(filename)
             log.debug('Reading %s', filename)
             frame = FrameLite.read(filename)
             night = frame.meta['NIGHT']
@@ -122,13 +125,17 @@ def main(args=None):
         sys.exit(1)
 
     log.info('Combining into spectra')
-    spectra = frames2spectra(frames)
+    spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
+
+    #- Record input files
+    if spectra.meta is None:
+        spectra.meta = dict()
+
+    for i, filename in enumerate(foundframefiles):
+        spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
 
     #- Add optional header keywords if requested
     if args.header is not None:
-        if spectra.meta is None:
-            spectra.meta = dict()
-
         for keyval in args.header:
             key, value = keyval.split('=', maxsplit=1)
             try:
