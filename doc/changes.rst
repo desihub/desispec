@@ -16,6 +16,7 @@ Used to create combined ``zcatalog/zall-*.fits`` files in fuji and guadalupe.
 * Ignore overscan rows with large cosmic charge deposit in nearby columns
   (PR `#1720`_)
 * Add tools to create combined/summary catalogs for specprods (PR `#1721`_).
+* Use tile-median E(B-V) for LOWEFFTIME QA calculation (PR `#1722`_).
 * tile QA: highlight secondary-only fibers in z vs. fiber (PR `#1729`_).
 * Enable GPUs on perlmutter in rrdesi_mpi slurm script (PR `#1730`_, `#1734`_).
 * Adjust main survey minimum exposure efftime_etc (PR `#1731`_).
@@ -31,6 +32,7 @@ Used to create combined ``zcatalog/zall-*.fits`` files in fuji and guadalupe.
 .. _`#1719`: https://github.com/desihub/desispec/pull/1719
 .. _`#1720`: https://github.com/desihub/desispec/pull/1720
 .. _`#1721`: https://github.com/desihub/desispec/pull/1721
+.. _`#1722`: https://github.com/desihub/desispec/pull/1722
 .. _`#1729`: https://github.com/desihub/desispec/pull/1729
 .. _`#1730`: https://github.com/desihub/desispec/pull/1730
 .. _`#1731`: https://github.com/desihub/desispec/pull/1731
