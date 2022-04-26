@@ -141,7 +141,7 @@ def write_spectra(outfile, spec, units=None):
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
             hdu = fits.ImageHDU(name="{}_MASK".format(band.upper()))
-            hdu.data = spec.mask[band].astype(np.uint32)
+            hdu.data = spec.mask[band].astype(np.int32)
             all_hdus.append(hdu)
 
         if spec.resolution_data is not None:
