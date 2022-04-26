@@ -392,6 +392,8 @@ class SpectraLite(object):
         '''
         Write this SpectraLite object to `filename`
         '''
+        log = get_logger()
+        log.warning('SpectraLite.write() is deprecated; please use desispec.io.write_spectra() instead')
 
         #- create directory if missing
         dirname=os.path.dirname(filename)
