@@ -73,7 +73,7 @@ def write_spectra(outfile, spec, units=None):
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
-    fmap = spec.fibermap.copy()
+    fmap = encode_table(spec.fibermap.copy())
     fmap.meta['EXTNAME'] = 'FIBERMAP'
     fmap.meta['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(fmap.meta)
@@ -96,7 +96,7 @@ def write_spectra(outfile, spec, units=None):
 
     # Optional: exposure-fibermap, used in coadds
     if spec.exp_fibermap is not None:
-        expfmap = spec.exp_fibermap.copy()
+        expfmap = encode_table(spec.exp_fibermap.copy())
         expfmap.meta["EXTNAME"] = "EXP_FIBERMAP"
         with warnings.catch_warnings():
             #- nanomaggies aren't an official IAU unit but don't complain
