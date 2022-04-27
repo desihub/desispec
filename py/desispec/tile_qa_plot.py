@@ -1292,6 +1292,7 @@ def make_tile_qa_plot(
 
             if tracer=="QSO" :
                 if istracer.sum() == 0:
+                    nqso_rr = 0
                     log.warning("istracer.sum() == 0 for QSO, probably due to LOW_EFFTIME (TBC); nqso_rr = 0")
                 else:
                     nqso_rr = int(zhists[sel].sum() * istracer.sum())
