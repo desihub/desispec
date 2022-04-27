@@ -1291,7 +1291,11 @@ def make_tile_qa_plot(
             n_valid += zhists[sel].sum() * istracer.sum()
 
             if tracer=="QSO" :
-                nqso_rr = int(zhists[sel].sum() * istracer.sum())
+                if istracer.sum() == 0:
+                    nqso_rr = 0
+                    log.warning("istracer.sum() == 0 for QSO, probably due to LOW_EFFTIME (TBC); nqso_rr = 0")
+                else:
+                    nqso_rr = int(zhists[sel].sum() * istracer.sum())
                 ### nqso_qnp = np.sum((fiberqa['IS_QSO_QN']==1)\
                 ###            &(fiberqa['Z_QN']>=zmin)&(fiberqa['Z_QN']<=zmax))
 
