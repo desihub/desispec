@@ -576,6 +576,9 @@ def frames2spectra(frames, pix=None, nside=64):
     #- shallow copy of frames dict in case we augment with blank frames
     frames = frames.copy()
 
+    if pix is not None:
+        log.info(f'Filtering by nside={nside} nested healpix={pix}')
+
     #- To support combining old+new data, recalculate TSNR2 if any
     #- frames are missing TSNR2* scores present in other frames of same bad.
     #- Assume longest list per camera is the one we want, because we also

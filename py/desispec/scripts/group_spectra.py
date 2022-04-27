@@ -74,6 +74,7 @@ def main(args=None):
         framefiles = args.inframes
     else:
         assert args.expfile is not None
+        log.info(f'Reading exposures to use from {args.expfile}')
         nightexp = Table.read(args.expfile)
 
         keep = np.ones(len(nightexp), dtype=bool)
@@ -85,11 +86,13 @@ def main(args=None):
             log.info(f'Filtering by FAPRGRM={args.faprogram}')
             keep &= nightexp['FAPRGRM'] == args.faprogram
 
-        if args.healpix is not None:
+        if args.healpix is not None and 'HEALPIX' in nightexp.colnames:
+            log.info(f'Filtering by healpix={args.healpix}')
             keep &= nightexp['HEALPIX'] == args.healpix
 
         if args.nights is not None:
             nights = [int(x) for x in args.nights.split(',')]
+            log.info(f'Filtering by night in {nights}')
             keep &= np.isin(nightexp['NIGHT'], nights)
 
         nightexp = nightexp[keep]
@@ -127,6 +130,17 @@ def main(args=None):
     log.info('Combining into spectra')
     spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
 
+    if spectra.num_spectra() == 0:
+        log.critical(f'No input frame spectra pass nside={args.nside} nested healpix={args.healpix}')
+        from desimodel.footprint import radec2pix
+        input_hpix = set()
+        for frame in frames.values():
+            ra = frame.fibermap['TARGET_RA']
+            dec = frame.fibermap['TARGET_DEC']
+            input_hpix.update(set(radec2pix(args.nside, ra, dec)))
+        log.critical(f'Input frames have nside={args.nside} healpix {input_hpix}')
+        sys.exit(1)
+
     #- Record input files
     if spectra.meta is None:
         spectra.meta = dict()
@@ -148,16 +162,13 @@ def main(args=None):
 
     if args.outfile is not None:
         log.info('Writing {}'.format(args.outfile))
-        # spectra.write(args.outfile, header=header)
         io.write_spectra(args.outfile, spectra)
-        log.info('Done at {}'.format(time.asctime()))
 
     if args.coaddfile is not None:
         log.info('Coadding spectra')
         #- in-place coadd updates spectra object
         coadd(spectra, onetile=args.onetile)
         log.info('Writing {}'.format(args.coaddfile))
-        # spectra.write(args.coaddfile, header=header)
         io.write_spectra(args.coaddfile, spectra)
 
     log.info('Done at {}'.format(time.asctime()))
