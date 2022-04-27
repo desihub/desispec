@@ -102,10 +102,10 @@ def main(args=None):
 
 
     if input_is_spectra :
-        spectra = read_spectra(args.infile[0])
+        spectra = read_spectra(args.infile[0], single=True)
         for filename in args.infile[1:] :
             log.info("append {}".format(filename))
-            spectra.update(read_spectra(filename))
+            spectra.update(read_spectra(filename), single=True)
     else: # frames
         frames = dict()
         cameras = {}

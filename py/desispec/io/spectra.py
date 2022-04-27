@@ -256,7 +256,8 @@ def read_spectra(infile, single=False):
             if type == "WAVELENGTH":
                 if wave is None:
                     wave = {}
-                wave[band] = native_endian(hdus[h].data.astype(ftype))
+                #- Note: keep original float64 resolution for wavelength
+                wave[band] = native_endian(hdus[h].data)
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
