@@ -296,9 +296,18 @@ class SpectraLite(object):
         self.ivar = ivar.copy()
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
-        self.fibermap = fibermap
-        self.exp_fibermap = exp_fibermap
-        self.scores = scores
+        self.fibermap = Table(fibermap)
+
+        #- optional tables
+        if exp_fibermap is not None:
+            self.exp_fibermap = Table(exp_fibermap)
+        else:
+            self.exp_fibermap = None
+
+        if scores is not None:
+            self.scores = Table(scores)
+        else:
+            self.scores = None
 
         #- for compatibility with full Spectra objects
         self.meta = None
@@ -383,6 +392,8 @@ class SpectraLite(object):
         '''
         Write this SpectraLite object to `filename`
         '''
+        log = get_logger()
+        log.warning('SpectraLite.write() is deprecated; please use desispec.io.write_spectra() instead')
 
         #- create directory if missing
         dirname=os.path.dirname(filename)
@@ -409,13 +420,18 @@ class SpectraLite(object):
             expfm.meta['EXTNAME'] = 'EXP_FIBERMAP'
             hdus.append(fits.convenience.table_to_hdu(expfm))
 
+        if self.scores is not None:
+            scores = Table(self.scores)
+            scores.meta['EXTNAME'] = 'SCORES'
+            hdus.append(fits.convenience.table_to_hdu(scores))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
         #- See https://github.com/esheldon/fitsio/issues/150 for why
         #- these are written one-by-one
-        if self.scores is not None:
-            fitsio.write(tmpout, self.scores, extname='SCORES')
+        ### if self.scores is not None:
+        ###     fitsio.write(tmpout, self.scores, extname='SCORES')
 
         for band in sorted(self.bands):
             upperband = band.upper()
@@ -559,6 +575,9 @@ def frames2spectra(frames, pix=None, nside=64):
 
     #- shallow copy of frames dict in case we augment with blank frames
     frames = frames.copy()
+
+    if pix is not None:
+        log.info(f'Filtering by nside={nside} nested healpix={pix}')
 
     #- To support combining old+new data, recalculate TSNR2 if any
     #- frames are missing TSNR2* scores present in other frames of same bad.

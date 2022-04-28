@@ -73,7 +73,7 @@ def write_spectra(outfile, spec, units=None):
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
-    fmap = spec.fibermap.copy()
+    fmap = encode_table(spec.fibermap.copy())
     fmap.meta['EXTNAME'] = 'FIBERMAP'
     fmap.meta['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(fmap.meta)
@@ -96,7 +96,7 @@ def write_spectra(outfile, spec, units=None):
 
     # Optional: exposure-fibermap, used in coadds
     if spec.exp_fibermap is not None:
-        expfmap = spec.exp_fibermap.copy()
+        expfmap = encode_table(spec.exp_fibermap.copy())
         expfmap.meta["EXTNAME"] = "EXP_FIBERMAP"
         with warnings.catch_warnings():
             #- nanomaggies aren't an official IAU unit but don't complain
@@ -141,7 +141,7 @@ def write_spectra(outfile, spec, units=None):
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
             hdu = fits.ImageHDU(name="{}_MASK".format(band.upper()))
-            hdu.data = spec.mask[band].astype(np.uint32)
+            hdu.data = spec.mask[band].astype(np.int32)
             all_hdus.append(hdu)
 
         if spec.resolution_data is not None:
@@ -159,7 +159,8 @@ def write_spectra(outfile, spec, units=None):
         scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
         scores_tbl.meta['EXTNAME'] = 'SCORES'
         all_hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
-        if spec.scores_comments is not None : # add comments in header
+        # add comments in header
+        if hasattr(spec, 'scores_comments') and spec.scores_comments is not None:
             hdu=all_hdus['SCORES']
             for i in range(1,999):
                 key = 'TTYPE'+str(i)
@@ -255,7 +256,8 @@ def read_spectra(infile, single=False):
             if type == "WAVELENGTH":
                 if wave is None:
                     wave = {}
-                wave[band] = native_endian(hdus[h].data.astype(ftype))
+                #- Note: keep original float64 resolution for wavelength
+                wave[band] = native_endian(hdus[h].data)
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
