@@ -199,8 +199,8 @@ class DarkFinder(CalibFinder) :
                 break
             
         if found:
-            self.data = {DARK: dark_filelist[dark_dates == date_used][0],
-                         BIAS: bias_filelist[dark_dates == date_used][0]}
+            self.data = {"DARK": dark_filelist[dark_dates == date_used][0],
+                         "BIAS": bias_filelist[dark_dates == date_used][0]}
 
         else:
             log.error("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
