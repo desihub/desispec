@@ -7,6 +7,7 @@ Reading and selecting calibration data from $DESI_SPECTRO_DARK using content of 
 
 import re
 import os
+import glob
 import numpy as np
 import yaml
 import os.path
@@ -110,8 +111,6 @@ def finddarkfile(headers,key,yaml_file=None) :
         return None
 
 class DarkFinder(CalibFinder) :
-
-
     def __init__(self,headers,yaml_file=None) :
         """
         Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
@@ -168,26 +167,6 @@ class DarkFinder(CalibFinder) :
 
         dateobs = header2night(header)
         
-        #some of those might be useful to validate the config vs info stored in DARKs?
-        """ 
-        detector=header["DETECTOR"].strip()
-        if "CCDCFG" in header :
-            ccdcfg = header["CCDCFG"].strip()
-        else :
-            ccdcfg = None
-        if "CCDTMING" in header :
-            ccdtming = header["CCDTMING"].strip()
-        else :
-            ccdtming = None 
-
-        # Support simulated data even if $DESI_SPECTRO_CALIB points to
-        # real data calibrations
-        self.directory = os.path.normpath(self.directory)  # strip trailing /
-        if detector == "SIM" and (not self.directory.endswith("sim")) :
-            newdir = os.path.join(self.directory, "sim")
-            if os.path.isdir(newdir) :
-                self.directory = newdir"""
-
         if not os.path.isdir(self.directory):
             raise IOError("Dark directory {} not found".format(self.directory))
 
@@ -195,57 +174,38 @@ class DarkFinder(CalibFinder) :
         
         log.debug("Use spectrograph hardware identifier SMY")
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
-        if yaml_file is None :
-            yaml_file = "{}/dark_config/{}_dark.yaml".format(self.directory,cameraid)
 
-        if not os.path.isfile(yaml_file) :
-            log.error("Cannot read {}".format(yaml_file))
-            raise IOError("Cannot read {}".format(yaml_file))
+        dark_filelist = glob.glob("{}/dark_frames/*.fits.gz".format(self.directory,cameraid))
+        if len(dark_filelist)==0:
+            log.error("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
+            super().init(self,headers,yaml_file)
+        dark_filelist.sort()
+        dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
+        bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
+        
+        dark_dates = np.array([int(f.split('-')[1].split('.')[0]) for f in dark_filelist])
 
-
-        log.debug("reading dark config data in {}".format(yaml_file))
-
-        stream = open(yaml_file, 'r')
-        data   = yaml.safe_load(stream)
-        stream.close()
-
-        #TODO: potentially add a check here e.g. for matching the config of the DARKs to the CCDCONFIG
-
-
-        if not cameraid in data :
-            log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))
-            raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
-
-        data=data[cameraid]
         log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
         log.debug("Finding matching version ...")
+
+        #loop over all dark filenames
 
         #TODO: decide on how to define the version exactly
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
-        matching_data=None
-        for version in data :
-            log.debug("Checking version %s"%version)
-            datebegin=int(data[version]["DATE-OBS-BEGIN"])
-            if dateobs < datebegin :
-                log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
-                continue
-            if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
-                dateend=int(data[version]["DATE-OBS-END"])
-                if dateobs > dateend :
-                    log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
-                    continue
+        for datebegin in sorted(dark_dates)[::-1] :
+            if dateobs > datebegin :
+                found=True
+                date_used=datebegin
+                break
+            
+        if found:
+            self.data = {DARK: dark_filelist[dark_dates == date_used][0],
+                         BIAS: bias_filelist[dark_dates == date_used][0]}
 
-            log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
-            if found :
-                log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
-                raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
-            found=True
-            matching_data=data[version]
-
-        if not found :
-            log.error("Didn't find matching calibration data in %s"%(yaml_file))
-            raise KeyError("Didn't find matching calibration data in %s"%(yaml_file))
+        else:
+            log.error("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
+            super().init(self,headers,yaml_file)
 
 
-        self.data = matching_data
+        
