@@ -176,13 +176,14 @@ class DarkFinder(CalibFinder) :
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
         dark_filelist = glob.glob("{}/dark_frames/*.fits.gz".format(self.directory,cameraid))
-        if len(dark_filelist)==0:
-            log.error("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
-            super().init(self,headers,yaml_file)
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
+        if len(dark_filelist) == 0:
+            log.error("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
+            super().init(self,headers,yaml_file)
+            return
+
         bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
-        
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
 
         log.debug(f"Finding matching dark frames for camera {cameraid} ...")
@@ -196,6 +197,8 @@ class DarkFinder(CalibFinder) :
             if dateobs > datebegin :
                 found=True
                 date_used=datebegin
+                log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
+
                 break
             
         if found:
