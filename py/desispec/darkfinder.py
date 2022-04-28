@@ -183,7 +183,7 @@ class DarkFinder(CalibFinder) :
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
         bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
         
-        dark_dates = np.array([int(f.split('-')[1].split('.')[0]) for f in dark_filelist])
+        dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
 
         log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
         log.debug("Finding matching version ...")
