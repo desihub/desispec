@@ -185,8 +185,7 @@ class DarkFinder(CalibFinder) :
         
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
 
-        log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
-        log.debug("Finding matching version ...")
+        log.debug(f"Finding matching dark frames for camera {cameraid} ...")
 
         #loop over all dark filenames
 
