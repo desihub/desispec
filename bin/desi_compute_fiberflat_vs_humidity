@@ -16,13 +16,16 @@ import matplotlib.pyplot as plt
 from desiutil.log import get_logger
 from desispec.io import specprod_root
 from desispec.io import findfile,read_fiberflat
+from desispec.fiberflat_vs_humidity import fit_wave_of_dip
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Generates fiber flat-field templates as a function of humidity")
-    parser.add_argument("-y", "--year", type = int, default = None, required = False,
-                        help = "year of data to scan")
-    parser.add_argument("-p", "--prod", type = str, default = None, required = False,
+    parser.add_argument("-y", "--years", type = int, default = None, required = True, nargs="*",
+                        help = "years of data to scan")
+    parser.add_argument("--intable", type = str, default = None, required = True,
+                        help = "table with columns NIGHT HUMIDITY DIPWAVE")
+    parser.add_argument("-p", "--prod", type = str, default = None, required = True,
                         help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-o", "--outdir", type = str, default = "./", required = False,
                         help = "output directory")
@@ -32,6 +35,7 @@ def parse(options=None):
     else:
         args = parser.parse_args(options)
     return args
+
 
 
 def main():
@@ -48,15 +52,49 @@ def main():
         log.info("creating {}".format(args.outdir))
         os.makedirs(args.outdir, exist_ok=True)
 
+    # read input table
+    # sort by wavelength
+    # define bins
+    input_table = Table.read(args.intable)
+    ii = np.argsort(input_table["DIPWAVE"])
+
+    x=input_table["DIPWAVE"][ii]
+    b=min(int(x[0]),4300)
+    dx=2
+    e=int(x[0])+1
+    nmin=1
+    xbins=[]
+    xbins.append(b)
+
+    while(True) :
+        while((np.sum((x>=b)&(x<e))<nmin)&(e<=x[-1]+0.001)) :
+            e += dx
+            continue
+        xbins.append(e)
+        b=e+0
+        if e>x[-1] : break
+    xbins[-1]=max(xbins[-1],4500)
+    xbins = np.array(xbins)
+    log.info(f"dip wavelenth bins = {xbins}")
+    nbins=xbins.size-1
+
+    nights_in_bins = []
+    for b in range(nbins) :
+        ii=np.where((input_table["DIPWAVE"]>=xbins[b])&(input_table["DIPWAVE"]<=xbins[b+1]))
+        nights_in_bins.append(list(input_table["NIGHT"][ii]))
+        print(xbins[b],xbins[b+1],len(nights_in_bins[b]),nights_in_bins[b])
+
+
     wave=None
     fiberflats_in_bin=None
-    bhumids_in_bin=None
     hdulist=None
 
-    for spectro in range(10) :
+    for spectro in range(0,10) :
         cam=f"b{spectro}"
 
         humidity_table_filename=f"{args.outdir}/humidity_table_{cam}.csv"
+        #humidity_table_filename=f"{args.outdir}/extended_humidity_table_{cam}.csv"
+
         if not os.path.isfile(humidity_table_filename) :
 
             vals=dict()
@@ -64,10 +102,22 @@ def main():
             vals["HUMIDITY"]=[]
 
             # loop on nights with fiberflat
-            for flat_filename in sorted(glob.glob(f"{args.prod}/calibnight/{args.year}*/fiberflatnight-{cam}-*.fits")) :
+
+            flat_filenames = []
+            for year in args.years :
+                for flat_filename in sorted(glob.glob(f"{args.prod}/calibnight/{year}*/fiberflatnight-{cam}-*.fits")) :
+                    flat_filenames.append(flat_filename)
+
+            for flat_filename in flat_filenames :
                 print(flat_filename)
                 head=fitsio.read_header(flat_filename)
-                night=head['NIGHT']
+                night=int(head['NIGHT'])
+                print(night)
+
+                if cam == "b1" and night == 20220413 :
+                    print("skip 20220413 for b1 because we tested a different mirror")
+                    continue
+
                 month=night//100
                 et_filename=f"{args.prod}/exposure_tables/{month}/exposure_table_{night}.csv"
                 if not os.path.isfile(et_filename) :
@@ -108,7 +158,8 @@ def main():
             print("wrote",humidity_table_filename)
 
         humidity_table = Table.read(humidity_table_filename)
-
+        ii = ~np.isnan(humidity_table["HUMIDITY"])
+        humidity_table = humidity_table[ii]
         print("Humidity table:")
         print(humidity_table)
         print("")
@@ -116,28 +167,6 @@ def main():
         wave = None
         goodfibers= None
 
-        # humidity bins have been adjusted based on the distribution of humidity values.
-        # note this is the humidity in the shack which is maintained below 50%
-        # all humidity values are in percent
-        # we want 'nmin' entries per bin
-        nmin=10
-        b=0
-        e=b+0.1
-        humidity_bins=[b]
-        while(True) :
-            while((np.sum((humidity_table["HUMIDITY"]>=b)&(humidity_table["HUMIDITY"]<e))<nmin)&(e<50)) :
-                e += 0.1
-                continue
-            humidity_bins.append(np.around(e,1))
-            b=e+0.
-            if e>=50. : break
-        n=np.sum((humidity_table["HUMIDITY"]>=humidity_bins[-2]))
-        if n<nmin :
-            humidity_bins.pop(len(humidity_bins)-2)
-            humidity_bins[-1]=50.
-        humidity_bins=np.array(humidity_bins)
-        log.info(f"humidity bins = {humidity_bins}")
-        nbins=humidity_bins.size
 
         # loop on bins
         for bin_index in range(nbins-1) :
@@ -148,20 +177,27 @@ def main():
                 log.info(f"skip existing {ofilename}")
                 continue
 
-            min_humidity=humidity_bins[bin_index]
-            max_humidity=humidity_bins[bin_index+1]
-            fiberflats_in_bin=[]
-            bhumids_in_bin=[]
+            print("nights_in_bins=",nights_in_bins[bin_index])
+            selection = np.in1d(humidity_table["NIGHT"],nights_in_bins[bin_index])
+            if np.sum(selection)==0 :
+                print("bin={} nflats={} (skip)".format(bin_index,np.sum(selection)))
+                continue
+
+            nights_in_bin     = humidity_table["NIGHT"][selection]
+            print("bin={} nflats={} nights={}".format(bin_index,np.sum(selection),nights_in_bin))
 
 
-            selection=(humidity_table["HUMIDITY"]>=min_humidity)&(humidity_table["HUMIDITY"]<max_humidity)
-            if np.sum(selection)<2 : continue
-            nights=np.unique(humidity_table["NIGHT"][selection])
-            log.info("Humidity bin #{} nights={}".format(bin_index,list(nights)))
+            fiberflats_in_bin = []
+            humidities_in_bin = []
 
             # loop on nights with fiberflat
-            for night in nights :
+            for night in nights_in_bin :
                 flat_filename = f"{args.prod}/calibnight/{night}/fiberflatnight-{cam}-{night}.fits"
+                #if not os.path.isfile(flat_filename) :
+                #    flat_filename = f"/global/cfs/cdirs/desi/spectro/redux/jguy/calibnight/{night}/fiberflatnight-{cam}-{night}.fits"
+                if not os.path.isfile(flat_filename) :
+                    log.warning(f"MISSING {flat_filename}")
+                    continue
                 log.info(f"Humidity bin #{bin_index} night={night} {flat_filename}")
                 flat=read_fiberflat(flat_filename)
 
@@ -169,9 +205,16 @@ def main():
                     wave=flat.wave
                     # fixed list of good fibers
                     ivar=(flat.ivar)*(flat.mask==0)
+                    hasnan=np.sum(np.isnan(flat.fiberflat),axis=1)
+                    goodfibers=np.where((hasnan==0)&(np.sum(flat.ivar,axis=1)>0))[0]
                     medflat=np.median(flat.fiberflat,axis=1)
-                    mmedflat=np.median(medflat)
-                    goodfibers=np.where((np.sum(flat.ivar,axis=1)>0)&(medflat>0.5*mmedflat))[0]
+                    mmedflat=np.median(medflat[goodfibers])
+                    goodfibers=np.where((hasnan==0)&(np.sum(flat.ivar,axis=1)>0)&(medflat>0.5*mmedflat))[0]
+                    print("goodfibers=",goodfibers)
+                    print("wave=",wave)
+                    if len(goodfibers)<300 :
+                        wave=None
+                        continue
 
                 mflat=np.median(flat.fiberflat[goodfibers],axis=0)
                 flats=[]
@@ -185,9 +228,9 @@ def main():
                 flat.fiberflat /= (mflat+(mflat==0))
 
                 fiberflats_in_bin.append(flat.fiberflat)
-                bhumids_in_bin.append(np.mean(humidity_table["HUMIDITY"][humidity_table["NIGHT"]==night]))
+                humidities_in_bin.append(np.mean(humidity_table["HUMIDITY"][humidity_table["NIGHT"]==night]))
 
-            if len(bhumids_in_bin)<2 : continue
+            if len(humidities_in_bin)<1 : continue
 
             log.info("now median in bin")
             hdulist=pyfits.HDUList([pyfits.PrimaryHDU(wave)])
@@ -207,7 +250,7 @@ def main():
                     continue
                 # keep only measurements where median flat is stable
                 good=np.abs(medval/medmedval-1)<0.1
-                if np.sum(good)<2 :
+                if np.sum(good)<1 :
                     log.warning(f"no good data for fiber {fiber} with median flats={medval} in humidity bin {bin_index}")
                     continue
                 # normalize correction per fiber by median flat
@@ -219,12 +262,19 @@ def main():
             fiberflat_in_bin = median_filter(fiberflat_in_bin,[5,1])
 
             hdulist.append(pyfits.ImageHDU(fiberflat_in_bin,name=extname))
-            hdulist[extname].header["MEDHUM"]=np.median(bhumids_in_bin)
-            hdulist[extname].header["MINHUM"]=np.min(bhumids_in_bin)
-            hdulist[extname].header["MAXHUM"]=np.max(bhumids_in_bin)
+            hdulist[extname].header["MEDHUM"]=np.median(humidities_in_bin)
+            hdulist[extname].header["MINHUM"]=np.min(humidities_in_bin)
+            hdulist[extname].header["MAXHUM"]=np.max(humidities_in_bin)
+
+            # now measure the DIP WAVE
+            if cam == "b4" :
+                dipwave = 0 # no dip !
+            else :
+                dipwave = fit_wave_of_dip(wave,fiberflat_in_bin)
+            hdulist[extname].header["DIPWAVE"]=dipwave
             hdulist.writeto(ofilename,overwrite=True)
             log.info(f"wrote {ofilename}")
-
+            #sys.exit(12)
 
         hdulist=None
 
@@ -236,6 +286,15 @@ def main():
             if not os.path.isfile(filename): continue
             print("adding",filename)
             h=pyfits.open(filename)
+            data=h[extname].data
+            # identify null data
+            rms=np.std(data,axis=1)
+            nzero=np.sum(rms<1e-6)
+            if nzero > 0 :
+                print(filename,"nzero=",nzero)
+                continue
+
+
             if hdulist==None :
                 hdulist=h
                 continue
