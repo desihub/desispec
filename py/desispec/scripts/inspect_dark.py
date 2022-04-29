@@ -33,7 +33,6 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
     return args
 
 def main(args=None):
@@ -228,4 +227,6 @@ def main(args=None):
         plt.plot(profs[1],c="C1")
         plt.grid()
         plt.show()
+
+    return 0
 

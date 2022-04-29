@@ -35,7 +35,6 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
     return args
 
 def main(args=None):
@@ -57,3 +56,5 @@ def main(args=None):
     else :
         write_frame(args.outfile,frame)
         log.info("wrote "+args.outfile)
+
+    return 0

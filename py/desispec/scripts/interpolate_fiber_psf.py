@@ -22,7 +22,6 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
     return args
 
 def main(args=None):
@@ -141,3 +140,5 @@ def main(args=None):
 
     h.writeto(args.outfile,overwrite=True)
     log.info("wrote {}".format(args.outfile))
+
+    return 0

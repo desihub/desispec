@@ -2,6 +2,7 @@
 Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
+import argparse
 
 import os
 import sys
@@ -28,10 +29,11 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
         clobber : if True, run even if outputs already exist
 
     Returns:
-        error code from command or input/output checking; 0 is good
+        error codes from command or input/output checking
+        0 is good
 
     TODO:
-        Should it raise an exception instead?
+        Should it raise exceptions instead for some or all of above?
 
     Notes:
         If any inputs are missing, don't run cmd.
@@ -40,18 +42,14 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     """
     log = get_logger()
     #- Check that inputs exist
-    err = 0
     input_time = 0  #- timestamp of latest input file
     for x in inputs:
         if not os.path.exists(x):
             log.error("missing input "+x)
-            err = 1
+            log.critical("FAILED {}".format(cmd))
+            return 1
         else:
             input_time = max(input_time, os.stat(x).st_mtime)
-
-    if err > 0:
-        log.critical("FAILED err={} {}".format(err, cmd))
-        return err
 
     #- Check if outputs already exist and that their timestamp is after
     #- the last input timestamp
@@ -83,45 +81,50 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             for x in outputs:
                 print("   ", x)
 
+    cmd_callable = isinstance(cmd, collections.abc.Callable)
+    if not cmd_callable and args is not None:
+        raise ValueError("Don't provide args unless cmd is a function")
+
     #- run command
-    if isinstance(cmd, collections.abc.Callable):
-        if args is None:
-            args = []
-
-        try:
-            return cmd(*args)
-        except Exception as e:
-            import traceback
-            lines = traceback.format_exception(*sys.exc_info())
-            for line in lines:
-                line = line.strip()
-                log.error(f'{line}')
-            log.critical(f"FAILED {cmd=} with {args=}")
-            raise e
-
-    else:
-        if args is None:
-            err = sp.call(cmd, shell=True)
+    try:
+        if cmd_callable:
+            if args is None:
+                err = cmd()
+            elif isinstance(args, argparse.Namespace):
+                err = cmd(args)
+            else:
+                err = cmd(*args)
         else:
-            raise ValueError("Don't provide args unless cmd is function")
+            err = sp.call(cmd, shell=True)
+    except Exception as e:
+        import traceback
+        lines = traceback.format_exception(*sys.exc_info())
+        for line in lines:
+            line = line.strip()
+            log.error(f'{line}')
+        log.critical("FAILED with {}".format(cmd))
+        raise e
 
     log.info(time.asctime())
-    if err > 0:
-        log.critical("FAILED err={} {}".format(err, cmd))
-        return err
+    if err != 0 and err is not None:
+        log.critical("FAILED command err={} {}".format(err, cmd))
+    else:
+        err = 0
 
     #- Check for outputs
-    err = 0
+    outputs_present = True
     for x in outputs:
         if not os.path.exists(x):
             log.error("missing output "+x)
-            err = 2
-    if err > 0:
-        log.critical("FAILED outputs {}".format(cmd))
-        return err
+            outputs_present = False
 
-    log.info("SUCCESS: {}".format(cmd))
-    return 0
+    if outputs_present:
+        log.info("SUCCESS: {}".format(cmd))
+    else:
+        log.critical("FAILED outputs {}".format(cmd))
+        err = 2
+
+    return err
 
 def mpi_count_failures(num_cmd, num_err, comm=None):
     """

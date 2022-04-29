@@ -31,7 +31,6 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
     return args
 
 def main(args=None):
@@ -186,3 +185,5 @@ def main(args=None):
     calib_stars.write(tmpfile, overwrite=True)
     os.rename(tmpfile, args.outfile)
     log.info("wrote {}".format(args.outfile))
+
+    return 0
