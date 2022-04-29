@@ -38,7 +38,7 @@ import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
 from desispec.io.util import create_camword, decode_camword, parse_cameras
-from desispec.io.util import validate_badamps, runcmd, get_tempfilename
+from desispec.io.util import validate_badamps, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -47,6 +47,7 @@ import desispec.scripts.specex
 import desispec.scripts.stdstars
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
+from desispec.util import runcmd
 
 from desitarget.targetmask import desi_mask
 
