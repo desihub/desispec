@@ -29,6 +29,8 @@ def parse(options=None):
                         help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-o", "--outdir", type = str, default = "./", required = False,
                         help = "output directory")
+    parser.add_argument("-s", "--spectrographs", type = str, default = "0,1,2,3,4,5,6,7,8,9", required = False,
+                        help = "comma separated list of spectographs, default is '0,1,2,3,4,5,6,7,8,9'")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -89,7 +91,9 @@ def main():
     fiberflats_in_bin=None
     hdulist=None
 
-    for spectro in range(0,10) :
+    spectrographs = [ int(s) for s in args.spectrographs.split(',')]
+
+    for spectro in spectrographs :
         cam=f"b{spectro}"
 
         humidity_table_filename=f"{args.outdir}/humidity_table_{cam}.csv"
