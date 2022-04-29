@@ -11,11 +11,8 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from .. import io
-<<<<<<< HEAD
 from ..io.meta import shorten_filename
-=======
 from ..io.util import checkgzip
->>>>>>> 2240ec68... group_spectra support gzip or not
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
