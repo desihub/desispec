@@ -97,7 +97,6 @@ def main():
         cam=f"b{spectro}"
 
         humidity_table_filename=f"{args.outdir}/humidity_table_{cam}.csv"
-        #humidity_table_filename=f"{args.outdir}/extended_humidity_table_{cam}.csv"
 
         if not os.path.isfile(humidity_table_filename) :
 
@@ -130,11 +129,10 @@ def main():
                 et=Table.read(et_filename)
                 ii=(et['OBSTYPE']=='flat')
                 expids=list(et['EXPID'][ii])
-                #print(night,expids)
+
                 bhumid_vals=[]
                 for expid in expids :
                     desi_filename=findfile("raw",night=night,expid=expid)
-                    #print(desi_filename)
                     spectcons=fitsio.read(desi_filename,"SPECTCONS")
                     ii=(spectcons["unit"]==spectro)
                     if np.sum(ii)==0 :
@@ -148,7 +146,6 @@ def main():
                         log.warning(f"unphysical humidity value = {bhumid}")
                         continue
                     bhumid_vals.append(bhumid)
-                    #print(expid,bhumid)
                 if len(bhumid_vals)==0 :
                     log.error(f"couldn't get humidity info for night {night}")
                     continue
@@ -197,8 +194,7 @@ def main():
             # loop on nights with fiberflat
             for night in nights_in_bin :
                 flat_filename = f"{args.prod}/calibnight/{night}/fiberflatnight-{cam}-{night}.fits"
-                #if not os.path.isfile(flat_filename) :
-                #    flat_filename = f"/global/cfs/cdirs/desi/spectro/redux/jguy/calibnight/{night}/fiberflatnight-{cam}-{night}.fits"
+
                 if not os.path.isfile(flat_filename) :
                     log.warning(f"MISSING {flat_filename}")
                     continue
@@ -278,7 +274,7 @@ def main():
             hdulist[extname].header["DIPWAVE"]=dipwave
             hdulist.writeto(ofilename,overwrite=True)
             log.info(f"wrote {ofilename}")
-            #sys.exit(12)
+
 
         hdulist=None
 
