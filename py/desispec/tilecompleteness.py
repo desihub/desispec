@@ -304,18 +304,18 @@ def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
     for spectro in range(10) :
 
         # coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        coadd_filename = findfile('coadd', night=night, tile=tileid, spectrograph=spectro, groupname='cumulative', specprod_dir=specprod_dir)
-        try:
-            coadd_filename = checkgzip(coadd_filename)
-        except FileNotFoundError:
-            if warn : log.warning("missing {}".format(coadd_filename))
+        coadd_filename, exists = findfile('coadd', night=night, tile=tileid,
+                spectrograph=spectro, groupname='cumulative',
+                specprod_dir=specprod_dir, check_exists=True)
+        if not exists:
+            if warn: log.warning("missing {}".format(coadd_filename))
             continue
             
         # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        redrock_filename = findfile('redrock', night=night, tile=tileid, spectrograph=spectro, groupname='cumulative', specprod_dir=specprod_dir)
-        try:
-            redrock_filename = checkgzip(redrock_filename)
-        except FileNotFoundError:
+        redrock_filename, exists = findfile('redrock', night=night, tile=tileid,
+                spectrograph=spectro, groupname='cumulative',
+                specprod_dir=specprod_dir, check_exists=True)
+        if not exists:
             if warn : log.warning("missing {}".format(redrock_filename))
             continue
 

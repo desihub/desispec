@@ -23,7 +23,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
         rawdata_dir=None, specprod_dir=None,
-        download=False, outdir=None, qaprod_dir=None):
+        download=False, outdir=None, qaprod_dir=None,
+        check_exists=False):
     """Returns location where file should be
 
     Args:
@@ -47,10 +48,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
+        check_exists: if True, also return whether the file exists
+
+    Returns filename, or (filename, exists) if check_exists=True
 
     Raises:
         ValueError: for invalid file types, and other invalid input
         KeyError: for missing environment variables
+
+    Special case: if the canonical filepath is gzipped and doesn't exist on
+    disk, check for a non-gzipped file and return that instead if it exists.
+    This is independent of the check_exists option.
     """
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
@@ -266,7 +274,30 @@ def findfile(filetype, night=None, expid=None, camera=None,
         log.debug("download('%s', single_thread=True)", filepath)
         filepath = download(filepath, single_thread=True)[0]
 
-    return filepath
+    #- Special case: gzip files previously weren't gzipped, so check
+    #- if non-gzip version exists (even if check_exists==False)
+    exists = None
+    if filepath.endswith('.gz'):
+        if os.path.exists(filepath):
+            #- gzip file exists, don't check non-gzip
+            exists = True
+        else:
+            nogzpath = filepath[:-3]
+            if os.path.exists(nogzpath):
+                #- non-gzip file exists so use that instead
+                filepath = nogzpath
+                exists = True
+            else:
+                #- neither exists, to remember that
+                exists = False
+
+    if check_exists:
+        if exists is None:
+            exists = os.path.exists(filepath)
+
+        return filepath, exists
+    else:
+        return filepath
 
 def get_raw_files(filetype, night, expid, rawdata_dir=None):
     """Get files for a specified exposure.

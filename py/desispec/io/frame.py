@@ -155,15 +155,14 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     log = get_logger()
-    filename = checkgzip(filename)
 
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
 
-    if not os.path.isfile(filename):
-        raise FileNotFoundError("cannot open"+filename)
+    #- check for gzip, raise FileNotFoundError if neither exists
+    filename = checkgzip(filename)
 
     t0 = time.time()
     fx = fits.open(filename, uint=True, memmap=False)

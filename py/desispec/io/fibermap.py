@@ -416,10 +416,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- Look for fiberassign file, gzipped or not
     if 'TILEID' in rawheader:
         tileid = rawheader['TILEID']
-        rawfafile = findfile('fiberassign',night=night,expid=expid,tile=tileid)
-        try:
-            rawfafile = checkgzip(rawfafile)
-        except FileNotFoundError:
+        rawfafile, exists = findfile('fiberassign', night=night, expid=expid,
+                tile=tileid, check_exists=True)
+        if not exists:
             log.error("%s not found; looking in earlier exposures", rawfafile)
             rawfafile = find_fiberassign_file(night, expid, tileid=tileid)
 

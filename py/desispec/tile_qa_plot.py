@@ -907,15 +907,14 @@ def get_expids_efftimes(tileqafits, prod):
         for petal in range(10):
             for camera in ["b", "r", "z"]:
                 tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
-                fn = findfile('cframe', nights[i], expids[i], camera+str(petal),
-                    specprod_dir=prod)
-                try:
-                    fn = checkgzip(fn)
-                    vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
-                    tsnr2_petals[petal] += np.median(vals[vals > 0])
-                except FileNotFoundError:
+                fn, exists = findfile('cframe', nights[i], expids[i], camera+str(petal),
+                    specprod_dir=prod, check_exists=True)
+                if not exists:
                     log.warning(f'{fn} not found; skipping')
                     pass
+
+                vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
+                tsnr2_petals[petal] += np.median(vals[vals > 0])
                     
         d["EFFTIME_SPEC"][i] = tsnr2_to_efftime(tsnr2_petals[tsnr2_petals > 0].mean(), tsnr2_key.split("_")[-1])
         # QA_EFFTIME_SPEC, reading exposure-qa*fits
