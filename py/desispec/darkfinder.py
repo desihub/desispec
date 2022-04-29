@@ -14,6 +14,7 @@ import os.path
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
 from desispec.calibfinder import CalibFinder
+import astropy.io.fits as fits
 
 def parse_date_obs(value):
     '''
@@ -178,15 +179,19 @@ class DarkFinder(CalibFinder) :
         dark_filelist = glob.glob("{}/dark_frames/*.fits.gz".format(self.directory,cameraid))
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
+
+        super().__init__(headers, yaml_file)
+
         if len(dark_filelist) == 0:
-            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
-            super().init(self,headers,yaml_file)
+            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
+            #super().init(self,headers,yaml_file)
             return
 
         bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
 
         log.debug(f"Finding matching dark frames for camera {cameraid} ...")
+
 
         #loop over all dark filenames
 
@@ -195,19 +200,40 @@ class DarkFinder(CalibFinder) :
         found=False
         for datebegin in sorted(dark_dates)[::-1] :
             if dateobs >= datebegin :
-                found=True
+                #TODO: extra checks that evaluate if selection from yaml file is matching...
                 date_used=datebegin
+                dark_filename=dark_filelist[dark_dates == date_used][0]
+                bias_filename=dark_filelist[dark_dates == date_used][0]
+                with fits.open(dark_filename,'readonly') as hdul:
+                    headers2=hdul[0].headers
+                    
+                    if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"],detector))
+                        continue
+
+                    if "CCDCFG" in self.data :
+                        if headers2["CCDCFG"].strip() is None or headers2["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_filename,headers2["CCDCFG"],self.data["CCDCFG"]))
+                            continue
+
+                    if "CCDTMING" in self.data :
+                        if headers2["CCDTMING"].strip() is None or headers2["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
+                            continue
+                    #This check is not done with the bias frames assuming they are always generated in pairs
+
+                found=True
                 log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
 
                 break
             
         if found:
-            self.data = {"DARK": dark_filelist[dark_dates == date_used][0],
-                         "BIAS": bias_filelist[dark_dates == date_used][0]}
+            #TODO: maybe just overwrite the selection from yaml file in case things are matching something newer...
+            self.data.update({"DARK": dark_filename,
+                              "BIAS": bias_filename})
 
         else:
-            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK reading from $DESI_SPECTRO_CALIB instead")
-            super().__init__(self,headers,yaml_file)
+            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
 
 
         
