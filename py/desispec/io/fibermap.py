@@ -417,7 +417,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     if 'TILEID' in rawheader:
         tileid = rawheader['TILEID']
         rawfafile, exists = findfile('fiberassign', night=night, expid=expid,
-                tile=tileid, check_exists=True)
+                tile=tileid, return_exists=True)
         if not exists:
             log.error("%s not found; looking in earlier exposures", rawfafile)
             rawfafile = find_fiberassign_file(night, expid, tileid=tileid)

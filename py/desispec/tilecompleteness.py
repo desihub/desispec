@@ -306,7 +306,7 @@ def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
         # coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         coadd_filename, exists = findfile('coadd', night=night, tile=tileid,
                 spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, check_exists=True)
+                specprod_dir=specprod_dir, return_exists=True)
         if not exists:
             if warn: log.warning("missing {}".format(coadd_filename))
             continue
@@ -314,7 +314,7 @@ def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
         # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         redrock_filename, exists = findfile('redrock', night=night, tile=tileid,
                 spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, check_exists=True)
+                specprod_dir=specprod_dir, return_exists=True)
         if not exists:
             if warn : log.warning("missing {}".format(redrock_filename))
             continue

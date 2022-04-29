@@ -908,7 +908,7 @@ def get_expids_efftimes(tileqafits, prod):
             for camera in ["b", "r", "z"]:
                 tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
                 fn, exists = findfile('cframe', nights[i], expids[i], camera+str(petal),
-                    specprod_dir=prod, check_exists=True)
+                    specprod_dir=prod, return_exists=True)
                 if not exists:
                     log.warning(f'{fn} not found; skipping')
                     pass
