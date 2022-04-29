@@ -633,7 +633,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
     log = get_logger()
 
-    cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(prod, night, expid, camera, expid)
+    cframe_filename = findfile('cframe', night, expid, camera, specprod_dir=prod)
     if not os.path.isfile(cframe_filename) :
         return None
 
