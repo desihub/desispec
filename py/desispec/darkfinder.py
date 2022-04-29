@@ -205,7 +205,7 @@ class DarkFinder(CalibFinder) :
                 dark_filename=dark_filelist[dark_dates == date_used][0]
                 bias_filename=dark_filelist[dark_dates == date_used][0]
                 with fits.open(dark_filename,'readonly') as hdul:
-                    headers2=hdul[0].headers
+                    headers2=hdul[0].header
                     
                     if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
                         log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"],detector))
