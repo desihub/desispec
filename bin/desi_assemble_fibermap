@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script assembles a fibermap from input exposures
+"""
+
+import desispec.scripts.assemble_fibermap as assemble_fibermap
+
+if __name__ == '__main__':
+    args = assemble_fibermap.parse()
+    assemble_fibermap.main(args)

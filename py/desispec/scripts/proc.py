@@ -314,11 +314,13 @@ def main(args=None, comm=None):
 
             log.info('Creating fibermap {}'.format(fibermap))
             cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
-                    args.night, args.expid, fibermap, tilepix)
+                    args.night, args.expid, fibermap, tilepix)                  
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
+            cmdargs = cmd.split()[1:]
+            cmdargs = desispec.scripts.assemble_fibermap.parse(cmdargs)
             try:
-                err = runcmd(cmd, inputs=[], outputs=[fibermap, tilepix])
+                err = runcmd(desispec.scripts.assemble_fibermap.main, args=[cmdargs], inputs=[], outputs=[fibermap, tilepix])
             except Exception:
                 err = True
             if err != 0:
@@ -332,8 +334,10 @@ def main(args=None, comm=None):
         if not fibermap_ok and int(args.night) <	20200310:
             log.info("Since night is before 20200310, trying to force fibermap creation without coords file")
             cmd += ' --force'
+            cmdargs = cmd.split()[1:]
+            cmdargs = desispec.scripts.assemble_fibermap.parse(cmdargs)
             try:
-                err = runcmd(cmd, inputs=[], outputs=[fibermap])
+                err = runcmd(desispec.scripts.assemble_fibermap.main, args=[cmdargs], inputs=[], outputs=[fibermap])
             except Exception:
                 err = True
             fibermap_ok = os.path.exists(fibermap)
@@ -375,10 +379,9 @@ def main(args=None, comm=None):
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
             cmdargs = cmd.split()[1:]
-            preproc_args = desispec.scripts.preproc.parse(cmdargs)
-            cmd = desispec.scripts.preproc.main
+            cmdargs = desispec.scripts.preproc.parse(cmdargs)
             try:
-                err = runcmd(cmd, args=[preproc_args], inputs=[args.input], outputs=[outfile])
+                err = runcmd(desispec.scripts.preproc.main, args=[cmdargs], inputs=[args.input], outputs=[outfile])
             except Exception:
                 err = True
             if err != 0:
@@ -452,8 +455,10 @@ def main(args=None, comm=None):
                     cmd = "desi_inspect_dark"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
+                    cmdargs = cmd.split()[1:]
+                    cmdargs = desispec.scripts.inspect_dark.parse(cmdargs)
                     try:
-                        err = runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                        err = runcmd(desispec.scripts.inspect_dark.main, args=[cmdargs], inputs=[preprocfile], outputs=[badcolumnsfile])
                     except Exception:
                         err = True
                     if err != 0:
@@ -543,8 +548,10 @@ def main(args=None, comm=None):
                 cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
                 cmd += ' --arc-lamps'
                 cmd += " --outpsf {}".format(outpsf)
+                cmdargs = cmd.split()[1:]
+                cmdargs = desispec.scripts.trace_shifts.parse(cmdargs)
                 try:
-                    err = runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                    err = runcmd(desispec.scripts.trace_shifts.main, args=[cmdargs], inputs=[preprocfile, inpsf], outputs=[outpsf])
                 except Exception:
                     err = True
                 if err != 0:
@@ -653,8 +660,10 @@ def main(args=None, comm=None):
                     cmd += ' --outfile {}'.format(outpsf)
                     cmd += ' --fibers {}'.format(fibers_to_ignore_str)
                     log.info('For camera {} interpolating PSF for fibers: {}'.format(camera,fibers_to_ignore_str))
+                    cmdargs = cmd.split()[1:]
+                    cmdargs = desispec.scripts.interpolate_fiber_psf.parse(cmdargs)
                     try:
-                        err = runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                        err = runcmd(desispec.scripts.interpolate_fiber_psf, args=[cmdargs], inputs=[inpsf], outputs=[outpsf])
                     except Exception:
                         err = True
                     if err != 0:
@@ -891,8 +900,10 @@ def main(args=None, comm=None):
                 continue
 
             if os.path.exists(badcolfile):
+                cmdargs = cmd.split()[1:]
+                cmdargs = desispec.scripts.compute_badcolumn_mask.parse(cmdargs)
                 try:
-                    err = runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                    err = runcmd(desispec.scripts.compute_badcolumn_mask, args=[cmdargs], inputs=[infile,psffile,badcolfile], outputs=[outfile])
                 except Exception:
                     err = True
                 if err != 0:
@@ -936,10 +947,9 @@ def main(args=None, comm=None):
                 cmd += " -i {}".format(framefile)
                 cmd += " -o {}".format(fiberflatfile)
                 cmdargs = cmd.split()[1:]
-                fiberflat_args = desispec.scripts.fiberflat.parse(cmdargs)
-                cmd = desispec.scripts.fiberflat.main
+                cmdargs = desispec.scripts.fiberflat.parse(cmdargs)
                 try:
-                    err = runcmd(cmd, args=[fiberflat_args], inputs=[framefile,], outputs=[fiberflatfile,])
+                    err = runcmd(desispec.scripts.fiberflat.main, args=[cmdargs], inputs=[framefile,], outputs=[fiberflatfile,])
                 except Exception:
                     err = True
                 if err != 0:
@@ -1014,8 +1024,10 @@ def main(args=None, comm=None):
             cmd += " -i {}".format(framefile)
             cmd += " --fiberflat {}".format(input_fiberflatfile)
             cmd += " -o {}".format(fiberflatfile)
+            cmdargs = cmd.split()[1:]
+            cmdargs = desispec.scripts.humidity_corrected_fiberflat.parse(cmdargs)
             try:
-                err = runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
+                err = runcmd(desispec.scripts.humidity_corrected_fiberflat.main, args=[cmdargs], inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
             except Exception:
                 err = True
             if err != 0:
@@ -1135,10 +1147,9 @@ def main(args=None, comm=None):
                     log.warning("No SKYGRADPCA file, do you need to update DESI_SPECTRO_CALIB?")
 
             cmdargs = cmd.split()[1:]
-            sky_args = desispec.scripts.sky.parse(cmdargs)
-            cmd = desispec.scripts.sky.main
+            cmdargs = desispec.scripts.sky.parse(cmdargs)
             try:
-                err = runcmd(cmd, args=[sky_args], inputs=[framefile, fiberflatfile], outputs=[skyfile,])
+                err = runcmd(desispec.scripts.sky.main, args=[cmdargs], inputs=[framefile, fiberflatfile], outputs=[skyfile,])
             except Exception:
                 err = True
             if err != 0:
@@ -1246,27 +1257,21 @@ def main(args=None, comm=None):
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
             err = 0
-            if subcomm is None:
-                #- Using multiprocessing
-                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with multiprocessing')
-                try:
-                    err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
-                except Exception:
-                    err = True
-            else:
-                #- Using MPI
-                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
-                try:
-                    cmdargs = cmd.split()[1:]
-                    cmdargs = desispec.scripts.stdstars.parse(cmdargs)
+            cmdargs = cmd.split()[1:]
+            cmdargs = desispec.scripts.stdstars.parse(cmdargs)      
+            try:
+                if subcomm is None:
+                    #- Using multiprocessing
+                    log.info(f'Rank {rank=} fitting sp{sp=} stdstars with multiprocessing')
+                    err = runcmd(desispec.scripts.stdstars.main, 
+                        args=[cmdargs], inputs=inputs, outputs=[stdfile])
+                else:
+                    #- Using MPI
+                    log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
                     err = runcmd(desispec.scripts.stdstars.main,
-                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
-                    )
-                except:
-                    #- Catches sys.exit from stdstars.main
-                    log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
-                    err = 1
-
+                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile])
+            except Exception:
+                err = True
             if err not in (0, None):
                 log.info(f'Rank {rank=} stdstar failure {err=}')
                 error_count += 1
@@ -1308,9 +1313,10 @@ def main(args=None, comm=None):
                 cmd += " --skys {}".format(list2str(skys))
                 cmd += " --models {}".format(list2str(models))
                 cmd += f" -o {outfile}"
-
+                cmdargs = cmd.split()[1:]
+                cmdargs = desispec.scripts.select_calib_stars.parse(cmdargs)
                 try:
-                    err = runcmd(cmd, inputs=inputs, outputs=[outfile,])
+                    err = runcmd(desispec.scripts.select_calib_stars.main, args=[cmdargs], inputs=inputs, outputs=[outfile,])
                 except Exception:
                     err = True
                 if err != 0:
@@ -1340,9 +1346,8 @@ def main(args=None, comm=None):
             inputs = [framefile, skyfile, fiberflatfile, stdfile, calibstars]
             cmdargs = cmd.split()[1:]
             fluxcal_args = desispec.scripts.fluxcalibration.parse(cmdargs)
-            cmd = desispec.scripts.fluxcalibration.main
             try:
-                err = runcmd(cmd, args=[fluxcal_args], inputs=inputs, outputs=[calibfile,])
+                err = runcmd(desispec.scripts.fluxcalibration.main, args=[cmdargs], inputs=inputs, outputs=[calibfile,])
             except:
                 err = True
             if err != 0:
@@ -1384,10 +1389,9 @@ def main(args=None, comm=None):
 
             inputs = [framefile, fiberflatfile, skyfile, calibfile]
             cmdargs = cmd.split()[1:]
-            procexp_args = desispec.scripts.procexp.parse(cmdargs)
-            cmd = desispec.scripts.procexp.main
+            cmdargs = desispec.scripts.procexp.parse(cmdargs)
             try:
-                err = runcmd(cmd, args=[procexp_args], inputs=inputs, outputs=[cframefile,])
+                err = runcmd(desispec.scripts.procexp.main, args=[cmdargs], inputs=inputs, outputs=[cframefile,])
             except Exception:
                 err = True
             if err != 0:
