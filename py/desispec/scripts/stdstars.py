@@ -730,3 +730,8 @@ def main(args, comm=None) :
         io.write_stdstar_models(args.outfile,normflux,stdwave,
                 starfibers[fitted_stars],data,
                 fibermap, input_frames_table)
+
+    if comm is not None:
+        comm.barrier()
+
+    return 0

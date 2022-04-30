@@ -23,6 +23,8 @@ from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.extract
 import desispec.scripts.specex
 import desispec.scripts.stdstars
+import desispec.scripts.average_fiberflat
+import desispec.scripts.autocalib_fiberflat
 
 from desitarget.targetmask import desi_mask
 
@@ -302,16 +304,20 @@ def main(args=None, comm=None):
         for camera, lampbox, ofile in camera_lampboxes[rank::size]:
             if not os.path.isfile(ofile):
                 log.info(f"Rank {rank} average flat for camera {camera} and lamp box #{lampbox}")
-                pg = f"CALIB DESI-CALIB-0{lampbox} LEDs only"
-
-                cmd = f"desi_average_fiberflat --program '{pg}' --outfile {ofile} -i "
+                cmd = []
+                cmd.append(f"desi_average_fiberflat")
+                cmd.append(f"--program")
+                cmd.append(f"CALIB DESI-CALIB-0{lampbox} LEDs only")
+                cmd.append(f"--outfile")
+                cmd.append(f"{ofile}")
+                cmd.append(f"-i")
                 for flat in inflats_for_camera[camera]:
-                    cmd += f" {flat} "
+                    cmd.append(f"{flat}")
                 num_cmd += 1
-                cmdargs = cmd.split()[1:]
-                average_fiberflat_args = desispec.scripts.average_fiberflat.parse(cmdargs)
+                cmdargs = cmd[1:]
+                cmdargs = desispec.scripts.average_fiberflat.parse(cmdargs)
                 try:
-                    err = runcmd(desispec.scripts.average_fiberflat.main, args=[average_fiberflat_args], inputs=inflats_for_camera[camera], outputs=[ofile, ])
+                    err = runcmd(desispec.scripts.average_fiberflat.main, args=cmdargs, inputs=inflats_for_camera[camera], outputs=[ofile, ])
                 except Exception:
                     err = True
                 if err:
@@ -325,14 +331,20 @@ def main(args=None, comm=None):
         log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
         for camera_arm in ["b", "r", "z"][rank::size]:
             log.info(f"Rank {rank} autocalibrating across spectro for camera arm {camera_arm}")
-            cmd = f"desi_autocalib_fiberflat --night {args.night} --arm {camera_arm} -i "
+            cmd = []
+            cmd.append(f"desi_autocalib_fiberflat")
+            cmd.append(f"--night")
+            cmd.append(f"{args.night}")
+            cmd.append(f"--arm")
+            cmd.append(f"{camera_arm}")
+            cmd.append(f"-i")
             for flat in flats_for_arm[camera_arm]:
-                cmd += f" {flat} "
+                cmd.append(f"{flat}")
             num_cmd += 1
-            cmdargs = cmd.split()[1:]
-            autocalib_fiberflat_args = desispec.scripts.autocalib_fiberflat.parse(cmdargs)
+            cmdargs = cmd[1:]
+            cmdargs = desispec.scripts.autocalib_fiberflat.parse(cmdargs)
             try:
-                err = runcmd(desispec.scripts.autocalib_fiberflat.main, args=[autocalib_fiberflat_args], inputs=flats_for_arm[camera_arm], outputs=[])
+                err = runcmd(desispec.scripts.autocalib_fiberflat.main, args=cmdargs, inputs=flats_for_arm[camera_arm], outputs=[])
             except Exception:
                 err = True            
             if err:
@@ -518,22 +530,25 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            num_cmd += 1
             if subcomm is None:
                 #- Using multiprocessing
+                num_cmd += 1
                 err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
             else:
                 #- Using MPI
                 try:
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.stdstars.parse(cmdargs)
+                    if subcomm.rank == 0:
+                        num_cmd += 1
                     err = runcmd(desispec.scripts.stdstars.main, 
-                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
+                        args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm
                     )
                 except:
                     #- Catches sys.exit from stdstars.main
                     log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
                     err = True
+
             if err:
                 num_err += 1
 

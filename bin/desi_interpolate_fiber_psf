@@ -11,5 +11,5 @@ This script interpolates fiber PSFs.
 import desispec.scripts.desi_interpolate_fiber_psf as interpolate_fiber_psf
 
 if __name__ == '__main__':
-    args = desi_interpolate_fiber_psf.parse()
-    desi_interpolate_fiber_psf.main(args)
+    args = interpolate_fiber_psf.parse()
+    interpolate_fiber_psf.main(args)

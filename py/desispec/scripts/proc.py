@@ -615,9 +615,10 @@ def main(args=None, comm=None):
 
         if comm is not None:
             cmds = comm.bcast(cmds, root=0)
-            err = desispec.scripts.specex.run(comm,cmds,args.cameras)
-            if err != 0:
-                error_count += 1
+            if len(cmds) > 0:
+                err = desispec.scripts.specex.run(comm,cmds,args.cameras)
+                if err != 0:
+                    error_count += 1
         else:
             log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
@@ -629,6 +630,7 @@ def main(args=None, comm=None):
                     if err != 0:
                         error_count += 1
 
+        timer.stop('psf')
         if comm is not None:
             comm.barrier()
 
@@ -673,7 +675,7 @@ def main(args=None, comm=None):
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.interpolate_fiber_psf.parse(cmdargs)
                     try:
-                        err = runcmd(desispec.scripts.interpolate_fiber_psf, args=cmdargs, inputs=[inpsf], outputs=[outpsf])
+                        err = runcmd(desispec.scripts.interpolate_fiber_psf.main, args=cmdargs, inputs=[inpsf], outputs=[outpsf])
                     except Exception:
                         err = True
                     if err != 0:
@@ -684,9 +686,7 @@ def main(args=None, comm=None):
                         subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
             dt = time.time() - t0
-            log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
-
-        timer.stop('psf')
+            log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')    
 
     #-------------------------------------------------------------------------
     #- Merge PSF of night if applicable

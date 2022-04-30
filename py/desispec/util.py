@@ -18,7 +18,7 @@ import subprocess as sp
 from desiutil.log import get_logger, INFO
 
 
-def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
+def runcmd(cmd, args=None, inputs=[], outputs=[], comm=None, clobber=False):
     """
     Runs a command, checking for inputs and outputs
 
@@ -40,13 +40,25 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
         If outputs exist and have timestamps after all inputs, don't run cmd.
 
     """
+
     log = get_logger()
+
+    if comm is None:
+        rank = 0
+        size = 1
+    else:
+        from mpi4py import MPI
+        size = comm.Get_size()
+        rank = comm.Get_rank()
+        if rank == 0:
+            log.info('runcmd parallel with {} ranks'.format(size))
+
     #- Check that inputs exist
     input_time = 0  #- timestamp of latest input file
     for x in inputs:
         if not os.path.exists(x):
-            log.error("missing input "+x)
-            log.critical("FAILED {}".format(cmd))
+            log.error("rank {} missing input {}".format(rank,x))
+            log.critical("rank {} FAILED {}".format(rank,cmd))
             return 1
         else:
             input_time = max(input_time, os.stat(x).st_mtime)
@@ -64,7 +76,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 break
 
     if already_done:
-        log.info("SKIPPING: {}".format(cmd))
+        log.info("SKIPPING: {} on rank {}".format(cmd,rank))
         return 0
 
     #- Green light to go; print input/output info
@@ -84,16 +96,19 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     cmd_callable = isinstance(cmd, collections.abc.Callable)
     if not cmd_callable and args is not None:
         raise ValueError("Don't provide args unless cmd is a function")
+    if isinstance(args, argparse.Namespace):
+        args = (args)
 
     #- run command
     try:
         if cmd_callable:
             if args is None:
                 err = cmd()
-            elif isinstance(args, argparse.Namespace):
-                err = cmd(args)
             else:
-                err = cmd(*args)
+                if comm is None:
+                    err = cmd(*args)
+                else:
+                    err = cmd(*args, comm=comm)
         else:
             err = sp.call(cmd, shell=True)
     except Exception as e:
@@ -102,27 +117,27 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
         for line in lines:
             line = line.strip()
             log.error(f'{line}')
-        log.critical("FAILED with {}".format(cmd))
+        log.critical("FAILED rank {} with {}".format(rank,cmd))
         raise e
 
     log.info(time.asctime())
     if err != 0 and err is not None:
-        log.critical("FAILED command err={} {}".format(err, cmd))
+        log.critical("FAILED rank {} with err {} {}".format(rank,err,cmd))
     else:
         err = 0
 
     #- Check for outputs
-    outputs_present = True
-    for x in outputs:
-        if not os.path.exists(x):
-            log.error("missing output "+x)
-            outputs_present = False
-
-    if outputs_present:
-        log.info("SUCCESS: {}".format(cmd))
-    else:
-        log.critical("FAILED outputs {}".format(cmd))
-        err = 2
+    if rank == 0:
+        outputs_present = True
+        for x in outputs:
+            if not os.path.exists(x):
+                log.error("missing output {}".format(rank,x))
+                outputs_present = False
+        if outputs_present:
+            log.info("SUCCESS: {}".format(cmd))
+        else:
+            log.critical("FAILED outputs {}".format(cmd))
+            err = 2
 
     return err
 

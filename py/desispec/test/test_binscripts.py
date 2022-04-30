@@ -259,7 +259,7 @@ for legacy standards
             args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
             err = runcmd(desispec.scripts.stdstars.main, args=[args,],
                 inputs=inputs, outputs=outputs, clobber=True)
-            self.assertEqual(err, None)
+            self.assertEqual(err, 0)
 
     def test_fit_stdstars_gaia(self):
         """
@@ -284,7 +284,7 @@ for legacy standards
             args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
             err = runcmd(desispec.scripts.stdstars.main, args=[args,],
                 inputs=inputs, outputs=outputs, clobber=True)
-            self.assertEqual(err, None)
+            self.assertEqual(err, 0)
 
         
     def test_compute_fluxcalib(self):
@@ -316,7 +316,7 @@ for legacy standards
         args = desispec.scripts.fluxcalibration.parse(cmd.split()[2:])
         err = runcmd(desispec.scripts.fluxcalibration.main, args=[args,],
             inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+        self.assertEqual(err, 0)
 
     def test_compute_sky(self):
         """
@@ -338,7 +338,7 @@ for legacy standards
         args = desispec.scripts.sky.parse(cmd.split()[2:])
         err = runcmd(desispec.scripts.sky.main, args=[args,],
             inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+        self.assertEqual(err, 0)
 
 def test_suite():
     """Allows testing of only this module with the command::
