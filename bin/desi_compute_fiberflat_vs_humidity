@@ -26,8 +26,8 @@ def parse(options=None):
     parser.add_argument("--reference-camera", type = str, default = "b0", required = False,
                         help = "reference camera to index humidity based on measured wavelength shift")
     parser.add_argument("-p", "--prod", type = str, default = None, required = True,
-                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
-    parser.add_argument("-o", "--outdir", type = str, default = "./", required = False,
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily/,  or simply prod version, like daily, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
+    parser.add_argument("-o", "--outdir", type = str, default = ".", required = False,
                         help = "output directory")
     parser.add_argument("-s", "--spectrographs", type = str, default = "0,1,2,3,4,5,6,7,8,9", required = False,
                         help = "comma separated list of spectographs, default is '0,1,2,3,4,5,6,7,8,9'")
@@ -81,7 +81,7 @@ def define_template_bins(input_table_filename) :
     for b in range(nbins) :
         ii=np.where((input_table["DIPWAVE"]>=wavebins[b])&(input_table["DIPWAVE"]<=wavebins[b+1]))
         nights_in_bins.append(list(input_table["NIGHT"][ii]))
-        log.info("bin {} : {}-{} nights {} {}".format(b,wavebins[b],wavebins[b+1],len(nights_in_bins[b]),nights_in_bins[b]))
+        log.info("bin {} : {}-{} nights {} {}".format(b,wavebins[b],wavebins[b+1],len(nights_in_bins[b]),list(nights_in_bins[b])))
 
     return wavebins, nights_in_bins
 
@@ -167,11 +167,11 @@ def compute_humidity_table(camera,years,specprod_dir,fit_dip_wavelength=False) :
                 dipwave=fit_wave_of_dip(ff.wave,ff.fiberflat)
                 vals["DIPWAVE"].append(dipwave)
 
-        table=Table()
-        for k in vals.keys() :
-            table[k]=vals[k]
+    table=Table()
+    for k in vals.keys() :
+        table[k]=vals[k]
 
-        return table
+    return table
 
 
 def main():
@@ -195,7 +195,9 @@ def main():
     # reference table with columns NIGHT HUMIDITY DIPWAVE
     reference_humidity_table_filename=f"{args.outdir}/humidity_table_{args.reference_camera}.csv"
     if not os.path.isfile(reference_humidity_table_filename) :
-        compute_humidity_table(args.reference_camera,args.years,args.prod,fit_dip_wavelength=True)
+        table = compute_humidity_table(args.reference_camera,args.years,args.prod,fit_dip_wavelength=True)
+        table.write(reference_humidity_table_filename)
+        log.info("wrote "+reference_humidity_table_filename)
 
     xbins , nights_in_bins = define_template_bins(reference_humidity_table_filename)
     nbins = xbins.size-1
@@ -214,7 +216,7 @@ def main():
         if not os.path.isfile(humidity_table_filename) :
             table = compute_humidity_table(cam,args.years,args.prod,fit_dip_wavelength=False)
             table.write(humidity_table_filename)
-            log.info("wrote",humidity_table_filename)
+            log.info("wrote "+humidity_table_filename)
 
         humidity_table = Table.read(humidity_table_filename)
         ii = ~np.isnan(humidity_table["HUMIDITY"])
@@ -232,14 +234,14 @@ def main():
                 log.info(f"skip existing {ofilename}")
                 continue
 
-            log.info("nights_in_bins=",nights_in_bins[bin_index])
+            log.info("nights in bins = {}".format(list(nights_in_bins[bin_index])))
             selection = np.in1d(humidity_table["NIGHT"],nights_in_bins[bin_index])
             if np.sum(selection)==0 :
                 log.warning("bin={} nflats={} (skip)".format(bin_index,np.sum(selection)))
                 continue
 
             nights_in_bin     = humidity_table["NIGHT"][selection]
-            log.info("bin={} nflats={} nights={}".format(bin_index,np.sum(selection),nights_in_bin))
+            log.info("bin={} nflats={} nights={}".format(bin_index,np.sum(selection),list(nights_in_bin)))
 
 
             fiberflats_in_bin = []
@@ -336,14 +338,14 @@ def main():
             extname="HUM{:02d}".format(bin_index)
             filename=f"{args.outdir}/fiberflat-vs-humidity-{cam}-{extname}.fits"
             if not os.path.isfile(filename): continue
-            log.info("adding",filename)
+            log.info("adding "+filename)
             h=pyfits.open(filename)
             data=h[extname].data
             # identify null data
             rms=np.std(data,axis=1)
             nzero=np.sum(rms<1e-6)
             if nzero > 0 :
-                log.warning(filename,"nzero=",nzero)
+                log.warning("{} nzero={}".format(filename,nzero))
                 continue
 
 
