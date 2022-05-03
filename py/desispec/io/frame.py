@@ -194,7 +194,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = read_fibermap(filename)
+        fibermap = read_fibermap(fx)
     else:
         fibermap = None
 
