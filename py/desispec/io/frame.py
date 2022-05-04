@@ -9,6 +9,7 @@ import time
 
 import numpy as np
 import scipy, scipy.sparse
+import fitsio
 from astropy.io import fits
 from astropy.table import Table
 import warnings
@@ -165,13 +166,13 @@ def read_frame(filename, nspec=None, skip_resolution=False):
     filename = checkgzip(filename)
 
     t0 = time.time()
-    fx = fits.open(filename, uint=True, memmap=False)
-    hdr = fx[0].header
-    flux = native_endian(fx['FLUX'].data.astype('f8'))
-    ivar = native_endian(fx['IVAR'].data.astype('f8'))
-    wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
+    fx = fitsio.FITS(filename)
+    hdr = fx[0].read_header()
+    flux = native_endian(fx['FLUX'].read().astype('f8'))
+    ivar = native_endian(fx['IVAR'].read().astype('f8'))
+    wave = native_endian(fx['WAVELENGTH'].read().astype('f8'))
     if 'MASK' in fx:
-        mask = native_endian(fx['MASK'].data)
+        mask = native_endian(fx['MASK'].read().astype(np.uint32))
     else:
         mask = None   #- let the Frame object create the default mask
 
@@ -187,11 +188,11 @@ def read_frame(filename, nspec=None, skip_resolution=False):
     if skip_resolution:
         pass
     elif 'RESOLUTION' in fx:
-        resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
+        resolution_data = native_endian(fx['RESOLUTION'].read().astype('f8'))
     elif 'QUICKRESOLUTION' in fx:
         qr=fx['QUICKRESOLUTION'].header
         qndiag =qr['NDIAG']
-        qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
+        qwsigma=native_endian(fx['QUICKRESOLUTION'].read().astype('f4'))
 
     if 'FIBERMAP' in fx:
         fibermap = read_fibermap(fx)
@@ -199,18 +200,18 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         fibermap = None
 
     if 'CHI2PIX' in fx:
-        chi2pix = native_endian(fx['CHI2PIX'].data.astype('f8'))
+        chi2pix = native_endian(fx['CHI2PIX'].read().astype('f8'))
     else:
         chi2pix = None
 
     if 'SCORES' in fx:
-        scores = fx['SCORES'].data
+        scores = fx['SCORES'].read()
         # I need to open the header to read the comments
         scores_comments = dict()
-        head   = fx['SCORES'].header
-        for i in range(1,len(scores.columns)+1) :
+        head   = fx['SCORES'].read_header()
+        for i in range(1,len(scores.dtype.names)+1) :
             k='TTYPE'+str(i)
-            scores_comments[head[k]]=head.comments[k]
+            scores_comments[head[k]]=head.get_comment(k)
     else:
         scores = None
         scores_comments = None
@@ -246,7 +247,6 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         log.error("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
     # Return
     return frame
-
 
 def search_for_framefile(frame_file, specprod_dir=None):
     """ Search for an input frame_file in the desispec redux hierarchy
