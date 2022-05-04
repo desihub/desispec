@@ -329,6 +329,17 @@ class TestIO(unittest.TestCase):
         self.assertEqual(header['BAR'], 1)
         self.assertEqual(header.comments['BAR'], 'biz bat')
 
+        #- fitsio.FITSHDR -> fits.Header
+        hlist = [
+                {'name':'A', 'value':1, 'comment':'blat'},
+                {'name':'B', 'value':'xyz', 'comment':'foo'},
+                ]
+        header = fitsheader(fitsio.FITSHDR(hlist))
+        self.assertTrue(isinstance(header, fits.Header))
+        self.assertEqual(header['A'], 1)
+        self.assertEqual(header['B'], 'xyz')
+        self.assertEqual(header.comments['B'], 'foo')
+
         #- Can't convert and int into a fits Header
         self.assertRaises(ValueError, fitsheader, (1,))
 
@@ -564,6 +575,15 @@ class TestIO(unittest.TestCase):
             else:
                 self.assertEqual(c1.dtype.kind, c2.dtype.kind)
                 self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
+
+        #- read_fibermap also works with open file pointer
+        with fitsio.FITS(self.testfile) as fp:
+            fm1 = read_fibermap(fp)
+            self.assertTrue(np.all(fm1 == fm))
+
+        with fits.open(self.testfile) as fp:
+            fm2 = read_fibermap(fp)
+            self.assertTrue(np.all(fm2 == fm))
 
     def test_stdstar(self):
         """Test reading and writing standard star files.
