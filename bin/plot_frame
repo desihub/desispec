@@ -82,6 +82,9 @@ for filename in args.infile :
         fibers = np.sort(frame.fibermap["FIBER"][selection])
         print("showing {} sky fibers fibers: {}".format(fibers.size,list(fibers)))
 
+    if fibers is None :
+        fibers = frame.fibermap["FIBER"]
+
     selection = np.in1d(frame.fibermap["FIBER"],fibers)
     if args.focal_plane and frame.fibermap is not None :
         x.append(frame.fibermap["FIBERASSIGN_X"][selection])
