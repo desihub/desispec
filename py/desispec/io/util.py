@@ -9,6 +9,7 @@ import glob
 import time
 import datetime
 import subprocess
+import fitsio
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -88,6 +89,14 @@ def fitsheader(header):
         hdr = astropy.io.fits.Header()
         for key, value in header.items():
             hdr[key] = value
+        return hdr
+
+    if isinstance(header, fitsio.FITSHDR):
+        hdr = astropy.io.fits.Header()
+        for key in header.keys():
+            value = header.get(key)
+            comment = header.get_comment(key)
+            hdr[key] = (value, comment)
         return hdr
 
     if isinstance(header, astropy.io.fits.Header):
