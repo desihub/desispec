@@ -496,7 +496,7 @@ tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
     echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa
+    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
     desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
 fi
