@@ -20,6 +20,7 @@ import astropy.units as u
 import astropy.io.fits as fits
 import astropy.table
 from astropy.table import Table
+import fitsio
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
@@ -211,12 +212,12 @@ def read_spectra(infile, single=False):
         raise IOError("{} is not a file".format(infile))
 
     t0 = time.time()
-    hdus = fits.open(infile, mode="readonly")
+    hdus = fitsio.FITS(infile, mode='r')
     nhdu = len(hdus)
 
     # load the metadata.
 
-    meta = dict(hdus[0].header)
+    meta = dict(hdus[0].read_header())
 
     # initialize data objects
 
@@ -238,15 +239,15 @@ def read_spectra(infile, single=False):
     # the Spectra object.
 
     for h in range(1, nhdu):
-        name = hdus[h].header["EXTNAME"]
+        name = hdus[h].read_header()["EXTNAME"]
         if name == "FIBERMAP":
-            fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+            fmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == "EXP_FIBERMAP":
-            expfmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+            expfmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == "SCORES":
-            scores = encode_table(Table(hdus[h].data, copy=True).as_array())
+            scores = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == 'EXTRA_CATALOG':
-            extra_catalog = encode_table(Table(hdus[h].data, copy=True).as_array())
+            extra_catalog = encode_table(Table(hdus[h].read(), copy=True).as_array())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -260,30 +261,30 @@ def read_spectra(infile, single=False):
                 if wave is None:
                     wave = {}
                 #- Note: keep original float64 resolution for wavelength
-                wave[band] = native_endian(hdus[h].data)
+                wave[band] = native_endian(hdus[h].read())
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
-                flux[band] = native_endian(hdus[h].data.astype(ftype))
+                flux[band] = native_endian(hdus[h].read().astype(ftype))
             elif type == "IVAR":
                 if ivar is None:
                     ivar = {}
-                ivar[band] = native_endian(hdus[h].data.astype(ftype))
+                ivar[band] = native_endian(hdus[h].read().astype(ftype))
             elif type == "MASK":
                 if mask is None:
                     mask = {}
-                mask[band] = native_endian(hdus[h].data.astype(np.uint32))
+                mask[band] = native_endian(hdus[h].read().astype(np.uint32))
             elif type == "RESOLUTION":
                 if res is None:
                     res = {}
-                res[band] = native_endian(hdus[h].data.astype(ftype))
+                res[band] = native_endian(hdus[h].read().astype(ftype))
             else:
                 # this must be an "extra" HDU
                 if extra is None:
                     extra = {}
                 if band not in extra:
                     extra[band] = {}
-                extra[band][type] = native_endian(hdus[h].data.astype(ftype))
+                extra[band][type] = native_endian(hdus[h].read().astype(ftype))
 
     hdus.close()
     duration = time.time() - t0
