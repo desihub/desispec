@@ -17,6 +17,7 @@ from desiutil.io import encode_table
 
 from desispec.qproc.qframe import QFrame
 from desispec.io.util import fitsheader, native_endian, makepath
+from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
 
 
@@ -85,8 +86,9 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
         log.error("You are likely writing a qframe without sufficient fiber info")
         raise ValueError('no fibermap')
 
-    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
 
     return outfile
 

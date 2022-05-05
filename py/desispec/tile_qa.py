@@ -17,7 +17,7 @@ from desiutil.log import get_logger
 
 from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
-from desispec.io.util import replace_prefix
+from desispec.io.util import replace_prefix, checkgzip
 from desispec.maskbits import fibermask
 
 
@@ -46,7 +46,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
 
     # get list of exposures used for the tile
     tiledir=f"{specprod_dir}/tiles/{group}/{tileid:d}/{night}"
-    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-*{night}.fits"))
+    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-*{night}.fits*"))
     if len(spectra_files)==0 :
         log.error(f"no spectra files in {tiledir}")
         return None, None
@@ -87,13 +87,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
                 fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
-                if not os.path.isfile(fafn):
-                    log.warning("missing {}".format(fafn))
-                    fafn=fafn.replace(".fits.gz",".fits")
-                    log.warning("trying {}...".format(fafn))
-                    if not os.path.isfile(fafn):
-                        log.error("missing {}".format(fafn))
-                        raise FileNotFoundError("missing {}".format(fafn))
+                fafn = checkgzip(fafn)
                 fahdr = fitsio.read_header(fafn, 0)
                 if "TARG" not in fahdr:
                     log.error("TARG keyword missing in {} header".format(fafn))
@@ -134,7 +128,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         exposure_petalqa_tables = exposure_petalqa_tables[0]
 
     # collect fibermaps and scores of all coadds
-    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits"))
+    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits*"))
 
     fibermaps=[]
     scores=[]

@@ -12,6 +12,7 @@ from desiutil.log import get_logger
 import numpy as np
 
 from . import iotime
+from .util import get_tempfilename
 
 def write_skycorr(outfile, skycorr):
     """Write sky model.
@@ -36,8 +37,9 @@ def write_skycorr(outfile, skycorr):
     hx['DWAVE'].header['BUNIT'] = 'Angstrom'
     hx['DLSF'].header['BUNIT'] = 'Angstrom'
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
     return outfile
@@ -49,7 +51,7 @@ def read_skycorr(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..skycorr import SkyCorr
     log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
@@ -58,6 +60,7 @@ def read_skycorr(filename) :
         filename = findfile('skycorr', night, expid, camera)
 
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header
@@ -100,8 +103,9 @@ def write_skycorr_pca(outfile, skycorrpca):
     hx.append( fits.ImageHDU(skycorrpca.wave.astype('f8'), name='WAVELENGTH'))
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
     return outfile
@@ -110,11 +114,12 @@ def read_skycorr_pca(filename) :
     """Read sky correction pca file and return SkyCorrPCA object.
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..skycorr import SkyCorrPCA
 
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header
