@@ -392,6 +392,14 @@ class TestIO(unittest.TestCase):
             self.assertEqual(frame.meta['BLAT'], read_meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], read_meta['FOO'])
 
+        #- read_frame works even with "wrong" .fits / .fits.gz
+        if self.testfile.endswith('.fits'):
+            frame = read_frame(self.testfile + '.gz')  # finds file anyway
+        elif self.testfile.endswith('.fits.gz'):
+            frame = read_frame(self.testfile[:-3])     # finds file anyway
+        else:
+            raise ValueError(f'unrecognized extension for {self.testfile=}')
+
         #- Test float32 on disk vs. float64 in memory
         for extname in ['FLUX', 'IVAR', 'RESOLUTION']:
             data = fits.getdata(self.testfile, extname)
@@ -777,6 +785,27 @@ class TestIO(unittest.TestCase):
                     'sky-{camera}-{expid:08d}.fits.gz'.format(**kwargs))
 
         self.assertEqual(file1, file2)
+
+        # canonical case is gzipped, but if non-gzipped version exists
+        # return that instead
+        assert file1.endswith('.gz')
+        os.makedirs(os.path.dirname(file1), exist_ok=True)
+        file1nogzip = file1[:-3]
+        fx = open(file1nogzip, 'w')
+        fx.close()
+        file3 = findfile('sky', **kwargs)
+        self.assertEqual(file1nogzip, file3)
+
+        # and also the reverse: canonical non-gzip will return gzip if
+        # for whatever reason that exists
+        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertFalse(file4.endswith('.gz'))
+        file5 = file4 + '.gz'
+        os.makedirs(os.path.dirname(file5), exist_ok=True)
+        fx = open(file5, 'w')
+        fx.close()
+        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertEqual(file6, file5)  #- not file4
 
         # url1 = filepath2url(file1)
         url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
