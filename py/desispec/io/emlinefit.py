@@ -16,7 +16,7 @@ from desiutil.dust import ext_odonnell
 from desiutil.dust import ebv as dust_ebv
 from desiutil.log import get_logger
 from desispec.emlinefit import get_rf_em_waves
-
+from .util import checkgzip
 
 def get_targetids(d, bitnames, log=None):
     """
@@ -102,6 +102,9 @@ def read_emlines_inputs(
     # AR log
     if log is None:
         log = get_logger()
+
+    redrock = checkgzip(redrock)
+    coadd = checkgzip(coadd)
 
     # AR targetids to np.array()
     if targetids is not None:

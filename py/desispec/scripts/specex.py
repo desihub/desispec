@@ -18,6 +18,8 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
+from desispec.io.util import get_tempfilename
+
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
         "one frame with specex")
@@ -419,7 +421,7 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    tmpfile = output+'.tmp'
+    tmpfile = get_tempfilename(output)
     psf_hdulist.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
@@ -622,7 +624,7 @@ def mean_psf(inputs, output):
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
 
     # save output PSF
-    tmpfile = output+'.tmp'
+    tmpfile = get_tempfilename(output)
     hdulist.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile, output)
     log.info("wrote {}".format(output))

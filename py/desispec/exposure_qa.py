@@ -134,6 +134,16 @@ def compute_exposure_qa(night, expid, specprod_dir):
     for petal in petal_locs :
         worst_rdnoise_per_petal = 0
 
+        #- Read and cache brz cframes for this petal
+        petal_cframes = dict()
+        for band in ['b', 'r', 'z']:
+            camera=f"{band}{petal}"
+            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+            if os.path.isfile(cframe_filename) :
+                petal_cframes[camera] = read_frame(cframe_filename, skip_resolution=True)
+            else:
+                petal_cframes[camera] = None
+
         spectro=petal # same number
         log.info("spectro {}".format(spectro))
         entries = np.where(fiberqa_table['PETAL_LOC'] == petal)[0]
@@ -144,11 +154,12 @@ def compute_exposure_qa(night, expid, specprod_dir):
         max_rdnoise      = qa_params["max_readnoise"]
         for band in ["b","r","z"] :
             camera=f"{band}{spectro}"
-            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-            if not os.path.isfile(cframe_filename) :
+            if petal_cframes[camera] is None:
                 continue
+            else:
+                head = petal_cframes[camera].meta
+
             petalqa_table["NCFRAME"][petal]+=1
-            head=fitsio.read_header(cframe_filename)
             if frame_header is None :
                 frame_header = head
 
@@ -199,7 +210,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
         stdstars_filename = findfile("stdstars",night,expid,spectrograph=spectro,specprod_dir=specprod_dir)
         if os.path.isfile(stdstars_filename) :
 
-            starfibers = fitsio.read(stdstars_filename,'FIBERS')
+            stdfile = fitsio.FITS(stdstars_filename)
+
+            starfibers = stdfile['FIBERS'].read()
 
             # New reductions have list of used standard stars in calibration files
             camera=f"r{spectro}"
@@ -210,10 +223,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 continue
             fluxcal = read_flux_calibration(fluxcal_filename)
 
-            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-            if not os.path.isfile(cframe_filename) :
+            if petal_cframes[camera] is None:
                 continue
-            cframe = read_frame(cframe_filename)
+            else:
+                cframe = petal_cframes[camera]
 
             if fluxcal.stdstar_fibermap is not None :
                 log.info("Use the list of stars from the fluxcalibration file")
@@ -223,7 +236,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
                     goodindices.append( np.where(starfibers==fiber)[0][0])
             else :
                 log.info("Apply the same cuts as in compute_flux_calibration to get the list of stars")
-                t = fitsio.read(stdstars_filename,'METADATA')
+                t = stdfile['METADATA'].read()
                 # SNR cut is same as in stdstars.py, this is redundant,
                 # but for clarity on the selection, I repeat the cuts here
                 # CHI2DOF and color cut are used in flux calibration
@@ -246,8 +259,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 log.info("petal #{} has {} good std stars for calibration".format(petal,ngood))
 
                 # measure RMS
-                modelwave = fitsio.read(stdstars_filename,'WAVELENGTH')
-                modelflux = fitsio.read(stdstars_filename,'FLUX')
+                modelwave = stdfile['WAVELENGTH'].read()
+                modelflux = stdfile['FLUX'].read()
                 modelflux = modelflux[goodindices]
 
                 log.debug("good fibers = {}".format(goodfibers))
@@ -279,6 +292,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 else :
                     log.info("petal #{} has std stars calib rms={:3.2f}".format(petal,calib_rms))
 
+            stdfile.close()
+
         else :
             log.warning("petal #{} does not have a standard star file. expected path='{}'".format(petal,stdstars_filename))
             fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
@@ -290,10 +305,11 @@ def compute_exposure_qa(night, expid, specprod_dir):
         # record TSNR2
         ####################################################################
         camera="{}{}".format(qa_params["tsnr2_band"],spectro)
-        cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-        if not os.path.isfile(cframe_filename) :
+        if petal_cframes[camera] is None:
             continue
-        scores = fitsio.read(cframe_filename,"SCORES")
+        else:
+            scores = petal_cframes[camera].scores
+
         print(scores.dtype.names)
 
         # AR the tsnr2_petals computation has been removed
@@ -302,11 +318,13 @@ def compute_exposure_qa(night, expid, specprod_dir):
         tsnr2_for_efftime_vals = np.zeros(entries.size)
         for band in ["B","R","Z"] :
              camera="{}{}".format(band.lower(),spectro)
-             cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-             if not os.path.isfile(cframe_filename):
-                 log.warning("missing {} => using {}_{}=0".format(cframe_filename, tsnr2_for_efftime_key, band))
+
+             if petal_cframes[camera] is None:
+                 log.warning("missing cframe {} => using {}_{}=0".format(camera, tsnr2_for_efftime_key, band))
                  continue
-             scores = fitsio.read(cframe_filename,"SCORES")
+             else:
+                 scores = petal_cframes[camera].scores
+
              tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
         efftime = tsnr2_to_efftime(tsnr2_for_efftime_vals,target_type)
@@ -323,10 +341,11 @@ def compute_exposure_qa(night, expid, specprod_dir):
             sky_throughput_corr=fitsio.read(sky_filename,"THRPUTCORR")
             petalqa_table[band.upper()+'SKYTHRURMS'][petal]=1.48*np.median(np.abs(sky_throughput_corr-1))
             log.info("petal #{} {} sky throughput rms={:4.3f}".format(petal,band,petalqa_table[band.upper()+"SKYTHRURMS"][petal]))
-            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-            if not os.path.isfile(cframe_filename) :
+            if petal_cframes[camera] is None:
                 continue
-            cframe=read_frame(cframe_filename)
+            else:
+                cframe = petal_cframes[camera]
+
             skyfibers=cframe.fibermap["OBJTYPE"]=="SKY"
             chi2=np.sum(cframe.ivar[skyfibers]*cframe.flux[skyfibers]**2*(cframe.mask[skyfibers]==0))
             ndata=np.sum((cframe.ivar[skyfibers]>0)*(cframe.mask[skyfibers]==0))

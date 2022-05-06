@@ -11,6 +11,7 @@ from astropy.io import fits
 from desiutil.log import get_logger
 
 from . import iotime
+from .util import get_tempfilename
 
 def write_sky(outfile, skymodel, header=None):
     """Write sky model.
@@ -55,8 +56,9 @@ def write_sky(outfile, skymodel, header=None):
     hx[-1].header['BUNIT'] = 'Angstrom'
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -69,7 +71,7 @@ def read_sky(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     from .meta import findfile
-    from .util import native_endian
+    from .util import native_endian, checkgzip
     from ..sky import SkyModel
     log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
@@ -78,6 +80,7 @@ def read_sky(filename) :
         filename = findfile('sky', night, expid, camera)
 
     t0 = time.time()
+    filename = checkgzip(filename)
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header

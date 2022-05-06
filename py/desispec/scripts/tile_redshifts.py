@@ -191,7 +191,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
-        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits')
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits*')
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
@@ -393,7 +393,7 @@ echo""")
             fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
@@ -424,7 +424,7 @@ wait
             fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
@@ -442,7 +442,7 @@ done
 echo
 echo --- Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     colog={logdir}/coadd-$SPECTRO-{suffix}.log
 
@@ -496,7 +496,7 @@ tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
     echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa
+    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
     desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
 fi
@@ -690,7 +690,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
 
     else:
         log.info(f'Loading exposure list from {explist}')
-        if explist.endswith('.fits'):
+        if explist.endswith( ('.fits', '.fits.gz') ):
             exptable = Table.read(explist, format='fits')
         elif explist.endswith('.csv'):
             exptable = Table.read(explist, format='ascii.csv')

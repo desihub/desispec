@@ -217,7 +217,7 @@ def get_ctedet_night_expid(night, prod):
                     "preproc",
                     "{}".format(night),
                     "{:08d}".format(expid),
-                    "preproc-??-{:08d}.fits".format(expid),
+                    "preproc-??-{:08d}.fits*".format(expid),
                 )
             )
         )
@@ -249,7 +249,7 @@ def get_ctedet_night_expid(night, prod):
                         "exposures",
                         "{}".format(night),
                         "{:08d}".format(expid),
-                        "sky-r?-{:08d}.fits".format(expid),
+                        "sky-r?-{:08d}.fits*".format(expid),
                     )
                 )
             )
@@ -342,7 +342,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
                         "preproc",
                         "{}".format(night),
                         "{:08d}".format(dark_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, dark_expid),
+                        "preproc-{}{}-{:08d}.fits*".format(camera, petal, dark_expid),
                 )
                 ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
                 if os.path.isfile(fn):
@@ -503,7 +503,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
                         "preproc",
                         "{}".format(night),
                         "{:08d}".format(ctedet_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, ctedet_expid),
+                        "preproc-{}{}-{:08d}.fits*".format(camera, petal, ctedet_expid),
                 )
                 ax1d.set_title(
                     "{}\nMedian of {} rows above/below CCD amp boundary".format(
@@ -566,7 +566,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                     os.path.join(
                         nightdir,
                         "{:08d}".format(expid),
-                        "sframe-??-{:08d}.fits".format(expid),
+                        "sframe-??-{:08d}.fits*".format(expid),
                     )
                 )
             )
@@ -578,7 +578,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                         fn = os.path.join(
                             nightdir,
                             "{:08d}".format(expid),
-                            "sframe-{}{}-{:08d}.fits".format(camera, petal, expid),
+                            "sframe-{}{}-{:08d}.fits*".format(camera, petal, expid),
                         )
                         if os.path.isfile(fn):
                             h = fits.open(fn)
@@ -718,7 +718,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
                     "data",
                     "{}".format(night),
                     "*",
-                    "fiberassign-{:06d}.fits.*".format(tileid),
+                    "fiberassign-{:06d}.fits*".format(tileid),
                 )
             )
         )
@@ -1457,7 +1457,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                     prod,
                     "calibnight",
                     "{}".format(night),
-                    "{}-{}{}-{}.fits".format(case, camera, petal, night),
+                    "{}-{}{}-{}.fits*".format(case, camera, petal, night),
                 )
                 fnshort, color = os.path.basename(fn), "red"
                 if os.path.isfile(fn):
