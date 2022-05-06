@@ -315,23 +315,23 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
-    elif jobdesc == 'POSTSTDSTAR':
+    elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
-    elif jobdesc == 'DARK':
+    elif jobdesc in ('CCDCALIB'):
         ncores, runtime = ncameras, 5
-    elif jobdesc == 'CCDCALIB':
-        ncores, runtime = ncameras, 5
-    elif jobdesc == 'ZERO':
+    elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
         ncores, runtime = ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = ncameras, 5
-    elif jobdesc == 'STDSTARFIT':
+    elif jobdesc in ('STDSTARFIT'):
         # former version with multiprocessing on many nodes
         # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
         #- new version using MPI on one node
         ncores, runtime = ncameras, (6+2*nexps) #ncameras, 10
+    elif jobdesc == 'POSTSTDSTAR':
+        ncores, runtime = ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
