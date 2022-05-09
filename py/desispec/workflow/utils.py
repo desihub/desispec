@@ -6,7 +6,6 @@ import sys
 import numpy as np
 import glob
 import json
-import psutil
 
 from desiutil.log import get_logger
 ## Give a shortcut name to os.path.join
@@ -155,6 +154,7 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
          running, bool. True if the process name was found in the list of processes and has a pid different that
                         the current process (signifying a second instance of that program).
     """
+    import psutil
     log = get_logger()
     if not suppress_outputs:
         log.info(f"Looking for other python processes with \'{proc_name}\' in command")
