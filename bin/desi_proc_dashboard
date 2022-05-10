@@ -11,8 +11,9 @@ desi_proc_dashboard.py -n all --n_night 60  --output_dir /global/project/project
 
 """
 
+import sys
 from desispec.desi_proc_dashboard import parse,main
 
 args = parse(options=None)
-main(args)
+sys.exit(main(args))
 

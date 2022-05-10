@@ -8,10 +8,10 @@
 Extract spectra from DESI pre-processed raw data
 """
 
+import sys
 import desispec.scripts.extract as extract
-
 
 if __name__ == '__main__':
     args = extract.parse()
-    extract.main(args)
+    sys.exit(extract.main(args))
 

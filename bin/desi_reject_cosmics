@@ -4,8 +4,9 @@
 #
 # -*- coding: utf-8 -*-
 
+import sys
 import desispec.scripts.rejectcosmics as reject
 
 if __name__ == '__main__':
     args = reject.parse()
-    reject.main(args)
+    sys.exit(reject.main(args))

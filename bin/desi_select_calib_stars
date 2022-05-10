@@ -10,8 +10,9 @@ by comparing the ratio of spectro to photometric r-band flux
 and using an RMS across all petals.
 """
 
+import sys
 import desispec.scripts.select_calib_stars as select_calib_stars
 
 if __name__ == '__main__':
     args = select_calib_stars.parse()
-    select_calib_stars.main(args)
+    sys.exit(select_calib_stars.main(args))

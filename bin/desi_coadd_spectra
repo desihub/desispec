@@ -8,9 +8,9 @@
 This script computes the PSF serially with SpecEX.
 """
 
+import sys
 import desispec.scripts.coadd_spectra as coadd_spectra
-
 
 if __name__ == '__main__':
     args = coadd_spectra.parse()
-    coadd_spectra.main(args)
+    sys.exit(coadd_spectra.main(args))

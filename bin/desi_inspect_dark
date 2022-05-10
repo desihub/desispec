@@ -8,8 +8,9 @@
 Inspect the desispec dark output.
 """
 
+import sys
 import desispec.scripts.inspect_dark as inspect_dark
 
 if __name__ == '__main__':
     args = inspect_dark.parse()
-    inspect_dark.main(args)
+    sys.exit(inspect_dark.main(args))

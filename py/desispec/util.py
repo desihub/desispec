@@ -97,7 +97,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], comm=None, clobber=False):
     if not cmd_callable and args is not None:
         raise ValueError("Don't provide args unless cmd is a function")
     if isinstance(args, argparse.Namespace):
-        args = (args)
+        args = (args,)
 
     #- run command
     try:

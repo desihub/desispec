@@ -5,6 +5,7 @@ import argparse
 
 from desiutil.log import get_logger
 from desispec.io.fibermap import assemble_fibermap
+from desispec.io.util import get_tempfilename
 from desispec.pixgroup import fibermap2tilepix
     
 def parse(options=None):
@@ -46,7 +47,7 @@ def main(args=None):
             badfibers_filename=args.badfibers, force=args.force,
             allow_svn_override=(not args.no_svn_override) )
 
-    tmpfile = args.outfile+'.tmp'
+    tmpfile = get_tempfilename(args.outfile)
     fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=args.overwrite, checksum=True)
     os.rename(tmpfile, args.outfile)
     log.info(f'Wrote {args.outfile}')
@@ -54,7 +55,7 @@ def main(args=None):
     if args.tilepix:
         tileid = fibermap['FIBERMAP'].header['TILEID']
         tilepix = {str(tileid): fibermap2tilepix(fibermap['FIBERMAP'].data)}
-        tmpfile = args.tilepix+'.tmp'
+        tmpfile = get_tempfilename(args.tilepix)
         with open(tmpfile, 'w') as fp:
             json.dump(tilepix, fp)
         os.rename(tmpfile, args.tilepix)

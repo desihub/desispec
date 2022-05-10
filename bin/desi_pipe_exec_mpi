@@ -39,4 +39,4 @@ import desispec.scripts.pipe_exec as pipe_exec
 
 if __name__ == '__main__':
     args = pipe_exec.parse()
-    pipe_exec.main(args, comm=comm)
+    sys.exit(pipe_exec.main(args, comm=comm))

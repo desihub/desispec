@@ -3,6 +3,7 @@
 
 import argparse
 
+import sys
 from desispec.scripts.submit_night import submit_night
 
 def parse_args():  # options=None):
@@ -92,4 +93,4 @@ def parse_args():  # options=None):
 if __name__ == '__main__':
     args = parse_args()
 
-    submit_night(**args.__dict__)
+    sys.exit(submit_night(**args.__dict__))

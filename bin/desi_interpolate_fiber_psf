@@ -8,8 +8,9 @@
 This script interpolates fiber PSFs.
 """
 
+import sys
 import desispec.scripts.desi_interpolate_fiber_psf as interpolate_fiber_psf
 
 if __name__ == '__main__':
     args = interpolate_fiber_psf.parse()
-    interpolate_fiber_psf.main(args)
+    sys.exit(interpolate_fiber_psf.main(args))

@@ -8,8 +8,9 @@
 This script computes the badcolumn mask.
 """
 
+import sys
 import desispec.scripts.badcolumn_mask as badcolumn_mask
 
 if __name__ == '__main__':
     args = badcolumn_mask.parse()
-    badcolumn_mask.main(args)
+    sys.exit(badcolumn_mask.main(args))

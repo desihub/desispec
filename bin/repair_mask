@@ -7,8 +7,9 @@
 This script repairs cosmic ray masks by patching broken tracks.
 """
 
+import sys
 import desispec.scripts.repair_mask as repair_mask
 
 if __name__ == '__main__':
     args = repair_mask.parse()
-    repair_mask.main(args)
+    sys.exit(repair_mask.main(args))

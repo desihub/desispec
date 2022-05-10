@@ -1279,7 +1279,7 @@ def main(args=None, comm=None):
                     #- Using MPI
                     log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
                     err = runcmd(desispec.scripts.stdstars.main,
-                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile])
+                        args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm)
             except Exception:
                 err = True
             if err not in (0, None):

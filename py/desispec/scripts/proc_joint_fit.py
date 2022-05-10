@@ -530,17 +530,15 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
+            num_cmd +=1 
             if subcomm is None:
                 #- Using multiprocessing
-                num_cmd += 1
                 err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
             else:
                 #- Using MPI
                 try:
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.stdstars.parse(cmdargs)
-                    if subcomm.rank == 0:
-                        num_cmd += 1
                     err = runcmd(desispec.scripts.stdstars.main, 
                         args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm
                     )

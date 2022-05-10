@@ -8,9 +8,9 @@
 This script coadds preproc images
 """
 
+import sys
 import desispec.scripts.coadd_preproc as coadd_preproc
-
 
 if __name__ == '__main__':
     args = coadd_preproc.parse()
-    coadd_preproc.main(args)
+    sys.exit(coadd_preproc.main(args))
