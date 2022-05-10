@@ -51,7 +51,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         log.error(f"no spectra files in {tiledir}")
         return None, None
 
-    fmap=read_fibermap(spectra_files[0])
+    fmap = vstack([read_fibermap(spectra_file) for spectra_file in spectra_files])
     expids=np.unique(fmap["EXPID"])
     lexpids=list(expids)
     log.info(f"for tile={tileid} night={night} expids={lexpids}")

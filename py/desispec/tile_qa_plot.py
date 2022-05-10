@@ -888,7 +888,7 @@ def get_expids_efftimes(tileqafits, prod):
                 tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits*')
                 spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
-        fmap = read_fibermap(spectra_fns[0])
+        fmap = vstack([read_fibermap(spectra_fn) for spectra_fn in spectra_fns])
         expids, ii = np.unique(fmap["EXPID"], return_index=True)
         nights = fmap["NIGHT"][ii]
     # AR then try based on prod
@@ -911,7 +911,7 @@ def get_expids_efftimes(tileqafits, prod):
                     specprod_dir=prod, return_exists=True)
                 if not exists:
                     log.warning(f'{fn} not found; skipping')
-                    pass
+                    continue
 
                 vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
                 tsnr2_petals[petal] += np.median(vals[vals > 0])
