@@ -2,10 +2,36 @@
 desispec Change Log
 ===================
 
-0.52.1 (unreleased)
+0.53.0 (unreleased)
 -------------------
 
-* No changes yet.
+Major:
+* gzip intermediate files, including spectra files (PR `#1756`_).
+
+Minor / backwards compatible:
+* Add ifmain wrapper to setup.py for testing (PR `#1745`_).
+* Allow QA of already QAed tiles (PR `#1747`_).
+* Update recipe for find_overscan_cosmic_trails (PR `#1748`_, `#1758`_).
+* desi_daily_proc_manager retry failed sbatch before giving up (PR `#1749`_).
+* Enable trace shifts by default (PR `#1750`_).
+* Improve error handling for specex (PR `#1751`_).
+* ``desi_group_spectra --coadd`` option (PR `#1753`_).
+* QA bugfix: handle nqso_rr if no valid fibers (PR `#1754`_).
+* Improve fiberflat vs. humidity (PR `#1757`_).
+* Night QA use findfile and fitsio (PR `#1766`_.)
+
+.. _`#1745`: https://github.com/desihub/desispec/pull/1745
+.. _`#1747`: https://github.com/desihub/desispec/pull/1747
+.. _`#1748`: https://github.com/desihub/desispec/pull/1748
+.. _`#1749`: https://github.com/desihub/desispec/pull/1749
+.. _`#1750`: https://github.com/desihub/desispec/pull/1750
+.. _`#1751`: https://github.com/desihub/desispec/pull/1751
+.. _`#1753`: https://github.com/desihub/desispec/pull/1753
+.. _`#1754`: https://github.com/desihub/desispec/pull/1754
+.. _`#1756`: https://github.com/desihub/desispec/pull/1756
+.. _`#1757`: https://github.com/desihub/desispec/pull/1757
+.. _`#1758`: https://github.com/desihub/desispec/pull/1758
+.. _`#1766`: https://github.com/desihub/desispec/pull/1766
 
 0.52.0 (2022-04-19)
 -------------------
