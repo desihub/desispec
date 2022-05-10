@@ -1385,6 +1385,37 @@ def main(args=None, comm=None):
         timer.stop('applycalib')
 
     #-------------------------------------------------------------------------
+    #- Exposure QA, using same criterion as fluxcalib for when to run
+
+    if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcalib) :
+        from desispec.scripts import exposure_qa
+
+        night, expid = args.night, args.expid #- shorter
+
+        timer.start('exposure_qa')
+        if rank == 0:
+            log.info('Starting exposure_qa at {}'.format(time.asctime()))
+
+        #- exposure QA not yet parallelized for a single exposure
+        if rank == 0:
+            qa_args = ['-n', str(night), '-e', str(expid), '--nproc', str(1)]
+            try:
+                exposure_qa.main(exposure_qa.parse(qa_args))
+            except Exception as err:
+                #- log exceptions, but don't treat QA problems as fatal
+                import traceback
+                lines = traceback.format_exception(*sys.exc_info())
+                log.error(f"exposure_qa raised an exception:")
+                print("".join(lines))
+                log.warning(f"QA exception not treated as blocking failure")
+
+        #- Make other ranks wait anyway
+        if comm is not None:
+            comm.barrier()
+
+        timer.stop('exposure_qa')
+
+    #-------------------------------------------------------------------------
     #- Collect error count
     if comm is not None:
         all_error_counts = comm.gather(error_count, root=0)

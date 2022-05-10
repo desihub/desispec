@@ -305,6 +305,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     """
     config = batch.get_config(system_name)
     log = get_logger()
+    jobdesc = jobdesc.upper()
 
     nspectro = (ncameras - 1) // 3 + 1
     nodes = None
@@ -669,12 +670,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('{}\n'.format(srun))
 
             if jobdesc.lower() in ['science', 'poststdstar']:
-                if nodes*4 > ncameras:
-                    #- only one rank per camera; multiprocessing fans out the rest
-                    ntasks = ncameras
-                else:
-                    #- but don't run more than 4 per node (to be tuned)
-                    ntasks = nodes*4
+                ntasks=ncameras
 
                 tot_threads = nodes * batch_config['cores_per_node'] * batch_config['threads_per_core']
                 threads_per_task = max(int(tot_threads / ntasks), 1)
