@@ -130,6 +130,14 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         else :
             log.info(f"reading {filename}")
             exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
+        # AR add info if that expid is used for each petal
+        exposure_petalqa_table["ISUSED"] = np.zeros(len(exposure_petalqa_table), dtype=bool)
+        for petal in np.unique(exposure_petalqa_table["PETAL_LOC"]):
+            petal_expids = np.unique(exp_fibermap["EXPID"][exp_fibermap["PETAL_LOC"] == petal])
+            if expid in petal_expids:
+                exposure_petalqa_table["ISUSED"][exposure_petalqa_table["PETAL_LOC"] == petal] = True
+            else:
+                log.warning("EXPID={} is not used in coadds for PETAL_LOC={}".format(expid, petal))
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
             # AR case no GOALTIME, MINTFRAC (can happen for early tiles):
@@ -304,6 +312,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
 
     for petal in petals :
         ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
+        # AR add constraint that expid is used for the petal
+        ii &= exposure_petalqa_tables["ISUSED"]
         for k in keys :
             vals=exposure_petalqa_tables[k][ii]
             nonnull=(vals!=0)
