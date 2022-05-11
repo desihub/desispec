@@ -44,15 +44,67 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
 
     log=get_logger()
 
-    # get list of exposures used for the tile
+    # tile folder
     tiledir=f"{specprod_dir}/tiles/{group}/{tileid:d}/{night}"
-    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-*{night}.fits*"))
-    if len(spectra_files)==0 :
-        log.error(f"no spectra files in {tiledir}")
-        return None, None
 
-    fmap = vstack([read_fibermap(spectra_file) for spectra_file in spectra_files])
-    expids=np.unique(fmap["EXPID"])
+    # collect fibermaps and scores of all coadds
+    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits*"))
+
+
+    fibermaps=[]
+    scores=[]
+    redshifts=[]
+    exp_fibermaps=[] # fibermaps of all frames
+    ### zqsos=[]
+    for coadd_file in coadd_files :
+        log.info("reading {}".format(coadd_file))
+        fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
+        exp_fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"EXP_FIBERMAP")))
+        scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
+
+
+        redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
+        extname="REDSHIFTS"
+        if not os.path.isfile(redrock_file) :
+            zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
+            if os.path.isfile(zbest_file) :
+                log.warning("switch to zbest file {}".format(zbest_file))
+                redrock_file = zbest_file
+                extname="ZBEST"
+        log.info("reading {}".format(redrock_file))
+        zz=Table.read(redrock_file,extname)
+        zz.remove_column("COEFF") # 1D array per entry, not needed
+        redshifts.append(_rm_meta_keywords(zz))
+
+
+        #- SB: commenting out zqso code since these have been replaced by
+        #- zmtl, but that has to run after QA to be able to update zwarn.
+        #- Something like zqso could be revived in QA after the QN afterburner
+        #- is finished, but data model details will likely be different.
+
+
+        ### zqso_file = coadd_file.replace("coadd","zqso")
+        ### if not os.path.isfile(zqso_file) :
+        ###     log.warning("missing {}".format(zqso_file))
+        ### else :
+        ###     log.info("reading {}".format(zqso_file))
+        ###     zqso=Table.read(zqso_file,"ZQSO")
+        ###     zqsos.append(_rm_meta_keywords(zqso))
+
+
+    log.info("stacking")
+    fibermap=vstack(fibermaps)
+    scores=vstack(scores)
+    redshifts=vstack(redshifts)
+    ### if len(zqsos)>0 :
+    ###     zqsos=vstack(zqsos)
+    ### else :
+    ###     zqsos=None
+    exp_fibermap=vstack(exp_fibermaps)
+    targetids=fibermap["TARGETID"]
+
+    # get list of exposures used for the tile
+    expids = np.unique(exp_fibermap["EXPID"])
     lexpids=list(expids)
     log.info(f"for tile={tileid} night={night} expids={lexpids}")
 
@@ -64,7 +116,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     exposure_fiberqa_tables = []
     exposure_petalqa_tables = []
     for expid in expids :
-        exposure_night = (fmap["NIGHT"][fmap["EXPID"]==expid][0])
+        exposure_night = (exp_fibermap["NIGHT"][exp_fibermap["EXPID"]==expid][0])
         filename=findfile("exposureqa",night=exposure_night,expid=expid,specprod_dir=exposure_qa_dir)
         if not os.path.isfile(filename) :
             log.info("running missing exposure qa")
@@ -127,56 +179,6 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         exposure_fiberqa_tables = exposure_fiberqa_tables[0]
         exposure_petalqa_tables = exposure_petalqa_tables[0]
 
-    # collect fibermaps and scores of all coadds
-    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits*"))
-
-    fibermaps=[]
-    scores=[]
-    redshifts=[]
-    exp_fibermaps=[] # fibermaps of all frames
-    ### zqsos=[]
-    for coadd_file in coadd_files :
-        log.info("reading {}".format(coadd_file))
-        fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
-        exp_fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"EXP_FIBERMAP")))
-        scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
-
-        redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
-        extname="REDSHIFTS"
-        if not os.path.isfile(redrock_file) :
-            zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
-            if os.path.isfile(zbest_file) :
-                log.warning("switch to zbest file {}".format(zbest_file))
-                redrock_file = zbest_file
-                extname="ZBEST"
-        log.info("reading {}".format(redrock_file))
-        zz=Table.read(redrock_file,extname)
-        zz.remove_column("COEFF") # 1D array per entry, not needed
-        redshifts.append(_rm_meta_keywords(zz))
-
-        #- SB: commenting out zqso code since these have been replaced by
-        #- zmtl, but that has to run after QA to be able to update zwarn.
-        #- Something like zqso could be revived in QA after the QN afterburner
-        #- is finished, but data model details will likely be different.
-
-        ### zqso_file = coadd_file.replace("coadd","zqso")
-        ### if not os.path.isfile(zqso_file) :
-        ###     log.warning("missing {}".format(zqso_file))
-        ### else :
-        ###     log.info("reading {}".format(zqso_file))
-        ###     zqso=Table.read(zqso_file,"ZQSO")
-        ###     zqsos.append(_rm_meta_keywords(zqso))
-
-    log.info("stacking")
-    fibermap=vstack(fibermaps)
-    scores=vstack(scores)
-    redshifts=vstack(redshifts)
-    ### if len(zqsos)>0 :
-    ###     zqsos=vstack(zqsos)
-    ### else :
-    ###     zqsos=None
-    exp_fibermap=vstack(exp_fibermaps)
-    targetids=fibermap["TARGETID"]
 
     # and / or of the fiberstatus of the individual exposures
     if fibermap['TARGETID'].size == exp_fibermap['TARGETID'].size :
