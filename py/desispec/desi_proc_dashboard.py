@@ -120,11 +120,7 @@ def parse(options):
                              "information on disk. As always, this will write out a new json archive," +
                              " overwriting the existing one.")
     # Read in command line and return
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
 
     return args
 
@@ -133,7 +129,7 @@ def parse(options):
 ######################
 ### Main Functions ###
 ######################
-def main(args):
+def main(args=None):
     """ Code to generate a webpage for monitoring of desi_dailyproc production status
     Usage:
     -n can be 'all' or series of nights separated by comma or blank like 20200101,20200102 or 20200101 20200102
@@ -141,6 +137,9 @@ def main(args):
     desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     """
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     args.show_null = True
     if 'DESI_SPECTRO_DATA' not in os.environ.keys():
         os.environ['DESI_SPECTRO_DATA'] = '/global/cfs/cdirs/desi/spectro/data/'
@@ -284,8 +283,13 @@ def main(args):
     #strTable += js_import_str(os.environ['DESI_DASHBOARD'])
     strTable += js_str()
     strTable += _closing_str()
-    with open(os.path.join(os.environ['DESI_DASHBOARD'],args.output_name),'w') as hs:
+    outfile = os.path.abspath(os.path.join(os.environ['DESI_DASHBOARD'], args.output_name))
+    with open(outfile, 'w') as hs:
         hs.write(strTable)
+
+    if 'NERSC_HOST' in os.environ and outfile.startswith('/global/cfs/cdirs/desi'):
+        url = outfile.replace('/global/cfs/cdirs/desi', 'https://data.desi.lbl.gov/desi')
+        print(url)
 
 def monthly_table(tables,month):
     """
