@@ -751,7 +751,8 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
+                      copy_outputs_to_split_dirs=False):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -768,6 +769,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         first_expid (int): ignore expids prior to this
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
         queue (str): which batch queue to use for submission
+        copy_outputs_to_split_dirs (bool): whether to copy outputs to bias_frames/dark_frames subdirs
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -900,6 +902,11 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 cd {outdir}
 time {cmd}
 ''')
+            if copy_outputs_to_split_dirs:
+                fx.write(f"""
+cp {darkfile}  dark_frames/{darkfile}
+cp {biasfile}  bias_frames/{biasfile}
+""")
 
         if not nosubmit:
             err = subprocess.call(['sbatch', batchfile])
@@ -913,7 +920,8 @@ time {cmd}
 
 def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
+                      copy_outputs_to_split_dirs=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -937,9 +945,11 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     if lastnight is None:
         lastnight=datetime.datetime.now().strftime('%Y%m%d')
     if outdir is None:
-        outdir=os.getenv('DESI_SPECTRO_DARK')+f'/new_{lastnight}'
+        outdir=os.getenv('DESI_SPECTRO_DARK')
     if tempdir is None:
-        tempdir=outdir+'/temp'
+        tempdir=outdir+f'/temp_{lastnight}'
+    if copy_outputs_to_split_dirs is None:
+        copy_outputs_to_split_dirs = True
 
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
@@ -968,4 +978,5 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
 
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
-                      first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue)
+                      first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue,
+                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs)
