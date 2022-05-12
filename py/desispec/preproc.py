@@ -634,6 +634,11 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
     med_overscan_col = median_filter(overscan_values, 20)
     badrows &= np.abs(overscan_values-med_overscan_col) > 2.
 
+    # add 2 pixel margins to the list of badrows
+    for _ in range(2) :
+        badrows[1:] |= badrows[:-1]
+        badrows[:-1] |= badrows[1:]
+
     return badrows, active_col_val
 
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
@@ -642,7 +647,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False):
+            keep_overscan_cols=False,no_overscan_per_row=False):
 
     '''
     preprocess image using metadata in header
@@ -689,6 +694,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         cosmics_c2fudge:  fudge factor applied to PSF
 
     Optional fit and subtraction of scattered light
+
+    Optional disabling of overscan subtraction per row if no_overscan_per_row=True
 
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
@@ -872,6 +879,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+
+    if no_overscan_per_row :
+        log.debug("Option no_overscan_per_row is set")
+
     for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
@@ -978,7 +989,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
-        if overscan_step <  2 : # tuned to trig on the worst few
+        if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value

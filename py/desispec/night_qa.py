@@ -93,7 +93,7 @@ def get_surveys_night_expids(
     )
     expids, tileids, surveys = [], [], []
     for i in range(len(fns)):
-        hdr = fits.getheader(fns[i], "SPEC")
+        hdr = fitsio.read_header(fns[i], "SPEC")
         if hdr["OBSTYPE"] == "SCIENCE":
             survey = "unknown"
             # AR look for the fiberassign file
@@ -102,7 +102,7 @@ def get_surveys_night_expids(
             # AR - if not present, take FA_SURV
             fafns = glob(os.path.join(os.path.dirname(fns[i]), "fiberassign-??????.fits*"))
             if len(fafns) > 0:
-                fahdr = fits.getheader(fafns[0], 0)
+                fahdr = fitsio.read_header(fafns[0], 0)
                 if "SURVEY" in fahdr:
                     survey = fahdr["SURVEY"]
                 else:
@@ -217,13 +217,13 @@ def get_ctedet_night_expid(night, prod):
                     "preproc",
                     "{}".format(night),
                     "{:08d}".format(expid),
-                    "preproc-??-{:08d}.fits".format(expid),
+                    "preproc-??-{:08d}.fits*".format(expid),
                 )
             )
         )
         # AR if some preproc files, just pick the first one
         if len(fns) > 0:
-            hdr = fits.getheader(fns[0], "IMAGE")
+            hdr = fitsio.read_header(fns[0], "IMAGE")
             if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
                 ctedet_expid = hdr["EXPID"]
                 break
@@ -249,15 +249,15 @@ def get_ctedet_night_expid(night, prod):
                         "exposures",
                         "{}".format(night),
                         "{:08d}".format(expid),
-                        "sky-r?-{:08d}.fits".format(expid),
+                        "sky-r?-{:08d}.fits*".format(expid),
                     )
                 )
             )
             # AR if some sky files, just pick the first one
             if len(fns) > 0:
-                hdr = fits.getheader(fns[0], "SKY")
+                hdr = fitsio.read_header(fns[0], "SKY")
                 if hdr["OBSTYPE"] == "SCIENCE":
-                    sky = np.median(fits.open(fns[0])["SKY"].data)
+                    sky = np.median(fitsio.read(fns[0], "SKY"))
                     log.info("{} r-sky = {:.1f}".format(os.path.basename(fns[0]), sky))
                     if sky < minsky:
                         ctedet_expid, minsky = expid, sky
@@ -337,18 +337,13 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
             gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
             for ic, camera in enumerate(cameras):
                 ax = plt.subplot(gs[ic])
-                fn = os.path.join(
-                        prod,
-                        "preproc",
-                        "{}".format(night),
-                        "{:08d}".format(dark_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, dark_expid),
-                )
+                fn = findfile('preproc', night, dark_expid, camera+str(petal),
+                        specprod_dir=prod)
                 ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
                 if os.path.isfile(fn):
                     log.info("reading {}".format(fn))
-                    h = fits.open(fn)
-                    image, ivar, mask = h["IMAGE"].data, h["IVAR"].data, h["MASK"].data
+                    with fitsio.FITS(fn) as h:
+                        image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
                     # AR setting to np.nan pixels with ivar = 0 or mask > 0
                     # AR hence, when binning, any binned pixel with a masked pixel
                     # AR will appear as np.nan (easy way to go)
@@ -498,13 +493,8 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
                 ax2d = plt.subplot(gs[0])
                 ax1d = plt.subplot(gs[1])
                 #
-                fn = os.path.join(
-                        prod,
-                        "preproc",
-                        "{}".format(night),
-                        "{:08d}".format(ctedet_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, ctedet_expid),
-                )
+                fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
+                        specprod_dir=prod)
                 ax1d.set_title(
                     "{}\nMedian of {} rows above/below CCD amp boundary".format(
                         fn, nrow,
@@ -512,7 +502,8 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
                 )
                 if os.path.isfile(fn):
                     # AR read
-                    img = fits.open(fn)["IMAGE"].data
+                    with fitsio.FITS(fn) as fx:
+                        img = fx["IMAGE"].read()
                     ny, nx = img.shape
                     if petcam_xmin is None:
                         petcam_xmin = 0
@@ -566,7 +557,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                     os.path.join(
                         nightdir,
                         "{:08d}".format(expid),
-                        "sframe-??-{:08d}.fits".format(expid),
+                        "sframe-??-{:08d}.fits*".format(expid),
                     )
                 )
             )
@@ -575,29 +566,31 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                 mydict = {camera : {} for camera in cameras}
                 for ic, camera in enumerate(cameras):
                     for petal in petals:
-                        fn = os.path.join(
-                            nightdir,
-                            "{:08d}".format(expid),
-                            "sframe-{}{}-{:08d}.fits".format(camera, petal, expid),
-                        )
-                        if os.path.isfile(fn):
-                            h = fits.open(fn)
-                            sel = h["FIBERMAP"].data["OBJTYPE"] == "SKY"
-                            h["FLUX"].data = h["FLUX"].data[sel, :]
-                            h["FIBERMAP"].data = h["FIBERMAP"].data[sel]
+                        fn, exists = findfile('sframe', night, expid, camera+str(petal),
+                                specprod_dir=prod, return_exists=True)
+                        if exists:
+                            with fitsio.FITS(fn) as h:
+                                fibermap = h["FIBERMAP"].read()
+                                sel = fibermap["OBJTYPE"] == "SKY"
+                                fibermap = fibermap[sel]
+                                flux = h["FLUX"].read()[sel]
+                                wave = h["WAVELENGTH"].read()
+                                flux_header = h["FLUX"].read_header()
+                                fibermap_header = h["FIBERMAP"].read_header()
+
                             if "flux" not in mydict[camera]:
-                                mydict[camera]["wave"] = h["WAVELENGTH"].data
+                                mydict[camera]["wave"] = wave
                                 nwave = len(mydict[camera]["wave"])
                                 mydict[camera]["petals"] = np.zeros(0, dtype=int)
                                 mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
                                 mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
-                            mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
-                            mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
+                            mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
+                            mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
                             band = camera.lower()[0]
-                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
+                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
                             if tileid is None:
-                                tileid = h["FIBERMAP"].header["TILEID"]
-                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
+                                tileid = fibermap_header["TILEID"]
+                            print("\t", night, expid, camera+str(petal), ((fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
                     print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
                 #
                 fig = plt.figure(figsize=(20, 10))
@@ -625,7 +618,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                                 1.0 * (p[3]-p[1])
                             ])
                             cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                            cbar.set_label("FLUX [{}]".format(h["FLUX"].header["BUNIT"]))
+                            cbar.set_label("FLUX [{}]".format(flux_header["BUNIT"]))
                             cbar.mappable.set_clim(clim)
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
@@ -718,19 +711,19 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
                     "data",
                     "{}".format(night),
                     "*",
-                    "fiberassign-{:06d}.fits.*".format(tileid),
+                    "fiberassign-{:06d}.fits*".format(tileid),
                 )
             )
         )
         if len(fns) > 0:
-            hdr = fits.getheader(fns[0], 0)
+            hdr = fitsio.read_header(fns[0], 0)
             if "FAFLAVOR" in hdr:
                 faflavor = hdr["FAFLAVOR"]
         log.info("identified FAFLAVOR for {}: {}".format(tileid, faflavor))
         # AR
         tmp = findfile("redrock", night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
         tiledir = os.path.dirname(tmp)
-        fns = sorted(glob(os.path.join(tiledir, f"redrock-?-{tileid}-*{night}.fits")))
+        fns = sorted(glob(os.path.join(tiledir, f"redrock-?-{tileid}-*{night}.fits*")))
         nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
@@ -919,7 +912,7 @@ def create_petalnz_pdf(
             if not os.path.isfile(fn):
                 log.warning("no {} file, proceeding to next tile".format(fn))
                 continue
-            hdr = fits.getheader(fn, "FIBERQA")
+            hdr = fitsio.read_header(fn, "FIBERQA")
             if hdr["EFFTIME"] < hdr["MINTFRAC"] * hdr["GOALTIME"]:
                 sel[i] = False
                 log.info(
@@ -941,7 +934,7 @@ def create_petalnz_pdf(
         if not os.path.isfile(fn):
             log.warning("no {} file, proceeding to next tile".format(fn))
             continue
-        hdr = fits.getheader(fn, "FIBERQA")
+        hdr = fitsio.read_header(fn, "FIBERQA")
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
@@ -1453,12 +1446,8 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         html.write("\t<tr>\n")
         for case in ["psfnight", "fiberflatnight"]:
             for camera in cameras:
-                fn = os.path.join(
-                    prod,
-                    "calibnight",
-                    "{}".format(night),
-                    "{}-{}{}-{}.fits".format(case, camera, petal, night),
-                )
+                fn = findfile(case, night, camera=camera+str(petal),
+                        specprod_dir=prod)
                 fnshort, color = os.path.basename(fn), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):

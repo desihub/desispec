@@ -31,12 +31,12 @@ class TestBinScripts(unittest.TestCase):
         cls.wave = 4000+np.arange(cls.nwave)
         id = uuid4().hex
         cls.calibfile = 'calib-'+id+'.fits'
-        cls.framefile = 'frame-'+id+'.fits'
+        cls.framefile = 'frame-'+id+'.fits.gz'
         cls.fiberflatfile = 'fiberflat-'+id+'.fits'
         cls.fibermapfile = 'fibermap-'+id+'.fits'
         cls.modelfile ='stdstar_templates-'+id+'.fits'
-        cls.skyfile = 'sky-'+id+'.fits'
-        cls.stdfile = 'std-'+id+'.fits'
+        cls.skyfile = 'sky-'+id+'.fits.gz'
+        cls.stdfile = 'std-'+id+'.fits.gz'
         cls.qa_calib_file = 'qa-calib-'+id+'.yaml'
         cls.qa_data_file = 'qa-data-'+id+'.yaml'
         cls.qafig = 'qa-'+id+'.pdf'

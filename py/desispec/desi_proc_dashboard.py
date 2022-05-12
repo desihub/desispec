@@ -5,7 +5,6 @@ from astropy.io import fits,ascii
 from astropy.table import Table, vstack
 import time,datetime
 import numpy as np
-import psutil
 from os import listdir
 import json
 
@@ -68,6 +67,7 @@ def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
     """
     Check if the desi_dailyproc process is running
     """
+    import psutil
     running = False
     mypid = os.getpid()
     for p in psutil.process_iter():
@@ -554,7 +554,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         elif ftype == 'biasnight':
             ext = 'fits.gz'
         else:
-            ext = 'fits'
+            ext = 'fits*'  #- .fits or .fits.gz
         fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
                                             cam=cam, ext=ext)
         return len(glob.glob(fileglob))

@@ -15,7 +15,7 @@ from astropy.io import fits
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -610,7 +610,7 @@ def main(args=None, comm=None):
 
                 stats = previous_stats
 
-            tmpfile = args.timingfile + '.tmp'
+            tmpfile = get_tempfilename(args.timingfile)
             with open(tmpfile, 'w') as fx:
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, args.timingfile)

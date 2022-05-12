@@ -77,4 +77,5 @@ setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
 #
 # Run setup command.
 #
-setup(**setup_keywords)
+if __name__ == '__main__':
+    setup(**setup_keywords)

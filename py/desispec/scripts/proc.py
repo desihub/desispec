@@ -38,7 +38,7 @@ import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
 from desispec.io.util import create_camword, decode_camword, parse_cameras
-from desispec.io.util import validate_badamps
+from desispec.io.util import validate_badamps, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -60,6 +60,7 @@ import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
+from desispec.util import runcmd
 
 from desitarget.targetmask import desi_mask
 
@@ -118,7 +119,7 @@ def _log_timer(timer, timingfile=None, comm=None):
 
                 stats = previous_stats
 
-            tmpfile = timingfile + '.tmp'
+            tmpfile = get_tempfilename(timingfile)
             with open(tmpfile, 'w') as fx:
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, timingfile)

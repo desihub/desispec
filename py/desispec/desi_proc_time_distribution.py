@@ -6,7 +6,6 @@ from astropy.table import QTable,vstack
 import pandas as pd
 import time,datetime
 import numpy as np
-import psutil
 from os import listdir
 import matplotlib.pyplot as plt
 
@@ -365,6 +364,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         """ 
         Check if the desi_dailyproc process is running
         """
+        import psutil
         a=psutil.process_iter()
         running='No'
         for p in a:

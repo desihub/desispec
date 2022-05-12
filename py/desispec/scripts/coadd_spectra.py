@@ -102,10 +102,10 @@ def main(args=None):
 
 
     if input_is_spectra :
-        spectra = read_spectra(args.infile[0])
+        spectra = read_spectra(args.infile[0], single=True)
         for filename in args.infile[1:] :
             log.info("append {}".format(filename))
-            spectra.update(read_spectra(filename))
+            spectra.update(read_spectra(filename), single=True)
     else: # frames
         frames = dict()
         cameras = {}
@@ -162,9 +162,16 @@ def main(args=None):
         log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
 
-    #- Add input files to header
+    #- Add input files to header, removing previous INFIL* first
     if spectra.meta is None:
         spectra.meta = dict()
+
+    for i in range(1000):
+        key = 'INFIL{:03d}'.format(i)
+        if key in spectra.meta:
+            del spectra.meta[key]
+        else:
+            break
 
     for i, filename in enumerate(args.infile):
         spectra.meta['INFIL{:03d}'.format(i)] = os.path.basename(filename)

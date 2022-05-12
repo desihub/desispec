@@ -19,6 +19,7 @@ import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
+from desispec.io.util import get_tempfilename
 from desispec.tile_qa import compute_tile_qa
 from desispec.util import parse_int_args
 
@@ -255,7 +256,7 @@ def main():
         print(table)
         print()
 
-        tmpfile = args.outfile + '.tmp'
+        tmpfile = get_tempfilename(args.outfile)
         table.write(tmpfile, overwrite=True, format='fits')
         os.rename(tmpfile, args.outfile)
         log.info("wrote {}".format(args.outfile))

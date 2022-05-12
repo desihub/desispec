@@ -4,6 +4,7 @@ Tools to regroup spectra in individual exposures by healpix on the sky
 
 import glob, os, sys, time, json
 from collections import Counter, OrderedDict
+import gzip, shutil
 
 import numpy as np
 
@@ -17,6 +18,7 @@ from desiutil.log import get_logger
 import desiutil.depend
 
 from . import io
+from .io.util import get_tempfilename
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -296,9 +298,18 @@ class SpectraLite(object):
         self.ivar = ivar.copy()
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
-        self.fibermap = fibermap
-        self.exp_fibermap = exp_fibermap
-        self.scores = scores
+        self.fibermap = Table(fibermap)
+
+        #- optional tables
+        if exp_fibermap is not None:
+            self.exp_fibermap = Table(exp_fibermap)
+        else:
+            self.exp_fibermap = None
+
+        if scores is not None:
+            self.scores = Table(scores)
+        else:
+            self.scores = None
 
         #- for compatibility with full Spectra objects
         self.meta = None
@@ -383,13 +394,19 @@ class SpectraLite(object):
         '''
         Write this SpectraLite object to `filename`
         '''
+        log = get_logger()
+        log.warning('SpectraLite.write() is deprecated; please use desispec.io.write_spectra() instead')
 
         #- create directory if missing
         dirname=os.path.dirname(filename)
         if dirname != '':
             os.makedirs(dirname, exist_ok=True)
 
-        tmpout = filename + '.tmp'
+        #- Have to first write non-gzip so that we can append
+        if filename.endswith('.gz'):
+            tmpout = get_tempfilename(filename[-3:])
+        else:
+            tmpout = get_tempfilename(filename)
 
         #- work around c/fitsio bug that appends spaces to string column values
         #- by using astropy Table to write fibermap
@@ -409,13 +426,18 @@ class SpectraLite(object):
             expfm.meta['EXTNAME'] = 'EXP_FIBERMAP'
             hdus.append(fits.convenience.table_to_hdu(expfm))
 
+        if self.scores is not None:
+            scores = Table(self.scores)
+            scores.meta['EXTNAME'] = 'SCORES'
+            hdus.append(fits.convenience.table_to_hdu(scores))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
         #- See https://github.com/esheldon/fitsio/issues/150 for why
         #- these are written one-by-one
-        if self.scores is not None:
-            fitsio.write(tmpout, self.scores, extname='SCORES')
+        ### if self.scores is not None:
+        ###     fitsio.write(tmpout, self.scores, extname='SCORES')
 
         for band in sorted(self.bands):
             upperband = band.upper()
@@ -428,7 +450,16 @@ class SpectraLite(object):
             fitsio.write(tmpout, self.mask[band], extname=upperband+'_MASK', compress='gzip')
             fitsio.write(tmpout, self.resolution_data[band], extname=upperband+'_RESOLUTION')
 
-        os.rename(tmpout, filename)
+        #- compress if needed (via another tempfile), otherwise just rename
+        if filename.endswith('.gz'):
+            tmpoutgz = get_tempfilename(filename)
+            with open(tmpout, 'rb') as f_in:
+                with gzip.open(tmpoutgz, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            os.rename(tmpoutgz, filename)
+            os.remove(tmpout)
+        else:
+            os.rename(tmpout, filename)
 
     @classmethod
     def read(cls, filename):
@@ -559,6 +590,9 @@ def frames2spectra(frames, pix=None, nside=64):
 
     #- shallow copy of frames dict in case we augment with blank frames
     frames = frames.copy()
+
+    if pix is not None:
+        log.info(f'Filtering by nside={nside} nested healpix={pix}')
 
     #- To support combining old+new data, recalculate TSNR2 if any
     #- frames are missing TSNR2* scores present in other frames of same bad.

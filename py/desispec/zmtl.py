@@ -32,6 +32,7 @@ from desitarget.targets import main_cmx_or_sv, switch_main_cmx_or_sv
 from desitarget.targetmask import zwarn_mask
 
 from desispec.io import read_spectra, findfile
+from desispec.io.util import checkgzip, replace_prefix
 from desispec.exposure_qa import get_qa_params
 from desispec.maskbits import fibermask
 
@@ -513,7 +514,7 @@ def add_abs_data(zmtl, coaddname):
 
     # LGN Read the coadd file and find targetid.
     specobj = read_spectra(coaddname)
-    redrockfile = coaddname.replace('coadd', 'redrock').replace('.fits', '.h5')
+    redrockfile = replace_prefix(coaddname, 'coadd', 'redrock').replace('.fits', '.h5')
     # LGN Get all targetids
     tids = specobj.target_ids()
     # LGN Run for every quasar target on the petal.

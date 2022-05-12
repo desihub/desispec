@@ -174,6 +174,14 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(comp.extra_catalog is not None)
         self.verify(comp, self.fmap1)
 
+        # read_spectra finds files even with wrong gzip extension
+        if self.fileio.endswith('fits'):
+            sp = read_spectra(self.fileio+'.gz')    # finds it anywayk
+        elif self.fileio.endswith('fits.gz'):
+            sp = read_spectra(self.fileio[:-3])     # finds it anywayk
+        else:
+            raise ValueError(f'Unrecognized extension for {self.fileio=}')
+
 
     def test_empty(self):
 

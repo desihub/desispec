@@ -17,6 +17,7 @@ from desitarget.targetmask import desi_mask, bgs_mask
 from desitarget.io import read_targets_in_tiles
 from desispec.maskbits import fibermask
 from desispec.io import read_fibermap, findfile
+from desispec.io.util import checkgzip
 from desispec.tsnr import tsnr2_to_efftime
 from desimodel.focalplane.geometry import get_tile_radius_deg
 from desimodel.footprint import is_point_in_desi
@@ -870,7 +871,7 @@ def get_expids_efftimes(tileqafits, prod):
     # AR first try spectra*fits files in the same folder as tileqafits
     tmpstr = os.path.join(
         os.path.dirname(tileqafits),
-        "spectra-*-{}-*{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+        "spectra-*-{}-*{}.fits*".format(hdr["TILEID"], hdr["LASTNITE"]),
     )
     spectra_fns = sorted(glob(tmpstr))
     # AR then try based on prod ("cumulative", then "pernight")
@@ -884,7 +885,7 @@ def get_expids_efftimes(tileqafits, prod):
                         "spectra", tile=tileid, groupname=groupname, night=night, spectrograph=0, specprod_dir=prod
                     )
                 )
-                tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
+                tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits*')
                 spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
         fmap = read_fibermap(spectra_fns[0])
@@ -906,16 +907,15 @@ def get_expids_efftimes(tileqafits, prod):
         for petal in range(10):
             for camera in ["b", "r", "z"]:
                 tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
-                fn = os.path.join(
-                    prod,
-                    "exposures",
-                    "{}".format(nights[i]),
-                    "{:08d}".format(expids[i]),
-                    "cframe-{}{}-{:08d}.fits".format(camera, petal, expids[i]),
-                )
-                if os.path.isfile(fn):
-                    vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
-                    tsnr2_petals[petal] += np.median(vals[vals > 0])
+                fn, exists = findfile('cframe', nights[i], expids[i], camera+str(petal),
+                    specprod_dir=prod, return_exists=True)
+                if not exists:
+                    log.warning(f'{fn} not found; skipping')
+                    pass
+
+                vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
+                tsnr2_petals[petal] += np.median(vals[vals > 0])
+                    
         d["EFFTIME_SPEC"][i] = tsnr2_to_efftime(tsnr2_petals[tsnr2_petals > 0].mean(), tsnr2_key.split("_")[-1])
         # QA_EFFTIME_SPEC, reading exposure-qa*fits
         fn = os.path.join(

@@ -61,7 +61,8 @@ class Spectra(object):
         and each value is a dictionary containing string keys and values
         which are arrays of the same size as the flux array.
     single : :class:`bool`, optional
-        If ``True``, store data in memory as single precision.
+        If ``True``, store flux,ivar,resolution data in memory as single
+        precision (np.float32).
     scores :
         QA scores table.
     scores_comments :
@@ -179,7 +180,7 @@ class Spectra(object):
             self.extra = {}
 
         for b in self._bands:
-            self.wave[b] = np.copy(wave[b].astype(self._ftype))
+            self.wave[b] = np.copy(wave[b])
             self.flux[b] = np.copy(flux[b].astype(self._ftype))
             self.ivar[b] = np.copy(ivar[b].astype(self._ftype))
             if mask is not None:
