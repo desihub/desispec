@@ -942,7 +942,7 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
         tempdir=outdir+'/temp'
 
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
-    startnight=datetime.strptime(lastnight,'%Y%m%d')-datetime.timedelta(days=window+1)
+    startnight=datetime.datetime.strptime(lastnight,'%Y%m%d')-datetime.timedelta(days=window+1)
     nights = [(startnight+datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(window)]
 
     #read all calib files to get dates of changes
