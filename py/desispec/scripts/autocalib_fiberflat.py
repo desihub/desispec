@@ -23,15 +23,14 @@ def parse(options=None):
     parser.add_argument('--arm', type = str, required=False, default=None, help="b, r or z")
     parser.add_argument('--average-per-program', action="store_true",help="first average per spectro and program name")
     
-    
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
     
     log=get_logger()
     if ( args.night is None or args.arm is None ) and args.prefix is None :

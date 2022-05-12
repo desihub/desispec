@@ -15,25 +15,29 @@ def parse(options=None):
     parser.add_argument("-e", "--expid", type=int, required=True,help="spectroscopic exposure ID")
     parser.add_argument("-o", "--outfile", type=str, required=True,help="output filename")
     parser.add_argument("-t", "--tilepix", type=str, required=False,help="output tilepix json filename")
-    parser.add_argument("-b","--badamps", type=str,help="comma separated list of {camera}{petal}{amp} i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
-    parser.add_argument("--badfibers", type=str,help="filename with table of bad fibers (with at least FIBER and FIBERSTATUS columns)")
-    parser.add_argument("--debug", action="store_true",help="enter ipython debug mode at end")
-    parser.add_argument("--overwrite", action="store_true",help="overwrite pre-existing output file")
-    parser.add_argument("--force", action="store_true",help="make fibermap even if missing input guide or coordinates files")
-    parser.add_argument("--no-svn-override", action="store_true",help="Do not allow fiberassign SVN to override raw data")
+    parser.add_argument("-b","--badamps", type=str,
+            help="comma separated list of {camera}{petal}{amp} i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
+    parser.add_argument("--badfibers", type=str,
+            help="filename with table of bad fibers (with at least FIBER and FIBERSTATUS columns)")
+    parser.add_argument("--debug", action="store_true",
+            help="enter ipython debug mode at end")
+    parser.add_argument("--overwrite", action="store_true",
+            help="overwrite pre-existing output file")
+    parser.add_argument("--force", action="store_true",
+            help="make fibermap even if missing input guide or coordinates files")
+    parser.add_argument("--no-svn-override", action="store_true",
+            help="Do not allow fiberassign SVN to override raw data")
 
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args=None):
 
     log = get_logger()
 
-    if args is None:
-        args = parse()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     if os.path.exists(args.outfile):
         if args.overwrite:

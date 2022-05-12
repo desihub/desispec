@@ -147,40 +147,41 @@ def sim(night,nspec):
     calib_dir = os.path.join(output_dir,'calib2d',night)
     psf_dir = os.path.join(output_dir,'calib2d','psf',night)
 
+    # runcmd -> result, success; so runcmd(cmd)[1] is success boolean
     cmd = "newarc --nspec {} --night {} --expid 0".format(nspec,night)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('newexp failed for arc exposure')
 
     cmd = "newflat --nspec {} --night {} --expid 1".format(nspec,night)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('newexp failed for flat exposure')
 
     cmd = "newexp-random --program dark --nspec {} --night {} --expid 2".format(nspec,night)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('newexp failed for dark exposure')
 
     cmd = "pixsim --night {} --expid 0 --nspec {} --rawfile {}/desi-00000000.fits.fz --preproc --preproc_dir {}".format(night,nspec,data_dir,data_dir)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('pixsim failed for arc exposure')
 
     cmd = "pixsim --night {} --expid 1 --nspec {} --rawfile {}/desi-00000001.fits.fz --preproc --preproc_dir {}".format(night,nspec,data_dir,data_dir)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('pixsim failed for flat exposure')
 
     cmd = "pixsim --night {} --expid 2 --nspec {} --rawfile {}/desi-00000002.fits.fz".format(night,nspec,data_dir)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('pixsim failed for dark exposure')
 
 #    cmd = "desi_extract_spectra -i {}/pix-b0-00000001.fits -o {}/frame-b0-00000001.fits -f {}/fibermap-00000001.fits -p {} -w 3550,5730,0.8 -n {}".format(data_dir,exp_dir,sim_dir,psf_b,nspec)
-#    if runcmd(cmd) != 0:
+#    if not runcmd(cmd)[1]:
 #        raise RuntimeError('desi_extract_spectra failed for camera b0')
 
     cmd = "desi_extract_spectra -i {}/pix-r0-00000001.fits -o {}/frame-r0-00000001.fits -f {}/fibermap-00000001.fits -p {} -w 5630,7740,0.8 -n {}".format(data_dir,exp_dir,sim_dir,psf_r,nspec)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('desi_extract_spectra failed for camera r0')
 
     cmd = "desi_extract_spectra -i {}/pix-z0-00000001.fits -o {}/frame-z0-00000001.fits -f {}/fibermap-00000001.fits -p {} -w 7650,9830,0.8 -n {}".format(data_dir,exp_dir,sim_dir,psf_z,nspec)
-    if runcmd(cmd) != 0:
+    if not runcmd(cmd)[1]:
         raise RuntimeError('desi_extract_spectra failed for camera z0')
 
     copyfile(os.path.join(sim_dir,'fibermap-00000002.fits'),os.path.join(data_dir,'fibermap-00000002.fits'))
@@ -189,11 +190,11 @@ def sim(night,nspec):
     for camera in ['r0','z0']:
 
         cmd = "desi_compute_fiberflat --infile {}/frame-{}-00000001.fits --outfile {}/fiberflat-{}-00000001.fits".format(exp_dir,camera,calib_dir,camera)
-        if runcmd(cmd) != 0:
+        if not runcmd(cmd)[1]:
             raise RuntimeError('desi_compute_fiberflat failed for camera {}'.format(camera))
 
         cmd = "desi_bootcalib --fiberflat {}/pix-{}-00000001.fits --arcfile {}/pix-{}-00000000.fits --outfile {}/psfboot-{}.fits".format(data_dir,camera,data_dir,camera,psf_dir,camera)
-        if runcmd(cmd) != 0:
+        if not runcmd(cmd)[1]:
             raise RuntimeError('desi_bootcalib failed for camera {}'.format(camera))
 
     return
@@ -229,8 +230,8 @@ def integration_test(args=None):
     for camera in ['r0','z0']:
         
         #- Verify that quicklook pipeline runs
-        com = "desi_quicklook -i {} -n {} -c {} -e 2".format(configfile,night,camera)
-        if runcmd(com) != 0:
+        cmd = "desi_quicklook -i {} -n {} -c {} -e 2".format(configfile,night,camera)
+        if not runcmd(cmd)[1]:
             raise RuntimeError('quicklook pipeline failed for camera {}'.format(camera))
 
     #- Remove all output if desired

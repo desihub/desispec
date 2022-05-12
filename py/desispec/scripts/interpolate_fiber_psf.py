@@ -18,18 +18,16 @@ def parse(options=None):
     parser.add_argument('-o','--outfile', type = str, default = None, required=True, help = 'output psf fits file')
     parser.add_argument('--fibers', type = str, default = None, required=True, help = 'fiber indices (i, or i:j or i,j,k) (for i, a fiber will be inserted between index i-1 and i in the file)')
 
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args=None):
 
     log=get_logger()
 
-    if args is None :
-        args = parse()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     bad_fibers = parse_fibers(args.fibers)
 

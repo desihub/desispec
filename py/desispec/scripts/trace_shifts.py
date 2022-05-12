@@ -69,11 +69,9 @@ Two methods are implemented.
                         help = "width of cross-dispersion profile")
     parser.add_argument('--ccd-rows-rebin', type = int, default = 4 , required=False,
                         help = "rebinning of CCD rows to run faster")
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+
+    args = parser.parse_args(options)
+
     return args
 
 
@@ -365,9 +363,12 @@ def fit_trace_shifts(image,args) :
 
     return tset
 
-def main(args) :
+def main(args=None) :
 
     log= get_logger()
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log.info("degxx={} degxy={} degyx={} degyy={}".format(args.degxx,args.degxy,args.degyx,args.degyy))
 

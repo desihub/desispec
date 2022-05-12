@@ -50,12 +50,12 @@ def parse(options=None):
     parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
 
     log = get_logger()
-    args = None
+
+    args = parser.parse_args(options)
+
     if options is None:
-        args = parser.parse_args()
         cmd = ' '.join(sys.argv)
     else:
-        args = parser.parse_args(options)
         cmd = 'desi_fit_stdstars ' + ' '.join(options)
 
     log.info('RUNNING {}'.format(cmd))
@@ -111,10 +111,13 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
 
-def main(args, comm=None) :
+def main(args=None, comm=None) :
     """ finds the best models of all standard stars in the frame
     and normlize the model flux. Output is written to a file and will be called for calibration.
     """
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 

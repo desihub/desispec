@@ -104,9 +104,7 @@ Must specify --infile OR --night and --expid.
     return args
 
 def main(args=None):
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     # Use bias?

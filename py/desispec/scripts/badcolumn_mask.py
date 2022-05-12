@@ -31,18 +31,16 @@ def parse(options=None):
     parser.add_argument('--frac-threshold', type = float, default = 0.4, required = False,
                         help = 'mask fibers with a number of masked spectral value exceeding this threshold')
 
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args=None):
 
     log=get_logger()
 
-    if args is None :
-        args = parse()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
     
     frame   = read_frame(args.infile)
     xyset   = read_xytraceset(args.psf)

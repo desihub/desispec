@@ -72,7 +72,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--save-sky-adjustments", action="store_true", help="Save sky adjustment terms (wavelength and LSF)")
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
-    parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
+    parser.add_argument("--no-xtalk", action="store_true", help='disable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("--extract-subcomm-size", type=int, default=None, help="Size to use for GPU extract subcomm")
     parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")

@@ -29,18 +29,16 @@ def parse(options=None):
     parser.add_argument('--dist', type = float , default = 3., required = False, help = 'min distance in pixels between fiber trace and bad column')
     parser.add_argument('--nopsf', action = 'store_true', help = 'do not read the traces and do not associate bad columns to fibers')
 
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args=None):
 
     log=get_logger()
 
-    if args is None :
-        args = parse()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
     
     log.info("Reading "+args.infile)
     with fitsio.FITS(args.infile) as fx:

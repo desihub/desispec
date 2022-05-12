@@ -16,7 +16,10 @@ from desiutil.log import get_logger
 
 def parse(options=None):
 
-    parser = argparse.ArgumentParser(description="Select calibration stars from spectro/photo flux across all petals")
+    parser = argparse.ArgumentParser(
+        prog='desi_select_calib_stars',
+        description="Select calibration stars from spectro/photo flux across all petals"
+        )
 
     parser.add_argument('--models', type=str, required=True, nargs="*", help = 'Input list of std stars model files')
     parser.add_argument('--frames',type=str, required=True, nargs="*", help = 'Input list of r-camera frame files from a given exposure (one per spectrograph)')
@@ -27,18 +30,16 @@ def parse(options=None):
     parser.add_argument('--wavemin', type = float, default = 6000., required=False, help = 'min wavelength in Angstrom, used to measure rapidely the broadband flux')
     parser.add_argument('--wavemax', type = float, default = 7300., required=False, help = 'max wavelength in Angstrom, used to measure rapidely the broadband flux')
 
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args=None):
 
     log=get_logger()
 
-    if args is None :
-        args = parse()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log.info("reading inputs")
     frames=dict()
