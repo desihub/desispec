@@ -2,6 +2,7 @@ import os, sys, glob, json
 import traceback
 import datetime
 import subprocess
+import yaml
 
 import astropy.io.fits as pyfits
 from astropy.table import vstack as table_vstack
@@ -908,3 +909,63 @@ time {cmd}
                 log.error(f'Error {err} submitting {batchfile}')
         else:
             log.info(f"Generated but didn't submit {batchfile}")
+
+
+def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
+                      linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
+    """
+    Generate batch script to run desi_compute_dark_nonlinear
+
+    Options:
+        outdir (str): output directory
+        lastnight (int): last night to take into account (inclusive), defaults to tonight
+
+        window (int): length of time window to take into account
+        cameras (list of str): cameras to include, e.g. b0, r1, z9
+        linexptime (float): exptime after which dark current is linear
+        nskip_zeros (int): number of ZEROs at beginning of day/night to skip
+        tempdir (str): tempfile working directory
+        nosubmit (bool): generate scripts but don't submit them to batch queue
+        first_expid (int): ignore expids prior to this
+        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
+        queue (str): which batch queue to use for submission
+
+    Args/Options are passed to the desi_compute_dark_nonlinear script
+    """
+    
+    if lastnight is None:
+        lastnight=datetime.now().strftime('%Y%m%d')
+    if outdir is None:
+        outdir=os.getenv('DESI_SPECTRO_DARK')+'/new_{lastnight}'
+    if tempdir is None:
+        tempdir=outdir+'/temp'
+
+    obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
+    startnight=datetime.strptime(lastnight,'%Y%m%d')-datetime.timedelta(days=window+1)
+    nights = [(startnight+datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(window)]
+
+    #read all calib files to get dates of changes
+    yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
+    all_config_data={}
+    for y_file in yaml_filenames:
+        with open(y_file) as f:
+            y_data=yaml.safe_load(f)
+        all_config_data.update(y_data)
+
+    #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
+    all_keys=[]
+    for d in all_config_data:
+        all_keys.extend(all_config_data[d].keys())
+    u_all_keys=np.unique(all_keys)
+    u_all_keys.sort()[1:]
+    change_dates=[int(k[1:]) for k in u_all_keys]
+
+    nights = [n for n in nights if n in obslist['NIGHT']]
+    change_dates_in_nights=[d for d in change_dates if d in nights]
+    if len(change_dates_in_nights)>0:
+        nights = [n for n in nights if n >= max(change_dates_in_nights)]
+
+    make_dark_scripts(outdir, nights=nights, cameras=cameras,
+                      linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
+                      first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue)

@@ -180,11 +180,11 @@ class DarkFinder(CalibFinder) :
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
 
+        #this step will do the matching again that calibfinder does
         super().__init__(headers, yaml_file)
 
         if len(dark_filelist) == 0:
             log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
-            #super().init(self,headers,yaml_file)
             return
 
         bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
@@ -207,8 +207,9 @@ class DarkFinder(CalibFinder) :
                 with fits.open(dark_filename,'readonly') as hdul:
                     headers2=hdul[0].header
                     
+                    #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
                     if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
-                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"],detector))
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"]))
                         continue
 
                     if "CCDCFG" in self.data :
