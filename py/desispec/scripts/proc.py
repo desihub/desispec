@@ -1405,4 +1405,7 @@ def main(args=None, comm=None):
         log.info('All done at {}; duration {}m{}s'.format(
             time.asctime(), mm, ss))
 
-    return error_count
+    if error_count > 0:
+        sys.exit(int(error_count))
+    else:
+        return 0

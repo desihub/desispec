@@ -220,7 +220,11 @@ def main(args=None):
     else:
         log.info(f'All {num_cameras} cameras successfully preprocessed')
 
-    return int(num_failed)
+    if num_failed > 0:
+        #- int to avoid np.int64 misinterpreted by sys.exit
+        sys.exit(int(num_failed))
+    else:
+        return 0
 
 def _preproc_file_kwargs_wrapper(opts):
     """

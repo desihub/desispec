@@ -35,7 +35,7 @@ def main(args=None) :
     log=get_logger()
     if ( args.night is None or args.arm is None ) and args.prefix is None :
         log.error("ERROR in arguments, need night and arm or prefix for output file names")
-        return
+        sys.exit(1)
     
     log=get_logger()
     log.info("starting at {}".format(time.asctime()))
