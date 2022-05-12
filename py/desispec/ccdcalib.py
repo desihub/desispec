@@ -935,7 +935,7 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     """
     
     if lastnight is None:
-        lastnight=datetime.now().strftime('%Y%m%d')
+        lastnight=datetime.datetime.now().strftime('%Y%m%d')
     if outdir is None:
         outdir=os.getenv('DESI_SPECTRO_DARK')+'/new_{lastnight}'
     if tempdir is None:
