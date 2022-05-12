@@ -943,7 +943,7 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
 
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
-    nights = [int(startnight+datetime.timedelta(days=i).strftime('%Y%m%d')) for i in range(window)]
+    nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
 
     #read all calib files to get dates of changes
     yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
