@@ -958,8 +958,8 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     for d in all_config_data:
         all_keys.extend(all_config_data[d].keys())
     u_all_keys=np.unique(all_keys)
-    u_all_keys.sort()[1:]
-    change_dates=[int(k[1:]) for k in u_all_keys]
+    u_all_keys.sort()
+    change_dates=[int(k[1:]) for k in u_all_keys[1:]]
 
     nights = [n for n in nights if n in obslist['NIGHT']]
     change_dates_in_nights=[d for d in change_dates if d in nights]
