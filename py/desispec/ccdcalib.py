@@ -752,7 +752,7 @@ def model_y1d(image, smooth=0):
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=False):
+                      copy_outputs_to_split_dirs=False, prepared_exptable=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -770,6 +770,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
         queue (str): which batch queue to use for submission
         copy_outputs_to_split_dirs (bool): whether to copy outputs to bias_frames/dark_frames subdirs
+        prepared_exptable (exptable): if a table is submitted here, no further spectra will be searched and this will be used instead
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -810,44 +811,49 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     #- Create exposure log so that N>>1 jobs don't step on each other
     nightlist = [int(tmp) for tmp in nights.split()]
 
-    if use_exptable:
-        #grab all exposures from the exposure log in case some have been marked bad
-        #note that some exposures will not be in here, so we'll assume those are all fine
-        log.info(f'Using exposure tables for {len(nightlist)} night directories')
-        expfiles=[]
-        for night in nightlist:
-            expfiles.append(get_exposure_table_pathname(night))
-        exptables = load_tables(expfiles)
-        exptable_all=table_vstack(exptables)
-        select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
-        exptable_select=exptable_all[select]
-    
-    log.info(f'Scanning {len(nightlist)} night directories')
-    speclog = io.util.get_speclog(nightlist)
-    select_speclog = ((speclog['OBSTYPE']=='ZERO')|(speclog['OBSTYPE']=='DARK'))
+    if prepared_exptable is not None:
+        if use_exptable:
+            #grab all exposures from the exposure log in case some have been marked bad
+            #note that some exposures will not be in here, so we'll assume those are all fine
+            log.info(f'Using exposure tables for {len(nightlist)} night directories')
+            expfiles=[]
+            for night in nightlist:
+                expfiles.append(get_exposure_table_pathname(night))
+            exptables = load_tables(expfiles)
+            exptable_all=table_vstack(exptables)
+            select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
+            exptable_select=exptable_all[select]
+        
+        log.info(f'Scanning {len(nightlist)} night directories')
+        speclog = io.util.get_speclog(nightlist)
+        select_speclog = ((speclog['OBSTYPE']=='ZERO')|(speclog['OBSTYPE']=='DARK'))
 
-    speclog = speclog[select_speclog]
-    if use_exptable:
-        badcamwords=[]
-        laststeps=[]
-        badamps=[]
-        camwords=[]
-        for entry in speclog:
-            if entry['EXPID'] in exptable_select['EXPID']:
-                sel=entry['EXPID']==exptable_select['EXPID']
-                badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
-                badamps.append(exptable_select['BADAMPS'][sel][0])
-                camwords.append(exptable_select['CAMWORD'][sel][0])
-                laststeps.append(exptable_select['LASTSTEP'][sel][0])
-            else:
-                badcamwords.append("")
-                laststeps.append("all")
-                camwords.append("a0123456789")
-                badamps.append("")
-        speclog.add_column(badcamwords,name='BADCAMWORD')
-        speclog.add_column(laststeps,name='LASTSTEP')
-        speclog.add_column(camwords,name='CAMWORD')
-        speclog.add_column(badamps,name='BADAMPS')
+        speclog = speclog[select_speclog]
+        if use_exptable:
+            badcamwords=[]
+            laststeps=[]
+            badamps=[]
+            camwords=[]
+            for entry in speclog:
+                if entry['EXPID'] in exptable_select['EXPID']:
+                    sel=entry['EXPID']==exptable_select['EXPID']
+                    badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
+                    badamps.append(exptable_select['BADAMPS'][sel][0])
+                    camwords.append(exptable_select['CAMWORD'][sel][0])
+                    laststeps.append(exptable_select['LASTSTEP'][sel][0])
+                else:
+                    badcamwords.append("")
+                    laststeps.append("all")
+                    camwords.append("a0123456789")
+                    badamps.append("")
+            speclog.add_column(badcamwords,name='BADCAMWORD')
+            speclog.add_column(laststeps,name='LASTSTEP')
+            speclog.add_column(camwords,name='CAMWORD')
+            speclog.add_column(badamps,name='BADAMPS')
+    else:
+        #TODO: need to check if this works properly, else needs to be adapted
+        speclog=prepared_exptable
+
 
     speclog['OBSTYPE']=np.char.upper(speclog['OBSTYPE'])
 
@@ -923,7 +929,7 @@ cp {biasfile}  bias_frames/{biasfile}
 def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=None):
+                      copy_outputs_to_split_dirs=None, transmit_obslist = False):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -940,6 +946,7 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
         first_expid (int): ignore expids prior to this
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
         queue (str): which batch queue to use for submission
+        transmit_obslist(bool): if True will give use the obslist from here downstream
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -958,6 +965,12 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
     nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
+
+
+
+
+    #TODO: the following steps should probably be done by spectrograph and then marking spectrographs that changed in between as bad for nights before the change (allowing other spectrographs to still use more data...)
+    #this could probably use calibfinder instead to find the setups...
 
     #read all calib files to get dates of changes
     yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
@@ -980,10 +993,19 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     if len(change_dates_in_nights)>0:
         nights = [n for n in nights if n >= max(change_dates_in_nights)]
 
+    #truncate to the right nights
+    if transmit_obslist:
+        obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
+        if nskip_zeros is None:
+            nskip_zeros = 0
+    else:
+        obslist = None
+
+    #TODO: potentially need to do further selections based on quality, but should not be needed as this is done in desi_compute_dark_nonlinear
 
     #could in principle parse the obslist for all relevant nights and give to the make_dark_scripts...
 
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
                       first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue,
-                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs)
+                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist)
