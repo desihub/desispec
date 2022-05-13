@@ -607,6 +607,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if jobdesc.lower() == 'stdstarfit':
             cmd += ' --mpistdstars'
 
+        cmd += ' --starttime $(date +%s)'
         cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
