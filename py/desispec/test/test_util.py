@@ -3,6 +3,7 @@ Test desispec.util.*
 """
 
 import os
+import time
 import unittest
 from uuid import uuid4
 import importlib
@@ -230,7 +231,7 @@ class TestRunCmd(unittest.TestCase):
     def test_newer_input(self):
         """
         Even if clobber=False and outputs exist, run cmd if inputs are
-        newer than outputs.  Run this test last since it alters timestamps.
+        newer than outputs.
         """
         #- update input timestamp to be newer than output
         fx = open(self.infile, 'w')
@@ -250,6 +251,27 @@ class TestRunCmd(unittest.TestCase):
         line = fx.readline().strip()        
         self.assertEqual(token, line)
         
+    @classmethod
+    def setUpClass(cls):
+        cls.infile = 'test-'+uuid4().hex
+        cls.outfile = 'test-'+uuid4().hex
+        cls.testfile = 'test-'+uuid4().hex
+
+    def setUp(self):
+        # refresh timestamps so that outfile is older than infile
+        for filename in [self.infile, self.outfile]:
+            with open(filename, 'w') as fx:
+                fx.write('This file is leftover from a test; you can remove it\n')
+            time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        for filename in [cls.infile, cls.outfile, cls.testfile]:
+            if os.path.exists(filename):
+                os.remove(filename)
+
+class TestUtil(unittest.TestCase):
+
     def test_utils_default_nproc(self):
         n = 4
         tmp = os.getenv('SLURM_CPUS_PER_TASK')
@@ -264,24 +286,6 @@ class TestRunCmd(unittest.TestCase):
         import multiprocessing
         
         self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
-
-    @classmethod
-    def setUpClass(cls):
-        cls.infile = 'test-'+uuid4().hex
-        cls.outfile = 'test-'+uuid4().hex
-        cls.testfile = 'test-'+uuid4().hex
-        for filename in [cls.infile, cls.outfile]:
-            fx = open(filename, 'w')
-            fx.write('This file is leftover from a test; you can remove it\n')
-            fx.close()
-
-    @classmethod
-    def tearDownClass(cls):
-        for filename in [cls.infile, cls.outfile, cls.testfile]:
-            if os.path.exists(filename):
-                os.remove(filename)
-
-class TestUtil(unittest.TestCase):
 
     def test_header2night(self):
         from astropy.time import Time
