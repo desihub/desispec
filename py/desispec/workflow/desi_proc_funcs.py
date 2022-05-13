@@ -243,6 +243,7 @@ def update_args_with_headers(args):
     if not os.path.isfile(args.input):
         raise IOError('Missing input file: {}'.format(args.input))
 
+    log.info(f'Loading header keywords from {args.input}')
     hdr, fx = load_raw_data_header(pathname=args.input, return_filehandle=True)
 
     if args.expid is None:

@@ -66,7 +66,6 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
     elif cmd_callable and not expandargs:
         args = (args,)
 
-    print(f'{args=}')
     if cmd_callable:
         funcname = cmd.__module__ + '.' + cmd.__name__
         if expandargs:

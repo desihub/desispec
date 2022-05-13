@@ -426,7 +426,7 @@ def main(args=None, comm=None) :
 
     log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
     if validstars.size == 0 :
-        log.error("No valid star")
+        log.error(f"No valid star for sp{spectrograph}")
         sys.exit(12)
 
     validstars = indices[validstars]
