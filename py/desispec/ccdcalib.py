@@ -80,7 +80,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             raise ValueError(message)
 
         if exptime is not None:
-            if round(exptime)  != round(thisexptime):
+            if int(exptime)  != int(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
                 log.error(message)
                 raise ValueError(message)
@@ -951,6 +951,8 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     if copy_outputs_to_split_dirs is None:
         copy_outputs_to_split_dirs = True
 
+    #probably run a script here that updates the obslist or checks it's up-to-date
+
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
     nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
@@ -975,6 +977,9 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     change_dates_in_nights=[d for d in change_dates if d in nights]
     if len(change_dates_in_nights)>0:
         nights = [n for n in nights if n >= max(change_dates_in_nights)]
+
+
+    #could in principle parse the obslist for all relevant nights and give to the make_dark_scripts...
 
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
