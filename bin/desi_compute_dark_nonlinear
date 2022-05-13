@@ -155,7 +155,7 @@ if 'CAMWORD' in colnames and 'BADCAMWORD' in colnames and 'BADAMPS' in colnames:
         sys.exit(1)
 
 #- group EXPTIMEs by integer
-speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
+speclog['EXPTIME_INT'] = np.around(speclog['EXPTIME']).astype(int)
 # this is not necessarily a great idea, will keep for the moment, but having this to be grouping
 # with some relative uncertainty margin would be better, also downstream routines used rounding
 # instead of integer conversion and failed for that reason, i.e. 601.56s would be counted as 601 here,

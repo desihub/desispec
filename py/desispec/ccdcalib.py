@@ -80,7 +80,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             raise ValueError(message)
 
         if exptime is not None:
-            if int(exptime)  != int(thisexptime):
+            if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
                 log.error(message)
                 raise ValueError(message)
