@@ -824,7 +824,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     
     log.info(f'Scanning {len(nightlist)} night directories')
     speclog = io.util.get_speclog(nightlist)
-    select_speclog = ((speclog['OBSTYPE']=='zero')|(speclog['OBSTYPE']=='dark'))
+    select_speclog = ((speclog['OBSTYPE']=='DARK')|(speclog['OBSTYPE']=='DARK'))
 
     speclog = speclog[select_speclog]
     if use_exptable:
