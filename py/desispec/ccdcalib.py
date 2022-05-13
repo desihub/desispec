@@ -824,6 +824,9 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     
     log.info(f'Scanning {len(nightlist)} night directories')
     speclog = io.util.get_speclog(nightlist)
+    select_speclog = ((speclog['OBSTYPE']=='zero')|(speclog['OBSTYPE']=='dark'))
+
+    speclog = speclog[select_speclog]
     if use_exptable:
         badcamwords=[]
         laststeps=[]
@@ -841,7 +844,6 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                 laststeps.append("all")
                 camwords.append("a0123456789")
                 badamps.append("")
-
         speclog.add_column(badcamwords,name='BADCAMWORD')
         speclog.add_column(laststeps,name='LASTSTEP')
         speclog.add_column(camwords,name='CAMWORD')
