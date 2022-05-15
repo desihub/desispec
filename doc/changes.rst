@@ -2,13 +2,23 @@
 desispec Change Log
 ===================
 
-0.53.0 (unreleased)
+0.53.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.53.0 (2022-05-15)
 -------------------
 
 Major:
+
 * gzip intermediate files, including spectra files (PR `#1756`_).
+* refactor pipeline to call functions instead of spawn scripts for
+  MPI compatibility on NERSC Perlmutter.  No user facing impact but major
+  under-the-hood change (PR `#1743`_).
 
 Minor / backwards compatible:
+
 * Add ifmain wrapper to setup.py for testing (PR `#1745`_).
 * Allow QA of already QAed tiles (PR `#1747`_).
 * Update recipe for find_overscan_cosmic_trails (PR `#1748`_, `#1758`_).
@@ -20,6 +30,7 @@ Minor / backwards compatible:
 * Improve fiberflat vs. humidity (PR `#1757`_).
 * Night QA use findfile and fitsio (PR `#1766`_.)
 
+.. _`#1743`: https://github.com/desihub/desispec/pull/1743
 .. _`#1745`: https://github.com/desihub/desispec/pull/1745
 .. _`#1747`: https://github.com/desihub/desispec/pull/1747
 .. _`#1748`: https://github.com/desihub/desispec/pull/1748
