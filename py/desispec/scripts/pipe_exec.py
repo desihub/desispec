@@ -106,7 +106,7 @@ def main(args, comm=None):
     if len(tasklist) == 0:
         # warnings.warn("Task list is empty", RuntimeWarning)
         log.error("Task list is empty")
-        return 1
+        sys.exit(1)
 
     # Derive tasktype from tasklist if needed; otherwise filter by tasktype
     tasktypes = [tmp.split('_')[0] for tmp in tasklist]
@@ -116,7 +116,7 @@ def main(args, comm=None):
         else:
             log.error("Multiple task types found in input list: {}".format(
                 set(tasktypes)))
-            return 1
+            sys.exit(1)
 
     elif len(set(tasktypes)) > 0:
         tasklist = [t for t in tasklist if t.startswith(args.tasktype+'_')]

@@ -4,5 +4,7 @@
 Run DESI qproc on a given exposure
 """
 
+import sys
+
 from desispec.scripts import qproc
-qproc.main(qproc.parse())
+sys.exit(qproc.main(qproc.parse()))

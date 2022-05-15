@@ -8,9 +8,9 @@
 This script computes the fiber flat field correction from a DESI continuum lamp frame.
 """
 
+import sys
 import desispec.scripts.autocalib_fiberflat as autocalib_fiberflat
-
 
 if __name__ == '__main__':
     args = autocalib_fiberflat.parse()
-    autocalib_fiberflat.main(args)
+    sys.exit(autocalib_fiberflat.main(args))

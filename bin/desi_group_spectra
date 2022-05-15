@@ -13,5 +13,5 @@ import sys
 if __name__ == '__main__':
     import desispec.scripts.group_spectra as group_spectra
     args = group_spectra.parse()
-    sys.exit( group_spectra.main(args) )
+    sys.exit(group_spectra.main(args))
 

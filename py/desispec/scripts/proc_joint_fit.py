@@ -23,6 +23,8 @@ from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.extract
 import desispec.scripts.specex
 import desispec.scripts.stdstars
+import desispec.scripts.average_fiberflat
+import desispec.scripts.autocalib_fiberflat
 
 from desitarget.targetmask import desi_mask
 
@@ -41,9 +43,7 @@ def parse(options=None):
     return args
 
 def main(args=None, comm=None):
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     log = get_logger()
@@ -302,14 +302,22 @@ def main(args=None, comm=None):
         for camera, lampbox, ofile in camera_lampboxes[rank::size]:
             if not os.path.isfile(ofile):
                 log.info(f"Rank {rank} average flat for camera {camera} and lamp box #{lampbox}")
-                pg = f"CALIB DESI-CALIB-0{lampbox} LEDs only"
-
-                cmd = f"desi_average_fiberflat --program '{pg}' --outfile {ofile} -i "
+                cmd = []
+                cmd.append(f"desi_average_fiberflat")
+                cmd.append(f"--program")
+                cmd.append(f"CALIB DESI-CALIB-0{lampbox} LEDs only")
+                cmd.append(f"--outfile")
+                cmd.append(f"{ofile}")
+                cmd.append(f"-i")
                 for flat in inflats_for_camera[camera]:
-                    cmd += f" {flat} "
+                    cmd.append(f"{flat}")
                 num_cmd += 1
-                err = runcmd(cmd, inputs=inflats_for_camera[camera], outputs=[ofile, ])
-                if err:
+                cmdargs = cmd[1:]
+
+                result, success = runcmd(desispec.scripts.average_fiberflat.main,
+                        args=cmdargs, inputs=inflats_for_camera[camera], outputs=[ofile, ])
+
+                if not success:
                     num_err += 1
             else:
                 log.info(f"Rank {rank} will use existing {ofile}")
@@ -320,12 +328,22 @@ def main(args=None, comm=None):
         log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
         for camera_arm in ["b", "r", "z"][rank::size]:
             log.info(f"Rank {rank} autocalibrating across spectro for camera arm {camera_arm}")
-            cmd = f"desi_autocalib_fiberflat --night {args.night} --arm {camera_arm} -i "
+            cmd = []
+            cmd.append(f"desi_autocalib_fiberflat")
+            cmd.append(f"--night")
+            cmd.append(f"{args.night}")
+            cmd.append(f"--arm")
+            cmd.append(f"{camera_arm}")
+            cmd.append(f"-i")
             for flat in flats_for_arm[camera_arm]:
-                cmd += f" {flat} "
+                cmd.append(f"{flat}")
             num_cmd += 1
-            err = runcmd(cmd, inputs=flats_for_arm[camera_arm], outputs=[])
-            if err:
+            cmdargs = cmd[1:]
+
+            result, success = runcmd(desispec.scripts.autocalib_fiberflat.main,
+                    args=cmdargs, inputs=flats_for_arm[camera_arm], outputs=[])
+
+            if not success:
                 num_err += 1
 
         if comm is not None:
@@ -508,23 +526,23 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            num_cmd += 1
+            num_cmd +=1 
             if subcomm is None:
                 #- Using multiprocessing
-                err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+                result, success = runcmd(cmd, inputs=inputs, outputs=[stdfile])
             else:
                 #- Using MPI
-                try:
-                    cmdargs = cmd.split()[1:]
-                    cmdargs = desispec.scripts.stdstars.parse(cmdargs)
-                    err = runcmd(desispec.scripts.stdstars.main, 
-                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
-                    )
-                except:
+                cmdargs = cmd.split()[1:]
+                result, success = runcmd(desispec.scripts.stdstars.main, 
+                    args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm
+                )
+
+                if not success:
                     #- Catches sys.exit from stdstars.main
                     log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
                     err = True
-            if err:
+
+            if not success:
                 num_err += 1
 
         timer.stop('stdstarfit')
@@ -541,6 +559,8 @@ def main(args=None, comm=None):
                 log.critical('All stdstar commands failed')
             sys.exit(1)
 
+        link_errors = 0
+        num_link_cmds = 0
         if rank==0 and len(args.expids) > 1:
             for sp in spectro_nums:
                 saved_stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
@@ -553,11 +573,23 @@ def main(args=None, comm=None):
                     relpath_saved_std = os.path.relpath(saved_stdfile, new_dirname)
                     log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
                             f'to existing file at rel. path {relpath_saved_std}')
-                    runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), \
+                    num_link_cmds += 1
+                    result, success = runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), expandargs=True,
                         inputs=[saved_stdfile, ], outputs=[new_stdfile, ])
                     log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
                                                                                         os.path.isfile(new_stdfile),
                                                                                         os.path.islink(new_stdfile)))
+                    if not success:
+                        link_errors += 1
+
+        if comm is not None:
+            link_errors = comm.bcast(link_errors, root=0)
+            num_link_cmds = comm.bcast(num_link_cmds, root=0)
+
+        if link_errors>0 and link_errors==num_link_cmds:
+            if rank == 0:
+                log.critical('All stdstar link commands failed')
+            sys.exit(1)
 
     # -------------------------------------------------------------------------
     # - Wrap up

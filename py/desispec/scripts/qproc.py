@@ -83,9 +83,7 @@ def parse(options=None):
 
 def main(args=None):
     
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     t0   = time.time()

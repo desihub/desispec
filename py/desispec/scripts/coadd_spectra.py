@@ -59,14 +59,14 @@ def main(args=None):
 
     if args.lin_step is not None and args.log10_step is not None :
         log.critical("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")
-        return 12
+        sys.exit(12)
     if args.coadd_cameras and ( args.lin_step is not None or args.log10_step is not None ) :
         log.critical("cannot specify a new wavelength binning along with --coadd-cameras option")
-        return 12
+        sys.exit(12)
 
     if len(args.infile) == 0:
         log.critical("You must specify input files")
-        return 12
+        sys.exit(12)
 
     log.info("reading input ...")
 

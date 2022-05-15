@@ -101,7 +101,8 @@ def sim(night, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('newexp-random failed for {} exposure {}'.format(program, expid))
 
         cmd = "pixsim --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
@@ -109,7 +110,8 @@ def sim(night, nspec=5, clobber=False):
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
         outputs.append(io.findfile('raw', night, expid))
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
     return

@@ -4,9 +4,10 @@
 #
 # -*- coding: utf-8 -*-
 
+import sys
 import desispec.scripts.procexp as procexp
 
 if __name__ == '__main__':
     args = procexp.parse()
-    procexp.main(args)
+    sys.exit(procexp.main(args))
 

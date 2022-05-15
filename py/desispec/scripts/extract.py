@@ -71,11 +71,8 @@ def parse(options=None):
     parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
     parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
@@ -134,7 +131,10 @@ def barycentric_correction_multiplicative_factor(header) :
     return val
 
 
-def main(args):
+def main(args=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     if args.mpi:
         from mpi4py import MPI
