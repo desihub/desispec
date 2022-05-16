@@ -107,7 +107,7 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
         nbad_tot=0
         for loop in range(20) :
             good=(fivar[fiber]>0)
-            splineflat = spline_fit(twave,twave[good],fflat[fiber,good],required_resolution=spline_res_clipping,input_ivar=fivar[fiber,good],max_resolution=3*spline_res_clipping)
+            splineflat = spline_fit(twave,twave[good],fflat[fiber,good],required_resolution=spline_res_clipping,input_ivar=fivar[fiber,good],max_resolution=5*spline_res_clipping)
             fchi2 = fivar[fiber]*(fflat[fiber]-splineflat)**2
             bad=np.where(fchi2>nsig_clipping**2)[0]
             if bad.size>0 :
