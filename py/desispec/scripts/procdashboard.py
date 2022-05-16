@@ -183,7 +183,7 @@ def main(args=None):
     ## that follows the same directory strucure ##
     ######################################################################
     color_profile = return_color_profile()
-    strTable = _initialize_page(color_profile, titlefill='Exp Processing')
+    strTable = _initialize_page(color_profile, titlefill='Exp. Processing')
 
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     # running='No'
