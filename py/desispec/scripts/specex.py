@@ -45,15 +45,15 @@ def parse(options=None):
     parser.add_argument("--disable-merge", action = 'store_true',
                         help="disable merging fiber bundles")
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
-def main(args, comm=None):
+def main(args=None, comm=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 

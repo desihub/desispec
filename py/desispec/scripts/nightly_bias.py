@@ -34,9 +34,7 @@ def parse(options=None):
     return args
 
 def main(args=None, comm=None):
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     if comm is None and args.mpi:

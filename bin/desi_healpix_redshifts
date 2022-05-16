@@ -5,10 +5,11 @@ Coadding and fitting redshift by healpix, assuming spectral
 regrouping has already happened
 """
 
+import sys
 from desispec.scripts import healpix_redshifts
 
 if __name__ == '__main__':
     args = healpix_redshifts.parse()
-    healpix_redshifts.main(args)
+    sys.exit(healpix_redshifts.main(args))
 
 

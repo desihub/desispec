@@ -51,14 +51,15 @@ def parse(options=None):
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute alpha of tsnr calc.')
     
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 def main(args):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     log = get_logger()
 
     if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):

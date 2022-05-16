@@ -72,7 +72,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--save-sky-adjustments", action="store_true", help="Save sky adjustment terms (wavelength and LSF)")
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
-    parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
+    parser.add_argument("--no-xtalk", action="store_true", help='disable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("--extract-subcomm-size", type=int, default=None, help="Size to use for GPU extract subcomm")
     parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
@@ -243,6 +243,7 @@ def update_args_with_headers(args):
     if not os.path.isfile(args.input):
         raise IOError('Missing input file: {}'.format(args.input))
 
+    log.info(f'Loading header keywords from {args.input}')
     hdr, fx = load_raw_data_header(pathname=args.input, return_filehandle=True)
 
     if args.expid is None:
@@ -304,6 +305,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     """
     config = batch.get_config(system_name)
     log = get_logger()
+    jobdesc = jobdesc.upper()
 
     nspectro = (ncameras - 1) // 3 + 1
     nodes = None
@@ -312,7 +314,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
-    elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
+    elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
@@ -329,6 +331,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
         #- new version using MPI on one node
         ncores, runtime = ncameras, (6+2*nexps) #ncameras, 10
+    elif jobdesc == 'POSTSTDSTAR':
+        ncores, runtime = ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
@@ -603,6 +607,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if jobdesc.lower() == 'stdstarfit':
             cmd += ' --mpistdstars'
 
+        cmd += ' --starttime $(date +%s)'
         cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
@@ -666,12 +671,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('{}\n'.format(srun))
 
             if jobdesc.lower() in ['science', 'poststdstar']:
-                if nodes*4 > ncameras:
-                    #- only one rank per camera; multiprocessing fans out the rest
-                    ntasks = ncameras
-                else:
-                    #- but don't run more than 4 per node (to be tuned)
-                    ntasks = nodes*4
+                ntasks=ncameras
 
                 tot_threads = nodes * batch_config['cores_per_node'] * batch_config['threads_per_core']
                 threads_per_task = max(int(tot_threads / ntasks), 1)

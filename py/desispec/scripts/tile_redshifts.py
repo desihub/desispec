@@ -2,6 +2,7 @@
 import sys, os, glob
 import re
 import subprocess
+import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
@@ -13,7 +14,6 @@ from desispec.workflow import batch
 from desispec.util import parse_int_args
 
 def parse(options=None):
-    import argparse
 
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
@@ -45,14 +45,15 @@ def parse(options=None):
     # p.add_argument("--scriptdir", type=str, help="script directory")
     # p.add_argument("--per-exposure", action="store_true",
     #         help="fit redshifts per exposure instead of grouping")
-    if options is None:
-        args = p.parse_args()
-    else:
-        args = p.parse_args(options)
+
+    args = p.parse_args(options)
 
     return args
 
-def main(args):
+def main(args=None):
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
     num_error = len(failed_jobs)
     sys.exit(num_error)

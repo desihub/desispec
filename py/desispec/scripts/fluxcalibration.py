@@ -63,15 +63,16 @@ def parse(options=None):
     parser.add_argument("--use-gpu", action="store_true", help="Use GPUs")
 
     parser.set_defaults(nostdcheck=False)
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+
+    args = parser.parse_args(options)
+
     return args
 
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log=get_logger()
 

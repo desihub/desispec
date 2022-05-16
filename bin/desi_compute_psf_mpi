@@ -23,7 +23,6 @@ if use_mpi():
 else:
     print("mpi4py not found, using only one process")
 
-
 if __name__ == '__main__':
     args = specex.parse()
-    specex.main(args, comm=comm)
+    sys.exit(specex.main(args, comm=comm))

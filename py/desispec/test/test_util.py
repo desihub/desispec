@@ -3,6 +3,7 @@ Test desispec.util.*
 """
 
 import os
+import time
 import unittest
 from uuid import uuid4
 import importlib
@@ -113,49 +114,124 @@ class TestNight(unittest.TestCase):
 class TestRunCmd(unittest.TestCase):
     
     def test_runcmd(self):
-        self.assertEqual(0, util.runcmd('echo hello > /dev/null'))
+        """Test calling a script"""
+        result, success = util.runcmd('echo hello > /dev/null')
+        self.assertEqual(result, 0)
+        self.assertTrue(success)
+
+    def test_command_args(self):
+        """Test calling a script with args"""
+        result, success = util.runcmd('echo', ['hello', 'biz', 'bat'])
+        self.assertEqual(result, 0)
+        self.assertTrue(success)
+
+    def test_failed_script(self):
+        """Test a script call that should fail"""
+        result, success = util.runcmd('blargbitbatfoo')
+        self.assertNotEqual(result, 0)
+        self.assertFalse(success)
+
+    def test_failed_function(self):
+        """Test a function call returning an exception"""
+        def blat():
+            raise ValueError
+
+        result, success = util.runcmd(blat)
+        self.assertTrue(isinstance(result, ValueError))
+        self.assertFalse(success)
 
     def test_missing_inputs(self):
-        cmd = 'echo hello > /dev/null'
-        self.assertNotEqual(0, util.runcmd(cmd, inputs=[uuid4().hex]))
+        """test failure from missing inputs"""
+        token = uuid4().hex
+        cmd = f'echo {token} > {self.testfile}'
+        result, success = util.runcmd(cmd, inputs=[uuid4().hex,])
+        self.assertNotEqual(result, 0)
+        self.assertFalse(success)
+
+        # command should not have run, so token should not be in file
+        with open(self.testfile) as fx:
+            line = fx.readline().strip()
+
+        self.assertNotEqual(token, line)
 
     def test_existing_inputs(self):
-        cmd = 'echo hello > /dev/null'
-        self.assertEqual(0, util.runcmd(cmd, inputs=[self.infile]))
+        """test success with existing inputs"""
+        token = uuid4().hex
+        cmd = f'echo {token} > {self.testfile}'
+        result, success = util.runcmd(cmd, inputs=[self.infile])
+        self.assertEqual(result, 0)
+        self.assertTrue(success)
+
+        # command should have run, so token should be in file
+        with open(self.testfile) as fx:
+            line = fx.readline().strip()
+
+        self.assertEqual(token, line)
 
     def test_missing_outputs(self):
-        cmd = 'echo hello > /dev/null'
-        self.assertNotEqual(0, util.runcmd(cmd, outputs=[uuid4().hex]))
+        """Test (purposefully) missing outputs"""
+        token = uuid4().hex
+        cmd = f'echo {token} > {self.testfile}'
+        result, success = util.runcmd(cmd, outputs=[uuid4().hex])
+        #- command ran (result=0) but fake outputs don't exist (success=False)
+        self.assertEqual(result, 0)
+        self.assertFalse(success)
+
+        #- since command ran, token shoudl be in file
+        with open(self.testfile) as fx:
+            line = fx.readline().strip()
+
+        self.assertEqual(token, line)
 
     def test_existing_outputs(self):
+        """Test skipping if outputs alredy exist"""
         token = uuid4().hex
         cmd = 'echo {} > {}'.format(token, self.testfile)
-        self.assertEqual(0, util.runcmd(cmd, outputs=[self.outfile]))
-        fx = open(self.testfile)
-        line = fx.readline().strip()
+        result, success = util.runcmd(cmd, outputs=[self.outfile,])
+        #- outputs exist = skipped test = result=None, success=True
+        self.assertEqual(result, None)
+        self.assertTrue(success)
+
         #- command should not have run, so tokens should not be equal
+        with open(self.testfile) as fx:
+            line = fx.readline().strip()
         self.assertNotEqual(token, line)
 
     def test_clobber(self):
+        """Test overwriting output if clobber=True"""
         token = uuid4().hex
         cmd = 'echo {} > {}'.format(token, self.testfile)
-        self.assertEqual(0, util.runcmd(cmd, outputs=[self.outfile], clobber=True))
-        fx = open(self.testfile)
-        line = fx.readline().strip()
+        result, success = util.runcmd(cmd, outputs=[self.outfile], clobber=True)
+        self.assertEqual(result, 0)
+        self.assertTrue(success)
+
         #- command should have run, so tokens should be equal
+        with open(self.testfile) as fx:
+            line = fx.readline().strip()
         self.assertEqual(token, line)
 
     def test_function(self):
-        def blat(*args):
-            return list(args)
-        
-        self.assertEqual(util.runcmd(blat, args=[1,2,3]), [1,2,3])
-        self.assertEqual(util.runcmd(blat), [])
+        """Test calling a function instead of spawning a script"""
+        def blat(args='hello'):
+            return args
 
-    def test_zz(self):
+        def foo(a, b, c):
+            return a + b + c
+
+        result, success = util.runcmd(blat, args=[1,2,3])
+        self.assertEqual(result, [1,2,3])
+        self.assertTrue(success)
+
+        result, success = util.runcmd(foo, args=[1,2,3], expandargs=True)
+        self.assertEqual(result, 6)
+        self.assertTrue(success)
+
+        self.assertEqual(util.runcmd(blat)[0], 'hello')
+
+    def test_newer_input(self):
         """
         Even if clobber=False and outputs exist, run cmd if inputs are
-        newer than outputs.  Run this test last since it alters timestamps.
+        newer than outputs.
         """
         #- update input timestamp to be newer than output
         fx = open(self.infile, 'w')
@@ -165,14 +241,37 @@ class TestRunCmd(unittest.TestCase):
         #- run a command
         token = uuid4().hex
         cmd = 'echo {} > {}'.format(token, self.testfile)
-        self.assertEqual(0, util.runcmd(cmd, outputs=[self.outfile], clobber=False))
+        result, success = util.runcmd(cmd, inputs=[self.infile,], outputs=[self.testfile,], clobber=False)
+        self.assertEqual(result, 0)
+        self.assertTrue(success)
 
         #- command should have run even though outputs exist,
-        #- so tokens should be equal
+        #- so updated token should be equal
         fx = open(self.testfile)
         line = fx.readline().strip()        
-        self.assertNotEqual(token, line)
+        self.assertEqual(token, line)
         
+    @classmethod
+    def setUpClass(cls):
+        cls.infile = 'test-'+uuid4().hex
+        cls.outfile = 'test-'+uuid4().hex
+        cls.testfile = 'test-'+uuid4().hex
+
+    def setUp(self):
+        # refresh timestamps so that outfile is older than infile
+        for filename in [self.infile, self.outfile]:
+            with open(filename, 'w') as fx:
+                fx.write('This file is leftover from a test; you can remove it\n')
+            time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        for filename in [cls.infile, cls.outfile, cls.testfile]:
+            if os.path.exists(filename):
+                os.remove(filename)
+
+class TestUtil(unittest.TestCase):
+
     def test_utils_default_nproc(self):
         n = 4
         tmp = os.getenv('SLURM_CPUS_PER_TASK')
@@ -187,24 +286,6 @@ class TestRunCmd(unittest.TestCase):
         import multiprocessing
         
         self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
-
-    @classmethod
-    def setUpClass(cls):
-        cls.infile = 'test-'+uuid4().hex
-        cls.outfile = 'test-'+uuid4().hex
-        cls.testfile = 'test-'+uuid4().hex
-        for filename in [cls.infile, cls.outfile]:
-            fx = open(filename, 'w')
-            fx.write('This file is leftover from a test; you can remove it\n')
-            fx.close()
-
-    @classmethod
-    def tearDownClass(cls):
-        for filename in [cls.infile, cls.outfile, cls.testfile]:
-            if os.path.exists(filename):
-                os.remove(filename)
-
-class TestUtil(unittest.TestCase):
 
     def test_header2night(self):
         from astropy.time import Time

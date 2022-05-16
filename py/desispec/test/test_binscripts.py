@@ -214,16 +214,18 @@ class TestBinScripts(unittest.TestCase):
                 self.fiberflatfile, self.qa_calib_file, self.qafig)
         outputs = [self.fiberflatfile,self.qa_calib_file,self.qafig]
         inputs = [self.framefile,]
-        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+        self.assertTrue(success, 'FAILED: {}'.format(cmd))
+        self.assertEqual(result, 0, 'FAILED: {}'.format(cmd))
 
         #- Confirm that the output file can be read as a fiberflat
         ff1 = io.read_fiberflat(self.fiberflatfile)
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
-        args = desispec.scripts.fiberflat.parse(cmd.split()[2:])
-        err = runcmd(desispec.scripts.fiberflat.main, args=[args,],
+        ## args = desispec.scripts.fiberflat.parse(cmd.split()[2:])
+        args = cmd.split()[2:]
+        result, success = runcmd(desispec.scripts.fiberflat.main, args=args,
             inputs=inputs, outputs=outputs, clobber=True)
 
         #- Confirm that the output file can be read as a fiberflat
@@ -250,16 +252,17 @@ for legacy standards
                 sys.executable, self.binDir, opt, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
             inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
             outputs  = [ self.stdfile]
-            err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+            result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
-            self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+            self.assertEqual(result, 0, 'FAILED: {}'.format(cmd))
+            self.assertTrue(success, 'FAILED: {}'.format(cmd))
 
             #- Remove outputs and call again via function instead of system call
             self._remove_files(outputs) 
             args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
-            err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+            result, success = runcmd(desispec.scripts.stdstars.main, args=args,
                 inputs=inputs, outputs=outputs, clobber=True)
-            self.assertEqual(err, None)
+            self.assertTrue(success)
 
     def test_fit_stdstars_gaia(self):
         """
@@ -275,16 +278,17 @@ for legacy standards
                 sys.executable, self.binDir, opt, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
             inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
             outputs  = [ self.stdfile]
-            err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+            result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
-            self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+            self.assertTrue(success, 'FAILED: {}'.format(cmd))
 
             #- Remove outputs and call again via function instead of system call
             self._remove_files(outputs) 
             args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
-            err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+            result, success = runcmd(desispec.scripts.stdstars.main, args=args,
                 inputs=inputs, outputs=outputs, clobber=True)
-            self.assertEqual(err, None)
+            self.assertTrue(success)
+            self.assertEqual(result, 0)
 
         
     def test_compute_fluxcalib(self):
@@ -307,16 +311,16 @@ for legacy standards
                 self.calibfile, self.qa_data_file, self.qafig)
         inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.stdfile]
         outputs = [self.calibfile,self.qa_data_file,self.qafig,]
-        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
-        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+        self.assertTrue(success, 'FAILED: {}'.format(cmd))
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
         args = desispec.scripts.fluxcalibration.parse(cmd.split()[2:])
-        err = runcmd(desispec.scripts.fluxcalibration.main, args=[args,],
+        result, success = runcmd(desispec.scripts.fluxcalibration.main, args=args,
             inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+        self.assertTrue(success)
 
     def test_compute_sky(self):
         """
@@ -330,15 +334,16 @@ for legacy standards
             sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.skyfile, self.qa_data_file, self.qafig)
         inputs  = [self.framefile, self.fiberflatfile]
         outputs = [self.skyfile,self.qa_data_file,self.qafig,]
-        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+        self.assertEqual(result, 0, 'FAILED: {}'.format(cmd))
+        self.assertTrue(success, 'FAILED: {}'.format(cmd))
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
         args = desispec.scripts.sky.parse(cmd.split()[2:])
-        err = runcmd(desispec.scripts.sky.main, args=[args,],
+        result, success = runcmd(desispec.scripts.sky.main, args=args,
             inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+        self.assertTrue(success)
 
 def test_suite():
     """Allows testing of only this module with the command::
