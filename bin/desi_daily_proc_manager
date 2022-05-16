@@ -4,12 +4,11 @@
 import argparse
 import socket
 import sys
-import numpy as np
 import os
 
 from desispec.scripts.daily_processing import daily_processing_manager
 from desispec.io.util import parse_cameras
-from desispec.desi_proc_dashboard import get_skipped_expids
+from desispec.workflow.proc_dashboard_funcs import get_skipped_expids
 
 from desispec.workflow.timing import during_operating_hours
 from desispec.workflow.utils import check_running
