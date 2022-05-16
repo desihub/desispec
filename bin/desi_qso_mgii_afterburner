@@ -192,15 +192,12 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
     # Save file in temporary file to track when timeout error appears during the writing
     tmpfile = get_tempfilename(filename)
-    fits = fitsio.FITS(tmpfile, 'rw', clobber=clobber)
+    fits = fitsio.FITS(tmpfile, 'rw')
     fits.write(data, extname='MGII')
-    if clobber:
-        log.info(f'OVERWRITE the file : {filename}')
-    else:
-        log.info(f'EXPAND the file : {filename}')
+    log.info(f'write output in: {filename}')
     fits.close()
 
-    # Rename temporary file to the
+    # Rename temporary file to output file, overwrite existing file.
     os.rename(tmpfile, filename)
     log.info(f'rename {tmpfile} to {filename}')
 
@@ -285,12 +282,12 @@ if __name__ == "__main__":
                          f"Selected with mgii: {QSO_from_MGII['IS_QSO_MGII'].sum()}")
                 save_dataframe_to_fits(QSO_from_MGII, args.output, DESI_TARGET)
             else:
-                file = open(os.path.splitext(args.output)[0] + '.notargets', "w")
+                file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by MgII afterburner to be a QSO.")
                 file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
                 file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
                 file.close()
-                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
+                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
 
     else:  # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")

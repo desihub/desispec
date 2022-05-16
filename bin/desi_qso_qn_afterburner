@@ -35,7 +35,13 @@ qso_template_filename = [path for path in find_templates() if os.path.basename(p
 try:  # check if the env variable QN_MODEL_FILE is defined, otherwise load boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5
     model_QN_path = os.environ['QN_MODEL_FILE']
 except KeyError:
-    model_QN_path = "/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5"
+    log.warning("$QN_MODEL_FILE is not set in the current environment. Default path will be used: $DESI_ROOT/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
+    try:
+        DESI_ROOT = os.environ['DESI_ROOT']
+        model_QN_path = os.path.join(DESI_ROOT, "science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
+    except KeyError:  # if $DESI_ROOT is not set, exit the program.
+        log.error("$DESI_ROOT is not set in the current environment. Please set it before running this code.")
+        sys.exit()
 model_QN = load_model(model_QN_path)
 
 
@@ -343,15 +349,12 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
     # Save file in temporary file to track when timeout error appears during the writing
     tmpfile = get_tempfilename(filename)
-    fits = fitsio.FITS(tmpfile, 'rw', clobber=clobber)
+    fits = fitsio.FITS(tmpfile, 'rw')
     fits.write(data, extname='QN_RR')
-    if clobber:
-        log.info(f'OVERWRITE the file : {filename}')
-    else:
-        log.info(f'EXPAND the file : {filename}')
+    log.info(f'write output in: {filename}')
     fits.close()
 
-    # Rename temporary file to the
+    # Rename temporary file to output file, overwrite existing file.
     os.rename(tmpfile, filename)
     log.info(f'rename {tmpfile} to {filename}')
 
@@ -443,12 +446,12 @@ if __name__ == "__main__":
                          f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
                 save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
             else:
-                file = open(os.path.splitext(args.output)[0] + '.notargets', "w")
+                file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by QN afterburner to be a QSO.")
                 file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
                 file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
                 file.close()
-                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
+                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
 
     else:  # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
