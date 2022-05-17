@@ -313,7 +313,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             cur_z_submit_types = z_submit_types
-            if lasttype == 'science':
+            ## If running redshifts and there is a future exposure of the same tile
+            ## then only run per exposure redshifts until then
+            if lasttype == 'science' and z_submit_types is not None:
                 tile_exps = etable['EXPID'][((etable['TILEID'] == lasttile) &
                                              (etable['LASTSTEP'] == 'all'))]
                 unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
