@@ -376,7 +376,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         lasttype = curtype
 
         tableng = len(ptable)
-        if tableng > 0 and ii % 10 == 0 and dry_run_level < 3:
+        if tableng > 0 and ii % 1 == 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
 
         sleep_and_report(1, message_suffix=f"to slow down the queue submission rate",
