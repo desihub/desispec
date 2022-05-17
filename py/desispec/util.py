@@ -486,6 +486,12 @@ def combine_ivar(ivar1, ivar2):
 _matplotlib_backend = None
 
 def set_backend(backend='agg'):
+    """
+    Set matplotlib to use a batch-friendly backend
+
+    This function is safe to call multiple times without tripping on a
+    previously set backend (which remains set)
+    """
     global _matplotlib_backend
     if _matplotlib_backend is None:
         _matplotlib_backend = backend

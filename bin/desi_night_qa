@@ -8,6 +8,9 @@
 This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products, once all tile-qa*fits are done.
 """
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
 
 import os,sys
 import numpy as np
