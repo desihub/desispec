@@ -22,6 +22,10 @@ time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191
 import time, datetime
 start_imports = time.time()
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
+
 import sys, os, argparse, re
 import subprocess
 from copy import deepcopy

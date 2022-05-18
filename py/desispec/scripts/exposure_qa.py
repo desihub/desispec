@@ -8,6 +8,9 @@
 This script computes QA scores per exposure, after the cframe are done
 """
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
 
 import os,sys
 import argparse

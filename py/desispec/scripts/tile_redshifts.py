@@ -379,6 +379,9 @@ def write_redshift_script(batchscript, outdir,
 #SBATCH --exclusive
 {batch_opts}
 
+# batch-friendly matplotlib backend
+export MPLBACKEND=agg
+
 echo --- Starting at $(date)
 START_TIME=$SECONDS
 
