@@ -193,6 +193,8 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
         new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
 
+    return d_exp, expid_processing, unaccounted_for_expids
+
 def interpret_table_row_quantities(row, colnames, lasttile):
     expid = int(row['EXPID'])
 
