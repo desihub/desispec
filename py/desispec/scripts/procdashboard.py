@@ -218,7 +218,7 @@ def populate_night_info(night, check_on_disk=False,
             continue
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
         if night_json_info is not None and str(expid) in night_json_info \
-                and night_json_info[str(expid)][0] in ['GOOD', 'NULL']:
+                and night_json_info[str(expid)]["COLOR"] in ['GOOD', 'NULL']:
             output[str(expid)] = night_json_info[str(expid)]
             continue
 
