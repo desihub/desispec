@@ -330,7 +330,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         # former version with multiprocessing on many nodes
         # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
         #- new version using MPI on one node
-        ncores, runtime = ncameras, (6+2*nexps) #ncameras, 10
+        ncores, runtime = ncameras, (8+2*nexps) #ncameras, 10
     elif jobdesc == 'POSTSTDSTAR':
         ncores, runtime = ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
