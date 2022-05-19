@@ -86,7 +86,7 @@ def get_nights_dict(nights, start_night, end_night, prod_dir):
     if end_night is not None:
         nights = nights[np.where(int(end_night) >= nights.astype(int))[0]]
 
-    if nights is not None and nights.isnumeric() and len(
+    if nights is not None and str(nights[0]).isnumeric() and len(
             nights) >= int(nights):
         if end_night is None or start_night is not None:
             print(
