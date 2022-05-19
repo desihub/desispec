@@ -2,10 +2,23 @@
 desispec Change Log
 ===================
 
-0.53.1 (unreleased)
+0.53.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.53.1 (2022-05-19)
+-------------------
+
+* QSO afterburners use temporary file when writing (PR `#1768`_).
+* Fix ``desi_run_night`` crash with non-consecutive obs of same tile
+  (PR `#1771`_).
+* Set batch-friendly matplotlib backend (PR `#1772`_).
+* Increase stdstar job requested time by 2 min (direct push, no PR).
+
+.. _`#1768`: https://github.com/desihub/desispec/pull/1768
+.. _`#1771`: https://github.com/desihub/desispec/pull/1771
+.. _`#1772`: https://github.com/desihub/desispec/pull/1772
 
 0.53.0 (2022-05-15)
 -------------------
