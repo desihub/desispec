@@ -58,7 +58,7 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
     ## Ensure we have directories to output to
     if makedir:
         os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(os.path.join(output_dir, 'files'), exist_ok=True)
+        os.makedirs(os.path.join(output_dir, 'exp_jsons'), exist_ok=True)
 
     return output_dir, prod_dir
 
