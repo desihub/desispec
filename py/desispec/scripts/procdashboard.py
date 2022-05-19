@@ -114,8 +114,8 @@ def main(args=None):
         nightly_tables = {}
         for night in nights_in_month:
             ## Load previous info if any
-            filename_json = os.path.join(output_dir, 'files',
-                                         f'night_info_{os.environ["SPECPROD"]}'
+            filename_json = os.path.join(output_dir, 'exp_jsons',
+                                         f'exp_info_{os.environ["SPECPROD"]}'
                                          + f'_{night}.json')
             night_json_info = None
             if not args.ignore_json_archive:

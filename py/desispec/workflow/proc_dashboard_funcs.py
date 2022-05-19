@@ -565,7 +565,8 @@ def _initialize_page(color_profile, titlefill='Processing'):
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
-    html_page += '</head><body><h1>DESI '+os.environ["SPECPROD"]+f' prod {titlefill} Status Monitor</h1>\n'
+    html_page += f'</head><body><h1>DESI {os.environ["SPECPROD"]} Prod. '
+    html_page += f'{titlefill} Status Monitor</h1>\n'
 
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     # running='No'
