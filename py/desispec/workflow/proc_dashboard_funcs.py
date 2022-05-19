@@ -60,7 +60,7 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(os.path.join(output_dir, 'files'), exist_ok=True)
 
-    return output_dir
+    return output_dir, prod_dir
 
 def get_nights_dict(nights, start_night, end_night, prod_dir):
     if nights is None or nights == 'all' or ',' not in nights:

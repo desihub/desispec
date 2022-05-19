@@ -91,8 +91,8 @@ def main(args=None):
         args = parse(args)
 
     args.show_null = True
-    output_dir = get_output_dir(args.redux_dir, args.specprod,
-                                args.output_dir, makedir=True)
+    output_dir, prod_dir = get_output_dir(args.redux_dir, args.specprod,
+                                          args.output_dir, makedir=True)
 
     ############
     ## Input ###
@@ -104,9 +104,9 @@ def main(args=None):
         skipd_expids = None
 
     nights_dict, nights = get_nights_dict(args.nights, args.start_night,
-                                          args.end_night, args.prod_dir)
+                                          args.end_night, prod_dir)
 
-    print(f'Searching {args.prod_dir} for: {nights}')
+    print(f'Searching {prod_dir} for: {nights}')
 
     monthly_tables = {}
     for month, nights_in_month in nights_dict.items():
