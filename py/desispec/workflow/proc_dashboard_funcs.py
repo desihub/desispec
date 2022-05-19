@@ -62,8 +62,9 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
 
     return output_dir, prod_dir
 
-def get_nights_dict(nights, start_night, end_night, prod_dir):
-    if nights is None or nights == 'all' or ',' not in nights:
+def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
+    if nights_arg is None or nights_arg == 'all' \
+            or (',' not in nights_arg and int(nights_arg) < 20000000):
         nights = list()
         for n in listdir(
                 os.path.join(prod_dir, 'run', 'scripts', 'night')):
@@ -71,7 +72,7 @@ def get_nights_dict(nights, start_night, end_night, prod_dir):
             if re.match('^20\d{6}$', n):
                 nights.append(n)
     else:
-        nights = [nigh.strip(' \t') for nigh in nights.split(',')]
+        nights = [nigh.strip(' \t') for nigh in nights_arg.split(',')]
 
     # tonight=what_night_is_it()   # Disabled per Anthony's request
     # if str(tonight) not in nights:
@@ -86,14 +87,13 @@ def get_nights_dict(nights, start_night, end_night, prod_dir):
     if end_night is not None:
         nights = nights[np.where(int(end_night) >= nights.astype(int))[0]]
 
-    if nights is not None and str(nights[0]).isnumeric() and len(
-            nights) >= int(nights):
+    if nights_arg is not None and nights_arg.isnumeric() and len(
+            nights) >= int(nights_arg):
         if end_night is None or start_night is not None:
-            print(
-                "Only showing the most recent {} days".format(int(nights)))
-            nights = nights[:int(nights)]
+            print(f"Only showing the most recent {int(nights_arg)} days")
+            nights = nights[:int(nights_arg)]
         else:
-            nights = nights[-1 * int(nights):]
+            nights = nights[-1 * int(nights_arg):]
 
     nights_dict = dict()
     for night in nights:
