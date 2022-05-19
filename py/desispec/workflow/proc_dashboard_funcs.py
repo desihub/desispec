@@ -27,6 +27,7 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
 
     if 'SPECPROD' not in os.environ.keys() and specprod is None:
         os.environ['SPECPROD'] = 'daily'
+        specprod = os.environ['SPECPROD']
     elif specprod is None:
         specprod = os.environ["SPECPROD"]
     else:
@@ -36,14 +37,21 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
         if 'DESI_SPECTRO_REDUX' not in os.environ.keys():  # these are not set by default in cronjob mode.
             os.environ['DESI_SPECTRO_REDUX'] = \
                 '/global/cfs/cdirs/desi/spectro/redux/'
+            desi_spectro_redux = os.environ['DESI_SPECTRO_REDUX']
     else:
         os.environ['DESI_SPECTRO_REDUX'] = desi_spectro_redux
 
+    ## Verify the production directory exists
+    prod_dir = os.path.join(desi_spectro_redux, specprod)
+    if not os.path.exists(prod_dir):
+        raise ValueError(
+            f"Path {prod_dir} doesn't exist for production directory.")
+
+    ## Define output_dir if not defined
     if output_dir is None:
         if 'DESI_DASHBOARD' not in os.environ.keys():
-            os.environ['DESI_DASHBOARD'] = os.path.join(
-                os.environ["DESI_SPECTRO_REDUX"], os.environ["SPECPROD"],
-                "dashboard")
+            os.environ['DESI_DASHBOARD'] = os.path.join(prod_dir,
+                                                        'run', 'dashboard')
         output_dir = os.environ["DESI_DASHBOARD"]
     else:
         os.environ['DESI_DASHBOARD'] = output_dir

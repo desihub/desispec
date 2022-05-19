@@ -38,7 +38,7 @@ def parse(options):
     # File I/O
     parser.add_argument('--redux-dir', type=str,
                         help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
-    parser.add_argument('--output-dir', type=str,
+    parser.add_argument('--output-dir', type=str, default=None,
                         help="output portal directory for the html pages, which defaults to your home directory ")
     parser.add_argument('--output-name', type=str, default='dashboard.html',
                         help="name of the html page (to be placed in --output-dir).")
@@ -93,12 +93,6 @@ def main(args=None):
     args.show_null = True
     output_dir = get_output_dir(args.redux_dir, args.specprod,
                                 args.output_dir, makedir=True)
-
-    ## Verify the production directory exists
-    args.prod_dir = os.path.join(args.redux_dir, args.specprod)
-    if not os.path.exists(args.prod_dir):
-        raise ValueError(
-            f"Path {args.prod_dir} doesn't exist for production directory.")
 
     ############
     ## Input ###
