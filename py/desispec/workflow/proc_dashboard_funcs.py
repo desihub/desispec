@@ -276,6 +276,7 @@ def get_terminal_steps(expected_by_type):
             if expected[key] > 0:
                 terminal_steps[obstype] = key
                 break
+    return terminal_steps
 
 def get_file_list(filename, doaction=True):
     if doaction and filename is not None and os.path.exists(filename):
