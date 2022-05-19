@@ -419,17 +419,17 @@ def populate_night_info(night, check_on_disk=False,
         rd["LAST STEP"] = laststep
         rd["EXP TIME"] = str(exptime)
         rd["PROC CAMWORD"] = proccamword
-        rd["PSF File"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
-        rd["FRAME FILE"] = _str_frac(nfiles['frame'],
+        rd["PSF'"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
+        rd["FRAME'"] = _str_frac(nfiles['frame'],
                                         ncams * expected['frame'])
-        rd["FFLAT FILE"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
-        rd["SFRAME FILE"] = _str_frac(nfiles['sframe'],
+        rd["FFLAT"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
+        rd["SFRAME"] = _str_frac(nfiles['sframe'],
                                         ncams * expected['sframe'])
-        rd["SKY FILE"] = _str_frac(nfiles['sky'],
+        rd["SKYs"] = _str_frac(nfiles['sky'],
                                         ncams * expected['sframe'])
-        rd["STD FILE"] = _str_frac(nfiles['std'],
+        rd["STD"] = _str_frac(nfiles['std'],
                                         nspecs * expected['std'])
-        rd["CFRAME FILE"] = _str_frac(nfiles['cframe'],
+        rd["CFRAME"] = _str_frac(nfiles['cframe'],
                                         ncams * expected['cframe'])
         rd["SLURM FILE"] = slurm_hlink
         rd["LOG FILE"] = log_hlink
