@@ -16,7 +16,8 @@ from desispec.workflow.exptable import get_exposure_table_pathname, \
     get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_expids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
-    get_output_dir, get_nights_dict, make_html_page, read_json, write_json
+    get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
+    get_terminal_steps, get_tables, interpret_table_row_quantities
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
@@ -166,122 +167,31 @@ def populate_night_info(night, check_on_disk=False,
     ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
     ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
-    expected_by_type['arc'] = {'psf': 1, 'frame': 0, 'ff': 0, 'sframe': 0,
-                               'std': 0, 'cframe': 0}
-    expected_by_type['cteflat'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0,
-                                   'std': 0, 'cframe': 0}
-    expected_by_type['flat'] = {'psf': 1, 'frame': 1, 'ff': 1, 'sframe': 0,
-                                'std': 0, 'cframe': 0}
-    expected_by_type['science'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 1,
-                                   'std': 1, 'cframe': 1}
-    expected_by_type['twilight'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0,
-                                    'std': 0, 'cframe': 0}
-    expected_by_type['zero'] = {'psf': 0, 'frame': 0, 'ff': 0, 'sframe': 0,
-                                'std': 0, 'cframe': 0}
+    expected_by_type['arc'] =      {'psf': 1,    'frame': 0, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['cteflat'] =  {'psf': 1,    'frame': 1, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['flat'] =     {'psf': 1,    'frame': 1, 'ff': 1,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['science'] =  {'psf': 1,    'frame': 1, 'ff': 0,
+                                    'sframe': 1, 'std': 1,   'cframe': 1}
+    expected_by_type['twilight'] = {'psf': 1,    'frame': 1, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['dark'] = expected_by_type['zero']
     expected_by_type['sky'] = expected_by_type['science']
     expected_by_type['null'] = expected_by_type['zero']
 
     ## Determine the last filetype that is expected for each obstype
-    terminal_steps = dict()
-    for obstype, expected in expected_by_type.items():
-        terminal_steps[obstype] = None
-        keys = list(expected.keys())
-        for key in reversed(keys):
-            if expected[key] > 0:
-                terminal_steps[obstype] = key
-                break
-
-    file_exptable = get_exposure_table_pathname(night)
-    file_processing = get_processing_table_pathname(specprod=None,
-                                                    prodmod=night)
-    # procpath,procname = os.path.split(file_processing)
-    # file_unprocessed = os.path.join(procpath,procname.replace('processing','unprocessed'))
+    terminal_steps = get_terminal_steps(expected_by_type)
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'FA_SURV', 'FAPRGRM', 'CAMWORD', 'BADCAMWORD',
-                       'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS',
-                       'LASTSTEP']
-
-    edefs = get_exposure_table_column_defaults(asdict=True)
-    for col in exptab_colnames:
-        if col not in edefs.keys():
-            ValueError(f"requested dashboard exposure table column {col} not" +
-                       f" in the exposure table columns: {edefs.keys()}.")
-
-    try:  # Try reading tables first. Switch to counting files if failed.
-        d_exp = load_table(file_exptable, tabletype='exptable')
-        for col in exptab_colnames:
-            if col not in d_exp.colnames:
-                d_exp[col] = edefs[col]
-
-        if 'LASTSTEP' in d_exp.colnames:
-            d_exp = d_exp[exptab_colnames]
-        else:
-            d_exp = d_exp[exptab_colnames[:-1]]
-            d_exp['LASTSTEP'] = 'all'
-    except:
-        print(
-            f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
-        etypes = get_exposure_table_column_types(asdict=True)
-        exptab_dtypes = [etypes[col] for col in exptab_colnames]
-        d_exp = Table(names=exptab_colnames, dtype=exptab_dtypes)
-        check_on_disk = True
-
-    unaccounted_for_expids = []
-    if check_on_disk:
-        rawdatatemplate = os.path.join(rawdata_root(), night, '{zexpid}',
-                                       'desi-{zexpid}.fits.fz')
-        rawdata_fileglob = rawdatatemplate.format(zexpid='*')
-        known_exposures = set(list(d_exp['EXPID']))
-        newexpids = list(find_new_exps(rawdata_fileglob, known_exposures))
-        newexpids.sort(reverse=True)
-        default_obstypes = default_obstypes_for_exptable()
-        for expid in newexpids:
-            zfild_expid = str(expid).zfill(8)
-            filename = rawdatatemplate.format(zexpid=zfild_expid)
-            h1 = fits.getheader(filename, 1)
-            header_info = {keyword: 'unknown' for keyword in
-                           ['SPCGRPHS', 'EXPTIME',
-                            'FA_SURV', 'FAPRGRM'
-                                       'OBSTYPE', 'TILEID']}
-            for keyword in header_info.keys():
-                if keyword in h1.keys():
-                    header_info[keyword] = h1[keyword]
-
-            if header_info['OBSTYPE'] in default_obstypes:
-                header_info['EXPID'] = expid
-                header_info['LASTSTEP'] = 'all'
-                header_info['COMMENTS'] = []
-                if header_info['SPCGRPHS'] != 'unknown':
-                    header_info['CAMWORD'] = 'a' + str(
-                        header_info['SPCGRPHS']).replace(' ', '').replace(',',
-                                                                          '')
-                else:
-                    header_info['CAMWORD'] = header_info['SPCGRPHS']
-                header_info.pop('SPCGRPHS')
-                d_exp.add_row(header_info)
-                unaccounted_for_expids.append(expid)
-
-    preproc_glob = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                                os.environ['SPECPROD'],
-                                'preproc', str(night), '[0-9]*[0-9]')
-    expid_processing = set(
-        [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
-
-    try:
-        d_processing = load_table(file_processing, tabletype='proctable')
-    except:
-        d_processing = None
-        print('WARNING: Error reading proctable. Only exposures in preproc'
-              + ' directory will be marked as processing.')
-
-    if d_processing is not None and len(d_processing) > 0:
-        new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
-        expid_processing.update(new_proc_expids)
+    d_exp, expid_processing, unaccounted_for_expids = \
+                                      get_tables(night, exptab_colnames=None)
 
     logfiletemplate = os.path.join(logpath,
                                    '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
@@ -295,9 +205,7 @@ def populate_night_info(night, check_on_disk=False,
             cam = ''
         else:
             cam = '[brz]'
-        if ftype == 'fit-psf':
-            ext = 'fits*'
-        elif ftype == 'badcolumns':
+        if ftype == 'badcolumns':
             ext = 'csv'
         elif ftype == 'biasnight':
             ext = 'fits.gz'
@@ -337,10 +245,6 @@ def populate_night_info(night, check_on_disk=False,
             tileid_str = '----'
 
         exptime = np.round(row['EXPTIME'], decimals=1)
-        # if expid in proccamwords_by_expid.keys():
-        #     proccamword = proccamwords_by_expid[expid]
-        # else:
-        #     proccamword = row['CAMWORD']
         proccamword = row['CAMWORD']
         if 'BADCAMWORD' in d_exp.colnames:
             proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
@@ -351,6 +255,10 @@ def populate_night_info(night, check_on_disk=False,
                 badcams.append(f'{camera}{petal}')
             badampcamword = create_camword(list(set(badcams)))
             proccamword = difference_camwords(proccamword, badampcamword)
+
+        cameras = decode_camword(proccamword)
+        nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
+        ncams = len(cameras)
 
         laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
@@ -380,6 +288,7 @@ def populate_night_info(night, check_on_disk=False,
         derived_obstype = obstype
         if obstype == 'flat' and exptime < 2.0:
             derived_obstype = 'cteflat'
+
         if derived_obstype in expected_by_type.keys():
             expected = expected_by_type[derived_obstype].copy()
             terminal_step = terminal_steps[derived_obstype]
@@ -403,10 +312,6 @@ def populate_night_info(night, check_on_disk=False,
         elif laststep != 'all' and obstype != 'science':
             print(
                 f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
-
-        cameras = decode_camword(proccamword)
-        nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
-        ncams = len(cameras)
 
         nfiles = dict()
         if obstype == 'arc':
