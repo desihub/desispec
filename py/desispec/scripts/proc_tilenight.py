@@ -21,9 +21,12 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
+import desispec.scripts.proc as proc
+import desispec.scripts.proc_joint_fit as proc_joint_fit
+
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tnight_parser, update_args_with_headers, \
     find_most_recent
-from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_tnight_batch_script, launch_desi_proc
+from desispec.workflow.desi_proc_funcs import determine_resources
 
 stop_imports = time.time()
 
@@ -43,22 +46,13 @@ def main(args=None, comm=None):
     log = get_logger()
     error_count = 0
 
-    #-------------------------------------------------------------------------
-    #- Create and submit a batch job if requested
-
-    if args.batch:
-        # create_desi_proc_tnight_batch_script not implemented yet
-        scriptfile = create_desi_proc_tnight_batch_script(night=args.night, tileid=args.tileid,
-                                                          cameras=args.cameras,
-                                                          jobdesc=jobdesc, queue=args.queue,
-                                                          runtime=args.runtime,
-                                                          batch_opts=args.batch_opts,
-                                                          timingfile=args.timingfile,
-                                                          system_name=args.system_name)
-        err = 0
-        if not args.nosubmit:
-            err = subprocess.call(['sbatch', scriptfile])
-        sys.exit(err)
+    if comm is not None:
+        #- Use the provided comm to determine rank and size
+        rank = comm.rank
+        size = comm.size
+    else:
+        #- Check MPI flags and determine the comm, rank, and size given the arguments
+        comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
 
     #- What are we going to do?
     if rank == 0:
@@ -72,23 +66,34 @@ def main(args=None, comm=None):
     #-------------------------------------------------------------------------
     #- Proceeding with running
     
+    #- common arguments
+    common_args = f'--traceshift --night {night} --cameras {cameras}'
+
+    #- get expids (wip)
+
     #- run desiproc prestdstar over exps
     for expid in expids:
-        launch_desi_proc(
-            comm, proc, 'prestdstar', args.night, [expid], args.cameras,
-            gpuspecter=args.gpuspecter, gpuextract=args.gpuextract
-        )
+        prestdstar_args = common_args
+        prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expids[0]}'
+        if args.gpu_specter:
+            prestdstar_args += '--gpu_specter'
+        if args.gpuextract:
+            prestdstar_args += '--gpuextract'
+        prestdstar_args = proc.parse(prestdstar_args)
+        err = proc.main(prestdstar_args,comm)
+
     #- run joint stdstar fit using all exp for this night-tile
-    launch_desi_proc(
-        comm, proc_joint_fit, 'stdstarfit', args.night, expids, camword,
-        timingsuffix=self.timingsuffix, gpuextract=self.gpuextract
-    )
+    stdstar_args  = common_args
+    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, expids))}'
+    stdstar_args = proc_joint_fit.parse(stdstar_args)
+    err = proc_joint_fit.main(stdstar_args, comm)
+
     #- run desiproc poststdstar over exps
     for expid in expids:
-        launch_desi_proc(
-            comm, proc, 'poststdstar', night, [expid], camword,
-            dryrun=args.dry_run, gpuextract=False
-        )
+        poststdstar_args  = common_args
+        poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expids[0]}'
+        poststdstar_args = proc.parse(poststdstar_args)
+        err = proc.main(poststdstar_args, comm)
 
     #-------------------------------------------------------------------------
     #- Collect error count
