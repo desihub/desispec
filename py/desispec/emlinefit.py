@@ -8,16 +8,17 @@ Routines for desi_emlinefit_afterburner.
 
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.special import erf
 from desiutil.log import get_logger
 
-allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
+allowed_emnames = ["LYA", "OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
 
 
 def get_rf_em_waves(emname):
     """
     Returns the rest-frame, vacuum, wavelengths.
     Args:
-        emname, from: "OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA" (string)
+        emname, from: "LYA", "OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA" (string)
 
     Returns:
         rf_em_waves: rest-frame wavelength(s) (np array)
@@ -26,6 +27,8 @@ def get_rf_em_waves(emname):
         For OII and OIII returns a two-elements array; one-element array otherwise.
         https://github.com/desihub/fastspecfit/blob/60393296e0cc466858f70a5d021d02693eff9375/py/fastspecfit/data/emlines.ecsv
     """
+    if emname == "LYA":
+        rf_em_waves = np.array([1215.67])
     if emname == "OII":
         rf_em_waves = np.array([3727.092, 3729.874])
     if emname == "OIII":
@@ -53,19 +56,24 @@ def emlines_gaussfit(
     p0_sigma=2.5,
     p0_flux=10,
     p0_share=0.58,
+    p0_skew=1.00,
     min_sigma=1e-5,
     max_sigma=10.,
+    # max_sigma=20.,
     min_flux=-1e9,
     max_flux=1e9,
     min_share=1e-1,
     max_share=1,
+    min_skew=0.1,
+    max_skew=4.,
+    # max_skew=20.,
     log=None,
 ):
     """
     Fits the [OII] doublet line profile with 2 related Gaussians.
 
     Args:
-        emname: "OII" or "OIII" or "HALPHA", "HBETA", "HGAMMA", "HDELTA" (string)
+        emname: "OII" or "OIII" or "LYA", "HALPHA", "HBETA", "HGAMMA", "HDELTA" (string)
         zspec: redshift (float)
         waves: wavelength in Angstroms (numpy array)
         fluxes: flux observed in the broad band (in erg/s/cm2/A) (numpy array)
@@ -76,12 +84,15 @@ def emlines_gaussfit(
         p0_sigma (optional, defaults to 2.5): initial guess on the line width in A (float)
         p0_flux (optional, defaults to 0.1): initial guess on the line flux in 1e-17 * erg/cm2/s/A (float)
         p0_share (optional, defaults to 0.58): initial guess on the share between the two [OII] lines (float)
+        p0_skew (optional, defaults to 1.00): initial guess on the skew for the Lya fit (float)
         min_sigma (optional, defaults to 1e-5): minimum allowed value for the line width in A (float)
         max_sigma (optional, defaults to 10.): maximum allowed value for the line width in A (float)
         min_flux (optional, defaults to 1e-5): minimum allowed value for the flux in e-17 * erg/cm2/s/A (float)
         max_flux (optional, defaults to 1e9): maximum allowed value for the flux in e-17 * erg/cm2/s/A (float)
         min_share (optional, defaults to 1e-1): minimum allowed value for the share (float)
         max_share (optional, defaults to 1): maximum allowed value for the share (float)
+        min_skew (optional, defaults to 0.1): minimum allowed value for the skew (float)
+        max_skew (optional, defaults to 4): maximum allowed value for the skew (float)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
@@ -93,6 +104,7 @@ def emlines_gaussfit(
                 SIGMA, SIGMA_IVAR: line width in A (observed frame)
                 SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
                 EW, EW_IVAR: rest-frame equivalent width
+                SKEW, SKEW_IVAR: skew for the Lya
                 waves: wavelength values (in A) used for the fitting (numpy array of floats)
                 fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
                 ivars: ivar values used for the fitting (numpy array of floats)
@@ -118,8 +130,13 @@ def emlines_gaussfit(
         raise ValueError(msg)
     # AR Line models
     gauss_nocont = lambda ws, sigma, F0, w0: F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
+    # AR skewed Gaussian
+    skew_gauss_nocont = lambda ws, sigma, F0, w0, skewval: gauss_nocont(ws, sigma, F0, w0) * (1. + erf((ws - w0) / skewval))
     # AR vacuum rest-frame wavelength(s)
     rf_em_waves = get_rf_em_waves(emname)
+    if emname == "LYA":
+        cont_choice = "right"
+        min_n_lines = 1
     if emname == "OII":
         cont_choice = "left"
         min_n_lines = 2
@@ -142,6 +159,7 @@ def emlines_gaussfit(
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
         "EW", "EW_IVAR",
+        "SKEW", "SKEW_IVAR",
         "CHI2", "NDOF",
     ]
     for key in keys:
@@ -207,11 +225,18 @@ def emlines_gaussfit(
             myfunc = lambda ws, sigma, F0: emdict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0])
             p0 = np.array([p0_sigma, p0_flux])
             bounds = ((min_sigma, min_flux), (max_sigma, max_flux))
+        # AR Lya line
+        # AR fitting a skewed Gaussian
+        if emname in ["LYA"]:
+            myfunc = lambda ws, sigma, F0, skewval: emdict["CONT"] + skew_gauss_nocont(ws, sigma, F0, obs_em_waves[0], skewval) 
+            p0 = np.array([p0_sigma, p0_flux, p0_skew])
+            bounds = ((min_sigma, min_flux, min_skew), (max_sigma, max_flux, max_skew))
         # AR flux at observed wavelength(s)
         obs_em_fluxes = np.array([fluxes[np.searchsorted(waves, obs_em_wave)] for obs_em_wave in obs_em_waves])
         # AR is the flux above continuum for at least one line?
         # SB don't require positive flux before attempting fit
         if True or obs_em_fluxes.max() > emdict["CONT"]:
+            print(emname)
             # AR maxfev and gtol set by JC; seems to work; not touching those...
             popt, pcov = curve_fit(
                 myfunc,
@@ -243,6 +268,10 @@ def emlines_gaussfit(
                         emdict["SHARE_IVAR"] = np.inf
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
                         models = myfunc(waves[keep_line], popt[0], popt[1])
+                    if emname in ["LYA"]:
+                        models = myfunc(waves[keep_line], popt[0], popt[1], popt[2])
+                        emdict["SKEW"] = popt[2]
+                        emdict["SKEW_IVAR"] = diag[2] ** -1
                     emdict["NDOF"] = keep_line.sum() - len(p0)
                     emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
                     emdict["CHI2"] /= emdict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
@@ -296,6 +325,7 @@ def get_emlines(
             SIGMA, SIGMA_IVAR: line width in A (observed frame)
             SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
             EW, EW_IVAR: rest-frame equivalent width
+            SKEW, SKEW_IVAR: skew for the Lya
             waves, fluxes, ivars, models: data used for fitting + fitted model
     """
     # AR log
@@ -325,6 +355,7 @@ def get_emlines(
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
         "EW", "EW_IVAR",
+        "SKEW", "SKEW_IVAR",
         "CHI2", "NDOF",
         "waves", "fluxes", "ivars", "models",
     ]
