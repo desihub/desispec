@@ -25,11 +25,10 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
     if 'DESI_SPECTRO_DATA' not in os.environ.keys():
         os.environ['DESI_SPECTRO_DATA'] = '/global/cfs/cdirs/desi/spectro/data/'
 
-    if 'SPECPROD' not in os.environ.keys() and specprod is None:
-        os.environ['SPECPROD'] = 'daily'
+    if specprod is None:
+        if 'SPECPROD' not in os.environ.keys():
+            os.environ['SPECPROD'] = 'daily'
         specprod = os.environ['SPECPROD']
-    elif specprod is None:
-        specprod = os.environ["SPECPROD"]
     else:
         os.environ['SPECPROD'] = specprod
 
@@ -37,7 +36,7 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
         if 'DESI_SPECTRO_REDUX' not in os.environ.keys():  # these are not set by default in cronjob mode.
             os.environ['DESI_SPECTRO_REDUX'] = \
                 '/global/cfs/cdirs/desi/spectro/redux/'
-            desi_spectro_redux = os.environ['DESI_SPECTRO_REDUX']
+        desi_spectro_redux = os.environ['DESI_SPECTRO_REDUX']
     else:
         os.environ['DESI_SPECTRO_REDUX'] = desi_spectro_redux
 
