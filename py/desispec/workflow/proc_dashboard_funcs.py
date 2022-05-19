@@ -350,7 +350,7 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
         print(
             "Month: {}, nights: {}".format(month, list(nightly_tables.keys())))
         nightly_table_htmls = []
-        for night, night_info in nightly_tables:
+        for night, night_info in nightly_tables.items():
             ####################################
             ### Table for individual night ####
             ####################################
