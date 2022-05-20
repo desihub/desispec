@@ -82,7 +82,7 @@ def main(args=None, comm=None):
         log.info('Tile {} night {}'.format(args.tileid, args.night))
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
-        
+
     #- Determine expids and cameras for a tile night
     reduxdir = desispec.io.specprod_root()
     exptable_file = f'{reduxdir}/exposure_tables/{str(args.night)[0:6]}/exposure_table_{args.night}.csv'
@@ -111,9 +111,14 @@ def main(args=None, comm=None):
     #- gpu options
     gpu_args=''
     if args.gpuspecter:
-        gpu_args += ' --gpu_specter'
+        gpu_args += ' --gpuspecter'
     if args.gpuextract:
         gpu_args += ' --gpuextract'
+
+    #- mpi options
+    mpi_args=''
+    if args.mpistdstars and args.mpi:
+        mpi_args += ' --mpistdstars'
 
     #- run desiproc prestdstar over exps
     for expid in expids:
@@ -123,7 +128,7 @@ def main(args=None, comm=None):
         error_count += proc.main(prestdstar_args,comm)
 
     #- run joint stdstar fit using all exp for this tile night
-    stdstar_args  = common_args
+    stdstar_args  = common_args + mpi_args
     stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, expids))} --cameras {cameras_union}'
     stdstar_args = proc_joint_fit.parse(stdstar_args.split())
     error_count += proc_joint_fit.main(stdstar_args, comm)
