@@ -105,6 +105,14 @@ def get_desi_proc_joint_fit_parser():
     parser = add_desi_proc_joint_fit_terms(parser)
     return parser
 
+def get_desi_proc_tilenight_parser():
+    """
+    Create an argparser object for use with desi_proc_tilenight based on arguments from sys.argv
+    """
+    parser = get_shared_desi_proc_parser()
+    parser = add_desi_proc_tilenight_terms(parser)
+    return parser
+
 def get_shared_desi_proc_parser():
     """
     Create an argparser object for use with desi_proc AND desi_proc_joint_fit based on arguments from sys.argv
@@ -183,6 +191,14 @@ def add_desi_proc_joint_fit_terms(parser):
     #parser.add_argument("-n", "--nights", type=str, help="YEARMMDD nights")
     parser.add_argument("-e", "--expids", type=str, help="Exposure IDs")
     parser.add_argument("-i", "--inputs", type=str, help="input raw data files")
+
+    return parser
+
+def add_desi_proc_tilenight_terms(parser):
+    """
+    Add parameters to the argument parser that are only used by desi_proc_tilenight
+    """
+    parser.add_argument("-t", "--tileid", type=str, help="Exposure IDs")
 
     return parser
 
