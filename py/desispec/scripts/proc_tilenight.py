@@ -95,11 +95,24 @@ def main(args=None, comm=None):
     exptable = exptable[keep]
 
     expids = list(exptable['EXPID'])
+    prestdstar_expids = []
+    stdstar_expids = []
+    poststdstar_expids = []
     cameras = dict()
     for i in range(len(expids)):
-        cameras[expids[i]] = difference_camwords(
-          exptable.iloc[i]['CAMWORD'],exptable.iloc[i]['BADCAMWORD']
-        )
+        expid=expids[i]
+        camword=exptable.iloc[i]['CAMWORD']
+        badcamword=exptable.iloc[i]['BADCAMWORD']
+        if isinstance(badcamword, str):
+            cameras[expids[i]] = difference_camwords(camword, badcamword)
+        else:
+            cameras[expids[i]] = camword
+        laststep = exptable.iloc[i]['LASTSTEP']
+        if laststep == 'all' or laststep == 'skysub':
+            prestdstar_expids.append(expid)
+        if laststep == 'all':
+            stdstar_expids.append(expid)
+            poststdstar_expids.append(expid)
     cameras_union = camword_union(list(cameras.values()), full_spectros_only=True) 
 
     #-------------------------------------------------------------------------
@@ -121,24 +134,33 @@ def main(args=None, comm=None):
         mpi_args += ' --mpistdstars'
 
     #- run desiproc prestdstar over exps
-    for expid in expids:
+    for expid in prestdstar_expids:
         prestdstar_args = common_args + gpu_args
         prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {cameras[expid]}'
+        if rank==0:
+            log.info(f'running desi_proc {prestdstar_args}')
         prestdstar_args = proc.parse(prestdstar_args.split())
-        error_count += proc.main(prestdstar_args,comm)
+        if not args.dryrun:
+            args.error_count += proc.main(prestdstar_args,comm)
 
     #- run joint stdstar fit using all exp for this tile night
     stdstar_args  = common_args + mpi_args
-    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, expids))} --cameras {cameras_union}'
+    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, stdstar_expids))} --cameras {cameras_union}'
+    if rank==0:
+        log.info(f'running desi_proc_joint_fit {stdstar_args}')
     stdstar_args = proc_joint_fit.parse(stdstar_args.split())
-    error_count += proc_joint_fit.main(stdstar_args, comm)
+    if not args.dryrun:
+        error_count += proc_joint_fit.main(stdstar_args, comm)
 
     #- run desiproc poststdstar over exps
-    for expid in expids:
+    for expid in poststdstar_expids:
         poststdstar_args  = common_args
         poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {cameras[expid]}'
+        if rank==0:
+            log.info(f'running desi_proc {poststdstar_args}')
         poststdstar_args = proc.parse(poststdstar_args.split())
-        error_count += proc.main(poststdstar_args, comm)
+        if not args.dryrun:
+            error_count += proc.main(poststdstar_args, comm)
 
     #-------------------------------------------------------------------------
     #- Collect error count

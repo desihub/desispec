@@ -191,7 +191,6 @@ def add_desi_proc_joint_fit_terms(parser):
     #parser.add_argument("-n", "--nights", type=str, help="YEARMMDD nights")
     parser.add_argument("-e", "--expids", type=str, help="Exposure IDs")
     parser.add_argument("-i", "--inputs", type=str, help="input raw data files")
-
     return parser
 
 def add_desi_proc_tilenight_terms(parser):
@@ -199,6 +198,7 @@ def add_desi_proc_tilenight_terms(parser):
     Add parameters to the argument parser that are only used by desi_proc_tilenight
     """
     parser.add_argument("-t", "--tileid", type=str, help="Exposure IDs")
+    parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
 
     return parser
 
