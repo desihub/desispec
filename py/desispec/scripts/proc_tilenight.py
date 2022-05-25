@@ -1,56 +1,21 @@
 """
 Script for science processing of a given DESI tile and night
 """
-
-import time
-start_imports = time.time()
-
-import sys, os, argparse, re
-import subprocess
-from copy import deepcopy
-import json
-import pandas as pd
+import time, datetime
 import numpy as np
-import fitsio
-from astropy.io import fits
 
-from astropy.table import Table,vstack
-
-from desitarget.targetmask import desi_mask
-
+from os.path import dirname, abspath
 from desiutil.log import get_logger, DEBUG, INFO
-import desiutil.iers
 
-import desispec.io
+from desispec.io import specprod_root
+from desispec.workflow.tableio import load_table
 from desispec.io.util import decode_camword, create_camword, camword_union
+
 import desispec.scripts.proc as proc
 import desispec.scripts.proc_joint_fit as proc_joint_fit
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tilenight_parser, update_args_with_headers, \
-    find_most_recent
-from desispec.workflow.desi_proc_funcs import determine_resources
-
-stop_imports = time.time()
-
-#########################################
-# TEMPORARY CONVENIENCE FUNCTIONS
-
-def difference_camwords(fullcamword, badcamword):
-    '''Borrowed from desispec to remove noisy log message
-
-    See desispec.io.util.difference_camwords
-    '''
-    full_cameras = decode_camword(fullcamword)
-    bad_cameras = decode_camword(badcamword)
-    for cam in bad_cameras:
-        if cam in full_cameras:
-            full_cameras.remove(cam)
-        # else:
-        #     log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
-    return create_camword(full_cameras)
-
-# END TEMPORARY CONVENIENCE FUNCTIONS
-#########################################
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tilenight_parser
+from desispec.workflow.desi_proc_funcs import update_args_with_headers
 
 #########################################
 ######## Begin Body of the Code #########
@@ -66,6 +31,7 @@ def main(args=None, comm=None):
         args = parse()
 
     log = get_logger()
+    start_time = time.time()
     error_count = 0
 
     if comm is not None:
@@ -76,22 +42,27 @@ def main(args=None, comm=None):
         #- Check MPI flags and determine the comm, rank, and size given the arguments
         comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
 
+    if rank == 0:
+        thisfile=dirname(abspath(__file__))
+        thistime=datetime.datetime.fromtimestamp(start_time).isoformat()
+        log.info(f'Tilenight started main in {thisfile} at {thistime}')
+
     #- What are we going to do?
     if rank == 0:
         log.info('----------')
         log.info('Tile {} night {}'.format(args.tileid, args.night))
-        log.info('Output root {}'.format(desispec.io.specprod_root()))
+        log.info('Output root {}'.format(specprod_root()))
         log.info('----------')
 
     #- Determine expids and cameras for a tile night
-    reduxdir = desispec.io.specprod_root()
+    reduxdir = specprod_root()
     exptable_file = f'{reduxdir}/exposure_tables/{str(args.night)[0:6]}/exposure_table_{args.night}.csv'
     log.info(f'Reading exptable in {exptable_file}')
 
-    exptable = pd.read_csv(exptable_file)
+    exptable = load_table(exptable_file)
 
     keep  = exptable['OBSTYPE'] == 'science'
-    keep &= exptable['TILEID'].isin([int(args.tileid)])
+    keep &= exptable['TILEID']  == int(args.tileid)
     exptable = exptable[keep]
 
     expids = list(exptable['EXPID'])
@@ -101,13 +72,18 @@ def main(args=None, comm=None):
     cameras = dict()
     for i in range(len(expids)):
         expid=expids[i]
-        camword=exptable.iloc[i]['CAMWORD']
-        badcamword=exptable.iloc[i]['BADCAMWORD']
+        camword=exptable['CAMWORD'][i]
+        badcamword=exptable['BADCAMWORD'][i]
         if isinstance(badcamword, str):
-            cameras[expids[i]] = difference_camwords(camword, badcamword)
+            full_cameras = decode_camword(camword)
+            bad_cameras = decode_camword(badcamword)
+            for cam in bad_cameras:
+                if cam in full_cameras:
+                    full_cameras.remove(cam)
+            cameras[expids[i]] = create_camword(full_cameras)
         else:
             cameras[expids[i]] = camword
-        laststep = exptable.iloc[i]['LASTSTEP']
+        laststep = exptable['LASTSTEP'][i]
         if laststep == 'all' or laststep == 'skysub':
             prestdstar_expids.append(expid)
         if laststep == 'all':
@@ -141,7 +117,7 @@ def main(args=None, comm=None):
             log.info(f'running desi_proc {prestdstar_args}')
         prestdstar_args = proc.parse(prestdstar_args.split())
         if not args.dryrun:
-            args.error_count += proc.main(prestdstar_args,comm)
+            error_count += proc.main(prestdstar_args,comm)
 
     #- run joint stdstar fit using all exp for this tile night
     stdstar_args  = common_args + mpi_args
@@ -150,7 +126,7 @@ def main(args=None, comm=None):
         log.info(f'running desi_proc_joint_fit {stdstar_args}')
     stdstar_args = proc_joint_fit.parse(stdstar_args.split())
     if not args.dryrun:
-        error_count += proc_joint_fit.main(stdstar_args, comm)
+        error_count += proc_joint_fit.main(stdstar_args, comm)   
 
     #- run desiproc poststdstar over exps
     for expid in poststdstar_expids:
@@ -169,9 +145,16 @@ def main(args=None, comm=None):
         error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
 
     if rank == 0 and error_count > 0:
-        log.error(f'{error_count} processing errors; see logs above')
+        log.error(f'{error_count} processing errors in tilenight; see logs above')
 
     #-------------------------------------------------------------------------
     #- Done
+
+    if rank == 0:
+        duration_seconds = time.time() - start_time
+        mm = int(duration_seconds) // 60
+        ss = int(duration_seconds - mm*60)
+
+        log.info(f'Tilenight main in {thisfile} returned at {time.asctime()}; duration {mm}m{ss}s')
 
     return error_count

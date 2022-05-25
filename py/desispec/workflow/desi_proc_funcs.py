@@ -15,80 +15,6 @@ from desiutil.log import get_logger
 
 from . import batch
 
-def launch_desi_proc(comm, func, procstage, night, expids, cameras, dryrun=False, timingsuffix=None, gpuspecter=True, gpuextract=True):
-    '''A helper function for launching desi_proc/desi_proc_joint_fit for an observation.
-
-    Args:
-        comm (mpi4py.MPI.Comm): MPI communicator
-        func (function): desispec.scripts.proc or desispec.scripts.proc_joint_fit
-        procstage (str): ('prestdstar', 'stdstarfit', 'poststdstar')
-        night (str): YEARMMDD night
-        expids (list): list of exposure ids
-        cameras (str): camword
-        dryrun (bool): only print command string, do not call providied func
-        timingsuffix (str): suffix to append to timing file
-        gpuspecter (bool): use gpu_specter for extractions
-        gpuextract (bool): use gpu for extraction and std star fitting
-
-    Returns:
-        None
-    '''
-    #- common options
-    cmd = f'{func.__name__} --traceshift --night {night} --cameras {cameras}'
-    #- TODO: The user should probably just specify extract_size
-    if gpuspecter:
-        cluster_name = os.environ.get('SLURM_CLUSTER_NAME')
-        if gpuextract:
-            if cluster_name == 'escori':
-                #- CoriGPU
-                #- 2 per GPU + 2 for IO
-                extract_size = 10
-            elif cluster_name == 'perlmutter':
-                #- Perlmutter GPU
-                #- 5 per GPU + 2 for IO
-                extract_size = 22
-            else:
-                raise RuntimeError(f'Unexpected SLURM_CLUSTER_NAME value: {cluster_name}')
-        else:
-            #- cpu version of gpu specter
-            extract_size = 16
-    else:
-        #- specter expects 1 rank per bundle
-        extract_size = 20
-    #- desi proc stage options
-    procstage_opts = {
-        'prestdstar' : f' --nostdstarfit --nofluxcalib --expid {expids[0]} --extract-size {extract_size}',
-        'stdstarfit' : f' --obstype science --mpistdstars --expids {",".join(map(str, expids))}',
-        'poststdstar': f' --nostdstarfit --noprestdstarfit --expid {expids[0]}',
-    }
-    cmd += procstage_opts[procstage]
-
-    if procstage == 'prestdstar' and gpuspecter:
-        cmd += ' --gpuspecter'
-
-    #- overloaded for pre and stdstar fit
-    if gpuextract:
-        cmd += ' --gpuextract'
-
-    #- ensure GPU is disabled for stdstarfit if gpuextract is not True
-    if procstage == 'stdstarfit' and not gpuextract:
-        import desispec.fluxcalibration
-        desispec.fluxcalibration.use_gpu = False
-
-    timingfile = f'{procstage}-{night}-{expids[0]}-{cameras}-timing'
-    if timingsuffix is not None:
-        timingfile += f'-{timingsuffix}'
-    cmd += f' --timingfile {timingfile}.json'
-    #- parse command string through argument parser
-    cmdargs = cmd.split()[1:]
-    args = func.parse(cmdargs)
-    #- run command using provided MPI communicator
-    if comm.rank == 0:
-        log.info(f'{func.__name__} {night=} {expids=} {comm.size=}')
-        log.info(cmd)
-    if not dryrun:
-        func.main(args, comm)
-
 def get_desi_proc_parser():
     """
     Create an argparser object for use with desi_proc based on arguments from sys.argv
@@ -197,7 +123,7 @@ def add_desi_proc_tilenight_terms(parser):
     """
     Add parameters to the argument parser that are only used by desi_proc_tilenight
     """
-    parser.add_argument("-t", "--tileid", type=str, help="Exposure IDs")
+    parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
     parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
 
     return parser
