@@ -829,13 +829,13 @@ def plot_newlya(
     # AR based on main dark tiles (from daily) up to May 26th 2022
     def expect_newlyas(ntilecovs):
         return (
-            ntilecovs[:, 0] * 288 +
-            ntilecovs[:, 1] * 138 +
-            ntilecovs[:, 2] * 58 +
-            ntilecovs[:, 3] * 21 +
-            ntilecovs[:, 4] * 10 +
-            ntilecovs[:, 5] * 0 +
-            ntilecovs[:, 6] * 1
+            ntilecovs[:, 0] * 287.7 +
+            ntilecovs[:, 1] * 137.8 +
+            ntilecovs[:, 2] * 58.1 +
+            ntilecovs[:, 3] * 20.9 +
+            ntilecovs[:, 4] * 10.5 +
+            ntilecovs[:, 5] * 0.0 +
+            ntilecovs[:, 6] * 0.6
         )
     # AR approximate expected regions:
     # AR - based on main dark tiles (from daily) up to May 26th 2022
