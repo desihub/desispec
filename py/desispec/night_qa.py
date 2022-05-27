@@ -788,7 +788,7 @@ def plot_newlya(
     xlabel="Number of observed tiles",
     ylabel="(N_newlya_obs / N_newlya_expect) - 1",
     xlim=(0.5, 6.5),
-    ylim=(-1, 1),
+    ylim=(-2.5, 2.5),
     nvalifiber_norm=3900,
 ):
     """
@@ -804,7 +804,7 @@ def plot_newlya(
         xlabel (optional, defaults to "Number of observed tiles"): plot xlabel (str)
         ylabel (optional, defaults to "Number of newly identified LYA candidates"): plot ylabel(str)
         xlim (optional, defaults to (0.5, 6.5)): plot xlim (tuple)
-        ylim (optional, defaults to (-1, 1): plot ylim (tuple)
+        ylim (optional, defaults to (-2.5, 2.5): plot ylim (tuple)
         nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
 
     Notes:
@@ -1198,7 +1198,7 @@ def create_petalnz_pdf(
                 ax.grid()
                 # AR - newly identified Ly-a = f(ntilecov)
                 ax = plt.subplot(gs[3])
-                xlim, ylim = (0.5, 6.5), (-1, 1)
+                xlim, ylim = (0.5, 6.5), (-2.5, 2.5)
                 nvalifiber_norm = 3900
                 if "dark" in faprgrms:
                     faprgrm = "dark"
