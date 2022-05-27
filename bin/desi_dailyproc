@@ -16,7 +16,7 @@ from astropy.io import fits
 ### Helper Functions ###
 ########################
 from desispec.workflow.proc_dashboard_funcs import what_night_is_it, check_running,\
-                                         get_file_list, get_skipped_expids
+                                         get_file_list, get_skipped_ids
 
 def find_new_nightexp(night, fileglob, known_exposures):
     """
@@ -187,7 +187,7 @@ def main(args):
     #########################
     ### Setup for Running ###
     #########################
-    skipd_expids = get_skipped_expids(expid_filename,args.skip_expids)
+    skipd_expids = get_skipped_ids(expid_filename, args.skip_expids)
     skipd_expid_set = set(skipd_expids)
     
     #- First identify exposures that are already processed

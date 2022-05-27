@@ -14,7 +14,7 @@ from desispec.workflow.exptable import get_exposure_table_pathname, \
     default_obstypes_for_exptable, \
     get_exposure_table_column_types, \
     get_exposure_table_column_defaults
-from desispec.workflow.proc_dashboard_funcs import get_skipped_expids, \
+from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
     get_terminal_steps, get_tables, interpret_table_row_quantities
@@ -99,7 +99,7 @@ def main(args=None):
     ############
     if args.skip_expid_file is not None:
         skipd_expids = set(
-            get_skipped_expids(args.skip_expid_file, skip_expids=True))
+            get_skipped_ids(args.skip_expid_file, skip_ids=True))
     else:
         skipd_expids = None
 
@@ -115,7 +115,7 @@ def main(args=None):
         for night in nights_in_month:
             ## Load previous info if any
             filename_json = os.path.join(output_dir, 'exp_jsons',
-                                         f'exp_info_{os.environ["SPECPROD"]}'
+                                         f'expinfo_{os.environ["SPECPROD"]}'
                                          + f'_{night}.json')
             night_json_info = None
             if not args.ignore_json_archive:
@@ -184,8 +184,21 @@ def populate_night_info(night, check_on_disk=False,
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    d_exp, expid_processing, unaccounted_for_expids = \
-                                      get_tables(night, exptab_colnames=None)
+    exptab, proctab, \
+    unaccounted_for_expids,\
+    unaccounted_for_tileids = get_tables(night, check_on_disk=check_on_disk,
+                                                exptab_colnames=None)
+
+    preproc_glob = os.path.join(specproddir, 'preproc',
+                                str(night), '[0-9]*[0-9]')
+    expid_processing = set(
+        [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
+
+    if proctab is not None and len(proctab) > 0:
+        new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
+        expid_processing.update(new_proc_expids)
+
+    del proctab
 
     logfiletemplate = os.path.join(logpath,
                                    '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
@@ -210,9 +223,9 @@ def populate_night_info(night, check_on_disk=False,
         return len(glob.glob(fileglob))
 
     output = dict()
-    d_exp.sort('EXPID')
+    exptab.sort('EXPID')
     lasttile, first_exp_of_tile = None, None
-    for row in d_exp:
+    for row in exptab:
         expid = int(row['EXPID'])
         if expid in skipd_expids:
             continue
@@ -240,9 +253,9 @@ def populate_night_info(night, check_on_disk=False,
 
         exptime = np.round(row['EXPTIME'], decimals=1)
         proccamword = row['CAMWORD']
-        if 'BADCAMWORD' in d_exp.colnames:
+        if 'BADCAMWORD' in exptab.colnames:
             proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
-        if obstype != 'science' and 'BADAMPS' in d_exp.colnames and row[
+        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row[
             'BADAMPS'] != '':
             badcams = []
             for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):

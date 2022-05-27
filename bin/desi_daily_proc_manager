@@ -8,7 +8,7 @@ import os
 
 from desispec.scripts.daily_processing import daily_processing_manager
 from desispec.io.util import parse_cameras
-from desispec.workflow.proc_dashboard_funcs import get_skipped_expids
+from desispec.workflow.proc_dashboard_funcs import get_skipped_ids
 
 from desispec.workflow.timing import during_operating_hours
 from desispec.workflow.utils import check_running
@@ -144,7 +144,7 @@ if __name__ == '__main__':
         expids = [int(val) for val in args.ignore_expid_list.split(',')]
         exps_to_ignore.extend(expids)
     if args.ignore_expid_file is not None and os.path.isfile(args.ignore_expid_file):
-        expids = get_skipped_expids(args.ignore_expid_file)
+        expids = get_skipped_ids(args.ignore_expid_file)
         exps_to_ignore.extend(expids)
 
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,

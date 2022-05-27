@@ -127,12 +127,6 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
         for col in exptab_colnames:
             if col not in d_exp.colnames:
                 d_exp[col] = edefs[col]
-
-        if 'LASTSTEP' in d_exp.colnames:
-            d_exp = d_exp[exptab_colnames]
-        else:
-            d_exp = d_exp[exptab_colnames[:-1]]
-            d_exp['LASTSTEP'] = 'all'
     except:
         print(
             f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
@@ -141,7 +135,7 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
         d_exp = Table(names=exptab_colnames, dtype=exptab_dtypes)
         check_on_disk = True
 
-    unaccounted_for_expids = []
+    unaccounted_for_expids, unaccounted_for_tileids = [], []
     if check_on_disk:
         rawdatatemplate = os.path.join(rawdata_root(), night, '{zexpid}',
                                        'desi-{zexpid}.fits.fz')
@@ -167,20 +161,14 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
                 header_info['LASTSTEP'] = 'all'
                 header_info['COMMENTS'] = []
                 if header_info['SPCGRPHS'] != 'unknown':
-                    header_info['CAMWORD'] = 'a' + str(
-                        header_info['SPCGRPHS']).replace(' ', '').replace(',',
-                                                                          '')
+                    specs = str(header_info['SPCGRPHS']).replace(' ', '').replace(',', '')
+                    header_info['CAMWORD'] = f'a{specs}'
                 else:
                     header_info['CAMWORD'] = header_info['SPCGRPHS']
                 header_info.pop('SPCGRPHS')
                 d_exp.add_row(header_info)
                 unaccounted_for_expids.append(expid)
-
-    specproddir = specprod_root()
-    preproc_glob = os.path.join(specproddir, 'preproc',
-                                str(night), '[0-9]*[0-9]')
-    expid_processing = set(
-        [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
+                unaccounted_for_tileids.append(header_info['TILEID'])
 
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
@@ -189,11 +177,8 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
         print('WARNING: Error reading proctable. Only exposures in preproc'
               + ' directory will be marked as processing.')
 
-    if d_processing is not None and len(d_processing) > 0:
-        new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
-        expid_processing.update(new_proc_expids)
-
-    return d_exp, expid_processing, unaccounted_for_expids
+    return d_exp, d_processing, np.array(unaccounted_for_expids), \
+           np.unique(unaccounted_for_tileids)
 
 def interpret_table_row_quantities(row, colnames, lasttile):
     expid = int(row['EXPID'])
@@ -285,8 +270,8 @@ def get_file_list(filename, doaction=True):
         output = []
     return output
 
-def get_skipped_expids(expid_filename, skip_expids=True):
-    return get_file_list(filename=expid_filename, doaction=skip_expids)
+def get_skipped_ids(expid_filename, skip_ids=True):
+    return get_file_list(filename=expid_filename, doaction=skip_ids)
 
 def what_night_is_it():
     """
