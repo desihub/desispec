@@ -1050,10 +1050,10 @@ def create_petalnz_pdf(
                     if pix_ntilecovs is None:
                         _, pix_ntilecovs, _, _, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
                         d["NTILECOV"] = np.zeros(len(d) * n_dark_passids).reshape((len(d), n_dark_passids))
-                        for ntilecov in range(1, n_dark_passids):
-                            sel = pix_ntilecovs == ntilecov
+                        for ntilecov in range(n_dark_passids):
+                            sel = pix_ntilecovs == 1 + ntilecov
                             if sel.sum() > 0:
-                                d["NTILECOV"][:, ntilecov - 1] = sel.mean()
+                                d["NTILECOV"][:, ntilecov] = sel.mean()
                 # AR append
                 ds[faprgrm].append(d)
         if istileid:
