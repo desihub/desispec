@@ -8,6 +8,7 @@ from os.path import dirname, abspath
 from desiutil.log import get_logger, DEBUG, INFO
 
 from desispec.io import specprod_root
+from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.util import decode_camword, create_camword, camword_union
 
@@ -55,8 +56,7 @@ def main(args=None, comm=None):
         log.info('----------')
 
     #- Determine expids and cameras for a tile night
-    reduxdir = specprod_root()
-    exptable_file = f'{reduxdir}/exposure_tables/{str(args.night)[0:6]}/exposure_table_{args.night}.csv'
+    exptable_file = get_exposure_table_pathname(args.night)
     log.info(f'Reading exptable in {exptable_file}')
 
     exptable = load_table(exptable_file)
@@ -69,33 +69,35 @@ def main(args=None, comm=None):
     prestdstar_expids = []
     stdstar_expids = []
     poststdstar_expids = []
-    cameras = dict()
+    camwords = dict()
+    badamps = dict()
     for i in range(len(expids)):
         expid=expids[i]
         camword=exptable['CAMWORD'][i]
         badcamword=exptable['BADCAMWORD'][i]
+        badamps[expid] = exptable['BADAMPS'][i]
         if isinstance(badcamword, str):
             full_cameras = decode_camword(camword)
             bad_cameras = decode_camword(badcamword)
             for cam in bad_cameras:
                 if cam in full_cameras:
                     full_cameras.remove(cam)
-            cameras[expids[i]] = create_camword(full_cameras)
+            camwords[expids[i]] = create_camword(full_cameras)
         else:
-            cameras[expids[i]] = camword
+            camwords[expids[i]] = camword
         laststep = exptable['LASTSTEP'][i]
         if laststep == 'all' or laststep == 'skysub':
             prestdstar_expids.append(expid)
         if laststep == 'all':
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
-    cameras_union = camword_union(list(cameras.values()), full_spectros_only=True) 
+    joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
 
     #-------------------------------------------------------------------------
     #- Proceeding with running
     
     #- common arguments
-    common_args = f'--traceshift --night {args.night}'
+    common_args = f'--night {args.night}'
 
     #- gpu options
     gpu_args=''
@@ -112,7 +114,9 @@ def main(args=None, comm=None):
     #- run desiproc prestdstar over exps
     for expid in prestdstar_expids:
         prestdstar_args = common_args + gpu_args
-        prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {cameras[expid]}'
+        prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {camwords[expid]}'
+        if len(badamps[expid]) > 0:
+            prestdstar_args += f' --badamps {badamps[expid]}'
         if rank==0:
             log.info(f'running desi_proc {prestdstar_args}')
         prestdstar_args = proc.parse(prestdstar_args.split())
@@ -121,7 +125,7 @@ def main(args=None, comm=None):
 
     #- run joint stdstar fit using all exp for this tile night
     stdstar_args  = common_args + mpi_args
-    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, stdstar_expids))} --cameras {cameras_union}'
+    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
     if rank==0:
         log.info(f'running desi_proc_joint_fit {stdstar_args}')
     stdstar_args = proc_joint_fit.parse(stdstar_args.split())
@@ -131,7 +135,9 @@ def main(args=None, comm=None):
     #- run desiproc poststdstar over exps
     for expid in poststdstar_expids:
         poststdstar_args  = common_args
-        poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {cameras[expid]}'
+        poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {camwords[expid]}'
+        if len(badamps[expid]) > 0:
+            poststdstar_args += f' --badamps {badamps[expid]}'
         if rank==0:
             log.info(f'running desi_proc {poststdstar_args}')
         poststdstar_args = proc.parse(poststdstar_args.split())
