@@ -537,7 +537,7 @@ def parse_cameras(cameras, loglevel='INFO'):
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
 
-def difference_camwords(fullcamword,badcamword):
+def difference_camwords(fullcamword,badcamword,suppress_logging=False):
     """
     Returns the difference of two camwords. The second argument cameras are removed from the first argument and the
     remainer is returned. Smart enough to ignore bad cameras if they don't exist in full camword list.

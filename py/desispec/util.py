@@ -3,7 +3,7 @@ Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
 import argparse
-
+import inspect
 import os
 import sys
 import errno
@@ -146,7 +146,8 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
             success = (result == 0)
 
     except (BaseException, Exception) as e:
-        log.critical("FAILED rank {} exception".format(rank))
+        frame,filename,line_number,function_name,lines,index = inspect.stack()[1] 
+        log.critical(f'FAILED rank {rank} exception while running {cmdstr} called from line {line_number} in {filename}')
         result = e
         success = False
         if rank == 0:
