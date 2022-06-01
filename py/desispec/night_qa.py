@@ -786,57 +786,94 @@ def plot_newlya(
     tileids=None,
     title=None,
     xlabel="Number of observed tiles",
-    ylabel="Number of newly identified LYA candidates",
+    ylabel="(N_newlya_obs / N_newlya_expect) - 1",
     xlim=(0.5, 6.5),
-    ylim=(0, 400),
+    ylim=(-2.5, 2.5),
     nvalifiber_norm=3900,
 ):
     """
-    Plot the number of newly identified Ly-a vs. the tile observations coverage for a list of tiles.
+    Plot the ratio of the number of newly identified Ly-a to the expected number,
+        vs. the tile observations coverage for a list of tiles.
 
     Args:
         ax: pyplot Axes object
-        ntilecovs: list of average number of previously observed tiles (list or np.array() of floats)
-        nnewlyas: list of newly identified Ly-a (with a valid fiber) (list or np.array() of ints)
+        ntilecovs: average number of previously observed tiles for each number of pass (np.array(len(tiles), n_dark_passids))
+        nnewlyas: list of nb of newly identified Ly-a (with a valid fiber), normalized to nvalifiber_norm (list or np.array() of ints)
         tileids (optional, defaults to None): tileids (to report outliers) (list or np.array() of ints)
         title (optional, defaults to None): plot title (str)
         xlabel (optional, defaults to "Number of observed tiles"): plot xlabel (str)
         ylabel (optional, defaults to "Number of newly identified LYA candidates"): plot ylabel(str)
         xlim (optional, defaults to (0.5, 6.5)): plot xlim (tuple)
-        ylim (optional, defaults to (0, 400): plot ylim (tuple)
+        ylim (optional, defaults to (-2.5, 2.5): plot ylim (tuple)
         nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
+
+    Notes:
+        ntilecovs[:, 0] lists the fractions of the tiles covered by 1 tile, etc.
+        The plotted y-values are: (N_newlya_observed / N_newlya_expected) - 1.
+        The expected numbers are based on all main dark tiles (from daily) up to May 26th 2022.
+        The 1-2-3-sigma regions reflect the approximate scatter of those data.
     """
-    # AR approximate expected locations:
+    #
+    n_dark_passids = 7
+    if ntilecovs.shape[1] != n_dark_passids:
+        msg = "ntilecovs.shape[1] = {} is different than n_dark_passids = {}".format(
+            ntilecovs.shape[1], n_dark_passids,
+        )
+        log.error(msg)
+        raise ValueError(msg)
+    # AR overall mean number of pass coverage
+    mean_ntilecovs = np.zeros(len(nnewlyas))
+    for i in range(n_dark_passids):
+        mean_ntilecovs += (i + 1) * ntilecovs[:, i]
+    # AR expected number of newlya
+    # AR based on main dark tiles (from daily) up to May 26th 2022
+    def expect_newlyas(ntilecovs):
+        return (
+            ntilecovs[:, 0] * 287.7 +
+            ntilecovs[:, 1] * 137.8 +
+            ntilecovs[:, 2] * 58.1 +
+            ntilecovs[:, 3] * 20.9 +
+            ntilecovs[:, 4] * 10.5 +
+            ntilecovs[:, 5] * 0.0 +
+            ntilecovs[:, 6] * 0.6
+        )
+    # AR approximate expected regions:
+    # AR - based on main dark tiles (from daily) up to May 26th 2022
+    # AR - the ntilecov in expect_1sig() is the *average* pass coverage (i.e. mean_ntilecovs)
     # AR - blue, green, red: approximative 1-sigma, 2-sigma, 3-sigma
-    # AR - exponential curve set:
-    # AR   - using 2021 + Jan. 2022 dark tiles from the daily
-    # AR   - using nvalifiber_norm = 3900
-    # AR - sigma: using here Poisson (though not 100% correct, as there is some normalizations in there...)
-    myfunc = lambda nobs, n, alpha: n * np.exp( alpha * (nobs - 1.))
-    n, alpha = 295, -0.7
-    tmpxs = np.linspace(1, xlim[1], 1000)
-    tmpys = myfunc(tmpxs, n, alpha)
-    ax.plot(tmpxs, tmpys, color="k", zorder=0)
+    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on 
+    # AR    the parent qso density)
+    def expect_1sig(ntilecovs):
+        vals = np.exp( (ntilecovs - 7.5) / 2.35)
+        vals[(ntilecovs > 0.95) & (ntilecovs <= 1)] = 0.08
+        return vals
+    tmpxs = np.linspace(0.95, xlim[1], 1000)
+    tmpys = expect_1sig(tmpxs)
     for nsig, col in zip([1, 2, 3], ["b", "g", "r"]):
         if nsig == 1:
-            ax.fill_between(tmpxs, tmpys - np.sqrt(tmpys), tmpys + np.sqrt(tmpys), color=col, alpha=0.25)
+            ax.fill_between(tmpxs, -tmpys, tmpys, color=col, alpha=0.25)
         else:
-            ax.fill_between(tmpxs, tmpys - nsig * np.sqrt(tmpys), tmpys - (nsig-1) * np.sqrt(tmpys), color=col, alpha=0.25)
-            ax.fill_between(tmpxs, tmpys + (nsig - 1) * np.sqrt(tmpys), tmpys + nsig * np.sqrt(tmpys), color=col, alpha=0.25)
-    ax.text(0.975, 0.55, r"Blue  : approx. expected 1$\sigma$", color="b", ha="right", transform=ax.transAxes)
-    ax.text(0.975, 0.50, r"Green: approx. expected 2$\sigma$", color="g", ha="right", transform=ax.transAxes)
-    ax.text(0.975, 0.45, r"Red   : approx. expected 3$\sigma$", color="r", ha="right", transform=ax.transAxes)
+            ax.fill_between(tmpxs, -nsig * tmpys, -(nsig-1) * tmpys, color=col, alpha=0.25)
+            ax.fill_between(tmpxs, (nsig - 1) * tmpys, nsig * tmpys, color=col, alpha=0.25)
+    ax.text(0.025, 0.15, r"Blue  : approx. expected 1$\sigma$", color="b", ha="left", transform=ax.transAxes)
+    ax.text(0.025, 0.10, r"Green: approx. expected 2$\sigma$", color="g", ha="left", transform=ax.transAxes)
+    ax.text(0.025, 0.05, r"Red   : approx. expected 3$\sigma$", color="r", ha="left", transform=ax.transAxes)
+    # AR compute (N_newlya_observed / N_newlya_expected) - 1
+    ys = (nnewlyas / expect_newlyas(ntilecovs)) - 1
     # AR clipping so that each point is visible on the plot
-    ys = np.clip(nnewlyas, ylim[0], ylim[1])
-    ax.scatter(ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
+    ys = np.clip(ys, ylim[0], ylim[1])
+    # AR Poisson error
+    yes = np.sqrt(nnewlyas) / expect_newlyas(ntilecovs)
+    ax.scatter(mean_ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
+    ax.errorbar(mean_ntilecovs, ys, yes, color="none", ecolor="k", elinewidth=1, zorder=1)
     # AR 3-sigma outliers
-    ii = np.where(np.abs(ys - myfunc(ntilecovs, n, alpha)) > 3 * np.sqrt(myfunc(ntilecovs, n, alpha)))[0]
+    ii = np.where(np.abs(ys) > 3 * expect_1sig(mean_ntilecovs))[0]
     for i in ii:
         if tileids is not None:
             label = "TILEID={}".format(tileids[i])
         else:
             label = None
-        ax.scatter(ntilecovs[i], nnewlyas[i], marker="x", s=80, zorder=2, label=label)
+        ax.scatter(mean_ntilecovs[i], ys[i], marker="x", s=80, zorder=2, label=label)
     #
     ax.set_title(title)
     ax.set_xlabel(xlabel)
@@ -844,10 +881,10 @@ def plot_newlya(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
-    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.yaxis.set_major_locator(MultipleLocator(0.25))
     ax.grid()
     if (ii.size > 0) & (tileids is not None):
-        ax.legend(loc=1)
+        ax.legend(loc=1, ncol=2)
 
 
 def create_petalnz_pdf(
@@ -889,6 +926,7 @@ def create_petalnz_pdf(
             surveys other than main..
     """
     petals = np.arange(10, dtype=int)
+    n_dark_passids = 7
     # AR safe
     tileids, ii = np.unique(tileids, return_index=True)
     surveys = surveys[ii]
@@ -944,7 +982,7 @@ def create_petalnz_pdf(
             continue
         # AR reading zmtl files
         istileid = False
-        ntilecov = None
+        pix_ntilecovs = None
         for petal in petals:
             fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
@@ -1006,9 +1044,16 @@ def create_petalnz_pdf(
                     # AR add PRIORITY
                     d["PRIORITY"] = rrd["PRIORITY"].copy()
                     # AR add number of previous tiles observed
-                    if ntilecov is None:
-                        ntilecov, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
-                    d["NTILECOV"] = ntilecov + np.zeros(len(d))
+                    # AR pix_ntilecovs is the number of hp pixels covered by NTILE
+                    # AR be careful as ntilecov=1 (i.e. covered by one tile) is
+                    # AR    stored in the 0-index, etc.
+                    if pix_ntilecovs is None:
+                        _, pix_ntilecovs, _, _, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
+                        d["NTILECOV"] = np.zeros(len(d) * n_dark_passids).reshape((len(d), n_dark_passids))
+                        for ntilecov in range(n_dark_passids):
+                            sel = pix_ntilecovs == 1 + ntilecov
+                            if sel.sum() > 0:
+                                d["NTILECOV"][:, ntilecov] = sel.mean()
                 # AR append
                 ds[faprgrm].append(d)
         if istileid:
@@ -1153,7 +1198,7 @@ def create_petalnz_pdf(
                 ax.grid()
                 # AR - newly identified Ly-a = f(ntilecov)
                 ax = plt.subplot(gs[3])
-                xlim, ylim = (0.5, 6.5), (0, 400)
+                xlim, ylim = (0.5, 6.5), (-2.5, 2.5)
                 nvalifiber_norm = 3900
                 if "dark" in faprgrms:
                     faprgrm = "dark"
@@ -1165,17 +1210,15 @@ def create_petalnz_pdf(
                     #
                     dark_tileids = np.unique(ds[faprgrm]["TILEID"])
                     tmpd = Table()
-                    for key in ["TILEID", "LASTNIGHT", "NVALIDFIBER", "NTILECOV", "NNEWLYA"]:
-                        if key == "NTILECOV":
-                            tmpd[key] = np.zeros(len(dark_tileids))
-                        else:
-                            tmpd[key] = np.zeros(len(dark_tileids), dtype=int)
+                    for key in ["TILEID", "LASTNIGHT", "NVALIDFIBER", "NNEWLYA"]:
+                        tmpd[key] = np.zeros(len(dark_tileids), dtype=int)
+                    tmpd["NTILECOV"] = np.zeros(len(dark_tileids) * n_dark_passids).reshape((len(dark_tileids), n_dark_passids))
                     for i in range(len(dark_tileids)):
                         sel = ds[faprgrm]["TILEID"] == dark_tileids[i]
                         tmpd["TILEID"][i] = dark_tileids[i]
                         tmpd["LASTNIGHT"][i] = night
                         tmpd["NVALIDFIBER"][i] = ((sel) & (ds[faprgrm]["VALID"])).sum()
-                        tmpd["NTILECOV"][i] = ds[faprgrm]["NTILECOV"][sel][0]
+                        tmpd["NTILECOV"][i, :] = ds[faprgrm]["NTILECOV"][sel, :][0]
                         tmpd["NNEWLYA"][i] = ((sel) & (isnewlya)).sum()
                     plot_newlya(
                         ax,
@@ -1193,7 +1236,7 @@ def create_petalnz_pdf(
                     ax.grid()
                 ax.set_title(title_dark)
                 ax.set_xlabel("Avg nb of previously observed overlapping tiles on {}".format(night))
-                ax.set_ylabel("Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm))
+                ax.set_ylabel("(N_newlya_obs / N_newlya_expect) - 1")
                 #
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
