@@ -10,7 +10,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 from desispec.io import specprod_root
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table
-from desispec.io.util import decode_camword, create_camword, camword_union
+from desispec.io.util import decode_camword, create_camword, camword_union, difference_camwords
 
 import desispec.scripts.proc as proc
 import desispec.scripts.proc_joint_fit as proc_joint_fit
@@ -57,7 +57,8 @@ def main(args=None, comm=None):
 
     #- Determine expids and cameras for a tile night
     exptable_file = get_exposure_table_pathname(args.night)
-    log.info(f'Reading exptable in {exptable_file}')
+    if rank == 0:
+        log.info(f'Reading exptable in {exptable_file}')
 
     exptable = load_table(exptable_file)
 
@@ -77,12 +78,7 @@ def main(args=None, comm=None):
         badcamword=exptable['BADCAMWORD'][i]
         badamps[expid] = exptable['BADAMPS'][i]
         if isinstance(badcamword, str):
-            full_cameras = decode_camword(camword)
-            bad_cameras = decode_camword(badcamword)
-            for cam in bad_cameras:
-                if cam in full_cameras:
-                    full_cameras.remove(cam)
-            camwords[expids[i]] = create_camword(full_cameras)
+            camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
             camwords[expids[i]] = camword
         laststep = exptable['LASTSTEP'][i]
