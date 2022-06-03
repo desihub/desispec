@@ -93,7 +93,8 @@ def main(args=None):
     args.show_null = True
     output_dir, prod_dir = get_output_dir(args.redux_dir, args.specprod,
                                           args.output_dir, makedir=True)
-
+    os.makedirs(os.path.join(output_dir, 'expjsons'), exist_ok=True)
+    
     ############
     ## Input ###
     ############
@@ -114,7 +115,7 @@ def main(args=None):
         nightly_tables = {}
         for night in nights_in_month:
             ## Load previous info if any
-            filename_json = os.path.join(output_dir, 'exp_jsons',
+            filename_json = os.path.join(output_dir, 'expjsons',
                                          f'expinfo_{os.environ["SPECPROD"]}'
                                          + f'_{night}.json')
             night_json_info = None

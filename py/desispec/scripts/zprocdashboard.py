@@ -67,9 +67,6 @@ def parse(options):
     parser.add_argument('--check-on-disk', action="store_true",
                         help="Check raw data directory for additional unaccounted for exposures on disk " +
                              "beyond the exposure table.")
-    parser.add_argument('--check-on-disk', action="store_true",
-                        help="Check raw data directory for additional unaccounted for exposures on disk " +
-                             "beyond the exposure table.")
     parser.add_argument('--no-emfits', action="store_true",
                         help="Set if you don't want the dashboard to count emlinefit files.")
     parser.add_argument('--no-qsofits', action="store_true",
@@ -99,16 +96,17 @@ def main(args=None):
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
+    args.show_null = True
     doem, doqso = (not args.no_emfits), (not args.no_qsofits)
     dotileqa = (not args.no_tileqa)
 
     output_dir, prod_dir = get_output_dir(args.redux_dir, args.specprod,
                                           args.output_dir, makedir=True)
-
+    os.makedirs(os.path.join(output_dir, 'zjsons'), exist_ok=True)
     ############
     ## Input ###
     ############
-    if args.skip_expid_file is not None:
+    if args.skip_tileid_file is not None:
         skipd_tileids = set(
             get_skipped_ids(args.skip_tileid_file, skip_ids=True))
     else:
@@ -125,10 +123,10 @@ def main(args=None):
         nightly_tables = {}
         for night in nights_in_month:
             ## Load previous info if any
-            filename_json = os.path.join(output_dir, 'z_jsons',
+            filename_json = os.path.join(output_dir, 'zjsons',
                                          f'zinfo_{os.environ["SPECPROD"]}'
                                          + f'_{night}.json')
-            night_json_info = None
+            night_json_zinfo = None
             if not args.ignore_json_archive:
                 night_json_zinfo = read_json(filename_json=filename_json)
 
@@ -222,8 +220,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             print(f"No processed data on night {night}. Assuming "
                   + f"{os.environ['SPECPROD']} implies ztypes={ztypes}")
     else:
-        proctab = proctab[np.array(job in ['pernight', 'perexp', 'cumulative']
-                                   for job in proctab['JOBDESC'])]
+        proctab = proctab[np.array([job in ['pernight', 'perexp', 'cumulative']
+                                    for job in proctab['JOBDESC']])]
         ztypes = np.unique(proctab['JOBDESC'])
     uniqs_processing = []
 
@@ -357,7 +355,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
 
         nfiles = dict()
         for ftype in ['spectra', 'coadd', 'redrock', 'rrdetails', 'tile-qa',
-                      'zmtl', 'emline', 'qso_qn', 'qso_mgii']:
+                      'zmtl', 'qso_qn', 'qso_mgii', 'emline']:
             nfiles[ftype] = count_num_files(ztype, ftype, tileid,
                                             zfild_expid, night)
         ## Commented out: Count regardless, just don't expect them if flags are false
@@ -369,22 +367,27 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         # if dotileqa:
         #     nfiles['tileqa'] = count_num_files(ztype, 'tileqa', tileid, expid, night)
 
+        npossible = nspecs
+        true_terminal_step = terminal_step
         if terminal_step is not None:
-            nexpected = 0
-        elif terminal_step == 'tile-qa':
-            nexpected = 2
-        else:
-            nexpected = nspecs
-
-        if terminal_step is None:
+            if terminal_step == 'tile-qa':
+                npossible = 2
+            elif terminal_step == 'rr':
+                true_terminal_step = 'rrdetails'
+            elif terminal_step == 'qso':
+                true_terminal_step = 'qso_qn'
+            elif terminal_step == 'em':
+                true_terminal_step = 'emline'
+        
+        if true_terminal_step is None:
             row_color = 'NULL'
         elif expected[terminal_step] == 0:
             row_color = 'NULL'
-        elif nfiles[terminal_step] == 0:
+        elif nfiles[true_terminal_step] == 0:
             row_color = 'BAD'
-        elif nfiles[terminal_step] < nexpected:
+        elif nfiles[true_terminal_step] < npossible:
             row_color = 'INCOMPLETE'
-        elif nfiles[terminal_step] == nexpected:
+        elif nfiles[true_terminal_step] == npossible:
             row_color = 'GOOD'
         else:
             row_color = 'OVERFUL'
@@ -446,8 +449,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
     return output
 
 def count_num_files(ztype, ftype, tileid, expid, night):
-    filename = findfile(filetype='spectra', night=night, expid=expid,
-                        camera='b1', tile=tileid, groupname=ztype,
+    filename = findfile(filetype='spectra', night=int(night), expid=int(expid),
+                        camera='b1', tile=int(tileid), groupname=ztype,
                         spectrograph=1)
 
     if ftype == 'tile-qa':
