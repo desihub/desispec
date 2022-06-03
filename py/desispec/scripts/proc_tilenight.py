@@ -1,6 +1,8 @@
 """
 Script for science processing of a given DESI tile and night
 """
+import sys
+import subprocess
 import time, datetime
 import numpy as np
 
@@ -16,7 +18,7 @@ import desispec.scripts.proc as proc
 import desispec.scripts.proc_joint_fit as proc_joint_fit
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tilenight_parser
-from desispec.workflow.desi_proc_funcs import update_args_with_headers
+from desispec.workflow.desi_proc_funcs import update_args_with_headers, create_desi_proc_tilenight_batch_script
 
 #########################################
 ######## Begin Body of the Code #########
@@ -41,12 +43,32 @@ def main(args=None, comm=None):
         size = comm.size
     else:
         #- Check MPI flags and determine the comm, rank, and size given the arguments
-        comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
+        comm, rank, size = assign_mpi(do_mpi=True, do_batch=args.batch, log=log)
 
     if rank == 0:
         thisfile=dirname(abspath(__file__))
         thistime=datetime.datetime.fromtimestamp(start_time).isoformat()
         log.info(f'Tilenight started main in {thisfile} at {thistime}')
+
+    #-------------------------------------------------------------------------
+    #- Create and submit a batch job if requested
+
+    if args.batch:
+        scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
+                                                   tileid=args.tileid,
+                                                   queue=args.queue,
+                                                   system_name=args.system_name,
+                                                   mpistdstars=args.mpistdstars,
+                                                   gpuspecter=args.gpuspecter,
+                                                   gpuextract=args.gpuextract
+                                                   )
+        err = 0
+        if not args.nosubmit:
+            err = subprocess.call(['sbatch', scriptfile])
+        sys.exit(err)
+
+    #-------------------------------------------------------------------------
+    #- Proceeding with running
 
     #- What are we going to do?
     if rank == 0:
@@ -88,9 +110,6 @@ def main(args=None, comm=None):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
     joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
-
-    #-------------------------------------------------------------------------
-    #- Proceeding with running
     
     #- common arguments
     common_args = f'--night {args.night}'
@@ -104,7 +123,7 @@ def main(args=None, comm=None):
 
     #- mpi options
     mpi_args=''
-    if args.mpistdstars and args.mpi:
+    if args.mpistdstars:
         mpi_args += ' --mpistdstars'
 
     #- run desiproc prestdstar over exps
