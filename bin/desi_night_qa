@@ -53,7 +53,7 @@ def parse(options=None):
     parser.add_argument("--html_only", action = "store_true",
                         help = "only regenerate the nightqa-{NIGHT}.html page")
     parser.add_argument("--nproc", type = int, default = 1, required = False,
-                        help="number of parallel processes for create_sframesky_pdf() (default=1)")
+                        help="number of parallel processes for create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
 
     args = None
     if options is None:
@@ -134,7 +134,7 @@ def main():
     # AR CTE detector
     if "ctedet" in args.steps.split(","):
         if ctedet_expid is not None:
-            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid)
+            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid, args.nproc)
 
     # AR sframesky
     if "sframesky" in args.steps.split(","):

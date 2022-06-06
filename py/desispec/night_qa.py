@@ -463,7 +463,44 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     plt.close()
 
 
-def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
+def _read_ctedet(night, prod, ctedet_expid, petal, camera):
+    """
+    Internal function used by create_ctedet_pdf(), reading the ctedet_expid preproc info.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        petal: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (int)
+        camera: "b", "r", or "z" (string)
+
+    Returns:
+        If the preproc file is here:
+            mydict: a dictionary with the IMAGE data, plus various infos
+        Else:
+            None
+    """
+    #
+    fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
+            specprod_dir=prod)
+    if os.path.isfile(fn):
+        mydict = {}
+        mydict["fn"] = fn
+        # AR read
+        with fitsio.FITS(fn) as fx:
+            mydict["img"] = fx["IMAGE"].read()
+        # AR check if we re displaying a 1s FLAT
+        hdr = fitsio.read_header(fn, "IMAGE")
+        if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
+            mydict["is_onesec_flat"] = True
+        else:
+            mydict["is_onesec_flat"] = False
+        return mydict
+    else:
+        return None
+
+
+def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
     """
     For a given night, create a pdf with a CTE diagnosis (from preproc files).
 
@@ -472,6 +509,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        nproc: number of processes running at the same time (int)
         nrow (optional, defaults to 21): number of rows to include in median (int)
         xmin (optional, defaults to None): minimum column to display (int)
         xmax (optional, defaults to None): maximum column to display (int)
@@ -481,66 +519,71 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         Credits to S. Bailey.
         Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
-    is_onesec_flat = None
+    myargs = []
+    for petal in petals:
+        for camera in cameras:
+            myargs.append(
+                [
+                    night,
+                    prod,
+                    ctedet_expid,
+                    petal,
+                    camera,
+                ]
+            )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_ctedet, myargs)
+    # AR plotting
     clim = (-5, 5)
     with PdfPages(outpdf) as pdf:
-        for petal in petals:
-            for camera in cameras:
-                petcam_xmin, petcam_xmax = xmin, xmax
-                fig = plt.figure(figsize=(30, 5))
-                gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
-                ax2d = plt.subplot(gs[0])
-                ax1d = plt.subplot(gs[1])
-                #
-                fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
-                        specprod_dir=prod)
+        for mydict in mydicts:
+            petcam_xmin, petcam_xmax = xmin, xmax
+            fig = plt.figure(figsize=(30, 5))
+            gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
+            ax2d = plt.subplot(gs[0])
+            ax1d = plt.subplot(gs[1])
+            if mydict is not None:
                 ax1d.set_title(
-                    "{}\nMedian of {} rows above/below CCD amp boundary".format(
-                        fn, nrow,
-                    )
+                "{}\nMedian of {} rows above/below CCD amp boundary".format(
+                    mydict["fn"], nrow,
                 )
-                if os.path.isfile(fn):
-                    # AR read
-                    with fitsio.FITS(fn) as fx:
-                        img = fx["IMAGE"].read()
-                    ny, nx = img.shape
-                    if petcam_xmin is None:
-                        petcam_xmin = 0
-                    if petcam_xmax is None:
-                        petcam_xmax = nx
-                    # AR check if we re displaying a 1s FLAT
-                    if is_onesec_flat is None:
-                        hdr = fitsio.read_header(fn, "IMAGE")
-                        if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
-                            is_onesec_flat = True
-                        else:
-                            is_onesec_flat = False
-                            ax1d.text(
-                                0.5, 0.7,
-                                "WARNING: not displaying a 1s FLAT image",
-                                color="k", fontsize=20, fontweight="bold", ha="center", va="center",
-                                transform=ax1d.transAxes,
-                            )
-                    above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
-                    below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
-                    xx = np.arange(petcam_xmin, petcam_xmax)
-                    # AR plot 2d image
-                    extent = [petcam_xmin - 0.5, petcam_xmax - 0.5, ny // 2 - nrow - 0.5, ny // 2 + nrow - 0.5]
-                    vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
-                    ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
-                    ax2d.xaxis.tick_top()
-                    # AR plot 1d median
-                    ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                    ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                    ax1d.legend(loc=2)
-                    # AR amplifier x-boundary
-                    ax1d.axvline(nx // 2 - 1, color="k", ls="--")
-                    ax1d.set_xlabel("CCD column")
-                    ax1d.set_xlim(petcam_xmin, petcam_xmax)
-                    ax1d.set_ylim(ylim)
-                    ax1d.grid()
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close()
+            )
+                # AR is it a 1s FLAT image?
+                if not mydict["is_onesec_flat"]:
+                    ax1d.text(
+                        0.5, 0.7,
+                        "WARNING: not displaying a 1s FLAT image",
+                        color="k", fontsize=20, fontweight="bold", ha="center", va="center",
+                        transform=ax1d.transAxes,
+                    )
+                img = mydict["img"]
+                ny, nx = img.shape
+                if petcam_xmin is None:
+                    petcam_xmin = 0
+                if petcam_xmax is None:
+                    petcam_xmax = nx
+                above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
+                below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
+                xx = np.arange(petcam_xmin, petcam_xmax)
+                # AR plot 2d image
+                extent = [petcam_xmin - 0.5, petcam_xmax - 0.5, ny // 2 - nrow - 0.5, ny // 2 + nrow - 0.5]
+                vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
+                ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
+                ax2d.xaxis.tick_top()
+                # AR plot 1d median
+                ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.legend(loc=2)
+                # AR amplifier x-boundary
+                ax1d.axvline(nx // 2 - 1, color="k", ls="--")
+                ax1d.set_xlabel("CCD column")
+                ax1d.set_xlim(petcam_xmin, petcam_xmax)
+                ax1d.set_ylim(ylim)
+                ax1d.grid()
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close()
 
 
 def _read_sframesky(night, prod, expid):
