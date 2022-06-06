@@ -50,8 +50,6 @@ def parse(options=None):
                         help = "recompute (i.e. overwrite args.outfile if already existing")
     parser.add_argument("--steps", type = str, default = "dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html", required = False,
                         help = "comma-separated list of steps to execute (default=dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html)")
-    parser.add_argument("--html_only", action = "store_true",
-                        help = "only regenerate the nightqa-{NIGHT}.html page")
     parser.add_argument("--nproc", type = int, default = 1, required = False,
                         help="number of parallel processes for create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
 
@@ -95,19 +93,18 @@ def main():
     # AR files that will be created
     outfns = get_nightqa_outfns(args.outdir, args.night)
     # AR existing output files?
-    if not args.html_only:
-        for key in outfns:
-            fn = outfns[key]
-            if key in args.steps.split(","):
-                log.info("will create {}".format(fn))
-                if os.path.isfile(fn):
-                    if args.recompute:
-                        log.warning("\texisting {} will be overwritten".format(fn))
-                    else:
-                        log.error("\t{} already exists, and args.recompute = False".format(fn))
-                        raise RuntimeError("\t{} already exists, and args.recompute = False".format(fn))
-            else:
-                log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
+    for key in outfns:
+        fn = outfns[key]
+        if key in args.steps.split(","):
+            log.info("will create {}".format(fn))
+            if os.path.isfile(fn):
+                if args.recompute:
+                    log.warning("\texisting {} will be overwritten".format(fn))
+                else:
+                    log.error("\t{} already exists, and args.recompute = False".format(fn))
+                    raise RuntimeError("\t{} already exists, and args.recompute = False".format(fn))
+        else:
+            log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
 
     # AR expids, tileids, surveys
     if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], args.steps.split(",")).sum() > 0:
