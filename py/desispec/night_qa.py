@@ -481,6 +481,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         Credits to S. Bailey.
         Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
+    is_onesec_flat = None
     clim = (-5, 5)
     with PdfPages(outpdf) as pdf:
         for petal in petals:
@@ -507,6 +508,19 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
                         petcam_xmin = 0
                     if petcam_xmax is None:
                         petcam_xmax = nx
+                    # AR check if we re displaying a 1s FLAT
+                    if is_onesec_flat is None:
+                        hdr = fitsio.read_header(fn, "IMAGE")
+                        if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
+                            is_onesec_flat = True
+                        else:
+                            is_onesec_flat = False
+                            ax1d.text(
+                                0.5, 0.7,
+                                "WARNING: not displaying a 1s FLAT image",
+                                color="k", fontsize=20, fontweight="bold", ha="center", va="center",
+                                transform=ax1d.transAxes,
+                            )
                     above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
                     below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
                     xx = np.arange(petcam_xmin, petcam_xmax)
