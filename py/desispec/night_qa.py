@@ -35,6 +35,9 @@ from PIL import Image
 
 log = get_logger()
 
+cameras = ["b", "r", "z"]
+petals = np.arange(10, dtype=int)
+
 def get_nightqa_outfns(outdir, night):
     """
     Utility function to get nightqa file names.
@@ -329,8 +332,6 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
         dark_expid: EXPID of the 300s DARK exposure to display (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
     """
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
     clim = (-5, 5)
     with PdfPages(outpdf) as pdf:
         for petal in petals:
@@ -401,9 +402,7 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         n_previous_nights (optional, defaults to 10): number of previous nights to plot (int)
     """
-    cameras = ["b", "r", "z"]
     colors = ["b", "r", "k"]
-    petals = np.arange(10, dtype=int)
     # AR grabbing the n_previous_nights previous nights
     nights = np.array(
         [int(os.path.basename(fn))
@@ -482,8 +481,6 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         Credits to S. Bailey.
         Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
     clim = (-5, 5)
     with PdfPages(outpdf) as pdf:
         for petal in petals:
@@ -550,9 +547,6 @@ def _read_sframesky(night, prod, expid):
             None
     """
     #
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
-    #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
     #
     tileid = None
@@ -618,9 +612,6 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         expids: expids to display (list or np.array)
         nproc: number of processes running at the same time (int)
     """
-    #
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
     #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
     # AR sorting the EXPIDs by increasing order
@@ -1517,9 +1508,6 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR - red : file does not exist
     # AR - blue : file exists, but is a symlink
     # AR - green : file exists
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
-    #
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} calibnight</strong>\n</button>\n".format(
             night,
