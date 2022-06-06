@@ -1634,20 +1634,20 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                 html.write("\t<p>{}</p>\n".format(text_split))
             html.write("\t<tr>\n")
             if os.path.splitext(outfns[case])[-1] == ".png":
-                outpng = path_full2web(outfns[case])
+                outpng = os.path.basename(outfns[case])
                 html.write(
                     "\t<a href='{}'><img SRC='{}' width={} height=auto></a>\n".format(
                         outpng, outpng, width,
                     )
                 )
             elif os.path.splitext(outfns[case])[-1] == ".pdf":
-                outpdf = path_full2web(outfns[case])
+                outpdf = os.path.basename(outfns[case])
                 html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
             else:
                 log.error("Unexpected extension for {}".format(outfns[case]))
                 raise RuntimeError("Unexpected extension for {}".format(outfns[case]))
         else:
-            html.write("\t<p>No {}.</p>\n".format(path_full2web(outfns[case])))
+            html.write("\t<p>No {}.</p>\n".format(os.path.basename(outfns[case])))
         html.write("\t</br>\n")
         html.write("</div>\n")
         html.write("\n")
