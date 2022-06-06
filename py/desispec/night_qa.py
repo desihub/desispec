@@ -7,6 +7,7 @@ from glob import glob
 import tempfile
 import textwrap
 from desiutil.log import get_logger
+import multiprocessing
 # AR scientifical
 import numpy as np
 import fitsio
@@ -531,7 +532,82 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
                 plt.close()
 
 
-def create_sframesky_pdf(outpdf, night, prod, expids):
+def _read_sframesky(night, prod, expid):
+    """
+    Internal function called by create_sframesky_pdf, which generates
+    the per-expid sframesky plot.
+
+    Args:
+        outpng: output png file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        expid: expid to display (int)
+
+    Returns:
+        If some sframe files:
+            mydict, dictionary with per-camera wave, flux, and various infos
+        Else:
+            None
+    """
+    #
+    cameras = ["b", "r", "z"]
+    petals = np.arange(10, dtype=int)
+    #
+    nightdir = os.path.join(prod, "exposures", "{}".format(night))
+    #
+    tileid = None
+    fns = sorted(
+        glob(
+            os.path.join(
+                nightdir,
+                "{:08d}".format(expid),
+                "sframe-??-{:08d}.fits*".format(expid),
+            )
+        )
+    )
+    if len(fns) > 0:
+        # AR read the sframe sky fibers
+        mydict = {camera : {} for camera in cameras}
+        for ic, camera in enumerate(cameras):
+            for petal in petals:
+                fn, exists = findfile('sframe', night, expid, camera+str(petal),
+                        specprod_dir=prod, return_exists=True)
+                if exists:
+                    with fitsio.FITS(fn) as h:
+                        fibermap = h["FIBERMAP"].read()
+                        sel = fibermap["OBJTYPE"] == "SKY"
+                        fibermap = fibermap[sel]
+                        flux = h["FLUX"].read()[sel]
+                        wave = h["WAVELENGTH"].read()
+                        flux_header = h["FLUX"].read_header()
+                        fibermap_header = h["FIBERMAP"].read_header()
+
+                    if "flux" not in mydict[camera]:
+                        mydict[camera]["wave"] = wave
+                        nwave = len(mydict[camera]["wave"])
+                        mydict[camera]["petals"] = np.zeros(0, dtype=int)
+                        mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
+                        mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
+                    mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
+                    mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
+                    band = camera.lower()[0]
+                    mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
+                    if tileid is None:
+                        tileid = fibermap_header["TILEID"]
+                    print("\t", night, expid, camera+str(petal), ((fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
+            print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
+        # AR various infos
+        mydict["expid"] = expid
+        mydict["night"] = night
+        mydict["tileid"] = tileid
+        mydict["flux_unit"] = flux_header["BUNIT"]
+        #
+        return mydict
+    else:
+        return None
+
+
+def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
     """
     For a given night, create a pdf from per-expid sframe for the sky fibers only.
 
@@ -540,6 +616,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         expids: expids to display (list or np.array)
+        nproc: number of processes running at the same time (int)
     """
     #
     cameras = ["b", "r", "z"]
@@ -547,52 +624,23 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
     #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
     # AR sorting the EXPIDs by increasing order
-    expids = np.sort(expids)
-    #
+    myargs = []
+    for expid in np.sort(expids):
+        myargs.append(
+            [
+                night,
+                prod,
+                expid,
+            ]
+        )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_sframesky, myargs)
+    # AR creating pdf (+ removing temporary files)
     with PdfPages(outpdf) as pdf:
-        for expid in expids:
-            tileid = None
-            fns = sorted(
-                glob(
-                    os.path.join(
-                        nightdir,
-                        "{:08d}".format(expid),
-                        "sframe-??-{:08d}.fits*".format(expid),
-                    )
-                )
-            )
-            if len(fns) > 0:
-                #
-                mydict = {camera : {} for camera in cameras}
-                for ic, camera in enumerate(cameras):
-                    for petal in petals:
-                        fn, exists = findfile('sframe', night, expid, camera+str(petal),
-                                specprod_dir=prod, return_exists=True)
-                        if exists:
-                            with fitsio.FITS(fn) as h:
-                                fibermap = h["FIBERMAP"].read()
-                                sel = fibermap["OBJTYPE"] == "SKY"
-                                fibermap = fibermap[sel]
-                                flux = h["FLUX"].read()[sel]
-                                wave = h["WAVELENGTH"].read()
-                                flux_header = h["FLUX"].read_header()
-                                fibermap_header = h["FIBERMAP"].read_header()
-
-                            if "flux" not in mydict[camera]:
-                                mydict[camera]["wave"] = wave
-                                nwave = len(mydict[camera]["wave"])
-                                mydict[camera]["petals"] = np.zeros(0, dtype=int)
-                                mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
-                                mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
-                            mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
-                            mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
-                            band = camera.lower()[0]
-                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
-                            if tileid is None:
-                                tileid = fibermap_header["TILEID"]
-                            print("\t", night, expid, camera+str(petal), ((fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
-                    print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
-                #
+        for mydict in mydicts:
+            if mydict is not None:
                 fig = plt.figure(figsize=(20, 10))
                 gs = gridspec.GridSpec(len(cameras), 1, hspace=0.025)
                 clim = (-100, 100)
@@ -618,12 +666,12 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                                 1.0 * (p[3]-p[1])
                             ])
                             cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                            cbar.set_label("FLUX [{}]".format(flux_header["BUNIT"]))
+                            cbar.set_label("FLUX [{}]".format(mydict["flux_unit"]))
                             cbar.mappable.set_clim(clim)
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
                         ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
-                            expid, night, tileid, nsky)
+                            mydict["expid"], mydict["night"], mydict["tileid"], nsky)
                         )
                     ax.set_xlim(xlim)
                     if ic == 2:

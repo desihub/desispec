@@ -52,6 +52,8 @@ def parse(options=None):
                         help = "comma-separated list of steps to execute (default=dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html)")
     parser.add_argument("--html_only", action = "store_true",
                         help = "only regenerate the nightqa-{NIGHT}.html page")
+    parser.add_argument("--nproc", type = int, default = 1, required = False,
+                        help="number of parallel processes for create_sframesky_pdf() (default=1)")
 
     args = None
     if options is None:
@@ -136,7 +138,7 @@ def main():
 
     # AR sframesky
     if "sframesky" in args.steps.split(","):
-        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
+        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids, args.nproc)
 
     # AR tileqa
     if "tileqa" in args.steps.split(","):
