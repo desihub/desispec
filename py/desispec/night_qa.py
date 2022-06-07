@@ -321,7 +321,68 @@ def create_mp4(fns, outmp4, duration=15):
         os.remove("{}/tmp-{:04d}.png".format(tmpoutdir, i))
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
+def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
+    """
+    Internal function used by create_dark_pdf(), to read and bin the 300s dark.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        dark_expid: EXPID of the 300s DARK exposure to display (int)
+        petal: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (int)
+        camera: "b", "r", or "z" (string)
+        binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
+
+    Returns:
+        If the preproc file is here:
+            mydict: a dictionary with the binned+masked image, plus various infos
+        Else:
+            None
+    """
+    fn = findfile('preproc', night, dark_expid, camera+str(petal),
+            specprod_dir=prod)
+    if os.path.isfile(fn):
+        mydict = {}
+        mydict["dark_expid"] = dark_expid
+        mydict["petal"] = petal
+        mydict["camera"] = camera
+        log.info("reading {}".format(fn))
+        with fitsio.FITS(fn) as h:
+            image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
+        # AR setting to np.nan pixels with ivar = 0 or mask > 0
+        # AR hence, when binning, any binned pixel with a masked pixel
+        # AR will appear as np.nan (easy way to go)
+        d = image.copy()
+        sel = (ivar == 0) | (mask > 0)
+        d[sel] = np.nan
+        # AR trimming
+        shape_orig = d.shape
+        if shape_orig[0] % binning != 0:
+            d = d[shape_orig[0] % binning:, :]
+        if shape_orig[1] % binning != 0:
+            d = d[:, shape_orig[1] % binning:]
+            log.info(
+                "{} trimmed from ({}, {}) to ({}, {})".format(
+                    fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
+                )
+            )
+        d_reshape = d.reshape(
+            d.shape[0] // binning,
+            binning,
+            d.shape[1] // binning,
+            binning
+        )
+        d_bin = d_reshape.mean(axis=1).mean(axis=-1)
+        # AR displaying masked pixels (np.nan) in red
+        d_bin_msk = np.ma.masked_where(d_bin == np.nan, d_bin)
+        mydict["image"] = d_bin_msk
+        return mydict
+    else:
+        log.warning("missing {}".format(fn))
+        return None
+
+
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -330,51 +391,45 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
+        nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
     """
+    #
+    myargs = []
+    for petal in petals:
+        for camera in cameras:
+            myargs.append(
+                [
+                    night,
+                    prod,
+                    dark_expid,
+                    petal,
+                    camera,
+                    binning,
+                ]
+            )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_dark, myargs)
+    # AR plotting
     clim = (-5, 5)
+    cmap = matplotlib.cm.Greys_r
+    cmap.set_bad(color="r")
     with PdfPages(outpdf) as pdf:
         for petal in petals:
             fig = plt.figure(figsize=(20, 10))
             gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
             for ic, camera in enumerate(cameras):
                 ax = plt.subplot(gs[ic])
-                fn = findfile('preproc', night, dark_expid, camera+str(petal),
-                        specprod_dir=prod)
-                ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-                if os.path.isfile(fn):
-                    log.info("reading {}".format(fn))
-                    with fitsio.FITS(fn) as h:
-                        image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
-                    # AR setting to np.nan pixels with ivar = 0 or mask > 0
-                    # AR hence, when binning, any binned pixel with a masked pixel
-                    # AR will appear as np.nan (easy way to go)
-                    d = image.copy()
-                    sel = (ivar == 0) | (mask > 0)
-                    d[sel] = np.nan
-                    # AR trimming
-                    shape_orig = d.shape
-                    if shape_orig[0] % binning != 0:
-                        d = d[shape_orig[0] % binning:, :]
-                    if shape_orig[1] % binning != 0:
-                        d = d[:, shape_orig[1] % binning:]
-                        log.info(
-                            "{} trimmed from ({}, {}) to ({}, {})".format(
-                                fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
-                            )
-                        )
-                    d_reshape = d.reshape(
-                        d.shape[0] // binning,
-                        binning,
-                        d.shape[1] // binning,
-                        binning
-                    )
-                    d_bin = d_reshape.mean(axis=1).mean(axis=-1)
-                    # AR displaying masked pixels (np.nan) in red
-                    d_bin_msk = np.ma.masked_where(d_bin == np.nan, d_bin)
-                    cmap = matplotlib.cm.Greys_r
-                    cmap.set_bad(color="r")
-                    im = ax.imshow(d_bin_msk, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
+                assert(len(ii) == 1)
+                mydict = mydicts[ii[0]]
+                if mydict is not None:
+                    assert(mydict["petal"] == petal)
+                    assert(mydict["camera"] == camera)
+                    ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
+                    im = ax.imshow(mydict["image"], cmap=cmap, vmin=clim[0], vmax=clim[1])
                     if camera == cameras[-1]:
                         p =  ax.get_position().get_points().flatten()
                         cax = fig.add_axes([
@@ -386,8 +441,6 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
                         cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
                         cbar.set_label("Units : ?")
                         cbar.mappable.set_clim(clim)
-                else:
-                    log.warning("missing {}".format(fn))
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
 

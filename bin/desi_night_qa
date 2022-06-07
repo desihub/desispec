@@ -56,7 +56,7 @@ def parse(options=None):
     parser.add_argument("--steps", type = str, default = ",".join(steps_all), required = False,
                         help = "comma-separated list of steps to execute (default={})".format(",".join(steps_all)))
     parser.add_argument("--nproc", type = int, default = 1, required = False,
-                        help="number of parallel processes for create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
+                        help="number of parallel processes for create_dark_pdf(), create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
 
     args = None
     if options is None:
@@ -142,7 +142,7 @@ def main():
     # AR dark
     if "dark" in steps_tbd:
         if dark_expid is not None:
-            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
+            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc)
 
     # AR badcolumn
     if "badcol" in steps_tbd:
