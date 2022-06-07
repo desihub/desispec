@@ -358,7 +358,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         extime_per_camera = 60 / fpnh
         overhead_per_camera = 10. / 60. # 10 seconds
         extraction_time = int(extime_per_camera * ncameras)
-        overhead_time = (overhead_per_camera * ncameras)
+        overhead_time = int(overhead_per_camera * ncameras)
         runtime = extraction_time + overhead_time
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
@@ -829,10 +829,10 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, camword, queue, 
         cmd += f' --timingfile {timingfile}'
         if mpistdstars:
             cmd += f' --mpistdstars'
-        if gpuspecter:
+        if system_name == 'perlmutter-gpu' or gpuextract:
+            cmd += f' --gpuspecter --gpuextract'
+        elif gpuspecter:
             cmd += f' --gpuspecter'
-        if gpuextract:
-            cmd += f' --gpuextract'
 
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
