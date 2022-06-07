@@ -854,6 +854,9 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         #TODO: need to check if this works properly, else needs to be adapted
         speclog=prepared_exptable
         speclog.rename_column('MJD-OBS','MJD')
+        del speclog['HEADERERR']
+        del speclog['EXPFLAG']
+        del speclog['COMMENTS']
 
 
     speclog['OBSTYPE']=np.char.upper(speclog['OBSTYPE'])
