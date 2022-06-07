@@ -987,7 +987,7 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
     change_dates={k:[] for k in all_config_data.keys()}
     for speckey,data in all_config_data.items():
         required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
-        required_keys.sort(key=lambda x:x[1]['OBS-BEGIN'],reverse=True)
+        required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
         usever,useval=required_keys[0]
         for newver,newval in required_keys[1:]:
             usenew = True
