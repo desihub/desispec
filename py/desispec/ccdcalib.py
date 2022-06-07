@@ -986,7 +986,7 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
     #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
     change_dates={k:[] for k in all_config_data.keys()}
     for speckey,data in all_config_data.items():
-        required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['OBS-BEGIN','OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
+        required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
         required_keys.sort(key=lambda x:x[1]['OBS-BEGIN'],reverse=True)
         usever,useval=required_keys[0]
         for newver,newval in required_keys[1:]:
@@ -997,10 +997,11 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                     break
             if usenew:
                 useval = newval
+                usever = newver
             else:
                 change_dates[speckey].append(int(useval['OBS-BEGIN']))
                 break
-    change_dates=sorted(np.unique([d for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
+    change_dates=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
     change_dates_in_nights=[d for d in change_dates if d in nights]
