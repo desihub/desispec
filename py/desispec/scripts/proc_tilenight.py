@@ -88,6 +88,13 @@ def main(args=None, comm=None):
     #- Create and submit a batch job if requested
 
     if args.batch:
+        # Use GPU extraction if system_name==perlmutter-gpu
+        # otherwise don't
+        gpuextract=False
+        gpuspecter=args.gpuspecter
+        if args.system_name == "perlmutter-gpu":
+            gpuspecter=True
+            gpuextract=True
         scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
                                                    exp=expids,
                                                    camword=camwords,
@@ -95,8 +102,8 @@ def main(args=None, comm=None):
                                                    queue=args.queue,
                                                    system_name=args.system_name,
                                                    mpistdstars=args.mpistdstars,
-                                                   gpuspecter=args.gpuspecter,
-                                                   gpuextract=args.gpuextract
+                                                   gpuspecter=gpuspecter,
+                                                   gpuextract=gpuextract
                                                    )
         err = 0
         if not args.nosubmit:

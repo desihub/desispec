@@ -827,9 +827,10 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, camword, queue, 
         cmd += f' -n {night}'
         cmd += f' -t {tileid}'
         cmd += f' --timingfile {timingfile}'
+        cmd += f' --mpi'
         if mpistdstars:
             cmd += f' --mpistdstars'
-        if system_name == 'perlmutter-gpu' or gpuextract:
+        if gpuextract:
             cmd += f' --gpuspecter --gpuextract'
         elif gpuspecter:
             cmd += f' --gpuspecter'
