@@ -811,7 +811,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     #- Create exposure log so that N>>1 jobs don't step on each other
     nightlist = [int(tmp) for tmp in nights.split()]
 
-    if prepared_exptable is not None:
+    if prepared_exptable is None:
         if use_exptable:
             #grab all exposures from the exposure log in case some have been marked bad
             #note that some exposures will not be in here, so we'll assume those are all fine
