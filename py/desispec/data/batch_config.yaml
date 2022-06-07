@@ -25,7 +25,7 @@ perlmutter-cpu:
     memory: 512
     timefactor: 1.0
     gpus_per_node: 0
-    batch_opts: []      # TBD
+    batch_opts: ['--constraint=cpu', ]
 
 perlmutter-gpu:
     site: NERSC
