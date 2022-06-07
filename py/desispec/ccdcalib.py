@@ -926,7 +926,7 @@ cp {biasfile}  bias_frames/{biasfile}
             log.info(f"Generated but didn't submit {batchfile}")
 
 
-def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
+def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
                       copy_outputs_to_split_dirs=None, transmit_obslist = False):
@@ -963,6 +963,9 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
     #probably run a script here that updates the obslist or checks it's up-to-date
 
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
+
+
+    #TODO: nights does not yet end with lastnight need fix
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
     nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
 
@@ -981,12 +984,23 @@ def make_weekly_darks(outdir=None, lastnight=None, cameras=None, window=14,
         all_config_data.update(y_data)
 
     #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
-    all_keys=[]
-    for d in all_config_data:
-        all_keys.extend(all_config_data[d].keys())
-    u_all_keys=np.unique(all_keys)
-    u_all_keys.sort()
-    change_dates=[int(k[1:]) for k in u_all_keys[1:]]
+    change_dates={k:[] for k in all_config_data.keys()}
+    for speckey,data in all_config_data.items():
+        required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['OBS-BEGIN','OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
+        required_keys.sort(key=lambda x:x[1]['OBS-BEGIN'],reverse=True)
+        usever,useval=required_keys[0]
+        for newver,newval in required_keys[1:]:
+            usenew = True
+            for key in ['DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']:
+                if useval[key]!=newval[key]:
+                    usenew = False
+                    break
+            if usenew:
+                useval = newval
+            else:
+                change_dates[speckey].append(int(useval['OBS-BEGIN']))
+                break
+    change_dates=sorted(np.unique([d for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
     change_dates_in_nights=[d for d in change_dates if d in nights]
