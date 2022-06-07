@@ -817,9 +817,21 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
                 faflavor = hdr["FAFLAVOR"]
         log.info("identified FAFLAVOR for {}: {}".format(tileid, faflavor))
         # AR
-        tmp = findfile("redrock", night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
-        tiledir = os.path.dirname(tmp)
-        fns = sorted(glob(os.path.join(tiledir, f"redrock-?-{tileid}-*{night}.fits*")))
+        fns = []
+        for petal in petals:
+            fn, exists = findfile(
+                "redrock",
+                night=night,
+                tile=tileid,
+                groupname=group,
+                spectrograph=petal,
+                specprod_dir=prod,
+                return_exists=True,
+            )
+            if exists:
+                fns.append(fn)
+            else:
+                log.warning("no {}".format(fn))
         nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
