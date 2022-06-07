@@ -999,7 +999,7 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                 useval = newval
                 usever = newver
             else:
-                change_dates[speckey].append(int(useval['OBS-BEGIN']))
+                change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
                 break
     change_dates=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
