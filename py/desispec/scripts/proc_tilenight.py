@@ -43,39 +43,12 @@ def main(args=None, comm=None):
         size = comm.size
     else:
         #- Check MPI flags and determine the comm, rank, and size given the arguments
-        comm, rank, size = assign_mpi(do_mpi=True, do_batch=args.batch, log=log)
+        comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
 
     if rank == 0:
         thisfile=dirname(abspath(__file__))
         thistime=datetime.datetime.fromtimestamp(start_time).isoformat()
         log.info(f'Tilenight started main in {thisfile} at {thistime}')
-
-    #-------------------------------------------------------------------------
-    #- Create and submit a batch job if requested
-
-    if args.batch:
-        scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
-                                                   tileid=args.tileid,
-                                                   queue=args.queue,
-                                                   system_name=args.system_name,
-                                                   mpistdstars=args.mpistdstars,
-                                                   gpuspecter=args.gpuspecter,
-                                                   gpuextract=args.gpuextract
-                                                   )
-        err = 0
-        if not args.nosubmit:
-            err = subprocess.call(['sbatch', scriptfile])
-        sys.exit(err)
-
-    #-------------------------------------------------------------------------
-    #- Proceeding with running
-
-    #- What are we going to do?
-    if rank == 0:
-        log.info('----------')
-        log.info('Tile {} night {}'.format(args.tileid, args.night))
-        log.info('Output root {}'.format(specprod_root()))
-        log.info('----------')
 
     #- Determine expids and cameras for a tile night
     exptable_file = get_exposure_table_pathname(args.night)
@@ -110,6 +83,35 @@ def main(args=None, comm=None):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
     joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
+
+    #-------------------------------------------------------------------------
+    #- Create and submit a batch job if requested
+
+    if args.batch:
+        scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
+                                                   exp=expids,
+                                                   camword=camwords,
+                                                   tileid=args.tileid,
+                                                   queue=args.queue,
+                                                   system_name=args.system_name,
+                                                   mpistdstars=args.mpistdstars,
+                                                   gpuspecter=args.gpuspecter,
+                                                   gpuextract=args.gpuextract
+                                                   )
+        err = 0
+        if not args.nosubmit:
+            err = subprocess.call(['sbatch', scriptfile])
+        sys.exit(err)
+
+    #-------------------------------------------------------------------------
+    #- Proceeding with running
+
+    #- What are we going to do?
+    if rank == 0:
+        log.info('----------')
+        log.info('Tile {} night {}'.format(args.tileid, args.night))
+        log.info('Output root {}'.format(specprod_root()))
+        log.info('----------')
     
     #- common arguments
     common_args = f'--night {args.night}'
@@ -123,7 +125,7 @@ def main(args=None, comm=None):
 
     #- mpi options
     mpi_args=''
-    if args.mpistdstars:
+    if args.mpi:
         mpi_args += ' --mpistdstars'
 
     #- run desiproc prestdstar over exps
@@ -140,7 +142,7 @@ def main(args=None, comm=None):
 
     #- run joint stdstar fit using all exp for this tile night
     stdstar_args  = common_args + mpi_args
-    stdstar_args += f' --obstype science --mpistdstars --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
+    stdstar_args += f' --obstype science --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
     if rank==0:
         log.info(f'running desi_proc_joint_fit {stdstar_args}')
     stdstar_args = proc_joint_fit.parse(stdstar_args.split())

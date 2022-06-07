@@ -352,6 +352,14 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
+    elif jobdesc == 'TILENIGHT':
+        ncores, nodes = config['cores_per_node'], 1
+        fpnh = 250. # ~300 for CPUs, ~450 for GPUs
+        extime_per_camera = 60 / fpnh
+        overhead_per_camera = 10. / 60. # 10 seconds
+        extraction_time = int(extime_per_camera * ncameras)
+        overhead_time = (overhead_per_camera * ncameras)
+        runtime = extraction_time + overhead_time
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -384,7 +392,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     #- Allow KNL jobs to be slower than Haswell,
     #- except for ARC so that we don't have ridiculously long times
     #- (Normal arc is still ~15 minutes, albeit with a tail)
-    if jobdesc not in ['ARC', 'TESTARC']:
+    if jobdesc not in ['ARC', 'TESTARC', 'TILENIGHT']:
         runtime *= config['timefactor']
 
     #- Add additional overhead factor if needed
@@ -423,13 +431,12 @@ def get_desi_proc_tilenight_batch_file_name(night, tileid):
         pathname: str, the default script name for a desi_proc_tilenight batch script file
     """
     if type(tileid) is not str:
-        if exp is None:
-            tilestr = 'none'
-        elif np.isscalar(tileid):
-            tilestr = '{:08d}'.format(tileid)
-    else:
-        tilestr = tileid
-    jobname = 'tilenight-{}-{}'.format(night, tilestr)
+        if np.isscalar(tileid):
+            tileid = '{}'.format(tileid)
+        else:
+            raise RuntimeError('tileid should be either int or str')
+
+    jobname = 'tilenight-{}-{}'.format(night, tileid)
     return jobname
 
 def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
@@ -736,7 +743,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     return scriptfile
 
-def create_desi_proc_tilenight_batch_script(night, tileid, queue, runtime=None, batch_opts=None,
+def create_desi_proc_tilenight_batch_script(night, exp, tileid, camword, queue, runtime=None, batch_opts=None,
                                   system_name=None, mpistdstars=None, gpuspecter=None,
                                   gpuextract=None,
                                   ):
@@ -745,7 +752,9 @@ def create_desi_proc_tilenight_batch_script(night, tileid, queue, runtime=None, 
 
     Args:
         night: str or int. The night the data was acquired.
+        exp: int, or list of ints. The exposure id(s) for the data.
         tileid: str or int. The tile id for the data.
+        camword: Dictionary of camword(s) corresponding to exp.
         queue: str. Queue to be used.
 
     Options:
@@ -762,8 +771,17 @@ def create_desi_proc_tilenight_batch_script(night, tileid, queue, runtime=None, 
     """
 
     batchdir = get_desi_proc_batch_file_path(night)
-
     os.makedirs(batchdir, exist_ok=True)
+
+    nexps = 1
+    if exp is not None and not np.isscalar(exp):
+        nexps = len(exp)
+        cameras = []
+        for expid in exp:
+            cameras += decode_camword(camword[expid])
+    else:
+        cameras = decode_camword(camword[exp])
+    ncameras = len(cameras)
 
     jobname = get_desi_proc_tilenight_batch_file_name(night, tileid)
 
@@ -776,13 +794,8 @@ def create_desi_proc_tilenight_batch_script(night, tileid, queue, runtime=None, 
     threads_per_core = batch_config['threads_per_core']
     gpus_per_node = batch_config['gpus_per_node']
 
-    nodes = 1
-    if system_name == 'perlmutter-gpu':
-        ncores = 64
-    elif system_name == 'perlmutter-cpu':
-        ncores = 128
-    else:
-        raise RuntimeError('tilenight batch jobs only supported on Perlmutter')
+    ncores, nodes, runtime = determine_resources(ncameras,'TILENIGHT',
+        queue=queue, nexps=nexps, system_name=system_name,forced_runtime=runtime)
 
     if runtime is None:
         runtime = 30
