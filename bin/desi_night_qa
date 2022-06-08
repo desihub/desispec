@@ -33,6 +33,9 @@ from desispec.night_qa import (
     write_nightqa_html,
 )
 
+# AR get all steps, using dummy outdir, night
+steps_all = list(get_nightqa_outfns("", 0).keys())
+
 def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
@@ -48,10 +51,12 @@ def parse(options=None):
                         help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
     parser.add_argument("--recompute", action = "store_true",
                         help = "recompute (i.e. overwrite args.outfile if already existing")
-    parser.add_argument("--steps", type = str, default = "dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html", required = False,
-                        help = "comma-separated list of steps to execute (default=dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html)")
-    parser.add_argument("--html_only", action = "store_true",
-                        help = "only regenerate the nightqa-{NIGHT}.html page")
+    parser.add_argument("--compute_missing_only", action = "store_true",
+                        help = "compute missing files only; overrides args.steps")
+    parser.add_argument("--steps", type = str, default = ",".join(steps_all), required = False,
+                        help = "comma-separated list of steps to execute (default={})".format(",".join(steps_all)))
+    parser.add_argument("--nproc", type = int, default = 1, required = False,
+                        help="number of parallel processes for create_dark_pdf(), create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
 
     args = None
     if options is None:
@@ -67,6 +72,10 @@ def main():
 
     # AR arguments: reading/defaulting
     args = parse()
+    if args.recompute and args.compute_missing_only:
+        msg = "cannot set at the same time args.recompute and args.compute_missing_only"
+        log.error(msg)
+        raise ValueError(msg)
     if args.prod is None:
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
@@ -92,63 +101,74 @@ def main():
         os.makedirs(args.outdir, exist_ok=True)
     # AR files that will be created
     outfns = get_nightqa_outfns(args.outdir, args.night)
-    # AR existing output files?
-    if not args.html_only:
-        for key in outfns:
-            fn = outfns[key]
-            if key in args.steps.split(","):
-                log.info("will create {}".format(fn))
-                if os.path.isfile(fn):
-                    if args.recompute:
-                        log.warning("\texisting {} will be overwritten".format(fn))
-                    else:
-                        log.error("\t{} already exists, and args.recompute = False".format(fn))
-                        raise RuntimeError("\t{} already exists, and args.recompute = False".format(fn))
+    # AR steps to be done
+    if not args.compute_missing_only:
+        steps_tbd = args.steps.split(",")
+    else:
+        log.info("args.compute_missing_only set: will override args.steps={}".format(args.steps))
+        steps_tbd = []
+        for step in steps_all:
+            if not os.path.isfile(outfns[step]):
+                steps_tbd.append(step)
+                log.info("add {} to steps_tbd, as args.compute_missing_only set and no {} present".format(step, outfns[step]))
+    if len(steps_tbd) == 0:
+        log.info("no steps to be done")
+    else:
+        log.info("steps to be done: {}".format(",".join(steps_tbd)))
+    # AR existing files?
+    for step in steps_tbd:
+        fn = outfns[step]
+        log.info("will create {}".format(fn))
+        if os.path.isfile(fn):
+            if args.recompute:
+                log.warning("\texisting {} will be overwritten".format(fn))
             else:
-                log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
+                msg = "\t{} already exists, and args.recompute = False".format(fn)
+                log.error(msg)
+                raise ValueError(msg)
 
     # AR expids, tileids, surveys
-    if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], args.steps.split(",")).sum() > 0:
+    if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], steps_tbd).sum() > 0:
         expids, tileids, surveys = get_surveys_night_expids(args.night)
 
     # AR dark expid
-    if np.in1d(["dark", "badcol"], args.steps.split(",")).sum() > 0:
+    if np.in1d(["dark", "badcol"], steps_tbd).sum() > 0:
         dark_expid = get_dark_night_expid(args.night, args.prod)
 
     # AR CTE detector expid
-    if "ctedet" in args.steps.split(","):
+    if "ctedet" in steps_tbd:
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
     # AR dark
-    if "dark" in args.steps.split(","):
+    if "dark" in steps_tbd:
         if dark_expid is not None:
-            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
+            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc)
 
     # AR badcolumn
-    if "badcol" in args.steps.split(","):
+    if "badcol" in steps_tbd:
         if dark_expid is not None:
             create_badcol_png(outfns["badcol"], args.night, args.prod)
 
     # AR CTE detector
-    if "ctedet" in args.steps.split(","):
+    if "ctedet" in steps_tbd:
         if ctedet_expid is not None:
-            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid)
+            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid, args.nproc)
 
     # AR sframesky
-    if "sframesky" in args.steps.split(","):
-        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
+    if "sframesky" in steps_tbd:
+        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids, args.nproc)
 
     # AR tileqa
-    if "tileqa" in args.steps.split(","):
+    if "tileqa" in steps_tbd:
         create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids, group=args.group)
 
     # AR skyzfiber
-    if "skyzfiber" in args.steps.split(","):
+    if "skyzfiber" in steps_tbd:
         create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9,
                 group=args.group)
 
     # AR per-petal n(z)
-    if "petalnz" in args.steps.split(","):
+    if "petalnz" in steps_tbd:
         unq_tileids, ii = np.unique(tileids, return_index=True)
         unq_surveys = surveys[ii]
         create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25,
@@ -156,7 +176,7 @@ def main():
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
-    if "html" in args.steps.split(","):
+    if "html" in steps_tbd:
         os.system("cp {} {}".format(args.css, args.outdir))
         write_nightqa_html(
             outfns, args.night, args.prod, os.path.basename(args.css),
