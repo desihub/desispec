@@ -95,9 +95,10 @@ def main(args=None, comm=None):
         if args.system_name == "perlmutter-gpu":
             gpuspecter=True
             gpuextract=True
+        ncameras = len(decode_camword(joint_camwords))
         scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
                                                    exp=expids,
-                                                   camword=camwords,
+                                                   ncameras=ncameras,
                                                    tileid=args.tileid,
                                                    queue=args.queue,
                                                    system_name=args.system_name,
