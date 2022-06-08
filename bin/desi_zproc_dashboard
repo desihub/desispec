@@ -12,7 +12,7 @@ proc_dashboard_funcs.py -n all --n_night 60  --output_dir /global/project/projec
 """
 
 import sys
-from desispec.scripts.procdashboard import parse,main
+from desispec.scripts.zprocdashboard import parse,main
 
 args = parse(options=None)
 sys.exit(main(args))
