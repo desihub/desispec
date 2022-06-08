@@ -336,7 +336,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 for ecomment in list(erow['COMMENTS']):
                     if 'For EXPTIME: req=' not in ecomment:
                         ecomments.append(f"{erow['EXPID']}: {ecomment}")
-                comments.append(f"{erow['EXPID']}: " + ', '.join(ecomments))
+                if len(ecomments) > 0:
+                    comments.append(f"{erow['EXPID']}: " + ', '.join(ecomments))
             comments = '; '.join(comments)
 
         if 'FA_SURV' in exptab_row.colnames and exptab_row['FA_SURV'] != 'unknown':
