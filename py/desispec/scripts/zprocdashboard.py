@@ -177,13 +177,16 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
     expected_by_type = dict()
     expected_by_type['cumulative'] =      {'rr': 1,  'tile-qa': 1, 'zmtl': 1,
                                            'qso': 0, 'em': 0}
+    expected_by_type['pernight'] =        {'rr': 1,  'tile-qa': 1, 'zmtl': 0,
+                                           'qso': 0, 'em': 0}
     expected_by_type['perexp'] =          {'rr': 1,  'tile-qa': 0, 'zmtl': 0,
                                            'qso': 0, 'em': 0}
     expected_by_type['null'] =            {'rr': 0,  'tile-qa': 0, 'zmtl': 0,
                                            'qso': 0, 'em': 0}
-    expected_by_type['pernight'] = expected_by_type['cumulative']
 
     for ztype in expected_by_type.keys():
+        if ztype == 'null':
+            continue
         if doem:
             expected_by_type[ztype]['em'] = 1
         if doqso:
@@ -322,16 +325,17 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         # laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = []
-        for erow in tilematches:
-            comments.extend(list(erow['COMMENTS']))
+        if ztype == 'perexp' or len(tilematches) == 1:
+            for comment in list(exptab_row['COMMENTS']):
+                if 'For EXPTIME: req=' not in comment:
+                    comments.append(comment)
+        else:
+            for erow in tilematches:
+                for comment in list(erow['COMMENTS']):
+                    if 'For EXPTIME: req=' not in comment:
+                        comments.append(f"{erow['EXPID']}: {comment}")
 
-        bad_ind = None
-        for ii, comment in enumerate(comments):
-            if 'For EXPTIME: req=' in comment:
-                bad_ind = ii
-        if bad_ind is not None:
-            comments.pop(bad_ind)
-        comments = ', '.join(comments)
+        comments = ', '.join(np.unique(comments))
 
         if 'FA_SURV' in exptab_row.colnames and exptab_row['FA_SURV'] != 'unknown':
             fasurv = exptab_row['FA_SURV']
