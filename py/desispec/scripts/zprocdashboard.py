@@ -17,7 +17,7 @@ from desispec.workflow.exptable import get_exposure_table_pathname, \
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
-    get_terminal_steps, get_tables, interpret_table_row_quantities
+    get_terminal_steps, get_tables
 from desispec.workflow.proctable import get_processing_table_pathname, \
     erow_to_prow, instantiate_processing_table
 from desispec.workflow.tableio import load_table
@@ -329,13 +329,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             for comment in list(exptab_row['COMMENTS']):
                 if 'For EXPTIME: req=' not in comment:
                     comments.append(comment)
+            comments = ', '.join(comments)
         else:
             for erow in tilematches:
-                for comment in list(erow['COMMENTS']):
-                    if 'For EXPTIME: req=' not in comment:
-                        comments.append(f"{erow['EXPID']}: {comment}")
-
-        comments = ', '.join(np.unique(comments))
+                ecomments = []
+                for ecomment in list(erow['COMMENTS']):
+                    if 'For EXPTIME: req=' not in ecomment:
+                        ecomments.append(f"{erow['EXPID']}: {ecomment}")
+                comments.append(f"{erow['EXPID']}: " + ', '.join(ecomments))
+            comments = '; '.join(comments)
 
         if 'FA_SURV' in exptab_row.colnames and exptab_row['FA_SURV'] != 'unknown':
             fasurv = exptab_row['FA_SURV']

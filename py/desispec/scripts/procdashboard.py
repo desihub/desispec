@@ -17,7 +17,7 @@ from desispec.workflow.exptable import get_exposure_table_pathname, \
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
-    get_terminal_steps, get_tables, interpret_table_row_quantities
+    get_terminal_steps, get_tables
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root

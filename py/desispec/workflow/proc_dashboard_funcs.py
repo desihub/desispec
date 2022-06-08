@@ -179,77 +179,6 @@ def get_tables(night, check_on_disk=False, exptab_colnames=None):
     return d_exp, d_processing, np.array(unaccounted_for_expids), \
            np.unique(unaccounted_for_tileids)
 
-def interpret_table_row_quantities(row, colnames, lasttile):
-    expid = int(row['EXPID'])
-
-    zfild_expid = str(expid).zfill(8)
-    obstype = str(row['OBSTYPE']).lower().strip()
-    tileid = str(row['TILEID'])
-    if obstype == 'science':
-        zfild_tid = tileid.zfill(6)
-        linkloc = f"https://data.desi.lbl.gov/desi/target/fiberassign/tiles/" \
-                  + f"trunk/{zfild_tid[0:3]}/fiberassign-{zfild_tid}.png"
-        tileid_str = _hyperlink(linkloc, tileid)
-        if lasttile != tileid:
-            first_exp_of_tile = zfild_expid
-            lasttile = tileid
-    # elif obstype == 'zero':  # or obstype == 'other':
-    #     continue
-    else:
-        tileid_str = '----'
-
-    exptime = np.round(row['EXPTIME'], decimals=1)
-    proccamword = row['CAMWORD']
-    if 'BADCAMWORD' in colnames:
-        proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
-    if obstype != 'science' and 'BADAMPS' in colnames and row[
-        'BADAMPS'] != '':
-        badcams = []
-        for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
-            badcams.append(f'{camera}{petal}')
-        badampcamword = create_camword(list(set(badcams)))
-        proccamword = difference_camwords(proccamword, badampcamword)
-
-    cameras = decode_camword(proccamword)
-    nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
-    ncams = len(cameras)
-
-    laststep = str(row['LASTSTEP'])
-    ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
-    comments = list(row['COMMENTS'])
-    bad_ind = None
-    for ii, comment in enumerate(comments):
-        if 'For EXPTIME: req=' in comment:
-            bad_ind = ii
-    if bad_ind is not None:
-        comments.pop(bad_ind)
-    comments = ', '.join(comments)
-
-    if 'FA_SURV' in row.colnames and row['FA_SURV'] != 'unknown':
-        fasurv = row['FA_SURV']
-    else:
-        fasurv = 'unkwn'
-    if 'FAPRGRM' in row.colnames and row['FAPRGRM'] != 'unknown':
-        faprog = row['FAPRGRM']
-    else:
-        faprog = 'unkwn'
-    if obstype not in ['science', 'twilight']:
-        if fasurv == 'unkwn':
-            fasurv = '----'
-        if faprog == 'unkwn':
-            faprog = '----'
-
-    derived_obstype = obstype
-    if obstype == 'flat' and exptime < 2.0:
-        derived_obstype = 'cteflat'
-
-    exptime = str(exptime)
-
-    return obstype, derived_obstype, laststep,\
-        ncams, nspecs, zfild_expid, tileid_str, \
-        obstype, fasurv, faprog, laststep, \
-        exptime, proccamword, comments
-
 def get_terminal_steps(expected_by_type):
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = dict()
@@ -460,7 +389,7 @@ def write_json(output_data, filename_json):
         try:
             json.dump(output_data, json_file)
         except:
-            print(f"Error trying to dumnp {filename_json}, "
+            print(f"Error trying to dump {filename_json}, "
                   + "not saving that information.")
 
 def _initialize_page(color_profile, titlefill='Processing'):
@@ -549,7 +478,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
-    html_page += f'</head><body><h1>DESI {os.environ["SPECPROD"]} Prod. '
+    html_page += f"</head><body><h1>DESI '{os.environ['SPECPROD']}' "
     html_page += f'{titlefill} Status Monitor</h1>\n'
 
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
