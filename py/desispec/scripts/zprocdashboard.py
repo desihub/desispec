@@ -317,6 +317,10 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         tileid_str = _hyperlink(linkloc, tileid)
 
         tilematches = exptab[exptab['TILEID'] == int(tileid)]
+        if len(tilematches) == 0:
+            print(f"ERROR: Tile {tileid} found in processing table not present "
+                  + f"in exposure table: {np.unique(exptab['TILEID'])}!")
+            continue
         exptab_row = tilematches[0]
         #exptime = np.round(exptab_row['EXPTIME'], decimals=1)
         proccamword = row['PROCCAMWORD']
