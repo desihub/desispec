@@ -98,6 +98,7 @@ class TestPixGroup(unittest.TestCase):
 
         # Setup a dummy SpectraLite for I/O tests
         cls.fileio = 'test_spectralite.fits'
+        cls.fileiogz = 'test_spectralite.fits.gz'
 
         cls.nwave = 100
         cls.nspec = 5
@@ -153,6 +154,8 @@ class TestPixGroup(unittest.TestCase):
             shutil.rmtree(self.outdir)
         if os.path.exists(self.fileio):
             os.remove(self.fileio)
+        if os.path.exists(self.fileiogz):
+            os.remove(self.fileiogz)
 
     def verify_spectralite(self, spec, fmap):
         nt.assert_array_equal(spec.fibermap, fmap)
@@ -293,9 +296,15 @@ class TestPixGroup(unittest.TestCase):
         path = write_spectra(self.fileio, spec)
         assert(path == os.path.abspath(self.fileio))
 
+        pathgz = write_spectra(self.fileiogz, spec)
+        assert(pathgz == os.path.abspath(self.fileiogz))
+
         # read back in and verify
         comp = read_spectra(self.fileio)
         self.verify_spectralite(comp, self.fmap1)
+
+        compgz = read_spectra(self.fileiogz)
+        self.verify_spectralite(compgz, self.fmap1)
 
 def test_suite():
     """Allows testing of only this module with the command::

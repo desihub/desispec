@@ -3,7 +3,7 @@
 from time import time
 from astropy.time import Time
 from desiutil.log import get_logger
-from argparse import ArgumentParser
+import argparse
 from desispec.io.emlinefit import (
     get_targetids,
     read_emlines_inputs,
@@ -17,7 +17,7 @@ from desispec.emlinefit import (
 )
 
 
-def get_parse(options=None, log=None):
+def parse(options=None, log=None):
     if log is None:
         log = get_logger()
     # AR some defaults
@@ -25,7 +25,7 @@ def get_parse(options=None, log=None):
     default_rr_keys = "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"
     default_fm_keys = "TARGET_RA,TARGET_DEC,OBJTYPE"
     #
-    parser = ArgumentParser(description="Simple emission line fitter; primarily designed for ELGs.")
+    parser = argparse.ArgumentParser(description="Simple emission line fitter; primarily designed for ELGs.")
     parser.add_argument(
         "--redrock",
         help="full path to a redrock/zbest file (default=None)",
@@ -125,10 +125,8 @@ def main(args=None):
     log.info("{:.1f}s\tstart\tTIMESTAMP={}".format(time() - start, Time.now().isot))
 
     # AR read arguments
-    if args is None:
-        args = get_parse(log=log)
-    elif isinstance(args, (list, tuple)):
-        args = get_parse(options=args, log=log)
+    if not isinstance(args, argparse.Namespace):
+        args = parse(options=args, log=log)
 
     # AR read columns + spectra
     rr, fm, waves, fluxes, ivars = read_emlines_inputs(

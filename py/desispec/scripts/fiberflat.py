@@ -40,16 +40,15 @@ def parse(options=None):
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     
+    args = parser.parse_args(options)
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
     return args
 
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log=get_logger()
     log.info("starting at {}".format(time.asctime()))

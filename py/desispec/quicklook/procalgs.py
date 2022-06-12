@@ -244,7 +244,7 @@ class Flexure(pas.PipelineAlg):
         from desispec.util import runcmd
         #- Generate modified psf file
         cmd="desi_compute_trace_shifts --image {} --psf {} --outpsf {}".format(preproc_file,input_file,output_file)
-        if runcmd(cmd) !=0:
+        if not runcmd(cmd)[1]:
             raise RuntimeError('desi_compute_trace_shifts failed, psftrace not written')
 
         #- return image object to pass to boxcar for extraction

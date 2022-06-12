@@ -8,19 +8,15 @@ No delimiters as it is only a single column (loaded as csv internally)
 
 import sys, os, glob, time, subprocess
 import argparse
-import psutil
 import socket
-import datetime
 import desispec.io
-import fitsio
 from astropy.io import fits
-import numpy as np
 
 ########################
 ### Helper Functions ###
 ########################
-from desispec.desi_proc_dashboard import what_night_is_it, check_running,\
-                                         get_file_list, get_skipped_expids
+from desispec.workflow.proc_dashboard_funcs import what_night_is_it, check_running,\
+                                         get_file_list, get_skipped_ids
 
 def find_new_nightexp(night, fileglob, known_exposures):
     """
@@ -191,7 +187,7 @@ def main(args):
     #########################
     ### Setup for Running ###
     #########################
-    skipd_expids = get_skipped_expids(expid_filename,args.skip_expids)
+    skipd_expids = get_skipped_ids(expid_filename, args.skip_expids)
     skipd_expid_set = set(skipd_expids)
     
     #- First identify exposures that are already processed

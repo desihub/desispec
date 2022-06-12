@@ -8,9 +8,10 @@
 This script generates QA related to an Exposure
 """
 
+import sys
 import desispec.scripts.qa_exposure as qa_exposure
 
 
 if __name__ == '__main__':
     args = qa_exposure.parse()
-    qa_exposure.main(args)
+    sys.exit(qa_exposure.main(args))

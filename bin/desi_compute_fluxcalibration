@@ -8,9 +8,9 @@
 This script computes the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.
 """
 
+import sys
 import desispec.scripts.fluxcalibration as fluxcal
-
 
 if __name__ == '__main__':
     args = fluxcal.parse()
-    fluxcal.main(args)
+    sys.exit(fluxcal.main(args))

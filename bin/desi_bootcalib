@@ -8,9 +8,9 @@
 This script runs bootcalib scripts for one spectrograph given a flat, arc combination
 """
 
+import sys
 import desispec.scripts.bootcalib as desiboot
-
 
 if __name__ == '__main__':
     args = desiboot.parse()
-    desiboot.main(args)
+    sys.exit(desiboot.main(args))

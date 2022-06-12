@@ -106,13 +106,15 @@ def integration_test(night=None, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(program, expid))
 
         cmd = "pixsim --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
         inputs = [fibermap, simspec]
         outputs = [fibermap.replace('fibermap-', 'simpix-'), ]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
     #-----
@@ -128,7 +130,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         for camera in cameras:
             outputs.append(io.findfile('preproc', night, expid, camera))
 
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('preproc failed for expid {}'.format(expid))
 
     #-----
@@ -148,7 +151,8 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             inputs = [pixfile, psffile, fiberfile]
             outputs = [framefile,]
-            if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+            result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+            if not success:
                 raise RuntimeError('extraction failed for {} expid {}'.format(cameras[ic], expid))
 
     #-----
@@ -164,7 +168,8 @@ def integration_test(night=None, nspec=5, clobber=False):
             frame=framefile, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile,fibermap,]
         outputs = [fiberflat,qafile,qafig,]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('fiberflat failed for '+cameras[ic])
 
     #-----
@@ -182,7 +187,8 @@ def integration_test(night=None, nspec=5, clobber=False):
             frame=framefile, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, qafile, qafig,]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('sky model failed for '+cameras[ic])
 
 
@@ -217,7 +223,8 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     inputs = [fibermap, std_templates]
     outputs = [stdstarfile,]
-    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+    result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+    if not success:
         raise RuntimeError('fitting stdstars failed')
 
 
@@ -241,7 +248,8 @@ def integration_test(night=None, nspec=5, clobber=False):
             )
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
         outputs = [calibfile, qafile, qafig]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('flux calibration failed for '+cameras[ic])
 
         #- Apply the flux calibration to write a cframe file
@@ -252,7 +260,8 @@ def integration_test(night=None, nspec=5, clobber=False):
             fiberflat=fiberflat, sky=skyfile, calib=calibfile, cframe=cframefile)
         inputs = [framefile, fiberflat, skyfile, calibfile]
         outputs = [cframefile, ]
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('combining calibration steps failed for '+cameras[ic])
 
     #-----
@@ -296,7 +305,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         outputs.append( io.findfile('spectra', groupname=pix) )
 
     cmd = "desi_group_spectra"
-    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+    result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+    if not success:
         raise RuntimeError('spectra regrouping failed')
 
     #-----
@@ -307,7 +317,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [specfile, ]
         outputs = [redrockfile, ]
         cmd = "rrdesi {} --outfile {}".format(specfile, redrockfile)
-        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+        if not success:
             raise RuntimeError('rrdesi failed for healpixel {}'.format(pix))
 
     #
@@ -325,7 +336,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     #     night=night, qafile=qafile, qafig=qafig)
     # inputs = []
     # outputs = [qafile, qafig]
-    # if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+    # result, success runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber)
+    # if not success:
     #     raise RuntimeError('redshift QA failed for night '+night)
 
     #-----

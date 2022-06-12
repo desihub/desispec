@@ -6,6 +6,7 @@ Spectral scores routines.
 """
 from __future__ import absolute_import
 import numpy as np
+import astropy.table
 from desispec.frame import Frame
 from desiutil.log import get_logger
 
@@ -303,8 +304,8 @@ def append_frame_scores(frame,new_scores,new_comments,overwrite) :
 
         # frame.scores can be a 
         frame_scores_keys = None
-        if isinstance(frame.scores, np.recarray) :
-            frame_scores_keys = frame.scores.columns.names
+        if isinstance(frame.scores, (np.ndarray, astropy.table.Table, np.recarray)) :
+            frame_scores_keys = frame.scores.dtype.names
         elif isinstance(frame.scores, dict) :
             frame_scores_keys = frame.scores.keys()
         else :

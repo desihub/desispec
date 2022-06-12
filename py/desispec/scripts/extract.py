@@ -23,6 +23,7 @@ from desiutil.iers import freeze_iers
 from desiutil import depend
 
 from desispec import io
+from desispec.io.util import get_tempfilename
 from desispec.frame import Frame
 from desispec.maskbits import specmask,extractmaskval
 
@@ -66,15 +67,12 @@ def parse(options=None):
     #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
     parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
     parser.add_argument("--gpu-specter", action="store_true", help="use gpu_specter instead of specter")
-    parser.add_argument("--gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
+    parser.add_argument("--use-gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
     parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
     parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
@@ -133,7 +131,10 @@ def barycentric_correction_multiplicative_factor(header) :
     return val
 
 
-def main(args):
+def main(args=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     if args.mpi:
         from mpi4py import MPI
@@ -169,7 +170,7 @@ def gpu_specter_check_input_options(args):
         msg = 'specmin ({}) must begin at a bundle boundary'.format(args.specmin)
         return False, msg
 
-    if args.gpu:
+    if args.use_gpu:
         is_numba_cuda_available = False
         try:
             import numba.cuda
@@ -183,7 +184,7 @@ def gpu_specter_check_input_options(args):
         except ImportError:
             return False, 'cannot import cupy'
         if not (is_numba_cuda_available and is_cupy_available):
-            return False, 'gpu is not available'
+            return False, f'gpu is not available ({is_numba_cuda_available=}, {is_cupy_available=})'
 
     if args.decorrelate_fibers:
         msg = "--decorrelate-fibers not implemented with --gpu-specter"
@@ -208,6 +209,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         log.critical(message)
         raise ValueError(message)
 
+    import gpu_specter
     import gpu_specter.io
     import gpu_specter.core
     import gpu_specter.mpi
@@ -241,7 +243,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             'ivar': img.ivar*((img.mask & extractmaskval)==0)
         }
         #- If GPU, move image and ivar arrays to device
-        if args.gpu:
+        if args.use_gpu:
             import cupy as cp
             image['image'] = cp.asarray(image['image'])
             image['ivar'] = cp.asarray(image['ivar'])
@@ -315,9 +317,9 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
         img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
         img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-        img.meta['SPECTER'] = ('dev', 'https://github.com/desihub/gpu_specter')
-        img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
-        img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
+        img.meta['SPECTER'] = (gpu_specter.__version__, 'https://github.com/desihub/gpu_specter')
+        img.meta['IN_PSF']  = (io.shorten_filename(args.psf), 'Input spectral PSF')
+        img.meta['IN_IMG']  = io.shorten_filename(args.input)
         depend.add_dependencies(img.meta)
 
         #- Check if input PSF was itself a traceshifted version of another PSF
@@ -360,7 +362,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             args.regularize,
             args.psferr,
             coordinator.work_comm,             # mpi parameters
-            args.gpu,                          # gpu parameters
+            args.use_gpu,                      # gpu parameters
             loglevel=None,
             timing=core_timing,
             wavepad_frac=args.wavepad_frac,
@@ -428,8 +430,9 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         if args.model is not None:
             modelimage = result['modelimage']
             log.info("Writing model {}".format(args.model))
-            fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
-            os.rename(args.model+'.tmp', args.model)
+            tmpfile = get_tempfilename(args.model)
+            fits.writeto(tmpfile, modelimage, header=frame.meta, overwrite=True, checksum=True)
+            os.rename(tmpfile, args.model)
 
     coordinator.write(finalize_result_and_write_frame, result)
 
@@ -638,7 +641,7 @@ def main_mpi(args, comm=None, timing=None):
         myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
 
     # get the root output file
-    outpat = re.compile(r'(.*)\.fits')
+    outpat = re.compile(r'(.*)\.fits(\.gz)?')
     outmat = outpat.match(args.output)
     if outmat is None:
         raise RuntimeError("extraction output file should have .fits extension")

@@ -249,7 +249,6 @@ def desi_proc_command(prow, queue=None):
     cmd = 'desi_proc'
     cmd += ' --batch'
     cmd += ' --nosubmit'
-    cmd += ' --traceshift'
     if queue is not None:
         cmd += f' -q {queue}'
     if prow['OBSTYPE'].lower() == 'science':
@@ -282,7 +281,6 @@ def desi_proc_joint_fit_command(prow, queue=None):
     cmd = 'desi_proc_joint_fit'
     cmd += ' --batch'
     cmd += ' --nosubmit'
-    cmd += ' --traceshift'
     if queue is not None:
         cmd += f' -q {queue}'
 
@@ -454,8 +452,23 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         current_qid = int(time.time() - 1.6e9)
         time.sleep(1)
     else:
-        current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
-        current_qid = int(current_qid.strip(' \t\n'))
+        #- sbatch sometimes fails; try several times before giving up
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
+                current_qid = int(current_qid.strip(' \t\n'))
+                break
+            except subprocess.CalledProcessError as err:
+                log.error(f'{jobname} submission failed: {batch_params}')
+                log.error(f'{jobname} {err.output=}')
+                if attempt < max_attempts - 1:
+                    log.info('Sleeping 60 seconds then retrying')
+                    time.sleep(60)
+        else:  #- for/else happens if loop doesn't succeed
+            msg = f'{jobname} submission failed {max_attempts} times; exiting'
+            log.critical(msg)
+            raise RuntimeError(msg)
 
     log.info(batch_params)
     log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
@@ -1094,7 +1107,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                           is the smallest unassigned value.
         z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
                                         exposure. If not specified or None, then no redshifts are submitted.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If 
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
@@ -1210,4 +1223,3 @@ def set_calibrator_flag(prows, ptable):
     for prow in prows:
         ptable['CALIBRATOR'][ptable['INTID'] == prow['INTID']] = 1
     return ptable
-

@@ -77,6 +77,8 @@ if  args.redrock is not None :
         redshifts=read_table(args.redrock, "REDSHIFTS")
     except KeyError:
         redshifts=read_table(args.redrock, "ZBEST")
+    except OSError:
+        redshifts=read_table(args.redrock, "ZBEST")
 
 if ( targetids is None ) and ( redshifts is not None ) and ( args.spectype is not None ):
     selection = np.where((redshifts["SPECTYPE"]==args.spectype)&(redshifts["ZWARN"]==0))[0]

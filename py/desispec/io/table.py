@@ -7,7 +7,7 @@ Utility functions for reading FITS tables
 
 import fitsio
 from astropy.table import Table
-from .util import addkeys
+from .util import addkeys, checkgzip
 
 def read_table(filename, ext=None):
     """
@@ -24,6 +24,7 @@ def read_table(filename, ext=None):
     fitsio and then converts to a Table.
     """
 
+    filename = checkgzip(filename)
     data, header = fitsio.read(filename, ext=ext, header=True)
     table = Table(data)
     if 'EXTNAME' in header:

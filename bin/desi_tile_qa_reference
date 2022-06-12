@@ -10,7 +10,7 @@ This script computes the reference n(z) and per-fiber TSNR2, used by the per-cum
 """
 
 
-import os
+import os, sys
 import argparse
 from astropy.table import Table
 import fitsio
@@ -259,4 +259,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

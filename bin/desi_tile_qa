@@ -8,6 +8,9 @@
 This script computes QA scores per exposure, after the cframe are done
 """
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
 
 import os,sys
 import argparse
@@ -19,6 +22,7 @@ import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
+from desispec.io.util import get_tempfilename
 from desispec.tile_qa import compute_tile_qa
 from desispec.util import parse_int_args
 
@@ -217,7 +221,7 @@ def main():
 
             if os.path.exists(qafitsfile) and not os.path.exists(qapngfile):
                 log.info(f'Trying again on '+os.path.basename(qapngfile))
-                _wrap_make_tile_qa_plot(qafitsfile, args.outdir)
+                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod)
 
     if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
@@ -255,7 +259,7 @@ def main():
         print(table)
         print()
 
-        tmpfile = args.outfile + '.tmp'
+        tmpfile = get_tempfilename(args.outfile)
         table.write(tmpfile, overwrite=True, format='fits')
         os.rename(tmpfile, args.outfile)
         log.info("wrote {}".format(args.outfile))
@@ -264,4 +268,4 @@ def main():
         print("no data")
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

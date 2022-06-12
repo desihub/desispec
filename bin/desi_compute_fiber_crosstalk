@@ -8,9 +8,9 @@
 This script computes the optical crosstalk between adjacent fibers due to PSF tails
 """
 
+import sys
 import desispec.scripts.fibercrosstalk as fibercrosstalk
-
 
 if __name__ == '__main__':
     args = fibercrosstalk.parse()
-    fibercrosstalk.main(args)
+    sys.exit(fibercrosstalk.main(args))

@@ -12,7 +12,7 @@ from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
-from .util import makepath
+from .util import makepath, get_tempfilename
 from . import iotime
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
@@ -208,8 +208,9 @@ def write_xytraceset(outfile,xytraceset) :
             hdus[hdu].header["NPIX_Y"]  = xytraceset.npix_y
 
     t0 = time.time()
-    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info("wrote a xytraceset in {}".format(outfile))
     log.info(iotime.format('write', outfile, duration))

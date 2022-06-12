@@ -47,15 +47,15 @@ def parse(options=None):
                          nargs='*',
                          help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
-    parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
+    parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
 
     log = get_logger()
-    args = None
+
+    args = parser.parse_args(options)
+
     if options is None:
-        args = parser.parse_args()
         cmd = ' '.join(sys.argv)
     else:
-        args = parser.parse_args(options)
         cmd = 'desi_fit_stdstars ' + ' '.join(options)
 
     log.info('RUNNING {}'.format(cmd))
@@ -111,10 +111,13 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
 
-def main(args, comm=None) :
+def main(args=None, comm=None) :
     """ finds the best models of all standard stars in the frame
     and normlize the model flux. Output is written to a file and will be called for calibration.
     """
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 
@@ -145,7 +148,7 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
-    if args.ignore_gpu and desispec.fluxcalibration.use_gpu:
+    if not args.use_gpu and desispec.fluxcalibration.use_gpu:
         # Opt-out of GPU usage
         desispec.fluxcalibration.use_gpu = False
         if rank == 0:
@@ -423,7 +426,7 @@ def main(args, comm=None) :
 
     log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
     if validstars.size == 0 :
-        log.error("No valid star")
+        log.error(f"No valid star for sp{spectrograph}")
         sys.exit(12)
 
     validstars = indices[validstars]
@@ -730,3 +733,8 @@ def main(args, comm=None) :
         io.write_stdstar_models(args.outfile,normflux,stdwave,
                 starfibers[fitted_stars],data,
                 fibermap, input_frames_table)
+
+    if comm is not None:
+        comm.barrier()
+
+    return 0

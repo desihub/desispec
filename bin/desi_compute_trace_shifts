@@ -8,9 +8,10 @@
 This script computes the trace shifts for a preprocessed image, using a PSF and a set of known lines
 """
 
+import sys
 import desispec.scripts.trace_shifts as trace_shifts
 
 
 if __name__ == '__main__':
     args = trace_shifts.parse()
-    trace_shifts.main(args)
+    sys.exit(trace_shifts.main(args))

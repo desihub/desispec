@@ -9,6 +9,7 @@ import glob
 import time
 import datetime
 import subprocess
+import fitsio
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -88,6 +89,14 @@ def fitsheader(header):
         hdr = astropy.io.fits.Header()
         for key, value in header.items():
             hdr[key] = value
+        return hdr
+
+    if isinstance(header, fitsio.FITSHDR):
+        hdr = astropy.io.fits.Header()
+        for key in header.keys():
+            value = header.get(key)
+            comment = header.get_comment(key)
+            hdr[key] = (value, comment)
         return hdr
 
     if isinstance(header, astropy.io.fits.Header):
@@ -528,7 +537,7 @@ def parse_cameras(cameras, loglevel='INFO'):
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
 
-def difference_camwords(fullcamword,badcamword):
+def difference_camwords(fullcamword,badcamword,suppress_logging=False):
     """
     Returns the difference of two camwords. The second argument cameras are removed from the first argument and the
     remainer is returned. Smart enough to ignore bad cameras if they don't exist in full camword list.

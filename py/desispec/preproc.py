@@ -599,12 +599,55 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
+def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,
+        threshold=25000., smooth=100):
+    """
+    Find overscan columns that might be impacted by a trail from bright cosmic
+
+    Args:
+        rawimage: numpy 2D array of raw image
+        ov_col: tuple(yslice, xslice) from parse_sec_keyword('BIASSECx') defining overscan region
+
+    Options:
+        col_width: number of pixels from overscan region to consider
+        threshold: ADU threshold for what might cause a problematic trail
+        smooth: median filter smoothing scale
+
+    Returns (badrows, active_col_val) where badrows is a boolean array
+    of whether each row is bad or not, and active_col_val is an array of
+    column-summed and row median-filtered from the active region of the CCD
+    next to the overscan region.
+    """
+    # define a band in the active CCD region next to the overscan
+    left_amp = ov_col[1].start < rawimage.shape[1]//2
+    if left_amp :
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+    else :
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
+
+    # measure sum over columns in band
+    active_col_val = np.max(rawimage[active_col].astype(float),axis=1)
+    # subtract median filter (to limit effect of neighboring truly bright fiber)
+    active_col_val -= median_filter(active_col_val, smooth)
+    # flag rows with large signal in active region
+    badrows=(active_col_val>threshold)
+    med_overscan_col = median_filter(overscan_values, 20)
+    badrows &= np.abs(overscan_values-med_overscan_col) > 2.
+
+    # add 2 pixel margins to the list of badrows
+    for _ in range(2) :
+        badrows[1:] |= badrows[:-1]
+        badrows[:-1] |= badrows[1:]
+
+    return badrows, active_col_val
+
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False):
+            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
+            keep_overscan_cols=False,no_overscan_per_row=False):
 
     '''
     preprocess image using metadata in header
@@ -652,6 +695,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     Optional fit and subtraction of scattered light
 
+    Optional disabling of overscan subtraction per row if no_overscan_per_row=True
+
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
         ivar : 2D inverse variance of image
@@ -683,6 +728,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     and thus is biased.
     '''
     log=get_logger()
+
+    if keep_overscan_cols :
+        if dark is not False :
+            mess="need dark=False because keep_overscal_col=True, try option --nodark"
+            log.error(mess)
+            raise RuntimeError(mess)
+        if mask is not False :
+            mess="need mask=False because keep_overscal_col=True, try option --nomask"
+            log.error(mess)
+            raise RuntimeError(mess)
+        if pixflat is not False :
+            mess="need pixflat=False because keep_overscal_col=True, try option --nopixflat"
+            log.error(mess)
+            raise RuntimeError(mess)
 
     header = header.copy()
     depend.setdep(header, 'DESI_SPECTRO_CALIB', os.getenv('DESI_SPECTRO_CALIB'))
@@ -740,6 +799,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         bias = bias_img
 
+    overscan_col_width = 0
+
     #- Output arrays
     ny=0
     nx=0
@@ -747,6 +808,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
+
+    if keep_overscan_cols :
+        amp = amp_ids[0]
+        tt     = parse_sec_keyword(header['DATASEC'+amp])
+        ov_col = parse_sec_keyword(header['BIASSEC%s'%amp])
+        overscan_col_width = max((tt[1].start-ov_col[1].start),(ov_col[1].stop-tt[1].stop))
+        log.info(f"will keep overscan columns of width = {overscan_col_width} pixels")
+        nx += 2*overscan_col_width
+
     image = np.zeros((ny,nx))
 
     readnoise = np.zeros_like(image)
@@ -809,6 +879,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+
+    if no_overscan_per_row :
+        log.debug("Option no_overscan_per_row is set")
+
     for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
@@ -847,15 +921,45 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.warning(f'Camera {camera} Missing keyword SATURLEV{amp} in header and nothing in calib data; using {saturlev_adu} ADU')
         header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
 
-
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
 
         kk = parse_sec_keyword(header['CCDSEC'+amp])
 
+        if keep_overscan_cols :
+            if kk[1].stop>image.shape[1]//2 :
+                start = kk[1].start + overscan_col_width
+                stop  = kk[1].stop + 2*overscan_col_width
+            else :
+                start = kk[1].start
+                stop  = kk[1].stop + overscan_col_width
+            kk = np.s_[kk[0].start:kk[0].stop, start:stop]
+
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
         log.info(f"Camera {camera} {nrows} rows in overscan")
+
+        if not nodarktrail and cfinder is not None :
+            if cfinder.haskey("DARKTRAILAMP%s"%amp) :
+                log.info("Perform a dark trail correction before fitting the overscan region")
+                amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
+                width = cfinder.value("DARKTRAILWIDTH%s"%amp)
+                # region is BIASSEC+DATASEC
+                ii    = parse_sec_keyword(header["BIASSEC"+amp])
+                jj    = parse_sec_keyword(header["DATASEC"+amp])
+                start = min(ii[1].start,jj[1].start)
+                stop  = max(ii[1].stop,jj[1].stop)
+                jj=np.s_[jj[0].start:jj[0].stop, start:stop]
+                o,r = calc_overscan(rawimage[jj])
+                # tmp copy or rawimage
+                tmp=rawimage[jj].copy()-o
+                ll=np.s_[0:tmp.shape[0],0:tmp.shape[1]]
+                correct_dark_trail(tmp,ll,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
+                tmp -= (rawimage[jj].copy()-o) # subtract input to keep only the correction
+                start = ii[1].start-jj[1].start
+                stop  = ii[1].stop-jj[1].start
+                raw_overscan_col += tmp[:,start:stop] # apply the correction only to the overscan cols
+
         overscan_col = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
         for j in range(nrows) :
@@ -865,10 +969,27 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
+
+        # find rows impacted by a large cosmic charge deposit
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
+        if np.any(badrows) :
+            log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
+                camera,amp,np.where(badrows)[0],active_col_val[badrows]))
+            # do not use overscan value for those, use interpolation
+            goodrows = ~badrows
+            rr=np.arange(nrows)
+            try:
+                overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
+            except ValueError:
+                # If can't interpolate, log error but don't crash and let ostep do the flagging
+                ngood = np.sum(goodrows)
+                nbad = np.sum(badrows)
+                log.error(f'Camera {camera} amp {amp} unable to interpolate overscan_col over {nbad} bad rows using {ngood} good rows')
+
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
-        if overscan_step <  2 : # tuned to trig on the worst few
+        if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value
@@ -897,6 +1018,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             # so we only need to add the quadratic difference of the master bias read noise
             # between the active region and the overscan columns
             jj = parse_sec_keyword(header['DATASEC'+amp])
+
             o,biasnoise_datasec = calc_overscan(bias[jj])
             o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
             new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
@@ -949,6 +1071,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         #- subtract overscan from data region and apply gain
         jj = parse_sec_keyword(header['DATASEC'+amp])
+        if keep_overscan_cols :
+            start=min(jj[1].start,ov_col[1].start)
+            stop=max(jj[1].stop,ov_col[1].stop)
+            jj = np.s_[jj[0].start:jj[0].stop, start:stop]
 
         data = rawimage[jj].copy()
         # Subtract columns
@@ -1069,7 +1195,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             if cfinder.haskey("DARKTRAILAMP%s"%amp) :
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
-                ii    = _parse_sec_keyword(header["CCDSEC"+amp])
+                ii    = parse_sec_keyword(header["CCDSEC"+amp])
+                if keep_overscan_cols and ii[1].stop>image.shape[1]//2 :
+                    start = ii[1].start + overscan_col_width
+                    stop  = ii[1].stop  + 2*overscan_col_width
+                    ii = np.s_[ii[0].start:ii[0].stop, start:stop]
+                else :
+                    start = ii[1].start
+                    stop  = ii[1].stop  + overscan_col_width
+                    ii = np.s_[ii[0].start:ii[0].stop, start:stop]
                 log.info("Camera {} amp {} removing dark trails with width={:3.1f} and amplitude={:5.4f}".format(
                     camera, amp, width, amplitude))
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)

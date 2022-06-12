@@ -1,6 +1,6 @@
 """
 desispec.fiberbitmasking
-==============
+========================
 
 Functions to properly take FIBERSTATUS into account in the variances for data reduction
 """
@@ -120,7 +120,6 @@ def get_fiberbitmask_comparison_value(kind,band):
         output:
              bitmask : 32 bit bitmask corresponding to the fiberbitmask of the desired kind
                        in the desired cameras (bands).
-
     """
     if kind.lower() == 'all':
         return get_all_fiberbitmask_with_amp(band)

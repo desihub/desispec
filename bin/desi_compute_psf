@@ -8,9 +8,9 @@
 This script computes the PSF serially with SpecEX.
 """
 
+import sys
 import desispec.scripts.specex as specex
-
 
 if __name__ == '__main__':
     args = specex.parse()
-    specex.main(args)
+    sys.exit(specex.main(args))
