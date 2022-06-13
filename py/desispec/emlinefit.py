@@ -74,12 +74,12 @@ def emlines_gaussfit(
         min_rf_fit_hw (optional, defaults to 20): minimum requested *rest-frame* width (in A) on each side of the line to consider the fitting (float)
         rf_cont_w (optional, defaults to 200): *rest-frame* wavelength extent (in A) to fit the continuum (float)
         p0_sigma (optional, defaults to 2.5): initial guess on the line width in A (float)
-        p0_flux (optional, defaults to 0.1): initial guess on the line flux in 1e-17 * erg/cm2/s/A (float)
+        p0_flux (optional, defaults to 0.1): initial guess on the line flux in 1e-17 * erg/cm2/s (float)
         p0_share (optional, defaults to 0.58): initial guess on the share between the two [OII] lines (float)
         min_sigma (optional, defaults to 1e-5): minimum allowed value for the line width in A (float)
         max_sigma (optional, defaults to 10.): maximum allowed value for the line width in A (float)
-        min_flux (optional, defaults to 1e-5): minimum allowed value for the flux in e-17 * erg/cm2/s/A (float)
-        max_flux (optional, defaults to 1e9): maximum allowed value for the flux in e-17 * erg/cm2/s/A (float)
+        min_flux (optional, defaults to 1e-5): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
+        max_flux (optional, defaults to 1e9): maximum allowed value for the flux in 1e-17 * erg/cm2/s (float)
         min_share (optional, defaults to 1e-1): minimum allowed value for the share (float)
         max_share (optional, defaults to 1): maximum allowed value for the share (float)
         log (optional, defaults to get_logger()): Logger object
@@ -89,10 +89,10 @@ def emlines_gaussfit(
             list of all keys:
                 CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                 CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
-                FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
+                FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s
                 SIGMA, SIGMA_IVAR: line width in A (observed frame)
                 SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
-                EW, EW_IVAR: rest-frame equivalent width
+                EW, EW_IVAR: rest-frame equivalent width (in A)
                 waves: wavelength values (in A) used for the fitting (numpy array of floats)
                 fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
                 ivars: ivar values used for the fitting (numpy array of floats)
@@ -292,10 +292,10 @@ def get_emlines(
         emdict: a dictionary with a subdictionary for each emname in emnames, with:,
             CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
             CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
-            FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
+            FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s
             SIGMA, SIGMA_IVAR: line width in A (observed frame)
             SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
-            EW, EW_IVAR: rest-frame equivalent width
+            EW, EW_IVAR: rest-frame equivalent width in A
             waves, fluxes, ivars, models: data used for fitting + fitted model
     """
     # AR log
