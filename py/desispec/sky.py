@@ -48,8 +48,6 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,
           - mask : 2D inverse mask flux (0=good)
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
         nsig_clipping : [optional] sigma clipping value for outlier rejection
-
-    Optional:
         max_iterations : int , number of iterations
         model_ivar : replace ivar by a model to avoid bias due to correlated flux and ivar. this has a negligible effect on sims.
         add_variance : evaluate calibration error and add this to the sky model variance
@@ -60,7 +58,8 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,
         fit_offsets : fit offsets for regions defined in calib
         fiberflat : desispec.FiberFlat object used for the fit of offsets
         skygradpca : desispec.skygradpca.SkyGradPCA object used for sky gradient fits
-        tpcorrparam : desispec.tpcorrparam.TPCorrParam object used for fiber throughput modeling
+        tpcorrparam : desispec.tpcorrparam.TPCorrParam object used for fiber
+            throughput modeling
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -482,8 +481,6 @@ def compute_uniform_sky(
           - mask : 2D inverse mask flux (0=good)
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
         nsig_clipping : [optional] sigma clipping value for outlier rejection
-
-    Optional:
         max_iterations : int, maximum number of iterations
         model_ivar : replace ivar by a model to avoid bias due to correlated flux and ivar. this has a negligible effect on sims.
         add_variance : evaluate calibration error and add this to the sky model variance

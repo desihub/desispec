@@ -19,14 +19,14 @@ def write_sky(outfile, skymodel, header=None):
     Args:
         outfile : filename or (night, expid, camera) tuple
         skymodel : SkyModel object, with the following attributes
-            wave : 1D wavelength in vacuum Angstroms
-            flux : 2D[nspec, nwave] sky flux
-            ivar : 2D inverse variance of sky flux
-            mask : 2D mask for sky flux
-            stat_ivar : 2D inverse variance of sky flux (statistical only)
-            dwavecoeff : 1D[ncoeff] array of PCA dwavelength coefficients
-                (optional)
-            dlsfcoeff : 1D[ncoeff] array of PCA dlsf coefficients (optional)
+        wave : 1D wavelength in vacuum Angstroms
+        flux : 2D[nspec, nwave] sky flux
+        ivar : 2D inverse variance of sky flux
+        mask : 2D mask for sky flux
+        stat_ivar : 2D inverse variance of sky flux (statistical only)
+        dwavecoeff : 1D[ncoeff] array of PCA dwavelength coefficients
+            (optional)
+        dlsfcoeff : 1D[ncoeff] array of PCA dlsf coefficients (optional)
         header : optional fits header data (fits.Header, dict, or list)
     """
     from desiutil.depend import add_dependencies
