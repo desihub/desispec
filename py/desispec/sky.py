@@ -440,7 +440,7 @@ def compute_sky_linear(
         skytpcorr = tpcorrmodel(tpcorrparam,
                                 fibermap['FIBER_X'], fibermap['FIBER_Y'],
                                 skytpcorrcoeff)
-    modeled_sky = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
+    modeled_sky = np.zeros((len(fibermap), flux.shape[1]), dtype='f8')
     for i in range(len(fibermap)):
         unconvflux = param[:nwave].copy()
         for j in range(nskygradpc):
