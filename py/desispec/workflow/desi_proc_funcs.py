@@ -86,7 +86,8 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
     parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
-    parser.add_argument("--skygradpca", action="store_true", help="Fit sky gradient")
+    parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
+    parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not fit sky gradient")
 
     return parser
 
@@ -355,7 +356,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'TILENIGHT':
         ncores, nodes = config['cores_per_node'], 1
         # total frames per node hour ~ 350 on a single
-        # Perlmutter GPU node, plus 15-minute overhead 
+        # Perlmutter GPU node, plus 15-minute overhead
         runtime = 15 + int(60. / 350. * ncameras * nexps)
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)

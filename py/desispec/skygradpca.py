@@ -36,6 +36,8 @@ class SkyGradPCA(object):
 
 
 def configure_for_xyr(skygradpca, x, y, R, skyfibers=None):
+    skygradpca.x = x
+    skygradpca.y = y
     skygradpca.dx = x - np.mean(x)
     skygradpca.dy = y - np.mean(y)
     meanR = np.sum(R) / len(R)

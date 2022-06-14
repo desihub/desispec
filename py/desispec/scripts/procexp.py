@@ -50,9 +50,8 @@ def parse(options=None):
                         help = 'Do not apply fiber crosstalk correction')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute alpha of tsnr calc.')
-    
-    args = parser.parse_args(options)
 
+    args = parser.parse_args(options)
     return args
 
 def main(args):
@@ -121,11 +120,11 @@ def main(args):
             frame.mask = copied_frame.mask
 
             # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
+            subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar = zero_ivar )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
+            subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar = zero_ivar )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
 
