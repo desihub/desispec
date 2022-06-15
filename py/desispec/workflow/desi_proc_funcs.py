@@ -481,6 +481,23 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     name = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
     return os.path.join(path, name)
 
+def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
+    """
+    Returns the default directory location to store a batch script file given a night
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
+        jobdesc: str, type of data being processed
+        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing.
+        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live
+
+    Returns:
+        pathname: str, the default location and script name for a desi_proc batch script file
+    """
+    path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
+    name = get_desi_proc_tilenight_batch_file_name(night,tileid)
+    return os.path.join(path, name)
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):

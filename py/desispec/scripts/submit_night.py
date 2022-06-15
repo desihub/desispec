@@ -15,7 +15,8 @@ from desispec.workflow.proctable import default_obstypes_for_proctable, get_proc
                                         get_processing_table_name, erow_to_prow, table_row_to_dict, \
                                         default_prow
 from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
-                                        define_and_assign_dependency, create_and_submit, checkfor_and_submit_joint_job
+                                        define_and_assign_dependency, create_and_submit, \
+                                        checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 from desispec.io.util import decode_camword, difference_camwords, create_camword
@@ -26,7 +27,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
-                 tiles=None, surveys=None, laststeps=None):
+                 tiles=None, surveys=None, laststeps=None, tilenight=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -67,6 +68,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         tiles, array-like, optional. Only submit jobs for these TILEIDs.
         surveys, array-like, optional. Only submit science jobs for these surveys (lowercase)
         laststeps, array-like, optional. Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
+        tilenight, bool. Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
+                             and poststdstar steps for science exposures.
     Returns:
         None.
     """
@@ -339,8 +342,20 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
                                                 z_submit_types=cur_z_submit_types,
+                                                system_name=system_name,
+                                                tilenight=tilenight)
+        if (lasttile is not None and curtile != lasttile and tilenight
+            and lasttype == 'science' and len(sciences)>0):
+            ptable, sciences, internal_id \
+                = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                                                dry_run=dry_run_level,
+                                                queue=queue,
+                                                reservation=reservation,
+                                                strictly_successful=True,
+                                                check_for_outputs=check_for_outputs,
+                                                resubmit_partial_complete=resubmit_partial_complete,
+                                                z_submit_types=z_submit_types,
                                                 system_name=system_name)
-
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
         internal_id += 1
@@ -349,20 +364,22 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         else:
             prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, calibjobs)
-        print(f"\nProcessing: {prow}\n")
-        prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
+        if (not tilenight) or erow['OBSTYPE'] != 'science':
+            print(f"\nProcessing: {prow}\n")
+            prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                  reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs,
                                  resubmit_partial_complete=resubmit_partial_complete,
-                                 system_name=system_name)
+                                 system_name=system_name,tilenight=tilenight)
 
-        ## If processed a dark, assign that to the dark job
-        if curtype == 'dark':
-            prow['CALIBRATOR'] = 1
-            calibjobs['ccdcalib'] = prow.copy()
+            ## If processed a dark, assign that to the dark job
+            if curtype == 'dark':
+                prow['CALIBRATOR'] = 1
+                calibjobs['ccdcalib'] = prow.copy()
 
-        ## Add the processing row to the processing table
-        ptable.add_row(prow)
+            ## Add the processing row to the processing table
+            ptable.add_row(prow)
+
         ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
@@ -371,7 +388,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
-        elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
+        elif curtype == 'science' and (prow['LASTSTEP'] != 'skysub' or tilenight):
             sciences.append(prow)
 
         lasttile = curtile
@@ -390,15 +407,27 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        ptable, calibjobs, sciences, internal_id \
-            = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
+        if tilenight:
+            ptable, sciences, internal_id \
+                = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                                                dry_run=dry_run_level,
+                                                queue=queue,
+                                                reservation=reservation,
+                                                strictly_successful=True,
+                                                check_for_outputs=check_for_outputs,
+                                                resubmit_partial_complete=resubmit_partial_complete,
+                                                z_submit_types=z_submit_types,
+                                                system_name=system_name)
+        else:
+            ptable, calibjobs, sciences, internal_id \
+                = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                             lasttype, internal_id, dry_run=dry_run_level,
                                             queue=queue, reservation=reservation,
                                             strictly_successful=True,
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
                                             z_submit_types=z_submit_types,
-                                            system_name=system_name)
+                                            system_name=system_name,tilenight=tilenight)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:
