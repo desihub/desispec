@@ -117,6 +117,21 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
 
     targetdirs = np.unique(np.hstack(targetdirs))
         
+    # Special-case a small number of SV1 tiles where the original targeting
+    # catalogs were missing the DR9 photometry but subsequent versions were not.
+    if tileid in [80705, 80706, 80708, 80712, 80971, 80972, 80974, 80975]:
+        for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
+            if 'dedicated' in targetdir:
+                continue
+            if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir or
+                'targets/sv1/resolve/dark' in targetdir or 'targets/sv1/resolve/bright' in targetdir or
+                'targets/sv1/resolve/supp' in targetdir):
+                newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
+                log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
+                targetdirs[ii] = newtargetdir
+
+    targetdirs = np.unique(np.hstack(targetdirs))
+        
     return targetdirs
 
 def _targetphot_datamodel(from_file=False):
@@ -420,7 +435,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
             # fitsio does not preserve the order of the rows but we'll sort later.
             photo_targetid = tinfo[extname].read(columns='TARGETID')
             I = np.where(np.isin(photo_targetid, input_cat['TARGETID']))[0]
-            
+
             log.debug('Matched {} targets in {}'.format(len(I), targetfile))
             if len(I) > 0:
                 photo1 = tinfo[extname].read(rows=I)
@@ -431,7 +446,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                     if col in photo1.dtype.names:
                         _photo[col] = photo1[col]
                     else:
-                        log.debug('Skipping missing column {} from {}'.format(col, targetfile))
+                        #log.debug('Skipping missing column {} from {}'.format(col, targetfile))
+                        pass
                 del photo1
                 photofiles.append(targetfile)
                 photo.append(_photo)
