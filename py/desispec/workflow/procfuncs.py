@@ -463,8 +463,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                 log.error(f'{jobname} submission failed: {batch_params}')
                 log.error(f'{jobname} {err.output=}')
                 if attempt < max_attempts - 1:
-                    log.info('Sleeping 60 seconds then retrying')
-                    time.sleep(60)
+                    if '--qos=regular' not in batch_params:
+                        log.info('adding --qos=regular then retrying')
+                        batch_params.insert(-1,'--qos=regular')
+                    else:
+                        log.info('Sleeping 60 seconds then retrying')
+                        time.sleep(60)
         else:  #- for/else happens if loop doesn't succeed
             msg = f'{jobname} submission failed {max_attempts} times; exiting'
             log.critical(msg)
