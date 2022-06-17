@@ -1,3 +1,21 @@
+"""This module implements a model for how the throughput of a fiber varies.
+
+It has the following components:
+1. We find that the fibers don't follow the nighly flat field exactly, and
+   apply a fixed mean correction from the nightly flat field.  This is thought
+   to reflect the different range of angles entering the fiber from the flat
+   field relative to the sky.
+2. We find that fibers' throughput depends modestly on the fibers' location
+   within their patrol radii.  We apply a cubic polynomial in (x, y) within
+   the patrol disk to correct for this.
+3. We find additional coherent variations in throughput from exposure to
+   exposure.  These are modeled with a PCA and fit exposure-by-exposure.
+
+The TPCorrParam object has mean, spatial, and pca attributes describing
+each of these three components.
+"""
+
+
 import os
 import numpy as np
 from astropy.io import fits
@@ -6,15 +24,58 @@ import desispec.calibfinder
 
 
 def cubic(p, x, y):
-    return (p[0]+p[1]*x+p[2]*y+p[3]*x**2+p[4]*x*y+p[5]*y**2+
-            p[6]*x**3+p[7]*x**2*y+p[8]*x*y**2+p[9]*y**3)
+    """Returns a cubic polynomial with coefficients p in x & y.
+
+    Args:
+        p (list[float]): 10 element floating point list with poly coefficients
+        x (ndarray[float]): x coordinates
+        y (ndarray[float]): y coordinates
+
+    Returns:
+        cubic polynomial in two variables with coefficients p evaluated at x, y
+    """
+    return (p[0] + p[1]*x + p[2]*y + p[3]*x**2 + p[4]*x*y + p[5]*y**2 +
+            p[6]*x**3 + p[7]*x**2*y + p[8]*x*y**2 + p[9]*y**3)
 
 
 def tpcorrspatialmodel(param, xfib, yfib):
+    """Evaluate spatial tpcorr throughput model at xfib, yfib.
+
+    Evaluates the throughput model at xfib, yfib.  param carries the
+    polynomial coefficients of the model as well as the central fiber
+    location.
+
+    Args:
+        param: ndarray describing fit.  Contains at least the following fields:
+            PARAM: cubic polynomial coefficients
+            X: central fiber X location (mm)
+            Y: central fiber Y location (mm)
+        xfib: x location at which model is to be evaluated (mm)
+        yfib: y location at which model is to be evaluated (mm)
+
+    Returns:
+        throughput model evaluated at xfib, yfib
+    """
     return cubic(param['PARAM'].T, (xfib-param['X'])/6, (yfib-param['Y'])/6)
 
 
 def tpcorrmodel(tpcorrparam, xfib, yfib, pcacoeff=None):
+    """Evaluates full TPCORR throughput model.
+
+    The full model consistents of a PCA and a spatial within-patrol-radius
+    component.  These two components are evaluated and summed.
+
+    Args:
+        tpcorrparam: TPCorrParam object describing the model
+        xfib: x coordinates of fibers (mm)
+        yfib: y coordinates of fibers (mm)
+        pcacoeff (optional): PCA coefficients of throughput model
+            If not set, no TPCORR PCA terms are fit.
+
+    Returns:
+        Throughput model evaluated at xfib, yfib with pca coefficients
+        pcacoeff.
+    """
     res = tpcorrparam.mean + tpcorrspatialmodel(
         tpcorrparam.spatial, xfib, yfib) - 1
     if pcacoeff is not None:
@@ -25,12 +86,43 @@ def tpcorrmodel(tpcorrparam, xfib, yfib, pcacoeff=None):
 
 class TPCorrParam:
     def __init__(self, mean, spatial, pca):
+        """Create TPCorrParam object.
+
+        Args:
+            mean: mean throughput difference between flat and sky for each
+                fiber
+            spatial (ndarray): parameters of spatial model describing variation
+                of throughput within patrol radius.  Contains the following
+                fields:
+                PARAM: cubic polynomial coefficients
+                X: central X coordinate of fiber (mm)
+                Y: central Y coordinate of fiber (mm)
+            pca (ndarray[float]): principal components of throughput variations
+                between fibers in an exposure.
+        """
         self.mean = mean
         self.spatial = spatial
         self.pca = pca
 
 
 def gather_tpcorr(recs):
+    """Gather TPCORR measurements for exposures.
+
+    Args:
+        recs (ndarray): ndarray array containing information about exposures
+            from which to gather TPCORR information.  Includes at least the
+            following fields:
+            NIGHT (int): night on which exposure was observed
+            EXPID (int): exposure id
+
+    Returns: ndarray with the following fields for each exposure
+        X: x coordinate of fiber (mm)
+        Y: y coordinate of fiber (mm)
+        TPCORR: tpcorr of fiber
+        CAMERA: camera for exposure
+        NIGHT: night for exposure
+        EXPID: expid of exposure
+    """
     out = np.zeros(3*len(recs), dtype=[
         ('X', '5000f4'), ('Y', '5000f4'), ('TPCORR', '5000f4'),
         ('CAMERA', 'U1'), ('NIGHT', 'i4'), ('EXPID', 'i4')])
@@ -57,6 +149,18 @@ def gather_tpcorr(recs):
 
 
 def gather_dark_tpcorr(specprod=None):
+    """Gathers TPCORR for dark exposures expected to be well behaved.
+
+    This wraps gather_tpcorr, making a sensible selection of dark
+    exposures from the given specprod.
+
+    Args:
+        specprod (str): specprod to use
+
+    Returns:
+        ndarray from gather_tpcorr with tpcorr information from selected
+        exposures.
+    """
     if specprod is None:
         specprod = os.environ.get('SPECPROD', 'daily')
     expfn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
@@ -70,6 +174,25 @@ def gather_dark_tpcorr(specprod=None):
 
 
 def pca_tpcorr(tpcorr):
+    """Run a PCA on TPCORR measurements.
+
+    This uses the tpcorr gathered by gather_tpcorr and runs a PCA on them.
+
+    Args:
+        tpcorr (ndarray): result of gather_tpcorr
+
+    Returns:
+        dict[filter] of (tpcorrmed, pc_info, exp_info), describing the results
+        of the fit.
+        tpcorrmed: the median TPCORR of the whole sample; i.e., how
+            different the nightly flat usually is from the sky.
+        pc_info: ndarray with:
+            pca: the principal components
+            amplitude: their corresponding singular values
+        exp_info: ndarray with:
+            expid: exposure id
+            coeff: pc component coefficients for this exposure
+    """
     from astropy.stats import mad_std
     out = dict()
     for f in 'brz':
@@ -109,6 +232,19 @@ def pca_tpcorr(tpcorr):
 
 
 def fit_tpcorr_per_fiber(tpcorr):
+    """Fit the spatial throughput variations for each fiber.
+
+    Args:
+        tpcorr (ndarray): output from gather_tpcorr with tpcorr
+            measurements and related metadata for each fiber
+
+    Returns:
+        dict[camera] of ndarray including the following fields:
+        X (float): central X position of each fiber used in fit (mm)
+        Y (float): central Y position of each fiber used in fit (mm)
+        FIBER (int): fiber number
+        PARAM (ndarray[float], length 10): 2D cubic polynomial coefficients
+    """
     from scipy.optimize import least_squares
     guess = np.zeros(10, dtype='f4')
     out = dict()
@@ -181,6 +317,20 @@ def fit_tpcorr_per_fiber(tpcorr):
 # and then this routine would require the product of the model TPCORR and
 # the measured TPCORR.
 def make_tpcorrparam_files(tpcorr=None, spatial=None, dirname=None):
+    """Gather, fit, and write tpcorrparam files to output directory.
+
+    This function is intended for producing tpcorrparam files to
+    DESI_SPECTRO_CALIB.  It can gather and fit tpcorr measurements and
+    write the results.
+
+    Args:
+        tpcorr (optional): result of gather_tpcorr.  If None, this is
+            populated with the result of gather_dark_tpcorr.
+        spatial (optional): spatial fit results.  If None, this is
+            populated with fit_tpcorr_per_fiber(tpcorr).
+        dirname (optional): directory to which to write files.  Defaults
+            to DESI_SPECTRO_CALIB.
+    """
     if dirname is None:
         dirname = os.environ['DESI_SPECTRO_CALIB']
     if tpcorr is None:

@@ -461,11 +461,11 @@ def compute_sky_linear(
 
 
 def compute_uniform_sky(
-        frame, nsig_clipping=4., max_iterations=100, model_ivar=False,
-        add_variance=True, adjust_wavelength=True, adjust_lsf=True,
-        only_use_skyfibers_for_adjustments=True, pcacorr=None,
-        fit_offsets=False, fiberflat=None, skygradpca=None,
-        min_iterations=5, tpcorrparam=None):
+    frame, nsig_clipping=4., max_iterations=100, model_ivar=False,
+    add_variance=True, adjust_wavelength=True, adjust_lsf=True,
+    only_use_skyfibers_for_adjustments=True, pcacorr=None,
+    fit_offsets=False, fiberflat=None, skygradpca=None,
+    min_iterations=5, tpcorrparam=None):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
