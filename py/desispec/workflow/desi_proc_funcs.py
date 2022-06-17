@@ -87,7 +87,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
     parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
-    parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not fit sky gradient")
+    parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not apply tpcorrparam spatial model or fit tpcorrparam pca terms")
 
     return parser
 

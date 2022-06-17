@@ -384,18 +384,32 @@ def compute_sky_linear(
             nout_iter += np.sum(bad)
 
         if tpcorrparam is not None:
+            # the throughput of each fiber varies, usually following
+            # the tpcorrparam pca.  We want to find the coefficients
+            # for these principal components.
+            # the code here is a bit hard to track primarily because
+            # in the iterative scheme, we have already applied some PCA correction
+            # in the previous iteration.  Here we remove the previous PCA correction,
+            # and then re-fit the result.  This may be equivalent to fitting directly
+            # and then added the fit results to the existing pca coefficients, but
+            # that wasn't the approach taken here.
+
+            # the _current_ pca-tracked bit of the tpcorr we are using is
+            # in tppca0.  This is the current total skytpcorr, divided by the fixed
+            # bit that comes from the mean and the spatial within-patrol-radius model.
             tppca0 = skytpcorr[:, None]/skytpcorrfixed[:, None]
-            from astropy.stats import mad_std
             tppcam = tpcorrparam.pca[:, skyfibers]
+            # in the design matrix and flux residuals, we divide out tppca0 from
+            # modeled_sky so that we have only the pre-PCA skies
             aa = np.array([(modeled_sky*tppcam0[:, None]/tppca0).reshape(-1)
                            for tppcam0 in tppcam]).T
             fluxresid = flux - modeled_sky / tppca0
+            # then we solve for the PCA coefficients that best take the
+            # pre-PCA skies to the pre-PCA sky residuals (fluxresid).
             skytpcorrcoeff = np.linalg.lstsq(
                 aa.T.dot(current_ivar.reshape(-1)[:, None]*aa),
                 aa.T.dot((current_ivar*fluxresid).reshape(-1)),
                 rcond=None)[0]
-            print(skytpcorrcoeff)
-            oldskytpcorr = skytpcorr.copy()
             skytpcorr = skytpcorrfixed.copy()
             for coeff, vec in zip(skytpcorrcoeff,
                                   tpcorrparam.pca[:, skyfibers]):
