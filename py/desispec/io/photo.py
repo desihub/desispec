@@ -117,36 +117,21 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
 
     targetdirs = np.unique(np.hstack(targetdirs))
         
-    ## Special-case a small number of SV1 tiles where the original targeting
-    ## catalogs were missing the DR9 photometry but subsequent versions were not.
-    #fixtiles = [80687, 80689, 80691, 80692, 80695, 80696, 80697, 80698,
-    #            80702, 80703, 80705, 80706, 80708, 80710, 80712, 80719, 80720, 80721, 80722, 80724, 80726,
-    #            80728, 80729, 80730, 80731, 80732, 80733, 80734, 80735, 80736, 80737, 80738,
-    #            80856, 80857, 80858, 80859, 80860, 80861, 80862, 80863, 80865, 80866, 80867, 80869, 80870,
-    #            80871, 80872, 80873, 80875, 80879, 80885, 80887, 80888, 80889, 80890, 80891, 80893, 80895, 80897, 80899,
-    #            80901, 80902, 80971, 80972, 80974, 80975,
-    #            81111, 81113]
-    ##fixtiles = [80705, 80706, 80708, 80712, 80971, 80972, 80974, 80975]
-    #if tileid == 80692:
-    #    pdb.set_trace()
-    
-    #if tileid in fixtiles:
+    # Special-case SV1 tiles where the original targeting catalogs for secondary
+    # targets were missing the DR9 photometry but subsequent versions were not.
     if (tileid > 80600) and (tileid < 81000):
+        newtargetdirs = []
         for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
-            if 'dedicated' in targetdir:
-                continue
-            #if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir or
-            #    'targets/sv1/resolve/dark' in targetdir or 'targets/sv1/resolve/bright' in targetdir or
-            #    'targets/sv1/resolve/supp' in targetdir):
-            #    newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
-            #    log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
-            #    targetdirs[ii] = newtargetdir
-            if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir):
+            if 'targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir:
                 newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
-                log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
-                targetdirs[ii] = newtargetdir
+                #log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
+                #targetdirs[ii] = newtargetdir
+                log.debug('Appending targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
+                newtargetdirs.append(newtargetdir)
+        if len(newtargetdirs) > 0:
+            targetdirs = np.hstack((targetdirs, newtargetdirs))
 
-    targetdirs = np.unique(np.hstack(targetdirs))
+    targetdirs = np.unique(targetdirs)
         
     return targetdirs
 
@@ -358,7 +343,9 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     if targetdirs is None:
         targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
                                           for tileid in set(np.atleast_1d(tileids))]))
-    
+
+    pdb.set_trace()
+        
     datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
@@ -371,8 +358,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
                 if 'dedicated' in targetdir:
                     targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
                 else:
-                    #targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # do not use
-                    targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+                    targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # use??
+                    #targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
             else:
                 targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
         elif 'ToO' in targetdir:
@@ -479,7 +466,15 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     photo = vstack(photo)
 
     # make sure there are no duplicates...?
-    _, uindx = np.unique(photo['TARGETID'], return_index=True) 
+    _, uindx = np.unique(photo['TARGETID'], return_index=True)
+    #if len(uindx) < len(photo):
+    #    # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+    #    idx_sort = np.argsort(photo['TARGETID'], kind='mergesort')
+    #    targetid_sorted = photo['TARGETID'][idx_sort].data
+    #    vals, idx_start, count = np.unique(targetid_sorted, return_counts=True, return_index=True)
+    #    res = np.split(idx_sort, idx_start[1:])
+    #    #vals = vals[count > 1]
+    #    #res = filter(lambda x: x.size > 1, res)
     photo = photo[uindx]
     assert(len(np.unique(photo['TARGETID'])) == len(photo))
 
