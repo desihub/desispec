@@ -17,7 +17,7 @@ from astropy.coordinates import SkyCoord
 from desitarget.io import desitarget_resolve_dec
 
 from desiutil.log import get_logger, DEBUG
-log = get_logger()#DEBUG)
+log = get_logger(DEBUG)
 
 def gather_targetdirs(tileid, fiberassign_dir=None):
     """Gather all the targeting directories used to build a given fiberassign catalog.
@@ -117,15 +117,31 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
 
     targetdirs = np.unique(np.hstack(targetdirs))
         
-    # Special-case a small number of SV1 tiles where the original targeting
-    # catalogs were missing the DR9 photometry but subsequent versions were not.
-    if tileid in [80705, 80706, 80708, 80712, 80971, 80972, 80974, 80975]:
+    ## Special-case a small number of SV1 tiles where the original targeting
+    ## catalogs were missing the DR9 photometry but subsequent versions were not.
+    #fixtiles = [80687, 80689, 80691, 80692, 80695, 80696, 80697, 80698,
+    #            80702, 80703, 80705, 80706, 80708, 80710, 80712, 80719, 80720, 80721, 80722, 80724, 80726,
+    #            80728, 80729, 80730, 80731, 80732, 80733, 80734, 80735, 80736, 80737, 80738,
+    #            80856, 80857, 80858, 80859, 80860, 80861, 80862, 80863, 80865, 80866, 80867, 80869, 80870,
+    #            80871, 80872, 80873, 80875, 80879, 80885, 80887, 80888, 80889, 80890, 80891, 80893, 80895, 80897, 80899,
+    #            80901, 80902, 80971, 80972, 80974, 80975,
+    #            81111, 81113]
+    ##fixtiles = [80705, 80706, 80708, 80712, 80971, 80972, 80974, 80975]
+    #if tileid == 80692:
+    #    pdb.set_trace()
+    
+    #if tileid in fixtiles:
+    if (tileid > 80600) and (tileid < 81000):
         for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
             if 'dedicated' in targetdir:
                 continue
-            if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir or
-                'targets/sv1/resolve/dark' in targetdir or 'targets/sv1/resolve/bright' in targetdir or
-                'targets/sv1/resolve/supp' in targetdir):
+            #if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir or
+            #    'targets/sv1/resolve/dark' in targetdir or 'targets/sv1/resolve/bright' in targetdir or
+            #    'targets/sv1/resolve/supp' in targetdir):
+            #    newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
+            #    log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
+            #    targetdirs[ii] = newtargetdir
+            if ('targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir):
                 newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
                 log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
                 targetdirs[ii] = newtargetdir
