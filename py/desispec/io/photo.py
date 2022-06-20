@@ -71,7 +71,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
             TOOfile = os.path.join(desi_root, TOOfile.replace('/data/', ''))
         if 'afternoon_planning' in TOOfile:
             TOOfile = TOOfile.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
-            
+
         if os.path.isfile(TOOfile):
             targetdirs += [TOOfile]
 
@@ -334,154 +334,166 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
             log.critical(errmsg)
             raise ValueError(errmsg)
 
-    if targetdirs is None and tileids is None:
-        errmsg = 'Must provide tileids or targetdirs input.'
-        log.critical(errmsg)
-        raise ValueError(errmsg)
+    #if targetdirs is None and tileids is None:
+    #    errmsg = 'Must provide tileids or targetdirs input.'
+    #    log.critical(errmsg)
+    #    raise ValueError(errmsg)
 
-    # Get the unique list of targetdirs
-    if targetdirs is None:
-        targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
-                                          for tileid in set(np.atleast_1d(tileids))]))
+    ## Get the unique list of targetdirs
+    #if targetdirs is None:
+    #    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
+    #                                      for tileid in set(np.atleast_1d(tileids))]))
 
-    pdb.set_trace()
-        
     datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
 
-    photo, photofiles = [], []
-    for targetdir in targetdirs:
-        # Handle secondary targets, which have a (very!) different data model.
-        if 'secondary' in targetdir:
-            if 'sv1' in targetdir: # special case
-                if 'dedicated' in targetdir:
-                    targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
+    tileids = input_cat['TILEID']
+    for tileid in np.unique(tileids):
+        log.debug('Working on tile {}'.format(tileid))
+
+        M = np.where(tileid == tileids)[0]
+        out1 = out[M]
+        input_cat1 = input_cat[M]
+
+        photo, photofiles = [], []
+
+        targetdirs = gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
+        for targetdir in targetdirs:
+            # Handle secondary targets, which have a (very!) different data model.
+            if 'secondary' in targetdir:
+                if 'sv1' in targetdir: # special case
+                    if 'dedicated' in targetdir:
+                        targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
+                    else:
+                        targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # use??
+                        #targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
                 else:
-                    targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # use??
-                    #targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+                    targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+            elif 'ToO' in targetdir:
+                targetfiles = targetdir
             else:
-                targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
-        elif 'ToO' in targetdir:
-            targetfiles = targetdir
-        else:
-            alltargetfiles = glob(os.path.join(targetdir, '*-hp-*.fits'))
-            filenside = fitsio.read_header(alltargetfiles[0], ext=1)['FILENSID']
-            # https://github.com/desihub/desispec/issues/1711
-            if np.any(np.isnan(input_cat[racolumn])): # some SV1 targets have nan in RA,DEC
-                log.warning('Some RA, DEC are NaN in target directory {}'.format(targetdir))
-            notnan = np.isfinite(input_cat[racolumn])
-            targetfiles = []
-            if np.sum(notnan) > 0:
-                pixlist = radec2pix(filenside, input_cat[racolumn][notnan], input_cat[deccolumn][notnan])
-                for pix in set(pixlist):
-                    _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix) # fragile
-                    if os.path.isfile(_targetfile):
-                        targetfiles.append(_targetfile)
-
-        targetfiles = np.unique(targetfiles)
-
-        if len(targetfiles) == 0:
-            continue
-
-        for targetfile in np.atleast_1d(targetfiles):
-            # If this is a secondary target catalog or ToO, use the photocache
-            # (if it exists). Also note that secondary target catalogs are
-            # missing some or all of the DR9 photometry columns we need, so only
-            # copy what exists.
-            if photocache is not None and targetfile in photocache.keys():
-                if type(photocache[targetfile]) == astropy.table.Table:
-                    I = np.where(np.isin(photocache[targetfile]['TARGETID'], input_cat['TARGETID']))[0]
-                else:
-                    photo_targetid = photocache[targetfile]
-                    I = np.where(np.isin(photo_targetid, input_cat['TARGETID']))[0]
+                alltargetfiles = glob(os.path.join(targetdir, '*-hp-*.fits'))
+                filenside = fitsio.read_header(alltargetfiles[0], ext=1)['FILENSID']
+                # https://github.com/desihub/desispec/issues/1711
+                if np.any(np.isnan(input_cat1[racolumn])): # some SV1 targets have nan in RA,DEC
+                    log.warning('Some RA, DEC are NaN in target directory {}'.format(targetdir))
+                notnan = np.isfinite(input_cat1[racolumn])
+                targetfiles = []
+                if np.sum(notnan) > 0:
+                    pixlist = radec2pix(filenside, input_cat1[racolumn][notnan], input_cat1[deccolumn][notnan])
+                    for pix in set(pixlist):
+                        _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix) # fragile
+                        if os.path.isfile(_targetfile):
+                            targetfiles.append(_targetfile)
+    
+            targetfiles = np.unique(targetfiles)
+    
+            if len(targetfiles) == 0:
+                continue
+    
+            for targetfile in np.atleast_1d(targetfiles):
+                # If this is a secondary target catalog or ToO, use the photocache
+                # (if it exists). Also note that secondary target catalogs are
+                # missing some or all of the DR9 photometry columns we need, so only
+                # copy what exists.
+                if photocache is not None and targetfile in photocache.keys():
+                    if type(photocache[targetfile]) == astropy.table.Table:
+                        I = np.where(np.isin(photocache[targetfile]['TARGETID'], input_cat1['TARGETID']))[0]
+                    else:
+                        photo_targetid = photocache[targetfile]
+                        I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
+                        
+                    log.debug('Matched {} targets in {}'.format(len(I), targetfile))
+                    if len(I) > 0:
+                        if type(photocache[targetfile]) == astropy.table.Table:
+                            cachecat = photocache[targetfile][I]
+                        else:
+                            cachecat = Table(fitsio.read(targetfile, rows=I))
+                        
+                        _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
+                        for col in _photo.colnames: # not all these columns will exist...
+                            if col in cachecat.colnames:
+                                _photo[col] = cachecat[col]
+                        photofiles.append(targetfile)
+                        photo.append(_photo)
+                    continue
+    
+                if 'ToO' in targetfile:
+                    photo1 = Table.read(targetfile, guess=False, format='ascii.ecsv')
+                    I = np.where(np.isin(photo1['TARGETID'], input_cat1['TARGETID']))[0]
+                    log.debug('Matched {} TOO targets'.format(len(I)))
+                    if len(I) > 0:
+                        photo1 = photo1[I]
+                        _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
+                        for col in _photo.colnames: # not all these columns will exist...
+                            if col in photo1.colnames:
+                                _photo[col] = photo1[col]
+                        del photo1
+                        photofiles.append('TOO')
+                        photo.append(_photo)
+                    continue
+    
+                # get the correct extension name or number
+                tinfo = fitsio.FITS(targetfile)
+                for _tinfo in tinfo:
+                    extname = _tinfo.get_extname()
+                    if 'TARGETS' in extname:
+                        break
+                if extname == '':
+                    extname = 1
                     
+                # fitsio does not preserve the order of the rows but we'll sort later.
+                photo_targetid = tinfo[extname].read(columns='TARGETID')
+                I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
+    
                 log.debug('Matched {} targets in {}'.format(len(I), targetfile))
                 if len(I) > 0:
-                    if type(photocache[targetfile]) == astropy.table.Table:
-                        cachecat = photocache[targetfile][I]
-                    else:
-                        cachecat = Table(fitsio.read(targetfile, rows=I))
-                    
+                    photo1 = tinfo[extname].read(rows=I)
+                    # Columns can be out of order, so sort them here based on the
+                    # data model so we can stack below.
                     _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-                    for col in _photo.colnames: # not all these columns will exist...
-                        if col in cachecat.colnames:
-                            _photo[col] = cachecat[col]
+                    for col in _photo.colnames: # all these columns should exist...
+                        if col in photo1.dtype.names:
+                            _photo[col] = photo1[col]
+                        else:
+                            #log.debug('Skipping missing column {} from {}'.format(col, targetfile))
+                            pass
+                    del photo1
                     photofiles.append(targetfile)
                     photo.append(_photo)
-                continue
-
-            if 'ToO' in targetfile:
-                photo1 = Table.read(targetfile, guess=False, format='ascii.ecsv')
-                I = np.where(np.isin(photo1['TARGETID'], input_cat['TARGETID']))[0]
-                log.debug('Matched {} TOO targets'.format(len(I)))
-                if len(I) > 0:
-                    photo1 = photo1[I]
-                    _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-                    for col in _photo.colnames: # not all these columns will exist...
-                        if col in photo1.colnames:
-                            _photo[col] = photo1[col]
-                    del photo1
-                    photofiles.append('TOO')
-                    photo.append(_photo)
-                continue
-
-            # get the correct extension name or number
-            tinfo = fitsio.FITS(targetfile)
-            for _tinfo in tinfo:
-                extname = _tinfo.get_extname()
-                if 'TARGETS' in extname:
-                    break
-            if extname == '':
-                extname = 1
-                
-            # fitsio does not preserve the order of the rows but we'll sort later.
-            photo_targetid = tinfo[extname].read(columns='TARGETID')
-            I = np.where(np.isin(photo_targetid, input_cat['TARGETID']))[0]
-
-            log.debug('Matched {} targets in {}'.format(len(I), targetfile))
-            if len(I) > 0:
-                photo1 = tinfo[extname].read(rows=I)
-                # Columns can be out of order, so sort them here based on the
-                # data model so we can stack below.
-                _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-                for col in _photo.colnames: # all these columns should exist...
-                    if col in photo1.dtype.names:
-                        _photo[col] = photo1[col]
-                    else:
-                        #log.debug('Skipping missing column {} from {}'.format(col, targetfile))
-                        pass
-                del photo1
-                photofiles.append(targetfile)
-                photo.append(_photo)
-
-    # backup programs have no target catalog photometry at all
-    if len(photo) == 0:
-        errmsg = 'No targeting photometry found.'
-        log.critical(errmsg)
-        raise ValueError(errmsg)
-
-    # np.hstack will sometimes complain even if the tables are identical...
-    #photo = Table(np.hstack(photo))
-    photo = vstack(photo)
-
-    # make sure there are no duplicates...?
-    _, uindx = np.unique(photo['TARGETID'], return_index=True)
-    #if len(uindx) < len(photo):
-    #    # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
-    #    idx_sort = np.argsort(photo['TARGETID'], kind='mergesort')
-    #    targetid_sorted = photo['TARGETID'][idx_sort].data
-    #    vals, idx_start, count = np.unique(targetid_sorted, return_counts=True, return_index=True)
-    #    res = np.split(idx_sort, idx_start[1:])
-    #    #vals = vals[count > 1]
-    #    #res = filter(lambda x: x.size > 1, res)
-    photo = photo[uindx]
-    assert(len(np.unique(photo['TARGETID'])) == len(photo))
-
-    # sort explicitly in order to ensure order
-    I = np.where(np.isin(out['TARGETID'], photo['TARGETID']))[0]
-    srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
-    out[I] = photo[srt]
+    
+        # backup programs have no target catalog photometry at all
+        if len(photo) == 0:
+            continue
+            #errmsg = 'No targeting photometry found.'
+            #log.critical(errmsg)
+            #raise ValueError(errmsg)
+    
+        # np.hstack will sometimes complain even if the tables are identical...
+        #photo = Table(np.hstack(photo))
+        photo = vstack(photo)
+    
+        # make sure there are no duplicates...?
+        _, uindx = np.unique(photo['TARGETID'], return_index=True)
+        #if len(uindx) < len(photo):
+        #    # https://stackoverflow.com/questions/30003068/how-to-get-a-list-of-all-indices-of-repeated-elements-in-a-numpy-array
+        #    idx_sort = np.argsort(photo['TARGETID'], kind='mergesort')
+        #    targetid_sorted = photo['TARGETID'][idx_sort].data
+        #    vals, idx_start, count = np.unique(targetid_sorted, return_counts=True, return_index=True)
+        #    res = np.split(idx_sort, idx_start[1:])
+        #    #vals = vals[count > 1]
+        #    #res = filter(lambda x: x.size > 1, res)
+        photo = photo[uindx]
+        assert(len(np.unique(photo['TARGETID'])) == len(photo))
+    
+        # sort explicitly in order to ensure order
+        I = np.where(np.isin(out1['TARGETID'], photo['TARGETID']))[0]
+        srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out1['TARGETID'][I]])
+            
+        out1[I] = photo[srt]
+        out[M] = out1
+        del out1, photo
 
     if columns is not None:
         out = out[columns]
