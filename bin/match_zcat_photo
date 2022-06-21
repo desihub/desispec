@@ -175,15 +175,15 @@ def _targetphot_one(args):
     """Multiprocessing wrapper."""
     return targetphot_one(*args)
 
-def targetphot_one(input_cat, tileids, photocache=None, racolumn='TARGET_RA',
-                   deccolumn='TARGET_DEC'):
+def targetphot_one(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
     """Simple wrapper on desispec.io.photo.gather_targetphot."""
-    from desispec.io.photo import gather_targetphot, gather_targetdirs
+    from desispec.io.photo import gather_targetphot
 
-    # Get the unique list of targetdirs
-    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))    
-    targetphot = gather_targetphot(input_cat, targetdirs=targetdirs, photocache=photocache,
+    targetphot = gather_targetphot(input_cat, photocache=photocache,
                                    racolumn=racolumn, deccolumn=deccolumn)
+    targetphot['SURVEY'] = input_cat['SURVEY']
+    targetphot['PROGRAM'] = input_cat['PROGRAM']
+    
     return targetphot
 
 def _get_secondary_targetdirs():
@@ -394,8 +394,23 @@ def main():
                 log.info('Keeping {}/{} objects after removing sky targets and stuck positioners)'.format(
                     np.sum(keep), len(zcat)))
                 zcat = zcat[keep]
+
+            # Use survey-program-tileid-targetid as a unique key; targetid is not unique, e.g.,
+            # zcat[zcat['TARGETID'] == 39627764155813825]
+            # <Table length=3>
+            #      TARGETID     PETAL_LOC     TARGET_RA          TARGET_DEC     TILEID SURVEY PROGRAM
+            #       int64         int16        float64            float64       int32   str7    str6
+            # ----------------- --------- ------------------ ------------------ ------ ------ -------
+            # 39627764155813825         0 213.92212168463337 -1.104593197988166  80974    sv1   other
+            # 39627764155813825         8 213.92212168463337 -1.104593197988166    531    sv3  bright
+            # 39627764155813825         8 213.92212168463337 -1.104593197988166    521    sv3    dark
+            key = np.array(['{}-{}'.format(survey, targetid) for survey, targetid in
+                   zip(zcat['SURVEY'], zcat['TARGETID'])])
+            #key = np.array(['{}-{}-{}-{}'.format(survey, program, tileid, targetid) for survey, program, tileid, targetid in
+            #       zip(zcat['SURVEY'], zcat['PROGRAM'], zcat['TILEID'], zcat['TARGETID'])])
+            #_, uindx = np.unique(zcat['TARGETID'], return_index=True)
+            _, uindx = np.unique(key, return_index=True)
             
-            _, uindx = np.unique(zcat['TARGETID'], return_index=True)
             zcat = zcat[uindx]
             zcat = zcat[np.argsort(zcat['TARGETID'])]
 
@@ -416,7 +431,7 @@ def main():
         # desispec.io.photo.gather_targetphot to determine which object was
         # actually targeted. Multiprocessing over tiles solves this issue.
         log.info('Dividing the sample into {} unique tiles.'.format(len(set(zcat['TILEID']))))
-        mpargs = [[zcat[zcat['TILEID'] == tileid], tileid, photocache, RACOLUMN, DECCOLUMN] for tileid in set(zcat['TILEID'])]
+        mpargs = [[zcat[zcat['TILEID'] == tileid], photocache, RACOLUMN, DECCOLUMN] for tileid in set(zcat['TILEID'])]
         
         if args.mp > 1:
             with multiprocessing.Pool(args.mp) as P:

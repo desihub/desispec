@@ -135,9 +135,16 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
         
     return targetdirs
 
-def _targetphot_datamodel(from_file=False):
-    """Initialize the targetphot data model."""
+def targetphot_datamodel(from_file=False):
+    """Initialize the targetphot data model.
 
+    Args:
+        from_file (bool, optional): read the datamodel from a file on-disk.
+
+    Returns an `astropy.table.Table` with a consistent data model across cmx,
+    sv[1-2], and main-survey observations.
+
+    """
     if from_file:
         TARGETINGBITCOLS = [
             'CMX_TARGET',
@@ -302,23 +309,26 @@ def _targetphot_datamodel(from_file=False):
 
     return datamodel
 
-def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
-                      racolumn='TARGET_RA', deccolumn='TARGET_DEC', columns=None,
-                      fiberassign_dir=None):
+def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
+                      deccolumn='TARGET_DEC', columns=None, fiberassign_dir=None):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
         input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, RACOLUMN, DECCOLUMN
-        tileids (int scalar or array): set of tileids corresponding to the input
-          targets (required if targetdirs is None)
-        targetdirs (int scalar or array): output of gather_targetdirs corresponding
-          to the input targets (required if tileids is None)
+          (required) columns: TARGETID, RACOLUMN, DECCOLUMN, TILEID
+        photocache (dict, optional): dictionary cache of targetids for large
+          targeting catalogs.
+        racolumn (str): name of the RA column in `input_cat` (defaults to
+          RA_COLUMN)
+        deccolumn (str): name of the RA column in `input_cat` (defaults to
+          DEC_COLUMN)
         columns (str array): return this subset of columns
-        fiberassign_dir (str, optional): directory to fiberassign tables
+        fiberassign_dir (str, optional): top-level directory to fiberassign
+          tables
 
     Returns a table of targeting photometry using a consistent data model across
-    primary (DR9) targets, secondary targets, and targets of opportunity.
+    primary (DR9) targets, secondary targets, and targets of opportunity. The
+    data model is documented in `targetphot_datamodel`.
 
     """
     import astropy
@@ -344,7 +354,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     #    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
     #                                      for tileid in set(np.atleast_1d(tileids))]))
 
-    datamodel = _targetphot_datamodel()
+    datamodel = targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
 
@@ -484,9 +494,14 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
         #    res = np.split(idx_sort, idx_start[1:])
         #    #vals = vals[count > 1]
         #    #res = filter(lambda x: x.size > 1, res)
+        
+        #bb = photo[photo['TARGETID'] == 39627764155813825]
+        #if len(bb) > 0:
+        #    pdb.set_trace()
+        
         photo = photo[uindx]
         assert(len(np.unique(photo['TARGETID'])) == len(photo))
-    
+
         # sort explicitly in order to ensure order
         I = np.where(np.isin(out1['TARGETID'], photo['TARGETID']))[0]
         srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out1['TARGETID'][I]])
@@ -500,9 +515,16 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     
     return out
 
-def _tractorphot_datamodel(from_file=False):
-    """Initialize the tractorphot data model for DR9 photometry."""
+def tractorphot_datamodel(from_file=False):
+    """Initialize the tractorphot data model for DR9 photometry.
 
+    Args:
+        from_file (bool, optional): read the datamodel from a file on-disk.
+
+    Returns an `astropy.table.Table` which follows the Tractor catalog
+    datamodel.
+
+    """
     if from_file:
         datamodel_file = os.environ.get('DESI_ROOT')+'/external/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits'
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
@@ -714,7 +736,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
     idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) * (input_cat['BRICK_OBJID'] > 0))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
 
-    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
+    out = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
     
     # DR9 targeting photometry exists
@@ -894,7 +916,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     # Split into unique brickname(s).
     bricknames = input_cat['BRICKNAME']
 
-    out = Table(np.hstack(np.repeat(_tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
+    out = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
     for brickname in set(bricknames):
         I = np.where(brickname == bricknames)[0]
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)
