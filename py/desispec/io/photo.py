@@ -17,7 +17,7 @@ from astropy.coordinates import SkyCoord
 from desitarget.io import desitarget_resolve_dec
 
 from desiutil.log import get_logger, DEBUG
-log = get_logger(DEBUG)
+log = get_logger()#DEBUG)
 
 def gather_targetdirs(tileid, fiberassign_dir=None):
     """Gather all the targeting directories used to build a given fiberassign catalog.
@@ -131,7 +131,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
         if len(newtargetdirs) > 0:
             targetdirs = np.hstack((targetdirs, newtargetdirs))
 
-    targetdirs = np.unique(targetdirs)
+    targetdirs = np.sort(np.unique(targetdirs))
         
     return targetdirs
 
