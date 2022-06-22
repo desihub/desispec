@@ -662,6 +662,80 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     return mdiff1, mdiff2
 
 
+def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
+    """Compare preprocessed dark images based on different dark models
+
+    Args:
+        preprocfile1: filepath to bias model made from OBSTYPE=ZERO exposures
+        preprocfile2: filepath to bias model made from OBSTYPE=ZERO exposures
+
+    Options:
+        ny (even int): number of patches in y (row) direction
+        nx (even int): number of patches in x (col) direction
+
+    Returns tuple (mdiff1[ny,nx], mdiff2[ny,nx]) median(image-bias) in patches
+
+    median(raw-bias) is calculated in ny*nx patches using only the DATASEC
+    portion of the images.  Since the DESI CCD bias features tend to vary
+    faster with row than column, default patches are (4k/8 x 4k/40) = 500x100.
+    """
+    #- only import fitsio if needed, not upon package import
+    import fitsio
+
+    log = get_logger()
+    diff1, preprochdr1 = fitsio.read(preprocfile1, header=True)
+    diff2, preprochdr2 = fitsio.read(preprocfile2, header=True)
+
+    #- bias cameras must match
+    cam1 = preprochdr1['CAMERA'].strip().upper()
+    cam2 = preprochdr2['CAMERA'].strip().upper()
+    if cam1 != cam2:
+        msg  = f'{preprocfile1} camera {cam1} != {preprocfile2} camera {cam2}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    #- calculate differences per-amp, thus //2
+    ny_groups = ny//2
+    nx_groups = nx//2
+    
+    median_diff1 = list()
+    median_diff2 = list()
+
+    amp_ids = get_amp_ids(preprochdr1)
+    for amp in amp_ids:
+        ampdiff1 = np.zeros((ny_groups, nx_groups))
+        ampdiff2 = np.zeros((ny_groups, nx_groups))
+        yy, xx = parse_sec_keyword(preprochdr1['DATASEC'+amp])
+        iiy = np.linspace(yy.start, yy.stop, ny_groups+1).astype(int)
+        jjx = np.linspace(xx.start, xx.stop, nx_groups+1).astype(int)
+        for i in range(ny_groups):
+            for j in range(nx_groups):
+                aa = slice(iiy[i], iiy[i+1])
+                bb = slice(jjx[j], jjx[j+1])
+
+                #- median of differences
+                ampdiff1[i,j] = np.median(diff1[aa,bb])
+                ampdiff2[i,j] = np.median(diff2[aa,bb])
+
+                #- Note: diff(medians) is less sensitive
+                ## ampdiff1[i,j] = np.median(image[aa,bb]) - np.median(bias1[aa,bb])
+                ## ampdiff2[i,j] = np.median(image[aa,bb]) - np.median(bias2[aa,bb])
+
+        median_diff1.append(ampdiff1)
+        median_diff2.append(ampdiff2)
+
+    #- put back into 2D array by amp
+    d1 = median_diff1
+    d2 = median_diff2
+    mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
+    mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+
+    assert mdiff1.shape == (ny,nx)
+    assert mdiff2.shape == (ny,nx)
+
+    return mdiff1, mdiff2
+
+
 def fit_const_plus_dark(exp_arr,image_arr):
     """
     fit const + dark*t model given images and exptimes
