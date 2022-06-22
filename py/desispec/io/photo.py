@@ -309,13 +309,17 @@ def targetphot_datamodel(from_file=False):
 
     return datamodel
 
-def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
+def gather_targetphot(input_cat, photocache=None, tileids=None, racolumn='TARGET_RA',
                       deccolumn='TARGET_DEC', columns=None, fiberassign_dir=None):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
         input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, RACOLUMN, DECCOLUMN, TILEID
+          (required) columns: TARGETID, RACOLUMN, DECCOLUMN and, optionally,
+          TILEID.
+        tileids (dict, optional): dictionary cache of targetids for large
+          targeting catalogs.
+    
         photocache (dict, optional): dictionary cache of targetids for large
           targeting catalogs.
         racolumn (str): name of the RA column in `input_cat` (defaults to
@@ -338,27 +342,24 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
         log.warning('No objects in input catalog.')
         return Table()
 
-    for col in ['TARGETID', racolumn, deccolumn]:
+    if tileids is None:
+        required_columns = ['TARGETID', racolumn, deccolumn]
+    else:
+        required_columns = ['TARGETID', racolumn, deccolumn, 'TILEID']
+
+    for col in required_columns:
         if col not in input_cat.colnames:
             errmsg = 'Missing required input column {}'.format(col)
             log.critical(errmsg)
             raise ValueError(errmsg)
 
-    #if targetdirs is None and tileids is None:
-    #    errmsg = 'Must provide tileids or targetdirs input.'
-    #    log.critical(errmsg)
-    #    raise ValueError(errmsg)
-
-    ## Get the unique list of targetdirs
-    #if targetdirs is None:
-    #    targetdirs = np.unique(np.hstack([gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
-    #                                      for tileid in set(np.atleast_1d(tileids))]))
+    if tileids is None:
+        tileids = input_cat['TILEID']
 
     datamodel = targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
 
-    tileids = input_cat['TILEID']
     for tileid in np.unique(tileids):
         log.debug('Working on tile {}'.format(tileid))
 
@@ -368,7 +369,9 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
         photo, photofiles = [], []
 
+        # Get the unique list of targetdirs
         targetdirs = gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
+        
         for targetdir in targetdirs:
             # Handle secondary targets, which have a (very!) different data model.
             if 'secondary' in targetdir:
@@ -494,10 +497,6 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
         #    res = np.split(idx_sort, idx_start[1:])
         #    #vals = vals[count > 1]
         #    #res = filter(lambda x: x.size > 1, res)
-        
-        #bb = photo[photo['TARGETID'] == 39627764155813825]
-        #if len(bb) > 0:
-        #    pdb.set_trace()
         
         photo = photo[uindx]
         assert(len(np.unique(photo['TARGETID'])) == len(photo))
