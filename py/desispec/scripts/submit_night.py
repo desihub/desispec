@@ -27,7 +27,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
-                 tiles=None, surveys=None, laststeps=None, tilenight=False):
+                 tiles=None, surveys=None, laststeps=None, use_tilenight=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -68,7 +68,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         tiles, array-like, optional. Only submit jobs for these TILEIDs.
         surveys, array-like, optional. Only submit science jobs for these surveys (lowercase)
         laststeps, array-like, optional. Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
-        tilenight, bool. Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
+        use_tilenight, bool. Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
                              and poststdstar steps for science exposures.
     Returns:
         None.
@@ -315,24 +315,38 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         curtype, curtile = get_type_and_tile(erow)
 
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-            cur_z_submit_types = z_submit_types
-            ## If running redshifts and there is a future exposure of the same tile
-            ## then only run per exposure redshifts until then
-            if lasttype == 'science' and z_submit_types is not None:
-                tile_exps = etable['EXPID'][((etable['TILEID'] == lasttile) &
-                                             (etable['LASTSTEP'] == 'all'))]
-                unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
-                if np.any(unprocd_exps):
-                    print(f"Identified that tile {lasttile} has future exposures"
-                          + f" for this night. Not submitting full night "
-                          + f"redshift jobs.")
-                    if 'perexp' in z_submit_types:
-                        print("Still submitting perexp redshifts")
-                        cur_z_submit_types = ['perexp']
-                    else:
-                        cur_z_submit_types = None
-            ptable, calibjobs, sciences, internal_id \
-                = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
+            # If done with science exposures for a tile and use_tilenight==True, use
+            # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
+            if use_tilenight and lasttype == 'science' and len(sciences)>0:
+                ptable, sciences, internal_id \
+                    = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                                                    dry_run=dry_run_level,
+                                                    queue=queue,
+                                                    reservation=reservation,
+                                                    strictly_successful=True,
+                                                    check_for_outputs=check_for_outputs,
+                                                    resubmit_partial_complete=resubmit_partial_complete,
+                                                    z_submit_types=z_submit_types,
+                                                    system_name=system_name)
+            else:
+                cur_z_submit_types = z_submit_types
+                ## If running redshifts and there is a future exposure of the same tile
+                ## then only run per exposure redshifts until then
+                if lasttype == 'science' and z_submit_types is not None and not use_tilenight:
+                    tile_exps = etable['EXPID'][((etable['TILEID'] == lasttile) &
+                                                 (etable['LASTSTEP'] == 'all'))]
+                    unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
+                    if np.any(unprocd_exps):
+                        print(f"Identified that tile {lasttile} has future exposures"
+                            + f" for this night. Not submitting full night "
+                            + f"redshift jobs.")
+                        if 'perexp' in z_submit_types:
+                            print("Still submitting perexp redshifts")
+                            cur_z_submit_types = ['perexp']
+                        else:
+                            cur_z_submit_types = None
+                ptable, calibjobs, sciences, internal_id \
+                    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
                                                 calibjobs,
                                                 lasttype, internal_id,
                                                 dry_run=dry_run_level,
@@ -342,20 +356,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
                                                 z_submit_types=cur_z_submit_types,
-                                                system_name=system_name,
-                                                tilenight=tilenight)
-        if (lasttile is not None and curtile != lasttile and tilenight
-            and lasttype == 'science' and len(sciences)>0):
-            ptable, sciences, internal_id \
-                = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
-                                                dry_run=dry_run_level,
-                                                queue=queue,
-                                                reservation=reservation,
-                                                strictly_successful=True,
-                                                check_for_outputs=check_for_outputs,
-                                                resubmit_partial_complete=resubmit_partial_complete,
-                                                z_submit_types=z_submit_types,
                                                 system_name=system_name)
+
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
         internal_id += 1
@@ -364,13 +366,13 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         else:
             prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, calibjobs)
-        if (not tilenight) or erow['OBSTYPE'] != 'science':
+        if (not use_tilenight) or erow['OBSTYPE'] != 'science':
             print(f"\nProcessing: {prow}\n")
             prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                  reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs,
                                  resubmit_partial_complete=resubmit_partial_complete,
-                                 system_name=system_name,tilenight=tilenight)
+                                 system_name=system_name)
 
             ## If processed a dark, assign that to the dark job
             if curtype == 'dark':
@@ -388,7 +390,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
-        elif curtype == 'science' and (prow['LASTSTEP'] != 'skysub' or tilenight):
+        elif curtype == 'science' and (prow['LASTSTEP'] != 'skysub' or use_tilenight):
             sciences.append(prow)
 
         lasttile = curtile
@@ -407,7 +409,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        if tilenight:
+        if use_tilenight:
             ptable, sciences, internal_id \
                 = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
                                                 dry_run=dry_run_level,
@@ -427,7 +429,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
                                             z_submit_types=z_submit_types,
-                                            system_name=system_name,tilenight=tilenight)
+                                            system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:

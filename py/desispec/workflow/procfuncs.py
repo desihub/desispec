@@ -185,7 +185,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
                  f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
     return prow
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False, tilenight=False,
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
@@ -202,8 +202,6 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
                       for testing as though scripts are being submitted. Default is 0 (false).
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit. Default is False.
-        tilenight, bool. Whether this is a tilenight job and therefore needs to be run with desi_proc_tilenight.
-                      Default is False.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
@@ -366,6 +364,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             expids = prow['EXPID']
             if len(expids) == 0:
                 expids = None
+            gpuspecter = (system_name=="perlmutter-gpu")
+            gpuextract = (system_name=="perlmutter-gpu")
             if prow['JOBDESC'] == 'tilenight':
                 log.info("Creating tilenight script for tile {}".format(prow['TILEID']))
                 ncameras = len(decode_camword(prow['PROCCAMWORD']))
@@ -375,8 +375,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                ncameras=ncameras,
                                                                queue=queue,
                                                                mpistdstars=True,
-                                                               gpuspecter=True,
-                                                               gpuextract=True,
+                                                               gpuspecter=gpuspecter,
+                                                               gpuextract=gpuextract,
                                                                system_name=system_name)
             else:
                 log.info("Running: {}".format(cmd.split()))
@@ -385,6 +385,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                cameras=prow['PROCCAMWORD'],
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
+                                                               gpuspecter=gpuspecter,
+                                                               gpuextract=gpuextract,
                                                                system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
@@ -503,7 +505,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, calibjobs, tilenight=False):
+def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -540,7 +542,7 @@ def define_and_assign_dependency(prow, calibjobs, tilenight=False):
             dependency = calibjobs['ccdcalib']
         else:
             dependency = calibjobs['nightlybias']
-        if not tilenight:
+        if not use_tilenight:
             prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
         if calibjobs['psfnight'] is not None:
@@ -1013,7 +1015,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
 #########################################
 ########     Redshifts     ##############
 #########################################
-def redshifts(ptable, prows, tnight, internal_id, queue, reservation,
+def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
               dry_run=0, strictly_successful=False,
               check_for_outputs=True, resubmit_partial_complete=True,
               z_submit_types=None, system_name=None):
@@ -1092,7 +1094,7 @@ def redshifts(ptable, prows, tnight, internal_id, queue, reservation,
 #########################################
 ########     Tilenight     ##############
 #########################################
-def tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
+def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
               dry_run=0, strictly_successful=False, resubmit_partial_complete=True,
               system_name=None):
     """
@@ -1134,7 +1136,7 @@ def tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
     log.info(f"Running tilenight.\n")
 
     tnight_prow = make_tnight_prow(prows, calibjobs, internal_id=internal_id)
-    tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, tilenight=True, dry_run=dry_run,
+    tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=False,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
     ptable.add_row(tnight_prow)
@@ -1255,7 +1257,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
-    joint_prow = define_and_assign_dependency(joint_prow,calibjobs,tilenight=True)
+    joint_prow = define_and_assign_dependency(joint_prow,calibjobs,use_tilenight=True)
 
     return joint_prow
 
@@ -1294,7 +1296,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
-                                  system_name=None, tilenight=False):
+                                  system_name=None):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
     the decision criteria into a single function for easier maintainability over time. These are separate from the
@@ -1334,9 +1336,6 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
-        tilenight, bool. Default is False. If True, use desi_proc_tilenight
-                             for prestdstar, stdstar, and poststdstar steps for science
-                             exposures.
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
         calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
@@ -1349,7 +1348,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
                           from the input such that it represents the smallest unused ID.
     """
-    if lasttype == 'science' and len(sciences) > 0 and not tilenight:
+    if lasttype == 'science' and len(sciences) > 0:
         log = get_logger()
         skysubonly = np.array([sci['LASTSTEP'] == 'skysub' for sci in sciences])
         if np.all(skysubonly):
@@ -1458,14 +1457,14 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
                           from the input such that it represents the smallest unused ID.
     """
-    ptable, tnight, internal_id = tilenight(ptable, sciences, calibjobs, internal_id,
+    ptable, tnight, internal_id = submit_tilenight(ptable, sciences, calibjobs, internal_id,
                                              queue=queue, reservation=reservation,
                                              dry_run=dry_run, strictly_successful=strictly_successful,
                                              resubmit_partial_complete=resubmit_partial_complete,
                                              system_name=system_name
                                              )
 
-    ptable, internal_id = redshifts(ptable, sciences, tnight, internal_id,
+    ptable, internal_id = submit_redshifts(ptable, sciences, tnight, internal_id,
                                     queue=queue, reservation=reservation,
                                     dry_run=dry_run, strictly_successful=strictly_successful,
                                     check_for_outputs=check_for_outputs,
