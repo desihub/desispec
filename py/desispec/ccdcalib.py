@@ -705,7 +705,8 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
     for amp in amp_ids:
         ampdiff1 = np.zeros((ny_groups, nx_groups))
         ampdiff2 = np.zeros((ny_groups, nx_groups))
-        yy, xx = parse_sec_keyword(preprochdr1['DATASEC'+amp])
+        #DATASEC is still CCD based, where DETSEC is given the coords in preproc x/y units?
+        yy, xx = parse_sec_keyword(preprochdr1['DETSEC'+amp])
         iiy = np.linspace(yy.start, yy.stop, ny_groups+1).astype(int)
         jjx = np.linspace(xx.start, xx.stop, nx_groups+1).astype(int)
         for i in range(ny_groups):
@@ -713,9 +714,9 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
                 aa = slice(iiy[i], iiy[i+1])
                 bb = slice(jjx[j], jjx[j+1])
 
-                #- median of differences (nanmedian needed as preproc files can have nans)
-                ampdiff1[i,j] = np.nanmedian(diff1[aa,bb])
-                ampdiff2[i,j] = np.nanmedian(diff2[aa,bb])
+                #- median of differences
+                ampdiff1[i,j] = np.median(diff1[aa,bb])
+                ampdiff2[i,j] = np.median(diff2[aa,bb])
 
                 #- Note: diff(medians) is less sensitive
                 ## ampdiff1[i,j] = np.median(image[aa,bb]) - np.median(bias1[aa,bb])
