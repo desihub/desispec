@@ -713,9 +713,9 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
                 aa = slice(iiy[i], iiy[i+1])
                 bb = slice(jjx[j], jjx[j+1])
 
-                #- median of differences
-                ampdiff1[i,j] = np.median(diff1[aa,bb])
-                ampdiff2[i,j] = np.median(diff2[aa,bb])
+                #- median of differences (nanmedian needed as preproc files can have nans)
+                ampdiff1[i,j] = np.nanmedian(diff1[aa,bb])
+                ampdiff2[i,j] = np.nanmedian(diff2[aa,bb])
 
                 #- Note: diff(medians) is less sensitive
                 ## ampdiff1[i,j] = np.median(image[aa,bb]) - np.median(bias1[aa,bb])
