@@ -343,9 +343,9 @@ def gather_targetphot(input_cat, photocache=None, tileids=None, racolumn='TARGET
         return Table()
 
     if tileids is None:
-        required_columns = ['TARGETID', racolumn, deccolumn]
-    else:
         required_columns = ['TARGETID', racolumn, deccolumn, 'TILEID']
+    else:
+        required_columns = ['TARGETID', racolumn, deccolumn]
 
     for col in required_columns:
         if col not in input_cat.colnames:
