@@ -309,17 +309,13 @@ def targetphot_datamodel(from_file=False):
 
     return datamodel
 
-def gather_targetphot(input_cat, photocache=None, tileids=None, racolumn='TARGET_RA',
+def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                       deccolumn='TARGET_DEC', columns=None, fiberassign_dir=None):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
         input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, RACOLUMN, DECCOLUMN and, optionally,
-          TILEID.
-        tileids (dict, optional): dictionary cache of targetids for large
-          targeting catalogs.
-    
+          (required) columns: TARGETID, RACOLUMN, DECCOLUMN, TILEID.
         photocache (dict, optional): dictionary cache of targetids for large
           targeting catalogs.
         racolumn (str): name of the RA column in `input_cat` (defaults to
@@ -342,23 +338,17 @@ def gather_targetphot(input_cat, photocache=None, tileids=None, racolumn='TARGET
         log.warning('No objects in input catalog.')
         return Table()
 
-    if tileids is None:
-        required_columns = ['TARGETID', racolumn, deccolumn, 'TILEID']
-    else:
-        required_columns = ['TARGETID', racolumn, deccolumn]
-
-    for col in required_columns:
+    for col in ['TARGETID', racolumn, deccolumn, 'TILEID']:
         if col not in input_cat.colnames:
             errmsg = 'Missing required input column {}'.format(col)
             log.critical(errmsg)
             raise ValueError(errmsg)
 
-    if tileids is None:
-        tileids = input_cat['TILEID']
-
     datamodel = targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
+
+    tileids = input_cat['TILEID']
 
     for tileid in np.unique(tileids):
         log.debug('Working on tile {}'.format(tileid))
