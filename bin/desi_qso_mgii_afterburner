@@ -17,11 +17,11 @@ from desitarget.sv2.sv2_targetmask import desi_mask as sv2_mask
 from desitarget.sv1.sv1_targetmask import desi_mask as sv1_mask
 from desitarget.cmx.cmx_targetmask import cmx_mask
 
-from desispec.io.util import get_tempfilename
-
 from desiutil.log import get_logger
 
+from desispec.io.util import get_tempfilename
 from desispec.mgii_afterburner import mgii_fitter
+
 
 log = get_logger()
 
@@ -46,6 +46,9 @@ def collect_argparser():
                               restricted (objects which are identify as QSO by the mgII afterburner) \
                               / all (All objects which are tested by the mgII fitter) \
                               --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
+
+    parser.add_argument("--template_dir", type=str, required=False, default=None,
+                        help="give the RR templates used in mgII fitter to compare the Xi2, by default use those from redrock")
 
     parser.add_argument("--lambda_width", type=str, required=False, default=250,
                         help="parameter for mgII fitter, see mgii_afterburner.py for more information")
@@ -88,6 +91,7 @@ def select_targets_with_mgii_fitter(redrock, fibermap, sel_to_mgii, spectra_name
          fits_result,
          index_with_mgii_fit) = mgii_fitter(spectra_name, redrock_name, sel_to_mgii,
                                             param_mgii_fitter['lambda_width'],
+                                            template_dir=param_mgii_fitter['template_dir'],
                                             max_sigma=param_mgii_fitter['max_sigma'],
                                             min_sigma=param_mgii_fitter['min_sigma'],
                                             min_deltachi2=param_mgii_fitter['min_deltachi2'],
@@ -211,7 +215,7 @@ if __name__ == "__main__":
     args = collect_argparser()
 
     # Param for the MgII fitter see desispec/py/desispec/mgii_afterburner.py for additional informations
-    param_mgii_fitter = {'lambda_width': args.lambda_width, 'max_sigma': args.max_sigma, 'min_sigma': args.min_sigma,
+    param_mgii_fitter = {'lambda_width': args.lambda_width, 'template_dir': args.template_dir, 'max_sigma': args.max_sigma, 'min_sigma': args.min_sigma,
                          'min_deltachi2': args.min_deltachi2, 'min_signifiance_A': args.min_signifiance_A, 'min_A': args.min_A}
 
     if os.path.isfile(args.coadd) and os.path.isfile(args.redrock):
