@@ -14,13 +14,12 @@ from glob import glob
 from datetime import datetime
 import tempfile
 from desitarget.targetmask import desi_mask, bgs_mask
-from desitarget.io import read_targets_in_tiles
+from desitarget.geomask import hp_in_cap
 from desispec.maskbits import fibermask
 from desispec.io import read_fibermap, findfile
 from desispec.io.util import checkgzip
 from desispec.tsnr import tsnr2_to_efftime
 from desimodel.focalplane.geometry import get_tile_radius_deg
-from desimodel.footprint import is_point_in_desi
 from desiutil.log import get_logger
 from desiutil.dust import ebv as dust_ebv
 from astropy.table import Table, vstack
@@ -888,7 +887,7 @@ def get_expids_efftimes(tileqafits, prod):
                 tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits*')
                 spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
-        fmap = read_fibermap(spectra_fns[0])
+        fmap = vstack([read_fibermap(spectra_fn) for spectra_fn in spectra_fns])
         expids, ii = np.unique(fmap["EXPID"], return_index=True)
         nights = fmap["NIGHT"][ii]
     # AR then try based on prod
@@ -911,7 +910,7 @@ def get_expids_efftimes(tileqafits, prod):
                     specprod_dir=prod, return_exists=True)
                 if not exists:
                     log.warning(f'{fn} not found; skipping')
-                    pass
+                    continue
 
                 vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
                 tsnr2_petals[petal] += np.median(vals[vals > 0])
@@ -960,6 +959,7 @@ def get_tilecov(
     programs=None,
     lastnight=None,
     indesi=True,
+    nside=1024,
     outpng=None,
     plot_tiles=False,
     verbose=False,
@@ -974,23 +974,27 @@ def get_tilecov(
         lastnight (optional, defaults to today): only consider tiles observed up to lastnight (int)
         surveys (optional, defaults to "main"): comma-separated list of surveys to consider (reads the tiles-SURVEY.ecsv file) (str)
         indesi (optional, defaults to True): restrict to IN_DESI=True tiles? (bool)
+        nside (optional, defaults to 1024): healpix pixel nside (int)
         outpng (optional, defaults to None): if provided, output file with a plot (str)
         plot_tiles (optional, defaults to False): plot overlapping tiles? (bool)
         verbose (optional, defaults to False): print log.info() (bool)
 
     Returns:
-        ntilecov: average number of observed tiles covering the considered tile (float)
+        pixs: list of the healpix pixels covering the tile (np.array(float))
+        pix_ntiles: list of the nb of tiles covering each pixel from pixs (np.array(float))
+        nside: healpix pixel nside (int)
+        nest: healpix NESTED? (boolean)
         outdict: a dictionary, with an entry for each observed, overlapping tile, containing the list of observed overlapping tiles (dict)
 
     Notes:
-        If the tile is not covered by randoms, ntilecov=np.nan, tileids=[] (and no plot is made).
         The "regular" use is to provide a single PROGRAM in programs (e.g., programs="DARK").
         This function relies on the following files:
             $DESI_SURVEYOPS/ops/tiles-{SURVEY}.ecsv for SURVEY in surveys (to get the tiles to consider)
             $DESI_ROOT/spectro/redux/daily/exposures-daily.fits (to get the existing observations up to lastnight)
-            $DESI_TARGET/catalogs/dr9/2.4.0/randoms/resolve/randoms-1-0/
         If one wants to consider the latest observations, one should wait the 10am pacific update of exposures-daily.fits.
     """
+    # AR healpix
+    nest = True # desitarget routines use nest = True
     # AR lastnight
     if lastnight is None:
         lastnight = int(datetime.now().strftime("%Y%m%d"))
@@ -1009,8 +1013,6 @@ def get_tilecov(
         for survey in surveys.split(",")
     ]
     expsfn = os.path.join(os.getenv("DESI_ROOT"), "spectro", "redux", "daily", "exposures-daily.fits")
-    # AR we need that specific version which is healpix-split, hence readable by read_targets_in_tile(quick=True))
-    randdir = os.path.join(os.getenv("DESI_TARGET"), "catalogs", "dr9", "2.4.0", "randoms", "resolve", "randoms-1-0")
 
     # AR exposures with EFFTIME_SPEC>0 and NIGHT<=LASTNIGHT
     exps = Table.read(expsfn, "EXPOSURES")
@@ -1032,7 +1034,7 @@ def get_tilecov(
 
     # AR first, before any cut:
     # AR - get the considered tile
-    # AR - read the randoms inside that tile
+    # AR - get the healpix pixels inside that tile
     sel = tiles["TILEID"] == tileid
     if sel.sum() == 0:
         msg = "no TILEID={} found in {}".format(tileid, tilesfn)
@@ -1052,12 +1054,8 @@ def get_tilecov(
         dec=tiles["DEC"][sel][0] * units.degree,
         frame="icrs"
     )
-    d = read_targets_in_tiles(randdir, tiles=tiles[sel], quick=True)
-    if len(d) == 0:
-        log.warning("found 0 randoms in TILEID={}; cannot proceed; returning np.nan, empty_dictionary".format(tileid))
-        return np.nan, {}
-    if verbose:
-        log.info("found {} randoms in TILEID={}".format(len(d), tileid))
+    radecrad = [tiles["RA"][sel][0], tiles["DEC"][sel][0], tile_radius_deg]
+    pixs = hp_in_cap(nside, radecrad, inclusive=True, fact=4)
 
     # AR then cut on:
     # AR - PROGRAM, IN_DESI: to get the tiles to consider
@@ -1091,18 +1089,30 @@ def get_tilecov(
     }
 
     # AR count the number of tile coverage
-    ntile = np.zeros(len(d), dtype=int)
+    pix_ntiles = np.zeros(len(pixs), dtype=int)
     for i in range(len(tiles)):
-        sel = is_point_in_desi(tiles[[i]], d["RA"], d["DEC"])
+        i_radecrad = [tiles["RA"][i], tiles["DEC"][i], tile_radius_deg]
+        i_pixs = hp_in_cap(nside, i_radecrad, inclusive=True, fact=4)
+        sel = np.in1d(pixs, i_pixs)
         if verbose:
             log.info("fraction of TILEID={} covered by TILEID={}: {:.2f}".format(tileid, tiles[i]["TILEID"], sel.mean()))
-        ntile[sel] += 1
-    ntilecov = ntile.mean()
+        pix_ntiles[sel] += 1
+    ntilecovs, counts = np.unique(pix_ntiles, return_counts=True)
+    ntilefracs = counts / len(pixs)
     if verbose:
-        log.info("mean coverage of TILEID={}: {:.2f}".format(tileid, ntilecov))
+        log.info("mean coverage of TILEID={}: {:.2f}".format(tileid, pix_ntiles.mean()))
+        log.info(
+            "tile coverage fractions of TILEID={}: {}".format(
+                tileid,
+                ", ".join(["{}={:.2f}".format(ntilecov, ntilefrac) for ntilecov, ntilefrac in zip(ntilecovs, ntilefracs)]),
+            )
+        )
 
     # AR plot?
     if outpng is not None:
+        # AR pixels coordinates
+        thetas, phis = hp.pix2ang(nside, pixs, nest=nest)
+        pix_ras, pix_decs = np.degrees(phis), 90. - np.degrees(thetas)
         # AR cbar settings
         cmin = 0
         # AR for "regular" programs, setting cmax to the
@@ -1113,20 +1123,20 @@ def get_tilecov(
             "mainBACKUP" : 1, "mainBRIGHT" : 4, "mainDARK" : 7,
         }
         if "{}{}".format(surveys, programs) in refcmaxs:
-            cmax = np.max([refcmaxs["{}{}".format(surveys, programs)], ntile.max()])
+            cmax = np.max([refcmaxs["{}{}".format(surveys, programs)], pix_ntiles.max()])
         else:
-            cmax = ntile.max()
+            cmax = pix_ntiles.max()
         cmap = get_quantz_cmap(matplotlib.cm.jet, cmax - cmin + 1, 0, 1)
         # AR case overlap Dec.=0
-        if d["RA"].max() - d["RA"].min() > 100:
+        if pix_ras.max() - pix_ras.min() > 100:
             dowrap = True
         else:
             dowrap = False
         if dowrap:
-            d["RA"][d["RA"] > 300] -= 360
+            pix_ras[pix_ras > 300] -= 360
         #
         fig, ax = plt.subplots()
-        sc = ax.scatter(d["RA"], d["DEC"], c=ntile, s=1, cmap=cmap, vmin=cmin, vmax=cmax)
+        sc = ax.scatter(pix_ras, pix_decs, c=pix_ntiles, s=10, cmap=cmap, vmin=cmin, vmax=cmax)
         # AR plot overlapping tiles?
         if plot_tiles:
             angs = np.linspace(0, 2 * np.pi, 100)
@@ -1134,20 +1144,20 @@ def get_tilecov(
             ddecs = tile_radius_deg * np.sin(angs)
             for i in range(len(tiles)):
                 if tiles["TILEID"][i] != tileid:
-                    ras = tiles["RA"][i] + dras / np.cos(np.radians(tiles["DEC"][i] + ddecs))
+                    tras = tiles["RA"][i] + dras / np.cos(np.radians(tiles["DEC"][i] + ddecs))
                     if dowrap:
-                        ras[ras > 300] -= 360
-                    decs = tiles["DEC"][i] + ddecs
-                    ax.plot(ras, decs, label="TILEID={}".format(tiles["TILEID"][i]))
+                        tras[tras > 300] -= 360
+                    tdecs = tiles["DEC"][i] + ddecs
+                    ax.plot(tras, tdecs, label="TILEID={}".format(tiles["TILEID"][i]))
             ax.legend(loc=2, ncol=2, fontsize=8)
         #
-        ax.set_title("Mean coverage of TILEID={} on {}: {:.2f}".format(tileid, lastnight, ntilecov))
+        ax.set_title("Mean coverage of TILEID={} on {}: {:.2f}".format(tileid, lastnight, pix_ntiles.mean()))
         ax.set_xlabel("R.A. [deg]")
         ax.set_ylabel("Dec. [deg]")
         dra = 1.1 * tile_radius_deg / np.cos(np.radians(d["DEC"].mean()))
         ddec = 1.1 * tile_radius_deg
-        ax.set_xlim(d["RA"].mean() + dra, d["RA"].mean() - dra)
-        ax.set_ylim(d["DEC"].mean() - ddec, d["DEC"].mean() + ddec)
+        ax.set_xlim(pix_ras.mean() + dra, pix_ras.mean() - dra)
+        ax.set_ylim(pix_decs.mean() - ddec, pix_decs.mean() + ddec)
         ax.grid()
         cbar = plt.colorbar(sc, ticks=np.arange(cmin, cmax + 1, dtype=int))
         cbar.set_label("Number of observed tiles on {}".format(lastnight))
@@ -1155,7 +1165,7 @@ def get_tilecov(
         plt.savefig(outpng, bbox_inches="tight")
         plt.close()
     #
-    return ntilecov, outdict
+    return pixs, pix_ntiles, nside, nest, outdict
 
 
 def make_tile_qa_plot(

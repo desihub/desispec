@@ -31,6 +31,14 @@ def get_desi_proc_joint_fit_parser():
     parser = add_desi_proc_joint_fit_terms(parser)
     return parser
 
+def get_desi_proc_tilenight_parser():
+    """
+    Create an argparser object for use with desi_proc_tilenight based on arguments from sys.argv
+    """
+    parser = get_shared_desi_proc_parser()
+    parser = add_desi_proc_tilenight_terms(parser)
+    return parser
+
 def get_shared_desi_proc_parser():
     """
     Create an argparser object for use with desi_proc AND desi_proc_joint_fit based on arguments from sys.argv
@@ -109,6 +117,14 @@ def add_desi_proc_joint_fit_terms(parser):
     #parser.add_argument("-n", "--nights", type=str, help="YEARMMDD nights")
     parser.add_argument("-e", "--expids", type=str, help="Exposure IDs")
     parser.add_argument("-i", "--inputs", type=str, help="input raw data files")
+    return parser
+
+def add_desi_proc_tilenight_terms(parser):
+    """
+    Add parameters to the argument parser that are only used by desi_proc_tilenight
+    """
+    parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
+    parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
 
     return parser
 
@@ -330,12 +346,17 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         # former version with multiprocessing on many nodes
         # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
         #- new version using MPI on one node
-        ncores, runtime = ncameras, (6+2*nexps) #ncameras, 10
+        ncores, runtime = ncameras, (8+2*nexps) #ncameras, 10
     elif jobdesc == 'POSTSTDSTAR':
         ncores, runtime = ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
+    elif jobdesc == 'TILENIGHT':
+        ncores, nodes = config['cores_per_node'], 1
+        # total frames per node hour ~ 350 on a single
+        # Perlmutter GPU node, plus 15-minute overhead 
+        runtime = 15 + int(60. / 350. * ncameras * nexps)
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -394,6 +415,26 @@ def get_desi_proc_batch_file_path(night,reduxdir=None):
         reduxdir = desispec.io.specprod_root()
     batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(night))
     return batchdir
+
+def get_desi_proc_tilenight_batch_file_name(night, tileid):
+    """
+    Returns the default directory location to store a batch script file given a night
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        tileid: str or int, defines the tile id relevant to the job
+
+    Returns:
+        pathname: str, the default script name for a desi_proc_tilenight batch script file
+    """
+    if type(tileid) is not str:
+        if np.isscalar(tileid):
+            tileid = '{}'.format(tileid)
+        else:
+            raise RuntimeError('tileid should be either int or str')
+
+    jobname = 'tilenight-{}-{}'.format(night, tileid)
+    return jobname
 
 def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
     """
@@ -686,6 +727,120 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('  echo FAILED: done at $(date)\n')
                 fx.write('  exit 1\n')
                 fx.write('fi\n')
+
+        fx.write('\nif [ $? -eq 0 ]; then\n')
+        fx.write('  echo SUCCESS: done at $(date)\n')
+        fx.write('else\n')
+        fx.write('  echo FAILED: done at $(date)\n')
+        fx.write('  exit 1\n')
+        fx.write('fi\n')
+
+    print('Wrote {}'.format(scriptfile))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
+
+    return scriptfile
+
+def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
+                                  system_name=None, mpistdstars=None, gpuspecter=None,
+                                  gpuextract=None,
+                                  ):
+    """
+    Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
+
+    Args:
+        night: str or int. The night the data was acquired.
+        exp: int, or list of ints. The exposure id(s) for the data.
+        tileid: str or int. The tile id for the data.
+        ncameras: int. The number of cameras used for joint fitting.
+        queue: str. Queue to be used.
+
+    Options:
+        runtime: str. Timeout wall clock time.
+        batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
+        system_name: name of batch system, e.g. cori-haswell, cori-knl.
+        mpistdstars: bool. Whether to use MPI for stdstar fitting.
+        gpuspecter: bool. Whether to use gpu_specter.
+        gpuextract: bool. Whether to perform gpu extraction with gpu_specter.
+
+    Returns:
+        scriptfile: the full path name for the script written.
+
+    """
+
+    batchdir = get_desi_proc_batch_file_path(night)
+    os.makedirs(batchdir, exist_ok=True)
+
+    nexps = 1
+    if exp is not None and not np.isscalar(exp):
+        nexps = len(exp)
+
+    jobname = get_desi_proc_tilenight_batch_file_name(night, tileid)
+
+    timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+    timingfile = os.path.join(batchdir, timingfile)
+
+    scriptfile = os.path.join(batchdir, jobname + '.slurm')
+
+    batch_config = batch.get_config(system_name)
+    threads_per_core = batch_config['threads_per_core']
+    gpus_per_node = batch_config['gpus_per_node']
+
+    ncores, nodes, runtime = determine_resources(ncameras,'TILENIGHT',
+        queue=queue, nexps=nexps, system_name=system_name,forced_runtime=runtime)
+
+    if runtime is None:
+        runtime = 30
+
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
+
+    with open(scriptfile, 'w') as fx:
+        fx.write('#!/bin/bash -l\n\n')
+        fx.write('#SBATCH -N {}\n'.format(nodes))
+        fx.write('#SBATCH --qos {}\n'.format(queue))
+        for opts in batch_config['batch_opts']:
+            fx.write('#SBATCH {}\n'.format(opts))
+        if batch_opts is not None:
+            fx.write('#SBATCH {}\n'.format(batch_opts))
+        if system_name == 'perlmutter-gpu':
+            # perlmutter-gpu requires projects name with "_g" appended
+            fx.write('#SBATCH --account desi_g\n')
+        else:
+            fx.write('#SBATCH --account desi\n')
+        fx.write('#SBATCH --job-name {}\n'.format(jobname))
+        fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
+        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
+        fx.write('#SBATCH --exclusive\n')
+
+        fx.write('\n')
+
+        cmd = 'desi_proc_tilenight'
+        cmd += f' -n {night}'
+        cmd += f' -t {tileid}'
+        cmd += f' --timingfile {timingfile}'
+        cmd += f' --mpi'
+        if mpistdstars:
+            cmd += f' --mpistdstars'
+        if gpuextract:
+            cmd += f' --gpuspecter --gpuextract'
+        elif gpuspecter:
+            cmd += f' --gpuspecter'
+
+        fx.write(f'# running a tile-night\n')
+        fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
+
+        fx.write('echo Starting at $(date)\n')
+
+        mps_wrapper=''
+        if system_name == 'perlmutter-gpu':
+            fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
+            mps_wrapper='desi_mps_wrapper'
+
+        fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
+        srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                +mps_wrapper+f' {cmd}')
+        fx.write('echo Running {}\n'.format(srun))
+        fx.write('{}\n'.format(srun))
 
         fx.write('\nif [ $? -eq 0 ]; then\n')
         fx.write('  echo SUCCESS: done at $(date)\n')

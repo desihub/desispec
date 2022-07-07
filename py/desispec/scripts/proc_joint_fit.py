@@ -1,6 +1,10 @@
 import time
 start_imports = time.time()
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
+
 import sys, os, argparse, re
 import traceback
 import subprocess
@@ -17,10 +21,7 @@ import desispec.io
 from desispec.io import findfile, replace_prefix
 from desispec.io.util import create_camword, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder
-from desispec.fiberflat import apply_fiberflat
-from desispec.sky import subtract_sky
 from desispec.util import runcmd, mpi_count_failures
-import desispec.scripts.extract
 import desispec.scripts.specex
 import desispec.scripts.stdstars
 import desispec.scripts.average_fiberflat
@@ -626,3 +627,5 @@ def main(args=None, comm=None):
 
     if rank == 0:
         log.info('All done at {}'.format(time.asctime()))
+
+    return 0

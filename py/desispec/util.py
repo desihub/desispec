@@ -3,7 +3,7 @@ Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
 import argparse
-
+import inspect
 import os
 import sys
 import errno
@@ -146,7 +146,8 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
             success = (result == 0)
 
     except (BaseException, Exception) as e:
-        log.critical("FAILED rank {} exception".format(rank))
+        frame,filename,line_number,function_name,lines,index = inspect.stack()[1] 
+        log.critical(f'FAILED rank {rank} exception while running {cmdstr} called from line {line_number} in {filename}')
         result = e
         success = False
         if rank == 0:
@@ -486,6 +487,12 @@ def combine_ivar(ivar1, ivar2):
 _matplotlib_backend = None
 
 def set_backend(backend='agg'):
+    """
+    Set matplotlib to use a batch-friendly backend
+
+    This function is safe to call multiple times without tripping on a
+    previously set backend (which remains set)
+    """
     global _matplotlib_backend
     if _matplotlib_backend is None:
         _matplotlib_backend = backend

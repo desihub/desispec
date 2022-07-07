@@ -43,7 +43,8 @@ except KeyError:
         model_QN_path = os.path.join(DESI_ROOT, "science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
     except KeyError:  # if $DESI_ROOT is not set, exit the program.
         log.error("$DESI_ROOT is not set in the current environment. Please set it before running this code.")
-        sys.exit()
+        sys.exit(1)
+
 model_QN = load_model(model_QN_path)
 
 
