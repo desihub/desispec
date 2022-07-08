@@ -354,9 +354,10 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         nodes = 2
     elif jobdesc == 'TILENIGHT':
         ncores, nodes = config['cores_per_node'], 1
-        # total frames per node hour ~ 350 on a single
-        # Perlmutter GPU node, plus 20-minute overhead
-        runtime = 20 + int(60. / 350. * ncameras * nexps)
+        # ~150 frames per node hour plus
+        # 8-minute overhead for a single node
+        # perlmutter-[cpu,gpu] have timefactor=[0.7,0.5]
+        runtime = 8 + int(60. / 140. * ncameras * nexps)
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -365,7 +366,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     if jobdesc in ('FLAT', 'TESTFLAT', 'SKY',
         'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         if system_name[0:10] == 'perlmutter':
-            ncores, nodes, runtime = config['cores_per_node'], 1, 25
+            ncores, nodes = config['cores_per_node'], 1
 
     if forced_runtime is not None:
         runtime = forced_runtime
