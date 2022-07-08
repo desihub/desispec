@@ -5,7 +5,11 @@ desispec Change Log
 0.53.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Validate redshift catalog metadata and generate Tractor photometric catalogs
+  for all objects with a redshift in a given data release (PR `#1716`_). 
+
+.. _`#1716`: https://github.com/desihub/desispec/pull/1716
+
 
 0.53.1 (2022-05-19)
 -------------------
