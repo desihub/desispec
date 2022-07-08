@@ -180,39 +180,42 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         zmin, zmax = np.min(redshift_template), np.max(redshift_template)
         sel = (z_prior >= zmin) & (z_prior <= zmax)
 
-        write_prior_for_RR(targetid[sel], z_prior[sel], filename_priors)
+        # In case where all the objects have priors outside the redshift template range
+        # Skip the template to avoid any undesired errors
+        if sel.sum() != 0:
+            write_prior_for_RR(targetid[sel], z_prior[sel], filename_priors)
 
-        # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
-        # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
-        # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
-        # To figure out with this, we just need to add a space before the -
+            # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
+            # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+            # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
+            # To figure out with this, we just need to add a space before the -
 
-        argument_for_rerun_RR = ['--infiles', spectra_name,
-                                 '--templates', template_filename,
-                                 '--targetids', ' ' + ",".join(reversed(targetid[sel].astype(str))),
-                                 '--priors', filename_priors,
-                                 '--details', filename_output_rerun_RR,
-                                 '--outfile', filename_redrock_rerun_RR]
-        # NEW RUN RR
-        log.info(f'Running redrock with priors on selected targets with {template_filename}')
-        rrdesi(argument_for_rerun_RR)
-        log.info('Done running redrock')
+            argument_for_rerun_RR = ['--infiles', spectra_name,
+                                     '--templates', template_filename,
+                                     '--targetids', ' ' + ",".join(reversed(targetid[sel].astype(str))),
+                                     '--priors', filename_priors,
+                                     '--details', filename_output_rerun_RR,
+                                     '--outfile', filename_redrock_rerun_RR]
+            # NEW RUN RR
+            log.info(f'Running redrock with priors on selected targets with {template_filename}')
+            rrdesi(argument_for_rerun_RR)
+            log.info('Done running redrock')
 
-        # Extract information from the new run of RR
-        redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+            # Extract information from the new run of RR
+            redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
 
-        if param_RR['delete_RR_output'] == 'True':
-            log.debug("Remove output from the new run of RR")
-            os.remove(filename_priors)
-            os.remove(filename_output_rerun_RR)
-            os.remove(filename_redrock_rerun_RR)
+            if param_RR['delete_RR_output'] == 'True':
+                log.debug("Remove output from the new run of RR")
+                os.remove(filename_priors)
+                os.remove(filename_output_rerun_RR)
+                os.remove(filename_redrock_rerun_RR)
 
-        # aggregate the result:
-        best_chi2 = np.zeros(targetid.size, dtype='bool')
-        best_chi2_tmp = chi2[sel] > chi2_tmp
-        best_chi2[sel] = best_chi2_tmp
+            # aggregate the result:
+            best_chi2 = np.zeros(targetid.size, dtype='bool')
+            best_chi2_tmp = chi2[sel] > chi2_tmp
+            best_chi2[sel] = best_chi2_tmp
 
-        redshift[best_chi2], err_redshift[best_chi2], coeffs[best_chi2] = redshift_tmp[best_chi2_tmp], err_redshift_tmp[best_chi2_tmp], coeffs_tmp[best_chi2_tmp]
+            redshift[best_chi2], err_redshift[best_chi2], coeffs[best_chi2] = redshift_tmp[best_chi2_tmp], err_redshift_tmp[best_chi2_tmp], coeffs_tmp[best_chi2_tmp]
 
     return redshift, err_redshift, coeffs
 
