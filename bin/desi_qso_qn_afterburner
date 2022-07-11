@@ -3,6 +3,7 @@
 
 import os
 import sys
+import glob
 import time
 import argparse
 
@@ -27,10 +28,11 @@ from redrock.external.desi import rrdesi
 from quasarnp.io import load_model, load_desi_coadd
 from quasarnp.utils import process_preds
 
+
 log = get_logger()
 
-# LOAD template to RE-RUN redrock
-qso_template_filename = [path for path in find_templates() if os.path.basename(path) == 'rrtemplate-qso.fits'][0]
+# LOAD ONLY QSO templates to RE-RUN redrock
+templates_default_qso = glob.glob(os.path.join(os.path.dirname(find_templates()[0]), 'rrtemplate-qso*.fits'))
 
 try:  # check if the env variable QN_MODEL_FILE is defined, otherwise load boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5
     model_QN_path = os.environ['QN_MODEL_FILE']
@@ -73,8 +75,9 @@ def collect_argparser():
                         help="For QN: is_qso_QN =  np.sum(c_line > c_thresh, axis=0) >= n_thresh")
 
     # for RR
-    parser.add_argument("--template", type=str, required=False, default=qso_template_filename,
-                        help="give the RR template for the new RR run, by default:redrock_qso_template")
+    parser.add_argument("--templates", type=str, nargs='+', required=False, default=templates_default_qso,
+                        help="give the templates used during the new run of RR\
+                              By default use the templates from redrock of the form rrtemplate-qso*.fits")
     parser.add_argument("--filename_priors", type=str, required=False, default=None,
                         help="filename for the RR prior file, by default use the directory of coadd file")
     parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default=None,
@@ -88,7 +91,6 @@ def collect_argparser():
 
 
 def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
-
     """
     Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
     with z_prior using the template contained in template_file
@@ -107,12 +109,6 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
                        even we work only with QSO template, it has a "shape" of redshift.size x 10
                         WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
     """
-
-    template_filename = param_RR['template_filename']
-    filename_priors = param_RR['filename_priors']
-    filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
-    filename_redrock_rerun_RR = param_RR['filename_redrock_rerun_RR']
-
     def write_prior_for_RR(targetid, z_prior, filename_priors):
         # Write the prior file for RR associated to the targetid list
         # Args:
@@ -162,39 +158,64 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
 
             redshift = rr['Z'][correct_index]
             err_redshift = rr['ZERR'][correct_index]
+            chi2 = rr['CHI2'][correct_index]
             coeffs = np.zeros((redshift.size, 10))
             coeffs[:, :4] = rr['COEFF'][correct_index]
 
-        return redshift, err_redshift, coeffs
+        return redshift, err_redshift, chi2, coeffs
 
-    write_prior_for_RR(targetid, z_prior, filename_priors)
+    # define the output
+    redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
 
-    # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
-    # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
-    # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
-    # To figure out with this, we just need to add a space before the -
+    # make an independant run for each quasar templates to circumvent some problem from redrock:
+    # 1] cannot give two templates in redrock as input, only one or a directory
+    # 2] problem with prior and template redshift range .. --> give zero result and redrock stop
+    for template_filename in param_RR['templates_filename']:
+        filename_priors = param_RR['filename_priors']
+        filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
+        filename_redrock_rerun_RR = param_RR['filename_redrock_rerun_RR']
 
-    argument_for_rerun_RR = ['--infiles', spectra_name,
-                             '--templates', template_filename,
-                             '--targetids', ' ' + ",".join(reversed(targetid.astype(str))),
-                             '--priors', filename_priors,
-                             '--details', filename_output_rerun_RR,
-                             '--outfile', filename_redrock_rerun_RR]
-    # NEW RUN RR
-    log.info('Running redrock with priors on selected targets')
-    print()
-    rrdesi(argument_for_rerun_RR)
-    print()
-    log.info('Done running redrock')
+        # find redshift range of the template
+        redshift_template = fitsio.FITS(template_filename)['REDSHIFTS'][:]
+        zmin, zmax = np.min(redshift_template), np.max(redshift_template)
+        sel = (z_prior >= zmin) & (z_prior <= zmax)
 
-    # Extract information from the new run of RR
-    redshift, err_redshift, coeffs = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid)
+        # In case where all the objects have priors outside the redshift template range
+        # Skip the template to avoid any undesired errors
+        if sel.sum() != 0:
+            write_prior_for_RR(targetid[sel], z_prior[sel], filename_priors)
 
-    if param_RR['delete_RR_output'] == 'True':
-        log.debug("Remove output from the new run of RR")
-        os.remove(filename_priors)
-        os.remove(filename_output_rerun_RR)
-        os.remove(filename_redrock_rerun_RR)
+            # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
+            # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+            # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
+            # To figure out with this, we just need to add a space before the -
+
+            argument_for_rerun_RR = ['--infiles', spectra_name,
+                                     '--templates', template_filename,
+                                     '--targetids', ' ' + ",".join(reversed(targetid[sel].astype(str))),
+                                     '--priors', filename_priors,
+                                     '--details', filename_output_rerun_RR,
+                                     '--outfile', filename_redrock_rerun_RR]
+            # NEW RUN RR
+            log.info(f'Running redrock with priors on selected targets with {template_filename}')
+            rrdesi(argument_for_rerun_RR)
+            log.info('Done running redrock')
+
+            # Extract information from the new run of RR
+            redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+
+            if param_RR['delete_RR_output'] == 'True':
+                log.debug("Remove output from the new run of RR")
+                os.remove(filename_priors)
+                os.remove(filename_output_rerun_RR)
+                os.remove(filename_redrock_rerun_RR)
+
+            # aggregate the result:
+            best_chi2 = np.zeros(targetid.size, dtype='bool')
+            best_chi2_tmp = chi2[sel] > chi2_tmp
+            best_chi2[sel] = best_chi2_tmp
+
+            redshift[best_chi2], err_redshift[best_chi2], coeffs[best_chi2] = redshift_tmp[best_chi2_tmp], err_redshift_tmp[best_chi2_tmp], coeffs_tmp[best_chi2_tmp]
 
     return redshift, err_redshift, coeffs
 
@@ -371,7 +392,8 @@ if __name__ == "__main__":
     param_QN = {'c_thresh': args.c_thresh, 'n_thresh': args.n_thresh}
 
     # param for the new run of RR
-    param_RR = {'template_filename': args.template}
+    param_RR = {'templates_filename': args.templates}
+
     if args.filename_priors is None:
         param_RR['filename_priors'] = args.coadd.replace('coadd', 'priors-tmp')
     else:
