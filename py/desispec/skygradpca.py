@@ -65,6 +65,36 @@ def configure_for_xyr(skygradpca, x, y, R, skyfibers=None):
     skygradpca.skyfibers = skyfibers
 
 
+def evaluate_model(skygradpca, R, coeff, mean=None):
+    """Evaluate a skygradpca object for a frame.
+
+    The skygradpca object must first be configured for the frame with
+    configure_for_xyr.
+
+    Args:
+        skygradpca: SkyGradPCA instance, configured with configure_for_xyr
+        R: resolution matrices for frame
+        coeff (array, 1D): coefficients for eigenvectors
+        mean (optional): mean sky spectrum
+
+    Returns:
+        sky spectrum (array[nfiber, nwave]) given mean spectrum, per-fiber
+        resolution matrices, and gradient amplitudes
+    """
+
+    nfiber = len(skygradpca.x)
+    sky = np.zeros((nfiber, skygradpca.nwave), dtype='f8')
+    if mean is not None:
+        sky += mean[None, :]
+    for i in range(nfiber):
+        for j in range(skygradpca.nspec):
+            sky[i, :] += (
+                coeff[2*j+0]*skygradpca.deconvflux[j]*skygradpca.dx[i] +
+                coeff[2*j+1]*skygradpca.deconvflux[j]*skygradpca.dy[i])
+        sky[i, :] = R[i].dot(sky[i, :])
+    return sky
+
+
 def gather_skies(fn=None, camera='r', petal=0, n=np.inf, heliocor=True,
                  specprod='daily'):
     """Gather sframes for performing bulk analyses; e.g., PCA.

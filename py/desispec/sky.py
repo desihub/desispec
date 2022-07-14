@@ -27,54 +27,7 @@ from desispec.io import findfile,read_xytraceset
 from desispec.calibfinder import CalibFinder
 from desispec.preproc import get_amp_ids
 from desispec.tpcorrparam import tpcorrmodel
-
-
-def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,
-                add_variance=True,\
-                adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None,
-                fit_offsets=False,fiberflat=None, skygradpca=None,
-                tpcorrparam=None):
-    """Compute a sky model.
-
-    Input flux are expected to be flatfielded!
-    We don't check this in this routine.
-
-    Args:
-        frame : Frame object, which includes attributes
-          - wave : 1D wavelength grid in Angstroms
-          - flux : 2D flux[nspec, nwave] density
-          - ivar : 2D inverse variance of flux
-          - mask : 2D inverse mask flux (0=good)
-          - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
-        nsig_clipping : [optional] sigma clipping value for outlier rejection
-        max_iterations : int , number of iterations
-        model_ivar : replace ivar by a model to avoid bias due to correlated flux and ivar. this has a negligible effect on sims.
-        add_variance : evaluate calibration error and add this to the sky model variance
-        adjust_wavelength : adjust the wavelength of the sky model on sky lines to improve the sky subtraction
-        adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
-        only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
-        pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
-        fit_offsets : fit offsets for regions defined in calib
-        fiberflat : desispec.FiberFlat object used for the fit of offsets
-        skygradpca : desispec.skygradpca.SkyGradPCA object used for sky gradient fits
-        tpcorrparam : desispec.tpcorrparam.TPCorrParam object used for fiber
-            throughput modeling
-
-    returns SkyModel object with attributes wave, flux, ivar, mask
-    """
-    skymodel = compute_uniform_sky(
-        frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
-        model_ivar=model_ivar,add_variance=add_variance,\
-        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-        only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,
-        pcacorr=pcacorr,fit_offsets=fit_offsets,fiberflat=fiberflat,
-        skygradpca=skygradpca, tpcorrparam=tpcorrparam)
-
-    skymodel.throughput_corrections = calculate_throughput_corrections(
-        frame, skymodel)
-
-    return skymodel
+import desispec.skygradpca
 
 
 def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
@@ -453,15 +406,11 @@ def compute_sky_linear(
         skytpcorr = tpcorrmodel(tpcorrparam,
                                 fibermap['FIBER_X'], fibermap['FIBER_Y'],
                                 skytpcorrcoeff)
-    modeled_sky = np.zeros((len(fibermap), flux.shape[1]), dtype='f8')
-    for i in range(len(fibermap)):
-        unconvflux = param[:nwave].copy()
-        for j in range(nskygradpc):
-            pcagradspechere = skygradpca.deconvflux[j]*(
-                skygradpca.dx[i]*param[nwave + nsector + 2*j] +
-                skygradpca.dy[i]*param[nwave + nsector + 2*j + 1])
-            unconvflux += pcagradspechere
-        modeled_sky[i, :] = Rframe[i].dot(unconvflux)
+
+    unconvflux = param[:nwave].copy()
+    skygradpcacoeff = param[nwave + nsector:nwave+nsector+nskygradpc*2]
+    modeled_sky = desispec.skygradpca.evaluate_model(
+        skygradpca, Rframe, skygradpcacoeff, mean=unconvflux)
 
     sector_offsets = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
     for i, secmask in enumerate(sectors):
@@ -471,12 +420,13 @@ def compute_sky_linear(
     bad_wavelengths = ~(w[:nwave])
 
     return (param, parameter_covar, modeled_sky, current_ivar, nout_tot,
-            skytpcorr, bad_skyfibers, bad_wavelengths, sector_offsets)
+            skytpcorr, bad_skyfibers, bad_wavelengths, sector_offsets,
+            skygradpcacoeff)
 
 
-def compute_uniform_sky(
+def compute_sky(
     frame, nsig_clipping=4., max_iterations=100, model_ivar=False,
-    add_variance=True, adjust_wavelength=True, adjust_lsf=True,
+    add_variance=True, adjust_wavelength=False, adjust_lsf=False,
     only_use_skyfibers_for_adjustments=True, pcacorr=None,
     fit_offsets=False, fiberflat=None, skygradpca=None,
     min_iterations=5, tpcorrparam=None):
@@ -574,7 +524,6 @@ def compute_uniform_sky(
         sectors = []
 
     if skygradpca is not None:
-        import desispec.skygradpca
         desispec.skygradpca.configure_for_xyr(
             skygradpca, frame.fibermap['FIBERASSIGN_X'],
             frame.fibermap['FIBERASSIGN_Y'],
@@ -587,7 +536,7 @@ def compute_uniform_sky(
         max_iterations=max_iterations, nsig_clipping=nsig_clipping,
         tpcorrparam=tpcorrparam)
     (param, parameter_covar, modeled_sky, current_ivar, nout_tot, skytpcorr,
-     bad_skyfibers, bad_wavelengths, background) = res
+     bad_skyfibers, bad_wavelengths, background, skygradpcacoeff) = res
     deconvolved_sky = param[:nwave]
 
     log.info("compute mean resolution")
@@ -877,12 +826,17 @@ def compute_uniform_sky(
 
     skymodel = SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
                         nrej=nout_tot, stat_ivar = cskyivar,
-                        dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff)
+                        dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff,
+                        throughput_corrections_model=skytpcorr,
+                        skygradpcacoeff=skygradpcacoeff)
     # keep a record of the statistical ivar for QA
     if adjust_wavelength :
         skymodel.dwave = interpolated_sky_dwave
     if adjust_lsf :
         skymodel.dlsf  = interpolated_sky_dlsf
+
+    skymodel.throughput_corrections = calculate_throughput_corrections(
+        frame, skymodel)
 
     return skymodel
 
@@ -890,7 +844,8 @@ def compute_uniform_sky(
 class SkyModel(object):
     def __init__(self, wave, flux, ivar, mask, header=None, nrej=0,
                  stat_ivar=None, throughput_corrections=None,
-                 dwavecoeff=None, dlsfcoeff=None):
+                 throughput_corrections_model=None,
+                 dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None):
         """Create SkyModel object
 
         Args:
@@ -900,9 +855,12 @@ class SkyModel(object):
             mask  : 2D[nspec, nwave] 0=ok or >0 if problems; 32-bit
             header : (optional) header from FITS file HDU0
             nrej : (optional) Number of rejected pixels in fit
-            throughput_corrections : 1D (optional) Multiplicative throughput corrections for each fiber
+            throughput_corrections : 1D (optional) Residual multiplicative throughput corrections for each fiber
+            throughput_corrections_model : 1D (optional) Model multiplicative throughput corrections for each fiber
             dwavecoeff : (optional) 1D[ncoeff] vector of PCA coefficients for wavelength offsets
             dlsfcoeff : (optional) 1D[ncoeff] vector of PCA coefficients for LSF size changes
+            skygradpcacoeff : (optional) 1D[ncoeff] vector of gradient amplitudes for
+                sky gradient spectra.
         All input arguments become attributes
         """
         assert wave.ndim == 1
@@ -919,13 +877,15 @@ class SkyModel(object):
         self.nrej = nrej
         self.stat_ivar = stat_ivar
         self.throughput_corrections = throughput_corrections
+        self.throughput_corrections_model = throughput_corrections_model
         self.dwave = None # wavelength corrections
         self.dlsf  = None # LSF corrections
         self.dwavecoeff = dwavecoeff
         self.dlsfcoeff = dlsfcoeff
+        self.skygradpcacoeff = skygradpcacoeff
 
 
-def subtract_sky(frame, skymodel, apply_throughput_correction = True, zero_ivar=True) :
+def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar=True) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -933,8 +893,11 @@ def subtract_sky(frame, skymodel, apply_throughput_correction = True, zero_ivar=
         skymodel : desispec.SkyModel object
 
     Option:
-        apply_throughput_correction : if True, fit for an achromatic throughput correction.
-                                      This is to absorb variations of Focal Ratio Degradation with fiber flexure.
+        apply_throughput_correction : if True, fit for an achromatic throughput
+            correction.  This is to absorb variations of Focal Ratio Degradation
+            with fiber flexure.  This applies the residual throughput corrections
+            on top of the model throughput corrections already included in the sky
+            model.
 
         zero_ivar : if True , set ivar=0 for masked pixels
     """

@@ -1175,7 +1175,8 @@ def main(args=None, comm=None):
                         fiberflat = desispec.io.read_fiberflat(fiberflatfile)
                         sky = desispec.io.read_sky(skyfile)
                         apply_fiberflat(frame, fiberflat)
-                        subtract_sky(frame, sky, apply_throughput_correction=False)
+                        subtract_sky(frame, sky, apply_throughput_correction=(
+                            args.apply_sky_throughput_correction))
                         frame.meta['IN_SKY'] = shorten_filename(skyfile)
                         frame.meta['FIBERFLT'] = shorten_filename(fiberflatfile)
                         desispec.io.write_frame(sframefile, frame)
