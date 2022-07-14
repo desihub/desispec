@@ -409,8 +409,13 @@ def compute_sky_linear(
 
     unconvflux = param[:nwave].copy()
     skygradpcacoeff = param[nwave + nsector:nwave+nsector+nskygradpc*2]
-    modeled_sky = desispec.skygradpca.evaluate_model(
-        skygradpca, Rframe, skygradpcacoeff, mean=unconvflux)
+    if skygradpca is not None:
+        modeled_sky = desispec.skygradpca.evaluate_model(
+            skygradpca, Rframe, skygradpcacoeff, mean=unconvflux)
+    else:
+        modeled_sky = np.zeros((len(Rframe), nwave), dtype='f8')
+        for i in range(len(Rframe)):
+            modeled_sky[i] = Rframe[i].dot(unconvflux)
 
     sector_offsets = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
     for i, secmask in enumerate(sectors):
