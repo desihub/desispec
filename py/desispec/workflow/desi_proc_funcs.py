@@ -355,9 +355,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'TILENIGHT':
         ncores, nodes = config['cores_per_node'], 1
         # ~150 frames per node hour plus
-        # 8-minute overhead for a single node
+        # 10-minute overhead for a single node
         # perlmutter-[cpu,gpu] have timefactor=[0.7,0.5]
-        runtime = 8 + int(60. / 140. * ncameras * nexps)
+        runtime = 18 + int(60. / 140. * ncameras * nexps)
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -424,7 +424,7 @@ def get_desi_proc_batch_file_path(night,reduxdir=None):
 
 def get_desi_proc_tilenight_batch_file_name(night, tileid):
     """
-    Returns the default directory location to store a batch script file given a night
+    Returns the filename for a tilenight batch script file given a night and tileid
 
     Args:
         night: str or int, defines the night (should be 8 digits)
@@ -489,17 +489,15 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
 
 def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     """
-    Returns the default directory location to store a batch script file given a night
+    Returns the default directory location to store a tilenight batch script file given a night and tileid
 
     Args:
         night: str or int, defines the night (should be 8 digits)
-        exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
-        jobdesc: str, type of data being processed
-        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing.
+        tileid: str or int, defines the tile id relevant to the job
         reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live
 
     Returns:
-        pathname: str, the default location and script name for a desi_proc batch script file
+        pathname: str, the default location and script name for a desi_proc_tilenight batch script file
     """
     path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
     name = get_desi_proc_tilenight_batch_file_name(night,tileid)
@@ -680,7 +678,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         else:
             fx.write("export OMP_NUM_THREADS=1\n")
-        if system_name == 'perlmutter-gpu':
+        if system_name == 'perlmutter-gpu' and jobdesc.lower() not in ['arc']:
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
             mps_wrapper='desi_mps_wrapper'
 
@@ -716,7 +714,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             if ' -e ' in cmd or ' --expid ' in cmd:
                 fx.write('\n# Process exposure\n')
                 cmd = cmd.replace('--nightlybias', '')
-                srun=f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd}'
+                srun=(f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                    +mps_wrapper+f' {cmd}')
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
 

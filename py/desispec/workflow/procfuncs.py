@@ -359,7 +359,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         if dry_run > 1:
             scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
-            log.info("Command to be run: {}".format(cmd.split()))
+            if prow['JOBDESC'] != 'tilenight':
+                log.info("Command to be run: {}".format(cmd.split()))
         else:
             expids = prow['EXPID']
             if len(expids) == 0:
@@ -521,6 +522,9 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
                        calibration job. Each value that isn't None must contain
                        'INTID', and 'LATEST_QID'. If None, it assumes the
                        dependency doesn't exist and no dependency is assigned.
+        use_tilenight, bool. Default is False. If True, use desi_proc_tilenight
+                             for prestdstar, stdstar,and poststdstar steps for
+                             science exposures.
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except
                                  with modified values updated values for
@@ -1027,7 +1031,7 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
     Args:
         ptable, Table. The processing table where each row is a processed job.
         prows list or array of dicts. Unsubmitted prestdstar jobs that are first steps in tilenight.
-        tnight, Table.Row. The row of the tilenight job on which the redshifts depend.
+        tnight, Table.Row. The processing table row of the tilenight job on which the redshifts depend.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.

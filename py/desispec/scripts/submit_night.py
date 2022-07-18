@@ -133,9 +133,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
-    ## If laststeps not defined, default is only LASTSTEP=='all' exposures
+    ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     if laststeps is None:
-        laststeps = ['all']
+        if use_tilenight:
+            laststeps = ['all','skysub']
+        else:
+            laststeps = ['all']
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:
@@ -160,6 +163,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## Load in the files defined above
     etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
     full_etable = etable.copy()
+
+    ## Sort science exposures by TILEID
+    sciexps = (etable['OBSTYPE']=='science')
+    scisrtd = etable[sciexps].argsort(['TILEID'])
+    etable[sciexps] = etable[sciexps][scisrtd]
 
     ## filter by TILEID if requested
     if tiles is not None:
@@ -409,7 +417,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        if use_tilenight:
+        if use_tilenight and len(sciences)>0:
             ptable, sciences, internal_id \
                 = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
                                                 dry_run=dry_run_level,

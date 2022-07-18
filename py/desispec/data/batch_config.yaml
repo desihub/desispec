@@ -23,7 +23,7 @@ perlmutter-cpu:
     cores_per_node: 128
     threads_per_core: 2
     memory: 512
-    timefactor: 0.65
+    timefactor: 0.7
     gpus_per_node: 0
     batch_opts: ['--constraint=cpu', ]
 
