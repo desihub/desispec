@@ -722,7 +722,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
     brick = input_cat['BRICKNAME'][0]
     
-    idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) * (input_cat['BRICK_OBJID'] > 0))[0]
+    idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) * (input_cat['BRICK_OBJID'] > 0) * (input_cat['PHOTSYS'] != ''))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
 
     out = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
@@ -731,7 +731,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
     # DR9 targeting photometry exists
     if len(idr9) > 0:
         assert(np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0]))
-    
+            
         # find the catalog
         photsys = input_cat['PHOTSYS'][idr9][0]
     
