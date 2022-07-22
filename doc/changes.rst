@@ -7,7 +7,7 @@ desispec Change Log
 
 * Validate redshift catalog metadata and generate Tractor photometric catalogs
   for all objects with a redshift in a given data release (PR `#1716`_).
-* Add batch script for :command:`desi_proc_tilenight` jobs (PR `1792`_).
+* Add batch script for :command:`desi_proc_tilenight` jobs (PR `#1792`_).
 * Add :command:`desi_psf_fit` which wraps specex_ (PR `#1794`_).
 * Parallelize :command:`desi_night_qa` (PR `#1795`_).
 * Enable redshift status board (PR `#1797`_).
