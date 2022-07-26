@@ -340,7 +340,7 @@ def run(comm,cmds,cameras):
                      log.error('FAILED: {}'.format(cmds[camera]))
                      log.error(e)
                      error_count += 1
-            if rank == 0:
+            if grouprank == 0:
                 specex_time = time.time() - t0
                 log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
 
