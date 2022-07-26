@@ -625,6 +625,11 @@ def main(args=None, comm=None):
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, args.timingfile)
 
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
+
     if rank == 0:
         log.info('All done at {}'.format(time.asctime()))
 

@@ -15,7 +15,8 @@ from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts, get_
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
-                                              get_desi_proc_batch_file_path
+                                              get_desi_proc_batch_file_path, get_desi_proc_tilenight_batch_file_pathname, \
+                                              create_desi_proc_tilenight_batch_script
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
@@ -66,7 +67,10 @@ def batch_script_name(prow):
     expids = prow['EXPID']
     if len(expids) == 0:
         expids = None
-    pathname = get_desi_proc_batch_file_pathname(night = prow['NIGHT'], exp=expids, \
+    if prow['JOBDESC'] == 'tilenight':
+        pathname = get_desi_proc_tilenight_batch_file_pathname(night = prow['NIGHT'], tileid=prow['TILEID'])
+    else:
+        pathname = get_desi_proc_batch_file_pathname(night = prow['NIGHT'], exp=expids, \
                                              jobdesc=prow['JOBDESC'], cameras=prow['PROCCAMWORD'])
     scriptfile =  pathname + '.slurm'
     return scriptfile
@@ -180,7 +184,6 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} has no " +
                  f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
     return prow
-
 
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
@@ -309,7 +312,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                       If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
-                     run with desi_proc_joint_fit. Default is False.
+                     run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
@@ -348,25 +351,44 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             else:
                 scriptpathname = scripts[0]
     else:
-        if joint:
-            cmd = desi_proc_joint_fit_command(prow, queue=queue)
-        else:
-            cmd = desi_proc_command(prow, queue=queue)
-        scriptpathname = batch_script_name(prow)
+        if prow['JOBDESC'] != 'tilenight':
+            if joint:
+                cmd = desi_proc_joint_fit_command(prow, queue=queue)
+            else:
+                cmd = desi_proc_command(prow, queue=queue)
         if dry_run > 1:
+            scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
-            log.info("Command to be run: {}".format(cmd.split()))
+            if prow['JOBDESC'] != 'tilenight':
+                log.info("Command to be run: {}".format(cmd.split()))
         else:
-            log.info("Running: {}".format(cmd.split()))
             expids = prow['EXPID']
             if len(expids) == 0:
                 expids = None
-            scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=expids,
-                                                           cameras=prow['PROCCAMWORD'],
-                                                           jobdesc=prow['JOBDESC'],
-                                                           queue=queue, cmdline=cmd,
-                                                           system_name=system_name)
-
+            gpuspecter = (system_name=="perlmutter-gpu")
+            gpuextract = (system_name=="perlmutter-gpu")
+            if prow['JOBDESC'] == 'tilenight':
+                log.info("Creating tilenight script for tile {}".format(prow['TILEID']))
+                ncameras = len(decode_camword(prow['PROCCAMWORD']))
+                scriptpathname = create_desi_proc_tilenight_batch_script(
+                                                               night=prow['NIGHT'], exp=expids,
+                                                               tileid=prow['TILEID'],
+                                                               ncameras=ncameras,
+                                                               queue=queue,
+                                                               mpistdstars=True,
+                                                               gpuspecter=gpuspecter,
+                                                               gpuextract=gpuextract,
+                                                               system_name=system_name)
+            else:
+                log.info("Running: {}".format(cmd.split()))
+                scriptpathname = create_desi_proc_batch_script(
+                                                               night=prow['NIGHT'], exp=expids,
+                                                               cameras=prow['PROCCAMWORD'],
+                                                               jobdesc=prow['JOBDESC'],
+                                                               queue=queue, cmdline=cmd,
+                                                               gpuspecter=gpuspecter,
+                                                               gpuextract=gpuextract,
+                                                               system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
@@ -484,7 +506,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, calibjobs):
+def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -500,7 +522,9 @@ def define_and_assign_dependency(prow, calibjobs):
                        calibration job. Each value that isn't None must contain
                        'INTID', and 'LATEST_QID'. If None, it assumes the
                        dependency doesn't exist and no dependency is assigned.
-
+        use_tilenight, bool. Default is False. If True, use desi_proc_tilenight
+                             for prestdstar, stdstar,and poststdstar steps for
+                             science exposures.
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except
                                  with modified values updated values for
@@ -522,7 +546,8 @@ def define_and_assign_dependency(prow, calibjobs):
             dependency = calibjobs['ccdcalib']
         else:
             dependency = calibjobs['nightlybias']
-        prow['JOBDESC'] = 'prestdstar'
+        if not use_tilenight:
+            prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
         if calibjobs['psfnight'] is not None:
             dependency = calibjobs['psfnight']
@@ -991,6 +1016,136 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
 
     return ptable, joint_prow, internal_id
 
+#########################################
+########     Redshifts     ##############
+#########################################
+def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
+              dry_run=0, strictly_successful=False,
+              check_for_outputs=True, resubmit_partial_complete=True,
+              z_submit_types=None, system_name=None):
+    """
+    Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
+    tilenight job given by descriptor. The returned ptable has all of these rows added to the
+    table given as input.
+
+    Args:
+        ptable, Table. The processing table where each row is a processed job.
+        prows list or array of dicts. Unsubmitted prestdstar jobs that are first steps in tilenight.
+        tnight, Table.Row. The processing table row of the tilenight job on which the redshifts depend.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
+        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+                                   less desirable because e.g. the sciences can run with SVN default calibrations rather
+                                   than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
+        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+                                        exposure. If not specified or None, then no redshifts are submitted.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
+
+    Returns:
+        ptable, Table. The same processing table as input except with added rows for the joint fit job.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+    """
+    log = get_logger()
+    if len(prows) < 1 or z_submit_types == None:
+        return ptable, internal_id
+
+    log.info(" ")
+    log.info(f"Running redshifts.\n")
+
+    ## Now run redshifts
+    zprows = []
+    for row in prows:
+        if row['LASTSTEP'] == 'all':
+            zprows.append(row)
+
+    if len(zprows) > 0:
+        for zsubtype in z_submit_types:
+            if zsubtype == 'perexp':
+                for zprow in zprows:
+                    log.info(" ")
+                    log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
+                    redshift_prow = make_redshift_prow([zprow], tnight, descriptor=zsubtype, internal_id=internal_id)
+                    internal_id += 1
+                    redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                                   strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                                   resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+                    ptable.add_row(redshift_prow)
+            else:
+                log.info(" ")
+                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.")
+                expids = [prow['EXPID'][0] for prow in zprows]
+                log.info(f"Expids: {expids}.\n")
+                redshift_prow = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
+                internal_id += 1
+                redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                               strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                               resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+                ptable.add_row(redshift_prow)
+
+    return ptable, internal_id
+
+#########################################
+########     Tilenight     ##############
+#########################################
+def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
+              dry_run=0, strictly_successful=False, resubmit_partial_complete=True,
+              system_name=None):
+    """
+    Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
+    tilenight job given by descriptor. The returned ptable has all of these rows added to the
+    table given as input.
+
+    Args:
+        ptable, Table. The processing table where each row is a processed job.
+        prows list or array of dicts. Unsubmitted prestdstar jobs that are first steps in tilenight.
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+                       and 'nightlyflat'. Each key corresponds to a Table.Row or
+                       None. The table.Row() values are for the corresponding
+                       calibration job.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
+        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+                                   less desirable because e.g. the sciences can run with SVN default calibrations rather
+                                   than failing completely from failed calibrations. Default is False.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
+
+    Returns:
+        ptable, Table. The same processing table as input except with added rows for the joint fit job.
+        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+    """
+    log = get_logger()
+    if len(prows) < 1:
+        return ptable, None, internal_id
+
+    log.info(" ")
+    log.info(f"Running tilenight.\n")
+
+    tnight_prow = make_tnight_prow(prows, calibjobs, internal_id=internal_id)
+    tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, dry_run=dry_run,
+                                   strictly_successful=strictly_successful, check_for_outputs=False,
+                                   resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+    ptable.add_row(tnight_prow)
+
+    return ptable, tnight_prow, internal_id
 
 ## wrapper functions for joint fitting
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservation=None,
@@ -1077,7 +1232,69 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow
 
+def make_tnight_prow(prows, calibjobs, internal_id):
+    """
+    Given an input list or array of processing table rows and a descriptor, this creates a joint fit processing job row.
+    It starts by copying the first input row, overwrites relevant columns, and defines the new dependencies (based on the
+    input prows).
 
+    Args:
+        prows, list or array of dicts. Unsumbitted rows corresponding to the individual prestdstar jobs that are
+                                                     the first steps of tilenight.
+        calibjobs, dict. Dictionary containing keys that each corresponds to a Table.Row or
+                       None, with each table.Row() value corresponding to a calibration job
+                       on which the tilenight job depends.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+
+    Returns:
+        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+    """
+    first_row = prows[0]
+    joint_prow = first_row.copy()
+
+    joint_prow['INTID'] = internal_id
+    joint_prow['JOBDESC'] = 'tilenight'
+    joint_prow['LATEST_QID'] = -99
+    joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
+    joint_prow['SUBMIT_DATE'] = -99
+    joint_prow['STATUS'] = 'U'
+    joint_prow['SCRIPTNAME'] = ''
+    joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+
+    joint_prow = define_and_assign_dependency(joint_prow,calibjobs,use_tilenight=True)
+
+    return joint_prow
+
+def make_redshift_prow(prows, tnight, descriptor, internal_id):
+    """
+    Given an input list or array of processing table rows and a descriptor, this creates a joint fit processing job row.
+    It starts by copying the first input row, overwrites relevant columns, and defines the new dependencies (based on the
+    input prows).
+
+    Args:
+        prows, list or array of dicts. Unsumbitted rows corresponding to the individual prestdstar jobs that are
+                                                     the first steps of tilenight.
+        tnight, Table.Row object. Row corresponding to the tilenight job on which the redshift job depends.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+
+    Returns:
+        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+    """
+    first_row = prows[0]
+    redshift_prow = first_row.copy()
+
+    redshift_prow['INTID'] = internal_id
+    redshift_prow['JOBDESC'] = descriptor
+    redshift_prow['LATEST_QID'] = -99
+    redshift_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
+    redshift_prow['SUBMIT_DATE'] = -99
+    redshift_prow['STATUS'] = 'U'
+    redshift_prow['SCRIPTNAME'] = ''
+    redshift_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+
+    redshift_prow = assign_dependency(redshift_prow,dependency=tnight)
+
+    return redshift_prow
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,
@@ -1204,6 +1421,65 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                             )
     return ptable, calibjobs, sciences, internal_id
 
+def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id, dry_run=0,
+                                  queue='realtime', reservation=None, strictly_successful=False,
+                                  check_for_outputs=True, resubmit_partial_complete=True,
+                                  z_submit_types=None, system_name=None):
+    """
+    Takes all the state-ful data from daily processing and determines whether a tilenight job needs to be submitted.
+
+    Args:
+        ptable, Table, Processing table of all exposures that have been processed.
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
+                                       (if currently processing that tile). May be empty if none identified yet.
+        lasttype, str or None, the obstype of the last individual exposure row to be processed.
+        internal_id, int, an internal identifier unique to each job. Increments with each new job. This
+                          is the smallest unassigned value.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
+        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+                                   less desirable because e.g. the sciences can run with SVN default calibrations rather
+                                   than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
+        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+                                        exposure. If not specified or None, then no redshifts are submitted.
+        system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
+    Returns:
+        ptable, Table, Processing table of all exposures that have been processed.
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
+                                       (if currently processing that tile). May be empty if none identified yet or
+                                       we just submitted them for processing.
+        internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
+                          from the input such that it represents the smallest unused ID.
+    """
+    ptable, tnight, internal_id = submit_tilenight(ptable, sciences, calibjobs, internal_id,
+                                             queue=queue, reservation=reservation,
+                                             dry_run=dry_run, strictly_successful=strictly_successful,
+                                             resubmit_partial_complete=resubmit_partial_complete,
+                                             system_name=system_name
+                                             )
+
+    ptable, internal_id = submit_redshifts(ptable, sciences, tnight, internal_id,
+                                    queue=queue, reservation=reservation,
+                                    dry_run=dry_run, strictly_successful=strictly_successful,
+                                    check_for_outputs=check_for_outputs,
+                                    resubmit_partial_complete=resubmit_partial_complete,
+                                    z_submit_types=z_submit_types, system_name=system_name
+                                    )
+
+    if tnight is not None:
+        sciences = []
+
+    return ptable, sciences, internal_id
 
 def set_calibrator_flag(prows, ptable):
     """

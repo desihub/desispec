@@ -18,10 +18,11 @@ class Schedule:
         
         Args:
             workfunc: function to do each MPI job defined using 
-                      def workfunc(groupcomm,job):
-                          where groupcomm is an MPI communicator 
+                      def workfunc(groupcomm,worldcomm,job):
+                          where groupcomm is a job-specific MPI communicator 
+                          worldcomm is the global communicator shared by all jobs
                           and job is an integer in the range 0 to njobs - 1
-            
+
         Keyword Args:
             comm:       MPI communicator (default=None)
             njobs:      number of jobs (default=2)
@@ -61,7 +62,8 @@ class Schedule:
         self.log = getLogger(__name__)
         
         # numpy array for sending and receiving job indices
-        self.job_buff = np.zeros(1,dtype=np.int32)
+        self.job_buffS = np.zeros(1,dtype=np.int32)
+        self.job_buffR = np.zeros(1,dtype=np.int32)
 
         if self.group_size > self.size - 1:
             raise Exception("can't have group_size larger than world size - 1")
@@ -104,9 +106,9 @@ class Schedule:
         reqs = []
         for grouprank in range(self.group_size):
             destrank = worker * self.group_size + grouprank + 1
-            self.job_buff[0] = job
-            self.comm.Send(self.job_buff,dest=destrank)
-            if job >= 0: reqs.append(self.comm.Irecv(self.job_buff,source=destrank))
+            self.job_buffS[0] = job
+            self.comm.Send(self.job_buffS,dest=destrank)
+            if job >= 0: reqs.append(self.comm.Irecv(self.job_buffR,source=destrank))
         return reqs
 
     def _checkreqlist(self,reqs):
@@ -186,17 +188,18 @@ class Schedule:
         sum_retvals = 0
         # listen for job assignments from the scheduler
         while True:
-            self.comm.Recv(self.job_buff,source=0) # receive assignment from rank=0 scheduler
-            job = self.job_buff[0]                 # unpack job index
-            if job < 0: return sum_retvals         # job < 0 means no more jobs to do
+            self.comm.Recv(self.job_buffR,source=0) # get job from rank=0 scheduler
+            job = self.job_buffR[0]                 # unpack job
+            if job < 0: return sum_retvals          # job < 0 -> no more jobs 
             try:
-                ret_val=self._workfunc(self.groupcomm,job) # call work function for job
+                # call work function for job
+                ret_val=self._workfunc(self.groupcomm,self.comm,job)         
                 sum_retvals += ret_val
             except Exception as e:
                 self.log.error(f'FAILED: call to workfunc for job {job}'+
                                f' on rank {self.rank}')
                 self.log.error(e)
-            self.comm.Isend(self.job_buff,dest=0)  # send non-blocking message on completion
+            self.comm.Isend(self.job_buffR,dest=0)  # send non-blocking message on completion
 
         return sum_retvals
 

@@ -356,13 +356,19 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         nodes = 2
     elif jobdesc == 'TILENIGHT':
         ncores, nodes = config['cores_per_node'], 1
-        # total frames per node hour ~ 350 on a single
-        # Perlmutter GPU node, plus 15-minute overhead
-        runtime = 15 + int(60. / 350. * ncameras * nexps)
+        # ~150 frames per node hour plus
+        # 10-minute overhead for a single node
+        # perlmutter-[cpu,gpu] have timefactor=[0.7,0.5]
+        runtime = 18 + int(60. / 140. * ncameras * nexps)
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
         raise ValueError(msg)
+
+    if jobdesc in ('FLAT', 'TESTFLAT', 'SKY',
+        'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
+        if system_name[0:10] == 'perlmutter':
+            ncores, nodes = config['cores_per_node'], 1
 
     if forced_runtime is not None:
         runtime = forced_runtime
@@ -420,7 +426,7 @@ def get_desi_proc_batch_file_path(night,reduxdir=None):
 
 def get_desi_proc_tilenight_batch_file_name(night, tileid):
     """
-    Returns the default directory location to store a batch script file given a night
+    Returns the filename for a tilenight batch script file given a night and tileid
 
     Args:
         night: str or int, defines the night (should be 8 digits)
@@ -483,9 +489,25 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     name = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
     return os.path.join(path, name)
 
+def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
+    """
+    Returns the default directory location to store a tilenight batch script file given a night and tileid
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        tileid: str or int, defines the tile id relevant to the job
+        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live
+
+    Returns:
+        pathname: str, the default location and script name for a desi_proc_tilenight batch script file
+    """
+    path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
+    name = get_desi_proc_tilenight_batch_file_name(night,tileid)
+    return os.path.join(path, name)
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
-                                  timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):
+                                  timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
+                                  gpuspecter=False, gpuextract=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -513,6 +535,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         jobname: name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
         system_name: name of batch system, e.g. cori-haswell, cori-knl
+        gpuspecter: bool. Whether to use gpu_specter.
+        gpuextract: bool. Whether to perform gpu extraction with gpu_specter.
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -550,17 +574,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     ncores, nodes, runtime = determine_resources(
             ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
-
-    if jobdesc.upper() in ('FLAT', 'TESTFLAT', 'SKY',
-        'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR') and system_name == 'perlmutter-gpu':
-        gpuextract = False
-        if cmdline is not None:
-            if '--gpuextract' in cmdline:
-                gpuextract = True
-        elif '--gpuextract' in sys.argv:
-            gpuextract = True
-        if gpuextract:
-            ncores, nodes, runtime = 32, 1, 30
 
     #- derive from cmdline or sys.argv whether this is a nightlybias job
     nightlybias = False
@@ -650,6 +663,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if jobdesc.lower() == 'stdstarfit':
             cmd += ' --mpistdstars'
 
+        if gpuextract and '--gpuextract' not in cmd:
+            cmd += ' --gpuextract'
+        if gpuspecter and '--gpuspecter' not in cmd:
+            cmd += ' --gpuspecter'
         cmd += ' --starttime $(date +%s)'
         cmd += f' --timingfile {timingfile}'
 
@@ -663,7 +680,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         else:
             fx.write("export OMP_NUM_THREADS=1\n")
-        if system_name == 'perlmutter-gpu':
+        if system_name == 'perlmutter-gpu' and jobdesc.lower() not in ['arc']:
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
             mps_wrapper='desi_mps_wrapper'
 
@@ -699,7 +716,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             if ' -e ' in cmd or ' --expid ' in cmd:
                 fx.write('\n# Process exposure\n')
                 cmd = cmd.replace('--nightlybias', '')
-                srun=f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
+                srun=(f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                    +mps_wrapper+f' {cmd}')
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
 
@@ -743,8 +761,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     return scriptfile
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
-                                  system_name=None, mpistdstars=None, gpuspecter=None,
-                                  gpuextract=None,
+                                  system_name=None, mpistdstars=True, gpuspecter=False,
+                                  gpuextract=False,
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
