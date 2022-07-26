@@ -327,7 +327,7 @@ def main(args=None, comm=None):
 
             log.info('Creating fibermap {}'.format(fibermap))
             cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
-                    args.night, args.expid, fibermap, tilepix)                  
+                    args.night, args.expid, fibermap, tilepix)
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
             cmdargs = cmd.split()[1:]
@@ -675,7 +675,7 @@ def main(args=None, comm=None):
                         subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
             dt = time.time() - t0
-            log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')    
+            log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
 
     #-------------------------------------------------------------------------
     #- Merge PSF of night if applicable
@@ -1133,13 +1133,19 @@ def main(args=None, comm=None):
                 else :
                     log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
             cmd += " --fit-offsets"
-            if args.skygradpca:
+            if not args.no_skygradpca:
                 skygradpca_filename = findcalibfile([hdr, camhdr[camera]], 'SKYGRADPCA')
                 if skygradpca_filename is not None :
                     cmd += " --skygradpca {}".format(skygradpca_filename)
                 else :
                     log.warning("No SKYGRADPCA file, do you need to update DESI_SPECTRO_CALIB?")
 
+            if not args.no_tpcorrparam:
+                tpcorrparam_filename = findcalibfile([hdr, camhdr[camera]], 'TPCORRPARAM')
+                if tpcorrparam_filename is not None :
+                    cmd += " --tpcorrparam {}".format(tpcorrparam_filename)
+                else :
+                    log.warning("No TPCORRPARAM file, do you need to update DESI_SPECTRO_CALIB?")
             cmdargs = cmd.split()[1:]
 
             result, success = runcmd(desispec.scripts.sky.main,
@@ -1169,7 +1175,8 @@ def main(args=None, comm=None):
                         fiberflat = desispec.io.read_fiberflat(fiberflatfile)
                         sky = desispec.io.read_sky(skyfile)
                         apply_fiberflat(frame, fiberflat)
-                        subtract_sky(frame, sky, apply_throughput_correction=True)
+                        subtract_sky(frame, sky, apply_throughput_correction=(
+                            args.apply_sky_throughput_correction))
                         frame.meta['IN_SKY'] = shorten_filename(skyfile)
                         frame.meta['FIBERFLT'] = shorten_filename(fiberflatfile)
                         desispec.io.write_frame(sframefile, frame)
