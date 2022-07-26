@@ -2,10 +2,35 @@
 desispec Change Log
 ===================
 
-0.53.2 (unreleased)
+0.53.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.53.2 (2022-07-22)
+-------------------
+
+* Validate redshift catalog metadata and generate Tractor photometric catalogs
+  for all objects with a redshift in a given data release (PR `#1716`_).
+* Add batch script for :command:`desi_proc_tilenight` jobs (PR `#1792`_).
+* Add :command:`desi_psf_fit` which wraps specex_ (PR `#1794`_).
+* Parallelize :command:`desi_night_qa` (PR `#1795`_).
+* Enable redshift status board (PR `#1797`_).
+* Correct flux units for emission lines (PR `#1798`_).
+* Update QSO afterburners for new templates (PR `#1805`_).
+* Fix function used by fastspecfit_ (PR `#1808`_).
+
+.. _`#1716`: https://github.com/desihub/desispec/pull/1716
+.. _`#1792`: https://github.com/desihub/desispec/pull/1792
+.. _`#1794`: https://github.com/desihub/desispec/pull/1794
+.. _`#1795`: https://github.com/desihub/desispec/pull/1795
+.. _`#1797`: https://github.com/desihub/desispec/pull/1797
+.. _`#1798`: https://github.com/desihub/desispec/pull/1798
+.. _`#1805`: https://github.com/desihub/desispec/pull/1808
+.. _`#1808`: https://github.com/desihub/desispec/pull/1808
+.. _fastspecfit: https://github.com/desihub/fastspecfit
+.. _specex: https://github.com/desihub/specex
+
 
 0.53.1 (2022-05-19)
 -------------------
