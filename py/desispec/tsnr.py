@@ -571,7 +571,7 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
         nominal = 15.8                    # r=19.5 [nanomaggie].
 
     elif tracer in ['backup', 'gpbbackup']:
-        nominal = 27.5                    # r=18.9 [nanomaggie].
+        nominal = 397.                    # r=16. [nanomaggie].
 
     else:
         # No source poisson term otherwise.
