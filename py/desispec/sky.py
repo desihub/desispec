@@ -924,7 +924,6 @@ class SkyModel(object):
         return sky2
 
 
-
 def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar=True) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 

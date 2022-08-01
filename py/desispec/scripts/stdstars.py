@@ -40,6 +40,8 @@ def parse(options=None):
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
     parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
     parser.add_argument('--delta-color', type = float, default = 0.2, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
+    parser.add_argument('--min-blue-snr', type = float, default = 4.0, required = False,
+            help = 'Minimum required S/N in blue CCD to be used')
     parser.add_argument('--color', type = str, default = None, choices=['G-R', 'R-Z', 'GAIA-BP-RP','GAIA-G-RP'], required = False, help = 'color for selection of standard stars')
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
@@ -164,10 +166,6 @@ def main(args=None, comm=None) :
         if rank == 0:
             log.info('GPU not available')
 
-    std_targetids = None
-    if args.std_targetids is not None:
-        std_targetids = args.std_targetids
-
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
@@ -182,6 +180,16 @@ def main(args=None, comm=None) :
         rows.append( (night, expid, camera) )
         spec = camera[1]
         uniq_key = (expid,spec)
+
+        # To save memory, trim to just stdstars as each frame is read;
+        # more quality cuts will be applied later
+        if args.std_targetids is None:
+            keep = isStdStar(frame.fibermap)
+        else:
+            keep = np.isin(frame.fibermap['TARGETID'], args.std_targetids)
+
+        frame = frame[keep]
+
         if uniq_key in frames_by_expid.keys():
             frames_by_expid[uniq_key][camera] = frame
         else:
@@ -214,10 +222,9 @@ def main(args=None, comm=None) :
             # Set fibermask flagged spectra to have 0 flux and variance
             frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
             frame_fibermap = frame.fibermap
-            if std_targetids is None:
-                frame_starindices = np.where(isStdStar(frame_fibermap))[0]
-            else:
-                frame_starindices = np.nonzero(np.isin(frame_fibermap['TARGETID'], std_targetids))[0]
+
+            # frame was filtered to just stdstars upon reading, so initial list of starindices is full range
+            frame_starindices = np.arange(len(frame.fibermap), dtype=int)
 
             #- Confirm that all fluxes have entries but trust targeting bits
             #- to get basic magnitude range correct
@@ -237,8 +244,8 @@ def main(args=None, comm=None) :
             # accept both types of standards for the time being
 
             # keep the indices for gaia/legacy subsets
-            gaia_indices = keep_gaia[keep]
-            legacy_indices = keep_legacy[keep]
+            is_gaia_std = keep_gaia[keep]
+            is_legacy_std = keep_legacy[keep]
 
             frame_starindices = frame_starindices[keep]
 
@@ -246,7 +253,7 @@ def main(args=None, comm=None) :
                 spectrograph = frame.spectrograph
                 fibermap = frame_fibermap
                 starindices=frame_starindices
-                starfibers=fibermap["FIBER"][starindices]
+                starfibers=np.asarray(fibermap["FIBER"][starindices])
 
             elif spectrograph != frame.spectrograph :
                 log.error("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
@@ -263,13 +270,18 @@ def main(args=None, comm=None) :
     # possibly cleanup memory
     del frames_by_expid
 
+    # wait for all ranks to finish reading and trimming before reading more
+    if comm is not None:
+        comm.barrier()
+
+    #- Read sky models and fiberflats, also trimming to starfibers kept for frames
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
         camera=safe_read_key(sky.header,"CAMERA").strip().lower()
         if not camera in skies :
             skies[camera]=[]
-        skies[camera].append(sky)
+        skies[camera].append(sky[starfibers%500])
 
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
@@ -281,7 +293,7 @@ def main(args=None, comm=None) :
             log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
             #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
         else :
-            flats[camera]=flat
+            flats[camera]=flat[starfibers%500]
 
     # if color is not specified we decide on the fly
     color = args.color
@@ -319,15 +331,15 @@ def main(args=None, comm=None) :
         color_band1, color_band2  = ['GAIA-'+ _ for _ in color[5:].split('-')]
         log.info("Using Gaia standards with color {} and normalizing to {}".format(color, ref_mag_name))
         # select appropriate subset of standards
-        starindices = starindices[gaia_indices]
-        starfibers = starfibers[gaia_indices]
+        starindices = np.where(is_gaia_std)[0]
+        starfibers = starfibers[is_gaia_std]
     else:
         ref_mag_name = 'R'
         color_band1, color_band2  = color.split('-')
         log.info("Using Legacy standards with color {} and normalizing to {}".format(color, ref_mag_name))
         # select appropriate subset of standards
-        starindices = starindices[legacy_indices]
-        starfibers = starfibers[legacy_indices]
+        starindices = np.where(is_legacy_std)[0]
+        starfibers = starfibers[is_legacy_std]
 
 
     # excessive check but just in case
@@ -352,7 +364,7 @@ def main(args=None, comm=None) :
             frames.pop(cam)
             continue
 
-        flat=flats[cam][starindices]
+        flat = flats[cam][starindices]
 
         for i in range(len(frames[cam])):
             frame = frames[cam][i][starindices]
@@ -405,6 +417,9 @@ def main(args=None, comm=None) :
             coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
             frames[cam] = [ coadded_frame ]
 
+    # We're done with skies and flats dict; remove them to possibly save memory
+    del skies
+    del flats
 
     # CHECK S/N
     ############################################
@@ -420,18 +435,14 @@ def main(args=None, comm=None) :
             snr[band] = np.sqrt( snr[band]**2 + msnr**2 )
     log.info("SNR(B) = {}".format(snr['b']))
 
-    ###############################
-    max_number_of_stars = 50
-    min_blue_snr = 4.
-    ###############################
-    indices=np.argsort(snr['b'])[::-1][:max_number_of_stars]
-
-    validstars = np.where(snr['b'][indices]>min_blue_snr)[0]
+    # Sort and trim by blue S/N
+    indices=np.argsort(snr['b'])[::-1][:args.maxstdstars]
+    validstars = np.where(snr['b'][indices]>args.min_blue_snr)[0]
 
     #- TODO: later we filter on models based upon color, thus throwing
     #- away very blue stars for which we don't have good models.
 
-    log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
+    log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(args.min_blue_snr,validstars.size))
     if validstars.size == 0 :
         log.error(f"No valid star for sp{spectrograph}")
         sys.exit(12)
@@ -445,9 +456,10 @@ def main(args=None, comm=None) :
 
     for cam in frames :
         for frame in frames[cam] :
-            frame.flux = frame.flux[validstars]
-            frame.ivar = frame.ivar[validstars]
-            frame.resolution_data = frame.resolution_data[validstars]
+            frame = frame[validstars]
+            ### frame.flux = frame.flux[validstars]
+            ### frame.ivar = frame.ivar[validstars]
+            ### frame.resolution_data = frame.resolution_data[validstars]
     starindices = starindices[validstars]
     starfibers  = starfibers[validstars]
     nstars = starindices.size
@@ -468,6 +480,7 @@ def main(args=None, comm=None) :
 
     # READ MODELS
     ############################################
+
     log.info("reading star models in %s"%args.starmodels)
     stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
 
@@ -507,6 +520,7 @@ def main(args=None, comm=None) :
         for filter_name in model_filters.keys():
             model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
         log.info("done computing model mags")
+
     if comm is not None:
         model_mags = comm.bcast(model_mags, root=0)
 
@@ -568,11 +582,6 @@ def main(args=None, comm=None) :
             star_unextincted_mags['GAIA-' + c1] -
             star_unextincted_mags['GAIA-' + c2])
 
-    linear_coefficients=np.zeros((nstars,stdflux.shape[0]))
-    chi2dof=np.zeros((nstars))
-    redshift=np.zeros((nstars))
-    normflux=np.zeros((nstars, stdwave.size))
-    fitted_model_colors = np.zeros(nstars)
 
     local_comm, head_comm = None, None
     if comm is not None:
@@ -580,6 +589,22 @@ def main(args=None, comm=None) :
         local_comm = comm.Split(rank % nstars, rank)
         # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
         head_comm = comm.Split(rank < nstars, rank)
+
+    #- Allocate arrays only needed by local_comm.rank == 0 ranks
+    if local_comm is None or local_comm.rank == 0:
+        linear_coefficients = np.zeros((nstars,stdflux.shape[0]))
+        chi2dof = np.zeros((nstars))
+        redshift = np.zeros((nstars))
+        normflux = np.zeros((nstars, stdwave.size))
+        fitted_model_colors = np.zeros(nstars)
+        model = np.zeros(stdwave.size)
+    else:
+        linear_coefficients = None
+        chi2dof = None
+        redshift = None
+        normflux = None
+        fitted_model_colors = None
+        model = None
 
     for star in range(rank % nstars, nstars, size):
 
@@ -648,7 +673,7 @@ def main(args=None, comm=None) :
             )
 
         # Apply redshift to original spectrum at full resolution
-        model=np.zeros(stdwave.size)
+        model *= 0.0   #- clear model from previous loop without re-allocating memory
         redshifted_stdwave = stdwave*(1+redshift[star])
         for i,c in enumerate(linear_coefficients[star]) :
             if c != 0 :
