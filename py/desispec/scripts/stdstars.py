@@ -350,9 +350,11 @@ def main(args=None, comm=None) :
             continue
 
         flat=flats[cam]
+        flat.fiberflat = flat.fiberflat[starindices]
         for frame,sky in zip(frames[cam],skies[cam]) :
             frame.flux = frame.flux[starindices]
             frame.ivar = frame.ivar[starindices]
+            sky.flux = sky.flux[starindices]
             frame.ivar *= (frame.mask[starindices] == 0)
             frame.ivar *= (sky.ivar[starindices] != 0)
             frame.ivar *= (sky.mask[starindices] == 0)
@@ -363,6 +365,7 @@ def main(args=None, comm=None) :
                 ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
                 if ok.size > 0 :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
+                    frame.ivar[star] = frame.ivar[star]*flat.fiberflat[star]**2
             frame.resolution_data = frame.resolution_data[starindices]
 
         nframes=len(frames[cam])
