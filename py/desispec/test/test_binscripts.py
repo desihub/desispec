@@ -136,6 +136,14 @@ class TestBinScripts(unittest.TestCase):
 
     def _get_fibermap(self, gaia_only=False):
         fibermap = io.empty_fibermap(self.nspec, 1500)
+        fibermap['GAIA_PHOT_G_MEAN_MAG'] = 1
+        fibermap['GAIA_PHOT_BP_MEAN_MAG'] = 1
+        fibermap['GAIA_PHOT_RP_MEAN_MAG'] = 1
+        if not gaia_only:
+            fibermap['FLUX_G'] = 1
+            fibermap['FLUX_R'] = 1
+            fibermap['FLUX_Z'] = 1
+
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['DESI_TARGET'][i] = desi_mask.SKY
