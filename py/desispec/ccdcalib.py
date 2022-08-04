@@ -1096,8 +1096,8 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
 
     obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
     for i,o in enumerate(obslist):
-        for speckey, date in change_dates_relevant:
-            if o['NIGHT']>date:
+        for speckey, date in change_dates_relevant.items():
+            if o['NIGHT']<date:
                 badcamword_decoded=decode_camword(o['BADCAMWORD'])
                 spec=sm2sp(speckey.split('-')[0])
                 color=speckey[-1]
