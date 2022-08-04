@@ -95,8 +95,6 @@ class TestSky(unittest.TestCase):
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
 
-<<<<<<< HEAD
-=======
     def test_subtract_sky_with_gradient_using_compute_polynomial_times_sky(self):
         spectra = self._get_spectra(with_gradient=True)
         sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=1,add_variance=self.add_variance)
@@ -115,6 +113,8 @@ class TestSky(unittest.TestCase):
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-3, atol=1e-3))
 
 >>>>>>> c25a69b9... stdstar memory usage improvements
+=======
+>>>>>>> dd461e3c... re-remove deprecated sky tests after merge conflict
     def test_sky_slice(self):
         flux = np.tile(self.flux, self.nspec).reshape(self.nspec, self.nwave)
         ivar = np.tile(self.ivar, self.nspec).reshape(self.nspec, self.nwave)
