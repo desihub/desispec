@@ -176,7 +176,7 @@ class DarkFinder(CalibFinder) :
         log.debug("Use spectrograph hardware identifier SMY")
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
-        dark_filelist = glob.glob("{}/dark_frames/*.fits.gz".format(self.directory,cameraid))
+        dark_filelist = glob.glob("{}/dark_frames/*{}*.fits.gz".format(self.directory,cameraid))
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
 
@@ -196,6 +196,8 @@ class DarkFinder(CalibFinder) :
         #loop over all dark filenames
 
         #TODO: decide on how to define the version exactly
+        #TODO: add an option to use the default dark or second newest dark or something else for doing comparisons
+        
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
         for datebegin in sorted(dark_dates)[::-1] :
