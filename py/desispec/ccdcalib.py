@@ -1069,17 +1069,18 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
         required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
         usever,useval=required_keys[0]
         for newver,newval in required_keys[1:]:
-            usenew = True
+            usenew=True
             for key in ['DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']:
                 if useval[key]!=newval[key]:
                     usenew = False
                     break
-            if usenew:
+            
+            if not usenew:
+                change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
                 useval = newval
                 usever = newver
-            else:
-                change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
-                break
+            useval = newval
+            usever = newver
     change_dates=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
