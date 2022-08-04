@@ -15,8 +15,8 @@ from desispec.preproc import masked_median
 # from desispec.preproc import parse_sec_keyword, calc_overscan
 from desispec.preproc import parse_sec_keyword, get_amp_ids
 from desispec.preproc import subtract_peramp_overscan
-from desispec.calibfinder import CalibFinder, sp2sm
-from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords
+from desispec.calibfinder import CalibFinder, sp2sm, sm2sp
+from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords,create_camword
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
 
@@ -1008,7 +1008,7 @@ cp {biasfile}  bias_frames/{biasfile}
 def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=None, transmit_obslist = False):
+                      copy_outputs_to_split_dirs=None, transmit_obslist = True):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -1081,12 +1081,37 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                 usever = newver
             useval = newval
             usever = newver
-    change_dates=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
+    change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
-    change_dates_in_nights=[d for d in change_dates if d in nights]
-    if len(change_dates_in_nights)>0:
-        nights = [n for n in nights if n >= max(change_dates_in_nights)]
+    change_dates_in_nights=[d for d in change_dates_any_spectrograph if d in nights]
+
+    #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
+    change_dates_relevant={}
+    for speckey,dates in change_dates.items():
+        dates_relevant= [date for date in dates if date in change_dates_in_nights]
+        if len(dates_relevant)>0:
+            dates_relevant.sort()
+            change_dates_relevant[speckey]=dates_relevant[-1]
+
+    obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
+    for o in obslist:
+        for speckey, date in change_dates_relevant:
+            if o['NIGHT']>date:
+                badcamword_decoded=decode_camword(o['BADCAMWORD'])
+                spec=sm2sp(speckey.split('-')[0])
+                color=speckey[-1]
+                mask_sp=f"{color}{spec[-1]}"
+                if mask_sp not in badcamword_decoded:
+                    badcamword_decoded.append(mask_sp)
+                badcamword_encoded=create_camword(badcamword_decoded)
+                o['BADCAMWORD']=badcamword_encoded
+
+    #if len(change_dates_in_nights)>0:
+    #    nights = [n for n in nights if n >= max(change_dates_in_nights)]
+
+
+
 
     #truncate to the right nights
     if transmit_obslist:
