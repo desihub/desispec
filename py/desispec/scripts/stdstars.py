@@ -366,12 +366,6 @@ def main(args=None, comm=None) :
             frame.ivar *= (flat.mask == 0)
             frame.flux *= (frame.ivar > 0) # just for clean plots
 
-            ### for star in range(frame.flux.shape[0]) :
-            ###     ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
-            ###     if ok.size > 0 :
-            ###         frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
-            ###         frame.ivar[star] = frame.ivar[star]*flat.fiberflat[star]**2
-
             apply_fiberflat(frame, flat)
             subtract_sky(frame, sky)
 
