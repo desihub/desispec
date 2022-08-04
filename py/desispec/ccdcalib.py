@@ -1084,7 +1084,7 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
     change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
-    change_dates_in_nights=[d for d in change_dates_any_spectrograph if d in nights]
+    change_dates_in_nights=[d for d in change_dates_any_spectrograph if d<max(nights) and d>min(nights)]
 
     #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
     change_dates_relevant={}
