@@ -860,6 +860,7 @@ class SkyModel(object):
             mask  : 2D[nspec, nwave] 0=ok or >0 if problems; 32-bit
             header : (optional) header from FITS file HDU0
             nrej : (optional) Number of rejected pixels in fit
+            stat_ivar  : 2D[nspec, nwave] inverse variance of the statistical inverse variance
             throughput_corrections : 1D (optional) Residual multiplicative throughput corrections for each fiber
             throughput_corrections_model : 1D (optional) Model multiplicative throughput corrections for each fiber
             dwavecoeff : (optional) 1D[ncoeff] vector of PCA coefficients for wavelength offsets
@@ -888,6 +889,40 @@ class SkyModel(object):
         self.dwavecoeff = dwavecoeff
         self.dlsfcoeff = dlsfcoeff
         self.skygradpcacoeff = skygradpcacoeff
+
+    def __getitem__(self, index):
+        """
+        Return a subset of the fibers for this skymodel
+
+        e.g. `stdsky = sky[stdstar_indices]`
+        """
+        #- convert index to 1d array to maintain dimentionality of sliced arrays
+        if not isinstance(index, slice):
+            index = np.atleast_1d(index)
+
+        flux = self.flux[index]
+        ivar = self.ivar[index]
+        mask = self.mask[index]
+
+        if self.stat_ivar is not None:
+            stat_ivar = self.stat_ivar[index]
+        else:
+            stat_ivar = None
+
+        if self.throughput_corrections is not None:
+            tcorr = self.throughput_corrections[index]
+        else:
+            tcorr = None
+
+        sky2 = SkyModel(self.wave, flux, ivar, mask, header=self.header, nrej=self.nrej,
+                stat_ivar=stat_ivar, throughput_corrections=tcorr)
+
+        sky2.dwave = self.dwave
+        if self.dlsf is not None:
+            sky2.dlsf = self.dlsf[index]
+
+        return sky2
+
 
 
 def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar=True) :

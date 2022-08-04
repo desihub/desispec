@@ -25,6 +25,9 @@ from desispec.io.filters import load_legacy_survey_filter, load_gaia_filter
 from desiutil.dust import dust_transmission,extinction_total_to_selective_ratio, SFDMap, gaia_extinction
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
+from desispec.fiberflat import apply_fiberflat
+from desispec.sky import subtract_sky
+
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
     parser.add_argument('--frames', type = str, default = None, required=True, nargs='*',
@@ -349,24 +352,31 @@ def main(args=None, comm=None) :
             frames.pop(cam)
             continue
 
-        flat=flats[cam]
-        flat.fiberflat = flat.fiberflat[starindices]
-        for frame,sky in zip(frames[cam],skies[cam]) :
-            frame.flux = frame.flux[starindices]
-            frame.ivar = frame.ivar[starindices]
-            sky.flux = sky.flux[starindices]
-            frame.ivar *= (frame.mask[starindices] == 0)
-            frame.ivar *= (sky.ivar[starindices] != 0)
-            frame.ivar *= (sky.mask[starindices] == 0)
-            frame.ivar *= (flat.ivar[starindices] != 0)
-            frame.ivar *= (flat.mask[starindices] == 0)
-            frame.flux *= ( frame.ivar > 0) # just for clean plots
-            for star in range(frame.flux.shape[0]) :
-                ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
-                if ok.size > 0 :
-                    frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
-                    frame.ivar[star] = frame.ivar[star]*flat.fiberflat[star]**2
-            frame.resolution_data = frame.resolution_data[starindices]
+        flat=flats[cam][starindices]
+
+        for i in range(len(frames[cam])):
+            frame = frames[cam][i][starindices]
+            sky = skies[cam][i][starindices]
+
+            #- don't use masked or ivar=0 data
+            frame.ivar *= (frame.mask == 0)
+            frame.ivar *= (sky.ivar != 0)
+            frame.ivar *= (sky.mask == 0)
+            frame.ivar *= (flat.ivar != 0)
+            frame.ivar *= (flat.mask == 0)
+            frame.flux *= (frame.ivar > 0) # just for clean plots
+
+            ### for star in range(frame.flux.shape[0]) :
+            ###     ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
+            ###     if ok.size > 0 :
+            ###         frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
+            ###         frame.ivar[star] = frame.ivar[star]*flat.fiberflat[star]**2
+
+            apply_fiberflat(frame, flat)
+            subtract_sky(frame, sky)
+
+            #- keep newly flat-fielded sky-subtracted frame
+            frames[cam][i] = frame
 
         nframes=len(frames[cam])
         if nframes>1 :
