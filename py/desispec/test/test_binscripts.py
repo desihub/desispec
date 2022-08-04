@@ -123,7 +123,7 @@ class TestBinScripts(unittest.TestCase):
     def _write_fiberflat(self, camera=None):
         """Write a fake fiberflat"""
         fiberflat = np.ones((self.nspec, self.nwave))
-        ivar = np.ones((self.nspec, self.nwave))
+        ivar = 1000*np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         meanspec = np.ones(self.nwave)
         ff = FiberFlat(self.wave, fiberflat, ivar, mask, meanspec)
@@ -168,7 +168,7 @@ class TestBinScripts(unittest.TestCase):
     def _write_skymodel(self, camera=None):
         """Write a fake SkyModel"""
         skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
-        ivar = np.ones((self.nspec, self.nwave))
+        ivar = 1000*np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         sky = SkyModel(self.wave, skyflux, ivar, mask, nrej=1)
         if camera is not None:
