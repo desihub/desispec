@@ -10,6 +10,11 @@ from datetime import datetime
 from os.path import expanduser
 
 
+_surveyid = {'cmx': 1, 'special': 2, 'sv1': 3, 'sv2': 4, 'sv3':5, 'main':6}
+_programid = {'backup': 1, 'bright': 2, 'dark': 3, 'other': 4}
+_spgrpid = {'1x_depth': 1, '4x_depth': 2, 'cumulative': 3, 'lowspeed': 4, 'perexp': 5, 'pernight': 6}
+
+
 def cameraid(camera):
     """Converts `camera` (*e.g.* 'b0') to an integer in a simple but ultimately
     arbitrary way.
@@ -32,6 +37,143 @@ def frameid(expid, camera):
     suitable for use as a primary key.
     """
     return 100*expid + cameraid(camera)
+
+
+def surveyid(survey):
+    """Converts `survey` (*e.g.* 'main') to an integer in a simple but ultimately
+    arbitrary way.
+
+    Parameters
+    ----------
+    survey : :class:`str`
+        Survey name.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary, small integer.
+    """
+    return _surveyid[survey]
+
+
+def programid(survey):
+    """Converts `program` (*e.g.* 'bright') to an integer in a simple but ultimately
+    arbitrary way.
+
+    Parameters
+    ----------
+    program : :class:`str`
+        Program name.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary, small integer.
+    """
+    return _programid[program]
+
+
+def spgrpid(spgrp):
+    """Converts `spgrp` (*e.g.* 'cumulative') to an integer in a simple but ultimately
+    arbitrary way.
+
+    Parameters
+    ----------
+    spgrp : :class:`str`
+        SPGRP name.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary, small integer.
+    """
+    return _spgrpid[spgrp]
+
+
+def targetphotid(targetid, tileid, survey):
+    """Convert inputs into an arbitrary large integer.
+
+    Parameters
+    ----------
+    targetid : :class:`int`
+        Standard ``TARGETID``.
+    tileid : :class:`int`
+        Standard ``TILEID``.
+    survey : :class:`str`
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary integer, which will be greater than :math:`2^64` but
+        less than :math:`2^128`.
+    """
+    return (surveyid(survey) << 96) | (tileid << 64) | targetid
+
+
+def zpixid(targetid, survey, program):
+    """Convert inputs into an arbitrary large integer.
+
+    Parameters
+    ----------
+    targetid : :class:`int`
+        Standard ``TARGETID``.
+    survey : :class:`str`
+        Survey name.
+    program : :class:`str`
+        Program name.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary integer, which will be greater than :math:`2^64` but
+        less than :math:`2^128`.
+    """
+    return (programid(program) << 96) | (surveyid(survey) << 64) | targetid
+
+
+def ztileid(targetid, spgrp, spgrpval, tileid):
+    """Convert inputs into an arbitrary large integer.
+
+    Parameters
+    ----------
+    targetid : :class:`int`
+        Standard ``TARGETID``.
+    spgrp : :class:`str`
+        Tile grouping.
+    spgrpval : :class:`str`
+        Id with in `spgrp`.
+    tileid : :class:`int`
+        Standard ``TILEID``.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary integer, which will be greater than :math:`2^64` but
+        less than :math:`2^128`.
+    """
+    spgrpid = (_spgrpid[spgrp] << 27) | spgrpval  # effective 32-bit integer
+    return (spgrpid << 96) | (tileid << 64) | targetid
+
+
+def fiberassignid(targetid, tileid, location):
+    """Convert inputs into an arbitrary large integer.
+
+    Parameters
+    ----------
+    targetid : :class:`int`
+        Standard ``TARGETID``.
+    tileid : :class:`int`
+        Standard ``TILEID``.
+    location : :class:`int`
+        Location on the tile.
+
+    Returns
+    -------
+    :class:`int`
+        An arbitrary integer, which will be greater than :math:`2^64` but
+        less than :math:`2^128`.
+    """
+    return (location << 96) | (tileid << 64) | targetid
 
 
 def convert_dateobs(timestamp, tzinfo=None):

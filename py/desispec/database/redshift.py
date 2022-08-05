@@ -41,7 +41,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 
 from ..io.meta import specprod_root, faflavor2program
 from ..io.util import checkgzip
-from .util import convert_dateobs, parse_pgpass, cameraid
+from .util import convert_dateobs, parse_pgpass, cameraid, surveyid, programid, spgrpid
 
 Base = declarative_base()
 engine = None
@@ -271,14 +271,15 @@ class Target(SchemaMixin, Base):
     which are vector-valued, are not yet implemented.
     """
 
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
     release = Column(SmallInteger, nullable=False)
     brickid = Column(Integer, nullable=False)
     brickname = Column(String(8), nullable=False)
     brick_objid = Column(Integer, nullable=False)
     morphtype = Column(String(4), nullable=False)
     ra = Column(DOUBLE_PRECISION, nullable=False)
-    dec = Column(DOUBLE_PRECISION, nullable=False)
     ra_ivar = Column(REAL, nullable=False)
+    dec = Column(DOUBLE_PRECISION, nullable=False)
     dec_ivar = Column(REAL, nullable=False)
     dchisq_psf = Column(REAL, nullable=False)
     dchisq_rex = Column(REAL, nullable=False)
@@ -340,10 +341,10 @@ class Target(SchemaMixin, Base):
     maskbits = Column(SmallInteger, nullable=False)
     # LC_...
     shape_r = Column(REAL, nullable=False)
-    shape_r_ivar = Column(REAL, nullable=False)
     shape_e1 = Column(REAL, nullable=False)
-    shape_e1_ivar = Column(REAL, nullable=False)
     shape_e2 = Column(REAL, nullable=False)
+    shape_r_ivar = Column(REAL, nullable=False)
+    shape_e1_ivar = Column(REAL, nullable=False)
     shape_e2_ivar = Column(REAL, nullable=False)
     sersic = Column(REAL, nullable=False)
     sersic_ivar = Column(REAL, nullable=False)
@@ -366,7 +367,7 @@ class Target(SchemaMixin, Base):
     pmdec = Column(REAL, nullable=False)
     pmdec_ivar = Column(REAL, nullable=False)
     photsys = Column(String(1), nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    targetid = Column(BigInteger, nullable=False)
     subpriority = Column(DOUBLE_PRECISION, nullable=False)
     obsconditions = Column(BigInteger, nullable=False)
     priority_init = Column(BigInteger, nullable=False)
@@ -389,14 +390,12 @@ class Target(SchemaMixin, Base):
     sv1_scnd_target = Column(BigInteger, nullable=False)
     sv2_scnd_target = Column(BigInteger, nullable=False)
     sv3_scnd_target = Column(BigInteger, nullable=False)
-
-    # fiberassign = relationship("Fiberassign", back_populates="target")
-    # potential = relationship("Potential", back_populates="target")
-    # zpix_redshifts = relationship("Zpix", back_populates="target")
-    # ztile_redshifts = relationship("Ztile", back_populates="target")
+    survey = Column(String(7), nullable=False, index=True)
+    program = Column(String(6), nullable=False, index=True)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
 
     def __repr__(self):
-        return "Target(targetid={0.targetid})".format(self)
+        return "Target(targetid={0.targetid}, tileid={0.tileid}, survey='{0.survey}')".format(self)
 
 
 class Tile(SchemaMixin, Base):
@@ -598,11 +597,12 @@ class Fiberassign(SchemaMixin, Base):
       ever implemented.
     """
 
-    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)  # potential ForeignKey on Target
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
+    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
-    location = Column(Integer, primary_key=True)
+    location = Column(Integer, nullable=False)
     fiber = Column(Integer, nullable=False)
     fiberstatus = Column(Integer, nullable=False)
     target_ra = Column(DOUBLE_PRECISION, nullable=False)
@@ -627,10 +627,11 @@ class Potential(SchemaMixin, Base):
     """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
     """
 
-    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)  # potential ForeignKey on Target
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
+    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
     fiber = Column(Integer, nullable=False)
-    location = Column(Integer, primary_key=True)
+    location = Column(Integer, nullable=False)
 
     tile = relationship("Tile", back_populates="potential")
     # target = relationship("Target", back_populates="potenial")
@@ -643,12 +644,13 @@ class Zpix(SchemaMixin, Base):
     """Representation of the ``ZCATALOG`` table in zpix files.
     """
 
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # potential ForeignKey on Target
-    survey = Column(String(7), primary_key=True, autoincrement=False)
-    program = Column(String(6), primary_key=True, autoincrement=False)
-    spgrp = Column(String(10), nullable=False)
-    spgrpval = Column(Integer, nullable=False)
-    healpix = Column(Integer, nullable=False)
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    survey = Column(String(7), nullable=False, index=True)
+    program = Column(String(6), nullable=False, index=True)
+    spgrp = Column(String(10), nullable=False, index=True)
+    spgrpval = Column(Integer, nullable=False, index=True)
+    healpix = Column(Integer, nullable=False, index=True)
     z = Column(DOUBLE_PRECISION, index=True, nullable=False)
     zerr = Column(DOUBLE_PRECISION, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
@@ -730,11 +732,12 @@ class Ztile(SchemaMixin, Base):
     """Representation of the ``ZCATALOG`` table in ztile files.
     """
 
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # potential ForeignKey on Target
-    survey = Column(String(7), nullable=False)
-    program = Column(String(6), nullable=False)
-    spgrp = Column(String, primary_key=True, autoincrement=False)
-    spgrpval = Column(Integer, primary_key=True, autoincrement=False)
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    survey = Column(String(7), nullable=False, index=True)
+    program = Column(String(6), nullable=False, index=True)
+    spgrp = Column(String, nullable=False, index=True)
+    spgrpval = Column(Integer, nullable=False, index=True)
     z = Column(DOUBLE_PRECISION, index=True, nullable=False)
     zerr = Column(DOUBLE_PRECISION, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
@@ -758,7 +761,7 @@ class Ztile(SchemaMixin, Base):
     #
     # Skipping columns that are in other tables.
     #
-    tileid = Column(Integer, ForeignKey("tile.tileid"), primary_key=True, autoincrement=False)
+    tileid = Column(Integer, ForeignKey("tile.tileid"), nullable=False, index=True)
     coadd_numexp = Column(SmallInteger, nullable=False)
     coadd_exptime = Column(REAL, nullable=False)
     coadd_numnight = Column(SmallInteger, nullable=False)
@@ -855,6 +858,9 @@ def _tileid(data):
         log.debug("Adding PLATE_RA, PLATE_DEC.")
         data['PLATE_RA'] = data['TARGET_RA']
         data['PLATE_DEC'] = data['TARGET_DEC']
+    id0 = data['LOCATION'].base.astype(np.int64) << 32 | data['TILEID'].base.astype(np.int64)
+    composite_id = np.array([id0, data['TARGETID'].base]).T
+    data.add_column(composite_id, name='ID', index=0)
     return data
 
 
@@ -884,6 +890,35 @@ def _survey_program(data):
             raise
         log.debug("Adding %s column.", key)
         data.add_column(np.array([val]*len(data)), name=key, index=i+1)
+    if 'TILEID' in data.colnames:
+        s = np.array([spgrpid(s) for s in data['SPGRP']], dtype=np.int64)
+        id0 = (s << 27 | data['SPGRPVAL'].base.astype(np.int64)) << 32 | data['TILEID'].base.astype(np.int64)
+    else:
+        s = np.array([surveyid(s) for s in data['SURVEY']], dtype=np.int64)
+        p = np.array([programid(s) for s in data['PROGRAM']], dtype=np.int64)
+        id0 = p << 32 | s
+    composite_id = np.array([id0, data['TARGETID'].base]).T
+    data.add_column(composite_id, name='ID', index=0)
+    return data
+
+
+def _target_unique_id(data):
+    """Add composite ``ID`` column for later conversion.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        Updated data table.
+    """
+    s = np.array([surveyid(s) for s in targetphot['SURVEY']], dtype=np.int64)
+    id0 = s << 32 | data['TILEID'].base.astype(np.int64)
+    composite_id = np.array([id0, targetphot['TARGETID'].base]).T
+    data.add_column(composite_id, name='ID', index=0)
     return data
 
 
@@ -1262,43 +1297,20 @@ def setup_db(options=None, **kwargs):
     #
     if options is None:
         if len(kwargs) > 0:
-            try:
-                schema = kwargs['schema']
-            except KeyError:
-                schema = None
-            try:
-                overwrite = kwargs['overwrite']
-            except KeyError:
-                overwrite = False
-            try:
-                hostname = kwargs['hostname']
-            except KeyError:
-                hostname = None
-            try:
-                username = kwargs['username']
-            except KeyError:
-                username = 'desidev_admin'
-            try:
-                dbfile = kwargs['dbfile']
-            except KeyError:
-                dbfile = 'redshift.db'
-            try:
-                datapath = kwargs['datapath']
-            except KeyError:
-                datapath = None
-            try:
-                verbose = kwargs['verbose']
-            except KeyError:
-                verbose = False
+            dbfile = kwargs.get('dbfile', 'redshift.db')
+            hostname = kwargs.get('hostname', None)
+            overwrite = kwargs.get('overwrite', False)
+            schema = kwargs.get('schema', None)
+            username = kwargs.get('username', 'desidev_admin')
+            verbose = kwargs.get('verbose', False)
         else:
             raise ValueError("No options specified!")
     else:
-        schema = options.schema
-        overwrite = options.overwrite
-        hostname = options.hostname
-        username = options.username
         dbfile = options.dbfile
-        datapath = options.datapath
+        hostname = options.hostname
+        overwrite = options.overwrite
+        schema = options.schema
+        username = options.username
         verbose = options.verbose
     if schema:
         schemaname = schema
@@ -1361,8 +1373,7 @@ def get_options(*args):
     """
     from sys import argv
     from argparse import ArgumentParser
-    prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
-                                       "database."),
+    prsr = ArgumentParser(description=("Load redshift data into a database."),
                           prog=os.path.basename(argv[0]))
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='redshift.db', metavar='FILE',
@@ -1389,8 +1400,6 @@ def get_options(*args):
                       help="If specified, connect to a PostgreSQL database with USERNAME (default %(default)s).")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
-    prsr.add_argument('-z', '--redrock', action='store_true', dest='redrock',
-                      help='Force loading of the zcat table from redrock files.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
     if len(args) > 0:
         options = prsr.parse_args(args)
@@ -1427,24 +1436,24 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': [os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),],
-                             # os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-potential-targets-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                             # os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-missing-{specprod}.fits'.format(specprod=os.environ['SPECPROD']))],
+    loader = [{'filepaths': os.path.join(options.datapath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Target,
                'hdu': 'TARGETPHOT',
+               'preload': _target_unique_id,
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
                'q3c': 'ra',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Tile,
                'hdu': 'TILE_COMPLETENESS',
                'q3c': 'tilera',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
                'insert': {'mjd': ('date_obs',)},
@@ -1453,29 +1462,31 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+              {'filepaths': os.path.join(ooptions.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Frame,
                'hdu': 'FRAMES',
                'preload': _frameid,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
               },
-              {'filepaths': glob.glob(os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'zcatalog', 'zpix-*.fits')),
+              {'filepaths': glob.glob(os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zpix-*.fits')),
                'tcls': Zpix,
                'hdu': 'ZCATALOG',
                'preload': _survey_program,
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': glob.glob(os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'zcatalog', 'ztile-*.fits')),
+              {'filepaths': glob.glob(os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'ztile-*.fits')),
                'tcls': Ztile,
                'hdu': 'ZCATALOG',
                'preload': _survey_program,
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
@@ -1510,6 +1521,7 @@ def main():
                'tcls': Fiberassign,
                'hdu': 'FIBERASSIGN',
                'preload': _tileid,
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'q3c': 'target_ra',
                'chunksize': options.chunksize,
@@ -1519,6 +1531,7 @@ def main():
                'tcls': Potential,
                'hdu': 'POTENTIAL_ASSIGNMENTS',
                'preload': _tileid,
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
