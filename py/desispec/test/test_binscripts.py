@@ -123,7 +123,7 @@ class TestBinScripts(unittest.TestCase):
     def _write_fiberflat(self, camera=None):
         """Write a fake fiberflat"""
         fiberflat = np.ones((self.nspec, self.nwave))
-        ivar = np.ones((self.nspec, self.nwave))
+        ivar = 1000*np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         meanspec = np.ones(self.nwave)
         ff = FiberFlat(self.wave, fiberflat, ivar, mask, meanspec)
@@ -136,6 +136,14 @@ class TestBinScripts(unittest.TestCase):
 
     def _get_fibermap(self, gaia_only=False):
         fibermap = io.empty_fibermap(self.nspec, 1500)
+        fibermap['GAIA_PHOT_G_MEAN_MAG'] = 1
+        fibermap['GAIA_PHOT_BP_MEAN_MAG'] = 1
+        fibermap['GAIA_PHOT_RP_MEAN_MAG'] = 1
+        if not gaia_only:
+            fibermap['FLUX_G'] = 1
+            fibermap['FLUX_R'] = 1
+            fibermap['FLUX_Z'] = 1
+
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['DESI_TARGET'][i] = desi_mask.SKY
@@ -160,7 +168,7 @@ class TestBinScripts(unittest.TestCase):
     def _write_skymodel(self, camera=None):
         """Write a fake SkyModel"""
         skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
-        ivar = np.ones((self.nspec, self.nwave))
+        ivar = 1000*np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         sky = SkyModel(self.wave, skyflux, ivar, mask, nrej=1)
         if camera is not None:

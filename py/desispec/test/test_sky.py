@@ -5,7 +5,7 @@ tests desispec.sky
 import unittest
 
 import numpy as np
-from desispec.sky import compute_sky, subtract_sky
+from desispec.sky import compute_sky, subtract_sky, SkyModel
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 import desispec.io
@@ -25,6 +25,8 @@ class TestSky(unittest.TestCase):
         for i in range(0, self.nwave, 20):
             self.flux[i] = i
         self.ivar = np.ones(self.flux.shape)
+        self.mask = np.zeros(self.flux.shape, dtype=np.int32)
+        self.tpcorr = np.linspace(0.9, 1.1, self.nspec)
         self.add_variance = True
 
     def _get_spectra(self,with_gradient=False):
@@ -93,9 +95,68 @@ class TestSky(unittest.TestCase):
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
 
+    def test_sky_slice(self):
+        flux = np.tile(self.flux, self.nspec).reshape(self.nspec, self.nwave)
+        ivar = np.tile(self.ivar, self.nspec).reshape(self.nspec, self.nwave)
+        mask = np.tile(self.mask, self.nspec).reshape(self.nspec, self.nwave)
+        sky1 = SkyModel(self.wave, flux, ivar, mask, nrej=10,
+                stat_ivar=ivar*100, throughput_corrections=self.tpcorr)
+
+        sky2 = sky1[2]
+        self.assertEqual(sky2.flux.shape, (1,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (1,self.nwave))
+        self.assertEqual(sky2.mask.shape, (1,self.nwave))
+        self.assertEqual(sky2.stat_ivar.shape, (1,self.nwave))
+        self.assertEqual(sky2.throughput_corrections.shape, (1,))
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
+        sky2 = sky1[2:3]
+        self.assertEqual(sky2.flux.shape, (1,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (1,self.nwave))
+        self.assertEqual(sky2.mask.shape, (1,self.nwave))
+        self.assertEqual(sky2.stat_ivar.shape, (1,self.nwave))
+        self.assertEqual(sky2.throughput_corrections.shape, (1,))
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
+        sky2 = sky1[2:4]
+        self.assertEqual(sky2.flux.shape, (2,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (2,self.nwave))
+        self.assertEqual(sky2.mask.shape, (2,self.nwave))
+        self.assertEqual(sky2.stat_ivar.shape, (2,self.nwave))
+        self.assertEqual(sky2.throughput_corrections.shape, (2,))
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
+        sky2 = sky1[[1,2,3]]
+        self.assertEqual(sky2.flux.shape, (3,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (3,self.nwave))
+        self.assertEqual(sky2.mask.shape, (3,self.nwave))
+        self.assertEqual(sky2.stat_ivar.shape, (3,self.nwave))
+        self.assertEqual(sky2.throughput_corrections.shape, (3,))
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
+        ii = np.arange(sky1.nspec, dtype=int)%2 == 0
+        n = np.sum(ii)
+        sky2 = sky1[ii]
+        self.assertEqual(sky2.flux.shape, (n,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (n,self.nwave))
+        self.assertEqual(sky2.mask.shape, (n,self.nwave))
+        self.assertEqual(sky2.stat_ivar.shape, (n,self.nwave))
+        self.assertEqual(sky2.throughput_corrections.shape, (n,))
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
+        #- stat_ivar and throughput_corrections are optional, but shouldn't break slicing
+        sky1.stat_ivar = None
+        sky1.throughput_corrections = None
+        sky2 = sky1[2:4]
+        self.assertEqual(sky2.flux.shape, (2,self.nwave))
+        self.assertEqual(sky2.ivar.shape, (2,self.nwave))
+        self.assertEqual(sky2.mask.shape, (2,self.nwave))
+        self.assertEqual(sky2.stat_ivar, None)
+        self.assertEqual(sky2.throughput_corrections, None)
+        self.assertEqual(sky2.nrej, sky1.nrej)
+
     def test_main(self):
         pass
-
 
     def runTest(self):
         pass
