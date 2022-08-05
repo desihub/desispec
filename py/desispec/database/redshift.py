@@ -394,6 +394,8 @@ class Target(SchemaMixin, Base):
     program = Column(String(6), nullable=False, index=True)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
 
+    ztile_redshifts = relationship("Ztile", back_populates="target")
+
     def __repr__(self):
         return "Target(targetid={0.targetid}, tileid={0.tileid}, survey='{0.survey}')".format(self)
 
@@ -733,6 +735,7 @@ class Ztile(SchemaMixin, Base):
     """
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    targetphotid = Column(Numeric(39), ForeignKey("target.id"), nullable=False, index=True)
     targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
@@ -811,7 +814,7 @@ class Ztile(SchemaMixin, Base):
     zcat_primary = Column(Boolean, nullable=False)
 
     tile = relationship("Tile", back_populates="ztile_redshifts")
-    # target = relationship("Target", back_populates="ztile_redshifts")
+    target = relationship("Target", back_populates="ztile_redshifts")
 
     def __repr__(self):
         return "Ztile(targetid={0.targetid:d}, tileid={0.tileid:d}, spgrp='{0.spgrp}', spgrpval={0.spgrpval:d})".format(self)
@@ -891,6 +894,8 @@ def _survey_program(data):
         log.debug("Adding %s column.", key)
         data.add_column(np.array([val]*len(data)), name=key, index=i+1)
     if 'TILEID' in data.colnames:
+        data = _target_unique_id(data)
+        data.rename_column('ID', 'TARGETPHOTID')
         s = np.array([spgrpid(s) for s in data['SPGRP']], dtype=np.int64)
         id0 = (s << 27 | data['SPGRPVAL'].base.astype(np.int64)) << 32 | data['TILEID'].base.astype(np.int64)
     else:
@@ -915,9 +920,9 @@ def _target_unique_id(data):
     :class:`astropy.table.Table`
         Updated data table.
     """
-    s = np.array([surveyid(s) for s in targetphot['SURVEY']], dtype=np.int64)
+    s = np.array([surveyid(s) for s in data['SURVEY']], dtype=np.int64)
     id0 = s << 32 | data['TILEID'].base.astype(np.int64)
-    composite_id = np.array([id0, targetphot['TARGETID'].base]).T
+    composite_id = np.array([id0, data['TARGETID'].base]).T
     data.add_column(composite_id, name='ID', index=0)
     return data
 
@@ -1486,7 +1491,8 @@ def main():
                'preload': _survey_program,
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
+               'convert': {'id': lambda x: x[0] << 64 | x[1],
+                           'targetphotid': lambda x: x[0] << 64 | x[1]},
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
