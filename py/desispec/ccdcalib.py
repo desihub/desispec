@@ -1029,7 +1029,8 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
-    
+    log = get_logger()
+
     if lastnight is None:
         lastnight=datetime.datetime.now().strftime('%Y%m%d')
     if outdir is None:
@@ -1043,12 +1044,9 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
 
     obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
 
-
     #TODO: nights does not yet end with lastnight need fix
     startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
     nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
-
-
 
 
     #TODO: the following steps should probably be done by spectrograph and then marking spectrographs that changed in between as bad for nights before the change (allowing other spectrographs to still use more data...)
@@ -1084,6 +1082,9 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
     change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
     nights = [n for n in nights if n in obslist['NIGHT']]
+    if len(nights)==0:
+        log.critical("No darks were taken for this time frame, exiting")
+        sys.exit(1)
     change_dates_in_nights=[d for d in change_dates_any_spectrograph if d<max(nights) and d>min(nights)]
 
     #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
@@ -1109,9 +1110,6 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
 
     #if len(change_dates_in_nights)>0:
     #    nights = [n for n in nights if n >= max(change_dates_in_nights)]
-
-
-
 
     #truncate to the right nights
     if transmit_obslist:
