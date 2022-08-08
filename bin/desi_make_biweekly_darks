@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+import argparse
+import queue
+from desispec.ccdcalib import make_biweekly_darks
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Compute a master dark from a bunch of nights and store to DESI_SPECTRO_DARK",
+                                 epilog='''
+                                 Input is a cutoff date for the new DARK model, the code will submit `desi_compute_dark_nonlinear` jobs internally
+                                 using a range of nights specified here and confirming that spectrograph setup has not been changed in between. See
+                                 `desi_compute_dark_nonlinear` for more details about the computation itself,
+                                 definition of default values etc.
+                                 ''')
+
+parser.add_argument('-o', '--outdir', type=str, required=False, default=None,
+                    help='output directory, defaults to $DESI_SPECTRO_DARK')
+parser.add_argument('--lastnight', type=int, required=False, default=None,
+                    help='Last night to include in the DARKs, defaults to tonight')
+parser.add_argument('--window', type=int, required=False, default=30,
+                    help='Number of nights before `lastnight` to include in the DARKs, '
+                         'defaults to 30 nights')
+
+parser.add_argument('--cameras', type=str, nargs='+', required=False, default=None,
+                    help = 'Cameras to process (e.g. b0, r1, z9) as blanc-seperated list'
+                           '(defaults to all)')
+parser.add_argument('--nosubmit', type=bool, required=False, default=False', action='store_true'
+                    help='Set to not submit jobs and just create scripts')
+parser.add_argument('-q','--queue', type=str, required=False, default='realtime',
+                    help='queue to use for the job scripts (will shorten to 30mins for debug), '
+                         'defaults to realtime')
+
+parser.add_argument('--first-expid', type=int, required=False, default=None,
+                    help='First EXPID to include')
+parser.add_argument('-t','--tempdir', type=str, required=False, default=None,
+                    help='directory for intermediate files, by default creates a dated subdir '
+                         'inside `outdir`')
+parser.add_argument('--linexptime', type=float, default=None, required=False,
+                    help='Model dark current as linear above this exptime (defaults to 300s)')
+parser.add_argument('--nskip-zeros', type=int, default=None, required=False,
+                    help='Skip N ZEROs per day while flushing charge (this defaults to 0 as the '
+                         'nightly evening ZEROs are not part of the exposure list used for this process '
+                         'only morning ZEROs and specific DARK sequence ZEROs are used)')
+
+args        = parser.parse_args()
+
+make_biweekly_darks(**vars(args))
+
+#outdir=args.outdir, lastnight=args.lastnight, window=args.window,
+#cameras=args.cameras, nosubmit=args.nosubmit, queue=args.queue,
+#first_expid=args.first_expid, tempdir=args.tempdir, linexptime=args.linexptime,
+#nskip_zeros=args.nskip_zeros
