@@ -24,7 +24,7 @@ parser.add_argument('--window', type=int, required=False, default=30,
 parser.add_argument('--cameras', type=str, nargs='+', required=False, default=None,
                     help = 'Cameras to process (e.g. b0, r1, z9) as blanc-seperated list'
                            '(defaults to all)')
-parser.add_argument('--nosubmit', type=bool, required=False, default=False, action='store_true',
+parser.add_argument('--nosubmit', required=False, default=False, action='store_true',
                     help='Set to not submit jobs and just create scripts')
 parser.add_argument('-q','--queue', type=str, required=False, default='realtime',
                     help='queue to use for the job scripts (will shorten to 30mins for debug), '
