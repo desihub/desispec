@@ -394,6 +394,7 @@ class Target(SchemaMixin, Base):
     program = Column(String(6), nullable=False, index=True)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
 
+    tile = relationship("Tile", back_populates="targets")
     ztile_redshifts = relationship("Ztile", back_populates="target")
 
     def __repr__(self):
@@ -452,6 +453,7 @@ class Tile(SchemaMixin, Base):
     exposures = relationship("Exposure", back_populates="tile")
     fiberassign = relationship("Fiberassign", back_populates="tile")
     potential = relationship("Potential", back_populates="tile")
+    targets = relationship("Target", back_populates="tile")
     ztile_redshifts = relationship("Ztile", back_populates="tile")
 
     def __repr__(self):
@@ -1441,7 +1443,14 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': os.path.join(options.datapath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+    loader = [{'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+               'tcls': Tile,
+               'hdu': 'TILE_COMPLETENESS',
+               'q3c': 'tilera',
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+               },
+              {'filepaths': os.path.join(options.datapath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Target,
                'hdu': 'TARGETPHOT',
                'preload': _target_unique_id,
@@ -1451,14 +1460,7 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Tile,
-               'hdu': 'TILE_COMPLETENESS',
-               'q3c': 'tilera',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+               {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
                'insert': {'mjd': ('date_obs',)},
