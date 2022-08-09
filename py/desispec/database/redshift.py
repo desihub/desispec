@@ -1467,7 +1467,7 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(ooptions.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Frame,
                'hdu': 'FRAMES',
                'preload': _frameid,
