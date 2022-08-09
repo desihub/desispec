@@ -993,7 +993,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
         else:
             log.error("Unrecognized data file, %s!", filepath)
             return
-        if maxrows == 0:
+        if maxrows == 0 or len(data) < maxrows:
             mr = len(data)
         else:
             mr = maxrows
