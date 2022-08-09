@@ -1087,7 +1087,10 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
         data_rows = list(zip(*data_list))
         del data_list
         log.info("Converted columns into rows on %s.", tn)
-        for k in range(finalrows//chunksize + 1):
+        n_chunks = finalrows//chunksize
+        if finalrows % chunksize:
+            n_chunks += 1
+        for k in range(n_chunks):
             data_chunk = [dict(zip(data_names, row))
                           for row in data_rows[k*chunksize:(k+1)*chunksize]]
             if len(data_chunk) > 0:

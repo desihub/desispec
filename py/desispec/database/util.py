@@ -56,7 +56,7 @@ def surveyid(survey):
     return _surveyid[survey]
 
 
-def programid(survey):
+def programid(program):
     """Converts `program` (*e.g.* 'bright') to an integer in a simple but ultimately
     arbitrary way.
 
