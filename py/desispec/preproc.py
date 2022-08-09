@@ -642,7 +642,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False):
+            keep_overscan_cols=False, use_nth_newest_dark=1):
 
     '''
     preprocess image using metadata in header
@@ -749,7 +749,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     darkfinder = None
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
-        darkfinder = DarkFinder([header, primary_header], yaml_file=ccd_calibration_filename) #the yaml file here is only used as a backup solution
+        darkfinder = DarkFinder([header, primary_header], yaml_file=ccd_calibration_filename, use_nth_newest=use_nth_newest_dark) #the yaml file here is only used as a backup solution, the last arg allows using older darks for comparison
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)

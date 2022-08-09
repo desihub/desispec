@@ -95,6 +95,8 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--ncpu', type=int, default=default_nproc,
             help=f"number of parallel processes to use [{default_nproc}]")
     parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
+    parser.add_argument('--use-nth-newest-dark', type=int, default=1,
+            help=f"use the n-th newest dark model for preprocessing to allow comparisons of different dark models, defaults to using the newest")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -194,7 +196,8 @@ def main(args=None):
                 model_variance=args.model_variance,
                 zero_masked=args.zero_masked,
                 no_traceshift=args.no_traceshift,
-                keep_overscan_cols=args.keep_overscan_cols
+                keep_overscan_cols=args.keep_overscan_cols,
+                use_nth_newest_dark=args.use_nth_newest_dark
         )
         opts_array.append(opts)
 

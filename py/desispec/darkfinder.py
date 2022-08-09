@@ -9,6 +9,7 @@ import re
 import os
 import glob
 import numpy as np
+from sympy import use
 import yaml
 import os.path
 from desispec.util import parse_int_args, header2night
@@ -112,7 +113,7 @@ def finddarkfile(headers,key,yaml_file=None) :
         return None
 
 class DarkFinder(CalibFinder) :
-    def __init__(self,headers,yaml_file=None) :
+    def __init__(self,headers,yaml_file=None, use_nth_newest=1) :
         """
         Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
 
@@ -197,9 +198,10 @@ class DarkFinder(CalibFinder) :
 
         #TODO: decide on how to define the version exactly
         #TODO: add an option to use the default dark or second newest dark or something else for doing comparisons
-        
+
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
+        count=0
         for datebegin in sorted(dark_dates)[::-1] :
             if dateobs >= datebegin :
                 #TODO: extra checks that evaluate if selection from yaml file is matching...
@@ -224,19 +226,21 @@ class DarkFinder(CalibFinder) :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
                             continue
                     #This check is not done with the bias frames assuming they are always generated in pairs
-
+                count+=1
                 found=True
                 log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
-
-                break
-            
-        if found:
+                if count >= use_nth_newest:
+                    break
+                   
+        if found and count >= use_nth_newest:
             #TODO: maybe just overwrite the selection from yaml file in case things are matching something newer...
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
-
         else:
-            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
+            if found:
+                log.warning(f"Didn't find an {use_nth_newest}-th newest calibration with required setup, using $DESI_SPECTRO_CALIB darks instead")
+            else:
+                log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
 
 
         
