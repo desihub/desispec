@@ -9,8 +9,6 @@ import re
 import os
 import glob
 import numpy as np
-from sympy import use
-import yaml
 import os.path
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
