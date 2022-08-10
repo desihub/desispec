@@ -129,7 +129,9 @@ class DarkFinder(CalibFinder) :
         # temporary backward compatibility
         if not "DESI_SPECTRO_DARK" in os.environ :
                 log.error("Need environment variable DESI_SPECTRO_DARK")
-                raise KeyError("Need environment variable DESI_SPECTRO_DARK")
+                super().__init__(headers, yaml_file)   #this is a (potentially only temporary fix to allow running on envs that don't have this set)
+                return
+                #raise KeyError("Need environment variable DESI_SPECTRO_DARK")
         else :
             self.directory = os.environ["DESI_SPECTRO_DARK"]
 
