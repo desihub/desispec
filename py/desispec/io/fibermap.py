@@ -264,19 +264,33 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
     return outfile
 
 
-def read_fibermap(filename):
+def read_fibermap(fp):
     """Reads a fibermap file and returns its data as an astropy Table
 
     Args:
-        filename : input file name
+        fp : input file name, or opened fitsio.FITS or astropy.io.fits.HDUList
     """
     #- Implementation note: wrapping fitsio.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     log = get_logger()
     t0 = time.time()
+    if isinstance(fp, fitsio.FITS):
+        fibermap = fp['FIBERMAP'].read()
+        hdr = fp['FIBERMAP'].read_header()
+        filename = fp[0].get_filename()
+        log.debug("fp is fitsio.FITS('%s')", filename)
+    elif isinstance(fp, fits.HDUList):
+        fibermap = fp['FIBERMAP'].data
+        hdr = fp['FIBERMAP'].header
+        filename = fp.filename()
+        log.debug("fp is astropy.io.fits.HDUList('%s')", filename)
+    else:
+        #- it must be filename to open and read
+        filename = checkgzip(fp)
+        fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
+        log.debug("fp is str('%s')", filename)
 
-    fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
     fibermap = Table(fibermap)
     addkeys(fibermap.meta, hdr)
 
@@ -415,10 +429,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- Look for fiberassign file, gzipped or not
     if 'TILEID' in rawheader:
         tileid = rawheader['TILEID']
-        rawfafile = findfile('fiberassign',night=night,expid=expid,tile=tileid)
-        try:
-            rawfafile = checkgzip(rawfafile)
-        except FileNotFoundError:
+        rawfafile, exists = findfile('fiberassign', night=night, expid=expid,
+                tile=tileid, return_exists=True)
+        if not exists:
             log.error("%s not found; looking in earlier exposures", rawfafile)
             rawfafile = find_fiberassign_file(night, expid, tileid=tileid)
 

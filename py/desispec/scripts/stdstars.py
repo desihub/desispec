@@ -25,6 +25,9 @@ from desispec.io.filters import load_legacy_survey_filter, load_gaia_filter
 from desiutil.dust import dust_transmission,extinction_total_to_selective_ratio, SFDMap, gaia_extinction
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
+from desispec.fiberflat import apply_fiberflat
+from desispec.sky import subtract_sky
+
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
     parser.add_argument('--frames', type = str, default = None, required=True, nargs='*',
@@ -50,12 +53,12 @@ def parse(options=None):
     parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
 
     log = get_logger()
-    args = None
+
+    args = parser.parse_args(options)
+
     if options is None:
-        args = parser.parse_args()
         cmd = ' '.join(sys.argv)
     else:
-        args = parser.parse_args(options)
         cmd = 'desi_fit_stdstars ' + ' '.join(options)
 
     log.info('RUNNING {}'.format(cmd))
@@ -111,10 +114,13 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
 
-def main(args, comm=None) :
+def main(args=None, comm=None) :
     """ finds the best models of all standard stars in the frame
     and normlize the model flux. Output is written to a file and will be called for calibration.
     """
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 
@@ -346,21 +352,25 @@ def main(args, comm=None) :
             frames.pop(cam)
             continue
 
-        flat=flats[cam]
-        for frame,sky in zip(frames[cam],skies[cam]) :
-            frame.flux = frame.flux[starindices]
-            frame.ivar = frame.ivar[starindices]
-            frame.ivar *= (frame.mask[starindices] == 0)
-            frame.ivar *= (sky.ivar[starindices] != 0)
-            frame.ivar *= (sky.mask[starindices] == 0)
-            frame.ivar *= (flat.ivar[starindices] != 0)
-            frame.ivar *= (flat.mask[starindices] == 0)
-            frame.flux *= ( frame.ivar > 0) # just for clean plots
-            for star in range(frame.flux.shape[0]) :
-                ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
-                if ok.size > 0 :
-                    frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
-            frame.resolution_data = frame.resolution_data[starindices]
+        flat=flats[cam][starindices]
+
+        for i in range(len(frames[cam])):
+            frame = frames[cam][i][starindices]
+            sky = skies[cam][i][starindices]
+
+            #- don't use masked or ivar=0 data
+            frame.ivar *= (frame.mask == 0)
+            frame.ivar *= (sky.ivar != 0)
+            frame.ivar *= (sky.mask == 0)
+            frame.ivar *= (flat.ivar != 0)
+            frame.ivar *= (flat.mask == 0)
+            frame.flux *= (frame.ivar > 0) # just for clean plots
+
+            apply_fiberflat(frame, flat)
+            subtract_sky(frame, sky)
+
+            #- keep newly flat-fielded sky-subtracted frame
+            frames[cam][i] = frame
 
         nframes=len(frames[cam])
         if nframes>1 :
@@ -423,7 +433,7 @@ def main(args, comm=None) :
 
     log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
     if validstars.size == 0 :
-        log.error("No valid star")
+        log.error(f"No valid star for sp{spectrograph}")
         sys.exit(12)
 
     validstars = indices[validstars]
@@ -730,3 +740,8 @@ def main(args, comm=None) :
         io.write_stdstar_models(args.outfile,normflux,stdwave,
                 starfibers[fitted_stars],data,
                 fibermap, input_frames_table)
+
+    if comm is not None:
+        comm.barrier()
+
+    return 0

@@ -18,6 +18,8 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
+from desispec.io.util import get_tempfilename
+
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
         "one frame with specex")
@@ -43,15 +45,15 @@ def parse(options=None):
     parser.add_argument("--disable-merge", action = 'store_true',
                         help="disable merging fiber bundles")
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
-def main(args, comm=None):
+def main(args=None, comm=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 
@@ -197,6 +199,8 @@ def main(args, comm=None):
         else:
             log.info(f"proc {rank} succeeded generating {outbundlefits}")
 
+    if args.disable_merge:
+        return failcount
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
@@ -220,7 +224,12 @@ def main(args, comm=None):
             sys.stdout.flush()
             time.sleep(5.)
 
-            merge_psf(inputs,outfits)
+            try:
+                merge_psf(inputs,outfits)
+            except Exception as e:
+                log.error(e)
+                log.error("merging failed for {}".format(outfits))
+                failcount += 1
 
             log.info('done merging')
 
@@ -263,9 +272,9 @@ def run(comm,cmds,cameras):
                  continuing with the others and not crashing.
                  
     The function first defines the procedure to call specex for a given ccd image 
-    with the "fitbundles" inline function, passes the fitbundles function 
+    with the "fitframe" inline function, passes the fitframe function
     to the Schedule initialization method, and then calls the run method of the 
-    Schedule class to call fitbundles len(cameras) times, each with group_size = 20 
+    Schedule class to call fitframe len(cameras) times, each with group_size = 20
     processes.
     """
 
@@ -277,17 +286,18 @@ def run(comm,cmds,cameras):
     group_size = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
-    def fitbundles(comm,job):
+    def fitframe(groupcomm,worldcomm,job):
         '''
         Run PSF fit with specex on all bundles for a single ccd image 
 
         Args:
-            comm: MPI communicator 
-            job:  job index corresponding to position in list of cmds entries 
+            groupcomm: job-specific MPI communicator
+            worldcomm: world MPI communicator
+            job:       job index corresponding to position in list of cmds entries
             
         This is an inline function for use by desispec.workflow.schedule.Schedule, 
         i.e. via the lines
-            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
+            sc = Schedule(fitframe,comm=comm,njobs=len(cameras),group_size=group_size)
             sc.run()
         immediately after this inline function definition. 
         
@@ -300,43 +310,45 @@ def run(comm,cmds,cameras):
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
             ...
-        From the point of view of the Schedule.run method, it is running fitbundles 
+        From the point of view of the Schedule.run method, it is running fitframe
         njobs = len(cameras) times, each time using group_size processes with a new 
         value of job in the range 0 to len(cameras)-1.  
         '''
-      
-        rank = comm.Get_rank()
+
+        error_count = 0
+        grouprank = groupcomm.Get_rank()
+        worldrank = worldcomm.Get_rank()
         camera = cameras[job]
         if not camera in cmds:
             log.error(f'FAILED: commands for camera {camera} not found for'+
-                      f' MPI group ranks {rank}-{rank+group_size-1}')
-            return        
-        if camera in cmds:
+                      f' MPI group rank {grouprank} and world rank {worldrank}')
+            error_count += 1
+        else:
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
-            if rank == 0:
+            if grouprank == 0:
                 t0 = time.time()
                 timestamp = time.asctime()
-                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
-                         f' fitting PSF for {camera} at {timestamp}')
+                log.info(f'MPI ranks {worldrank}-{worldrank+group_size-1}'
+                         f' fitting PSF for {camera} in job {job} at {timestamp}')
             try:
-                main(cmdargs, comm=comm)
+                main(cmdargs, comm=groupcomm)
             except Exception as e:
-                 if rank == 0:
-                     log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
+                 if grouprank == 0:
+                     log.error(f'FAILED: MPI ranks {worldrank}-{worldrank+group_size-1}'+
                                f' on camera {camera}')
                      log.error('FAILED: {}'.format(cmds[camera]))
                      log.error(e)
-            if rank == 0:
+                     error_count += 1
+            if grouprank == 0:
                 specex_time = time.time() - t0
                 log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
 
-        return
+        return error_count
 
-    sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
-    sc.run()
+    sc = Schedule(fitframe,comm=comm,njobs=len(cameras),group_size=group_size)
 
-    return
+    return sc.run()
 
 def compatible(head1, head2) :
     """
@@ -413,7 +425,7 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    tmpfile = output+'.tmp'
+    tmpfile = get_tempfilename(output)
     psf_hdulist.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
@@ -616,7 +628,7 @@ def mean_psf(inputs, output):
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
 
     # save output PSF
-    tmpfile = output+'.tmp'
+    tmpfile = get_tempfilename(output)
     hdulist.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile, output)
     log.info("wrote {}".format(output))

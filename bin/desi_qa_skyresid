@@ -8,9 +8,9 @@
 This script generates QA related to a production
 """
 
+import sys
 import desispec.scripts.skysubresid as skysubresid
-
 
 if __name__ == '__main__':
     args = skysubresid.parse()
-    skysubresid.main(args)
+    sys.exit(skysubresid.main(args))

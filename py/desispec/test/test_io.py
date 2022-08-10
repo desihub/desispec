@@ -329,6 +329,17 @@ class TestIO(unittest.TestCase):
         self.assertEqual(header['BAR'], 1)
         self.assertEqual(header.comments['BAR'], 'biz bat')
 
+        #- fitsio.FITSHDR -> fits.Header
+        hlist = [
+                {'name':'A', 'value':1, 'comment':'blat'},
+                {'name':'B', 'value':'xyz', 'comment':'foo'},
+                ]
+        header = fitsheader(fitsio.FITSHDR(hlist))
+        self.assertTrue(isinstance(header, fits.Header))
+        self.assertEqual(header['A'], 1)
+        self.assertEqual(header['B'], 'xyz')
+        self.assertEqual(header.comments['B'], 'foo')
+
         #- Can't convert and int into a fits Header
         self.assertRaises(ValueError, fitsheader, (1,))
 
@@ -380,6 +391,14 @@ class TestIO(unittest.TestCase):
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
             self.assertEqual(frame.meta['BLAT'], read_meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], read_meta['FOO'])
+
+        #- read_frame works even with "wrong" .fits / .fits.gz
+        if self.testfile.endswith('.fits'):
+            frame = read_frame(self.testfile + '.gz')  # finds file anyway
+        elif self.testfile.endswith('.fits.gz'):
+            frame = read_frame(self.testfile[:-3])     # finds file anyway
+        else:
+            raise ValueError(f'unrecognized extension for {self.testfile=}')
 
         #- Test float32 on disk vs. float64 in memory
         for extname in ['FLUX', 'IVAR', 'RESOLUTION']:
@@ -564,6 +583,15 @@ class TestIO(unittest.TestCase):
             else:
                 self.assertEqual(c1.dtype.kind, c2.dtype.kind)
                 self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
+
+        #- read_fibermap also works with open file pointer
+        with fitsio.FITS(self.testfile) as fp:
+            fm1 = read_fibermap(fp)
+            self.assertTrue(np.all(fm1 == fm))
+
+        with fits.open(self.testfile) as fp:
+            fm2 = read_fibermap(fp)
+            self.assertTrue(np.all(fm2 == fm))
 
     def test_stdstar(self):
         """Test reading and writing standard star files.
@@ -754,9 +782,30 @@ class TestIO(unittest.TestCase):
         file2 = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                     os.environ['SPECPROD'],'exposures',str(kwargs['night']),
                     '{expid:08d}'.format(**kwargs),
-                    'sky-{camera}-{expid:08d}.fits'.format(**kwargs))
+                    'sky-{camera}-{expid:08d}.fits.gz'.format(**kwargs))
 
         self.assertEqual(file1, file2)
+
+        # canonical case is gzipped, but if non-gzipped version exists
+        # return that instead
+        assert file1.endswith('.gz')
+        os.makedirs(os.path.dirname(file1), exist_ok=True)
+        file1nogzip = file1[:-3]
+        fx = open(file1nogzip, 'w')
+        fx.close()
+        file3 = findfile('sky', **kwargs)
+        self.assertEqual(file1nogzip, file3)
+
+        # and also the reverse: canonical non-gzip will return gzip if
+        # for whatever reason that exists
+        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertFalse(file4.endswith('.gz'))
+        file5 = file4 + '.gz'
+        os.makedirs(os.path.dirname(file5), exist_ok=True)
+        fx = open(file5, 'w')
+        fx.close()
+        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertEqual(file6, file5)  #- not file4
 
         # url1 = filepath2url(file1)
         url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
@@ -824,13 +873,13 @@ class TestIO(unittest.TestCase):
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'],
                          'healpix', 'main', 'bright', '52', '5286',
-                         'spectra-main-bright-5286.fits')
+                         'spectra-main-bright-5286.fits.gz')
         self.assertEqual(a, b)
         a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'], 'tiles', 'cumulative',
                          '68000', '20200314',
-                         'spectra-2-68000-thru20200314.fits')
+                         'spectra-2-68000-thru20200314.fits.gz')
         self.assertEqual(a, b)
 
         #- cumulative vs. pernight
@@ -849,6 +898,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits.gz'))
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
 
@@ -859,6 +910,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits.gz'))  #- no "thru"
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
 
@@ -874,6 +927,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits.gz'))  #- exp not thru
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
@@ -966,7 +1021,7 @@ class TestIO(unittest.TestCase):
         with open(x,'a') as f:
             pass
         # Find it
-        mfile = search_for_framefile('frame-b0-000123.fits')
+        mfile = search_for_framefile('frame-b0-000123.fits.gz')
         self.assertEqual(x, mfile)
 
     def test_get_reduced_frames(self):
@@ -1034,7 +1089,7 @@ class TestIO(unittest.TestCase):
         paths = download(filename)
         self.assertEqual(paths[0], filename)
         self.assertTrue(os.path.exists(paths[0]))
-        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits',
+        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits.gz',
                                          auth=_auth_cache['data.desi.lbl.gov'])
         n.authenticators.assert_called_once_with('data.desi.lbl.gov')
         #

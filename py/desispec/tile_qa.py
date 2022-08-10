@@ -17,7 +17,7 @@ from desiutil.log import get_logger
 
 from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
-from desispec.io.util import replace_prefix
+from desispec.io.util import replace_prefix, checkgzip
 from desispec.maskbits import fibermask
 
 
@@ -44,15 +44,67 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
 
     log=get_logger()
 
-    # get list of exposures used for the tile
+    # tile folder
     tiledir=f"{specprod_dir}/tiles/{group}/{tileid:d}/{night}"
-    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-*{night}.fits"))
-    if len(spectra_files)==0 :
-        log.error(f"no spectra files in {tiledir}")
-        return None, None
 
-    fmap=read_fibermap(spectra_files[0])
-    expids=np.unique(fmap["EXPID"])
+    # collect fibermaps and scores of all coadds
+    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits*"))
+
+
+    fibermaps=[]
+    scores=[]
+    redshifts=[]
+    exp_fibermaps=[] # fibermaps of all frames
+    ### zqsos=[]
+    for coadd_file in coadd_files :
+        log.info("reading {}".format(coadd_file))
+        fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
+        exp_fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"EXP_FIBERMAP")))
+        scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
+
+
+        redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
+        extname="REDSHIFTS"
+        if not os.path.isfile(redrock_file) :
+            zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
+            if os.path.isfile(zbest_file) :
+                log.warning("switch to zbest file {}".format(zbest_file))
+                redrock_file = zbest_file
+                extname="ZBEST"
+        log.info("reading {}".format(redrock_file))
+        zz=Table.read(redrock_file,extname)
+        zz.remove_column("COEFF") # 1D array per entry, not needed
+        redshifts.append(_rm_meta_keywords(zz))
+
+
+        #- SB: commenting out zqso code since these have been replaced by
+        #- zmtl, but that has to run after QA to be able to update zwarn.
+        #- Something like zqso could be revived in QA after the QN afterburner
+        #- is finished, but data model details will likely be different.
+
+
+        ### zqso_file = coadd_file.replace("coadd","zqso")
+        ### if not os.path.isfile(zqso_file) :
+        ###     log.warning("missing {}".format(zqso_file))
+        ### else :
+        ###     log.info("reading {}".format(zqso_file))
+        ###     zqso=Table.read(zqso_file,"ZQSO")
+        ###     zqsos.append(_rm_meta_keywords(zqso))
+
+
+    log.info("stacking")
+    fibermap=vstack(fibermaps)
+    scores=vstack(scores)
+    redshifts=vstack(redshifts)
+    ### if len(zqsos)>0 :
+    ###     zqsos=vstack(zqsos)
+    ### else :
+    ###     zqsos=None
+    exp_fibermap=vstack(exp_fibermaps)
+    targetids=fibermap["TARGETID"]
+
+    # get list of exposures used for the tile
+    expids = np.unique(exp_fibermap["EXPID"])
     lexpids=list(expids)
     log.info(f"for tile={tileid} night={night} expids={lexpids}")
 
@@ -64,7 +116,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     exposure_fiberqa_tables = []
     exposure_petalqa_tables = []
     for expid in expids :
-        exposure_night = (fmap["NIGHT"][fmap["EXPID"]==expid][0])
+        exposure_night = (exp_fibermap["NIGHT"][exp_fibermap["EXPID"]==expid][0])
         filename=findfile("exposureqa",night=exposure_night,expid=expid,specprod_dir=exposure_qa_dir)
         if not os.path.isfile(filename) :
             log.info("running missing exposure qa")
@@ -78,6 +130,14 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         else :
             log.info(f"reading {filename}")
             exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
+        # AR add info if that expid is used for each petal
+        exposure_petalqa_table["ISUSED"] = np.zeros(len(exposure_petalqa_table), dtype=bool)
+        for petal in np.unique(exposure_petalqa_table["PETAL_LOC"]):
+            petal_expids = np.unique(exp_fibermap["EXPID"][exp_fibermap["PETAL_LOC"] == petal])
+            if expid in petal_expids:
+                exposure_petalqa_table["ISUSED"][exposure_petalqa_table["PETAL_LOC"] == petal] = True
+            else:
+                log.warning("EXPID={} is not used in coadds for PETAL_LOC={}".format(expid, petal))
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
             # AR case no GOALTIME, MINTFRAC (can happen for early tiles):
@@ -87,13 +147,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
                 fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
-                if not os.path.isfile(fafn):
-                    log.warning("missing {}".format(fafn))
-                    fafn=fafn.replace(".fits.gz",".fits")
-                    log.warning("trying {}...".format(fafn))
-                    if not os.path.isfile(fafn):
-                        log.error("missing {}".format(fafn))
-                        raise FileNotFoundError("missing {}".format(fafn))
+                fafn = checkgzip(fafn)
                 fahdr = fitsio.read_header(fafn, 0)
                 if "TARG" not in fahdr:
                     log.error("TARG keyword missing in {} header".format(fafn))
@@ -133,56 +187,6 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         exposure_fiberqa_tables = exposure_fiberqa_tables[0]
         exposure_petalqa_tables = exposure_petalqa_tables[0]
 
-    # collect fibermaps and scores of all coadds
-    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits"))
-
-    fibermaps=[]
-    scores=[]
-    redshifts=[]
-    exp_fibermaps=[] # fibermaps of all frames
-    ### zqsos=[]
-    for coadd_file in coadd_files :
-        log.info("reading {}".format(coadd_file))
-        fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
-        exp_fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"EXP_FIBERMAP")))
-        scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
-
-        redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
-        extname="REDSHIFTS"
-        if not os.path.isfile(redrock_file) :
-            zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
-            if os.path.isfile(zbest_file) :
-                log.warning("switch to zbest file {}".format(zbest_file))
-                redrock_file = zbest_file
-                extname="ZBEST"
-        log.info("reading {}".format(redrock_file))
-        zz=Table.read(redrock_file,extname)
-        zz.remove_column("COEFF") # 1D array per entry, not needed
-        redshifts.append(_rm_meta_keywords(zz))
-
-        #- SB: commenting out zqso code since these have been replaced by
-        #- zmtl, but that has to run after QA to be able to update zwarn.
-        #- Something like zqso could be revived in QA after the QN afterburner
-        #- is finished, but data model details will likely be different.
-
-        ### zqso_file = coadd_file.replace("coadd","zqso")
-        ### if not os.path.isfile(zqso_file) :
-        ###     log.warning("missing {}".format(zqso_file))
-        ### else :
-        ###     log.info("reading {}".format(zqso_file))
-        ###     zqso=Table.read(zqso_file,"ZQSO")
-        ###     zqsos.append(_rm_meta_keywords(zqso))
-
-    log.info("stacking")
-    fibermap=vstack(fibermaps)
-    scores=vstack(scores)
-    redshifts=vstack(redshifts)
-    ### if len(zqsos)>0 :
-    ###     zqsos=vstack(zqsos)
-    ### else :
-    ###     zqsos=None
-    exp_fibermap=vstack(exp_fibermaps)
-    targetids=fibermap["TARGETID"]
 
     # and / or of the fiberstatus of the individual exposures
     if fibermap['TARGETID'].size == exp_fibermap['TARGETID'].size :
@@ -272,9 +276,20 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj]*((exposure_fiberqa_tables['QAFIBERSTATUS'][jj]&bad_fibers_mask)==0))
 
-    # set bit of LOWEFFTIME per fiber
+    # AR set bit of LOWEFFTIME per fiber using the median of EBV>0 fibers, with a EBVFAC-like dependence
+    # AR (see https://github.com/desihub/desispec/pull/1722)
     minimal_efftime = qa_params["tile_qa"]["fiber_rel_mintfrac"]*exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]
-    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"]<minimal_efftime)[0]
+    ebvfac_coeff = 2.165
+    ebvfac_fibers = 10. ** (ebvfac_coeff * tile_fiberqa_table["EBV"] / 2.5)
+    sel = tile_fiberqa_table["EBV"] > 0
+    if sel.sum() == 0:
+        ebvmed = 0
+        log.info("zero fibers with EBV>0 -> setting ebvmed=0 for LOWEFFTIME criterion")
+    else:
+        ebvmed = np.median(tile_fiberqa_table["EBV"][sel])
+        log.info("using {} EBV>0 fibers to set ebvmed={:.2f}".format(sel.sum(), ebvmed))
+    ebvfac_med = 10. ** (ebvfac_coeff * ebvmed / 2.5)
+    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"] * (ebvfac_fibers / ebvfac_med) ** 2 < minimal_efftime)[0]
     tile_fiberqa_table['QAFIBERSTATUS'][low_efftime_fibers] |= fibermask.mask("LOWEFFTIME")
 
     # good fibers are the fibers with efftime above the threshold
@@ -289,7 +304,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
     tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=np.int16)
     # all of these will be means of inputs, so get float32 output dtype
-    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME',
+    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'NCFRAME',
           'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',
           'BTHRUFRAC', 'RTHRUFRAC', 'ZTHRUFRAC']
     for k in keys :
@@ -297,6 +312,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
 
     for petal in petals :
         ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
+        # AR add constraint that expid is used for the petal
+        ii &= exposure_petalqa_tables["ISUSED"]
         for k in keys :
             vals=exposure_petalqa_tables[k][ii]
             nonnull=(vals!=0)

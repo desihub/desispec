@@ -20,12 +20,14 @@ import astropy.units as u
 import astropy.io.fits as fits
 import astropy.table
 from astropy.table import Table
+import fitsio
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 from desiutil.log import get_logger
 
-from .util import fitsheader, native_endian, add_columns
+from .util import fitsheader, native_endian, add_columns, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 from .frame import read_frame
@@ -73,7 +75,7 @@ def write_spectra(outfile, spec, units=None):
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
-    fmap = spec.fibermap.copy()
+    fmap = encode_table(spec.fibermap.copy())
     fmap.meta['EXTNAME'] = 'FIBERMAP'
     fmap.meta['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(fmap.meta)
@@ -96,7 +98,7 @@ def write_spectra(outfile, spec, units=None):
 
     # Optional: exposure-fibermap, used in coadds
     if spec.exp_fibermap is not None:
-        expfmap = spec.exp_fibermap.copy()
+        expfmap = encode_table(spec.exp_fibermap.copy())
         expfmap.meta["EXTNAME"] = "EXP_FIBERMAP"
         with warnings.catch_warnings():
             #- nanomaggies aren't an official IAU unit but don't complain
@@ -141,7 +143,7 @@ def write_spectra(outfile, spec, units=None):
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
             hdu = fits.ImageHDU(name="{}_MASK".format(band.upper()))
-            hdu.data = spec.mask[band].astype(np.uint32)
+            hdu.data = spec.mask[band].astype(np.int32)
             all_hdus.append(hdu)
 
         if spec.resolution_data is not None:
@@ -159,7 +161,8 @@ def write_spectra(outfile, spec, units=None):
         scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
         scores_tbl.meta['EXTNAME'] = 'SCORES'
         all_hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
-        if spec.scores_comments is not None : # add comments in header
+        # add comments in header
+        if hasattr(spec, 'scores_comments') and spec.scores_comments is not None:
             hdu=all_hdus['SCORES']
             for i in range(1,999):
                 key = 'TTYPE'+str(i)
@@ -174,8 +177,9 @@ def write_spectra(outfile, spec, units=None):
         all_hdus.append(fits.convenience.table_to_hdu(extra_catalog))
 
     t0 = time.time()
-    all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
-    os.rename("{}.tmp".format(outfile), outfile)
+    tmpfile = get_tempfilename(outfile)
+    all_hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -198,6 +202,7 @@ def read_spectra(infile, single=False):
 
     """
     log = get_logger()
+    infile = checkgzip(infile)
     ftype = np.float64
     if single:
         ftype = np.float32
@@ -207,12 +212,12 @@ def read_spectra(infile, single=False):
         raise IOError("{} is not a file".format(infile))
 
     t0 = time.time()
-    hdus = fits.open(infile, mode="readonly")
+    hdus = fitsio.FITS(infile, mode='r')
     nhdu = len(hdus)
 
     # load the metadata.
 
-    meta = dict(hdus[0].header)
+    meta = dict(hdus[0].read_header())
 
     # initialize data objects
 
@@ -234,15 +239,15 @@ def read_spectra(infile, single=False):
     # the Spectra object.
 
     for h in range(1, nhdu):
-        name = hdus[h].header["EXTNAME"]
+        name = hdus[h].read_header()["EXTNAME"]
         if name == "FIBERMAP":
-            fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+            fmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == "EXP_FIBERMAP":
-            expfmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+            expfmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == "SCORES":
-            scores = encode_table(Table(hdus[h].data, copy=True).as_array())
+            scores = encode_table(Table(hdus[h].read(), copy=True).as_array())
         elif name == 'EXTRA_CATALOG':
-            extra_catalog = encode_table(Table(hdus[h].data, copy=True).as_array())
+            extra_catalog = encode_table(Table(hdus[h].read(), copy=True).as_array())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -255,30 +260,31 @@ def read_spectra(infile, single=False):
             if type == "WAVELENGTH":
                 if wave is None:
                     wave = {}
-                wave[band] = native_endian(hdus[h].data.astype(ftype))
+                #- Note: keep original float64 resolution for wavelength
+                wave[band] = native_endian(hdus[h].read())
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
-                flux[band] = native_endian(hdus[h].data.astype(ftype))
+                flux[band] = native_endian(hdus[h].read().astype(ftype))
             elif type == "IVAR":
                 if ivar is None:
                     ivar = {}
-                ivar[band] = native_endian(hdus[h].data.astype(ftype))
+                ivar[band] = native_endian(hdus[h].read().astype(ftype))
             elif type == "MASK":
                 if mask is None:
                     mask = {}
-                mask[band] = native_endian(hdus[h].data.astype(np.uint32))
+                mask[band] = native_endian(hdus[h].read().astype(np.uint32))
             elif type == "RESOLUTION":
                 if res is None:
                     res = {}
-                res[band] = native_endian(hdus[h].data.astype(ftype))
+                res[band] = native_endian(hdus[h].read().astype(ftype))
             else:
                 # this must be an "extra" HDU
                 if extra is None:
                     extra = {}
                 if band not in extra:
                     extra[band] = {}
-                extra[band][type] = native_endian(hdus[h].data.astype(ftype))
+                extra[band][type] = native_endian(hdus[h].read().astype(ftype))
 
     hdus.close()
     duration = time.time() - t0
@@ -316,6 +322,7 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         The object containing the data read from disk.
 
     """
+    filename = checkgzip(filename)
     fr = read_frame(filename)
     if fr.fibermap is None:
         raise RuntimeError("reading Frame files into Spectra only supported if a fibermap exists")
@@ -410,7 +417,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits')
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*')
 
     if len(specfiles) == 0:
         raise ValueError(f'No spectra found in {tiledir}')

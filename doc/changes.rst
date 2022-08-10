@@ -2,13 +2,121 @@
 desispec Change Log
 ===================
 
-0.52.0 (unreleased)
+0.53.3 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.53.2 (2022-07-22)
+-------------------
+
+* Validate redshift catalog metadata and generate Tractor photometric catalogs
+  for all objects with a redshift in a given data release (PR `#1716`_).
+* Add batch script for :command:`desi_proc_tilenight` jobs (PR `#1792`_).
+* Add :command:`desi_psf_fit` which wraps specex_ (PR `#1794`_).
+* Parallelize :command:`desi_night_qa` (PR `#1795`_).
+* Enable redshift status board (PR `#1797`_).
+* Correct flux units for emission lines (PR `#1798`_).
+* Update QSO afterburners for new templates (PR `#1805`_).
+* Fix function used by fastspecfit_ (PR `#1808`_).
+
+.. _`#1716`: https://github.com/desihub/desispec/pull/1716
+.. _`#1792`: https://github.com/desihub/desispec/pull/1792
+.. _`#1794`: https://github.com/desihub/desispec/pull/1794
+.. _`#1795`: https://github.com/desihub/desispec/pull/1795
+.. _`#1797`: https://github.com/desihub/desispec/pull/1797
+.. _`#1798`: https://github.com/desihub/desispec/pull/1798
+.. _`#1805`: https://github.com/desihub/desispec/pull/1808
+.. _`#1808`: https://github.com/desihub/desispec/pull/1808
+.. _fastspecfit: https://github.com/desihub/fastspecfit
+.. _specex: https://github.com/desihub/specex
+
+
+0.53.1 (2022-05-19)
+-------------------
+
+* QSO afterburners use temporary file when writing (PR `#1768`_).
+* Fix ``desi_run_night`` crash with non-consecutive obs of same tile
+  (PR `#1771`_).
+* Set batch-friendly matplotlib backend (PR `#1772`_).
+* Increase stdstar job requested time by 2 min (direct push, no PR).
+
+.. _`#1768`: https://github.com/desihub/desispec/pull/1768
+.. _`#1771`: https://github.com/desihub/desispec/pull/1771
+.. _`#1772`: https://github.com/desihub/desispec/pull/1772
+
+0.53.0 (2022-05-15)
+-------------------
+
+Major:
+
+* gzip intermediate files, including spectra files (PR `#1756`_).
+* refactor pipeline to call functions instead of spawn scripts for
+  MPI compatibility on NERSC Perlmutter.  No user facing impact but major
+  under-the-hood change (PR `#1743`_).
+
+Minor / backwards compatible:
+
+* Add ifmain wrapper to setup.py for testing (PR `#1745`_).
+* Allow QA of already QAed tiles (PR `#1747`_).
+* Update recipe for find_overscan_cosmic_trails (PR `#1748`_, `#1758`_).
+* desi_daily_proc_manager retry failed sbatch before giving up (PR `#1749`_).
+* Enable trace shifts by default (PR `#1750`_).
+* Improve error handling for specex (PR `#1751`_).
+* ``desi_group_spectra --coadd`` option (PR `#1753`_).
+* QA bugfix: handle nqso_rr if no valid fibers (PR `#1754`_).
+* Improve fiberflat vs. humidity (PR `#1757`_).
+* Night QA use findfile and fitsio (PR `#1766`_.)
+
+.. _`#1743`: https://github.com/desihub/desispec/pull/1743
+.. _`#1745`: https://github.com/desihub/desispec/pull/1745
+.. _`#1747`: https://github.com/desihub/desispec/pull/1747
+.. _`#1748`: https://github.com/desihub/desispec/pull/1748
+.. _`#1749`: https://github.com/desihub/desispec/pull/1749
+.. _`#1750`: https://github.com/desihub/desispec/pull/1750
+.. _`#1751`: https://github.com/desihub/desispec/pull/1751
+.. _`#1753`: https://github.com/desihub/desispec/pull/1753
+.. _`#1754`: https://github.com/desihub/desispec/pull/1754
+.. _`#1756`: https://github.com/desihub/desispec/pull/1756
+.. _`#1757`: https://github.com/desihub/desispec/pull/1757
+.. _`#1758`: https://github.com/desihub/desispec/pull/1758
+.. _`#1766`: https://github.com/desihub/desispec/pull/1766
+
+0.52.0 (2022-04-19)
+-------------------
+
+Used to create combined ``zcatalog/zall-*.fits`` files in fuji and guadalupe.
+
+* qproc/nightwatch: fix deggy=0 for traceshifts (PR `#1719`_).
+* Ignore overscan rows with large cosmic charge deposit in nearby columns
+  (PR `#1720`_)
+* Add tools to create combined/summary catalogs for specprods (PR `#1721`_).
+* Use tile-median E(B-V) for LOWEFFTIME QA calculation (PR `#1722`_).
+* tile QA: highlight secondary-only fibers in z vs. fiber (PR `#1729`_).
+* Enable GPUs on perlmutter in rrdesi_mpi slurm script (PR `#1730`_, `#1734`_).
+* Adjust main survey minimum exposure efftime_etc (PR `#1731`_).
 * Warning files produced by QSO afterburners will now be called
   ``.misscamera.txt`` (PR `#1732`_).
+* Cleanup: make ``find_overscan_cosmic_trails`` separate function for testing
+  (PR `#1733`_).
+* Pipeline: add CTE flat class to dashboard so it reflects expected files
+  (PR `#1736`_).
+* Fix traceshift infinite iteration bug (PR `#1742`_).
+* Fix doctest config for GitHub actions (PR `#1744`_).
 
+.. _`#1719`: https://github.com/desihub/desispec/pull/1719
+.. _`#1720`: https://github.com/desihub/desispec/pull/1720
+.. _`#1721`: https://github.com/desihub/desispec/pull/1721
+.. _`#1722`: https://github.com/desihub/desispec/pull/1722
+.. _`#1729`: https://github.com/desihub/desispec/pull/1729
+.. _`#1730`: https://github.com/desihub/desispec/pull/1730
+.. _`#1731`: https://github.com/desihub/desispec/pull/1731
 .. _`#1732`: https://github.com/desihub/desispec/pull/1732
+.. _`#1733`: https://github.com/desihub/desispec/pull/1733
+.. _`#1734`: https://github.com/desihub/desispec/pull/1734
+.. _`#1736`: https://github.com/desihub/desispec/pull/1736
+.. _`#1742`: https://github.com/desihub/desispec/pull/1742
+.. _`#1744`: https://github.com/desihub/desispec/pull/1744
 
 0.51.13 (2022-02-28)
 --------------------

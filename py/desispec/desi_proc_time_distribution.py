@@ -6,7 +6,6 @@ from astropy.table import QTable,vstack
 import pandas as pd
 import time,datetime
 import numpy as np
-import psutil
 from os import listdir
 import matplotlib.pyplot as plt
 
@@ -21,7 +20,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
     desi_proc_time_distribution -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
     python3 desi_proc_time_distribution.py -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ 
     Cron job script:
-*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
+*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/workflow/proc_dashboard_funcs.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
 
 
     """
@@ -365,6 +364,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         """ 
         Check if the desi_dailyproc process is running
         """
+        import psutil
         a=psutil.process_iter()
         running='No'
         for p in a:

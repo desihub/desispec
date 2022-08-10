@@ -3,6 +3,7 @@
 
 import argparse
 
+import sys
 from desispec.scripts.submit_night import submit_night
 
 def parse_args():  # options=None):
@@ -71,6 +72,8 @@ def parse_args():  # options=None):
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
+    parser.add_argument("--use-tilenight", action="store_true",
+                        help="Use desi_proc_tilenight for prestdstar, stdstar, and poststdstar steps.")
     args = parser.parse_args()
 
     # convert str lists to actual lists
@@ -92,4 +95,4 @@ def parse_args():  # options=None):
 if __name__ == '__main__':
     args = parse_args()
 
-    submit_night(**args.__dict__)
+    sys.exit(submit_night(**args.__dict__))

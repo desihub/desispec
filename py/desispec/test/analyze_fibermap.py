@@ -27,6 +27,7 @@ from astropy.table import Table
 from astropy.io import fits
 from desispec.io.fibermap import assemble_fibermap, _set_fibermap_columns
 from desispec.io.meta import faflavor2program
+from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger, DEBUG
 # from desiutil.iers import freeze_iers
 
@@ -117,7 +118,7 @@ def main():
             os.makedirs(os.path.dirname(outfile), exist_ok=True)
             log.debug("fibermap = assemble_fibermap(%d, %d)", night, expid)
             fibermap = assemble_fibermap(night, expid)
-            tmpfile = outfile+'.tmp'
+            tmpfile = get_tempfilename(outfile)
             log.debug("fibermap.writeto('%s', output_verify='fix+warn, overwrite=True, checksum=True')", tmpfile)
             fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=True, checksum=True)
             log.debug("os.rename('%s', '%s')", tmpfile, outfile)

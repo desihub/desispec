@@ -33,6 +33,7 @@ from   desispec.io import read_fibermap
 from   desispec.io import findfile
 from   desispec.io import read_table
 from   desispec.io.fluxcalibration import read_flux_calibration
+from   desispec.io.util import get_tempfilename
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
@@ -590,7 +591,7 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
     hdus.append(fits.convenience.table_to_hdu(tsnr2_expid_table))
     hdus.append(fits.convenience.table_to_hdu(tsnr2_frame_table))
 
-    tmpfile = output_fits_filename+'.tmp'
+    tmpfile = get_tempfilename(output_fits_filename)
     hdus.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile,  output_fits_filename)
 
@@ -632,7 +633,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
     log = get_logger()
 
-    cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(prod, night, expid, camera, expid)
+    cframe_filename = findfile('cframe', night, expid, camera, specprod_dir=prod)
     if not os.path.isfile(cframe_filename) :
         return None
 
@@ -690,7 +691,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     #- Write per-expid per-camera output if requested
     if compute_tsnr and table_output_filename is not None :
         Path(os.path.dirname(table_output_filename)).mkdir(parents=True,exist_ok=True)
-        tmpfile = table_output_filename +'.tmp'
+        tmpfile = get_tempfilename(table_output_filename)
         table.write(tmpfile, format='fits', overwrite=True)
         os.rename(tmpfile, table_output_filename)
         log.debug('Successfully wrote {}.'.format(table_output_filename))
@@ -1209,4 +1210,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

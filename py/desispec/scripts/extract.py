@@ -23,6 +23,7 @@ from desiutil.iers import freeze_iers
 from desiutil import depend
 
 from desispec import io
+from desispec.io.util import get_tempfilename
 from desispec.frame import Frame
 from desispec.maskbits import specmask,extractmaskval
 
@@ -70,11 +71,8 @@ def parse(options=None):
     parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
     parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
@@ -133,7 +131,10 @@ def barycentric_correction_multiplicative_factor(header) :
     return val
 
 
-def main(args):
+def main(args=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     if args.mpi:
         from mpi4py import MPI
@@ -429,8 +430,9 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         if args.model is not None:
             modelimage = result['modelimage']
             log.info("Writing model {}".format(args.model))
-            fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
-            os.rename(args.model+'.tmp', args.model)
+            tmpfile = get_tempfilename(args.model)
+            fits.writeto(tmpfile, modelimage, header=frame.meta, overwrite=True, checksum=True)
+            os.rename(tmpfile, args.model)
 
     coordinator.write(finalize_result_and_write_frame, result)
 
@@ -639,7 +641,7 @@ def main_mpi(args, comm=None, timing=None):
         myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
 
     # get the root output file
-    outpat = re.compile(r'(.*)\.fits')
+    outpat = re.compile(r'(.*)\.fits(\.gz)?')
     outmat = outpat.match(args.output)
     if outmat is None:
         raise RuntimeError("extraction output file should have .fits extension")

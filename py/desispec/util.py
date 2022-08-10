@@ -2,7 +2,8 @@
 Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
-
+import argparse
+import inspect
 import os
 import sys
 import errno
@@ -17,46 +18,88 @@ import subprocess as sp
 from desiutil.log import get_logger, INFO
 
 
-def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
+def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False):
     """
-    Runs a command, checking for inputs and outputs
+    Runs a command (function or script), checking for inputs and outputs
 
     Args:
-        cmd : command string to run with subprocess.call()
+        cmd : function object or command string to run with subprocess.call()
+
+    Options:
+        args : list of args to pass to the function or script
+        expandargs: call function with ``cmd(*args)`` instead of ``cmd(args)``
         inputs : list of filename inputs that must exist before running
         outputs : list of output filenames that should be created
         clobber : if True, run even if outputs already exist
+        comm : MPI communicator to pass to cmd(..., comm=comm)
 
     Returns:
-        error code from command or input/output checking; 0 is good
-
-    TODO:
-        Should it raise an exception instead?
+        (result, success)
 
     Notes:
-        If any inputs are missing, don't run cmd.
-        If outputs exist and have timestamps after all inputs, don't run cmd.
 
+      * If any inputs are missing, don't run cmd and return (None, False).
+      * If outputs exist and have timestamps after all inputs,
+        don't run cmd and return (None, True).
+      * If spawned as a script, return (returncode, (returncode==0)).
+      * If function raises an exception, return (exception, False).
+      * If function returns result but outputs are missing, return (result, False).
+      * If function returns result and all outputs are present, return (result, True).
     """
-    log = get_logger()
-    #- Check that inputs exist
-    err = 0
-    input_time = 0  #- timestamp of latest input file
-    for x in inputs:
-        if not os.path.exists(x):
-            log.error("missing input "+x)
-            err = 1
-        else:
-            input_time = max(input_time, os.stat(x).st_mtime)
 
-    if err > 0:
-        log.critical("FAILED err={} {}".format(err, cmd))
-        return err
+    log = get_logger()
+
+    if comm is None:
+        rank = 0
+        size = 1
+    else:
+        from mpi4py import MPI
+        size = comm.Get_size()
+        rank = comm.Get_rank()
+        if rank == 0:
+            log.info('runcmd parallel with {} ranks'.format(size))
+
+    #- construct log string of what will run
+    cmd_callable = isinstance(cmd, collections.abc.Callable)
+    if args is None:
+        args = tuple()
+    elif cmd_callable and not expandargs:
+        args = (args,)
+
+    if cmd_callable:
+        funcname = cmd.__module__ + '.' + cmd.__name__
+        if expandargs:
+            cmdstr = f'{funcname}{tuple(args)}'
+        else:
+            argstr = ', '.join([str(tmp) for tmp in args])
+            cmdstr = f'{funcname}({argstr})'
+    else:
+        cmdstr = cmd + ' ' + ' '.join(args)
+
+    #- Check that inputs exist, and timestamp of latest input file
+    missing_inputs = False
+    input_time = 0
+    if rank == 0:
+        for x in inputs:
+            if not os.path.exists(x):
+                log.error(f"missing input {x}")
+                missing_inputs = True
+            else:
+                input_time = max(input_time, os.stat(x).st_mtime)
+
+    if comm is not None:
+        missing_inputs = comm.bcast(missing_inputs, root=0)
+        input_time = comm.bcast(input_time, root=0)
+
+    if missing_inputs:
+        if rank == 0:
+            log.critical(f"FAILED missing required inputs: {cmdstr}")
+        return None, False      #- results=None, success=False
 
     #- Check if outputs already exist and that their timestamp is after
     #- the last input timestamp
     already_done = (not clobber) and (len(outputs) > 0)
-    if not clobber:
+    if rank == 0 and not clobber:
         for x in outputs:
             if not os.path.exists(x):
                 already_done = False
@@ -65,63 +108,88 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 already_done = False
                 break
 
+    if comm is not None:
+        already_done = comm.bcast(already_done, root=0)
+
     if already_done:
-        log.info("SKIPPING: {}".format(cmd))
-        return 0
+        if rank == 0:
+            log.info("SKIPPING: {}".format(cmdstr, rank))
+        return None, True       #- results=None, success=True
 
     #- Green light to go; print input/output info
     #- Use log.level to decide verbosity, but avoid long prefixes
-    log.info(time.asctime())
-    log.info("RUNNING: {}".format(cmd))
-    if log.level <= INFO:
-        if len(inputs) > 0:
-            print("  Inputs")
-            for x in inputs:
-                print("   ", x)
-        if len(outputs) > 0:
-            print("  Outputs")
-            for x in outputs:
-                print("   ", x)
+    if rank == 0:
+        log.info(time.asctime())
+        log.info("RUNNING: {}".format(cmdstr))
+
+        if log.level <= INFO:
+            if len(inputs) > 0:
+                print("  Inputs")
+                for x in inputs:
+                    print("   ", x)
+            if len(outputs) > 0:
+                print("  Outputs")
+                for x in outputs:
+                    print("   ", x)
 
     #- run command
-    if isinstance(cmd, collections.abc.Callable):
-        if args is None:
-            args = []
+    success = True
+    result = None
+    try:
+        if cmd_callable:
+            if comm is None:
+                result = cmd(*args)
+            else:
+                result = cmd(*args, comm=comm)
+        else:
+            result = sp.call(cmdstr, shell=True)
+            success = (result == 0)
 
-        try:
-            return cmd(*args)
-        except Exception as e:
+    except (BaseException, Exception) as e:
+        frame,filename,line_number,function_name,lines,index = inspect.stack()[1] 
+        log.critical(f'FAILED rank {rank} exception while running {cmdstr} called from line {line_number} in {filename}')
+        result = e
+        success = False
+        if rank == 0:
             import traceback
             lines = traceback.format_exception(*sys.exc_info())
             for line in lines:
                 line = line.strip()
                 log.error(f'{line}')
-            log.critical("FAILED {cmd=} with {args=}".format(err, cmd))
-            raise e
 
-    else:
-        if args is None:
-            err = sp.call(cmd, shell=True)
-        else:
-            raise ValueError("Don't provide args unless cmd is function")
+    #- success only if all succeed
+    if comm is not None:
+        success = np.all(comm.gather(success, root=0))
+        success = comm.bcast(success, root=0)
 
-    log.info(time.asctime())
-    if err > 0:
-        log.critical("FAILED err={} {}".format(err, cmd))
-        return err
+    if not success:
+        if rank == 0:
+            log.critical(f"FAILED {cmdstr}")
+        return result, False
 
     #- Check for outputs
-    err = 0
-    for x in outputs:
-        if not os.path.exists(x):
-            log.error("missing output "+x)
-            err = 2
-    if err > 0:
-        log.critical("FAILED outputs {}".format(cmd))
-        return err
+    outputs_present = True
+    if rank == 0:
+        for x in outputs:
+            if not os.path.exists(x):
+                log.error("missing output {}".format(rank,x))
+                outputs_present = False
 
-    log.info("SUCCESS: {}".format(cmd))
-    return 0
+    if comm is not None:
+        outputs_present = comm.bcast(outputs_present, root=0)
+
+    if outputs_present:
+        if rank == 0:
+            log.info("SUCCESS: {}".format(cmdstr))
+        return result, True
+
+    else:
+        log.critical("FAILED missing outputs {}".format(cmdstr))
+        return result, False
+
+    #- Backstop: we shouldn't have gotten here (should have returned)
+    log.error(f'should not have gotten here')
+    return None, False
 
 def mpi_count_failures(num_cmd, num_err, comm=None):
     """
@@ -419,6 +487,12 @@ def combine_ivar(ivar1, ivar2):
 _matplotlib_backend = None
 
 def set_backend(backend='agg'):
+    """
+    Set matplotlib to use a batch-friendly backend
+
+    This function is safe to call multiple times without tripping on a
+    previously set backend (which remains set)
+    """
     global _matplotlib_backend
     if _matplotlib_backend is None:
         _matplotlib_backend = backend

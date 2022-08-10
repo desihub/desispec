@@ -8,9 +8,10 @@
 This script computes the fiber flat field correction from a DESI continuum lamp frame.
 """
 
+import sys
 import desispec.scripts.sky as sky
 
 
 if __name__ == '__main__':
     args = sky.parse()
-    sky.main(args)
+    sys.exit(sky.main(args))

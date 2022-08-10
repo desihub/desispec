@@ -10,6 +10,7 @@ from desispec.io import shorten_filename
 from desispec.io import write_skycorr
 from desispec.io import read_skycorr_pca
 from desispec.io import read_skygradpca
+from desispec.io import read_tpcorrparam
 from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
@@ -37,10 +38,6 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-extra-variance', action='store_true',
                         help = 'do not increase sky model variance based on chi2 on sky lines')
-    parser.add_argument('--angular-variation-deg', type = int, default = 0, required = False,
-                        help = 'Focal plane variation degree')
-    parser.add_argument('--chromatic-variation-deg', type = int, default = 0, required = False,
-                        help = 'wavelength degree for chromatic x angular variation. If -1, use independent focal plane polynomial corrections for each wavelength (i.e. many more parameters)')
     parser.add_argument('--adjust-wavelength', action='store_true',
                         help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
     parser.add_argument('--adjust-lsf', action='store_true',
@@ -55,16 +52,18 @@ def parse(options=None):
                         help = 'fit offsets in sectors of CCD specified in calib yaml file, like OFFCOLSD:"2057:3715" for columns 2057 to 3715 (excluded), in amplifier D')
     parser.add_argument('--skygradpca', type=str, default=None, required=False,
                         help = 'file name of sky gradient PCA file for fitting sky gradients')
+    parser.add_argument('--tpcorrparam', type=str, default=None, required=False,
+                        help = 'file name of tpcorr parameter file for fitting fiber throughputs')
 
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+    args = parser.parse_args(options)
+
     return args
 
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log=get_logger()
 
@@ -99,16 +98,20 @@ def main(args) :
     else:
         skygradpca = None
 
+    if args.tpcorrparam is not None:
+        tpcorrparam = read_tpcorrparam(args.tpcorrparam)
+    else:
+        tpcorrparam = None
+
+
 
     # compute sky model
     skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
-                           angular_variation_deg=args.angular_variation_deg,\
-                           chromatic_variation_deg=args.chromatic_variation_deg,\
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
                            pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat,
-                           skygradpca=skygradpca
+                           skygradpca=skygradpca, tpcorrparam=tpcorrparam
     )
 
     if args.save_adjustments is not None :

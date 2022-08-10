@@ -35,13 +35,91 @@ class SkyGradPCA(object):
         self.header = header
 
 
-# let's gather a lot of skies and do a PCA
+def configure_for_xyr(skygradpca, x, y, R, skyfibers=None):
+    """Add additional information to a SkyGradPCA object for fitting.
+
+    A SkyGradPCA object contains the templates used to fit out sky gradients.
+    When these templates are actually used in fitting, it's helpful to
+    additionally know things like the locations of the fibers on the particular
+    exposure and the mean resolution matrix for the exposure, etc.  This
+    function mutates the skygradpca object, adding new attributes for fitting.
+
+    Args:
+        skygradpca: SkyGradPCA object to extend
+        x: 1D[nfiber] array of x fiber coordinates on exposure (mm)
+        y: 1D[nfiber] array of y fiber coordinates on exposure (mm)
+        R: list of resolution matrices for each fiber (unitless)
+        skyfibers: (optional) indices of sky fibers in list of all fibers
+    """
+    skygradpca.x = x
+    skygradpca.y = y
+    skygradpca.dx = x - np.mean(x)
+    skygradpca.dy = y - np.mean(y)
+    meanR = np.sum(R) / len(R)
+    deconvskygradpca = np.zeros_like(skygradpca.flux)
+    for i in range(skygradpca.nspec):
+        deconvskygradpca[i] = np.linalg.solve(
+            meanR.T.dot(meanR).toarray(),
+            meanR.T.dot(skygradpca.flux[i]))
+    skygradpca.deconvflux = deconvskygradpca
+    skygradpca.skyfibers = skyfibers
+
+
+def evaluate_model(skygradpca, R, coeff, mean=None):
+    """Evaluate a skygradpca object for a frame.
+
+    The skygradpca object must first be configured for the frame with
+    configure_for_xyr.
+
+    Args:
+        skygradpca: SkyGradPCA instance, configured with configure_for_xyr
+        R: resolution matrices for frame
+        coeff (array, 1D): coefficients for eigenvectors
+        mean (optional): mean sky spectrum
+
+    Returns:
+        sky spectrum (array[nfiber, nwave]) given mean spectrum, per-fiber
+        resolution matrices, and gradient amplitudes
+    """
+
+    nfiber = len(skygradpca.x)
+    sky = np.zeros((nfiber, skygradpca.nwave), dtype='f8')
+    if mean is not None:
+        sky += mean[None, :]
+    for i in range(nfiber):
+        for j in range(skygradpca.nspec):
+            sky[i, :] += (
+                coeff[2*j+0]*skygradpca.deconvflux[j]*skygradpca.dx[i] +
+                coeff[2*j+1]*skygradpca.deconvflux[j]*skygradpca.dy[i])
+        sky[i, :] = R[i].dot(sky[i, :])
+    return sky
+
+
 def gather_skies(fn=None, camera='r', petal=0, n=np.inf, heliocor=True,
-                 tpcorr_power=1, include_mean_sky=True,
                  specprod='daily'):
+    """Gather sframes for performing bulk analyses; e.g., PCA.
+
+    This function gathers residual sky spectra together for many exposures,
+    bundling it together for later analysis.
+
+    Args:
+        fn: (list[str], optional) sframe file names to gather
+            If not set, all of the sframes in the `specprod` product in the
+            `camera` camera and `petal` petal will be gathered.
+        camera: (str, optional) camera to gather
+        petal: (int, optional) petal to gather
+        n: (int, optional) only gather at most this many exposures worth of
+            sky spectra
+        heliocor: (bool, optional) if True, apply correction to sframe files
+            to bring them to earth frame
+
+    Returns:
+        ndarray with EXPID, FIBER, CAMERA, X, Y, WAVE, FLUX, IVAR for each
+        sky fiber from sframe files.
+    """
     if fn is None:
         fn = glob.glob(os.path.join(
-            os.environ['DESI_ROOT'], 'spectro', 'redux', 'fuji',
+            os.environ['DESI_ROOT'], 'spectro', 'redux', specprod,
             'exposures', '*', '*', f'sframe-{camera}{petal}-*'))
         if len(fn) > n:
             fn = fn[:n]
@@ -95,10 +173,24 @@ def gather_skies(fn=None, camera='r', petal=0, n=np.inf, heliocor=True,
 
 
 def make_all_pcs_wrapper(args):
+    """Wrapper function; gathers skies for cam/petal combinations."""
     return gather_skies(fn=args[0], camera=args[1], petal=args[2], **args[3])
 
 
 def compute_pcs(skies, topn=6, niter=5):
+    """Computes principal components of sky spectra.
+
+    This computes the PCs used for the skygradpca product.
+
+    Args:
+        skies: output of gather skies; the sky spectra to do PCA on
+        topn: (optional int) number of PCA to compute
+        niter: (optional int) number of iterations to do, rejecting
+            discrepant pixels.
+
+    Returns:
+        Output of np.linalg.svd on the clipped, mean-subtracted sky spectra.
+    """
     flux = skies['FLUX'].copy()
     nmed = 101
     masklimit = nmed / 1.5
@@ -133,6 +225,24 @@ def compute_pcs(skies, topn=6, niter=5):
 
 def make_all_pcs(specprod, minnight=20200101,
                  cameras='brz', petals=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], **kw):
+    """Makes SkyGradPCA objects derived from residual skies from a specprod.
+
+    This grabs all of the sframe files passing certain criteria using
+    gather_skies and runs a PCA on them, producing SkyGradPCA objects for
+    each camera/petal.  It uses 30 processes, one for each camera/petal
+    combination.
+
+    Args:
+        specprod (str): specprod to use
+        minnight (int, optional): use only spectra taken after this date
+        cameras (str, optional): string containing some of 'brz'
+        petals (list[int], optional): petals to use
+        **kw (dict, optional): additional keywords passed to gather_skies.
+
+    Returns:
+        dictionary[camera, petal] containing the corresponding SkyGradPCA
+        object.
+    """
     exps = Table.read(os.path.join(
         os.environ['DESI_SPECTRO_REDUX'], specprod,
         f'exposures-{specprod}.csv'))
@@ -163,6 +273,7 @@ def make_all_pcs(specprod, minnight=20200101,
 
 
 def make_all_pcs_by_filter(**kw):
+    """Wrapper for make_all_pcs, doing one filter at a time."""
     pcs = dict()
     for f in 'brz':
         newpcs = make_all_pcs(cameras=f, **kw)
@@ -171,6 +282,13 @@ def make_all_pcs_by_filter(**kw):
 
 
 def write_pcs(pcs):
+    """Writes SkyGradPCA objects to DESI_SPECTRO_CALIB.
+
+    Takes the output of make_all_pcs and writes it to DESI_SPECTRO_CALIB.
+
+    Args:
+        pcs (dict[camera, petal] of SkyGradPCA): output of make_all_pcs
+    """
     for camera, petal in pcs:
         sm = desispec.calibfinder.sp2sm(petal)
         pc = pcs[camera, petal]
@@ -182,6 +300,15 @@ def write_pcs(pcs):
         desispec.io.write_skygradpca(calibfile, pc)
 
 
-def doall():
-    pcs = make_all_pcs_by_filter(specprod='fuji')
+def doall(specprod='fuji'):
+    """Perfoms and writes out analysis of sframe sky residuals.
+
+    Gathers all of the sframe residual sky spectra for each camera/petal,
+    runs a PCA on them, makes the appropriate SkyGradPCA objects, and
+    writes them out to DESI_SPECTRO_CALIB.
+
+    Args:
+        specprod (str, optional): specprod to run on
+    """
+    pcs = make_all_pcs_by_filter(specprod)
     write_pcs(pcs)

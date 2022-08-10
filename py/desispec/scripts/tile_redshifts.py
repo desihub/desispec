@@ -2,6 +2,7 @@
 import sys, os, glob
 import re
 import subprocess
+import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
@@ -13,7 +14,6 @@ from desispec.workflow import batch
 from desispec.util import parse_int_args
 
 def parse(options=None):
-    import argparse
 
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
@@ -45,14 +45,15 @@ def parse(options=None):
     # p.add_argument("--scriptdir", type=str, help="script directory")
     # p.add_argument("--per-exposure", action="store_true",
     #         help="fit redshifts per exposure instead of grouping")
-    if options is None:
-        args = p.parse_args()
-    else:
-        args = p.parse_args(options)
+
+    args = p.parse_args(options)
 
     return args
 
-def main(args):
+def main(args=None):
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
     num_error = len(failed_jobs)
     sys.exit(num_error)
@@ -191,7 +192,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
-        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits')
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits*')
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
@@ -378,6 +379,9 @@ def write_redshift_script(batchscript, outdir,
 #SBATCH --exclusive
 {batch_opts}
 
+# batch-friendly matplotlib backend
+export MPLBACKEND=agg
+
 echo --- Starting at $(date)
 START_TIME=$SECONDS
 
@@ -393,7 +397,7 @@ echo""")
             fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
@@ -424,7 +428,7 @@ wait
             fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
@@ -442,7 +446,7 @@ done
 echo
 echo --- Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     colog={logdir}/coadd-$SPECTRO-{suffix}.log
 
@@ -496,7 +500,7 @@ tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
     echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa
+    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
     desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
 fi
@@ -690,7 +694,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
 
     else:
         log.info(f'Loading exposure list from {explist}')
-        if explist.endswith('.fits'):
+        if explist.endswith( ('.fits', '.fits.gz') ):
             exptable = Table.read(explist, format='fits')
         elif explist.endswith('.csv'):
             exptable = Table.read(explist, format='ascii.csv')

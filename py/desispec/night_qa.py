@@ -7,6 +7,7 @@ from glob import glob
 import tempfile
 import textwrap
 from desiutil.log import get_logger
+import multiprocessing
 # AR scientifical
 import numpy as np
 import fitsio
@@ -33,6 +34,9 @@ from matplotlib.ticker import MultipleLocator
 from PIL import Image
 
 log = get_logger()
+
+cameras = ["b", "r", "z"]
+petals = np.arange(10, dtype=int)
 
 def get_nightqa_outfns(outdir, night):
     """
@@ -93,7 +97,7 @@ def get_surveys_night_expids(
     )
     expids, tileids, surveys = [], [], []
     for i in range(len(fns)):
-        hdr = fits.getheader(fns[i], "SPEC")
+        hdr = fitsio.read_header(fns[i], "SPEC")
         if hdr["OBSTYPE"] == "SCIENCE":
             survey = "unknown"
             # AR look for the fiberassign file
@@ -102,7 +106,7 @@ def get_surveys_night_expids(
             # AR - if not present, take FA_SURV
             fafns = glob(os.path.join(os.path.dirname(fns[i]), "fiberassign-??????.fits*"))
             if len(fafns) > 0:
-                fahdr = fits.getheader(fafns[0], 0)
+                fahdr = fitsio.read_header(fafns[0], 0)
                 if "SURVEY" in fahdr:
                     survey = fahdr["SURVEY"]
                 else:
@@ -217,13 +221,13 @@ def get_ctedet_night_expid(night, prod):
                     "preproc",
                     "{}".format(night),
                     "{:08d}".format(expid),
-                    "preproc-??-{:08d}.fits".format(expid),
+                    "preproc-??-{:08d}.fits*".format(expid),
                 )
             )
         )
         # AR if some preproc files, just pick the first one
         if len(fns) > 0:
-            hdr = fits.getheader(fns[0], "IMAGE")
+            hdr = fitsio.read_header(fns[0], "IMAGE")
             if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
                 ctedet_expid = hdr["EXPID"]
                 break
@@ -249,15 +253,15 @@ def get_ctedet_night_expid(night, prod):
                         "exposures",
                         "{}".format(night),
                         "{:08d}".format(expid),
-                        "sky-r?-{:08d}.fits".format(expid),
+                        "sky-r?-{:08d}.fits*".format(expid),
                     )
                 )
             )
             # AR if some sky files, just pick the first one
             if len(fns) > 0:
-                hdr = fits.getheader(fns[0], "SKY")
+                hdr = fitsio.read_header(fns[0], "SKY")
                 if hdr["OBSTYPE"] == "SCIENCE":
-                    sky = np.median(fits.open(fns[0])["SKY"].data)
+                    sky = np.median(fitsio.read(fns[0], "SKY"))
                     log.info("{} r-sky = {:.1f}".format(os.path.basename(fns[0]), sky))
                     if sky < minsky:
                         ctedet_expid, minsky = expid, sky
@@ -317,7 +321,68 @@ def create_mp4(fns, outmp4, duration=15):
         os.remove("{}/tmp-{:04d}.png".format(tmpoutdir, i))
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
+def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
+    """
+    Internal function used by create_dark_pdf(), to read and bin the 300s dark.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        dark_expid: EXPID of the 300s DARK exposure to display (int)
+        petal: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (int)
+        camera: "b", "r", or "z" (string)
+        binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
+
+    Returns:
+        If the preproc file is here:
+            mydict: a dictionary with the binned+masked image, plus various infos
+        Else:
+            None
+    """
+    fn = findfile('preproc', night, dark_expid, camera+str(petal),
+            specprod_dir=prod)
+    if os.path.isfile(fn):
+        mydict = {}
+        mydict["dark_expid"] = dark_expid
+        mydict["petal"] = petal
+        mydict["camera"] = camera
+        log.info("reading {}".format(fn))
+        with fitsio.FITS(fn) as h:
+            image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
+        # AR setting to np.nan pixels with ivar = 0 or mask > 0
+        # AR hence, when binning, any binned pixel with a masked pixel
+        # AR will appear as np.nan (easy way to go)
+        d = image.copy()
+        sel = (ivar == 0) | (mask > 0)
+        d[sel] = np.nan
+        # AR trimming
+        shape_orig = d.shape
+        if shape_orig[0] % binning != 0:
+            d = d[shape_orig[0] % binning:, :]
+        if shape_orig[1] % binning != 0:
+            d = d[:, shape_orig[1] % binning:]
+            log.info(
+                "{} trimmed from ({}, {}) to ({}, {})".format(
+                    fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
+                )
+            )
+        d_reshape = d.reshape(
+            d.shape[0] // binning,
+            binning,
+            d.shape[1] // binning,
+            binning
+        )
+        d_bin = d_reshape.mean(axis=1).mean(axis=-1)
+        # AR displaying masked pixels (np.nan) in red
+        d_bin_msk = np.ma.masked_where(d_bin == np.nan, d_bin)
+        mydict["image"] = d_bin_msk
+        return mydict
+    else:
+        log.warning("missing {}".format(fn))
+        return None
+
+
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -326,58 +391,45 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
+        nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
     """
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
+    #
+    myargs = []
+    for petal in petals:
+        for camera in cameras:
+            myargs.append(
+                [
+                    night,
+                    prod,
+                    dark_expid,
+                    petal,
+                    camera,
+                    binning,
+                ]
+            )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_dark, myargs)
+    # AR plotting
     clim = (-5, 5)
+    cmap = matplotlib.cm.Greys_r
+    cmap.set_bad(color="r")
     with PdfPages(outpdf) as pdf:
         for petal in petals:
             fig = plt.figure(figsize=(20, 10))
             gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
             for ic, camera in enumerate(cameras):
                 ax = plt.subplot(gs[ic])
-                fn = os.path.join(
-                        prod,
-                        "preproc",
-                        "{}".format(night),
-                        "{:08d}".format(dark_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, dark_expid),
-                )
-                ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-                if os.path.isfile(fn):
-                    log.info("reading {}".format(fn))
-                    h = fits.open(fn)
-                    image, ivar, mask = h["IMAGE"].data, h["IVAR"].data, h["MASK"].data
-                    # AR setting to np.nan pixels with ivar = 0 or mask > 0
-                    # AR hence, when binning, any binned pixel with a masked pixel
-                    # AR will appear as np.nan (easy way to go)
-                    d = image.copy()
-                    sel = (ivar == 0) | (mask > 0)
-                    d[sel] = np.nan
-                    # AR trimming
-                    shape_orig = d.shape
-                    if shape_orig[0] % binning != 0:
-                        d = d[shape_orig[0] % binning:, :]
-                    if shape_orig[1] % binning != 0:
-                        d = d[:, shape_orig[1] % binning:]
-                        log.info(
-                            "{} trimmed from ({}, {}) to ({}, {})".format(
-                                fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
-                            )
-                        )
-                    d_reshape = d.reshape(
-                        d.shape[0] // binning,
-                        binning,
-                        d.shape[1] // binning,
-                        binning
-                    )
-                    d_bin = d_reshape.mean(axis=1).mean(axis=-1)
-                    # AR displaying masked pixels (np.nan) in red
-                    d_bin_msk = np.ma.masked_where(d_bin == np.nan, d_bin)
-                    cmap = matplotlib.cm.Greys_r
-                    cmap.set_bad(color="r")
-                    im = ax.imshow(d_bin_msk, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
+                assert(len(ii) == 1)
+                mydict = mydicts[ii[0]]
+                if mydict is not None:
+                    assert(mydict["petal"] == petal)
+                    assert(mydict["camera"] == camera)
+                    ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
+                    im = ax.imshow(mydict["image"], cmap=cmap, vmin=clim[0], vmax=clim[1])
                     if camera == cameras[-1]:
                         p =  ax.get_position().get_points().flatten()
                         cax = fig.add_axes([
@@ -389,8 +441,6 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
                         cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
                         cbar.set_label("Units : ?")
                         cbar.mappable.set_clim(clim)
-                else:
-                    log.warning("missing {}".format(fn))
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
 
@@ -405,9 +455,7 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         n_previous_nights (optional, defaults to 10): number of previous nights to plot (int)
     """
-    cameras = ["b", "r", "z"]
     colors = ["b", "r", "k"]
-    petals = np.arange(10, dtype=int)
     # AR grabbing the n_previous_nights previous nights
     nights = np.array(
         [int(os.path.basename(fn))
@@ -468,7 +516,44 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     plt.close()
 
 
-def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
+def _read_ctedet(night, prod, ctedet_expid, petal, camera):
+    """
+    Internal function used by create_ctedet_pdf(), reading the ctedet_expid preproc info.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        petal: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (int)
+        camera: "b", "r", or "z" (string)
+
+    Returns:
+        If the preproc file is here:
+            mydict: a dictionary with the IMAGE data, plus various infos
+        Else:
+            None
+    """
+    #
+    fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
+            specprod_dir=prod)
+    if os.path.isfile(fn):
+        mydict = {}
+        mydict["fn"] = fn
+        # AR read
+        with fitsio.FITS(fn) as fx:
+            mydict["img"] = fx["IMAGE"].read()
+        # AR check if we re displaying a 1s FLAT
+        hdr = fitsio.read_header(fn, "IMAGE")
+        if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
+            mydict["is_onesec_flat"] = True
+        else:
+            mydict["is_onesec_flat"] = False
+        return mydict
+    else:
+        return None
+
+
+def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
     """
     For a given night, create a pdf with a CTE diagnosis (from preproc files).
 
@@ -477,6 +562,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        nproc: number of processes running at the same time (int)
         nrow (optional, defaults to 21): number of rows to include in median (int)
         xmin (optional, defaults to None): minimum column to display (int)
         xmax (optional, defaults to None): maximum column to display (int)
@@ -486,61 +572,146 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
         Credits to S. Bailey.
         Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
+    myargs = []
+    for petal in petals:
+        for camera in cameras:
+            myargs.append(
+                [
+                    night,
+                    prod,
+                    ctedet_expid,
+                    petal,
+                    camera,
+                ]
+            )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_ctedet, myargs)
+    # AR plotting
     clim = (-5, 5)
     with PdfPages(outpdf) as pdf:
-        for petal in petals:
-            for camera in cameras:
-                petcam_xmin, petcam_xmax = xmin, xmax
-                fig = plt.figure(figsize=(30, 5))
-                gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
-                ax2d = plt.subplot(gs[0])
-                ax1d = plt.subplot(gs[1])
-                #
-                fn = os.path.join(
-                        prod,
-                        "preproc",
-                        "{}".format(night),
-                        "{:08d}".format(ctedet_expid),
-                        "preproc-{}{}-{:08d}.fits".format(camera, petal, ctedet_expid),
-                )
+        for mydict in mydicts:
+            petcam_xmin, petcam_xmax = xmin, xmax
+            fig = plt.figure(figsize=(30, 5))
+            gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
+            ax2d = plt.subplot(gs[0])
+            ax1d = plt.subplot(gs[1])
+            if mydict is not None:
                 ax1d.set_title(
-                    "{}\nMedian of {} rows above/below CCD amp boundary".format(
-                        fn, nrow,
-                    )
+                "{}\nMedian of {} rows above/below CCD amp boundary".format(
+                    mydict["fn"], nrow,
                 )
-                if os.path.isfile(fn):
-                    # AR read
-                    img = fits.open(fn)["IMAGE"].data
-                    ny, nx = img.shape
-                    if petcam_xmin is None:
-                        petcam_xmin = 0
-                    if petcam_xmax is None:
-                        petcam_xmax = nx
-                    above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
-                    below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
-                    xx = np.arange(petcam_xmin, petcam_xmax)
-                    # AR plot 2d image
-                    extent = [petcam_xmin - 0.5, petcam_xmax - 0.5, ny // 2 - nrow - 0.5, ny // 2 + nrow - 0.5]
-                    vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
-                    ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
-                    ax2d.xaxis.tick_top()
-                    # AR plot 1d median
-                    ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                    ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                    ax1d.legend(loc=2)
-                    # AR amplifier x-boundary
-                    ax1d.axvline(nx // 2 - 1, color="k", ls="--")
-                    ax1d.set_xlabel("CCD column")
-                    ax1d.set_xlim(petcam_xmin, petcam_xmax)
-                    ax1d.set_ylim(ylim)
-                    ax1d.grid()
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close()
+            )
+                # AR is it a 1s FLAT image?
+                if not mydict["is_onesec_flat"]:
+                    ax1d.text(
+                        0.5, 0.7,
+                        "WARNING: not displaying a 1s FLAT image",
+                        color="k", fontsize=20, fontweight="bold", ha="center", va="center",
+                        transform=ax1d.transAxes,
+                    )
+                img = mydict["img"]
+                ny, nx = img.shape
+                if petcam_xmin is None:
+                    petcam_xmin = 0
+                if petcam_xmax is None:
+                    petcam_xmax = nx
+                above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
+                below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
+                xx = np.arange(petcam_xmin, petcam_xmax)
+                # AR plot 2d image
+                extent = [petcam_xmin - 0.5, petcam_xmax - 0.5, ny // 2 - nrow - 0.5, ny // 2 + nrow - 0.5]
+                vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
+                ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
+                ax2d.xaxis.tick_top()
+                # AR plot 1d median
+                ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.legend(loc=2)
+                # AR amplifier x-boundary
+                ax1d.axvline(nx // 2 - 1, color="k", ls="--")
+                ax1d.set_xlabel("CCD column")
+                ax1d.set_xlim(petcam_xmin, petcam_xmax)
+                ax1d.set_ylim(ylim)
+                ax1d.grid()
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close()
 
 
-def create_sframesky_pdf(outpdf, night, prod, expids):
+def _read_sframesky(night, prod, expid):
+    """
+    Internal function called by create_sframesky_pdf, which generates
+    the per-expid sframesky plot.
+
+    Args:
+        outpng: output png file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        expid: expid to display (int)
+
+    Returns:
+        If some sframe files:
+            mydict, dictionary with per-camera wave, flux, and various infos
+        Else:
+            None
+    """
+    #
+    nightdir = os.path.join(prod, "exposures", "{}".format(night))
+    #
+    tileid = None
+    fns = sorted(
+        glob(
+            os.path.join(
+                nightdir,
+                "{:08d}".format(expid),
+                "sframe-??-{:08d}.fits*".format(expid),
+            )
+        )
+    )
+    if len(fns) > 0:
+        # AR read the sframe sky fibers
+        mydict = {camera : {} for camera in cameras}
+        for ic, camera in enumerate(cameras):
+            for petal in petals:
+                fn, exists = findfile('sframe', night, expid, camera+str(petal),
+                        specprod_dir=prod, return_exists=True)
+                if exists:
+                    with fitsio.FITS(fn) as h:
+                        fibermap = h["FIBERMAP"].read()
+                        sel = fibermap["OBJTYPE"] == "SKY"
+                        fibermap = fibermap[sel]
+                        flux = h["FLUX"].read()[sel]
+                        wave = h["WAVELENGTH"].read()
+                        flux_header = h["FLUX"].read_header()
+                        fibermap_header = h["FIBERMAP"].read_header()
+
+                    if "flux" not in mydict[camera]:
+                        mydict[camera]["wave"] = wave
+                        nwave = len(mydict[camera]["wave"])
+                        mydict[camera]["petals"] = np.zeros(0, dtype=int)
+                        mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
+                        mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
+                    mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
+                    mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
+                    band = camera.lower()[0]
+                    mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
+                    if tileid is None:
+                        tileid = fibermap_header["TILEID"]
+                    print("\t", night, expid, camera+str(petal), ((fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
+            print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
+        # AR various infos
+        mydict["expid"] = expid
+        mydict["night"] = night
+        mydict["tileid"] = tileid
+        mydict["flux_unit"] = flux_header["BUNIT"]
+        #
+        return mydict
+    else:
+        return None
+
+
+def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
     """
     For a given night, create a pdf from per-expid sframe for the sky fibers only.
 
@@ -549,57 +720,28 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         expids: expids to display (list or np.array)
+        nproc: number of processes running at the same time (int)
     """
-    #
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
     #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
     # AR sorting the EXPIDs by increasing order
-    expids = np.sort(expids)
-    #
+    myargs = []
+    for expid in np.sort(expids):
+        myargs.append(
+            [
+                night,
+                prod,
+                expid,
+            ]
+        )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_sframesky, myargs)
+    # AR creating pdf (+ removing temporary files)
     with PdfPages(outpdf) as pdf:
-        for expid in expids:
-            tileid = None
-            fns = sorted(
-                glob(
-                    os.path.join(
-                        nightdir,
-                        "{:08d}".format(expid),
-                        "sframe-??-{:08d}.fits".format(expid),
-                    )
-                )
-            )
-            if len(fns) > 0:
-                #
-                mydict = {camera : {} for camera in cameras}
-                for ic, camera in enumerate(cameras):
-                    for petal in petals:
-                        fn = os.path.join(
-                            nightdir,
-                            "{:08d}".format(expid),
-                            "sframe-{}{}-{:08d}.fits".format(camera, petal, expid),
-                        )
-                        if os.path.isfile(fn):
-                            h = fits.open(fn)
-                            sel = h["FIBERMAP"].data["OBJTYPE"] == "SKY"
-                            h["FLUX"].data = h["FLUX"].data[sel, :]
-                            h["FIBERMAP"].data = h["FIBERMAP"].data[sel]
-                            if "flux" not in mydict[camera]:
-                                mydict[camera]["wave"] = h["WAVELENGTH"].data
-                                nwave = len(mydict[camera]["wave"])
-                                mydict[camera]["petals"] = np.zeros(0, dtype=int)
-                                mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
-                                mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
-                            mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
-                            mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
-                            band = camera.lower()[0]
-                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
-                            if tileid is None:
-                                tileid = h["FIBERMAP"].header["TILEID"]
-                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
-                    print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
-                #
+        for mydict in mydicts:
+            if mydict is not None:
                 fig = plt.figure(figsize=(20, 10))
                 gs = gridspec.GridSpec(len(cameras), 1, hspace=0.025)
                 clim = (-100, 100)
@@ -625,12 +767,12 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                                 1.0 * (p[3]-p[1])
                             ])
                             cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                            cbar.set_label("FLUX [{}]".format(h["FLUX"].header["BUNIT"]))
+                            cbar.set_label("FLUX [{}]".format(mydict["flux_unit"]))
                             cbar.mappable.set_clim(clim)
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
                         ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
-                            expid, night, tileid, nsky)
+                            mydict["expid"], mydict["night"], mydict["tileid"], nsky)
                         )
                     ax.set_xlim(xlim)
                     if ic == 2:
@@ -718,19 +860,31 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
                     "data",
                     "{}".format(night),
                     "*",
-                    "fiberassign-{:06d}.fits.*".format(tileid),
+                    "fiberassign-{:06d}.fits*".format(tileid),
                 )
             )
         )
         if len(fns) > 0:
-            hdr = fits.getheader(fns[0], 0)
+            hdr = fitsio.read_header(fns[0], 0)
             if "FAFLAVOR" in hdr:
                 faflavor = hdr["FAFLAVOR"]
         log.info("identified FAFLAVOR for {}: {}".format(tileid, faflavor))
         # AR
-        tmp = findfile("redrock", night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
-        tiledir = os.path.dirname(tmp)
-        fns = sorted(glob(os.path.join(tiledir, f"redrock-?-{tileid}-*{night}.fits")))
+        fns = []
+        for petal in petals:
+            fn, exists = findfile(
+                "redrock",
+                night=night,
+                tile=tileid,
+                groupname=group,
+                spectrograph=petal,
+                specprod_dir=prod,
+                return_exists=True,
+            )
+            if exists:
+                fns.append(fn)
+            else:
+                log.warning("no {}".format(fn))
         nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
@@ -793,57 +947,94 @@ def plot_newlya(
     tileids=None,
     title=None,
     xlabel="Number of observed tiles",
-    ylabel="Number of newly identified LYA candidates",
+    ylabel="(N_newlya_obs / N_newlya_expect) - 1",
     xlim=(0.5, 6.5),
-    ylim=(0, 400),
+    ylim=(-2.5, 2.5),
     nvalifiber_norm=3900,
 ):
     """
-    Plot the number of newly identified Ly-a vs. the tile observations coverage for a list of tiles.
+    Plot the ratio of the number of newly identified Ly-a to the expected number,
+        vs. the tile observations coverage for a list of tiles.
 
     Args:
         ax: pyplot Axes object
-        ntilecovs: list of average number of previously observed tiles (list or np.array() of floats)
-        nnewlyas: list of newly identified Ly-a (with a valid fiber) (list or np.array() of ints)
+        ntilecovs: average number of previously observed tiles for each number of pass (np.array(len(tiles), n_dark_passids))
+        nnewlyas: list of nb of newly identified Ly-a (with a valid fiber), normalized to nvalifiber_norm (list or np.array() of ints)
         tileids (optional, defaults to None): tileids (to report outliers) (list or np.array() of ints)
         title (optional, defaults to None): plot title (str)
         xlabel (optional, defaults to "Number of observed tiles"): plot xlabel (str)
         ylabel (optional, defaults to "Number of newly identified LYA candidates"): plot ylabel(str)
         xlim (optional, defaults to (0.5, 6.5)): plot xlim (tuple)
-        ylim (optional, defaults to (0, 400): plot ylim (tuple)
+        ylim (optional, defaults to (-2.5, 2.5): plot ylim (tuple)
         nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
+
+    Notes:
+        ntilecovs[:, 0] lists the fractions of the tiles covered by 1 tile, etc.
+        The plotted y-values are: (N_newlya_observed / N_newlya_expected) - 1.
+        The expected numbers are based on all main dark tiles (from daily) up to May 26th 2022.
+        The 1-2-3-sigma regions reflect the approximate scatter of those data.
     """
-    # AR approximate expected locations:
+    #
+    n_dark_passids = 7
+    if ntilecovs.shape[1] != n_dark_passids:
+        msg = "ntilecovs.shape[1] = {} is different than n_dark_passids = {}".format(
+            ntilecovs.shape[1], n_dark_passids,
+        )
+        log.error(msg)
+        raise ValueError(msg)
+    # AR overall mean number of pass coverage
+    mean_ntilecovs = np.zeros(len(nnewlyas))
+    for i in range(n_dark_passids):
+        mean_ntilecovs += (i + 1) * ntilecovs[:, i]
+    # AR expected number of newlya
+    # AR based on main dark tiles (from daily) up to May 26th 2022
+    def expect_newlyas(ntilecovs):
+        return (
+            ntilecovs[:, 0] * 287.7 +
+            ntilecovs[:, 1] * 137.8 +
+            ntilecovs[:, 2] * 58.1 +
+            ntilecovs[:, 3] * 20.9 +
+            ntilecovs[:, 4] * 10.5 +
+            ntilecovs[:, 5] * 0.0 +
+            ntilecovs[:, 6] * 0.6
+        )
+    # AR approximate expected regions:
+    # AR - based on main dark tiles (from daily) up to May 26th 2022
+    # AR - the ntilecov in expect_1sig() is the *average* pass coverage (i.e. mean_ntilecovs)
     # AR - blue, green, red: approximative 1-sigma, 2-sigma, 3-sigma
-    # AR - exponential curve set:
-    # AR   - using 2021 + Jan. 2022 dark tiles from the daily
-    # AR   - using nvalifiber_norm = 3900
-    # AR - sigma: using here Poisson (though not 100% correct, as there is some normalizations in there...)
-    myfunc = lambda nobs, n, alpha: n * np.exp( alpha * (nobs - 1.))
-    n, alpha = 295, -0.7
-    tmpxs = np.linspace(1, xlim[1], 1000)
-    tmpys = myfunc(tmpxs, n, alpha)
-    ax.plot(tmpxs, tmpys, color="k", zorder=0)
+    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on 
+    # AR    the parent qso density)
+    def expect_1sig(ntilecovs):
+        vals = np.exp( (ntilecovs - 7.5) / 2.35)
+        vals[(ntilecovs > 0.95) & (ntilecovs <= 1)] = 0.08
+        return vals
+    tmpxs = np.linspace(0.95, xlim[1], 1000)
+    tmpys = expect_1sig(tmpxs)
     for nsig, col in zip([1, 2, 3], ["b", "g", "r"]):
         if nsig == 1:
-            ax.fill_between(tmpxs, tmpys - np.sqrt(tmpys), tmpys + np.sqrt(tmpys), color=col, alpha=0.25)
+            ax.fill_between(tmpxs, -tmpys, tmpys, color=col, alpha=0.25)
         else:
-            ax.fill_between(tmpxs, tmpys - nsig * np.sqrt(tmpys), tmpys - (nsig-1) * np.sqrt(tmpys), color=col, alpha=0.25)
-            ax.fill_between(tmpxs, tmpys + (nsig - 1) * np.sqrt(tmpys), tmpys + nsig * np.sqrt(tmpys), color=col, alpha=0.25)
-    ax.text(0.975, 0.55, r"Blue  : approx. expected 1$\sigma$", color="b", ha="right", transform=ax.transAxes)
-    ax.text(0.975, 0.50, r"Green: approx. expected 2$\sigma$", color="g", ha="right", transform=ax.transAxes)
-    ax.text(0.975, 0.45, r"Red   : approx. expected 3$\sigma$", color="r", ha="right", transform=ax.transAxes)
+            ax.fill_between(tmpxs, -nsig * tmpys, -(nsig-1) * tmpys, color=col, alpha=0.25)
+            ax.fill_between(tmpxs, (nsig - 1) * tmpys, nsig * tmpys, color=col, alpha=0.25)
+    ax.text(0.025, 0.15, r"Blue  : approx. expected 1$\sigma$", color="b", ha="left", transform=ax.transAxes)
+    ax.text(0.025, 0.10, r"Green: approx. expected 2$\sigma$", color="g", ha="left", transform=ax.transAxes)
+    ax.text(0.025, 0.05, r"Red   : approx. expected 3$\sigma$", color="r", ha="left", transform=ax.transAxes)
+    # AR compute (N_newlya_observed / N_newlya_expected) - 1
+    ys = (nnewlyas / expect_newlyas(ntilecovs)) - 1
     # AR clipping so that each point is visible on the plot
-    ys = np.clip(nnewlyas, ylim[0], ylim[1])
-    ax.scatter(ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
+    ys = np.clip(ys, ylim[0], ylim[1])
+    # AR Poisson error
+    yes = np.sqrt(nnewlyas) / expect_newlyas(ntilecovs)
+    ax.scatter(mean_ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
+    ax.errorbar(mean_ntilecovs, ys, yes, color="none", ecolor="k", elinewidth=1, zorder=1)
     # AR 3-sigma outliers
-    ii = np.where(np.abs(ys - myfunc(ntilecovs, n, alpha)) > 3 * np.sqrt(myfunc(ntilecovs, n, alpha)))[0]
+    ii = np.where(np.abs(ys) > 3 * expect_1sig(mean_ntilecovs))[0]
     for i in ii:
         if tileids is not None:
             label = "TILEID={}".format(tileids[i])
         else:
             label = None
-        ax.scatter(ntilecovs[i], nnewlyas[i], marker="x", s=80, zorder=2, label=label)
+        ax.scatter(mean_ntilecovs[i], ys[i], marker="x", s=80, zorder=2, label=label)
     #
     ax.set_title(title)
     ax.set_xlabel(xlabel)
@@ -851,10 +1042,10 @@ def plot_newlya(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
-    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.yaxis.set_major_locator(MultipleLocator(0.25))
     ax.grid()
     if (ii.size > 0) & (tileids is not None):
-        ax.legend(loc=1)
+        ax.legend(loc=1, ncol=2)
 
 
 def create_petalnz_pdf(
@@ -896,6 +1087,7 @@ def create_petalnz_pdf(
             surveys other than main..
     """
     petals = np.arange(10, dtype=int)
+    n_dark_passids = 7
     # AR safe
     tileids, ii = np.unique(tileids, return_index=True)
     surveys = surveys[ii]
@@ -919,7 +1111,7 @@ def create_petalnz_pdf(
             if not os.path.isfile(fn):
                 log.warning("no {} file, proceeding to next tile".format(fn))
                 continue
-            hdr = fits.getheader(fn, "FIBERQA")
+            hdr = fitsio.read_header(fn, "FIBERQA")
             if hdr["EFFTIME"] < hdr["MINTFRAC"] * hdr["GOALTIME"]:
                 sel[i] = False
                 log.info(
@@ -941,7 +1133,7 @@ def create_petalnz_pdf(
         if not os.path.isfile(fn):
             log.warning("no {} file, proceeding to next tile".format(fn))
             continue
-        hdr = fits.getheader(fn, "FIBERQA")
+        hdr = fitsio.read_header(fn, "FIBERQA")
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
@@ -951,7 +1143,7 @@ def create_petalnz_pdf(
             continue
         # AR reading zmtl files
         istileid = False
-        ntilecov = None
+        pix_ntilecovs = None
         for petal in petals:
             fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
@@ -1013,9 +1205,16 @@ def create_petalnz_pdf(
                     # AR add PRIORITY
                     d["PRIORITY"] = rrd["PRIORITY"].copy()
                     # AR add number of previous tiles observed
-                    if ntilecov is None:
-                        ntilecov, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
-                    d["NTILECOV"] = ntilecov + np.zeros(len(d))
+                    # AR pix_ntilecovs is the number of hp pixels covered by NTILE
+                    # AR be careful as ntilecov=1 (i.e. covered by one tile) is
+                    # AR    stored in the 0-index, etc.
+                    if pix_ntilecovs is None:
+                        _, pix_ntilecovs, _, _, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
+                        d["NTILECOV"] = np.zeros(len(d) * n_dark_passids).reshape((len(d), n_dark_passids))
+                        for ntilecov in range(n_dark_passids):
+                            sel = pix_ntilecovs == 1 + ntilecov
+                            if sel.sum() > 0:
+                                d["NTILECOV"][:, ntilecov] = sel.mean()
                 # AR append
                 ds[faprgrm].append(d)
         if istileid:
@@ -1160,7 +1359,7 @@ def create_petalnz_pdf(
                 ax.grid()
                 # AR - newly identified Ly-a = f(ntilecov)
                 ax = plt.subplot(gs[3])
-                xlim, ylim = (0.5, 6.5), (0, 400)
+                xlim, ylim = (0.5, 6.5), (-2.5, 2.5)
                 nvalifiber_norm = 3900
                 if "dark" in faprgrms:
                     faprgrm = "dark"
@@ -1172,17 +1371,15 @@ def create_petalnz_pdf(
                     #
                     dark_tileids = np.unique(ds[faprgrm]["TILEID"])
                     tmpd = Table()
-                    for key in ["TILEID", "LASTNIGHT", "NVALIDFIBER", "NTILECOV", "NNEWLYA"]:
-                        if key == "NTILECOV":
-                            tmpd[key] = np.zeros(len(dark_tileids))
-                        else:
-                            tmpd[key] = np.zeros(len(dark_tileids), dtype=int)
+                    for key in ["TILEID", "LASTNIGHT", "NVALIDFIBER", "NNEWLYA"]:
+                        tmpd[key] = np.zeros(len(dark_tileids), dtype=int)
+                    tmpd["NTILECOV"] = np.zeros(len(dark_tileids) * n_dark_passids).reshape((len(dark_tileids), n_dark_passids))
                     for i in range(len(dark_tileids)):
                         sel = ds[faprgrm]["TILEID"] == dark_tileids[i]
                         tmpd["TILEID"][i] = dark_tileids[i]
                         tmpd["LASTNIGHT"][i] = night
                         tmpd["NVALIDFIBER"][i] = ((sel) & (ds[faprgrm]["VALID"])).sum()
-                        tmpd["NTILECOV"][i] = ds[faprgrm]["NTILECOV"][sel][0]
+                        tmpd["NTILECOV"][i, :] = ds[faprgrm]["NTILECOV"][sel, :][0]
                         tmpd["NNEWLYA"][i] = ((sel) & (isnewlya)).sum()
                     plot_newlya(
                         ax,
@@ -1200,7 +1397,7 @@ def create_petalnz_pdf(
                     ax.grid()
                 ax.set_title(title_dark)
                 ax.set_xlabel("Avg nb of previously observed overlapping tiles on {}".format(night))
-                ax.set_ylabel("Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm))
+                ax.set_ylabel("(N_newlya_obs / N_newlya_expect) - 1")
                 #
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
@@ -1433,9 +1630,6 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR - red : file does not exist
     # AR - blue : file exists, but is a symlink
     # AR - green : file exists
-    cameras = ["b", "r", "z"]
-    petals = np.arange(10, dtype=int)
-    #
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} calibnight</strong>\n</button>\n".format(
             night,
@@ -1453,12 +1647,8 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         html.write("\t<tr>\n")
         for case in ["psfnight", "fiberflatnight"]:
             for camera in cameras:
-                fn = os.path.join(
-                    prod,
-                    "calibnight",
-                    "{}".format(night),
-                    "{}-{}{}-{}.fits".format(case, camera, petal, night),
-                )
+                fn = findfile(case, night, camera=camera+str(petal),
+                        specprod_dir=prod)
                 fnshort, color = os.path.basename(fn), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):
@@ -1509,20 +1699,20 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                 html.write("\t<p>{}</p>\n".format(text_split))
             html.write("\t<tr>\n")
             if os.path.splitext(outfns[case])[-1] == ".png":
-                outpng = path_full2web(outfns[case])
+                outpng = os.path.basename(outfns[case])
                 html.write(
                     "\t<a href='{}'><img SRC='{}' width={} height=auto></a>\n".format(
                         outpng, outpng, width,
                     )
                 )
             elif os.path.splitext(outfns[case])[-1] == ".pdf":
-                outpdf = path_full2web(outfns[case])
+                outpdf = os.path.basename(outfns[case])
                 html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
             else:
                 log.error("Unexpected extension for {}".format(outfns[case]))
                 raise RuntimeError("Unexpected extension for {}".format(outfns[case]))
         else:
-            html.write("\t<p>No {}.</p>\n".format(path_full2web(outfns[case])))
+            html.write("\t<p>No {}.</p>\n".format(os.path.basename(outfns[case])))
         html.write("\t</br>\n")
         html.write("</div>\n")
         html.write("\n")

@@ -4,8 +4,9 @@
 #
 # -*- coding: utf-8 -*-
 
+import sys
 import desispec.scripts.calibrate_tsnr_ensemble as calibrate_tsnr_ensemble
 
 if __name__ == '__main__':
     args = calibrate_tsnr_ensemble.parse()
-    calibrate_tsnr_ensemble.main(args)
+    sys.exit(calibrate_tsnr_ensemble.main(args))

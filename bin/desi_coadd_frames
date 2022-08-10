@@ -8,9 +8,9 @@
 This script coadds frames
 """
 
+import sys
 import desispec.scripts.coadd_frames as coadd_frames
-
 
 if __name__ == '__main__':
     args = coadd_frames.parse()
-    coadd_frames.main(args)
+    sys.exit(coadd_frames.main(args))

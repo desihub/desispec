@@ -91,13 +91,12 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
             bad |= bit
 
     # find if any fibers have an intersection with the bad bits
-    badfibers = fmap['FIBER'][ (fmap['FIBERSTATUS'] & bad) > 0 ].data
-    badfibers = badfibers % 500
+    badfibers = (fmap['FIBERSTATUS'] & bad) > 0
     # For the bad fibers, loop through and nullify them
-    for fiber in badfibers:
-        mask[fiber] |= specmask.BADFIBER
+    for i in np.where(badfibers)[0]:
+        mask[i] |= specmask.BADFIBER
         if ivar_framemask :
-            ivar[fiber] = 0.
+            ivar[i] = 0.
 
     if return_mask:
         return ivar,mask

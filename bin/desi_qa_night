@@ -8,9 +8,10 @@
 This script generates QA related to a night
 """
 
+import sys
 import desispec.scripts.qa_night as qa_night
 
 
 if __name__ == '__main__':
     args = qa_night.parse()
-    qa_night.main(args)
+    sys.exit(qa_night.main(args))

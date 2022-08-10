@@ -24,15 +24,16 @@ def parse(options=None):
                         help = 'use sky fibers to improve the correction')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of output fiberflar file')
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+
+    args = parser.parse_args(options)
+
     return args
 
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log = get_logger()
 

@@ -370,7 +370,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         set `maxrows` to zero (0) to load all rows.
     """
     tn = tcls.__tablename__
-    if filepath.endswith('.fits'):
+    if filepath.endswith( ('.fits', '.fits.gz') ):
         with fits.open(filepath) as hdulist:
             data = hdulist[hdu].data
     elif filepath.endswith('.ecsv'):
@@ -480,7 +480,7 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
     tcls = Truth
     tn = tcls.__tablename__
     t = tcls.__table__
-    if filepath.endswith('.fits'):
+    if filepath.endswith( ('.fits', '.fits.gz') ):
         with fits.open(filepath) as hdulist:
             data = hdulist[hdu].data
     elif filepath.endswith('.ecsv'):

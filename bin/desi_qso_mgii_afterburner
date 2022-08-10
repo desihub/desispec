@@ -19,9 +19,12 @@ from desitarget.cmx.cmx_targetmask import cmx_mask
 
 from desiutil.log import get_logger
 
+from desispec.io.util import get_tempfilename
 from desispec.mgii_afterburner import mgii_fitter
 
+
 log = get_logger()
+
 
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run MgII fitter on coadd file")
@@ -34,15 +37,18 @@ def collect_argparser():
                         help="output filename where the result of the MgII will be saved")
 
     parser.add_argument("--target_selection", type=str, required=False, default="restricted",
-                        help="on which sample the mgII fitter is performed: " +
-                             "restricted (QSO targets with SPECTYPE==GALAXY)" +
-                             " / qso_targets (QSO targets) -- qso (works also)" +
-                             " / all_targets (All targets in the coadd file) -- all (works also)")
+                        help="on which sample the mgII fitter is performed: \
+                              restricted (QSO targets with SPECTYPE==GALAXY) \
+                              / qso_targets (QSO targets) -- qso (works also) \
+                              / all_targets (All targets in the coadd file) -- all (works also)")
     parser.add_argument("--save_target", type=str, required=False, default="restricted",
-                        help="which objects will be saved in the output files:" +
-                             "restricted (objects which are identify as QSO by the mgII afterburner)" +
-                             " / all (All objects which are tested by the mgII fitter)" +
-                             " --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
+                        help="which objects will be saved in the output files: \
+                              restricted (objects which are identify as QSO by the mgII afterburner) \
+                              / all (All objects which are tested by the mgII fitter) \
+                              --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
+
+    parser.add_argument("--template_dir", type=str, required=False, default=None,
+                        help="give the RR templates used in mgII fitter to compare the Xi2, by default use those from redrock")
 
     parser.add_argument("--lambda_width", type=str, required=False, default=250,
                         help="parameter for mgII fitter, see mgii_afterburner.py for more information")
@@ -82,15 +88,15 @@ def select_targets_with_mgii_fitter(redrock, fibermap, sel_to_mgii, spectra_name
         QSO_sel = pd.DataFrame()
     else:
         (index_selected_with_mgii_fit,
-        fits_result,
-        index_with_mgii_fit) = mgii_fitter(spectra_name, redrock_name, sel_to_mgii,
-                                           param_mgii_fitter['lambda_width'],
-                                           max_sigma=param_mgii_fitter['max_sigma'],
-                                           min_sigma=param_mgii_fitter['min_sigma'],
-                                           min_deltachi2=param_mgii_fitter['min_deltachi2'],
-                                           min_A=param_mgii_fitter['min_A'],
-                                           min_signifiance_A=param_mgii_fitter['min_signifiance_A'])
-
+         fits_result,
+         index_with_mgii_fit) = mgii_fitter(spectra_name, redrock_name, sel_to_mgii,
+                                            param_mgii_fitter['lambda_width'],
+                                            template_dir=param_mgii_fitter['template_dir'],
+                                            max_sigma=param_mgii_fitter['max_sigma'],
+                                            min_sigma=param_mgii_fitter['min_sigma'],
+                                            min_deltachi2=param_mgii_fitter['min_deltachi2'],
+                                            min_A=param_mgii_fitter['min_A'],
+                                            min_signifiance_A=param_mgii_fitter['min_signifiance_A'])
 
         sel_MGII = sel_to_mgii.copy()
         # we only consider index where the mgii fit was done
@@ -125,28 +131,27 @@ def select_targets_with_mgii_fitter(redrock, fibermap, sel_to_mgii, spectra_name
         QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][index_to_save]
         QSO_sel['IS_QSO_MGII'] = sel_MGII[index_to_save]
 
-
         # Add info from MgII fitter output:
         # index_with_mgii_fit and index_to_save_fit_result are size of sel_to_mgii.sum()
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 0]
         QSO_sel['DELTA_CHI2'] = tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 1]
         QSO_sel['A'] = tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 2]
         QSO_sel['SIGMA'] = tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 3]
-        QSO_sel['B'] =tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        QSO_sel['B'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 4]
         QSO_sel['VAR_A'] = tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 5]
         QSO_sel['VAR_SIGMA'] = tmp_arr[index_to_save_fit_result]
-        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr = np.nan * np.ones(sel_to_mgii.sum())
         tmp_arr[index_with_mgii_fit] = fits_result[:, 6]
         QSO_sel['VAR_B'] = tmp_arr[index_to_save_fit_result]
 
@@ -166,8 +171,8 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
         None
     """
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z_RR','f8'), ('ZERR', 'f4'), ('IS_QSO_MGII', '?'),
-                                               (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'), #('COEFFS', ('f4', 10)),
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA', 'f8'), ('DEC', 'f8'), ('Z_RR', 'f8'), ('ZERR', 'f4'), ('IS_QSO_MGII', '?'),
+                                               (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),  # ('COEFFS', ('f4', 10)),
                                                ('DELTA_CHI2', 'f4'), ('A', 'f4'), ('SIGMA', 'f4'), ('B', 'f4'),
                                                ('VAR_A', 'f4'), ('VAR_SIGMA', 'f4'), ('VAR_B', 'f4')])
 
@@ -179,7 +184,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['IS_QSO_MGII'] = dataframe['IS_QSO_MGII']
     data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['SPECTYPE'] = dataframe['SPECTYPE']
-    #data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
+    # data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
 
     data['DELTA_CHI2'] = dataframe['DELTA_CHI2']
     data['A'] = dataframe['A']
@@ -189,13 +194,16 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['VAR_SIGMA'] = dataframe['VAR_SIGMA']
     data['VAR_B'] = dataframe['VAR_B']
 
-    fits = fitsio.FITS(filename, 'rw', clobber=clobber)
+    # Save file in temporary file to track when timeout error appears during the writing
+    tmpfile = get_tempfilename(filename)
+    fits = fitsio.FITS(tmpfile, 'rw')
     fits.write(data, extname='MGII')
-    if clobber:
-        log.info(f'OVERWRITE the file : {filename}')
-    else:
-        log.info(f'EXPAND the file : {filename}')
+    log.info(f'write output in: {filename}')
     fits.close()
+
+    # Rename temporary file to output file, overwrite existing file.
+    os.rename(tmpfile, filename)
+    log.info(f'rename {tmpfile} to {filename}')
 
     return
 
@@ -207,13 +215,13 @@ if __name__ == "__main__":
     args = collect_argparser()
 
     # Param for the MgII fitter see desispec/py/desispec/mgii_afterburner.py for additional informations
-    param_mgii_fitter = {'lambda_width':args.lambda_width, 'max_sigma':args.max_sigma, 'min_sigma':args.min_sigma,
-                         'min_deltachi2':args.min_deltachi2, 'min_signifiance_A':args.min_signifiance_A, 'min_A':args.min_A}
+    param_mgii_fitter = {'lambda_width': args.lambda_width, 'template_dir': args.template_dir, 'max_sigma': args.max_sigma, 'min_sigma': args.min_sigma,
+                         'min_deltachi2': args.min_deltachi2, 'min_signifiance_A': args.min_signifiance_A, 'min_A': args.min_A}
 
     if os.path.isfile(args.coadd) and os.path.isfile(args.redrock):
         # Testing if there are three cameras in the coadd file. If not create a warning file.
         if np.isin(['B_FLUX', 'R_FLUX', 'Z_FLUX'], [hdu.get_extname() for hdu in fitsio.FITS(args.coadd)]).sum() != 3:
-            misscamera = os.path.splitext(args.output)[0]+'.misscamera.txt'
+            misscamera = os.path.splitext(args.output)[0] + '.misscamera.txt'
             with open(misscamera, "w") as miss:
                 miss.write(f"At least one camera is missing from the coadd file: {args.coadd}.\n")
                 miss.write("This is expected for the exposure directory.\n")
@@ -278,14 +286,14 @@ if __name__ == "__main__":
                          f"Selected with mgii: {QSO_from_MGII['IS_QSO_MGII'].sum()}")
                 save_dataframe_to_fits(QSO_from_MGII, args.output, DESI_TARGET)
             else:
-                file = open(os.path.splitext(args.output)[0]+'.notargets', "w")
+                file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by MgII afterburner to be a QSO.")
                 file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
                 file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
                 file.close()
-                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
+                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
 
-    else: # file for the consider Tile / Night / petal does not exist
+    else:  # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
         sys.exit(1)
 

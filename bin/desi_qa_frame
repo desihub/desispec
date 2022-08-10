@@ -8,9 +8,9 @@
 This script generates QA related to a Frame
 """
 
+import sys
 import desispec.scripts.qa_frame as qa_frame
-
 
 if __name__ == '__main__':
     args = qa_frame.parse()
-    qa_frame.main(args)
+    sys.exit(qa_frame.main(args))

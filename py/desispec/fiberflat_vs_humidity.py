@@ -14,27 +14,52 @@ from desiutil.log import get_logger
 from desispec.fiberflat import apply_fiberflat
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 
-def _interpolated_fiberflat_vs_humidity(fiberflat_vs_humidity , humidity_array, humidity_point) :
+def fit_wave_of_dip(wave1d,flux2d) :
+
+    assert(len(flux2d.shape)==2)
+    assert(flux2d.shape[0]==500)
+    assert(flux2d.shape[1]==wave1d.shape[0])
+
+    # 2D -> 1D
+    mflux=(np.median(flux2d[0:200],axis=0)+np.median(flux2d[300:500],axis=0))/2.
+    flux1d=np.median(flux2d[200:300],axis=0)
+    flux1d/=mflux
+
+    # minimum
+    ii=np.where((wave1d>4250)&(wave1d<4500))[0]
+    i=np.argmin(flux1d[ii])
+    mwave1=wave1d[ii[i]]
+
+    # parabola fit
+    ii=np.abs(wave1d-mwave1)<10
+    x=wave1d[ii]
+    y=flux1d[ii]
+    c=np.polyfit(x,y,2)
+    mwave2=-c[1]/(2*c[0])
+
+    return mwave2
+
+def _interpolated_fiberflat_vs_humidity(fiberflat_vs_humidity , humidity_indices, humidity_index) :
     """
     Interpolates between fiberflat templates indexed by humidity.
 
     Args:
         fiberflat_vs_humidity: 3D numpy array (n_humidity,n_fibers,n_wavelength)
-        humidity_array: 1D numpy array (n_humidity)
-        humidity_point: float, humidity value (same unit as humidity_array)
+        humidity_indices: 1D numpy array (n_humidity)
+        humidity_index: float, humidity index value (same unit as humidity_indices)
 
     Returns 2D numpy array (n_fibers,n_wavelength)
     """
-    if humidity_point<=humidity_array[0] :
+    if humidity_index<=humidity_indices[0] :
         i1=0
     else :
-        i1=np.where(humidity_array<humidity_point)[0][-1]
+        i1=np.where(humidity_indices<humidity_index)[0][-1]
     i2=i1+1
-    if i2>=humidity_array.size : # return largest value
+    if i2>=humidity_indices.size : # return largest value
         return fiberflat_vs_humidity[-1]
 
-    w1=(humidity_array[i2]-humidity_point)/(humidity_array[i2]-humidity_array[i1])
-    w2=(humidity_point-humidity_array[i1])/(humidity_array[i2]-humidity_array[i1])
+    w1=(humidity_indices[i2]-humidity_index)/(humidity_indices[i2]-humidity_indices[i1])
+    w2=(humidity_index-humidity_indices[i1])/(humidity_indices[i2]-humidity_indices[i1])
     return w1*fiberflat_vs_humidity[i1]+w2*fiberflat_vs_humidity[i2]
 
 def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_array) :
@@ -94,18 +119,19 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
     # chi2 is a 1D array with size = number of humidity bins
 
     # index of minimum, but then we refine
-    minindex=np.argmin(chi2)
+    best_index=np.argmin(chi2)
+    humidity_indices = np.arange(humidity_array.size,dtype=float)
 
-    if minindex==0 or minindex==humidity_array.size-1 :
+    if best_index==0 or best_index==humidity_array.size-1 :
 
-        best_humidity = humidity_array[minindex]
-        flat = mean_fiberflat_vs_humidity[minindex]
+        best_humidity = humidity_array[best_index]
+        flat = mean_fiberflat_vs_humidity[best_index]
         log.warning("best fit at edge of model humidity range")
 
     else :
 
-        bb=minindex-1
-        ee=minindex+2
+        bb=best_index-1
+        ee=best_index+2
         if bb<0 :
             bb+=1
             ee+=1
@@ -113,17 +139,23 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
             bb-=1
             ee-=1
 
-        # get the chi2 minimum
-        c=np.polyfit(humidity_array[bb:ee],chi2[bb:ee],2)
-        best_humidity = -c[1]/2./c[0]
-        best_humidity = max(humidity_array[0],best_humidity)
-        best_humidity = min(humidity_array[-1],best_humidity)
+        # get the chi2 minimum, using the indices, not the humidity values which can fluctuate
+        c=np.polyfit(humidity_indices[bb:ee],chi2[bb:ee],2)
+        best_index = -c[1]/2./c[0]
+        best_index = max(0,best_index)
+        best_index = min(chi2.size-1,best_index)
+        best_humidity = np.interp(best_index,humidity_indices,humidity_array)
 
         # simple linear interpolation indexed by the humidity
-        flat = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, best_humidity)
+        flat = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_indices, best_index)
 
+    log.info("best fit index = {} , humidity = {:.2f}".format(best_index, best_humidity))
 
-    log.info("best fit humidity = {:.2f}".format(best_humidity))
+    #import matplotlib.pyplot as plt
+    #plt.figure()
+    #plt.plot(humidity_indices,chi2,"o")
+    #plt.axvline(best_index)
+    #plt.show()
 
     return flat , best_humidity
 
