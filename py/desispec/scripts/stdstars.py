@@ -455,11 +455,9 @@ def main(args=None, comm=None) :
     log.info("BLUE SNR of selected stars={}".format(snr['b']))
 
     for cam in frames :
-        for frame in frames[cam] :
-            frame = frame[validstars]
-            ### frame.flux = frame.flux[validstars]
-            ### frame.ivar = frame.ivar[validstars]
-            ### frame.resolution_data = frame.resolution_data[validstars]
+        for i in range(len(frames[cam])) :
+            frames[cam][i] = frames[cam][i][validstars]
+
     starindices = starindices[validstars]
     starfibers  = starfibers[validstars]
     nstars = starindices.size
@@ -581,7 +579,6 @@ def main(args=None, comm=None) :
         star_unextincted_colors['GAIA-' + c1 + '-' + c2] = (
             star_unextincted_mags['GAIA-' + c1] -
             star_unextincted_mags['GAIA-' + c2])
-
 
     local_comm, head_comm = None, None
     if comm is not None:
