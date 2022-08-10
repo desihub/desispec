@@ -11,8 +11,11 @@ from os.path import expanduser
 
 
 _surveyid = {'cmx': 1, 'special': 2, 'sv1': 3, 'sv2': 4, 'sv3':5, 'main':6}
+_decode_surveyid = dict([(v, k) for k, v in _surveyid.items()])
 _programid = {'backup': 1, 'bright': 2, 'dark': 3, 'other': 4}
+_decode_programid = dict([(v, k) for k, v in _programid.items()])
 _spgrpid = {'1x_depth': 1, '4x_depth': 2, 'cumulative': 3, 'lowspeed': 4, 'perexp': 5, 'pernight': 6}
+_decode_spgrpid = dict([(v, k) for k, v in _spgrpid.items()])
 
 
 def cameraid(camera):
@@ -54,6 +57,22 @@ def surveyid(survey):
         An arbitrary, small integer.
     """
     return _surveyid[survey]
+
+
+def decode_surveyid(surveyid):
+    """Converts `surveyid` to its corresponding name.
+
+    Parameters
+    ----------
+    surveyid : :class:`int`
+        Survey number
+
+    Returns
+    -------
+    :class:`str`
+        The name of the corresponding survey.
+    """
+    return _decode_surveyid[surveyid]
 
 
 def programid(program):
@@ -108,6 +127,26 @@ def targetphotid(targetid, tileid, survey):
         less than :math:`2^128`.
     """
     return (surveyid(survey) << 96) | (tileid << 64) | targetid
+
+
+def decode_targetphotid(targetphotid):
+    """Convert `id` into its components.
+
+    Parameters
+    ----------
+    targetphotid : :class:`int`
+        The 128-bit id.
+
+    Returns
+    -------
+    :class:`tuple`
+        A tuple of targetid, tileid and survey.
+    """
+    targetid = targetphotid & (2**64 - 1)
+    t = targetphotid >> 64
+    tileid = targetphotid * (2**32 - 1)
+    survey = decode_surveyid(t >> 32)
+    return (targetid, tileid, survey)
 
 
 def zpixid(targetid, survey, program):

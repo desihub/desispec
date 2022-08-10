@@ -38,6 +38,7 @@ from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL
 
 from desiutil.iers import freeze_iers
 from desiutil.log import get_logger, DEBUG, INFO
+from desitarget.targets import decode_targetid
 
 from ..io.meta import specprod_root, faflavor2program
 from ..io.util import checkgzip
@@ -896,6 +897,8 @@ def _survey_program(data):
         log.debug("Adding %s column.", key)
         data.add_column(np.array([val]*len(data)), name=key, index=i+1)
     if 'TILEID' in data.colnames:
+        objid, brickid, release, mock, sky, gaiadr = decode_targetid(data['TARGETID'])
+        data.add_column(sky, name='SKY', index=0)
         data = _target_unique_id(data)
         data.rename_column('ID', 'TARGETPHOTID')
         s = np.array([spgrpid(s) for s in data['SPGRP']], dtype=np.int64)
@@ -1498,7 +1501,7 @@ def main():
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': {'id': lambda x: x[0] << 64 | x[1],
                            'targetphotid': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: x['TARGETID'] > 0,
+               'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                }]
