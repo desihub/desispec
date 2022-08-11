@@ -24,7 +24,6 @@ from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
 from desispec.workflow.batch import get_config
-from py.desispec.workflow import batch
 
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
