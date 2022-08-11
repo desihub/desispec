@@ -856,7 +856,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     log = get_logger()
     batch_config=get_config(system_name)
 
-    runtime= 60 * batch_config['timefactor']
+    runtime= 90 * batch_config['timefactor']
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
 
@@ -1003,7 +1003,7 @@ cd {outdir}
                 key = f'{sm}-{camera}-{lastdayornight}'
             darkfile = f'dark-{key}.fits.gz'
             biasfile = f'bias-{key}.fits.gz'
-
+            logfile2 = os.path.join(tempdir, f'dark-{key}-%j.log')
             darkfile_list.append(darkfile)
             biasfile_list.append(biasfile)
             cmd = f"desi_compute_dark_nonlinear"
@@ -1023,16 +1023,16 @@ cd {outdir}
                 cmd += f" \\\n    --first-expid {first_expid}"
 
             with open(batchfile, 'a') as fx:
-                fx.write(f"time {cmd} &\n")
+                fx.write(f"time {cmd} > {logfile2} &\n")
         
         with open(batchfile, 'a') as fx:
             fx.write("wait\n")
             for darkfile,biasfile in zip(darkfile_list,biasfile_list):
                 if copy_outputs_to_split_dirs:
                     fx.write(f"""
-    cp {darkfile}  dark_frames/{darkfile}
-    cp {biasfile}  bias_frames/{biasfile}
-    """)
+cp {darkfile}  dark_frames/{darkfile}
+cp {biasfile}  bias_frames/{biasfile}
+""")
 
         if not nosubmit:
             err = subprocess.call(['sbatch', batchfile])
