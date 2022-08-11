@@ -856,7 +856,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     log = get_logger()
     batch_config=get_config(system_name)
 
-    runtime= 1.5 * batch_config['timefactor']
+    runtime= 60 * batch_config['timefactor']
     runtime_hh = runtime // 60
     runtime_mm = runtime % 60
 
