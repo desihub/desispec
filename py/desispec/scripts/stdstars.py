@@ -737,9 +737,8 @@ def main(args=None, comm=None) :
     if rank == 0:
 
         # get the fibermap from any input frame for the standard stars
-        fibermap = Table(frame.fibermap)
-        keep = np.isin(fibermap['FIBER'], starfibers[fitted_stars])
-        fibermap = fibermap[keep]
+        fibermap = Table(frame.fibermap[fitted_stars])
+        assert np.all(fibermap['FIBER'] == starfibers[fitted_stars])
 
         # drop fibermap columns specific to exposures instead of targets
         for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
@@ -748,6 +747,8 @@ def main(args=None, comm=None) :
                 fibermap.remove_column(col)
 
         data={}
+        data['TARGETID'] = fibermap['TARGETID']
+        data['FIBER'] = fibermap['FIBER']
         data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
         data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
         data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
