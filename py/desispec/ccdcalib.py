@@ -857,8 +857,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     batch_config=get_config(system_name)
 
     runtime= 60 * batch_config['timefactor']
-    runtime_hh = runtime // 60
-    runtime_mm = runtime % 60
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
 
     if tempdir is None:
         tempdir = os.path.join(outdir, 'temp')
