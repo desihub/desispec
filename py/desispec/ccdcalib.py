@@ -970,21 +970,22 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         else:
             job_filename_key = f'scriptnumber-{scriptid}-{lastdayornight}'
 
-        batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
-        logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
+        batchfile = os.path.join(tempdir, f'dark-{job_filename_key}.slurm')
+        logfile = os.path.join(tempdir, f'dark-{job_filename_key}-%j.log')
         #header
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
 #SBATCH -N 1
 #SBATCH --qos {queue}
 #SBATCH --account desi
-#SBATCH --job-name dark-{key}
+#SBATCH --job-name dark-{job_filename_key}
 #SBATCH --output {logfile}
 #SBATCH --time={f"{runtime_hh:02d}:{runtime_mm:02d}:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
 {batch_opts}
 
 cd {outdir}''')
+
         minind=scriptid*n_jobs_per_script
         maxind=(scriptid+1)*n_jobs_per_script
         if maxind>len(cameras):
