@@ -1023,7 +1023,7 @@ cd {outdir}
                 cmd += f" \\\n    --first-expid {first_expid}"
 
             with open(batchfile, 'a') as fx:
-                fx.write(f"time {cmd} > {logfile2} &\n")
+                fx.write(f"srun -n 1 -c 64 --exact time {cmd} > {logfile2} 2> {logfile2} &\n")
         
         with open(batchfile, 'a') as fx:
             fx.write("wait\n")
