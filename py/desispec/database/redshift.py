@@ -1408,6 +1408,8 @@ def get_options(*args):
     prsr.add_argument('-t', '--tiles-path', action='store', dest='tilespath', metavar='PATH',
                       default=os.path.join(os.environ['DESI_TARGET'], 'fiberassign', 'tiles', 'trunk'),
                       help="Load fiberassign data from PATH (default %(default)s).")
+    prsr.add_argument('-T', '--target-path', action='store', dest='targetpath', metavar='PATH',
+                      help="Load target photometry data from PATH.")
     prsr.add_argument('-U', '--username', action='store', dest='username',
                       metavar='USERNAME', default='desidev_admin',
                       help="If specified, connect to a PostgreSQL database with USERNAME (default %(default)s).")
@@ -1418,6 +1420,8 @@ def get_options(*args):
         options = prsr.parse_args(args)
     else:
         options = prsr.parse_args()
+    if options.targetpath is None:
+        options.targetpath = options.datapath
     return options
 
 
@@ -1456,16 +1460,6 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': os.path.join(options.datapath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Target,
-               'hdu': 'TARGETPHOT',
-               'preload': _target_unique_id,
-               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
-               'q3c': 'ra',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
                {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
@@ -1482,6 +1476,16 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
               },
+              {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+               'tcls': Target,
+               'hdu': 'TARGETPHOT',
+               'preload': _target_unique_id,
+               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+               'convert': {'id': lambda x: x[0] << 64 | x[1]},
+               'q3c': 'ra',
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+               },
               {'filepaths': glob.glob(os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zpix-*.fits')),
                'tcls': Zpix,
                'hdu': 'ZCATALOG',
