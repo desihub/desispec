@@ -1003,7 +1003,7 @@ cd {outdir}
                 key = f'{sm}-{camera}-{lastdayornight}'
             darkfile = f'dark-{key}.fits.gz'
             biasfile = f'bias-{key}.fits.gz'
-            logfile2 = os.path.join(tempdir, f'dark-{key}-%j.log')
+            logfile2 = os.path.join(tempdir, f'dark-{key}-${{SLURM_JOB_ID}}.log')
             darkfile_list.append(darkfile)
             biasfile_list.append(biasfile)
             cmd = f"desi_compute_dark_nonlinear"
