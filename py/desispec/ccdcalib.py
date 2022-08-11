@@ -23,6 +23,10 @@ from desispec.workflow.tableio import load_table, load_tables, write_table
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
+from desispec.workflow.batch import get_config
+from py.desispec.workflow import batch
+
+
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                  scale=False, exptime=None):
     """
@@ -827,7 +831,7 @@ def model_y1d(image, smooth=0):
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=False, prepared_exptable=None):
+                      copy_outputs_to_split_dirs=False, prepared_exptable=None, system_name=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -846,10 +850,16 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         queue (str): which batch queue to use for submission
         copy_outputs_to_split_dirs (bool): whether to copy outputs to bias_frames/dark_frames subdirs
         prepared_exptable (exptable): if a table is submitted here, no further spectra will be searched and this will be used instead
+        system_name (str): the system for which batch files should be created, defaults to guessing current system
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
     log = get_logger()
+    batch_config=get_config(system_name)
+
+    runtime= 1.5 * batch_config['timefactor']
+    runtime_hh = runtime // 60
+    runtime_mm = runtime % 60
 
     if tempdir is None:
         tempdir = os.path.join(outdir, 'temp')
@@ -945,55 +955,83 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     os.rename(tmpfile, speclogfile)
     log.info(f'Wrote speclog to {speclogfile}')
 
-    for camera in cameras:
-        sp = 'sp' + camera[1]
-        sm = sp2sm(sp)
-        #key = f'{sm}-{camera}-{today}'
+    n_jobs_per_script = int(batch_config['cores_per_node']//32)
+    #create scripts that do up to 4 cameras in parallel
+    batch_opts = list()
+    if 'batch_opts' in batch_config:
+        for opt in batch_config['batch_opts']:
+            batch_opts.append(f'#SBATCH {opt}')
+    batch_opts = '\n'.join(batch_opts)
+    n_scripts=int(len(cameras)//n_jobs_per_script)
+    if len(cameras)%n_jobs_per_script !=0:
+        n_scripts+=1
+    for scriptid in range(n_scripts):
         if night_for_name is not None :
-            key = f'{sm}-{camera}-{night_for_name}'
-        else :
-            key = f'{sm}-{camera}-{lastdayornight}'
+            job_filename_key=f'scriptnumber-{scriptid}-{night_for_name}'
+        else:
+            job_filename_key = f'scriptnumber-{scriptid}-{lastdayornight}'
+
         batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
         logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
-        darkfile = f'dark-{key}.fits.gz'
-        biasfile = f'bias-{key}.fits.gz'
-
-        cmd = f"desi_compute_dark_nonlinear"
-        cmd += f" \\\n    --camera {camera}"
-        cmd += f" \\\n    --tempdir {tempdir}"
-        cmd += f" \\\n    --darkfile {darkfile}"
-        cmd += f" \\\n    --biasfile {biasfile}"
-        if days is not None:
-            cmd += f" \\\n    --days {days}"
-        if nights is not None:
-            cmd += f" \\\n    --nights {nights}"
-        if linexptime is not None:
-            cmd += f" \\\n    --linexptime {linexptime}"
-        if nskip_zeros is not None:
-            cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
-        if first_expid is not None:
-            cmd += f" \\\n    --first-expid {first_expid}"
-
+        #header
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
-
-#SBATCH -C haswell
 #SBATCH -N 1
 #SBATCH --qos {queue}
 #SBATCH --account desi
 #SBATCH --job-name dark-{key}
 #SBATCH --output {logfile}
-#SBATCH --time={"01:00:00" if queue!="debug" else "00:30:00"}
+#SBATCH --time={f"{runtime_hh:02d}:{runtime_mm:02d}:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
+{batch_opts}
 
-cd {outdir}
-time {cmd}
-''')
-            if copy_outputs_to_split_dirs:
-                fx.write(f"""
-cp {darkfile}  dark_frames/{darkfile}
-cp {biasfile}  bias_frames/{biasfile}
-""")
+cd {outdir}''')
+        minind=scriptid*n_jobs_per_script
+        maxind=(scriptid+1)*n_jobs_per_script
+        if maxind>len(cameras):
+            maxind=len(cameras)
+        darkfile_list=[]
+        biasfile_list=[]
+        for camera in cameras[minind:maxind]:
+            sp = 'sp' + camera[1]
+            sm = sp2sm(sp)
+            #key = f'{sm}-{camera}-{today}'
+            if night_for_name is not None :
+                key = f'{sm}-{camera}-{night_for_name}'
+            else :
+                key = f'{sm}-{camera}-{lastdayornight}'
+            darkfile = f'dark-{key}.fits.gz'
+            biasfile = f'bias-{key}.fits.gz'
+
+            darkfile_list.append(darkfile)
+            biasfile_list.append(biasfile)
+            cmd = f"desi_compute_dark_nonlinear"
+            cmd += f" \\\n    --camera {camera}"
+            cmd += f" \\\n    --tempdir {tempdir}"
+            cmd += f" \\\n    --darkfile {darkfile}"
+            cmd += f" \\\n    --biasfile {biasfile}"
+            if days is not None:
+                cmd += f" \\\n    --days {days}"
+            if nights is not None:
+                cmd += f" \\\n    --nights {nights}"
+            if linexptime is not None:
+                cmd += f" \\\n    --linexptime {linexptime}"
+            if nskip_zeros is not None:
+                cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
+            if first_expid is not None:
+                cmd += f" \\\n    --first-expid {first_expid}"
+
+            with open(batchfile, 'a') as fx:
+                fx.write(f"time {cmd} &")
+        
+        with open(batchfile, 'a') as fx:
+            fx.write("wait")
+            for darkfile,biasfile in zip(darkfile_list,biasfile_list):
+                if copy_outputs_to_split_dirs:
+                    fx.write(f"""
+    cp {darkfile}  dark_frames/{darkfile}
+    cp {biasfile}  bias_frames/{biasfile}
+    """)
 
         if not nosubmit:
             err = subprocess.call(['sbatch', batchfile])
@@ -1008,7 +1046,7 @@ cp {biasfile}  bias_frames/{biasfile}
 def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=None, transmit_obslist = True):
+                      copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -1026,6 +1064,7 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
         queue (str): which batch queue to use for submission
         transmit_obslist(bool): if True will give use the obslist from here downstream
+        system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -1126,4 +1165,4 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
                       first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue,
-                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist)
+                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist, system_name=system_name)
