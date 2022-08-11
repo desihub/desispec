@@ -985,6 +985,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 {batch_opts}
 
 cd {outdir}
+desidev
 ''')
 
         minind=scriptid*n_jobs_per_script
@@ -1023,7 +1024,7 @@ cd {outdir}
                 cmd += f" \\\n    --first-expid {first_expid}"
 
             with open(batchfile, 'a') as fx:
-                fx.write(f"srun -n 1 -c 64 --exact time {cmd} > {logfile2} 2> {logfile2} &\n")
+                fx.write(f"srun -n 1 -c 64 --mem-per-cpu=120G --exact time {cmd} > {logfile2} 2> {logfile2} &\n")
         
         with open(batchfile, 'a') as fx:
             fx.write("wait\n")
