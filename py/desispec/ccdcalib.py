@@ -984,7 +984,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 #SBATCH --exclusive
 {batch_opts}
 
-cd {outdir}''')
+cd {outdir}
+''')
 
         minind=scriptid*n_jobs_per_script
         maxind=(scriptid+1)*n_jobs_per_script
@@ -1022,10 +1023,10 @@ cd {outdir}''')
                 cmd += f" \\\n    --first-expid {first_expid}"
 
             with open(batchfile, 'a') as fx:
-                fx.write(f"time {cmd} &")
+                fx.write(f"time {cmd} &\n")
         
         with open(batchfile, 'a') as fx:
-            fx.write("wait")
+            fx.write("wait\n")
             for darkfile,biasfile in zip(darkfile_list,biasfile_list):
                 if copy_outputs_to_split_dirs:
                     fx.write(f"""

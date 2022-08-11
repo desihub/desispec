@@ -41,7 +41,8 @@ parser.add_argument('--nskip-zeros', type=int, default=None, required=False,
                     help='Skip N ZEROs per day while flushing charge (this defaults to 0 as the '
                          'nightly evening ZEROs are not part of the exposure list used for this process '
                          'only morning ZEROs and specific DARK sequence ZEROs are used)')
-
+parser.add_argument('--system-name', type=str, default=None, required=False,
+                    help='Name of system to make scripts for (default: current system)')
 args        = parser.parse_args()
 
 make_biweekly_darks(**vars(args))
