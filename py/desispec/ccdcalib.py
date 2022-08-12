@@ -856,7 +856,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     log = get_logger()
     batch_config=get_config(system_name)
 
-    runtime= 90 * batch_config['timefactor']
+    runtime= 120 * batch_config['timefactor']
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
 
@@ -982,6 +982,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 #SBATCH --output {logfile}
 #SBATCH --time={f"{runtime_hh:02d}:{runtime_mm:02d}:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
+#SBATCH --ntasks-per-node={n_jobs_per_script}
 {batch_opts}
 
 cd {outdir}
