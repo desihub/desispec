@@ -540,7 +540,7 @@ def main(args=None, comm=None):
 
                 if not success:
                     #- Catches sys.exit from stdstars.main
-                    log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
+                    log.error('Rank {} stdstars.main failed for {}'.format(rank, os.path.basename(stdfile)))
                     err = True
 
             if not success:
@@ -551,13 +551,14 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-        if rank == 0 and num_err > 0:
-            log.error(f'{num_err}/{num_cmd} stdstar commands failed')
-
-        sys.stdout.flush()
-        if num_err>0 and num_err==num_cmd:
+        #- all ranks exit with error if any failed
+        if num_err > 0:
             if rank == 0:
-                log.critical('All stdstar commands failed')
+                log.critical(f'{num_err}/{num_cmd} stdstar ranks failed')
+                if num_err==num_cmd:
+                    log.critical('All stdstar commands failed')
+
+            sys.stdout.flush()
             sys.exit(1)
 
         link_errors = 0
@@ -587,9 +588,13 @@ def main(args=None, comm=None):
             link_errors = comm.bcast(link_errors, root=0)
             num_link_cmds = comm.bcast(num_link_cmds, root=0)
 
-        if link_errors>0 and link_errors==num_link_cmds:
+        #- all ranks exit with error if any failed
+        if link_errors>0:
             if rank == 0:
-                log.critical('All stdstar link commands failed')
+                log.critical(f'{link_errors}/{num_link_commands} stdstar link commands failed')
+                if link_errors==num_link_cmds:
+                    log.critical('All stdstar link commands failed')
+
             sys.exit(1)
 
     # -------------------------------------------------------------------------
