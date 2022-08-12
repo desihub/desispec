@@ -982,7 +982,6 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 #SBATCH --output {logfile}
 #SBATCH --time={f"{runtime_hh:02d}:{runtime_mm:02d}:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
-#SBATCH --ntasks-per-node={n_jobs_per_script}
 {batch_opts}
 
 cd {outdir}
@@ -1025,7 +1024,7 @@ desidev
                 cmd += f" \\\n    --first-expid {first_expid}"
 
             with open(batchfile, 'a') as fx:
-                fx.write(f"srun -n 1 -c 64 --mem-per-cpu=4G --cpu_bind=cores --exact time {cmd} > {logfile2} 2> {logfile2} &\n")
+                fx.write(f"time {cmd} > {logfile2} 2> {logfile2} &\n")
         
         with open(batchfile, 'a') as fx:
             fx.write("wait\n")
