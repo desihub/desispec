@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.53.3 (unreleased)
+0.54.1 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.54.0 (2022-08-15)
+-------------------
+
+* Fix rank race condition bug in specex.py (PR `#1809`_).
+* Stdstar use correct sky and flat fiber; scale ivar (PR `#1817`_).
+* Stdstar memory optimization (PR `#1820`_).
+
+.. _`#1809`: https://github.com/desihub/desispec/pull/1809
+.. _`#1817`: https://github.com/desihub/desispec/pull/1817
+.. _`#1820`: https://github.com/desihub/desispec/pull/1820
 
 0.53.2 (2022-07-22)
 -------------------
@@ -26,7 +37,7 @@ desispec Change Log
 .. _`#1795`: https://github.com/desihub/desispec/pull/1795
 .. _`#1797`: https://github.com/desihub/desispec/pull/1797
 .. _`#1798`: https://github.com/desihub/desispec/pull/1798
-.. _`#1805`: https://github.com/desihub/desispec/pull/1808
+.. _`#1805`: https://github.com/desihub/desispec/pull/1805
 .. _`#1808`: https://github.com/desihub/desispec/pull/1808
 .. _fastspecfit: https://github.com/desihub/fastspecfit
 .. _specex: https://github.com/desihub/specex
