@@ -1263,7 +1263,7 @@ def main(args=None, comm=None):
                 #- Using multiprocessing
                 log.info(f'Rank {rank=} fitting sp{sp=} stdstars with multiprocessing')
                 result, success = runcmd(desispec.scripts.stdstars.main,
-                    args=[cmdargs], inputs=inputs, outputs=[stdfile])
+                    args=cmdargs, inputs=inputs, outputs=[stdfile])
             else:
                 #- Using MPI
                 log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
