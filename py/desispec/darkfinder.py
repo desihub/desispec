@@ -207,7 +207,7 @@ class DarkFinder(CalibFinder) :
                 #TODO: extra checks that evaluate if selection from yaml file is matching...
                 date_used=datebegin
                 dark_filename=dark_filelist[dark_dates == date_used][0]
-                bias_filename=dark_filelist[dark_dates == date_used][0]
+                bias_filename=bias_filelist[dark_dates == date_used][0]
                 with fits.open(dark_filename,'readonly') as hdul:
                     headers2=hdul[0].header
                     
