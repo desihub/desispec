@@ -126,20 +126,20 @@ def get_sector_masks(frame):
         yb = sec[0].start
         ye = sec[0].stop
 
-    if cfinder.haskey(key) :
-        val = cfinder.value(key)
-        for tmp1 in val.split(",") :
-            tmp2 = tmp1.split(":")
-            if len(tmp2) != 2 :
-                mess="cannot decode {}={}".format(key,val)
-                log.error(mess)
-                raise KeyError(mess)
-            xb = max(sec[1].start,int(tmp2[0]))
-            xe = min(sec[1].stop,int(tmp2[1]))
-            sector = [yb,ye,xb,xe]
-            sectors.append(sector)
-            log.info("Adding CCD sector in amp {} with offset: {}".format(
-                amp,sector))
+        if cfinder.haskey(key) :
+            val = cfinder.value(key)
+            for tmp1 in val.split(",") :
+                tmp2 = tmp1.split(":")
+                if len(tmp2) != 2 :
+                    mess="cannot decode {}={}".format(key,val)
+                    log.error(mess)
+                    raise KeyError(mess)
+                xb = max(sec[1].start,int(tmp2[0]))
+                xe = min(sec[1].stop,int(tmp2[1]))
+                sector = [yb,ye,xb,xe]
+                sectors.append(sector)
+                log.info("Adding CCD sector in amp {} with offset: {}".format(
+                    amp,sector))
 
     if len(sectors) == 0:
         return []
@@ -442,7 +442,10 @@ def compute_sky_linear(
 
     sector_offsets = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
     for i, secmask in enumerate(sectors):
-        sector_offsets[secmask] += param[nwave+nskygradpc+i]
+        sector_offsets[secmask] += param[nwave+i]
+        if fiberflat is not None:
+            flat = fiberflat.fiberflat + (fiberflat.fiberflat == 0)
+            sector_offsets[secmask] /= flat[secmask]
 
     modeled_sky *= skytpcorr[:, None]
     bad_wavelengths = ~(w[:nwave])
