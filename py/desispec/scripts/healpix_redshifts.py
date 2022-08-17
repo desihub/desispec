@@ -12,6 +12,7 @@ from desiutil.log import get_logger
 from desispec.scripts.tile_redshifts import write_redshift_script
 from desispec import io
 from desispec.pixgroup import get_exp2healpix_map
+from desispec.workflow import batch
 
 def parse(options=None):
     import argparse
@@ -37,7 +38,7 @@ def parse(options=None):
             help="batch reservation name")
     p.add_argument("--batch-dependency", type=str,
             help="job dependencies passed to sbatch --dependency")
-    p.add_argument("--system-name", type=str,
+    p.add_argument("--system-name", type=str, default=batch.default_system(),
             help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
     p.add_argument("--redrock-nodes", type=int, default=1,
             help="Number of nodes per redrock call (default 1)")
