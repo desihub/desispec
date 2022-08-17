@@ -159,7 +159,6 @@ def get_sector_masks(frame):
         tmp_y[fiber] = tset.y_vs_wave(fiber=fiber, wavelength=frame.wave)
 
     masks = []
-    print(sectors)
     for ymin, ymax, xmin, xmax in sectors:
         mask = ((tmp_y >= ymin) & (tmp_y < ymax) &
                 (tmp_x >= xmin) & (tmp_x < xmax))
@@ -383,7 +382,8 @@ def compute_sky_linear(
 
     if nsector > 0:
         log.info('sectors: %d sectors fit, offsets %s' %
-                 (nsector, ' '.join([str(x) for x in param[-nsector:]])))
+                 (nsector, ' '.join(
+                     [str(x) for x in param[nwave:nwave+nsector]])))
 
     if nskygradpc > 0:
         log.info(('Fit with %d spatial PCs, amplitudes ' % nskygradpc) +
@@ -423,6 +423,7 @@ def compute_sky_linear(
 
     modeled_sky *= skytpcorr[:, None]
     bad_wavelengths = ~(w[:nwave])
+    modeled_sky += sector_offsets
 
     return (param, parameter_covar, modeled_sky, current_ivar, nout_tot,
             skytpcorr, bad_skyfibers, bad_wavelengths, sector_offsets,
