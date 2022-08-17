@@ -126,20 +126,20 @@ def get_sector_masks(frame):
         yb = sec[0].start
         ye = sec[0].stop
 
-    if cfinder.haskey(key) :
-        val = cfinder.value(key)
-        for tmp1 in val.split(",") :
-            tmp2 = tmp1.split(":")
-            if len(tmp2) != 2 :
-                mess="cannot decode {}={}".format(key,val)
-                log.error(mess)
-                raise KeyError(mess)
-            xb = max(sec[1].start,int(tmp2[0]))
-            xe = min(sec[1].stop,int(tmp2[1]))
-            sector = [yb,ye,xb,xe]
-            sectors.append(sector)
-            log.info("Adding CCD sector in amp {} with offset: {}".format(
-                amp,sector))
+        if cfinder.haskey(key) :
+            val = cfinder.value(key)
+            for tmp1 in val.split(",") :
+                tmp2 = tmp1.split(":")
+                if len(tmp2) != 2 :
+                    mess="cannot decode {}={}".format(key,val)
+                    log.error(mess)
+                    raise KeyError(mess)
+                xb = max(sec[1].start,int(tmp2[0]))
+                xe = min(sec[1].stop,int(tmp2[1]))
+                sector = [yb,ye,xb,xe]
+                sectors.append(sector)
+                log.info("Adding CCD sector in amp {} with offset: {}".format(
+                    amp,sector))
 
     if len(sectors) == 0:
         return []
@@ -159,7 +159,6 @@ def get_sector_masks(frame):
         tmp_y[fiber] = tset.y_vs_wave(fiber=fiber, wavelength=frame.wave)
 
     masks = []
-    print(sectors)
     for ymin, ymax, xmin, xmax in sectors:
         mask = ((tmp_y >= ymin) & (tmp_y < ymax) &
                 (tmp_x >= xmin) & (tmp_x < xmax))
@@ -219,6 +218,18 @@ def compute_sky_linear(
         # frame = R*(sky spectrum + sum(PC * (a*(x-<x>) + b*(y-<y>)))) + offsets
         # We could consider adding a mild prior to deal with ill-conditioned
         # matrices.
+
+        # note: the design matrix we set up has the following parameters:
+        # first nwave columns: deconvolved flux at each wavelength
+        # next nsector columns: sector offsets
+        # next 2*nskygradpc columns: sky gradient amplitudes in x & y
+        # direction for each PC.
+
+        # in a separate step we also set up a 'tpcorr' model, reflecting
+        # different throughputs of each fiber.
+
+        # the full model is:
+        # R(sky + amplitudes * skygradpc * dx)*tpcorr + sector
 
         nsector = len(sectors)
         npar = nwave + nsector + nskygradpc*2
@@ -368,6 +379,17 @@ def compute_sky_linear(
                                   tpcorrparam.pca[:, skyfibers]):
                 skytpcorr += coeff*vec
 
+            # there's a modest issue here that we're not removing the
+            # sector offsets when computing the tpcorr.  we probably
+            # want to replace modeled_sky with
+            # modeled_sky - sector_offsets above, and flux with
+            # flux - sector_offsets.
+            # This is pretty perturbative and I am
+            # ignoring for the moment.  (sector offsets already mostly
+            # cancel out of fluxresid, since the tpcorr are close to
+            # 1; and the sector offsets are a small part of the
+            # overall sky).
+
         nout_tot += nout_iter
 
         sum_chi2=float(np.sum(chi2))
@@ -383,7 +405,8 @@ def compute_sky_linear(
 
     if nsector > 0:
         log.info('sectors: %d sectors fit, offsets %s' %
-                 (nsector, ' '.join([str(x) for x in param[-nsector:]])))
+                 (nsector, ' '.join(
+                     [str(x) for x in param[nwave:nwave+nsector]])))
 
     if nskygradpc > 0:
         log.info(('Fit with %d spatial PCs, amplitudes ' % nskygradpc) +
@@ -419,10 +442,14 @@ def compute_sky_linear(
 
     sector_offsets = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
     for i, secmask in enumerate(sectors):
-        sector_offsets[secmask] += param[nwave+nskygradpc+i]
+        sector_offsets[secmask] += param[nwave+i]
+        if fiberflat is not None:
+            flat = fiberflat.fiberflat + (fiberflat.fiberflat == 0)
+            sector_offsets[secmask] /= flat[secmask]
 
     modeled_sky *= skytpcorr[:, None]
     bad_wavelengths = ~(w[:nwave])
+    modeled_sky += sector_offsets
 
     return (param, parameter_covar, modeled_sky, current_ivar, nout_tot,
             skytpcorr, bad_skyfibers, bad_wavelengths, sector_offsets,
