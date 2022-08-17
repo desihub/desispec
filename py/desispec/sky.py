@@ -219,6 +219,18 @@ def compute_sky_linear(
         # We could consider adding a mild prior to deal with ill-conditioned
         # matrices.
 
+        # note: the design matrix we set up has the following parameters:
+        # first nwave columns: deconvolved flux at each wavelength
+        # next nsector columns: sector offsets
+        # next 2*nskygradpc columns: sky gradient amplitudes in x & y
+        # direction for each PC.
+
+        # in a separate step we also set up a 'tpcorr' model, reflecting
+        # different throughputs of each fiber.
+
+        # the full model is:
+        # R(sky + amplitudes * skygradpc * dx)*tpcorr + sector
+
         nsector = len(sectors)
         npar = nwave + nsector + nskygradpc*2
 
@@ -366,6 +378,17 @@ def compute_sky_linear(
             for coeff, vec in zip(skytpcorrcoeff,
                                   tpcorrparam.pca[:, skyfibers]):
                 skytpcorr += coeff*vec
+
+            # there's a modest issue here that we're not removing the
+            # sector offsets when computing the tpcorr.  we probably
+            # want to replace modeled_sky with
+            # modeled_sky - sector_offsets above, and flux with
+            # flux - sector_offsets.
+            # This is pretty perturbative and I am
+            # ignoring for the moment.  (sector offsets already mostly
+            # cancel out of fluxresid, since the tpcorr are close to
+            # 1; and the sector offsets are a small part of the
+            # overall sky).
 
         nout_tot += nout_iter
 
