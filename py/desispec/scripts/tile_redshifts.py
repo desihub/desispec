@@ -37,7 +37,7 @@ def parse(options=None):
                    help="batch reservation name")
     p.add_argument("--batch-dependency", type=str,
                    help="job dependencies passed to sbatch --dependency")
-    p.add_argument("--system-name", type=str,
+    p.add_argument("--system-name", type=str, default=batch.default_system(),
                    help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
 
     # TODO
