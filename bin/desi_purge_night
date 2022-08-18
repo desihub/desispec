@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+import os
+import glob
+import shutil
+import sys
+
+from desiutil.log import get_logger
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+            description = ' Purges a night from a production, intended '+
+                'for providing a fresh start before resubmitting that night '+
+                'from the beginning with desi_submit_night. '+
+                'CAVEAT: this does not purge healpix redshifts, '+
+                'perexp redshifts, or cumulative redshifts after this night; '+
+                'i.e. it is intended for cleanup when the failures occured '+
+                'earlier in the processing.'
+                )
+    parser.add_argument("-n", "--night", type=int, required=True,
+            help="Night to remove")
+    parser.add_argument("--not-dry-run", action="store_true",
+            help="Actually remove files and directories instead of just logging what would be done")
+
+    args = parser.parse_args()
+    dry_run = not args.not_dry_run
+    night = args.night
+    specprod = os.environ['SPECPROD']
+
+    log = get_logger()
+
+    reduxdir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+    log.info(f'Purging {night} from {reduxdir}')
+    os.chdir(reduxdir)
+
+    #- Night and tile directories
+    nightdirs = [
+        f'calibnight/{night}',
+        f'exposures/{night}',
+        f'nightqa/{night}',
+        f'preproc/{night}',
+        f'run/scripts/night/{night}',
+        ]
+    nightdirs += sorted(glob.glob('tiles/cumulative/*/{night}'))
+    nightdirs += sorted(glob.glob('tiles/pernight/*/{night}'))
+
+    for dirpath in nightdirs:
+        if os.path.isdir(dirpath):
+            if dry_run:
+                log.info(f'dry_run: would remove {dirpath}')
+            else:
+                log.info(f'Removing {dirpath}')
+                shutil.rmtree(dirpath)
+        else:
+            log.info(f'already gone: {dirpath}')
+
+    #- Individual files
+    dashboard_cache = f'run/dashboard/files/night_info_{specprod}_{night}.json'
+    processing_table = f'processing_tables/processing_table_{specprod}-{night}.csv'
+
+    for filename in [processing_table, dashboard_cache]:
+        if os.path.exists(filename):
+            if dry_run:
+                log.info(f'dry_run: would remove {filename}')
+            else:
+                log.info(f'Removing {filename}')
+                os.remove(filename)
+        else:
+            log.info(f'already gone: {filename}')
+
+    log.warning("Not attempting to find and purge perexp redshifts")
+    log.warning("Not attempting to find and purge healpix redshifts")
+
+    log.info(f"Done purging {specprod} night {night}")
+
