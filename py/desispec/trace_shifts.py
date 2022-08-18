@@ -15,6 +15,7 @@ import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 import numba
+import scipy.ndimage
 
 from desispec.io import read_image
 from desiutil.log import get_logger
@@ -203,7 +204,7 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 # @numba.jit no real gain
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False) :
+def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False, median_filter_width=0) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -217,6 +218,8 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     Optional:
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
+        calibrate : apply a flux calibration correction
+        median_filter_width : width for median filtering of flux (assuming refflux is already filtered out)
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -227,7 +230,8 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         wave  : 1D array of wavelength
     """
 
-
+    if median_filter_width > 0 : # remove median filter : very efficient for width=100 but slow!
+        flux -= scipy.ndimage.filters.median_filter(flux, median_filter_width, mode='constant')
 
     # absorb differences of calibration (fiberflat not yet applied)
     if calibrate:
@@ -288,10 +292,16 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             sigma=100.
 
     '''
-    print("dw= %f +- %f"%(delta,sigma))
-    if np.abs(delta)>1. :
+    if np.abs(delta)>1 :
+        print("dw= %f +- %f"%(delta,sigma))
         print("chi2/ndf=%f/%d=%f"%(chi2[i],(ndata-1),chi2[i]/(ndata-1)))
         import matplotlib.pyplot as plt
+        plt.figure()
+        plt.subplot(211)
+        plt.plot(wave,flux)
+        plt.plot(wave,refflux)
+        plt.grid()
+        plt.subplot(212)
         x=dwave*(np.arange(chi2.size)-ihw)
         plt.plot(x,chi2,"o-")
         pol=np.poly1d(c)
@@ -306,7 +316,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     return delta,sigma
 
 
-def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoef, ycoef, wavemin, wavemax, reference_flux , n_wavelength_bins = 4) :
+def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoef, ycoef, wavemin, wavemax, reference_flux , n_wavelength_bins = 4, median_filter_width = 100) :
     """
     Measures y offsets from a set of resampled spectra and a reference spectrum that are on the same wavelength grid.
     reference_flux is the assumed well calibrated spectrum.
@@ -341,6 +351,9 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
     nfibers = flux.shape[0]
 
+    if median_filter_width >0 :
+        reference_flux -=  scipy.ndimage.filters.median_filter(reference_flux, median_filter_width, mode='constant')
+
     for fiber in range(nfibers) :
         if fiber %10==0 :
             log.info("computing dy for fiber #%03d"%fiber)
@@ -356,7 +369,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             if sw<=0 :
                 continue
 
-            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True)
+            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True,  median_filter_width =  median_filter_width)
 
             if err > 1 :
                 continue
