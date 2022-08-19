@@ -59,10 +59,11 @@ if __name__ == '__main__':
             log.info(f'already gone: {dirpath}')
 
     #- Individual files
-    dashboard_cache = f'run/dashboard/files/night_info_{specprod}_{night}.json'
     processing_table = f'processing_tables/processing_table_{specprod}-{night}.csv'
+    dashboard_exp = f'run/dashboard/expjsons/expinfo_{specprod}_{night}.json'
+    dashboard_z = f'run/dashboard/zjsons/zinfo_{specprod}_{night}.json'
 
-    for filename in [processing_table, dashboard_cache]:
+    for filename in [processing_table, dashboard_exp, dashboard_z]:
         if os.path.exists(filename):
             if dry_run:
                 log.info(f'dry_run: would remove {filename}')
