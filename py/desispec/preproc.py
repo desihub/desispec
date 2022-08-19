@@ -560,12 +560,15 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
             night = header2night(header)
             expid = header['EXPID']
             camera = header['CAMERA'].lower()
-            biasnight = findfile('biasnight', night, expid, camera)
-            if os.path.exists(biasnight):
-                log.info(f'Using {night} nightly bias for {expid} {camera}')
-                filename = biasnight
+            if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
+                biasnight = findfile('biasnight', night, expid, camera)
+                if os.path.exists(biasnight):
+                    log.info(f'Using {night} nightly bias for {expid} {camera}')
+                    filename = biasnight
+                else:
+                    log.warning(f'{night} nightly bias not found; using default bias for {expid} {camera}')
             else:
-                log.warning(f'{night} nightly bias not found; using default bias for {expid} {camera}')
+                log.warning(f'SPECPROD not set; using default bias instead of nightly bias for {expid} {camera}')
 
         if filename is None:
             if cfinder is None :
