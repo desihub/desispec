@@ -560,7 +560,7 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
             night = header2night(header)
             expid = header['EXPID']
             camera = header['CAMERA'].lower()
-            if 'SPECPROD' in os.environ:
+            if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
                 biasnight = findfile('biasnight', night, expid, camera)
                 if os.path.exists(biasnight):
                     log.info(f'Using {night} nightly bias for {expid} {camera}')
