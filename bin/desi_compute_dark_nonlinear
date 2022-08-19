@@ -188,6 +188,10 @@ for night in nights:
 
 #skip all nights that have no observations left
 nights = [n for n in nights if n not in badnights]
+if len(nights)==0:
+    log.critical('No nights left to process')
+    sys.exit(1)
+
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()
