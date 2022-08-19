@@ -171,6 +171,12 @@ for exptime in np.unique(speclog['EXPTIME_INT']):
 
 speclog = speclog[keep]
 
+#remove all nights that have no observations left
+badnights = [n for n in nights if n not in speclog[daynight]]
+for night in badnights:
+    log.warning(f"there are no good observations left for {daynight} {night}, skipping that {daynight}")
+nights = [n for n in nights if n in speclog[daynight]]
+
 #- Print some summary stats before continuing
 isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
 isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
