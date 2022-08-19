@@ -69,10 +69,12 @@ def parse_logfile(logfile):
             if row is not None:
                 rows.append(row)
 
-    timing = Table(rows=rows)
-    timing['datetime'] = Time(timing['timestamp']).datetime
-
-    return timing
+    if len(rows) > 0:
+        timing = Table(rows=rows)
+        timing['datetime'] = Time(timing['timestamp']).datetime
+        return timing
+    else:
+        return None
 
 def _ordered_unique_names(names):
     """Return unique list of names, ordered by first appearance in list
