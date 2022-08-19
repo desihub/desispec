@@ -401,7 +401,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         elif nfiles[true_terminal_step] == npossible:
             row_color = 'GOOD'
         else:
-            row_color = 'OVERFUL'
+            row_color = 'OVERFULL'
 
         if unique_key in uniqs_processing:
             status = 'processing'
