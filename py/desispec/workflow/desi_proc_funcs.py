@@ -81,7 +81,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='disable fiber crosstalk correction')
-    parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
+    parser.add_argument("--system-name", type=str, default=batch.default_system(), help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("--extract-subcomm-size", type=int, default=None, help="Size to use for GPU extract subcomm")
     parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
     parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
@@ -345,10 +345,13 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
-        # former version with multiprocessing on many nodes
-        # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
-        #- new version using MPI on one node
-        ncores, runtime = ncameras, (8+2*nexps) #ncameras, 10
+        #- Special case hardcode: stdstar parallelism maxes out at ~30 cores
+        #- and on KNL, it OOMs above that anyway.
+        #- This might be more related to using a max of 30 standards, not that
+        #- there are 30 cameras (coincidence).
+        #- Use 32 as power of 2 for core packing
+        ncores = 32
+        runtime = 5+1*nexps
     elif jobdesc == 'POSTSTDSTAR':
         ncores, runtime = ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':

@@ -50,13 +50,18 @@ def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
 
     hdu3 = fits.ImageHDU(fibers, name='FIBERS')
 
-    # metadata
-    from astropy.io.fits import Column
-    cols=[]
-    for k in data.colnames:
-        if len(data[k].shape)==1 :
-            cols.append(Column(name=k,format='D',array=data[k]))
-    tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
+    # Create metadata table, using table_to_hdu(Table(data)) to handle
+    # different column dtypes.
+    # Also remove 2D columns like COEFF, which are stored separately
+    metatable = Table(data)
+    for col in list(metatable.colnames):
+        ndim = len(metatable[col].shape)
+        if ndim != 1:
+            log.debug('Dropping %d-dim metadata column %s', ndim, col)
+            metatable.remove_column(col)
+
+    tbhdu = table_to_hdu(metatable)
+    tbhdu.name = 'METADATA'
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
 

@@ -623,7 +623,10 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
     # define a band in the active CCD region next to the overscan
     left_amp = ov_col[1].start < rawimage.shape[1]//2
     if left_amp :
-        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+        if ov_col[1].start > rawimage.shape[1]//4 : # overscan is on the right of the active region
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+        else : # overscan is on the left of the active region which happens for some 2 amp read mode.
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
     else :
         active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
 
