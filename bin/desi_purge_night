@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import argparse
-
 import os
 import glob
 import shutil
@@ -44,8 +43,10 @@ if __name__ == '__main__':
         f'preproc/{night}',
         f'run/scripts/night/{night}',
         ]
-    nightdirs += sorted(glob.glob('tiles/cumulative/*/{night}'))
-    nightdirs += sorted(glob.glob('tiles/pernight/*/{night}'))
+    nightdirs += sorted(glob.glob(f'tiles/cumulative/*/{night}'))
+    nightdirs += sorted(glob.glob(f'tiles/pernight/*/{night}'))
+    nightdirs += sorted(glob.glob(f'run/scripts/tiles/cumulative/*/{night}'))
+    nightdirs += sorted(glob.glob(f'run/scripts/tiles/pernight/*/{night}'))
 
     for dirpath in nightdirs:
         if os.path.isdir(dirpath):
