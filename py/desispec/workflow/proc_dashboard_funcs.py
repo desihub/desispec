@@ -338,16 +338,20 @@ def generate_nightly_table_html(night_info, night, show_null):
         main_body += ("\t" + table_row + "\n")
         status = str(row_info["STATUS"]).lower()
         if status == 'processing':
-            if 'GOOD' in table_row:
+            if 'COLOR' in row_info:
+                color = row_info['COLOR']
+            else:
+                color = table_row.split('">')[0].split('id="')[1]
+            if color == 'GOOD':
                 ngood += 1
                 n_notnull += 1
-            elif 'BAD' in table_row:
+            elif color == 'BAD':
                 nbad += 1
                 n_notnull += 1
-            elif 'INCOMPLETE' in table_row:
+            elif color == 'INCOMPLETE':
                 ninter += 1
                 n_notnull += 1
-            elif 'OVERFULL' in table_row:
+            elif color == 'OVERFULL':
                 nover += 1
                 n_notnull += 1
             else:
@@ -616,7 +620,7 @@ def _table_element_id(elem,id):
 
 def _hyperlink(rel_path,displayname):
     hlink = f'<a href="{rel_path}" target="_blank"' \
-            +' rel="noopener noreferrer">{displayname}</a>'
+            + f' rel="noopener noreferrer">{displayname}</a>'
     return hlink
 
 def _str_frac(numerator,denominator):
