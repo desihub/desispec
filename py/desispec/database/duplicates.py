@@ -30,7 +30,7 @@ def get_options(*args):
     """
     prsr = ArgumentParser(description=("Find rows in a file that contain the same value in a certain column."),
                           prog=os.path.basename(sys.argv[0]))
-    prsr.add_argument('-H', '--hdu', action='store', type=int, default=1, dest='hdu', metavar='HDU', help="Read tabular data from HDU (default %(default)s.)")
+    prsr.add_argument('-H', '--hdu', action='store', type=int, default=1, dest='hdu', metavar='HDU', help="Read tabular data from HDU (default %(default)s).")
     # prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
     #                   default='redshift.db', metavar='FILE',
     #                   help="Store data in FILE (default %(default)s).")
@@ -57,7 +57,10 @@ def main():
     duplicate_values = np.nonzero(column_counts > 1)[0]
     map_duplicates_to_rows = dict()
     for i in duplicate_values:
-        v = unique_values[i]
+        try:
+            v = int(unique_values[i])
+        except ValueError:
+            v = str(unique_values[i])
         rows = np.nonzero(column_indexes == i)[0]
         assert rows.shape[0] > 1
         map_duplicates_to_rows[v] = rows.tolist()
