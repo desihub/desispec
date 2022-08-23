@@ -330,15 +330,26 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     if jobdesc in ('ARC', 'TESTARC'):
         ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
-    elif jobdesc in ('FLAT', 'TESTFLAT', 'TILENIGHT'):
-        ncores, runtime = 20 * nspectro, 25
+    elif jobdesc in ('FLAT', 'TESTFLAT'):
+        runtime = 25
         if system_name[0:10] == 'perlmutter':
-            # ~150 frames per node hour plus
-            # 20-minute overhead for a single node
-            # perlmutter-[cpu,gpu] have timefactor=[0.7,0.5]
-            runtime = 20 + int(60. / 140. * ncameras * nexps)
+            ncores = config['cores_per_node']
+        else:
+            ncores = 20 * nspectro
+    elif jobdesc in ('TILENIGHT'):
+        runtime  = int(60. / 140. * ncameras * nexps) # 140 frames per node hour
+        runtime += 20                                 # overhead
+        ncores = config['cores_per_node']
+        if system_name[0:10] != 'perlmutter':
+            msg = 'tilenight cannot run on system_name={}'.format(system_name)
+            log.critical(msg)
+            raise ValueError(msg)
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR'):
-        ncores, runtime = 20 * nspectro, 30
+        runtime = 30
+        if system_name[0:10] == 'perlmutter':
+            ncores = config['cores_per_node']
+        else:
+            ncores = 20 * nspectro
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('CCDCALIB'):
@@ -358,7 +369,11 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores = 32
         runtime = 5+1*nexps
     elif jobdesc == 'POSTSTDSTAR':
-        ncores, runtime = ncameras, 10
+        runtime = 10
+        if system_name[0:10] == 'perlmutter':
+            ncores = config['cores_per_node']
+        else:
+            ncores = ncameras
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
@@ -366,11 +381,6 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
         raise ValueError(msg)
-
-    if jobdesc in ('FLAT', 'TESTFLAT', 'SKY', 'TILENIGHT',
-        'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
-        if system_name[0:10] == 'perlmutter':
-            ncores, nodes = config['cores_per_node'], 1
 
     if forced_runtime is not None:
         runtime = forced_runtime
@@ -399,7 +409,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     #- Allow KNL jobs to be slower than Haswell,
     #- except for ARC so that we don't have ridiculously long times
     #- (Normal arc is still ~15 minutes, albeit with a tail)
-    if jobdesc not in ['ARC', 'TESTARC', 'FLAT', 'TESTFLAT', 'NIGHTLYFLAT']:
+    if jobdesc not in ['ARC', 'TESTARC', 'NIGHTLYFLAT']:
         runtime *= config['timefactor']
 
     #- Do not allow runtime to be less than 5 min

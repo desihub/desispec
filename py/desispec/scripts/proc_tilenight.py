@@ -147,7 +147,9 @@ def main(args=None, comm=None):
         prestdstar_args_parsed = proc.parse(prestdstar_args.split())
         if not args.dryrun:
             try:
-                error_count += proc.main(prestdstar_args_parsed,comm)
+                errcode = proc.main(prestdstar_args_parsed,comm)
+                if errcode != 0:
+                    error_count += 1
             except (BaseException, Exception) as e:
                 import traceback
                 lines = traceback.format_exception(*sys.exc_info())
@@ -178,7 +180,9 @@ def main(args=None, comm=None):
         stdstar_args_parsed = proc_joint_fit.parse(stdstar_args.split())
         if not args.dryrun:
             try:
-                error_count += proc_joint_fit.main(stdstar_args_parsed, comm)
+                errcode = proc_joint_fit.main(stdstar_args_parsed, comm)
+                if errcode != 0:
+                    error_count += 1
             except (BaseException, Exception) as e:
                 import traceback
                 lines = traceback.format_exception(*sys.exc_info())
@@ -210,7 +214,9 @@ def main(args=None, comm=None):
             poststdstar_args_parsed = proc.parse(poststdstar_args.split())
             if not args.dryrun:
                 try:
-                    error_count += proc.main(poststdstar_args_parsed, comm)
+                    errcode = proc.main(poststdstar_args_parsed, comm)
+                    if errcode != 0:
+                        error_count += 1
                 except (BaseException, Exception) as e:
                     import traceback
                     lines = traceback.format_exception(*sys.exc_info())
