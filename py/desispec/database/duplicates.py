@@ -15,6 +15,36 @@ from argparse import ArgumentParser
 from astropy.table import Table, Column, MaskedColumn
 
 
+def find_duplicate_rows(data, column):
+    """Find rows in `data` for which `column` has the same value.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        Data set to analyze.
+    column : :class:`str`
+        Search for duplicates in this column.
+
+    Returns
+    -------
+    :class:`dict`
+        A mapping of unique values of `column` to row numbers in `data`.
+    """
+    values = data[column].data
+    unique_values, unique_indexes, column_indexes, column_counts = np.unique(values, return_index=True, return_inverse=True, return_counts=True)
+    duplicate_values = np.nonzero(column_counts > 1)[0]
+    map_duplicates_to_rows = dict()
+    for i in duplicate_values:
+        try:
+            v = int(unique_values[i])
+        except ValueError:
+            v = str(unique_values[i])
+        rows = np.nonzero(column_indexes == i)[0]
+        assert rows.shape[0] > 1
+        map_duplicates_to_rows[v] = rows.tolist()
+    return map_duplicates_to_rows
+
+
 def get_options(*args):
     """Parse command-line options.
 
@@ -52,19 +82,7 @@ def main():
     """
     options = get_options()
     data = Table.read(options.filename, hdu=options.hdu)
-    column = data[options.column].data
-    unique_values, unique_indexes, column_indexes, column_counts = np.unique(column, return_index=True, return_inverse=True, return_counts=True)
-    duplicate_values = np.nonzero(column_counts > 1)[0]
-    map_duplicates_to_rows = dict()
-    for i in duplicate_values:
-        try:
-            v = int(unique_values[i])
-        except ValueError:
-            v = str(unique_values[i])
-        rows = np.nonzero(column_indexes == i)[0]
-        assert rows.shape[0] > 1
-        map_duplicates_to_rows[v] = rows.tolist()
-
+    map_duplicates_to_rows = find_duplicate_rows(data, options.column)
     output = os.path.join(os.environ['SCRATCH'], os.path.splitext(os.path.basename(options.filename))[0] + '.json')
     with open(output, 'w') as fp:
         json.dump(map_duplicates_to_rows, fp, indent=None, separators=(',', ':'))
