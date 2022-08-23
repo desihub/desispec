@@ -15,7 +15,6 @@ from argparse import ArgumentParser
 from astropy.table import Table, Column, MaskedColumn
 
 
-
 def get_options(*args):
     """Parse command-line options.
 
@@ -51,6 +50,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    options = get_options()
     data = Table.read(options.filename, hdu=options.hdu)
     column = data[options.column].data
     unique_values, unique_indexes, column_indexes, column_counts = np.unique(column, return_index=True, return_inverse=True, return_counts=True)
