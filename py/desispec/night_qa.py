@@ -1655,7 +1655,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                         fnshort, color = os.path.basename(os.readlink(fn)), "blue"
                     else:
                         color = "green"
-                    html.write("\t\t<td> <span style='color:{};'>{}</span> </td>\n".format(color, fnshort))
+                html.write("\t\t<td> <span style='color:{};'>{}</span> </td>\n".format(color, fnshort))
                 if camera != cameras[-1]:
                     html.write("\t\t<td> &emsp; </td>\n")
             if case in ["psfnight", "fiberflatnight"]:
