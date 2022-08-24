@@ -479,29 +479,31 @@ def get_completed_tiles(specstatus_path=None):
     log = get_logger()
     if specstatus_path is None:
         if 'DESI_SURVEYOPS' not in os.environ:
-            raise ValueError(
-                "DESI_SURVEYOPS is not defined in your environment. You must" +
-                " set it or specify --specstatus-path explicitly.")
+            raise ValueError("DESI_SURVEYOPS is not defined in your environment. " +
+                             "You must set it or specify --specstatus-path explicitly.")
         specstatus_path = os.path.join(os.environ['DESI_SURVEYOPS'], 'ops',
                                        'tiles-specstatus.ecsv')
-        log.info(
-            f"specstatus_path not defined, setting default to {specstatus_path}.")
+        log.info(f"specstatus_path not defined, setting default to {specstatus_path}.")
     if not os.path.exists(specstatus_path):
-        raise IOError(
-            f"Couldn't find {specstatus_path}, but only_completed_tiles was set. " +
-            "The script can't proceed.")
+        raise IOError(f"Couldn't find {specstatus_path}, but " +
+                      "only_completed_tiles was set. The script can't proceed.")
     specstatus = Table.read(specstatus_path)
+
+    ## As of 20220822 there are 90 SURVEY 'unknown' tiles, all of which are
+    ## either very early mini-sv2/SV0 tiles or dithprec/dithfocus tiles
+    specstatus = specstatus[specstatus['SURVEY'] != 'unknown']
 
     ## good tile selection
     iszdone = (specstatus['ZDONE'] == 'true')
     isnotmain = (specstatus['SURVEY'] != 'main')
-    isenoughtime = (specstatus['EFFTIME_SPEC'] > specstatus['GOALTIME'] *
-                    specstatus['MINTFRAC'])
+    enoughfraction = 0.1  # 10% rather than specstatus['MINTFRAC']
+    isenoughtime = (specstatus['EFFTIME_SPEC'] >
+                    specstatus['GOALTIME'] * enoughfraction)
     ## only take the approved QA tiles in main
     goodtiles = iszdone
     ## not all special and cmx/SV tiles have zdone set, so also pass those with enough time
     goodtiles |= (isenoughtime & isnotmain)
-    ## main backup as well as special tiles often don't have zdone set
+    ## main backup also don't have zdone set, so also pass those with enough time
     goodtiles |= (isenoughtime & (specstatus['FAPRGRM'] == 'backup'))
 
     specstatus = specstatus[goodtiles]
