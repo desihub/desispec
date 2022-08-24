@@ -1625,7 +1625,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("</div>\n")
     html.write("\n")
 
-    # AR calibnight: flat and psf
+    # AR calibnight: flat, psf and bias
     # AR color-coding:
     # AR - red : file does not exist
     # AR - blue : file exists, but is a symlink
@@ -1637,7 +1637,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>Assess the presence of all psfnight and fiberflatnight files for {}.</p>\n".format(night))
+    html.write("\t<p>Assess the presence of all psfnight, fiberflatnight, and biasnight files for {}.</p>\n".format(night))
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
@@ -1645,11 +1645,11 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("<table>\n")
     for petal in petals:
         html.write("\t<tr>\n")
-        for case in ["psfnight", "fiberflatnight"]:
+        for case in ["psfnight", "fiberflatnight", "biasnight"]:
             for camera in cameras:
                 fn = findfile(case, night, camera=camera+str(petal),
                         specprod_dir=prod)
-                fnshort, color = os.path.basename(fn), "red"
+                fnshort, color = os.path.basename(fn).replace("-{}".format(night), ""), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):
                         fnshort, color = os.path.basename(os.readlink(fn)), "blue"
@@ -1658,7 +1658,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                     html.write("\t\t<td> <span style='color:{};'>{}</span> </td>\n".format(color, fnshort))
                 if camera != cameras[-1]:
                     html.write("\t\t<td> &emsp; </td>\n")
-            if case == "psfnight":
+            if case in ["psfnight", "fiberflatnight"]:
                 html.write("\t\t<td> &emsp; &emsp; &emsp; </td>\n")
         html.write("\t</tr>\n")
     html.write("</table>\n")
