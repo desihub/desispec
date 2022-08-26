@@ -177,7 +177,7 @@ class DarkFinder(CalibFinder) :
         log.debug("Use spectrograph hardware identifier SMY")
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
-        dark_filelist = glob.glob("{}/dark_frames/*{}*.fits.gz".format(self.directory,cameraid))
+        dark_filelist = glob.glob("{}/dark_frames/dark-*{}*.fits.gz".format(self.directory,cameraid))
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
 
@@ -188,9 +188,10 @@ class DarkFinder(CalibFinder) :
             log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
             return
 
-        bias_filelist = np.array([f.replace('dark','bias') for f in dark_filelist])
+        bias_filelist = glob.glob("{}/bias_frames/bias-*{}*.fits.gz".format(self.directory,cameraid))
+        bias_filelist.sort()
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
-
+        bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
         log.debug(f"Finding matching dark frames for camera {cameraid} ...")
 
 
@@ -202,12 +203,12 @@ class DarkFinder(CalibFinder) :
         log.debug("DATE-OBS=%d"%dateobs)
         found=False
         count=0
-        for datebegin in sorted(dark_dates)[::-1] :
+        for datebegin in sorted(dark_dates)[::-1]:
             if dateobs >= datebegin :
                 #TODO: extra checks that evaluate if selection from yaml file is matching...
                 date_used=datebegin
                 dark_filename=dark_filelist[dark_dates == date_used][0]
-                bias_filename=bias_filelist[dark_dates == date_used][0]
+                bias_filename=bias_filelist[bias_dates == date_used][0]   #this would ensure that we're using same date for bias and dark
                 with fits.open(dark_filename,'readonly') as hdul:
                     headers2=hdul[0].header
                     
