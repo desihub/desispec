@@ -187,11 +187,13 @@ class DarkFinder(CalibFinder) :
         if len(dark_filelist) == 0:
             log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
             return
-
+        
         bias_filelist = glob.glob("{}/bias_frames/bias-*{}*.fits.gz".format(self.directory,cameraid))
         bias_filelist.sort()
+        bias_filelist = np.array([f for f in bias_filelist if cameraid in f])
+
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
-        bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
+        bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in bias_filelist])
         log.debug(f"Finding matching dark frames for camera {cameraid} ...")
 
 
