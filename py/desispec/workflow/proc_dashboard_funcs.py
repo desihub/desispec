@@ -261,10 +261,14 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
     html_page = _initialize_page(color_profile, titlefill=titlefill)
 
     for month, nightly_tables in monthly_tables.items():
+        if len(nightly_tables) == 0:
+            continue
         print(
             "Month: {}, nights: {}".format(month, list(nightly_tables.keys())))
         nightly_table_htmls, statuses = list(), list()
         for night, night_info in nightly_tables.items():
+            if len(night_info) == 0:
+                continue
             ####################################
             ### Table for individual night ####
             ####################################
@@ -327,6 +331,9 @@ def generate_monthly_table_html(tables, statuses, month):
     return month_table_str
 
 def generate_nightly_table_html(night_info, night, show_null):
+    if len(night_info) == 0:
+        return '', 'NULL'
+
     ngood, ninter, nbad, nnull, nover, n_notnull, noprocess, norecord = \
         0, 0, 0, 0, 0, 0, 0, 0
 
