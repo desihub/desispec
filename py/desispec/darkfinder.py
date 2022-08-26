@@ -181,6 +181,9 @@ class DarkFinder(CalibFinder) :
         dark_filelist.sort()
         dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
 
+        bias_filelist = glob.glob("{}/bias_frames/bias-*{}*.fits.gz".format(self.directory,cameraid))
+        bias_filelist.sort()
+        bias_filelist = np.array([f for f in bias_filelist if cameraid in f])
         #this step will do the matching again that calibfinder does
         super().__init__(headers, yaml_file)
 
@@ -188,9 +191,9 @@ class DarkFinder(CalibFinder) :
             log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
             return
         
-        bias_filelist = glob.glob("{}/bias_frames/bias-*{}*.fits.gz".format(self.directory,cameraid))
-        bias_filelist.sort()
-        bias_filelist = np.array([f for f in bias_filelist if cameraid in f])
+        if len(bias_filelist) == 0:
+            log.warning("Didn't find matching calibration bias in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
+            return
 
         dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
         bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in bias_filelist])
@@ -209,8 +212,18 @@ class DarkFinder(CalibFinder) :
             if dateobs >= datebegin :
                 #TODO: extra checks that evaluate if selection from yaml file is matching...
                 date_used=datebegin
-                dark_filename=dark_filelist[dark_dates == date_used][0]
-                bias_filename=bias_filelist[bias_dates == date_used][0]   #this would ensure that we're using same date for bias and dark
+                dark_filename=dark_filelist[dark_dates == date_used]
+                if len(dark_filename)>0:
+                    dark_filename=dark_filename[0]
+                else:
+                    log.debug(f"no master dark model found for {datebegin}")
+                    continue
+                bias_filename=bias_filelist[bias_dates == date_used]
+                if len(dark_filename)>0:
+                    log.debug(f"no master bias model found for {datebegin}")
+                    bias_filename=bias_filename[0]   #this would ensure that we're using same date for bias and dark
+                else:
+                    continue
                 with fits.open(dark_filename,'readonly') as hdul:
                     headers2=hdul[0].header
                     
