@@ -210,9 +210,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Add -99 to keep calibration exposures
         completed_tiles = np.append([-99], completed_tiles)
-        log.info(f'Filtering by completed tiles in file {specstatus_path}')
         if etable is not None:
             keep = np.isin(etable['TILEID'], completed_tiles)
+            log.info(f'Filtering by completed tiles retained {sum(keep)}/{len(etable)} exposures')
         etable = etable[keep]
 
     ## Cut on LASTSTEP
