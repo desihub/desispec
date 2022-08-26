@@ -213,7 +213,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         if etable is not None:
             keep = np.isin(etable['TILEID'], completed_tiles)
             log.info(f'Filtering by completed tiles retained {sum(keep)}/{len(etable)} exposures')
-        etable = etable[keep]
+            etable = etable[keep]
 
     ## Cut on LASTSTEP
     good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
@@ -488,10 +488,6 @@ def get_completed_tiles(specstatus_path=None):
         raise IOError(f"Couldn't find {specstatus_path}, but " +
                       "only_completed_tiles was set. The script can't proceed.")
     specstatus = Table.read(specstatus_path)
-
-    ## As of 20220822 there are 90 SURVEY 'unknown' tiles, all of which are
-    ## either very early mini-sv2/SV0 tiles or dithprec/dithfocus tiles
-    specstatus = specstatus[specstatus['SURVEY'] != 'unknown']
 
     ## good tile selection
     iszdone = (specstatus['ZDONE'] == 'true')
