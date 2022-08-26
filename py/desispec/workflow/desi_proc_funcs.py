@@ -336,7 +336,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
-    elif jobdesc in ('TILENIGHT'):
+    elif jobdesc == 'TILENIGHT':
         runtime  = int(60. / 140. * ncameras * nexps) # 140 frames per node hour
         runtime += 20                                 # overhead
         ncores = config['cores_per_node']
@@ -350,17 +350,17 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
-    elif jobdesc in ('DARK'):
+    elif jobdesc == 'DARK':
         ncores, runtime = ncameras, 5
-    elif jobdesc in ('CCDCALIB'):
+    elif jobdesc == 'CCDCALIB':
         ncores, runtime = ncameras, 5
-    elif jobdesc in ('ZERO'):
+    elif jobdesc == 'ZERO':
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
         ncores, runtime = ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = ncameras, 5
-    elif jobdesc in ('STDSTARFIT'):
+    elif jobdesc == 'STDSTARFIT':
         #- Special case hardcode: stdstar parallelism maxes out at ~30 cores
         #- and on KNL, it OOMs above that anyway.
         #- This might be more related to using a max of 30 standards, not that
@@ -370,10 +370,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         runtime = 5+1*nexps
     elif jobdesc == 'POSTSTDSTAR':
         runtime = 10
-        if system_name[0:10] == 'perlmutter':
-            ncores = config['cores_per_node']
-        else:
-            ncores = ncameras
+        ncores = ncameras
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
