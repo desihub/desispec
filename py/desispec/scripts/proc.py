@@ -64,7 +64,6 @@ import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
-from desispec.util import runcmd
 
 from desitarget.targetmask import desi_mask
 
@@ -209,6 +208,9 @@ def main(args=None, comm=None):
 
         sys.exit(1)
 
+    if isinstance(args.cameras, str):
+        args.cameras = decode_camword(args.cameras)
+
     if only_nightlybias and args.cameras is None:
         args.cameras = decode_camword('a0123456789')
 
@@ -271,26 +273,40 @@ def main(args=None, comm=None):
     if args.nightlybias:
         timer.start('nightlybias')
 
-        cmd = f"desi_compute_nightly_bias -n {args.night}"
+        biasnightfiles = [findfile('biasnight', args.night, camera=cam) for cam in args.cameras]
+
+        camword = create_camword(args.cameras)
+        cmd = f"desi_compute_nightly_bias -n {args.night} -c {camword}"
 
         if rank == 0:
             log.info(f'RUNNING {cmd}')
 
-        desispec.scripts.nightly_bias.main(cmd.split()[1:], comm=comm)
+        result, success = runcmd(desispec.scripts.nightly_bias.main,
+                args=cmd.split()[1:], inputs=[], outputs=biasnightfiles, comm=comm)
+
+        if not success:
+            error_count += 1
+
         timer.stop('nightlybias')
 
     #- this might be just nightly bias, with no single exposure to process
     if args.expid is None:
+        if comm is not None:
+            all_error_counts = comm.gather(error_count, root=0)
+            error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+
         if rank == 0:
+            log.info('No expid given so stopping now')
+            if error_count > 0:
+                log.error(f'{error_count} processing errors; see logs above')
+
             duration_seconds = time.time() - start_time
             mm = int(duration_seconds) // 60
             ss = int(duration_seconds - mm*60)
-
-            log.info('No expid given; stopping now')
             log.info('All done at {}; duration {}m{}s'.format(
                 time.asctime(), mm, ss))
 
-        sys.exit()
+        sys.exit(error_count)
 
 
     #-------------------------------------------------------------------------

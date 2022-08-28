@@ -490,14 +490,16 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
 
             log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
 
-        if len(used_expdict)==0:
-            log.critical("No camera has enough zeros")
-            raise RuntimeError("No camera has enough zeros")
         expdict=used_expdict
-
 
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
+
+    if len(expdict) == 0:
+        if rank == 0:
+            log.critical("No camera has enough zeros")
+
+        raise RuntimeError("No camera has enough zeros")
 
     #- Rank 0 create output directory if needed
     if rank == 0:
@@ -552,7 +554,15 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
             defaultbias = cf.findfile('BIAS')
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
-            mdiff1, mdiff2 = compare_bias(rawtestfile, testbias, defaultbias)
+            try:
+                mdiff1, mdiff2 = compare_bias(rawtestfile, testbias, defaultbias)
+            except Exception as ex:
+                nfail+=1
+                log.error(f'Rank {rank} camera {camera} raised {type(ex)} exception {ex}')
+                for line in traceback.format_exception(*sys.exc_info()):
+                    log.error('  '+line.strip())
+                continue
+
             maxabs1 = np.max(np.abs(mdiff1))
             std1 = np.std(mdiff1)
             maxabs2 = np.max(np.abs(mdiff2))
