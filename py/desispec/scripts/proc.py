@@ -672,7 +672,7 @@ def main(args=None, comm=None):
 
                     if os.path.isfile(outpsf) :
                         os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-listed-fix"))
-                        subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
+                        os.system('cp {} {}'.format(outpsf,inpsf))
 
             dt = time.time() - t0
             log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
