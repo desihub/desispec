@@ -244,7 +244,7 @@ def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
 #################################
 def return_color_profile():
     color_profile = dict()
-    color_profile['STANDARD'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
+    color_profile['DEFAULT'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
     color_profile['NULL'] = {'font': '#34495e', 'background': '#ccd1d1'}  # gray on gray
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
     color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
@@ -307,7 +307,7 @@ def generate_monthly_table_html(tables, statuses, month):
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
 
     statuses = np.array(statuses)
-    monthlystatus = 'NULL'
+    monthlystatus = 'DEFAULT'
     if np.all(statuses == 'GOOD'):
         monthlystatus = 'GOOD'
     elif np.any(statuses == 'BAD'):
@@ -382,7 +382,7 @@ def generate_nightly_table_html(night_info, night, show_null):
                + f"Other: {nnull}"
                )
 
-    night_status = 'INCOMPLETE'
+    night_status = 'DEFAULT'
     if ngood == n_notnull:
         night_status = "GOOD"
     elif ninter > 0:
