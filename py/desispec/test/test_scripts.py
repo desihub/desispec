@@ -51,6 +51,11 @@ class TestScripts(unittest.TestCase):
         return
 
     def test_get_completed_tiles(self):
+        """
+        tests desispec.scripts.submit_night.get_completed_tiles(testfile)
+        to ensure that the tile selection logic matches the expectations.
+        The test varies ZDONE, SURVEY, EFFTIME_SPEC, and FAPRGRM.
+        """
         from desispec.scripts.submit_night import get_completed_tiles
         rows = []
         tiles_truth = []
@@ -87,7 +92,6 @@ class TestScripts(unittest.TestCase):
         tiles_truth.extend(list(range(1,19)))
 
         ## Test other criteria when zdone false
-        ## Test zdone always gives true
         ## nominal dark
         rows.append(['false', 'main', 1000., 1000., 0.85, 'dark', 21])  # fail
         rows.append(['false', 'sv', 1000., 1000., 0.85, 'dark', 22])  # pass
