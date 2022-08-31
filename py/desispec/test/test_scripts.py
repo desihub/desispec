@@ -7,6 +7,7 @@ from __future__ import absolute_import, division
 
 import os
 import unittest
+from uuid import uuid4
 from astropy.table import Table
 
 
@@ -117,8 +118,11 @@ class TestScripts(unittest.TestCase):
         tiles_truth.extend([22, 24, 28, 30, 33, 34, 35, 36])
 
         test_table = Table(names=row_names, rows=rows)
-        test_table.write(self.testfile, overwrite=True)
-        tiles_test = list(get_completed_tiles(self.testfile))
+        testfile = f'test-{uuid4().hex}.ecsv'
+        test_table.write(testfile, overwrite=True)
+        tiles_test = list(get_completed_tiles(testfile))
+        if os.path.exists(testfile):
+            os.remove(testfile)
         self.assertListEqual(tiles_truth, tiles_test)
 
     def clear_environment(self):
@@ -132,7 +136,6 @@ class TestScripts(unittest.TestCase):
                 environ[k] = self.environ_cache[k]
         self.environ_cache.clear()
         return
-
 
 def test_suite():
     """Allows testing of only this module with the command::
