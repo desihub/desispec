@@ -140,3 +140,7 @@ def test_suite():
         python setup.py test -m <modulename>
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
+
+if __name__ == '__main__':
+    unittest.main()
