@@ -74,8 +74,8 @@ def parse_args():  # options=None):
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     parser.add_argument("--use-tilenight", action="store_true",
                         help="Use desi_proc_tilenight for prestdstar, stdstar, and poststdstar steps.")
-    parser.add_argument("--only-completed-tiles", action="store_true",
-                        help="Set to restrict to completed tiles as defined by the table pointed to by specstatus_path.")
+    parser.add_argument("--all-tiles", action="store_true",
+                        help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
     parser.add_argument("--specstatus-path", type=str, required=False, default=None,
                         help="Location of the surveyops specstatus table. Default is "+
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")

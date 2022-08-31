@@ -28,7 +28,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
-                 only_completed_tiles=False, specstatus_path=None):
+                 all_tiles=False, specstatus_path=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -71,7 +71,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         laststeps, array-like, optional. Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
         use_tilenight, bool, optional. Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
                              and poststdstar steps for science exposures.
-        only_completed_tiles, bool, optional. Default is False. Set to restrict to completed tiles as defined by
+        all_tiles, bool, optional. Default is False. Set to NOT restrict to completed tiles as defined by
                                               the table pointed to by specstatus_path.
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
@@ -205,7 +205,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         #    ptable = ptable[keep]
 
     ## If asked to do so, only process tiles deemed complete by the specstatus file
-    if only_completed_tiles:
+    if not all_tiles:
         completed_tiles = get_completed_tiles(specstatus_path)
 
         ## Add -99 to keep calibration exposures
@@ -485,8 +485,7 @@ def get_completed_tiles(specstatus_path=None):
                                        'tiles-specstatus.ecsv')
         log.info(f"specstatus_path not defined, setting default to {specstatus_path}.")
     if not os.path.exists(specstatus_path):
-        raise IOError(f"Couldn't find {specstatus_path}, but " +
-                      "only_completed_tiles was set. The script can't proceed.")
+        raise IOError(f"Couldn't find {specstatus_path}.")
     specstatus = Table.read(specstatus_path)
 
     ## good tile selection
@@ -502,5 +501,4 @@ def get_completed_tiles(specstatus_path=None):
     ## main backup also don't have zdone set, so also pass those with enough time
     goodtiles |= (isenoughtime & (specstatus['FAPRGRM'] == 'backup'))
 
-    specstatus = specstatus[goodtiles]
-    return np.array(specstatus['TILEID'])
+    return np.array(specstatus['TILEID'][goodtiles])
