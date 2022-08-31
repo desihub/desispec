@@ -40,7 +40,7 @@ def parse(options):
                         help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
     parser.add_argument('--output-dir', type=str, default=None,
                         help="output portal directory for the html pages, which defaults to your home directory ")
-    parser.add_argument('--output-name', type=str, default='dashboard.html',
+    parser.add_argument('--output-name', type=str, default='zdashboard.html',
                         help="name of the html page (to be placed in --output-dir).")
     parser.add_argument('--specprod', type=str,
                         help="overwrite the environment keyword for $SPECPROD")
