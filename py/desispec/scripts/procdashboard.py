@@ -349,7 +349,7 @@ def populate_night_info(night, check_on_disk=False,
         elif nfiles[terminal_step] == nexpected:
             row_color = 'GOOD'
         else:
-            row_color = 'OVERFUL'
+            row_color = 'OVERFULL'
 
         if expid in expid_processing:
             status = 'processing'
