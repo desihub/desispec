@@ -50,7 +50,7 @@ class TestScripts(unittest.TestCase):
         return
 
     def test_get_completed_tiles(self):
-        from ..scripts.submit_night import get_completed_tiles
+        from desispec.scripts.submit_night import get_completed_tiles
         rows = []
         tiles_truth = []
         row_names = ['ZDONE', 'SURVEY', 'EFFTIME_SPEC', 'GOALTIME',
