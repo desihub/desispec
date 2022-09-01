@@ -1140,6 +1140,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
     log.info(f"Running tilenight.\n")
 
     tnight_prow = make_tnight_prow(prows, calibjobs, internal_id=internal_id)
+    internal_id += 1
     tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=False,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)

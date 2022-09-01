@@ -1341,6 +1341,13 @@ class TestIO(unittest.TestCase):
         self.assertEqual(list(t['readwrite']), ['write', 'read'])
         self.assertEqual(list(t['duration']), [1.23, 2.56])
 
+        #- logfile without iotime messages
+        with open(self.testlog, 'w') as logfile:
+            logfile.write('INFO:blat.py:42:blat: hello\n')
+            logfile.write('ERROR:blat.py:45:blat: goodbye\n')
+
+        t = iotime.parse_logfile(self.testlog)
+        self.assertEqual(t, None)
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -144,30 +144,85 @@ def main(args=None, comm=None):
             prestdstar_args += f' --badamps {badamps[expid]}'
         if rank==0:
             log.info(f'running desi_proc {prestdstar_args}')
-        prestdstar_args = proc.parse(prestdstar_args.split())
+        prestdstar_args_parsed = proc.parse(prestdstar_args.split())
         if not args.dryrun:
-            error_count += proc.main(prestdstar_args,comm)
+            try:
+                errcode = proc.main(prestdstar_args_parsed,comm)
+                if errcode != 0:
+                    error_count += 1
+            except (BaseException, Exception) as e:
+                import traceback
+                lines = traceback.format_exception(*sys.exc_info())
+                log.error(f"prestdstar step using desi_proc with args {prestdstar_args} raised an exception:")
+                print("".join(lines))
+                log.warning(f'continuing to next prestdstar exposure, if any')
+                error_count += 1
 
-    #- run joint stdstar fit using all exp for this tile night
-    stdstar_args  = common_args + mpi_args
-    stdstar_args += f' --obstype science --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
-    if rank==0:
-        log.info(f'running desi_proc_joint_fit {stdstar_args}')
-    stdstar_args = proc_joint_fit.parse(stdstar_args.split())
-    if not args.dryrun:
-        error_count += proc_joint_fit.main(stdstar_args, comm)   
+    #- collect post prestdstar error count
+    if comm is not None:
+        all_error_counts = comm.gather(error_count, root=0)
+        error_count_pre = int(comm.bcast(np.sum(all_error_counts), root=0))
+    else:
+        error_count_pre = error_count
 
-    #- run desiproc poststdstar over exps
-    for expid in poststdstar_expids:
-        poststdstar_args  = common_args
-        poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {camwords[expid]}'
-        if len(badamps[expid]) > 0:
-            poststdstar_args += f' --badamps {badamps[expid]}'
+    continue_tilenight=True
+    if error_count_pre > 0:
+        if rank == 0:
+            log.info(f'prestdstar failed with {error_count_pre} errors, skipping rest of tilenight steps')
+        continue_tilenight=False
+
+    if continue_tilenight:
+        #- run joint stdstar fit using all exp for this tile night
+        stdstar_args  = common_args + mpi_args
+        stdstar_args += f' --obstype science --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
         if rank==0:
-            log.info(f'running desi_proc {poststdstar_args}')
-        poststdstar_args = proc.parse(poststdstar_args.split())
+            log.info(f'running desi_proc_joint_fit {stdstar_args}')
+        stdstar_args_parsed = proc_joint_fit.parse(stdstar_args.split())
         if not args.dryrun:
-            error_count += proc.main(poststdstar_args, comm)
+            try:
+                errcode = proc_joint_fit.main(stdstar_args_parsed, comm)
+                if errcode != 0:
+                    error_count += 1
+            except (BaseException, Exception) as e:
+                import traceback
+                lines = traceback.format_exception(*sys.exc_info())
+                log.error(f"joint fit step using desi_proc_joint_fit with args {stdstar_args} raised an exception:")
+                print("".join(lines))
+                error_count += 1
+
+        #- collect post joint fit error count
+        if comm is not None:
+            all_error_counts = comm.gather(error_count, root=0)
+            error_count_jnt = int(comm.bcast(np.sum(all_error_counts), root=0))
+        else:
+            error_count_jnt = error_count
+
+        if error_count_jnt > 0:
+            if rank == 0:
+                log.info(f'joint fitting failed with {error_count_jnt} errors, skipping rest of tilenight steps')
+            continue_tilenight=False
+
+    if continue_tilenight:
+        #- run desiproc poststdstar over exps
+        for expid in poststdstar_expids:
+            poststdstar_args  = common_args
+            poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {camwords[expid]}'
+            if len(badamps[expid]) > 0:
+                poststdstar_args += f' --badamps {badamps[expid]}'
+            if rank==0:
+                log.info(f'running desi_proc {poststdstar_args}')
+            poststdstar_args_parsed = proc.parse(poststdstar_args.split())
+            if not args.dryrun:
+                try:
+                    errcode = proc.main(poststdstar_args_parsed, comm)
+                    if errcode != 0:
+                        error_count += 1
+                except (BaseException, Exception) as e:
+                    import traceback
+                    lines = traceback.format_exception(*sys.exc_info())
+                    log.error(f"joint fit step using desi_proc_joint_fit with args {poststdstar_args} raised an exception:")
+                    print("".join(lines))
+                    error_count += 1
 
     #-------------------------------------------------------------------------
     #- Collect error count
