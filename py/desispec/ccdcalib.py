@@ -12,7 +12,7 @@ from scipy.signal import savgol_filter
 from desispec import io
 from desispec.preproc import masked_median
 # from desispec.preproc import parse_sec_keyword, calc_overscan
-from desispec.preproc import parse_sec_keyword, get_amp_ids
+from desispec.preproc import parse_sec_keyword, get_amp_ids, get_readout_mode
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
 from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords
@@ -490,14 +490,16 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
 
             log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
 
-        if len(used_expdict)==0:
-            log.critical("No camera has enough zeros")
-            raise RuntimeError("No camera has enough zeros")
         expdict=used_expdict
-
 
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
+
+    if len(expdict) == 0:
+        if rank == 0:
+            log.critical("No camera has enough zeros")
+
+        raise RuntimeError("No camera has enough zeros")
 
     #- Rank 0 create output directory if needed
     if rank == 0:
@@ -552,7 +554,15 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
             defaultbias = cf.findfile('BIAS')
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
-            mdiff1, mdiff2 = compare_bias(rawtestfile, testbias, defaultbias)
+            try:
+                mdiff1, mdiff2 = compare_bias(rawtestfile, testbias, defaultbias)
+            except Exception as ex:
+                nfail+=1
+                log.error(f'Rank {rank} camera {camera} raised {type(ex)} exception {ex}')
+                for line in traceback.format_exception(*sys.exc_info()):
+                    log.error('  '+line.strip())
+                continue
+
             maxabs1 = np.max(np.abs(mdiff1))
             std1 = np.std(mdiff1)
             maxabs2 = np.max(np.abs(mdiff2))
@@ -617,9 +627,22 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     image = image.astype(float)
     subtract_peramp_overscan(image, hdr)
 
-    #- calculate differences per-amp, thus //2
-    ny_groups = ny//2
-    nx_groups = nx//2
+    #- calculate differences per-amp
+    readout_mode = get_readout_mode(hdr)
+    if readout_mode == '4Amp':
+        ny_groups = ny//2
+        nx_groups = nx//2
+    elif readout_mode == '2AmpLeftRight':
+        ny_groups = ny
+        nx_groups = nx//2
+    elif readout_mode == '2AmpUpDown':
+        ny_groups = ny//2
+        nx_groups = nx
+    else:
+        msg = f'Unknown {readout_mode=}'
+        log.critical(msg)
+        raise ValueError(msg)
+
     diff1 = image - bias1
     diff2 = image - bias2
 
@@ -652,8 +675,16 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     #- put back into 2D array by amp
     d1 = median_diff1
     d2 = median_diff2
-    mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
-    mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+
+    if readout_mode == '4Amp':
+        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
+        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+    elif readout_mode == '2AmpLeftRight':
+        mdiff1 = np.hstack([d1[0], d1[1]])
+        mdiff2 = np.hstack([d2[0], d2[1]])
+    elif readout_mode == '2AmpUpDown':
+        mdiff1 = np.vstack([d1[0], d1[1]])
+        mdiff2 = np.vstack([d2[0], d2[1]])
 
     assert mdiff1.shape == (ny,nx)
     assert mdiff2.shape == (ny,nx)
