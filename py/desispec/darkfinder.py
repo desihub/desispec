@@ -219,10 +219,10 @@ class DarkFinder(CalibFinder) :
                     log.debug(f"no master dark model found for {datebegin}")
                     continue
                 bias_filename=bias_filelist[bias_dates == date_used]
-                if len(dark_filename)>0:
-                    log.debug(f"no master bias model found for {datebegin}")
+                if len(bias_filename)>0:
                     bias_filename=bias_filename[0]   #this would ensure that we're using same date for bias and dark
                 else:
+                    log.debug(f"no master bias model found for {datebegin}")
                     continue
                 with fits.open(dark_filename,'readonly') as hdul:
                     headers2=hdul[0].header
@@ -241,7 +241,23 @@ class DarkFinder(CalibFinder) :
                         if headers2["CCDTMING"].strip() is None or headers2["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
                             continue
-                    #This check is not done with the bias frames assuming they are always generated in pairs
+                with fits.open(bias_filename,'readonly') as hdul:
+                    headers2=hdul[0].header
+                    
+                    #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
+                    if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"]))
+                        continue
+
+                    if "CCDCFG" in self.data :
+                        if headers2["CCDCFG"].strip() is None or headers2["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_filename,headers2["CCDCFG"],self.data["CCDCFG"]))
+                            continue
+
+                    if "CCDTMING" in self.data :
+                        if headers2["CCDTMING"].strip() is None or headers2["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
+                            continue
                 count+=1
                 found=True
                 log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
