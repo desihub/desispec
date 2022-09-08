@@ -43,7 +43,7 @@ parser.add_argument('--nskip-zeros', type=int, default=None, required=False,
                          'only morning ZEROs and specific DARK sequence ZEROs are used)')
 parser.add_argument('--system-name', type=str, default=None, required=False,
                     help='Name of system to make scripts for (default: current system)')
-parser.add_argument('--no-obstable', action='store_true',
+parser.add_argument('--no-obslist', action='store_true',
                     help='Do not use list of observations for the computation, instead parse from all frames observed in the timespan')
 args        = parser.parse_args()
 
