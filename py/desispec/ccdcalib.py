@@ -1048,7 +1048,8 @@ cp {biasfile}  bias_frames/{biasfile}
 def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None):
+                      copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None,
+                      no_obslist=False):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -1067,6 +1068,8 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
         queue (str): which batch queue to use for submission
         transmit_obslist(bool): if True will give use the obslist from here downstream
         system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
+        no_obslist(str): just use exactly the specified night-range, but assume we do not have exposure tables for this (useful when there is no exposure_table yet)
+
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -1083,86 +1086,90 @@ def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
 
     #probably run a script here that updates the obslist or checks it's up-to-date
 
-    obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
-
-    #TODO: nights does not yet end with lastnight need fix
-    startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window)
+    startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window-1)
     nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
 
+    if no_obslist:
+        #this part is only to allow running the dark scripts before we have an exposure table
+        usenights=[]
+        for n in nights:
+            if len(glob.glob(f"{os.getenv('DESI_SPECTRO_DATA')}/{n}/*"))>0:
+                usenights.append(n)
+        nights=usenights
 
-    #TODO: the following steps should probably be done by spectrograph and then marking spectrographs that changed in between as bad for nights before the change (allowing other spectrographs to still use more data...)
-    #this could probably use calibfinder instead to find the setups...
+        obslist=None
+        use_exptable=False
+    else:
+        obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
 
-    #read all calib files to get dates of changes
-    yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
-    all_config_data={}
-    for y_file in yaml_filenames:
-        with open(y_file) as f:
-            y_data=yaml.safe_load(f)
-        all_config_data.update(y_data)
+        #read all calib files to get dates of changes
+        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
+        all_config_data={}
+        for y_file in yaml_filenames:
+            with open(y_file) as f:
+                y_data=yaml.safe_load(f)
+            all_config_data.update(y_data)
 
-    #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
-    change_dates={k:[] for k in all_config_data.keys()}
-    for speckey,data in all_config_data.items():
-        required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
-        required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
-        usever,useval=required_keys[0]
-        for newver,newval in required_keys[1:]:
-            usenew=True
-            for key in ['DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']:
-                if useval[key]!=newval[key]:
-                    usenew = False
-                    break
-            
-            if not usenew:
-                change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
+        #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
+        change_dates={k:[] for k in all_config_data.keys()}
+        for speckey,data in all_config_data.items():
+            required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
+            required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
+            usever,useval=required_keys[0]
+            for newver,newval in required_keys[1:]:
+                usenew=True
+                for key in ['DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']:
+                    if useval[key]!=newval[key]:
+                        usenew = False
+                        break
+                
+                if not usenew:
+                    change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
+                    useval = newval
+                    usever = newver
                 useval = newval
                 usever = newver
-            useval = newval
-            usever = newver
-    change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
+        change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
 
-    nights = [n for n in nights if n in obslist['NIGHT']]
-    if len(nights)==0:
-        log.critical("No darks were taken for this time frame, exiting")
-        sys.exit(1)
-    change_dates_in_nights=[d for d in change_dates_any_spectrograph if d<max(nights) and d>min(nights)]
+        nights = [n for n in nights if n in obslist['NIGHT']]
+        if len(nights)==0:
+            log.critical("No darks were taken for this time frame, exiting")
+            sys.exit(1)
+        change_dates_in_nights=[d for d in change_dates_any_spectrograph if d<max(nights) and d>min(nights)]
 
-    #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
-    change_dates_relevant={}
-    for speckey,dates in change_dates.items():
-        dates_relevant= [date for date in dates if date in change_dates_in_nights]
-        if len(dates_relevant)>0:
-            dates_relevant.sort()
-            change_dates_relevant[speckey]=dates_relevant[-1]
+        #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
+        change_dates_relevant={}
+        for speckey,dates in change_dates.items():
+            dates_relevant= [date for date in dates if date in change_dates_in_nights]
+            if len(dates_relevant)>0:
+                dates_relevant.sort()
+                change_dates_relevant[speckey]=dates_relevant[-1]
 
-    obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
-    for i,o in enumerate(obslist):
-        for speckey, date in change_dates_relevant.items():
-            if o['NIGHT']<date:
-                badcamword_decoded=decode_camword(o['BADCAMWORD'])
-                spec=sm2sp(speckey.split('-')[0])
-                color=speckey[-1]
-                mask_sp=f"{color}{spec[-1]}"
-                if mask_sp not in badcamword_decoded:
-                    badcamword_decoded.append(mask_sp)
-                badcamword_encoded=create_camword(badcamword_decoded)
-                obslist[i]['BADCAMWORD']=badcamword_encoded
-
-    #if len(change_dates_in_nights)>0:
-    #    nights = [n for n in nights if n >= max(change_dates_in_nights)]
-
-    #truncate to the right nights
-    if transmit_obslist:
         obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
-        if nskip_zeros is None:
-            nskip_zeros = 0
-    else:
-        obslist = None
+        for i,o in enumerate(obslist):
+            for speckey, date in change_dates_relevant.items():
+                if o['NIGHT']<date:
+                    badcamword_decoded=decode_camword(o['BADCAMWORD'])
+                    spec=sm2sp(speckey.split('-')[0])
+                    color=speckey[-1]
+                    mask_sp=f"{color}{spec[-1]}"
+                    if mask_sp not in badcamword_decoded:
+                        badcamword_decoded.append(mask_sp)
+                    badcamword_encoded=create_camword(badcamword_decoded)
+                    obslist[i]['BADCAMWORD']=badcamword_encoded
 
-    #TODO: potentially need to do further selections based on quality, but should not be needed as this is done in desi_compute_dark_nonlinear
+        #if len(change_dates_in_nights)>0:
+        #    nights = [n for n in nights if n >= max(change_dates_in_nights)]
 
-    #could in principle parse the obslist for all relevant nights and give to the make_dark_scripts...
+        #truncate to the right nights
+        if transmit_obslist:
+            obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
+            if nskip_zeros is None:
+                nskip_zeros = 0
+        else:
+            obslist = None
+
+        #TODO: potentially need to do further selections based on quality, but should not be needed as this is done in desi_compute_dark_nonlinear
 
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
