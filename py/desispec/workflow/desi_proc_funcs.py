@@ -313,14 +313,21 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         jobdesc: str, type of data being processed
         queue: str, the queue at NERSC to be submitted to. 'realtime' will force
                     restrictions on number of nodes.
+
+    Options:
+        nexps: int, the number of exposures processed in this step
         force_runtime: int, the amount of runtime in minutes to allow for the script. Should be left
                             to default heuristics unless needed for some reason.
+        system_name: str, batch compute system, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
         ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
         nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // cores_per_node + 1
         runtime: int, the max time requested for the script in minutes for the processing.
     """
+    if system_name is None:
+        system_name = batch.default_system()
+
     config = batch.get_config(system_name)
     log = get_logger()
     jobdesc = jobdesc.upper()
