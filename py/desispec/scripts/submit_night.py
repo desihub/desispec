@@ -172,7 +172,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## Sort science exposures by TILEID
     sciexps = (etable['OBSTYPE']=='science')
-    scisrtd = etable[sciexps].argsort(['TILEID'])
+    scisrtd = etable[sciexps].argsort(['TILEID','EXPID'])
     etable[sciexps] = etable[sciexps][scisrtd]
 
     ## filter by TILEID if requested
