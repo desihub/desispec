@@ -273,16 +273,33 @@ def main(args=None, comm=None):
     if args.nightlybias:
         timer.start('nightlybias')
 
-        biasnightfiles = [findfile('biasnight', args.night, camera=cam) for cam in args.cameras]
-
         camword = create_camword(args.cameras)
         cmd = f"desi_compute_nightly_bias -n {args.night} -c {camword}"
 
         if rank == 0:
             log.info(f'RUNNING {cmd}')
 
+        #- Note: nightly_bias may not produce all biasnight files if some
+        #- are determined to be worse than the default, so check existence
+        #- of output files separately.
         result, success = runcmd(desispec.scripts.nightly_bias.main,
-                args=cmd.split()[1:], inputs=[], outputs=biasnightfiles, comm=comm)
+                args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
+
+        #- check for biasnight or biasnighttest output files
+        missing_biasnight = 0
+        if rank == 0:
+            biasnightfiles = [findfile('biasnight', args.night, camera=cam) for cam in args.cameras]
+            for filename in biasnightfiles:
+                if not os.path.exists(filename):
+                    #- ok for biasnight to be missing if biasnighttest is there
+                    filename = replace_prefix(filename, 'biasnight', 'biasnighttest')
+                    if not os.path.exists(filename):
+                        missing_biasnight += 1
+
+        if comm is not None:
+            missing_biasnight = comm.bcast(missing_biasnight, root=0)
+
+        success &= (missing_biasnight == 0)
 
         if not success:
             error_count += 1
