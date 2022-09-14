@@ -538,7 +538,7 @@ wait
         if not noafterburners:
             fx.write(f"""
 echo
-echo --- Running QSO and EM afterburners at $(date)
+echo --- Running QSO and emline afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
@@ -589,7 +589,7 @@ for SPECTRO in {spectro_string}; do
     fi
 
 done
-echo Waiting for QSO and EM afterburners to finish at $(date)
+echo Waiting for QSO and emline afterburners to finish at $(date)
 wait
 """)
 
