@@ -496,13 +496,16 @@ wait
         if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
+echo --- Running desi_tile_qa at $(date)
 tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
-    echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
+    echo $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
+    echo Running desi_tile_qa, see $tile_qa_log
+    cmd="desi_tile_qa -g {group} -n {night} -t {tileid}"
+    echo RUNNING $cmd &> $tile_qa_log
+    $cmd &>> $tile_qa_log
 fi
 """)
 
