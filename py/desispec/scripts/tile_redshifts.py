@@ -588,15 +588,12 @@ for SPECTRO in {spectro_string}; do
 done
 echo Waiting for QSO afterburners to finish at $(date)
 wait
-done
-echo Waiting for QSO afterburners to finish at $(date)
-wait
 """)
 
         fx.write(f"""
 echo
 echo --- Files in {outdir}:
-for prefix in spectra coadd redrock zmtl qso_qn qso_mgii emline tile-qa; do
+for prefix in spectra coadd redrock tile-qa zmtl qso_qn qso_mgii emline; do
     echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
 done
 
