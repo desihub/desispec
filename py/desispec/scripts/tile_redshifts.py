@@ -541,9 +541,11 @@ for SPECTRO in {spectro_string}; do
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
+    emfit={outdir}/emline-$SPECTRO-{suffix}.fits
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
     qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
-
+    emfitlog={logdir}/emline-$SPECTRO-{suffix}.log
+    
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
@@ -570,6 +572,22 @@ for SPECTRO in {spectro_string}; do
         echo ERROR: missing $(basename $redrock), skipping QSO QN afterburner
     fi
 
+    # EM Line Fit afterburner
+    if [ -f $emfit ]; then
+        echo $(basename $emfit) already exists, skipping EM Line Fit afterburner
+    elif [ -f $redrock ]; then
+        echo Running EM Line Fit afterburner, see $emfitlog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_emlinefit_afterburner --coadd $coadd --redrock $redrock --output $emfit"
+        echo RUNNING $cmd &> $emfitlog
+        $cmd &>> $emfitlog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $redrock), skipping EM Line Fit afterburner
+    fi
+
+done
+echo Waiting for QSO afterburners to finish at $(date)
+wait
 done
 echo Waiting for QSO afterburners to finish at $(date)
 wait
@@ -578,7 +596,7 @@ wait
         fx.write(f"""
 echo
 echo --- Files in {outdir}:
-for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
+for prefix in spectra coadd redrock zmtl qso_qn qso_mgii emline tile-qa; do
     echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
 done
 
