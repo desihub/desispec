@@ -589,7 +589,7 @@ for SPECTRO in {spectro_string}; do
     fi
 
 done
-echo Waiting for QSO afterburners to finish at $(date)
+echo Waiting for QSO and EM afterburners to finish at $(date)
 wait
 """)
 
