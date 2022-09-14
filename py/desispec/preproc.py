@@ -43,6 +43,38 @@ def get_amp_ids(header):
         raise KeyError("No keyword BIASSECX with X in A,B,C,D,1,2,3,4 in header")
     return amp_ids
 
+def get_readout_mode(header):
+    """
+    Derive CCD readout mode from CCD header
+
+    Args:
+        header: dict-like FITS header object with BIASSEC keywrds
+
+    Returns "4Amp", "2AmpLeftRight", or "2AmpUpDown"
+
+    "4Amp" means all 4 amps (ABCD) were used for CCD readout;
+    "2AmpLeftRight" means 1 left amp (AC) and 1 right amp (BD) were used;
+    "2AmpUpDown" means 1 upper amp (CD) and one lower (AB) were used.
+    """
+
+    # Amp arrangement:
+    #   C D    3 4
+    #   A B or 1 2
+
+    # python note: set('ABCD') == set(['A', 'B', 'C', 'D']), not set(['ABCD',])
+    ampids = set(get_amp_ids(header))
+    if ampids in [set('ABCD'), set('1234')]:
+        return "4Amp"
+    elif ampids in [set('AB'), set('CD'), set('12'), set('34')]:
+        return "2AmpLeftRight"
+    elif ampids in [set('AC'), set('BD'), set('13'), set('24')]:
+        return "2AmpUpDown"
+    else:
+        log = get_logger()
+        msg = f"Unknown CCD readout mode with amps {ampids}"
+        log.error(msg)
+        raise ValueError(msg)
+
 def _parse_sec_keyword(value):
     log = get_logger()
     log.warning('please use parse_sec_keyword (no underscore)')

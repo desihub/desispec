@@ -64,7 +64,6 @@ import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
-from desispec.util import runcmd
 
 from desitarget.targetmask import desi_mask
 
@@ -209,6 +208,9 @@ def main(args=None, comm=None):
 
         sys.exit(1)
 
+    if isinstance(args.cameras, str):
+        args.cameras = decode_camword(args.cameras)
+
     if only_nightlybias and args.cameras is None:
         args.cameras = decode_camword('a0123456789')
 
@@ -271,26 +273,57 @@ def main(args=None, comm=None):
     if args.nightlybias:
         timer.start('nightlybias')
 
-        cmd = f"desi_compute_nightly_bias -n {args.night}"
+        camword = create_camword(args.cameras)
+        cmd = f"desi_compute_nightly_bias -n {args.night} -c {camword}"
 
         if rank == 0:
             log.info(f'RUNNING {cmd}')
 
-        desispec.scripts.nightly_bias.main(cmd.split()[1:], comm=comm)
+        #- Note: nightly_bias may not produce all biasnight files if some
+        #- are determined to be worse than the default, so check existence
+        #- of output files separately.
+        result, success = runcmd(desispec.scripts.nightly_bias.main,
+                args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
+
+        #- check for biasnight or biasnighttest output files
+        missing_biasnight = 0
+        if rank == 0:
+            biasnightfiles = [findfile('biasnight', args.night, camera=cam) for cam in args.cameras]
+            for filename in biasnightfiles:
+                if not os.path.exists(filename):
+                    #- ok for biasnight to be missing if biasnighttest is there
+                    filename = replace_prefix(filename, 'biasnight', 'biasnighttest')
+                    if not os.path.exists(filename):
+                        missing_biasnight += 1
+
+        if comm is not None:
+            missing_biasnight = comm.bcast(missing_biasnight, root=0)
+
+        success &= (missing_biasnight == 0)
+
+        if not success:
+            error_count += 1
+
         timer.stop('nightlybias')
 
     #- this might be just nightly bias, with no single exposure to process
     if args.expid is None:
+        if comm is not None:
+            all_error_counts = comm.gather(error_count, root=0)
+            error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+
         if rank == 0:
+            log.info('No expid given so stopping now')
+            if error_count > 0:
+                log.error(f'{error_count} processing errors; see logs above')
+
             duration_seconds = time.time() - start_time
             mm = int(duration_seconds) // 60
             ss = int(duration_seconds - mm*60)
-
-            log.info('No expid given; stopping now')
             log.info('All done at {}; duration {}m{}s'.format(
                 time.asctime(), mm, ss))
 
-        sys.exit()
+        sys.exit(error_count)
 
 
     #-------------------------------------------------------------------------

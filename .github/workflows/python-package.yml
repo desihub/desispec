@@ -20,6 +20,7 @@ jobs:
                 python-version: ['3.9']  # fuji+guadalupe, not ready for 3.10 yet
                 astropy-version: ['==5.0', '<5.1']  # fuji+guadalupe, latest
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
+                numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
             DESIUTIL_VERSION: 3.2.5
             DESIMODEL_DATA: branches/test-0.17
@@ -39,6 +40,7 @@ jobs:
                 python -m pip install pytest
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
+                python -m pip install -U 'numpy${{ matrix.numpy-version }}'
                 python -m pip install -U 'astropy${{ matrix.astropy-version }}'
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
