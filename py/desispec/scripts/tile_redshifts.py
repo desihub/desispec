@@ -597,7 +597,7 @@ wait
 echo
 echo --- Files in {outdir}:
 for prefix in spectra coadd redrock tile-qa zmtl qso_qn qso_mgii emline; do
-    echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
+    echo  "   " $(ls {outdir}/$prefix*.fits* |& grep -v 'cannot access' | wc -l) $prefix
 done
 
 popd &> /dev/null
