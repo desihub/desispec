@@ -496,13 +496,16 @@ wait
         if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
+echo --- Running desi_tile_qa at $(date)
 tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
-    echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
+    echo $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
+    echo Running desi_tile_qa, see $tile_qa_log
+    cmd="desi_tile_qa -g {group} -n {night} -t {tileid}"
+    echo RUNNING $cmd &> $tile_qa_log
+    $cmd &>> $tile_qa_log
 fi
 """)
 
@@ -535,15 +538,17 @@ wait
         if not noafterburners:
             fx.write(f"""
 echo
-echo --- Running QSO afterburners at $(date)
+echo --- Running QSO and emline afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
+    emfit={outdir}/emline-$SPECTRO-{suffix}.fits
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
     qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
-
+    emfitlog={logdir}/emline-$SPECTRO-{suffix}.log
+    
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
@@ -570,16 +575,29 @@ for SPECTRO in {spectro_string}; do
         echo ERROR: missing $(basename $redrock), skipping QSO QN afterburner
     fi
 
+    # EM Line Fit afterburner
+    if [ -f $emfit ]; then
+        echo $(basename $emfit) already exists, skipping EM Line Fit afterburner
+    elif [ -f $redrock ]; then
+        echo Running EM Line Fit afterburner, see $emfitlog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_emlinefit_afterburner --coadd $coadd --redrock $redrock --output $emfit"
+        echo RUNNING $cmd &> $emfitlog
+        $cmd &>> $emfitlog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $redrock), skipping EM Line Fit afterburner
+    fi
+
 done
-echo Waiting for QSO afterburners to finish at $(date)
+echo Waiting for QSO and emline afterburners to finish at $(date)
 wait
 """)
 
         fx.write(f"""
 echo
 echo --- Files in {outdir}:
-for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
-    echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
+for prefix in spectra coadd redrock tile-qa zmtl qso_qn qso_mgii emline; do
+    echo  "   " $(ls {outdir}/$prefix*.fits* |& grep -v 'cannot access' | wc -l) $prefix
 done
 
 popd &> /dev/null
