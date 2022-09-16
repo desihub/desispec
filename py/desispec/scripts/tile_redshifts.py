@@ -192,7 +192,8 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
-        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits*')
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}'
+                          +'.fits{,.gz}')
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
@@ -404,11 +405,12 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $spectra) already exists, skipping grouping
     else
         # Check if any input frames exist
-        CFRAMES=$(ls {frame_glob})
-        MISSING_CFRAMES=$?
+        # Use echo instead of ls because it doesn't raise an error for missing entries
+        CFRAMES=$(echo {frame_glob})
+        NUM_TERMS=$(echo "{frame_glob}" | wc -w)
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $MISSING_CFRAMES -ne 0 ] && [ $NUM_CFRAMES -gt 0 ]; then
-            echo ERROR: some expected cframes missing for spectrograph $SPECTRO but proceeding anyway
+        if [ $NUM_TERMS -ne $NUM_CFRAMES ]; then
+            echo ERROR: some expected cframes missing for spectrograph $SPECTRO with $NUM_TERMS search terms and only $NUM_CFRAMES found. Proceeding anyway
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
