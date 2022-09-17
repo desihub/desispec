@@ -785,9 +785,17 @@ def get_tempfilename(filename):
     race condition protection (the last one do do os.rename wins, but at least
     different processes won't corrupt each other's files).
     """
-    base, extension = os.path.splitext(filename)
     pid = os.getpid()
-    tempfile = f'{base}_tmp{pid}{extension}'
+    if filename.endswith('.gz'):
+        second_ext = '.gz'
+        filename = filename.rstrip(second_ext)
+    elif filename.endswith('.fz'):
+        second_ext = '.fz'
+        filename = filename.rstrip(second_ext)
+    else:
+        second_ext = ''
+    base, extension = os.path.splitext(filename)
+    tempfile = f'{base}_tmp{pid}{extension}{second_ext}'
     return tempfile
 
 def addkeys(hdr1, hdr2, skipkeys=None):
