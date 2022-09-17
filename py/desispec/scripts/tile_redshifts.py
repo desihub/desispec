@@ -409,8 +409,8 @@ for SPECTRO in {spectro_string}; do
         CFRAMES=$(ls {frame_glob} 2>/dev/null)
         NUM_TERMS=$(echo "{frame_glob}" | wc -w)
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $NUM_CFRAMES -gt $NUM_TERMS ]; then
-            echo ERROR: some expected cframes missing for spectrograph $SPECTRO with $NUM_TERMS search terms and only $NUM_CFRAMES found. Proceeding anyway
+        if [ $NUM_TERMS -gt $NUM_CFRAMES ]; then
+            echo ERROR: some expected cframes missing for spectrograph $SPECTRO with $NUM_TERMS search terms but only $NUM_CFRAMES found. Proceeding anyway
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
