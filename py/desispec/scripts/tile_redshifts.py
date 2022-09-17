@@ -405,11 +405,11 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $spectra) already exists, skipping grouping
     else
         # Check if any input frames exist
-        # Use echo instead of ls because it doesn't raise an error for missing entries
-        CFRAMES=$(echo {frame_glob})
+        # Use either .fits or .fits.gz search will fail and throw error, so catch them
+        CFRAMES=$(ls {frame_glob} 2>/dev/null)
         NUM_TERMS=$(echo "{frame_glob}" | wc -w)
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $NUM_TERMS -ne $NUM_CFRAMES ]; then
+        if [ $NUM_CFRAMES -gt $NUM_TERMS ]; then
             echo ERROR: some expected cframes missing for spectrograph $SPECTRO with $NUM_TERMS search terms and only $NUM_CFRAMES found. Proceeding anyway
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
