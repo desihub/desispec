@@ -1202,11 +1202,25 @@ class TestIO(unittest.TestCase):
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.fits'))
+        self.assertTrue('/a/b/c' in tempfile)
+
+        filename = '/a/b/blat.fits.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.gz'))
+        self.assertTrue('/a/b/blat' in tempfile)
+
+        filename = '/a/b/blat.fits.fz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.fz'))
+        self.assertTrue('/a/b/blat' in tempfile)
 
         filename = 'blat.ecsv'
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.ecsv'))
+        self.assertTrue('blat' in tempfile)
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
