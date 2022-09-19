@@ -252,7 +252,7 @@ def write_redshift_script(batchscript, outdir,
         healpix=None,
         extra_header=None,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None, expid=None, nexps=None,
+        onetile=True, tileid=None, night=None, expid=None, nexps=0,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
