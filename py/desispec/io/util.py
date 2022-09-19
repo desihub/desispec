@@ -787,11 +787,9 @@ def get_tempfilename(filename):
     """
     pid = os.getpid()
     if filename.endswith('.gz'):
-        second_ext = '.gz'
-        filename = filename.rstrip(second_ext)
+        filename, second_ext = os.path.splitext(filename)
     elif filename.endswith('.fz'):
-        second_ext = '.fz'
-        filename = filename.rstrip(second_ext)
+        filename, second_ext = os.path.splitext(filename)
     else:
         second_ext = ''
     base, extension = os.path.splitext(filename)
