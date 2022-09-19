@@ -190,6 +190,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
 
+    nexps = len(exptable)
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
         frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}'
@@ -221,7 +222,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
             spectro_string=spectro_string, suffix=suffix,
             frame_glob=frame_glob,
             queue=queue, system_name=system_name,
-            onetile=True, tileid=tileid, night=night, expid=expid,
+            onetile=True, tileid=tileid, night=night, expid=expid, nexps=nexps,
             run_zmtl=run_zmtl, noafterburners=noafterburners)
 
     err = 0
@@ -251,7 +252,7 @@ def write_redshift_script(batchscript, outdir,
         healpix=None,
         extra_header=None,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None, expid=None,
+        onetile=True, tileid=None, night=None, expid=None, nexps=None,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
@@ -278,6 +279,7 @@ def write_redshift_script(batchscript, outdir,
         tileid (int): tileid to process; only needed for group='cumulative'
         night (int): process through or on night YEARMMDD; for group='cumulative' and 'pernight'
         expid (int): expid for group='perexp'
+        nexps (int): number of exposures to be fit
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
         redrock_nodes (int): number of nodes for each redrock call
@@ -407,11 +409,12 @@ for SPECTRO in {spectro_string}; do
         # Check if any input frames exist
         # Use either .fits or .fits.gz search will fail and throw error, so catch them
         CFRAMES=$(ls {frame_glob} 2>/dev/null)
-        NUM_TERMS=$(echo "{frame_glob}" | wc -w)
+        NUM_EXPS={nexps}
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $NUM_TERMS -gt $NUM_CFRAMES ]; then
-            echo ERROR: some expected cframes missing for spectrograph $SPECTRO with $NUM_TERMS search terms but only $NUM_CFRAMES found. Proceeding anyway
+        if [ $NUM_EXPS -gt $NUM_CFRAMES ]; then
+            echo WARNING: Some expected cframes may be missing for spectrograph $SPECTRO. Proceeding anyway
         fi
+        echo INFO: For spectrograph $SPECTRO, $NUM_CFRAMES cframes found for $NUM_EXPS exposures
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
             cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra {headeropt}"
