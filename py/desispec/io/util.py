@@ -786,9 +786,7 @@ def get_tempfilename(filename):
     different processes won't corrupt each other's files).
     """
     pid = os.getpid()
-    if filename.endswith('.gz'):
-        filename, second_ext = os.path.splitext(filename)
-    elif filename.endswith('.fz'):
+    if filename.endswith(('.gz', '.fz')):
         filename, second_ext = os.path.splitext(filename)
     else:
         second_ext = ''

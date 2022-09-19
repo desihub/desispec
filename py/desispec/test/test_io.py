@@ -1222,6 +1222,12 @@ class TestIO(unittest.TestCase):
         self.assertTrue(tempfile.endswith('.ecsv'))
         self.assertTrue('blat' in tempfile)
 
+        filename = 'blat.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.gz'))
+        self.assertTrue('blat' in tempfile)
+
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
         from ..io.fibermap import find_fiberassign_file
