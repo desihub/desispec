@@ -65,16 +65,19 @@ class SchemaMixin(object):
         return {'schema': schemaname}
 
 
-class Target(SchemaMixin, Base):
-    """Representation of the ``TARGETPHOT`` table in the targetphot files.
+class Tractor(SchemaMixin, Base):
+    """Contains *only* photometric quantities associated with a ``TARGETID``.
+
+    This table is deliberately designed so that ``TARGETID`` can serve as a
+    primary key. Any quantities created or modified by desitarget are
+    defined in the :class:`~desispec.database.redshift.Target` class.
 
     Notes
     -----
     The various ``LC`` (light curve) columns,
     which are vector-valued, are not yet implemented.
     """
-
-    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    ls_id = Column(BigInteger, nullable=False, index=True)  # (release << 40) | (brickid << 16) | brick_objid
     release = Column(SmallInteger, nullable=False)
     brickid = Column(Integer, nullable=False)
     brickname = Column(String(8), nullable=False)
@@ -170,7 +173,19 @@ class Target(SchemaMixin, Base):
     pmdec = Column(REAL, nullable=False)
     pmdec_ivar = Column(REAL, nullable=False)
     photsys = Column(String(1), nullable=False)
-    targetid = Column(BigInteger, nullable=False, index=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+
+    def __repr__(self):
+        return "Tractor(targetid={0.targetid:d})".format(self)
+
+
+class Target(SchemaMixin, Base):
+    """Representation of the pure-desitarget quantities in the
+    ``TARGETPHOT`` table in the targetphot files.
+    """
+
+    id = Column(Numeric(39), primary_key=True, autoincrement=False)
+    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
     subpriority = Column(DOUBLE_PRECISION, nullable=False)
     obsconditions = Column(BigInteger, nullable=False)
     priority_init = Column(BigInteger, nullable=False)
@@ -197,11 +212,11 @@ class Target(SchemaMixin, Base):
     program = Column(String(6), nullable=False, index=True)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
 
+    photometry = relationship("Tractor", back_populates="targets")
     tile = relationship("Tile", back_populates="targets")
-    ztile_redshifts = relationship("Ztile", back_populates="target")
 
     def __repr__(self):
-        return "Target(targetid={0.targetid}, tileid={0.tileid}, survey='{0.survey}')".format(self)
+        return "Target(targetid={0.targetid:d}, tileid={0.tileid:d}, survey='{0.survey}')".format(self)
 
 
 class Tile(SchemaMixin, Base):
@@ -406,7 +421,7 @@ class Fiberassign(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
-    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
     location = Column(Integer, nullable=False)
@@ -423,8 +438,8 @@ class Fiberassign(SchemaMixin, Base):
     plate_ra = Column(DOUBLE_PRECISION, nullable=False)
     plate_dec = Column(DOUBLE_PRECISION, nullable=False)
 
+    photometry = relationship("Tractor", back_populates="fiberassign")
     tile = relationship("Tile", back_populates="fiberassign")
-    # target = relationship("Target", back_populates="fiberassign")
 
     def __repr__(self):
         return "Fiberassign(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
@@ -436,12 +451,12 @@ class Potential(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
-    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
     fiber = Column(Integer, nullable=False)
     location = Column(Integer, nullable=False)
 
+    photometry = relationship("Tractor", back_populates="potential")
     tile = relationship("Tile", back_populates="potential")
-    # target = relationship("Target", back_populates="potenial")
 
     def __repr__(self):
         return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
@@ -452,7 +467,7 @@ class Zpix(SchemaMixin, Base):
     """
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
-    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
     spgrp = Column(String(10), nullable=False, index=True)
@@ -529,7 +544,7 @@ class Zpix(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
-    # target = relationship("Target", back_populates="zpix_redshifts")
+    photometry = relationship("Tractor", back_populates="zpix_redshifts")
 
     def __repr__(self):
         return "Zpix(targetid={0.targetid:d}, survey='{0.survey}', program='{0.program}')".format(self)
@@ -541,7 +556,7 @@ class Ztile(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetphotid = Column(Numeric(39), ForeignKey("target.id"), nullable=False, index=True)
-    targetid = Column(BigInteger, nullable=False, index=True)  # potential ForeignKey on Target
+    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
     spgrp = Column(String, nullable=False, index=True)
@@ -618,8 +633,8 @@ class Ztile(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
+    photometry = relationship("Tractor", back_populates="zpix_redshifts")
     tile = relationship("Tile", back_populates="ztile_redshifts")
-    target = relationship("Target", back_populates="ztile_redshifts")
 
     def __repr__(self):
         return "Ztile(targetid={0.targetid:d}, tileid={0.tileid:d}, spgrp='{0.spgrp}', spgrpval={0.spgrpval:d})".format(self)
