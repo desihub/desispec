@@ -17,6 +17,34 @@ import numpy as np
 from desiutil.log import get_logger
 from .util import healpix_subdirectory, checkgzip
 
+_desi_root_readonly=None
+def get_desi_root_readonly():
+    """
+    Returns $DESI_ROOT_READONLY if set and path exists, otherwise $DESI_ROOT.
+
+    Caches answer upon first call, i.e. setting $DESI_ROOT_READONLY to a
+    different value part way through running will use previously cached value.
+    This prevents it from re-checking a non-existent path N>>1 times.
+    """
+    global _desi_root_readonly
+    log = get_logger()
+    if _desi_root_readonly is not None:
+        log.debug('Using cached _desi_root_readonly=%s', _desi_root_readonly)
+        return _desi_root_readonly
+    elif 'DESI_ROOT_READONLY' in os.environ:
+        if os.path.exists(os.environ['DESI_ROOT_READONLY']):
+            _desi_root_readonly = os.environ['DESI_ROOT_READONLY']
+            log.debug("Using $DESI_ROOT_READONLY=%s", _desi_root_readonly)
+        else:
+            log.debug("$DESI_ROOT_READONLY=%s set but doesn't exist; using $DESI_ROOT=%s",
+                    os.environ['DESI_ROOT_READONLY'], os.environ['DESI_ROOT'])
+            _desi_root_readonly = os.environ['DESI_ROOT']
+    else:
+        log.debug('$DESI_ROOT_READONLY not set; using $DESI_ROOT=%s',
+                os.environ['DESI_ROOT'])
+        _desi_root_readonly = os.environ['DESI_ROOT']
+
+    return _desi_root_readonly
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, nside=64,
@@ -24,7 +52,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         survey=None, faprogram=None,
         rawdata_dir=None, specprod_dir=None,
         download=False, outdir=None, qaprod_dir=None,
-        return_exists=False):
+        return_exists=False,
+        readonly=False):
     """Returns location where file should be
 
     Args:
@@ -49,6 +78,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
+        readonly: if True, and $DESI_ROOT_READONLY is set and exists,
+            return read-only version of path
 
     Returns filename, or (filename, exists) if return_exists=True
 
@@ -223,6 +254,22 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
+
+    #- Check for readonly cases
+    if readonly and 'DESI_ROOT' in os.environ:
+        readonlydir = get_desi_root_readonly()
+        desi_root = os.environ['DESI_ROOT']
+        if rawdata_dir is not None and rawdata_dir.startswith(desi_root):
+            rawdata_dir = rawdata_dir.replace(desi_root, readonlydir, 1)
+
+        if specprod_dir is not None and specprod_dir.startswith(desi_root):
+            specprod_dir = specprod_dir.replace(desi_root, readonlydir, 1)
+
+        if outdir is not None and outdir.startswith(desi_root):
+            outdir = outdir.replace(desi_root, readonlydir, 1)
+
+        if qaprod_dir is not None and qaprod_dir.startswith(desi_root):
+            qaprod_dir = qaprod_dir.replace(desi_root, readonlydir, 1)
 
     if 'specprod' in required_inputs and outdir is None :
         #- Replace / with _ in $SPECPROD so we can use it in a filename
