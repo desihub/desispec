@@ -46,6 +46,28 @@ def get_desi_root_readonly():
 
     return _desi_root_readonly
 
+def get_readonly_filepath(filepath):
+    """
+    Generate optimized path for read-only usage of filepath
+
+    Args:
+        filepath (str): full path to input file
+
+    Returns: readonly_filepath using $DESI_ROOT_READONLY
+
+    If a readonly filepath can't be derived, return original filepath
+    """
+    if 'DESI_ROOT' not in os.environ:
+        return filepath
+    else:
+        desi_root = os.environ['DESI_ROOT']
+
+    desi_root_readonly = get_desi_root_readonly()
+    if filepath.startswith(desi_root) and desi_root != desi_root_readonly:
+        filepath = filepath.replace(desi_root, desi_root_readonly, 1)
+
+    return filepath
+
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, nside=64,
         band=None, spectrograph=None,
@@ -255,22 +277,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
-    #- Check for readonly cases
-    if readonly and 'DESI_ROOT' in os.environ:
-        readonlydir = get_desi_root_readonly()
-        desi_root = os.environ['DESI_ROOT']
-        if rawdata_dir is not None and rawdata_dir.startswith(desi_root):
-            rawdata_dir = rawdata_dir.replace(desi_root, readonlydir, 1)
-
-        if specprod_dir is not None and specprod_dir.startswith(desi_root):
-            specprod_dir = specprod_dir.replace(desi_root, readonlydir, 1)
-
-        if outdir is not None and outdir.startswith(desi_root):
-            outdir = outdir.replace(desi_root, readonlydir, 1)
-
-        if qaprod_dir is not None and qaprod_dir.startswith(desi_root):
-            qaprod_dir = qaprod_dir.replace(desi_root, readonlydir, 1)
-
     if 'specprod' in required_inputs and outdir is None :
         #- Replace / with _ in $SPECPROD so we can use it in a filename
         specprod = os.environ['SPECPROD'].replace('/', '_')
@@ -322,6 +328,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         exists = True
     except FileNotFoundError:
         exists = False
+
+    if readonly:
+        filepath = get_readonly_filepath(filepath)
 
     if return_exists:
         return filepath, exists

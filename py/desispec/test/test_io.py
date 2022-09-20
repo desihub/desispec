@@ -1000,6 +1000,21 @@ class TestIO(unittest.TestCase):
         self.assertTrue(fn1.startswith(self.testDir))
         self.assertTrue(fn2.startswith(self.readonlyDir))
 
+    def test_readonly_filepath(self):
+        """Test get_readonly_filepath"""
+        from ..io.meta import get_readonly_filepath
+
+        #- Starts with $DESI_ROOT, so fine readonly equivalent
+        rwfile = os.path.join(os.environ['DESI_ROOT'], 'blat', 'foo')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertNotEqual(rwfile, rofile)
+        self.assertTrue(rofile.startswith(os.environ['DESI_ROOT_READONLY']))
+
+        #- Doesn't start with $DESI_ROOT so no read-only equivalent
+        rwfile = os.path.join('blat', 'foo', 'bar')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertEqual(rwfile, rofile)
+
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
         """
