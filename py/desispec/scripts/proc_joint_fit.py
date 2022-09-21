@@ -18,7 +18,7 @@ from astropy.io import fits
 
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile, replace_prefix
+from desispec.io import findfile, replace_prefix, get_readonly_filepath
 from desispec.io.util import create_camword, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.util import runcmd, mpi_count_failures
@@ -93,7 +93,7 @@ def main(args=None, comm=None):
                 args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
                 args.inputs = []
                 for expid in args.expids:
-                    infile = findfile('raw', night=args.night, expid=expid)
+                    infile = findfile('raw', night=args.night, expid=expid, readonly=True)
                     args.inputs.append(infile)
                     if not os.path.isfile(infile):
                         raise IOError('Missing input file: {}'.format(infile))
@@ -184,7 +184,7 @@ def main(args=None, comm=None):
             if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
                 psfs = list()
                 for expid in args.expids:
-                    psffile = findfile('fitpsf', args.night, expid, camera)
+                    psffile = findfile('fitpsf', args.night, expid, camera, readonly=True)
                     if os.path.exists(psffile):
                         psfs.append( psffile )
                     else:
@@ -259,7 +259,7 @@ def main(args=None, comm=None):
         for camera in args.cameras:
             inflats_for_camera[camera] = list()
             for expid in args.expids:
-                filename = findfile('fiberflat', args.night, expid, camera)
+                filename = findfile('fiberflat', args.night, expid, camera, readonly=True)
                 inflats.append(filename)
                 inflats_for_camera[camera].append(filename)
 
@@ -412,7 +412,7 @@ def main(args=None, comm=None):
                 elif args.calibnight is not None:
                     # look for a fiberflatnight for this calib night
                     fiberflatnightfile = findfile('fiberflatnight',
-                                                args.calibnight, args.expids[0], camera)
+                                            args.calibnight, args.expids[0], camera, readonly=True)
                     if not os.path.isfile(fiberflatnightfile):
                         log.error("no {}".format(fiberflatnightfile))
                         raise IOError("no {}".format(fiberflatnightfile))
@@ -420,7 +420,7 @@ def main(args=None, comm=None):
                 else:
                     # look for a fiberflatnight fiberflat
                     fiberflatnightfile = findfile('fiberflatnight',
-                                                args.night, args.expids[0], camera)
+                                                args.night, args.expids[0], camera, readonly=True)
                 if os.path.isfile(fiberflatnightfile):
                         input_fiberflat[camera] = fiberflatnightfile
                 elif args.most_recent_calib:
@@ -454,8 +454,8 @@ def main(args=None, comm=None):
 
                 fiberflatfiles[sp].append(input_fiberflat[camera])
                 for expid in args.expids:
-                    tmpframefile = findfile('frame', args.night, expid, camera)
-                    tmpskyfile = findfile('sky', args.night, expid, camera)
+                    tmpframefile = findfile('frame', args.night, expid, camera, readonly=True)
+                    tmpskyfile = findfile('sky', args.night, expid, camera, readonly=True)
 
                     inputsok = True
                     if not os.path.exists(tmpframefile):
@@ -480,6 +480,7 @@ def main(args=None, comm=None):
         # - Hardcoded stdstar model version
         starmodels = os.path.join(
             os.getenv('DESI_BASIS_TEMPLATES'), 'stdstar_templates_v2.2.fits')
+        starmodels = get_readonly_filepath(starmodels)
 
         # - Fit stdstars per spectrograph (not per-camera)
         spectro_nums = sorted(framefiles.keys())

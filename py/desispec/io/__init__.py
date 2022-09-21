@@ -30,7 +30,7 @@ from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    get_pipe_rundir, get_pipe_scriptdir, get_pipe_database,
                    get_pipe_logdir, get_reduced_frames, get_pipe_pixeldir,
                    get_nights, get_pipe_nightdir, find_exposure_night,
-                   shorten_filename)
+                   shorten_filename, get_readonly_filepath)
 from .params import read_params
 from .qa import (read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick,
                  load_qa_frame, write_qa_exposure, write_qa_multiexp, load_qa_multiexp,
