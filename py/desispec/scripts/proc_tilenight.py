@@ -50,13 +50,17 @@ def main(args=None, comm=None):
         thistime=datetime.datetime.fromtimestamp(start_time).isoformat()
         log.info(f'Tilenight started main in {thisfile} at {thistime}')
 
-    #- Determine expids and cameras for a tile night
-    exptable_file = get_exposure_table_pathname(args.night)
+    #- Read + broadcast exposure table for this night
+    exptable = None
     if rank == 0:
+        exptable_file = get_exposure_table_pathname(args.night)
         log.info(f'Reading exptable in {exptable_file}')
+        exptable = load_table(exptable_file)
 
-    exptable = load_table(exptable_file)
+    if comm is not None:
+        exptable = comm.bcast(exptable, root=0)
 
+    #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
     keep &= exptable['TILEID']  == int(args.tileid)
     exptable = exptable[keep]
@@ -83,6 +87,11 @@ def main(args=None, comm=None):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
     joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
+
+    if len(prestdstar_expids) == 0:
+        if rank == 0:
+            log.critical(f'No good exposures found for tile {args.tileid} night {args.night}')
+        sys.exit(1)
 
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
