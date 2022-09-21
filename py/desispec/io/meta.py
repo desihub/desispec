@@ -100,14 +100,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
-        readonly: if True, and $DESI_ROOT_READONLY is set and exists,
-            return read-only version of path
+        readonly: if True, return read-only version of path if possible
 
     Returns filename, or (filename, exists) if return_exists=True
 
     Raises:
         ValueError: for invalid file types, and other invalid input
         KeyError: for missing environment variables
+
+    Notes:
+        The readonly option uses $DESI_ROOT_READONLY if it is set and
+        exists; otherwise it returns the normal read/write path.
     """
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
