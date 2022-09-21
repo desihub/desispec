@@ -405,7 +405,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             drop = np.isin(expids, exptable['EXPID'][bad])
             ndrop = np.sum(drop)
             drop_expids = expids[drop]
-            log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
+            log.info(f'Dropping {ndrop} bad {zerotype} ZEROs: {drop_expids}')
             expids = expids[~drop]
 
         if np.any(badcam|badamp|notallcams):
