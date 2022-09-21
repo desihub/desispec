@@ -397,7 +397,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
         #- drop first two zeros because they are sometimes still stabilizing
         if nskip > 0:
-            log.info('Dropping first {} ZEROs: {}'.format(nskip, expids[0:2]))
+            log.info(f'Dropping first {nskip} {zerotype} ZEROs: {expids[0:2]}')
             expids = expids[nskip:]
 
         if np.any(bad):
@@ -418,11 +418,11 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             expdict={f'{cam}': list(expids) for cam in cameras}
             if len(expids) >= nzeros:
                 #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
-                log.info(f'Additionally dropped {ndrop} partially bad ZEROs for'
+                log.info(f'Additionally dropped {ndrop} partially bad {zerotype} ZEROs for'
                          + f' all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
             else:
                 #in this case we want to recover as many as possible
-                log.info(f'additionally dropped {ndrop} bad ZEROs for some cams'
+                log.info(f'additionally dropped {ndrop} bad {zerotype} ZEROs for some cams'
                          + f'because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
 
                 for expid in drop_expids:
@@ -438,7 +438,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             expdict={f'{cam}': expids for cam in cameras}
 
         for camera,expids in expdict.items():
-            log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
+            log.info(f'Keeping {len(expids)} {zerotype} ZEROs for camera {camera}')
             #make sure everything is in np arrays again
             expdict[camera] = np.sort(expids)
 
