@@ -664,7 +664,7 @@ def main(args=None, comm=None):
             t0 = time.time()
 
             psfname = findfile('psf', args.night, args.expid, camera)
-            inpsf = get_readonly_filename(replace_prefix(psfname,"psf","fit-psf"))
+            inpsf = get_readonly_filepath(replace_prefix(psfname,"psf","fit-psf"))
 
             #- Check if a noisy amp might have corrupted this PSF;
             #- if so, rename to *.badreadnoise
@@ -730,7 +730,7 @@ def main(args=None, comm=None):
                             os.makedirs(dirname)
                         desispec.scripts.specex.mean_psf(psfs,psfnightfile)
                 if os.path.isfile(psfnightfile) : # now use this one
-                    input_psf[camera] = get_readonly_filename(psfnightfile)
+                    input_psf[camera] = get_readonly_filepath(psfnightfile)
 
     #-------------------------------------------------------------------------
     #- Extract
