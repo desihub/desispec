@@ -660,7 +660,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         else:
             readonlydir = None
 
-        if readonly dir is not None:
+        if readonlydir is not None:
             fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
 
         if cmdline is None:
@@ -876,7 +876,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         else:
             readonlydir = None
 
-        if readonly dir is not None:
+        if readonlydir is not None:
             fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
 
         fx.write('\n')
