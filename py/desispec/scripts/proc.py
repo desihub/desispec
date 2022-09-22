@@ -774,7 +774,7 @@ def main(args=None, comm=None):
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
-                cmd += ' --psferr 0.1'
+                cmd += ' --psferr 0.01'
 
                 if args.gpuspecter:
                     cmd += ' --gpu-specter'
