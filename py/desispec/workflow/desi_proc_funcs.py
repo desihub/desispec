@@ -9,6 +9,7 @@ import numpy as np
 import fitsio
 import desispec.io
 from desispec.io import findfile
+from desispec.io.meta import get_desi_root_readonly
 from desispec.io.util import create_camword, decode_camword, parse_cameras
 # from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
@@ -650,6 +651,18 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('\n')
 
+        #- Special case CFS readonly mount at NERSC
+        if 'DESI_ROOT_READONLY' in os.environ:
+            readonlydir = os.environ['DESI_ROOT_READONLY']
+        elif os.environ['DESI_ROOT'].startswith('/global/cfs/cdirs'):
+            readonlydir = os.environ['DESI_ROOT'].replace(
+                    '/global/cfs/cdirs', '/dvs_ro/cfs/cdirs', 1)
+        else:
+            readonlydir = None
+
+        if readonly dir is not None:
+            fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
+
         if cmdline is None:
             inparams = list(sys.argv).copy()
         elif np.isscalar(cmdline):
@@ -851,6 +864,20 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
         fx.write('#SBATCH --exclusive\n')
+
+        fx.write('\n')
+
+        #- Special case CFS readonly mount at NERSC
+        if 'DESI_ROOT_READONLY' in os.environ:
+            readonlydir = os.environ['DESI_ROOT_READONLY']
+        elif os.environ['DESI_ROOT'].startswith('/global/cfs/cdirs'):
+            readonlydir = os.environ['DESI_ROOT'].replace(
+                    '/global/cfs/cdirs', '/dvs_ro/cfs/cdirs', 1)
+        else:
+            readonlydir = None
+
+        if readonly dir is not None:
+            fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
 
         fx.write('\n')
 
