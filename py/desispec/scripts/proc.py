@@ -664,7 +664,8 @@ def main(args=None, comm=None):
             t0 = time.time()
 
             psfname = findfile('psf', args.night, args.expid, camera)
-            inpsf = get_readonly_filepath(replace_prefix(psfname,"psf","fit-psf"))
+            #- NOTE: not readonly because we need to rename it later
+            inpsf = replace_prefix(psfname,"psf","fit-psf")
 
             #- Check if a noisy amp might have corrupted this PSF;
             #- if so, rename to *.badreadnoise
@@ -711,26 +712,6 @@ def main(args=None, comm=None):
 
             dt = time.time() - t0
             log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
-
-    #-------------------------------------------------------------------------
-    #- Merge PSF of night if applicable
-
-    #if args.obstype in ['ARC']:
-    if False:
-        if rank == 0:
-            for camera in args.cameras :
-                psfnightfile = findfile('psfnight', args.night, args.expid, camera)
-                if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
-                    psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace("psf","fit-psf").replace(str(args.expid),"*"))
-                    log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
-                    if len(psfs)>4 : # lets do it!
-                        log.info("Computing psfnight ...")
-                        dirname=os.path.dirname(psfnightfile)
-                        if not os.path.isdir(dirname) :
-                            os.makedirs(dirname)
-                        desispec.scripts.specex.mean_psf(psfs,psfnightfile)
-                if os.path.isfile(psfnightfile) : # now use this one
-                    input_psf[camera] = get_readonly_filepath(psfnightfile)
 
     #-------------------------------------------------------------------------
     #- Extract
@@ -871,15 +852,23 @@ def main(args=None, comm=None):
                         if comm_extract.rank == 0:
                             print('RUNNING: {}'.format(cmds[camera]))
 
-                        if args.gpuextract:
-                            #- GPU extraction with gpu_specter
-                            desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
-                        elif args.gpuspecter:
-                            #- CPU extraction with gpu_specter
-                            desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
-                        else:
-                            #- CPU extraction with specter
-                            desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                        try:
+                            if args.gpuextract:
+                                #- GPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                            elif args.gpuspecter:
+                                #- CPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
+                            else:
+                                #- CPU extraction with specter
+                                desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                        except Exception as err:
+                            import traceback
+                            lines = traceback.format_exception(*sys.exc_info())
+                            log.error(f"Camera {camera} extraction raised an exception:")
+                            print("".join(lines))
+                            error_count += 1
+
             elif len(cmds)>0:
                 #- Skip this rank
                 log.warning(f'rank {rank} idle during extraction step')
