@@ -12,6 +12,7 @@ import sys
 import multiprocessing as mp
 import numpy as np
 from desispec import io
+from desispec.io.util import get_tempfilename
 from desispec.parallel import default_nproc
 from desiutil.log import get_logger
 log = get_logger()
@@ -283,6 +284,8 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
         outfile = io.findfile('preproc', night=night,expid=expid,camera=camera,
                               outdir=outdir)
 
-    io.write_image(outfile, img)
+    tmpfile = get_tempfilename(outfile)
+    io.write_image(tmpfile, img)
+    os.rename(tmpfile, outfile)
     log.info("Wrote {}".format(outfile))
     return 0

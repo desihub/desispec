@@ -785,7 +785,9 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     mark_extraction = time.time()
 
     #- Write output
-    io.write_frame(outbundle, frame)
+    tmpfile = get_tempfilename(outbundle)
+    io.write_frame(tmpfile, frame)
+    os.rename(tmpfile, outbundle)
 
     if args.model is not None:
         fits.writeto(outmodel, results['modelimage'], header=frame.meta)
