@@ -369,13 +369,17 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
         with open(filename) as fx:
             r = json.load(fx)
 
-        #- CALIB ZEROs, or any ZEROs if anyzeros=True,
+        #- CALIB ZEROs or non-calib ZEROs for dark sequence
         #- while being robust to missing OBSTYPE or PROGRAM
         if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r): 
             if r['PROGRAM'].startswith('CALIB ZEROs'):
                 calib_expids.append(int(os.path.basename(os.path.dirname(filename))))
-            else:
+            elif r['PROGRAM'].startswith('ZEROs for dark sequence'):
                 noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+            elif r['PROGRAM'].startswith('ZEROs for morning darks'):
+                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+            else:
+                continue
         else:
             continue
 
@@ -510,7 +514,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
             ntotzeros = len(calib_exps) + len(noncalib_exps)
             ## If we don't have enought total zeros, give up now for this cam
             if ntotzeros < minzeros:
-                msg = f'Only {ntotzeros} ZEROS on {night} and cam {cam}; need at least {minzeros}'
+                msg = f'Only {ntotzeros} total ZEROS on {night} and cam {cam};' \
+                        + f'need at least {minzeros}'
                 log.error(msg)
                 continue
             elif len(expids) < minzeros:
