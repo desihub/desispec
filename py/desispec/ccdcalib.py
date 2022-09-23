@@ -457,6 +457,75 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
     return expdicts['calib'], expdicts['noncalib']
 
+def _select_zero_expids(calib_exps, noncalib_exps, night, cam,
+                        nzeros=25, minzeros=15, nskip=2, anyzeros=False):
+    """Select which ZERO exposure IDs to use for nightly bias
+
+    Args:
+        calib_exps (array): expids of calibration zeros
+        noncalib_exps (array): expids of non calibration zeros
+        night (int): YEARMMDD night to process
+        cam (str): camera to process
+
+    Options:
+        nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
+        minzeros (int): minimum number of zeros to sufficiently compute a nightly bias
+        nskip (int): number of initial zeros to skip
+
+    Returns:
+        expids (array): the list of expids selected
+
+    """
+    log = get_logger()
+    ntotzeros = len(calib_exps) + len(noncalib_exps)
+    nthreshold = nzeros - nskip
+
+    # - If anyzeros, use all expids
+    if anyzeros:
+        expids = np.sort(np.append(calib_exps, noncalib_exps))
+    else:
+        expids = calib_exps
+
+    ## If we don't have enought total zeros, give up now for this cam
+    if ntotzeros < minzeros:
+        log.error(f'Only {ntotzeros} total ZEROS on {night} and cam {cam};'
+                  + f'need at least {minzeros}')
+        return None
+
+    ## If we have fewer zeros than we ideally want (nthreshold) and we
+    ## have other cals that we haven't tried, add them
+    if not anyzeros and len(expids) < nthreshold and len(noncalib_exps) > 0:
+        log.info(f'Only {len(expids)} Calib ZEROS on {night} and cam {cam},'
+                 + f' but want {nthreshold}. Trying non-calibrations zeros')
+        ## If not enough or just enough noncalib zeros to reach threshold
+        ## add all of them
+        ## Otherwise add just enough noncalib zeros to reach nthreshold
+        if ntotzeros <= nthreshold:
+            expids = np.sort(np.append(calib_exps, noncalib_exps))
+        else:
+            ## Draw the exposures from the middle of the set (in hopes that
+            ## they are more stable)
+            n_needed_zeros = nthreshold - len(calib_exps)
+            i = (len(noncalib_exps) - n_needed_zeros) // 2
+            expids = np.sort(
+                np.append(calib_exps, noncalib_exps[i:i + n_needed_zeros]))
+
+        ## This shouldn't happen after the above check, but make sure
+        if len(expids) < minzeros:
+            log.error(f'Still only {len(expids)} ZEROS on {night} and '
+                      + f'cam {cam}; need at least {minzeros}.')
+            return None
+        else:
+            log.info(f'Succeeded in adding {n_needed_zeros} non-calib'
+                     + f' zeros. We now have {len(expids)} ZEROS on '
+                     + f'{night} and cam {cam}.')
+
+    if len(expids) > nzeros:
+        nexps = len(expids)
+        n = (nexps - nzeros) // 2
+        expids = expids[n:n + nzeros]
+
+    return expids
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         nskip=2, anyzeros=False, comm=None):
@@ -503,55 +572,13 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         ## _find_zeros dictionaries already verified to have the same set
         ## of keys
         for cam in calib_expdict.keys():
-            calib_exps, noncalib_exps = calib_expdict[cam], noncalib_expdict[cam]
-
-            #- If anyzeros, use all expids
-            if anyzeros:
-                expids = np.sort(np.append(calib_exps, noncalib_exps))
-            else:
-                expids = calib_exps
-
-            ntotzeros = len(calib_exps) + len(noncalib_exps)
-            ## If we don't have enought total zeros, give up now for this cam
-            if ntotzeros < minzeros:
-                msg = f'Only {ntotzeros} total ZEROS on {night} and cam {cam};' \
-                        + f'need at least {minzeros}'
-                log.error(msg)
-                continue
-            elif len(expids) < minzeros:
-                msg = f'Only {len(expids)} Calib ZEROS on {night} and cam {cam};' \
-                    + f' need at least {minzeros}. Trying non-calibrations zeros'
-                log.warning(msg)
-
-                ## If there are enough noncalib zeros, add just enough to reach
-                ## the required minimum number of zeros
-                ## Draw the exposures from the middle of the set (in hopes that
-                ## they are more stable)
-                n_needed_zeros = minzeros - len(calib_exps)
-                n_noncal_exps = len(noncalib_exps)
-                n = (n_noncal_exps - n_needed_zeros) // 2
-                expids = np.sort(np.append(calib_exps, noncalib_exps[n:n+n_needed_zeros]))
-
-                ## This shouldn't happen after the above check, but make sure
-                if len(expids) < minzeros:
-                    msg = f'Still only {len(expids)} ZEROS on {night} and ' \
-                          + f'cam {cam}; need at least {minzeros}.'
-                    log.error(msg)
-                    continue
-                else:
-                    msg = f'Succeeded in adding {n_needed_zeros} non-calib' \
-                          + f' zeros. We now have {len(expids)} ZEROS on ' \
-                          + f'{night} and cam {cam}.'
-                    log.info(msg)
-
-            if len(expids) > nzeros:
-                nexps = len(expids)
-                n = (nexps - nzeros)//2
-                used_expdict[cam] = expids[n:n+nzeros]
-            else:
+            expids = _select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
+                                         night, cam, log, nzeros, minzeros,
+                                         nskip, anyzeros)
+            if expids is not None:
                 used_expdict[cam] = expids
-
-            log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
+                log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly'
+                         + f'bias {night} and cam {cam}')
 
         expdict=used_expdict
 
