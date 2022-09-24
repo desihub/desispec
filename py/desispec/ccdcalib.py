@@ -457,7 +457,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
     return expdicts['calib'], expdicts['noncalib']
 
-def _select_zero_expids(calib_exps, noncalib_exps, night, cam,
+def select_zero_expids(calib_exps, noncalib_exps, night, cam,
                         nzeros=25, minzeros=15, nskip=2, anyzeros=False):
     """Select which ZERO exposure IDs to use for nightly bias
 
@@ -572,7 +572,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         ## _find_zeros dictionaries already verified to have the same set
         ## of keys
         for cam in calib_expdict.keys():
-            expids = _select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
+            expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
                                          night, cam, log, nzeros, minzeros,
                                          nskip, anyzeros)
             if expids is not None:
