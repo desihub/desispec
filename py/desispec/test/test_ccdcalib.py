@@ -7,7 +7,7 @@ class TestCcdCalib(unittest.TestCase):
 
     def test_select_zero_expids(self):
         """Test select_zero_expids"""
-        original_log_level = os.getenv['DESI_LOGLEVEL']
+        original_log_level = os.getenv('DESI_LOGLEVEL')
         os.environ['DESI_LOGLEVEL'] = 'CRITICAL'
 
         from ..ccdcalib import select_zero_expids
