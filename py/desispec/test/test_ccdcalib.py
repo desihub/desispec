@@ -42,7 +42,7 @@ class TestCcdCalib(unittest.TestCase):
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
         self.assertEqual(len(expids),25-2)
-        self.assertListEqual(calib_exps.tolist(), expids[:16].tolist())
+        self.assertListEqual(calib_exps.tolist(), expids[:15].tolist())
 
         ## Test case of 15 calibs and fewer than enough noncals
         calib_exps = np.arange(1,16)
@@ -50,7 +50,7 @@ class TestCcdCalib(unittest.TestCase):
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
         self.assertEqual(len(expids),16)
-        self.assertListEqual(calib_exps.tolist(), expids[:16].tolist())
+        self.assertListEqual(calib_exps.tolist(), expids[:15].tolist())
 
         ## Test case of 15 calibs and fewer than enough noncals
         calib_exps = np.arange(1,16)
@@ -58,7 +58,7 @@ class TestCcdCalib(unittest.TestCase):
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
         self.assertEqual(len(expids),25-2)
-        self.assertListEqual(calib_exps.tolist(), expids[:16].tolist())
+        self.assertListEqual(calib_exps.tolist(), expids[:15].tolist())
 
         ## Test case of 12 calibs and just enough noncalibs
         calib_exps = np.arange(1,13)
@@ -66,7 +66,7 @@ class TestCcdCalib(unittest.TestCase):
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
         self.assertEqual(len(expids),25-2)
-        self.assertListEqual(calib_exps.tolist(), expids[:13].tolist())
+        self.assertListEqual(calib_exps.tolist(), expids[:12].tolist())
 
         ## Test case of 12 calibs and less than max noncalibs
         calib_exps = np.arange(1,13)
@@ -74,7 +74,7 @@ class TestCcdCalib(unittest.TestCase):
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
         self.assertEqual(len(expids),22)
-        self.assertListEqual(calib_exps.tolist(), expids[:13].tolist())
+        self.assertListEqual(calib_exps.tolist(), expids[:12].tolist())
 
         ## Test case of 15 calibs and no noncalibs
         calib_exps = np.arange(1,16)
