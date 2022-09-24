@@ -462,8 +462,8 @@ def select_zero_expids(calib_exps, noncalib_exps, night, cam,
     """Select which ZERO exposure IDs to use for nightly bias
 
     Args:
-        calib_exps (array): expids of calibration zeros
-        noncalib_exps (array): expids of non calibration zeros
+        calib_exps (array-like): expids of calibration zeros
+        noncalib_exps (array-like): expids of non calibration zeros
         night (int): YEARMMDD night to process
         cam (str): camera to process
 
@@ -501,14 +501,15 @@ def select_zero_expids(calib_exps, noncalib_exps, night, cam,
         ## add all of them
         ## Otherwise add just enough noncalib zeros to reach nthreshold
         if ntotzeros <= nthreshold:
+            num_to_add = len(noncalib_exps)
             expids = np.sort(np.append(calib_exps, noncalib_exps))
         else:
             ## Draw the exposures from the middle of the set (in hopes that
             ## they are more stable)
-            n_needed_zeros = nthreshold - len(calib_exps)
-            i = (len(noncalib_exps) - n_needed_zeros) // 2
+            num_to_add = nthreshold - len(calib_exps)
+            i = (len(noncalib_exps) - num_to_add) // 2
             expids = np.sort(
-                np.append(calib_exps, noncalib_exps[i:i + n_needed_zeros]))
+                np.append(calib_exps, noncalib_exps[i:i + num_to_add]))
 
         ## This shouldn't happen after the above check, but make sure
         if len(expids) < minzeros:
@@ -516,7 +517,7 @@ def select_zero_expids(calib_exps, noncalib_exps, night, cam,
                       + f'cam {cam}; need at least {minzeros}.')
             return None
         else:
-            log.info(f'Succeeded in adding {n_needed_zeros} non-calib'
+            log.info(f'Succeeded in adding {num_to_add} non-calib'
                      + f' zeros. We now have {len(expids)} ZEROS on '
                      + f'{night} and cam {cam}.')
 
