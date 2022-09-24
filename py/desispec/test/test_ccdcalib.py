@@ -49,7 +49,7 @@ class TestCcdCalib(unittest.TestCase):
         noncalib_exps = np.arange(30, 36)
         expids = select_zero_expids(calib_exps, noncalib_exps, night, cam,
                             nzeros=25, minzeros=15, nskip=2, anyzeros=False)
-        self.assertEqual(len(expids),22)
+        self.assertEqual(len(expids),21)
         self.assertListEqual(calib_exps.tolist(), expids[:15].tolist())
 
         ## Test case of 12 calibs and just enough noncalibs
