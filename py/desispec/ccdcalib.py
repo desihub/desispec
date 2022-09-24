@@ -574,7 +574,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         ## of keys
         for cam in calib_expdict.keys():
             expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
-                                         night, cam, log, nzeros, minzeros,
+                                         night, cam, nzeros, minzeros,
                                          nskip, anyzeros)
             if expids is not None:
                 used_expdict[cam] = expids
