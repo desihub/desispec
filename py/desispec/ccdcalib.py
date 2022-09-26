@@ -343,7 +343,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
     Args:
         night (int): YEARMMDD night to search
-        cameras (str): list of cameras to process
+        cameras (list of str): list of cameras to process
 
     Options:
         nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
@@ -359,9 +359,13 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     find any ZEROs on disk for that night, regardless of whether they are in
     the exposures table or not.
     """
+    log = get_logger()
+
+    ## Ensure cameras are array-like and valid
+    if isinstance(cameras, str):
+        cameras = decode_camword(parse_cameras(cameras))
 
     #- Find all ZERO exposures on this night
-    log = get_logger()
     nightdir = io.rawdata_root() + f'/{night}'
     requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
     calib_expids, noncalib_expids = list(), list()
@@ -534,7 +538,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
 
     Args:
         night (int): YEARMMDD night to process
-        cameras (str): list of cameras to process
+        cameras (list of str): list of cameras to process
 
     Options:
         outdir (str): write files to this output directory
@@ -557,6 +561,17 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
     import fitsio
 
     log = get_logger()
+
+    ## Ensure cameras are array-like and valid
+    if isinstance(cameras, str):
+        cameras = decode_camword(parse_cameras(cameras))
+    else:
+        for camera in cameras:
+            if not isinstance(camera, str) or len(camera) != 2 \
+               or camera[0] not in ['b', 'r', 'z'] or not camera[1].isnumeric():
+                msg = f"Couldn't understand camera={camera} in {cameras}"
+                log.error(msg)
+                raise ValueError(msg)
 
     if comm is not None:
         rank, size = comm.rank, comm.size
