@@ -40,7 +40,7 @@ from astropy.table import Table,vstack
 import glob
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile, replace_prefix, shorten_filename
+from desispec.io import findfile, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras
 from desispec.io.util import validate_badamps, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
@@ -440,14 +440,14 @@ def main(args=None, comm=None):
                 input_psf[camera] = args.psf
             elif args.calibnight is not None :
                 # look for a psfnight psf for this calib night
-                psfnightfile = findfile('psfnight', args.calibnight, args.expid, camera)
+                psfnightfile = findfile('psfnight', args.calibnight, args.expid, camera, readonly=True)
                 if not os.path.isfile(psfnightfile) :
                     log.error("no {}".format(psfnightfile))
                     raise IOError("no {}".format(psfnightfile))
                 input_psf[camera] = psfnightfile
             else :
                 # look for a psfnight psf
-                psfnightfile = findfile('psfnight', args.night, args.expid, camera)
+                psfnightfile = findfile('psfnight', args.night, args.expid, camera, readonly=True)
                 if os.path.isfile(psfnightfile) :
                     input_psf[camera] = psfnightfile
                 elif args.most_recent_calib:
@@ -458,6 +458,8 @@ def main(args=None, comm=None):
                         input_psf[camera] = nightfile
                 else :
                     input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
+
+            input_psf[camera] = get_readonly_filepath(input_psf[camera])
             log.info("Will use input PSF : {}".format(input_psf[camera]))
 
     if comm is not None:
@@ -475,7 +477,7 @@ def main(args=None, comm=None):
         # if it is a 300s exposure
         exptime = None
         if rank == 0 :
-            rawfilename=findfile('raw', args.night, args.expid)
+            rawfilename=findfile('raw', args.night, args.expid, readonly=True)
             head=fitsio.read_header(rawfilename,1)
             exptime=head["EXPTIME"]
         if comm is not None :
@@ -488,7 +490,7 @@ def main(args=None, comm=None):
 
             for i in range(rank, len(args.cameras), size):
                 camera = args.cameras[i]
-                preprocfile = findfile('preproc', args.night, args.expid, camera)
+                preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
                 badcolumnsfile = findfile('badcolumns', night=args.night, camera=camera)
                 if not os.path.isfile(badcolumnsfile) :
                     cmd = "desi_inspect_dark"
@@ -526,7 +528,7 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
             inpsf  = input_psf[camera]
             outpsf = findfile('psf', args.night, args.expid, camera)
             if not os.path.isfile(outpsf) :
@@ -575,7 +577,7 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
             inpsf  = input_psf[camera]
             outpsf = findfile('psf', args.night, args.expid, camera)
             outpsf = replace_prefix(outpsf, "psf", "shifted-input-psf")
@@ -611,9 +613,9 @@ def main(args=None, comm=None):
             inputs = dict()
             outputs = dict()
             for camera in args.cameras:
-                preprocfile = findfile('preproc', args.night, args.expid, camera)
+                preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
                 tmpname = findfile('psf', args.night, args.expid, camera)
-                inpsf = replace_prefix(tmpname,"psf","shifted-input-psf")
+                inpsf = get_readonly_filepath(replace_prefix(tmpname,"psf","shifted-input-psf"))
                 outpsf = replace_prefix(tmpname,"psf","fit-psf")
 
                 log.info("now run specex psf fit")
@@ -662,6 +664,7 @@ def main(args=None, comm=None):
             t0 = time.time()
 
             psfname = findfile('psf', args.night, args.expid, camera)
+            #- NOTE: not readonly because we need to rename it later
             inpsf = replace_prefix(psfname,"psf","fit-psf")
 
             #- Check if a noisy amp might have corrupted this PSF;
@@ -669,7 +672,7 @@ def main(args=None, comm=None):
             #- Currently the data is flagged per amp (25% of pixels), but do
             #- more generic test for 12.5% of pixels (half of one amp)
             log.info(f'Rank {rank} checking for noisy input CCD amps')
-            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
             mask = fitsio.read(preprocfile, 'MASK')
             noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
             if noisyfrac > 0.25*0.5:
@@ -711,26 +714,6 @@ def main(args=None, comm=None):
             log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
 
     #-------------------------------------------------------------------------
-    #- Merge PSF of night if applicable
-
-    #if args.obstype in ['ARC']:
-    if False:
-        if rank == 0:
-            for camera in args.cameras :
-                psfnightfile = findfile('psfnight', args.night, args.expid, camera)
-                if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
-                    psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace("psf","fit-psf").replace(str(args.expid),"*"))
-                    log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
-                    if len(psfs)>4 : # lets do it!
-                        log.info("Computing psfnight ...")
-                        dirname=os.path.dirname(psfnightfile)
-                        if not os.path.isdir(dirname) :
-                            os.makedirs(dirname)
-                        desispec.scripts.specex.mean_psf(psfs,psfnightfile)
-                if os.path.isfile(psfnightfile) : # now use this one
-                    input_psf[camera] = psfnightfile
-
-    #-------------------------------------------------------------------------
     #- Extract
     #- This is MPI parallel so handle a bit differently
 
@@ -761,8 +744,8 @@ def main(args=None, comm=None):
                 elif camera.startswith('z'):
                     cmd += ' -w 7520.0,9824.0,0.8'
 
-                preprocfile = findfile('preproc', args.night, args.expid, camera)
-                psffile = findfile('psf', args.night, args.expid, camera)
+                preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
+                psffile = findfile('psf', args.night, args.expid, camera, readonly=True)
                 finalframefile = findfile('frame', args.night, args.expid, camera)
                 if os.path.exists(finalframefile):
                     log.info('{} already exists; not regenerating'.format(
@@ -869,15 +852,23 @@ def main(args=None, comm=None):
                         if comm_extract.rank == 0:
                             print('RUNNING: {}'.format(cmds[camera]))
 
-                        if args.gpuextract:
-                            #- GPU extraction with gpu_specter
-                            desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
-                        elif args.gpuspecter:
-                            #- CPU extraction with gpu_specter
-                            desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
-                        else:
-                            #- CPU extraction with specter
-                            desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                        try:
+                            if args.gpuextract:
+                                #- GPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                            elif args.gpuspecter:
+                                #- CPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
+                            else:
+                                #- CPU extraction with specter
+                                desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                        except Exception as err:
+                            import traceback
+                            lines = traceback.format_exception(*sys.exc_info())
+                            log.error(f"Camera {camera} extraction raised an exception:")
+                            print("".join(lines))
+                            error_count += 1
+
             elif len(cmds)>0:
                 #- Skip this rank
                 log.warning(f'rank {rank} idle during extraction step')
@@ -918,9 +909,10 @@ def main(args=None, comm=None):
         for i in range(rank, len(args.cameras), size):
             camera     = args.cameras[i]
             outfile    = findfile('frame', args.night, args.expid, camera)
+            #- note: not readonly for "infile" since we'll remove it later
             infile     = outfile.replace(".fits","-no-badcolumn-mask.fits")
-            psffile    = findfile('psf', args.night, args.expid, camera)
-            badcolfile = findfile('badcolumns', night=args.night, camera=camera)
+            psffile    = findfile('psf', args.night, args.expid, camera, readonly=True)
+            badcolfile = findfile('badcolumns', night=args.night, camera=camera, readonly=True)
             cmd = "desi_compute_badcolumn_mask -i {} -o {} --psf {} --badcolumns {}".format(
                 infile, outfile, psffile, badcolfile)
 
@@ -956,7 +948,7 @@ def main(args=None, comm=None):
     if args.obstype in ['FLAT', 'TESTFLAT'] :
         exptime = None
         if rank == 0 :
-            rawfilename=findfile('raw', args.night, args.expid)
+            rawfilename=findfile('raw', args.night, args.expid, readonly=True)
             head=fitsio.read_header(rawfilename,1)
             exptime=head["EXPTIME"]
         if comm is not None :
@@ -970,7 +962,7 @@ def main(args=None, comm=None):
 
             for i in range(rank, len(args.cameras), size):
                 camera = args.cameras[i]
-                framefile = findfile('frame', args.night, args.expid, camera)
+                framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
                 fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
                 cmd = "desi_compute_fiberflat"
                 cmd += " -i {}".format(framefile)
@@ -1019,6 +1011,8 @@ def main(args=None, comm=None):
                     else :
                         input_fiberflat[camera] = findcalibfile(
                                 [hdr, camhdr[camera]], 'FIBERFLAT')
+
+                input_fiberflat[camera] = get_readonly_filepath(input_fiberflat[camera])
                 log.info("Will use input FIBERFLAT: {}".format(input_fiberflat[camera]))
 
         if comm is not None:
@@ -1037,7 +1031,7 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera)
+            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
             hdr = fitsio.read_header(framefile, 'FLUX')
             input_fiberflatfile=input_fiberflat[camera]
             if input_fiberflatfile is None :
@@ -1077,9 +1071,9 @@ def main(args=None, comm=None):
             camera = args.cameras[i]
             fframefile = findfile('fframe', args.night, args.expid, camera)
             if not os.path.exists(fframefile):
-                framefile = findfile('frame', args.night, args.expid, camera)
+                framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
                 fr = desispec.io.read_frame(framefile)
-                flatfilename = findfile('fiberflatexp', args.night, args.expid, camera)
+                flatfilename = findfile('fiberflatexp', args.night, args.expid, camera, readonly=True)
                 ff = desispec.io.read_fiberflat(flatfilename)
                 fr.meta['FIBERFLT'] = desispec.io.shorten_filename(flatfilename)
                 apply_fiberflat(fr, ff)
@@ -1102,7 +1096,7 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera)
+            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
             orig_frame = desispec.io.read_frame(framefile)
 
             #- Make a copy so that we can apply fiberflat
@@ -1114,7 +1108,7 @@ def main(args=None, comm=None):
                 continue
 
             #- Apply fiberflat then select random fibers below a flux cut
-            flatfilename = findfile('fiberflatexp', args.night, args.expid, camera)
+            flatfilename = findfile('fiberflatexp', args.night, args.expid, camera, readonly=True)
             ff = desispec.io.read_fiberflat(flatfilename)
             apply_fiberflat(fr, ff)
             sumflux = np.sum(fr.flux, axis=1)
@@ -1142,9 +1136,9 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera)
+            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
             hdr = fitsio.read_header(framefile, 'FLUX')
-            fiberflatfile = findfile('fiberflatexp', args.night, args.expid, camera)
+            fiberflatfile = findfile('fiberflatexp', args.night, args.expid, camera, readonly=True)
             skyfile = findfile('sky', args.night, args.expid, camera)
 
             cmd = "desi_compute_sky"
@@ -1248,9 +1242,9 @@ def main(args=None, comm=None):
                 skyfiles[sp] = list()
                 fiberflatfiles[sp] = list()
 
-            framefiles[sp].append(findfile('frame', night, expid, camera))
-            skyfiles[sp].append(findfile('sky', night, expid, camera))
-            fiberflatfiles[sp].append(findfile('fiberflatexp', night, expid, camera))
+            framefiles[sp].append(findfile('frame', night, expid, camera, readonly=True))
+            skyfiles[sp].append(findfile('sky', night, expid, camera, readonly=True))
+            fiberflatfiles[sp].append(findfile('fiberflatexp', night, expid, camera, readonly=True))
 
         #- Hardcoded stdstar model version
         starmodels = os.path.join(
@@ -1332,10 +1326,10 @@ def main(args=None, comm=None):
                     r_cameras.append(camera)
             if len(r_cameras)>0 :
                 outfile    = findfile('calibstars',night, expid)
-                frames     = [findfile('frame', night, expid, camera) for camera in r_cameras]
-                fiberflats = [findfile('fiberflatexp', night, expid, camera) for camera in r_cameras]
-                skys       = [findfile('sky', night, expid, camera) for camera in r_cameras]
-                models     = [findfile('stdstars', night, expid,spectrograph=int(camera[1])) for camera in r_cameras]
+                frames     = [findfile('frame', night, expid, camera, readonly=True) for camera in r_cameras]
+                fiberflats = [findfile('fiberflatexp', night, expid, camera, readonly=True) for camera in r_cameras]
+                skys       = [findfile('sky', night, expid, camera, readonly=True) for camera in r_cameras]
+                models     = [findfile('stdstars', night, expid,spectrograph=int(camera[1]), readonly=True) for camera in r_cameras]
 
                 inputs = frames + fiberflats + skys + models
                 cmd = "desi_select_calib_stars --delta-color-cut 0.1 "
@@ -1356,13 +1350,13 @@ def main(args=None, comm=None):
 
         #- Compute flux calibration vectors per camera
         for camera in args.cameras[rank::size]:
-            framefile = findfile('frame', night, expid, camera)
-            skyfile = findfile('sky', night, expid, camera)
+            framefile = findfile('frame', night, expid, camera, readonly=True)
+            skyfile = findfile('sky', night, expid, camera, readonly=True)
             spectrograph = int(camera[1])
-            stdfile = findfile('stdstars', night, expid,spectrograph=spectrograph)
+            stdfile = findfile('stdstars', night, expid,spectrograph=spectrograph, readonly=True)
+            fiberflatfile = findfile('fiberflatexp', night, expid, camera, readonly=True)
             calibfile = findfile('fluxcalib', night, expid, camera)
             calibstars = findfile('calibstars',night, expid)
-            fiberflatfile = findfile('fiberflatexp', night, expid, camera)
 
             cmd = "desi_compute_fluxcalibration"
             cmd += " --infile {}".format(framefile)
@@ -1397,13 +1391,13 @@ def main(args=None, comm=None):
             log.info('Starting cframe file creation at {}'.format(time.asctime()))
 
         for camera in args.cameras[rank::size]:
-            framefile = findfile('frame', night, expid, camera)
-            skyfile = findfile('sky', night, expid, camera)
+            framefile = findfile('frame', night, expid, camera, readonly=True)
+            fiberflatfile = findfile('fiberflatexp', night, expid, camera, readonly=True)
+            skyfile = findfile('sky', night, expid, camera, readonly=True)
             spectrograph = int(camera[1])
-            stdfile = findfile('stdstars', night, expid, spectrograph=spectrograph)
-            calibfile = findfile('fluxcalib', night, expid, camera)
+            stdfile = findfile('stdstars', night, expid, spectrograph=spectrograph, readonly=True)
+            calibfile = findfile('fluxcalib', night, expid, camera, readonly=True)
             cframefile = findfile('cframe', night, expid, camera)
-            fiberflatfile = findfile('fiberflatexp', night, expid, camera)
 
             cmd = "desi_process_exposure"
             cmd += " --infile {}".format(framefile)

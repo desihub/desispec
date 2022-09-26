@@ -17,6 +17,56 @@ import numpy as np
 from desiutil.log import get_logger
 from .util import healpix_subdirectory, checkgzip
 
+_desi_root_readonly=None
+def get_desi_root_readonly():
+    """
+    Returns $DESI_ROOT_READONLY if set and path exists, otherwise $DESI_ROOT.
+
+    Caches answer upon first call, i.e. setting $DESI_ROOT_READONLY to a
+    different value part way through running will use previously cached value.
+    This prevents it from re-checking a non-existent path N>>1 times.
+    """
+    global _desi_root_readonly
+    log = get_logger()
+    if _desi_root_readonly is not None:
+        log.debug('Using cached _desi_root_readonly=%s', _desi_root_readonly)
+        return _desi_root_readonly
+    elif 'DESI_ROOT_READONLY' in os.environ:
+        if os.path.exists(os.environ['DESI_ROOT_READONLY']):
+            _desi_root_readonly = os.environ['DESI_ROOT_READONLY']
+            log.debug("Using $DESI_ROOT_READONLY=%s", _desi_root_readonly)
+        else:
+            log.debug("$DESI_ROOT_READONLY=%s set but doesn't exist; using $DESI_ROOT=%s",
+                    os.environ['DESI_ROOT_READONLY'], os.environ['DESI_ROOT'])
+            _desi_root_readonly = os.environ['DESI_ROOT']
+    else:
+        log.debug('$DESI_ROOT_READONLY not set; using $DESI_ROOT=%s',
+                os.environ['DESI_ROOT'])
+        _desi_root_readonly = os.environ['DESI_ROOT']
+
+    return _desi_root_readonly
+
+def get_readonly_filepath(filepath):
+    """
+    Generate optimized path for read-only usage of filepath
+
+    Args:
+        filepath (str): full path to input file
+
+    Returns: readonly_filepath using $DESI_ROOT_READONLY
+
+    If a readonly filepath can't be derived, return original filepath
+    """
+    if 'DESI_ROOT' not in os.environ:
+        return filepath
+    else:
+        desi_root = os.environ['DESI_ROOT']
+
+    desi_root_readonly = get_desi_root_readonly()
+    if filepath.startswith(desi_root) and desi_root != desi_root_readonly:
+        filepath = filepath.replace(desi_root, desi_root_readonly, 1)
+
+    return filepath
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, nside=64,
@@ -24,7 +74,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         survey=None, faprogram=None,
         rawdata_dir=None, specprod_dir=None,
         download=False, outdir=None, qaprod_dir=None,
-        return_exists=False):
+        return_exists=False,
+        readonly=False):
     """Returns location where file should be
 
     Args:
@@ -49,12 +100,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
+        readonly: if True, return read-only version of path if possible
 
     Returns filename, or (filename, exists) if return_exists=True
 
     Raises:
         ValueError: for invalid file types, and other invalid input
         KeyError: for missing environment variables
+
+    Notes:
+        The readonly option uses $DESI_ROOT_READONLY if it is set and
+        exists; otherwise it returns the normal read/write path.
     """
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
@@ -275,6 +331,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         exists = True
     except FileNotFoundError:
         exists = False
+
+    if readonly:
+        filepath = get_readonly_filepath(filepath)
 
     if return_exists:
         return filepath, exists
