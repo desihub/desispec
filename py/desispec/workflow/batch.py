@@ -36,11 +36,15 @@ def get_config(name):
 
     return config[name]
 
-def default_system():
+def default_system(jobdesc=None):
     """
     Guess default system to use based on environment
 
-    Returns default name to use
+    Args:
+        jobdesc (str): Description of the job in the processsing table (optional).
+
+    Returns:
+         name (str): default system name to use
     """
     log = get_logger()
     name = None
@@ -48,7 +52,11 @@ def default_system():
         if os.environ['NERSC_HOST'] == 'cori':
             name = 'cori-haswell'
         elif os.environ['NERSC_HOST'] == 'perlmutter':
-            name = 'perlmutter-gpu'
+            ## HARDCODED: for now arcs and biases can't use gpu's, so use cpu's
+            if jobdesc in ['arc', 'nightlybias', 'ccdcalib']:
+                name = 'perlmutter-cpu'
+            else:
+                name = 'perlmutter-gpu'
     elif os.path.isdir('/clusterfs/dirac1'):
         name = 'dirac'
 

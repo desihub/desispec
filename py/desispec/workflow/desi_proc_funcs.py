@@ -584,6 +584,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
+    ## If system name isn't specified, derive it
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=jobdesc)
+
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
     gpus_per_node = batch_config['gpus_per_node']
