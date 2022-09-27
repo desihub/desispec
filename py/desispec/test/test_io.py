@@ -32,6 +32,7 @@ class TestIO(unittest.TestCase):
         """Create unique test filename in a subdirectory.
         """
         cls.testDir = tempfile.mkdtemp()
+        cls.readonlyDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
@@ -39,12 +40,14 @@ class TestIO(unittest.TestCase):
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
+                       "DESI_ROOT_READONLY": None,
                        "DESI_SPECTRO_DATA": None,
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
                        }
         cls.testEnv = {'SPECPROD':'dailytest',
                        "DESI_ROOT": cls.testDir,
+                       "DESI_ROOT_READONLY": cls.readonlyDir,
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
                        "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
                        "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
@@ -932,6 +935,85 @@ class TestIO(unittest.TestCase):
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
+    def test_desi_root_readonly(self):
+        """test $DESI_ROOT_READONLY + findfile"""
+        from ..io import meta
+
+        #- cache whatever $DESI_ROOT_READONLY was (or None)
+        orig_desi_root_readonly = os.getenv('DESI_ROOT_READONLY')
+        orig_cache = meta._desi_root_readonly
+
+        #- Reset cache for clean start
+        meta._desi_root_readonly = None
+
+        #- Case 1: $DESI_ROOT_READONLY is set and exists -> use it
+        os.environ['DESI_ROOT_READONLY'] = tempfile.mkdtemp()
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT_READONLY'])
+
+        #- Case 2: $DESI_ROOT_READONLY set but invalid -> $DESI_ROOT instead
+        meta._desi_root_readonly = None
+        os.environ['DESI_ROOT_READONLY'] = '/blat/foo/bar'
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT'])
+
+        #- Case 3: $DESI_ROOT_READONLY isn't set -> $DESI_ROOT instead
+        meta._desi_root_readonly = None
+        del os.environ['DESI_ROOT_READONLY']
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT'])
+
+        #- Case 4: ensure we are using previous cached value
+        cache = meta._desi_root_readonly = '/does/not/exist'
+        os.environ['DESI_ROOT_READONLY'] = '/biz/bat/boo'
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, cache)
+        self.assertNotEqual(blat, os.environ['DESI_ROOT_READONLY'])
+
+        #- get us back to where we were
+        meta._desi_root_readonly = orig_cache
+        if orig_desi_root_readonly is not None:
+            os.environ['DESI_ROOT_READONLY'] = orig_desi_root_readonly
+
+    def test_findfile_readonly(self):
+        """Test findfile(..., readonly=True) option
+        """
+        from ..io.meta import findfile
+        fn1 = findfile('frame', 20201010, 123, 'b0')
+        fn2 = findfile('frame', 20201010, 123, 'b0', readonly=True)
+        self.assertNotEqual(fn1, fn2)
+        self.assertTrue(fn1.startswith(self.testDir))
+        self.assertTrue(fn2.startswith(self.readonlyDir))
+
+        #- if outdir doesn't start with DESI_ROOT, RO is same as RW
+        fn1 = findfile('frame', 20201010, 123, 'b0', outdir='/blat/foo')
+        fn2 = findfile('frame', 20201010, 123, 'b0', outdir='/blat/foo',
+                readonly=True)
+        self.assertEqual(fn1, fn2)
+
+        #- if outdir starts with DESI_ROOT, RO is different
+        outdir = os.path.join(os.environ['DESI_ROOT'], 'blat', 'foo')
+        fn1 = findfile('frame', 20201010, 123, 'b0', outdir=outdir)
+        fn2 = findfile('frame', 20201010, 123, 'b0', outdir=outdir,
+                readonly=True)
+        self.assertNotEqual(fn1, fn2)
+        self.assertTrue(fn1.startswith(self.testDir))
+        self.assertTrue(fn2.startswith(self.readonlyDir))
+
+    def test_readonly_filepath(self):
+        """Test get_readonly_filepath"""
+        from ..io.meta import get_readonly_filepath
+
+        #- Starts with $DESI_ROOT, so fine readonly equivalent
+        rwfile = os.path.join(os.environ['DESI_ROOT'], 'blat', 'foo')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertNotEqual(rwfile, rofile)
+        self.assertTrue(rofile.startswith(os.environ['DESI_ROOT_READONLY']))
+
+        #- Doesn't start with $DESI_ROOT so no read-only equivalent
+        rwfile = os.path.join('blat', 'foo', 'bar')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertEqual(rwfile, rofile)
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -1202,11 +1284,31 @@ class TestIO(unittest.TestCase):
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.fits'))
+        self.assertTrue('/a/b/c' in tempfile)
+
+        filename = '/a/b/blat.fits.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.gz'))
+        self.assertTrue('/a/b/blat' in tempfile)
+
+        filename = '/a/b/blat.fits.fz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.fz'))
+        self.assertTrue('/a/b/blat' in tempfile)
 
         filename = 'blat.ecsv'
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.ecsv'))
+        self.assertTrue('blat' in tempfile)
+
+        filename = 'blat.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.gz'))
+        self.assertTrue('blat' in tempfile)
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''

@@ -747,7 +747,7 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     results = ex2d(img.pix, img.ivar*((img.mask & extractmaskval)==0), psf, bspecmin,
                    bnspec, wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                    bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                   full_output=True, nsubbundles=args.nsubbundles,
+                   full_output=True, nsubbundles=args.nsubbundles, psferr=args.psferr,
                    wavepad_frac=args.wavepad_frac, pixpad_frac=args.pixpad_frac)
 
     flux = results['flux']
@@ -785,7 +785,9 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     mark_extraction = time.time()
 
     #- Write output
-    io.write_frame(outbundle, frame)
+    tmpfile = get_tempfilename(outbundle)
+    io.write_frame(tmpfile, frame)
+    os.rename(tmpfile, outbundle)
 
     if args.model is not None:
         fits.writeto(outmodel, results['modelimage'], header=frame.meta)

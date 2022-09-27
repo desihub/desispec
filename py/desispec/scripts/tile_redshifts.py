@@ -190,9 +190,11 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
 
+    nexps = len(exptable)
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
-        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits*')
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}'
+                          +'.fits{,.gz}')
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
@@ -220,7 +222,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
             spectro_string=spectro_string, suffix=suffix,
             frame_glob=frame_glob,
             queue=queue, system_name=system_name,
-            onetile=True, tileid=tileid, night=night, expid=expid,
+            onetile=True, tileid=tileid, night=night, expid=expid, nexps=nexps,
             run_zmtl=run_zmtl, noafterburners=noafterburners)
 
     err = 0
@@ -250,7 +252,7 @@ def write_redshift_script(batchscript, outdir,
         healpix=None,
         extra_header=None,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None, expid=None,
+        onetile=True, tileid=None, night=None, expid=None, nexps=0,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
@@ -277,6 +279,7 @@ def write_redshift_script(batchscript, outdir,
         tileid (int): tileid to process; only needed for group='cumulative'
         night (int): process through or on night YEARMMDD; for group='cumulative' and 'pernight'
         expid (int): expid for group='perexp'
+        nexps (int): number of exposures to be fit
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
         redrock_nodes (int): number of nodes for each redrock call
@@ -404,12 +407,14 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $spectra) already exists, skipping grouping
     else
         # Check if any input frames exist
-        CFRAMES=$(ls {frame_glob})
-        MISSING_CFRAMES=$?
+        # Use either .fits or .fits.gz search will fail and throw error, so catch them
+        CFRAMES=$(ls {frame_glob} 2>/dev/null)
+        NUM_EXPS={nexps}
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $MISSING_CFRAMES -ne 0 ] && [ $NUM_CFRAMES -gt 0 ]; then
-            echo ERROR: some expected cframes missing for spectrograph $SPECTRO but proceeding anyway
+        if [ $NUM_EXPS -gt $NUM_CFRAMES ]; then
+            echo WARNING: Some expected cframes may be missing for spectrograph $SPECTRO. Proceeding anyway
         fi
+        echo INFO: For spectrograph $SPECTRO, $NUM_CFRAMES cframes found for $NUM_EXPS exposures
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
             cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra {headeropt}"
@@ -496,13 +501,16 @@ wait
         if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
+echo --- Running desi_tile_qa at $(date)
 tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
-    echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
+    echo $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa at $(date)
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
+    echo Running desi_tile_qa, see $tile_qa_log
+    cmd="desi_tile_qa -g {group} -n {night} -t {tileid}"
+    echo RUNNING $cmd &> $tile_qa_log
+    $cmd &>> $tile_qa_log
 fi
 """)
 
@@ -535,15 +543,17 @@ wait
         if not noafterburners:
             fx.write(f"""
 echo
-echo --- Running QSO afterburners at $(date)
+echo --- Running QSO and emline afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
+    emfit={outdir}/emline-$SPECTRO-{suffix}.fits
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
     qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
-
+    emfitlog={logdir}/emline-$SPECTRO-{suffix}.log
+    
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
@@ -570,16 +580,29 @@ for SPECTRO in {spectro_string}; do
         echo ERROR: missing $(basename $redrock), skipping QSO QN afterburner
     fi
 
+    # EM Line Fit afterburner
+    if [ -f $emfit ]; then
+        echo $(basename $emfit) already exists, skipping EM Line Fit afterburner
+    elif [ -f $redrock ]; then
+        echo Running EM Line Fit afterburner, see $emfitlog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_emlinefit_afterburner --coadd $coadd --redrock $redrock --output $emfit"
+        echo RUNNING $cmd &> $emfitlog
+        $cmd &>> $emfitlog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $redrock), skipping EM Line Fit afterburner
+    fi
+
 done
-echo Waiting for QSO afterburners to finish at $(date)
+echo Waiting for QSO and emline afterburners to finish at $(date)
 wait
 """)
 
         fx.write(f"""
 echo
 echo --- Files in {outdir}:
-for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
-    echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
+for prefix in spectra coadd redrock tile-qa zmtl qso_qn qso_mgii emline; do
+    echo  "   " $(ls {outdir}/$prefix*.fits* |& grep -v 'cannot access' | wc -l) $prefix
 done
 
 popd &> /dev/null

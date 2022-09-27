@@ -342,49 +342,54 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
     log.info(f"done with {camera}")
 
-def _find_zeros(night, cameras, nzeros=25, nskip=2, anyzeros=False):
+def _find_zeros(night, cameras, nzeros=25, nskip=2):
     """Find all OBSTYPE=ZERO exposures on a given night
 
     Args:
         night (int): YEARMMDD night to search
-        cameras (str): list of cameras to process
+        cameras (list of str): list of cameras to process
 
     Options:
         nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
         nskip (int): number of initial zeros to skip
-        anyzeros (bool): allow any ZEROs, not just those taken for CCD calib seq
 
-    Returns array of expids that are OBSTYPE=ZERO
+    Returns:
+         calib_expdict (dict): dictionary of expids (values) for each camera (keys) 
+                               for calibration zeros
+         noncalib_expdict (dict): dictionary of expids (values) for each camera (keys)
+                                  for non calibration zeros.
 
     Uses production exposure tables to veto known bad ZEROs, but it will also
     find any ZEROs on disk for that night, regardless of whether they are in
     the exposures table or not.
     """
+    log = get_logger()
+
+    ## Ensure cameras are array-like and valid
+    if isinstance(cameras, str):
+        cameras = decode_camword(parse_cameras(cameras))
 
     #- Find all ZERO exposures on this night
-    log = get_logger()
     nightdir = io.rawdata_root() + f'/{night}'
     requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
-    expids = list()
+    calib_expids, noncalib_expids = list(), list()
     for filename in requestfiles:
         with open(filename) as fx:
             r = json.load(fx)
 
-        #- CALIB ZEROs, or any ZEROs if anyzeros=True,
+        #- CALIB ZEROs or non-calib ZEROs for dark sequence
         #- while being robust to missing OBSTYPE or PROGRAM
-        if (('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and
-            ((('PROGRAM' in r) and  r['PROGRAM'].startswith('CALIB ZEROs')) or
-             anyzeros)):
-            expids.append(int(os.path.basename(os.path.dirname(filename))))
+        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r): 
+            if r['PROGRAM'].startswith('CALIB ZEROs'):
+                calib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+            elif r['PROGRAM'].startswith('ZEROs for dark sequence'):
+                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+            elif r['PROGRAM'].startswith('ZEROs for morning darks'):
+                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+            else:
+                continue
         else:
             continue
-
-    expids = np.array(expids)
-
-    #- drop first two zeros because they are sometimes still stabilizing
-    if nskip > 0:
-       log.info('Dropping first {} ZEROs: {}'.format(nskip, expids[0:2]))
-       expids = expids[nskip:]
 
     #- Remove ZEROs that are flagged as bad, but allow for the possibility
     #- of ZEROs that aren't in the exposure table for whatever reason
@@ -396,47 +401,140 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2, anyzeros=False):
     badcam = select_zeros & (exptable['BADCAMWORD']!='')
     badamp = select_zeros & (exptable['BADAMPS']!='')
     notallcams = select_zeros & (exptable['CAMWORD']!='a0123456789')
-    if np.any(bad):
-        #this discards observations that are bad for all cams
-        drop = np.isin(expids, exptable['EXPID'][bad])
-        ndrop = np.sum(drop)
-        drop_expids = expids[drop]
-        log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
-        expids = expids[~drop]
-        
-    if np.any(badcam|badamp|notallcams):
-        #do the by spectrograph evaluation of bad spectra
-        drop = np.isin(expids, exptable['EXPID'][badcam|badamp|notallcams])
-        ndrop = np.sum(drop)
-        drop_expids = expids[drop]
-        expids = expids[~drop]
-        #need lists here so we can append good observations on some spectrographs
-        expdict={f'{cam}':list(expids) for cam in cameras}
-        if len(expids) >= nzeros:
-            #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
-            log.info(f'Additionally dropped {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+
+    expdicts = dict()
+    for expids, zerotype in zip([calib_expids, noncalib_expids],
+                                ['calib', 'noncalib']):
+        expids = np.array(expids)
+
+        #- drop first two zeros because they are sometimes still stabilizing
+        if nskip > 0:
+            log.info(f'Dropping first {nskip} {zerotype} ZEROs: {expids[0:2]}')
+            expids = expids[nskip:]
+
+        if np.any(bad):
+            #this discards observations that are bad for all cams
+            drop = np.isin(expids, exptable['EXPID'][bad])
+            ndrop = np.sum(drop)
+            drop_expids = expids[drop]
+            log.info(f'Dropping {ndrop} bad {zerotype} ZEROs: {drop_expids}')
+            expids = expids[~drop]
+
+        if np.any(badcam|badamp|notallcams):
+            #do the by spectrograph evaluation of bad spectra
+            drop = np.isin(expids, exptable['EXPID'][badcam|badamp|notallcams])
+            ndrop = np.sum(drop)
+            drop_expids = expids[drop]
+            expids = expids[~drop]
+            #need lists here so we can append good observations on some spectrographs
+            expdict={f'{cam}': list(expids) for cam in cameras}
+            if len(expids) >= nzeros:
+                #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
+                log.info(f'Additionally dropped {ndrop} partially bad {zerotype} ZEROs for'
+                         + f' all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+            else:
+                #in this case we want to recover as many as possible
+                log.info(f'additionally dropped {ndrop} bad {zerotype} ZEROs for some cams'
+                         + f'because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+
+                for expid in drop_expids:
+                    select_exp=exptable['EXPID']==expid
+                    badampstring=exptable['BADAMPS'][select_exp][0]
+                    goodcamword=difference_camwords(exptable['CAMWORD'][select_exp][0],
+                                                    exptable['BADCAMWORD'][select_exp][0])
+                    goodcamlist=decode_camword(goodcamword)
+                    for camera in goodcamlist:
+                        if camera in cameras and camera not in badampstring:
+                            expdict[camera].append(expid)
         else:
-            #in this case we want to recover as many as possible
-            log.info(f'additionally dropped {ndrop} bad ZEROs for some cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
-            
-            for expid in drop_expids:
-                select_exp=exptable['EXPID']==expid
-                badampstring=exptable['BADAMPS'][select_exp][0]
-                goodcamword=difference_camwords(exptable['CAMWORD'][select_exp][0],exptable['BADCAMWORD'][select_exp][0])
-                goodcamlist=decode_camword(goodcamword)
-                for camera in goodcamlist:
-                    if camera in cameras and camera not in badampstring:
-                        expdict[camera].append(expid)
+            expdict={f'{cam}': expids for cam in cameras}
+
+        for camera,expids in expdict.items():
+            log.info(f'Keeping {len(expids)} {zerotype} ZEROs for camera {camera}')
+            #make sure everything is in np arrays again
+            expdict[camera] = np.sort(expids)
+
+        expdicts[zerotype] = expdict
+
+    #- Verify that all cameras in one are present in the other dictionary
+    for cam in set(expdicts['calib'].keys()).union(set(expdicts['noncalib'].keys())):
+        if cam not in expdicts['calib'].keys():
+            expdicts['calib'][cam] = np.array([])
+        if cam not in expdicts['noncalib'].keys():
+            expdicts['noncalib'][cam] = np.array([])
+
+    return expdicts['calib'], expdicts['noncalib']
+
+def select_zero_expids(calib_exps, noncalib_exps, night, cam,
+                        nzeros=25, minzeros=15, nskip=2, anyzeros=False):
+    """Select which ZERO exposure IDs to use for nightly bias
+
+    Args:
+        calib_exps (array-like): expids of calibration zeros
+        noncalib_exps (array-like): expids of non calibration zeros
+        night (int): YEARMMDD night to process
+        cam (str): camera to process
+
+    Options:
+        nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
+        minzeros (int): minimum number of zeros to sufficiently compute a nightly bias
+        nskip (int): number of initial zeros to skip
+
+    Returns:
+        expids (array): the list of expids selected
+
+    """
+    log = get_logger()
+    ntotzeros = len(calib_exps) + len(noncalib_exps)
+    nthreshold = nzeros - nskip
+
+    # - If anyzeros, use all expids
+    if anyzeros:
+        expids = np.sort(np.append(calib_exps, noncalib_exps))
     else:
-        expdict={f'{cam}':expids for cam in cameras}
-    
-    for camera,expids in expdict.items():
-        log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
-        #make sure everything is in np arrays again
-        expdict[camera]=np.sort(expids)
+        expids = calib_exps
 
+    ## If we don't have enought total zeros, give up now for this cam
+    if ntotzeros < minzeros:
+        log.error(f'Only {ntotzeros} total ZEROS on {night} and cam {cam};'
+                  + f'need at least {minzeros}')
+        return None
 
-    return expdict
+    ## If we have fewer zeros than we ideally want (nthreshold) and we
+    ## have other cals that we haven't tried, add them
+    if not anyzeros and len(expids) < nthreshold and len(noncalib_exps) > 0:
+        log.info(f'Only {len(expids)} Calib ZEROS on {night} and cam {cam},'
+                 + f' but want {nthreshold}. Trying non-calibrations zeros')
+        ## If not enough or just enough noncalib zeros to reach threshold
+        ## add all of them
+        ## Otherwise add just enough noncalib zeros to reach nthreshold
+        if ntotzeros <= nthreshold:
+            num_to_add = len(noncalib_exps)
+            expids = np.sort(np.append(calib_exps, noncalib_exps))
+        else:
+            ## Draw the exposures from the middle of the set (in hopes that
+            ## they are more stable)
+            num_to_add = nthreshold - len(calib_exps)
+            i = (len(noncalib_exps) - num_to_add) // 2
+            expids = np.sort(
+                np.append(calib_exps, noncalib_exps[i:i + num_to_add]))
+
+        ## This shouldn't happen after the above check, but make sure
+        if len(expids) < minzeros:
+            log.error(f'Still only {len(expids)} ZEROS on {night} and '
+                      + f'cam {cam}; need at least {minzeros}.')
+            return None
+        else:
+            log.info(f'Succeeded in adding {num_to_add} non-calib'
+                     + f' zeros. We now have {len(expids)} ZEROS on '
+                     + f'{night} and cam {cam}.')
+
+    if len(expids) > nzeros:
+        nexps = len(expids)
+        n = (nexps - nzeros) // 2
+        expids = expids[n:n + nzeros]
+
+    return expids
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         nskip=2, anyzeros=False, comm=None):
@@ -444,7 +542,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
 
     Args:
         night (int): YEARMMDD night to process
-        cameras (str): list of cameras to process
+        cameras (list of str): list of cameras to process
 
     Options:
         outdir (str): write files to this output directory
@@ -468,6 +566,17 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
 
     log = get_logger()
 
+    ## Ensure cameras are array-like and valid
+    if isinstance(cameras, str):
+        cameras = decode_camword(parse_cameras(cameras))
+    else:
+        for camera in cameras:
+            if not isinstance(camera, str) or len(camera) != 2 \
+               or camera[0] not in ['b', 'r', 'z'] or not camera[1].isnumeric():
+                msg = f"Couldn't understand camera={camera} in {cameras}"
+                log.error(msg)
+                raise ValueError(msg)
+
     if comm is not None:
         rank, size = comm.rank, comm.size
     else:
@@ -476,23 +585,20 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
     #- Find all zeros for the night
     expdict = None
     if rank == 0:
-        expdict = _find_zeros(night, cameras=cameras, nzeros=nzeros,
-                nskip=nskip, anyzeros=anyzeros)
+        calib_expdict, noncalib_expdict = _find_zeros(night, cameras=cameras,
+                                                      nzeros=nzeros, nskip=nskip)
+
         used_expdict = {}
-        for cam,expids in expdict.items():
-            if len(expids) < minzeros:
-                msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
-                log.error(msg)
-                continue
-
-            if len(expids) > nzeros:
-                nexps = len(expids)
-                n = (nexps - nzeros)//2
-                used_expdict[cam] = expids[n:n+nzeros]
-            else:
+        ## _find_zeros dictionaries already verified to have the same set
+        ## of keys
+        for cam in calib_expdict.keys():
+            expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
+                                         night, cam, nzeros, minzeros,
+                                         nskip, anyzeros)
+            if expids is not None:
                 used_expdict[cam] = expids
-
-            log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
+                log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly'
+                         + f'bias {night} and cam {cam}')
 
         expdict=used_expdict
 
