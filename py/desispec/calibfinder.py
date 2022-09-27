@@ -310,7 +310,7 @@ class CalibFinder() :
         self.data = matching_data
 
         if "DESI_SPECTRO_DARK" in os.environ:
-            self.find_darks_in_desi_spectro_dark(headers)
+            self.find_darks_in_desi_spectro_dark(header)
 
     def haskey(self,key) :
         """
