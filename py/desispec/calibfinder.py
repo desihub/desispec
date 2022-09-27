@@ -310,7 +310,7 @@ class CalibFinder() :
         self.data = matching_data
 
         if "DESI_SPECTRO_DARK" in os.environ:
-            find_darks_in_desi_spectro_dark(self,headers)
+            self.find_darks_in_desi_spectro_dark(self,headers)
 
     def haskey(self,key) :
         """
@@ -378,7 +378,11 @@ class CalibFinder() :
 
         """
         log = get_logger()
-        self.dark_directory = os.getenv("DESI_SPECTRO_DARK")
+        if "DESI_DARK_VERSION" not in os.environ:
+            log.critical("did not specify DESI_DARK_VERSION, but DESI_SPECTRO_DARK was set, quitting...")
+            raise RuntimeError("did not specify DESI_DARK_VERSION, but DESI_SPECTRO_DARK was set, quitting...")
+
+        self.dark_directory = f'{os.getenv("DESI_SPECTRO_DARK")}/{os.getenv("DESI_DARK_VERSION")}/'
 
         camera=header["CAMERA"].strip().lower()
 
@@ -391,8 +395,6 @@ class CalibFinder() :
         
         if not os.path.isdir(self.dark_directory):
             raise IOError("Dark directory {} not found".format(self.dark_directory))
-
-        #TODO: potentially add a checks here e.g. for files that are too early?
         
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
