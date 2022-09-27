@@ -1122,7 +1122,6 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 {batch_opts}
 
 cd {outdir}
-desidev
 ''')
 
         minind=scriptid*n_jobs_per_script
