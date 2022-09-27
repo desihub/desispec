@@ -868,7 +868,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             exptime_key="EXPTIME"
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
-        
+
         dark_filename = cfinder.findfile("DARK")
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
