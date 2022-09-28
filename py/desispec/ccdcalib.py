@@ -1181,7 +1181,7 @@ cp {biasfile}  bias_frames/{biasfile}
             log.info(f"Generated but didn't submit {batchfile}")
 
 
-def make_biweekly_darks(outdir=None, lastnight=None, cameras=None, window=30,
+def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
                       copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None,

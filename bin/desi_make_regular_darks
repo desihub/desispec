@@ -2,7 +2,7 @@
 
 import argparse
 import queue
-from desispec.ccdcalib import make_biweekly_darks
+from desispec.ccdcalib import make_regular_darks
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Compute a master dark from a bunch of nights and store to DESI_SPECTRO_DARK",
@@ -47,9 +47,4 @@ parser.add_argument('--no-obslist', action='store_true',
                     help='Do not use list of observations for the computation, instead parse from all frames observed in the timespan')
 args        = parser.parse_args()
 
-make_biweekly_darks(**vars(args))
-
-#outdir=args.outdir, lastnight=args.lastnight, window=args.window,
-#cameras=args.cameras, nosubmit=args.nosubmit, queue=args.queue,
-#first_expid=args.first_expid, tempdir=args.tempdir, linexptime=args.linexptime,
-#nskip_zeros=args.nskip_zeros
+make_regular_darks(**vars(args))
