@@ -399,7 +399,7 @@ class CalibFinder() :
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
 
-        if os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}}/dark_model_list.csv') & os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}}/bias_model_list.csv'):
+        if os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_model_list.csv') & os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_model_list.csv'):
             pass
         else:   #this will only be done as long as files do not yet exist
             dark_filelist = glob.glob("{}/dark_frames/dark-*{}*.fits.gz".format(self.dark_directory,cameraid))
