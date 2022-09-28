@@ -41,7 +41,7 @@ def default_system(jobdesc=None):
     Guess default system to use based on environment
 
     Args:
-        jobdesc (str): Description of the job in the processsing table (optional).
+        jobdesc (str): Description of the job in the processing table (optional).
 
     Returns:
          name (str): default system name to use

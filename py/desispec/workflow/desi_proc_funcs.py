@@ -584,7 +584,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
-    ## If system name isn't specified, derive it
+    ## If system name isn't specified, guess it
     if system_name is None:
         system_name = batch.default_system(jobdesc=jobdesc)
 
