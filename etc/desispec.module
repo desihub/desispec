@@ -77,8 +77,7 @@ setenv [string toupper $product] $PRODUCT_DIR
 # Add any non-standard Module code below this point.
 #
 setenv DESI_SPECTRO_CALIB $env(DESI_ROOT)/spectro/desi_spectro_calib/trunk
-setenv DESI_SPECTRO_DARK $env(DESI_ROOT)/spectro/desi_spectro_dark
-setenv DESI_DARK_VERSION v2209
+setenv DESI_SPECTRO_DARK $env(DESI_ROOT)/spectro/desi_spectro_dark/v2209
 
 # for MPI+multiprocessing coordination
 setenv MPICH_GNI_FORK_MODE FULLCOPY

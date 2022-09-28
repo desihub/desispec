@@ -1294,9 +1294,6 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
                     badcamword_encoded=create_camword(badcamword_decoded)
                     obslist[i]['BADCAMWORD']=badcamword_encoded
 
-        #if len(change_dates_in_nights)>0:
-        #    nights = [n for n in nights if n >= max(change_dates_in_nights)]
-
         #truncate to the right nights
         if transmit_obslist:
             obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
@@ -1304,8 +1301,6 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
                 nskip_zeros = 0
         else:
             obslist = None
-
-        #TODO: potentially need to do further selections based on quality, but should not be needed as this is done in desi_compute_dark_nonlinear
 
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
