@@ -431,8 +431,8 @@ class CalibFinder() :
                         log.debug(f"no master dark model found for {datebegin}")
                         continue
                     bias_entry=bias_table[bias_dates == date_used]
-                    if len(dark_entry)>0:
-                        dark_entry=dark_entry[0]   #this would ensure that we're using same date for bias and dark
+                    if len(bias_entry)>0:
+                        bias_entry=bias_entry[0]
                     else:
                         log.debug(f"no master bias model found for {datebegin}")
                         continue
