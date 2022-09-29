@@ -408,7 +408,7 @@ class CalibFinder() :
             bias_table_select = np.array([cameraid in fn for fn in bias_table["FILENAME"]])
             
             dark_table=dark_table[dark_table_select]
-            bias_table=dark_table[bias_table_select]
+            bias_table=bias_table[bias_table_select]
             if len(dark_table) == 0 or len(bias_table) == 0:
                 log.warning("Didn't find matching calibration darks/biases in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
                 return
