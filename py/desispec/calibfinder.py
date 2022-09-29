@@ -12,9 +12,9 @@ import yaml
 import os.path
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
-from astropy.io import fits
-import glob
-from desispec.io import read_table
+
+import astropy.table as t #need the package here directly due to circular import complaints when trying to use desispec.io.read_table
+read_table=t.Table.read
 
 def parse_date_obs(value):
     '''
