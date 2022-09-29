@@ -425,8 +425,8 @@ class CalibFinder() :
                     #TODO: extra checks that evaluate if selection from yaml file is matching...
                     date_used=datebegin
                     dark_entry=dark_table[dark_dates == date_used]
-                    if len(dark_filename)>0:
-                        dark_filename=dark_filename[0]
+                    if len(dark_entry)>0:
+                        dark_entry=dark_entry[0]
                     else:
                         log.debug(f"no master dark model found for {datebegin}")
                         continue
@@ -452,8 +452,8 @@ class CalibFinder() :
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
                     break
-            dark_filename=f"{self.dark_directory}{dark_filename}"
-            bias_filename=f"{self.dark_directory}{bias_filename}"
+            dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
+            bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
 
         else:   #this will only be done as long as files do not yet exist
             log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
