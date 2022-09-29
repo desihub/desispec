@@ -14,6 +14,7 @@ from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
 from astropy.io import fits
 import glob
+from desispec.io import read_table
 
 def parse_date_obs(value):
     '''
@@ -399,90 +400,65 @@ class CalibFinder() :
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
 
-        if os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_model_list.csv') & os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_model_list.csv'):
-            pass
-        else:   #this will only be done as long as files do not yet exist
-            dark_filelist = glob.glob("{}/dark_frames/dark-*{}*.fits.gz".format(self.dark_directory,cameraid))
-            dark_filelist.sort()
-            dark_filelist = np.array([f for f in dark_filelist if cameraid in f])
-        
-            bias_filelist = glob.glob("{}/bias_frames/bias-*{}*.fits.gz".format(self.dark_directory,cameraid))
-            bias_filelist.sort()
-            bias_filelist = np.array([f for f in bias_filelist if cameraid in f])
-            #this step will do the matching again that calibfinder does
+        if os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv') & os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'):
+            dark_table = read_table(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv')
+            bias_table = read_table(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv')
 
-            if len(dark_filelist) == 0:
-                log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
-                return
+            dark_table_select = np.array([cameraid in fn for fn in dark_table["FILENAME"]])
+            bias_table_select = np.array([cameraid in fn for fn in bias_table["FILENAME"]])
             
-            if len(bias_filelist) == 0:
-                log.warning("Didn't find matching calibration bias in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
+            dark_table=dark_table[dark_table_select]
+            bias_table=dark_table[bias_table_select]
+            if len(dark_table) == 0 or len(bias_table) == 0:
+                log.warning("Didn't find matching calibration darks/biases in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
                 return
 
-            dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_filelist])
-            bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in bias_filelist])
+            dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_table['FILENAME']])
+            bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in bias_table['FILENAME']])
+
             log.debug(f"Finding matching dark frames in {self.dark_directory} for camera {cameraid} ...")
-
-
             #loop over all dark filenames
-
             log.debug("DATE-OBS=%d"%dateobs)
             found=False
             for datebegin in sorted(dark_dates)[::-1]:
                 if dateobs >= datebegin :
                     #TODO: extra checks that evaluate if selection from yaml file is matching...
                     date_used=datebegin
-                    dark_filename=dark_filelist[dark_dates == date_used]
+                    dark_entry=dark_table[dark_dates == date_used]
                     if len(dark_filename)>0:
                         dark_filename=dark_filename[0]
                     else:
                         log.debug(f"no master dark model found for {datebegin}")
                         continue
-                    bias_filename=bias_filelist[bias_dates == date_used]
+                    bias_entry=bias_table[bias_dates == date_used]
                     if len(bias_filename)>0:
                         bias_filename=bias_filename[0]   #this would ensure that we're using same date for bias and dark
                     else:
                         log.debug(f"no master bias model found for {datebegin}")
                         continue
-                    with fits.open(dark_filename,'readonly') as hdul:
-                        headers2=hdul[0].header
-                        
-                        #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
-                        if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
-                            log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"]))
+
+                    #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
+                    if dark_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_entry["FILENAME"],dark_entry["DETECTOR"],self.data["DETECTOR"]))
+                        continue
+                    if "CCDCFG" in self.data :
+                        if dark_entry["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDCFG"],self.data["CCDCFG"]))
                             continue
-
-                        if "CCDCFG" in self.data :
-                            if headers2["CCDCFG"].strip() is None or headers2["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
-                                log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_filename,headers2["CCDCFG"],self.data["CCDCFG"]))
-                                continue
-
-                        if "CCDTMING" in self.data :
-                            if headers2["CCDTMING"].strip() is None or headers2["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
-                                log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
-                                continue
-                    with fits.open(bias_filename,'readonly') as hdul:
-                        headers2=hdul[0].header
-                        
-                        #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
-                        if headers2["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
-                            log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_filename,headers2["DETECTOR"],self.data["DETECTOR"]))
+                    if "CCDTMING" in self.data :
+                        if dark_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTMING"],self.data["CCDTMING"]))
                             continue
-
-                        if "CCDCFG" in self.data :
-                            if headers2["CCDCFG"].strip() is None or headers2["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
-                                log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_filename,headers2["CCDCFG"],self.data["CCDCFG"]))
-                                continue
-
-                        if "CCDTMING" in self.data :
-                            if headers2["CCDTMING"].strip() is None or headers2["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
-                                log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_filename,headers2["CCDTMING"],self.data["CCDTMING"]))
-                                continue
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
                     break
+            dark_filename=f"{self.dark_directory}{dark_filename}"
+            bias_filename=f"{self.dark_directory}{bias_filename}"
+
+        else:   #this will only be done as long as files do not yet exist
+            log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+            raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
                 
-                   
         if found:      
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
