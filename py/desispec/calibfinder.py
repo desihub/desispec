@@ -468,7 +468,9 @@ class CalibFinder() :
             dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
             bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
             if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
-
+                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                
 
         else:   #this will only be done as long as files do not yet exist
             log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
