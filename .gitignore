@@ -30,6 +30,7 @@ distribute-*.tar.gz
 # Other
 .*.swp
 *~
+.vscode
 
 # Test directories and files
 test-*.fits
