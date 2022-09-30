@@ -1165,7 +1165,7 @@ def setup_db(options=None, **kwargs):
             return 1
     else:
         if os.path.basename(dbfile) == dbfile:
-            db_file = os.path.join(datapath, dbfile)
+            db_file = os.path.join(options.datapath, dbfile)
         else:
             db_file = dbfile
         if overwrite and os.path.exists(db_file):
