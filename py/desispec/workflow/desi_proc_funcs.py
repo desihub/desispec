@@ -327,7 +327,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         runtime: int, the max time requested for the script in minutes for the processing.
     """
     if system_name is None:
-        system_name = batch.default_system()
+        system_name = batch.default_system(jobdesc=jobdesc)
 
     config = batch.get_config(system_name)
     log = get_logger()
@@ -583,6 +583,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
+
+    ## If system name isn't specified, guess it
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=jobdesc)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']

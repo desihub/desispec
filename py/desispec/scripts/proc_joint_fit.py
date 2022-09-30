@@ -592,7 +592,7 @@ def main(args=None, comm=None):
         #- all ranks exit with error if any failed
         if link_errors>0:
             if rank == 0:
-                log.critical(f'{link_errors}/{num_link_commands} stdstar link commands failed')
+                log.critical(f'{link_errors}/{num_link_cmds} stdstar link commands failed')
                 if link_errors==num_link_cmds:
                     log.critical('All stdstar link commands failed')
 
