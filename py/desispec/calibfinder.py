@@ -379,10 +379,7 @@ class CalibFinder() :
 
         """
         log = get_logger()
-        if "DESI_DARK_VERSION" not in os.environ:
-            log.critical("did not specify DESI_DARK_VERSION, but DESI_SPECTRO_DARK was set, quitting...")
-            raise RuntimeError("did not specify DESI_DARK_VERSION, but DESI_SPECTRO_DARK was set, quitting...")
-
+        
         self.dark_directory = f'{os.getenv("DESI_SPECTRO_DARK")}/'
 
         camera=header["CAMERA"].strip().lower()
@@ -409,6 +406,9 @@ class CalibFinder() :
             
             dark_table=dark_table[dark_table_select]
             bias_table=bias_table[bias_table_select]
+            dark_table.sort('FILENAME')
+            bias_table.sort('FILENAME')
+
             if len(dark_table) == 0 or len(bias_table) == 0:
                 log.warning("Didn't find matching calibration darks/biases in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
                 return
@@ -449,11 +449,26 @@ class CalibFinder() :
                         if dark_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTMING"],self.data["CCDTMING"]))
                             continue
+
+                    #same for bias
+                    if bias_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(bias_entry["FILENAME"],bias_entry["DETECTOR"],self.data["DETECTOR"]))
+                        continue
+                    if "CCDCFG" in self.data :
+                        if bias_entry["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDCFG"],self.data["CCDCFG"]))
+                            continue
+                    if "CCDTMING" in self.data :
+                        if bias_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTMING"],self.data["CCDTMING"]))
+                            continue
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
                     break
             dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
             bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
+            if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
+
 
         else:   #this will only be done as long as files do not yet exist
             log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
