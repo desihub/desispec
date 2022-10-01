@@ -13,6 +13,7 @@ from desispec.util import set_backend
 set_backend()
 
 import os,sys
+import time
 import numpy as np
 import argparse
 from desiutil.log import get_logger
@@ -67,6 +68,7 @@ def parse(options=None):
 
 
 def main():
+    start_time = time.time()
 
     log = get_logger()
 
@@ -181,6 +183,12 @@ def main():
         write_nightqa_html(
             outfns, args.night, args.prod, os.path.basename(args.css),
             surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
+
+    duration_seconds = time.time() - start_time
+    minutes = int(duration_seconds // 60)
+    seconds = int(duration_seconds % 60)
+
+    log.info(f'All done at {time.asctime()}; duration {minutes}m{seconds}s')
 
 if __name__ == "__main__":
     main()
