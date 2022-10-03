@@ -7,14 +7,14 @@ Reading and selecting calibration data from $DESI_SPECTRO_CALIB using content of
 
 import re
 import os
+import os.path
+
 import numpy as np
 import yaml
-import os.path
+from astropy.table import Table
+
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
-
-import astropy.table as t #need the package here directly due to circular import complaints when trying to use desispec.io.read_table
-read_table=t.Table.read
 
 def parse_date_obs(value):
     '''
@@ -343,7 +343,7 @@ class CalibFinder() :
     def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]) :
         """
         Args:
-            keys: ptional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
+            keys: optional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
 
         Returns:
             List of bad fibers from yaml file as a 1D array of intergers
@@ -369,18 +369,24 @@ class CalibFinder() :
         Function to select dark frames from $DESI_SPECTRO_DARK using the keywords found in the headers
 
         Args:
-            cfinder: an existing cfinder class that will be updated
             header: header as created in calibfinder
 
-        Optional:
-            yaml_file: path to a specific yaml file. By default, the code will
-            automatically find the yaml file from the environment variable
-            DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
-
+        Updates self in-place
         """
         log = get_logger()
+
+        #- Should only be called if $DESI_SPECTRO_DARK is set, but check that
+        #- to avoid accidentally creating paths like "None/dark_table.csv"
+        if 'DESI_SPECTRO_DARK' not in os.environ:
+            msg = '$DESI_SPECTRO_DARK not set'
+            log.critical(msg)
+            raise ValueError(msg)
         
         self.dark_directory = f'{os.getenv("DESI_SPECTRO_DARK")}/'
+        if not os.path.isdir(self.dark_directory):
+            msg = "Dark directory {} not found".format(self.dark_directory)
+            log.critical(msg)
+            raise IOError(msg)
 
         camera=header["CAMERA"].strip().lower()
 
@@ -391,15 +397,13 @@ class CalibFinder() :
 
         dateobs = header2night(header)
         
-        if not os.path.isdir(self.dark_directory):
-            raise IOError("Dark directory {} not found".format(self.dark_directory))
-        
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
-
-        if os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv') & os.path.exists(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'):
-            dark_table = read_table(f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv')
-            bias_table = read_table(f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv')
+        dark_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv'
+        bias_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'
+        if os.path.exists(dark_table_file) and os.path.exists(bias_table_file):
+            dark_table = Table.read(dark_table_file)
+            bias_table = Table.read(bias_table_file)
 
             dark_table_select = np.array([cameraid in fn for fn in dark_table["FILENAME"]])
             bias_table_select = np.array([cameraid in fn for fn in bias_table["FILENAME"]])
@@ -482,5 +486,3 @@ class CalibFinder() :
         else:
             log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
 
-
-        
