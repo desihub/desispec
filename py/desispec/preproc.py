@@ -686,7 +686,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False,no_overscan_per_row=False):
-
     '''
     preprocess image using metadata in header
 
@@ -789,7 +788,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             depend.setdep(header, key, os.environ[key])
 
     cfinder = None
-
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
 

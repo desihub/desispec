@@ -2,6 +2,7 @@ import os, sys, glob, json
 import traceback
 import datetime
 import subprocess
+import yaml
 
 import astropy.io.fits as pyfits
 from astropy.table import vstack as table_vstack
@@ -14,13 +15,16 @@ from desispec.preproc import masked_median
 # from desispec.preproc import parse_sec_keyword, calc_overscan
 from desispec.preproc import parse_sec_keyword, get_amp_ids, get_readout_mode
 from desispec.preproc import subtract_peramp_overscan
-from desispec.calibfinder import CalibFinder, sp2sm
-from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords
+from desispec.calibfinder import CalibFinder, sp2sm, sm2sp
+from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords,create_camword
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
+
+from desispec.workflow.batch import get_config
+
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                  scale=False, exptime=None):
@@ -798,6 +802,81 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     return mdiff1, mdiff2
 
 
+def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
+    """Compare preprocessed dark images based on different dark models
+
+    Args:
+        preprocfile1: filepath to bias model made from OBSTYPE=ZERO exposures
+        preprocfile2: filepath to bias model made from OBSTYPE=ZERO exposures
+
+    Options:
+        ny (even int): number of patches in y (row) direction
+        nx (even int): number of patches in x (col) direction
+
+    Returns tuple (mdiff1[ny,nx], mdiff2[ny,nx]) median(image-bias) in patches
+
+    median(raw-bias) is calculated in ny*nx patches using only the DATASEC
+    portion of the images.  Since the DESI CCD bias features tend to vary
+    faster with row than column, default patches are (4k/8 x 4k/40) = 500x100.
+    """
+    #- only import fitsio if needed, not upon package import
+    import fitsio
+
+    log = get_logger()
+    diff1, preprochdr1 = fitsio.read(preprocfile1, header=True)
+    diff2, preprochdr2 = fitsio.read(preprocfile2, header=True)
+
+    #- bias cameras must match
+    cam1 = preprochdr1['CAMERA'].strip().upper()
+    cam2 = preprochdr2['CAMERA'].strip().upper()
+    if cam1 != cam2:
+        msg  = f'{preprocfile1} camera {cam1} != {preprocfile2} camera {cam2}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    #- calculate differences per-amp, thus //2
+    ny_groups = ny//2
+    nx_groups = nx//2
+    
+    median_diff1 = list()
+    median_diff2 = list()
+
+    amp_ids = get_amp_ids(preprochdr1)
+    for amp in amp_ids:
+        ampdiff1 = np.zeros((ny_groups, nx_groups))
+        ampdiff2 = np.zeros((ny_groups, nx_groups))
+        #DATASEC is still CCD based, where DETSEC is given the coords in preproc x/y units?
+        yy, xx = parse_sec_keyword(preprochdr1['DETSEC'+amp])
+        iiy = np.linspace(yy.start, yy.stop, ny_groups+1).astype(int)
+        jjx = np.linspace(xx.start, xx.stop, nx_groups+1).astype(int)
+        for i in range(ny_groups):
+            for j in range(nx_groups):
+                aa = slice(iiy[i], iiy[i+1])
+                bb = slice(jjx[j], jjx[j+1])
+
+                #- median of differences
+                ampdiff1[i,j] = np.median(diff1[aa,bb])
+                ampdiff2[i,j] = np.median(diff2[aa,bb])
+
+                #- Note: diff(medians) is less sensitive
+                ## ampdiff1[i,j] = np.median(image[aa,bb]) - np.median(bias1[aa,bb])
+                ## ampdiff2[i,j] = np.median(image[aa,bb]) - np.median(bias2[aa,bb])
+
+        median_diff1.append(ampdiff1)
+        median_diff2.append(ampdiff2)
+
+    #- put back into 2D array by amp
+    d1 = median_diff1
+    d2 = median_diff2
+    mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
+    mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+
+    assert mdiff1.shape == (ny,nx)
+    assert mdiff2.shape == (ny,nx)
+
+    return mdiff1, mdiff2
+
+
 def fit_const_plus_dark(exp_arr,image_arr):
     """
     fit const + dark*t model given images and exptimes
@@ -887,7 +966,8 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
+                      copy_outputs_to_split_dirs=False, prepared_exptable=None, system_name=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -904,10 +984,18 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         first_expid (int): ignore expids prior to this
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
         queue (str): which batch queue to use for submission
+        copy_outputs_to_split_dirs (bool): whether to copy outputs to bias_frames/dark_frames subdirs
+        prepared_exptable (exptable): if a table is submitted here, no further spectra will be searched and this will be used instead
+        system_name (str): the system for which batch files should be created, defaults to guessing current system
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
     log = get_logger()
+    batch_config=get_config(system_name)
+
+    runtime= 240 * batch_config['timefactor']
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
 
     if tempdir is None:
         tempdir = os.path.join(outdir, 'temp')
@@ -944,42 +1032,53 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     #- Create exposure log so that N>>1 jobs don't step on each other
     nightlist = [int(tmp) for tmp in nights.split()]
 
-    if use_exptable:
-        #grab all exposures from the exposure log in case some have been marked bad
-        #note that some exposures will not be in here, so we'll assume those are all fine
-        log.info(f'Using exposure tables for {len(nightlist)} night directories')
-        expfiles=[]
-        for night in nightlist:
-            expfiles.append(get_exposure_table_pathname(night))
-        exptables = load_tables(expfiles)
-        exptable_all=table_vstack(exptables)
-        select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
-        exptable_select=exptable_all[select]
-    
-    log.info(f'Scanning {len(nightlist)} night directories')
-    speclog = io.util.get_speclog(nightlist)
-    if use_exptable:
-        badcamwords=[]
-        laststeps=[]
-        badamps=[]
-        camwords=[]
-        for entry in speclog:
-            if entry['EXPID'] in exptable_select['EXPID']:
-                sel=entry['EXPID']==exptable_select['EXPID']
-                badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
-                badamps.append(exptable_select['BADAMPS'][sel][0])
-                camwords.append(exptable_select['CAMWORD'][sel][0])
-                laststeps.append(exptable_select['LASTSTEP'][sel][0])
-            else:
-                badcamwords.append("")
-                laststeps.append("all")
-                camwords.append("a0123456789")
-                badamps.append("")
+    if prepared_exptable is None:
+        if use_exptable:
+            #grab all exposures from the exposure log in case some have been marked bad
+            #note that some exposures will not be in here, so we'll assume those are all fine
+            log.info(f'Using exposure tables for {len(nightlist)} night directories')
+            expfiles=[]
+            for night in nightlist:
+                expfiles.append(get_exposure_table_pathname(night))
+            exptables = load_tables(expfiles)
+            exptable_all=table_vstack(exptables)
+            select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
+            exptable_select=exptable_all[select]
+        
+        log.info(f'Scanning {len(nightlist)} night directories')
+        speclog = io.util.get_speclog(nightlist)
+        select_speclog = ((speclog['OBSTYPE']=='ZERO')|(speclog['OBSTYPE']=='DARK'))
 
-        speclog.add_column(badcamwords,name='BADCAMWORD')
-        speclog.add_column(laststeps,name='LASTSTEP')
-        speclog.add_column(camwords,name='CAMWORD')
-        speclog.add_column(badamps,name='BADAMPS')
+        speclog = speclog[select_speclog]
+        if use_exptable:
+            badcamwords=[]
+            laststeps=[]
+            badamps=[]
+            camwords=[]
+            for entry in speclog:
+                if entry['EXPID'] in exptable_select['EXPID']:
+                    sel=entry['EXPID']==exptable_select['EXPID']
+                    badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
+                    badamps.append(exptable_select['BADAMPS'][sel][0])
+                    camwords.append(exptable_select['CAMWORD'][sel][0])
+                    laststeps.append(exptable_select['LASTSTEP'][sel][0])
+                else:
+                    badcamwords.append("")
+                    laststeps.append("all")
+                    camwords.append("a0123456789")
+                    badamps.append("")
+            speclog.add_column(badcamwords,name='BADCAMWORD')
+            speclog.add_column(laststeps,name='LASTSTEP')
+            speclog.add_column(camwords,name='CAMWORD')
+            speclog.add_column(badamps,name='BADAMPS')
+    else:
+        #TODO: need to check if this works properly, else needs to be adapted
+        speclog=prepared_exptable
+        speclog.rename_column('MJD-OBS','MJD')
+        del speclog['HEADERERR']
+        del speclog['EXPFLAG']
+        del speclog['COMMENTS']
+
 
     speclog['OBSTYPE']=np.char.upper(speclog['OBSTYPE'])
 
@@ -992,51 +1091,86 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     os.rename(tmpfile, speclogfile)
     log.info(f'Wrote speclog to {speclogfile}')
 
-    for camera in cameras:
-        sp = 'sp' + camera[1]
-        sm = sp2sm(sp)
-        #key = f'{sm}-{camera}-{today}'
+    n_jobs_per_script = int(batch_config['cores_per_node']//32)
+    #create scripts that do up to 4 cameras in parallel
+    batch_opts = list()
+    if 'batch_opts' in batch_config:
+        for opt in batch_config['batch_opts']:
+            batch_opts.append(f'#SBATCH {opt}')
+    batch_opts = '\n'.join(batch_opts)
+    n_scripts=int(len(cameras)//n_jobs_per_script)
+    if len(cameras)%n_jobs_per_script !=0:
+        n_scripts+=1
+    for scriptid in range(n_scripts):
         if night_for_name is not None :
-            key = f'{sm}-{camera}-{night_for_name}'
-        else :
-            key = f'{sm}-{camera}-{lastdayornight}'
-        batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
-        logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
-        darkfile = f'dark-{key}.fits.gz'
-        biasfile = f'bias-{key}.fits.gz'
+            job_filename_key=f'scriptnumber-{scriptid}-{night_for_name}'
+        else:
+            job_filename_key = f'scriptnumber-{scriptid}-{lastdayornight}'
 
-        cmd = f"desi_compute_dark_nonlinear"
-        cmd += f" \\\n    --camera {camera}"
-        cmd += f" \\\n    --tempdir {tempdir}"
-        cmd += f" \\\n    --darkfile {darkfile}"
-        cmd += f" \\\n    --biasfile {biasfile}"
-        if days is not None:
-            cmd += f" \\\n    --days {days}"
-        if nights is not None:
-            cmd += f" \\\n    --nights {nights}"
-        if linexptime is not None:
-            cmd += f" \\\n    --linexptime {linexptime}"
-        if nskip_zeros is not None:
-            cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
-        if first_expid is not None:
-            cmd += f" \\\n    --first-expid {first_expid}"
-
+        batchfile = os.path.join(tempdir, f'dark-{job_filename_key}.slurm')
+        logfile = os.path.join(tempdir, f'dark-{job_filename_key}-%j.log')
+        #header
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
-
-#SBATCH -C haswell
 #SBATCH -N 1
 #SBATCH --qos {queue}
 #SBATCH --account desi
-#SBATCH --job-name dark-{key}
+#SBATCH --job-name dark-{job_filename_key}
 #SBATCH --output {logfile}
-#SBATCH --time={"01:00:00" if queue!="debug" else "00:30:00"}
+#SBATCH --time={f"{runtime_hh:02d}:{runtime_mm:02d}:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
+{batch_opts}
 
 cd {outdir}
-time {cmd}
 ''')
 
+        minind=scriptid*n_jobs_per_script
+        maxind=(scriptid+1)*n_jobs_per_script
+        if maxind>len(cameras):
+            maxind=len(cameras)
+        darkfile_list=[]
+        biasfile_list=[]
+        for camera in cameras[minind:maxind]:
+            sp = 'sp' + camera[1]
+            sm = sp2sm(sp)
+            #key = f'{sm}-{camera}-{today}'
+            if night_for_name is not None :
+                key = f'{sm}-{camera}-{night_for_name}'
+            else :
+                key = f'{sm}-{camera}-{lastdayornight}'
+            darkfile = f'dark-{key}.fits.gz'
+            biasfile = f'bias-{key}.fits.gz'
+            logfile2 = os.path.join(tempdir, f'dark-{key}-${{SLURM_JOB_ID}}.log')
+            darkfile_list.append(darkfile)
+            biasfile_list.append(biasfile)
+            cmd = f"desi_compute_dark_nonlinear"
+            cmd += f" \\\n    --camera {camera}"
+            cmd += f" \\\n    --tempdir {tempdir}"
+            cmd += f" \\\n    --darkfile {darkfile}"
+            cmd += f" \\\n    --biasfile {biasfile}"
+            if days is not None:
+                cmd += f" \\\n    --days {days}"
+            if nights is not None:
+                cmd += f" \\\n    --nights {nights}"
+            if linexptime is not None:
+                cmd += f" \\\n    --linexptime {linexptime}"
+            if nskip_zeros is not None:
+                cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
+            if first_expid is not None:
+                cmd += f" \\\n    --first-expid {first_expid}"
+
+            with open(batchfile, 'a') as fx:
+                fx.write(f"time {cmd} > {logfile2} 2> {logfile2} &\n")
+        
+        with open(batchfile, 'a') as fx:
+            fx.write("wait\n")
+            for darkfile,biasfile in zip(darkfile_list,biasfile_list):
+                if copy_outputs_to_split_dirs:
+                    fx.write(f"""
+cp {darkfile}  dark_frames/{darkfile}
+cp {biasfile}  bias_frames/{biasfile}
+""")
+#TODO: the copying needs to be done in a cleaner way, maybe as part of the desi_compute_dark_nonlinear? or just writing to the corresponding output dir directly
         if not nosubmit:
             err = subprocess.call(['sbatch', batchfile])
             if err == 0:
@@ -1045,3 +1179,130 @@ time {cmd}
                 log.error(f'Error {err} submitting {batchfile}')
         else:
             log.info(f"Generated but didn't submit {batchfile}")
+
+
+def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
+                      linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
+                      copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None,
+                      no_obslist=False):
+    """
+    Generate batch script to run desi_compute_dark_nonlinear
+
+    Options:
+        outdir (str): output directory
+        lastnight (int): last night to take into account (inclusive), defaults to tonight
+
+        window (int): length of time window to take into account
+        cameras (list of str): cameras to include, e.g. b0, r1, z9
+        linexptime (float): exptime after which dark current is linear
+        nskip_zeros (int): number of ZEROs at beginning of day/night to skip
+        tempdir (str): tempfile working directory
+        nosubmit (bool): generate scripts but don't submit them to batch queue
+        first_expid (int): ignore expids prior to this
+        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
+        queue (str): which batch queue to use for submission
+        transmit_obslist(bool): if True will give use the obslist from here downstream
+        system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
+        no_obslist(str): just use exactly the specified night-range, but assume we do not have exposure tables for this (useful when there is no exposure_table yet)
+
+
+    Args/Options are passed to the desi_compute_dark_nonlinear script
+    """
+    log = get_logger()
+
+    if lastnight is None:
+        lastnight=datetime.datetime.now().strftime('%Y%m%d')
+    if outdir is None:
+        outdir=os.getenv('DESI_SPECTRO_DARK')
+    if tempdir is None:
+        tempdir=outdir+f'/temp_{lastnight}'
+    if copy_outputs_to_split_dirs is None:
+        copy_outputs_to_split_dirs = True
+
+    #probably run a script here that updates the obslist or checks it's up-to-date
+
+    startnight=datetime.datetime.strptime(str(lastnight),'%Y%m%d')-datetime.timedelta(days=window-1)
+    nights = [int((startnight+datetime.timedelta(days=i)).strftime('%Y%m%d')) for i in range(window)]
+
+    if no_obslist:
+        #this part is only to allow running the dark scripts before we have an exposure table
+        usenights=[]
+        for n in nights:
+            if len(glob.glob(f"{os.getenv('DESI_SPECTRO_DATA')}/{n}/*"))>0:
+                usenights.append(n)
+        nights=usenights
+
+        obslist=None
+        use_exptable=False
+    else:
+        obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
+
+        #read all calib files to get dates of changes
+        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
+        all_config_data={}
+        for y_file in yaml_filenames:
+            with open(y_file) as f:
+                y_data=yaml.safe_load(f)
+            all_config_data.update(y_data)
+
+        #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
+        change_dates={k:[] for k in all_config_data.keys()}
+        for speckey,data in all_config_data.items():
+            required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
+            required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
+            usever,useval=required_keys[0]
+            for newver,newval in required_keys[1:]:
+                usenew=True
+                for key in ['DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']:
+                    if useval[key]!=newval[key]:
+                        usenew = False
+                        break
+                
+                if not usenew:
+                    change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
+                    useval = newval
+                    usever = newver
+                useval = newval
+                usever = newver
+        change_dates_any_spectrograph=sorted(np.unique([int(d) for v in change_dates.values() for d in v]))   #this is to not overcomplicate things by tracking per detector yet
+
+        nights = [n for n in nights if n in obslist['NIGHT']]
+        if len(nights)==0:
+            log.critical("No darks were taken for this time frame, exiting")
+            sys.exit(1)
+        change_dates_in_nights=[d for d in change_dates_any_spectrograph if d<max(nights) and d>min(nights)]
+
+        #change_dates_relevant={k:v for k,v in change_dates.items() if v in change_dates_in_nights}
+        change_dates_relevant={}
+        for speckey,dates in change_dates.items():
+            dates_relevant= [date for date in dates if date in change_dates_in_nights]
+            if len(dates_relevant)>0:
+                dates_relevant.sort()
+                change_dates_relevant[speckey]=dates_relevant[-1]
+
+        obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
+        for i,o in enumerate(obslist):
+            for speckey, date in change_dates_relevant.items():
+                if o['NIGHT']<date:
+                    badcamword_decoded=decode_camword(o['BADCAMWORD'])
+                    spec=sm2sp(speckey.split('-')[0])
+                    color=speckey[-1]
+                    mask_sp=f"{color}{spec[-1]}"
+                    if mask_sp not in badcamword_decoded:
+                        badcamword_decoded.append(mask_sp)
+                    badcamword_encoded=create_camword(badcamword_decoded)
+                    obslist[i]['BADCAMWORD']=badcamword_encoded
+
+        #truncate to the right nights
+        if transmit_obslist:
+            obslist=obslist[[o['NIGHT'] in nights for o in obslist]]
+            if nskip_zeros is None:
+                nskip_zeros = 0
+        else:
+            obslist = None
+
+    make_dark_scripts(outdir, nights=nights, cameras=cameras,
+                      linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
+                      first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue,
+                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist, system_name=system_name)

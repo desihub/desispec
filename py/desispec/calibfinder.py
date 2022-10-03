@@ -7,9 +7,12 @@ Reading and selecting calibration data from $DESI_SPECTRO_CALIB using content of
 
 import re
 import os
+import os.path
+
 import numpy as np
 import yaml
-import os.path
+from astropy.table import Table
+
 from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
 
@@ -305,8 +308,10 @@ class CalibFinder() :
             log.error("Didn't find matching calibration data in %s"%(yaml_file))
             raise KeyError("Didn't find matching calibration data in %s"%(yaml_file))
 
-
         self.data = matching_data
+
+        if "DESI_SPECTRO_DARK" in os.environ:
+            self.find_darks_in_desi_spectro_dark(header)
 
     def haskey(self,key) :
         """
@@ -338,7 +343,7 @@ class CalibFinder() :
     def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]) :
         """
         Args:
-            keys: ptional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
+            keys: optional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
 
         Returns:
             List of bad fibers from yaml file as a 1D array of intergers
@@ -356,3 +361,128 @@ class CalibFinder() :
         if len(fibers)==0 :
             return np.array([],dtype=int)
         return np.unique(np.hstack(fibers))
+
+
+
+    def find_darks_in_desi_spectro_dark(self, header):
+        """
+        Function to select dark frames from $DESI_SPECTRO_DARK using the keywords found in the headers
+
+        Args:
+            header: header as created in calibfinder
+
+        Updates self in-place
+        """
+        log = get_logger()
+
+        #- Should only be called if $DESI_SPECTRO_DARK is set, but check that
+        #- to avoid accidentally creating paths like "None/dark_table.csv"
+        if 'DESI_SPECTRO_DARK' not in os.environ:
+            msg = '$DESI_SPECTRO_DARK not set'
+            log.critical(msg)
+            raise ValueError(msg)
+        
+        self.dark_directory = f'{os.getenv("DESI_SPECTRO_DARK")}/'
+        if not os.path.isdir(self.dark_directory):
+            msg = "Dark directory {} not found".format(self.dark_directory)
+            log.critical(msg)
+            raise IOError(msg)
+
+        camera=header["CAMERA"].strip().lower()
+
+        if "SPECID" in header :
+            specid=int(header["SPECID"])
+        else :
+            specid=None
+
+        dateobs = header2night(header)
+        
+        cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+
+        dark_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv'
+        bias_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'
+        if os.path.exists(dark_table_file) and os.path.exists(bias_table_file):
+            dark_table = Table.read(dark_table_file)
+            bias_table = Table.read(bias_table_file)
+
+            dark_table_select = np.array([cameraid in fn for fn in dark_table["FILENAME"]])
+            bias_table_select = np.array([cameraid in fn for fn in bias_table["FILENAME"]])
+            
+            dark_table=dark_table[dark_table_select]
+            bias_table=bias_table[bias_table_select]
+            dark_table.sort('FILENAME')
+            bias_table.sort('FILENAME')
+
+            if len(dark_table) == 0 or len(bias_table) == 0:
+                log.warning("Didn't find matching calibration darks/biases in $DESI_SPECTRO_DARK using from $DESI_SPECTRO_CALIB instead")
+                return
+
+            dark_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in dark_table['FILENAME']])
+            bias_dates = np.array([int(f.split('-')[-1].split('.')[0]) for f in bias_table['FILENAME']])
+
+            log.debug(f"Finding matching dark frames in {self.dark_directory} for camera {cameraid} ...")
+            #loop over all dark filenames
+            log.debug("DATE-OBS=%d"%dateobs)
+            found=False
+            for datebegin in sorted(dark_dates)[::-1]:
+                if dateobs >= datebegin :
+                    #TODO: extra checks that evaluate if selection from yaml file is matching...
+                    date_used=datebegin
+                    dark_entry=dark_table[dark_dates == date_used]
+                    if len(dark_entry)>0:
+                        dark_entry=dark_entry[0]
+                    else:
+                        log.debug(f"no master dark model found for {datebegin}")
+                        continue
+                    bias_entry=bias_table[bias_dates == date_used]
+                    if len(bias_entry)>0:
+                        bias_entry=bias_entry[0]
+                    else:
+                        log.debug(f"no master bias model found for {datebegin}")
+                        continue
+
+                    #those check if the already matched ver (from calibfinder) that is stored in self.data is the same as the one from the dark file
+                    if dark_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(dark_entry["FILENAME"],dark_entry["DETECTOR"],self.data["DETECTOR"]))
+                        continue
+                    if "CCDCFG" in self.data :
+                        if dark_entry["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDCFG"],self.data["CCDCFG"]))
+                            continue
+                    if "CCDTMING" in self.data :
+                        if dark_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTMING"],self.data["CCDTMING"]))
+                            continue
+
+                    #same for bias
+                    if bias_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
+                        log.debug("Skip file %s with DETECTOR=%s != %s"%(bias_entry["FILENAME"],bias_entry["DETECTOR"],self.data["DETECTOR"]))
+                        continue
+                    if "CCDCFG" in self.data :
+                        if bias_entry["CCDCFG"].strip() != self.data["CCDCFG"].strip() :
+                            log.debug("Skip file %s with CCDCFG=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDCFG"],self.data["CCDCFG"]))
+                            continue
+                    if "CCDTMING" in self.data :
+                        if bias_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
+                            log.debug("Skip file %s with CCDTMING=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTMING"],self.data["CCDTMING"]))
+                            continue
+                    found=True
+                    log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
+                    break
+            dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
+            bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
+            if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
+                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                
+
+        else:   #this will only be done as long as files do not yet exist
+            log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+            raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+                
+        if found:      
+            self.data.update({"DARK": dark_filename,
+                              "BIAS": bias_filename})
+        else:
+            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
+
