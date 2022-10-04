@@ -405,7 +405,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
         print("\nReached the end of current iteration of new exposures.")
         if override_night is not None and (not continue_looping_debug):
-            print("Override_night set, not waiting for new data before exiting.")
+            print("\nOverride_night set, not waiting for new data before exiting.\n")
         else:
             sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
                             dry_run=(dry_run and ()))
