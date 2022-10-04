@@ -41,6 +41,38 @@ def get_amp_ids(header):
         raise KeyError("No keyword BIASSECX with X in A,B,C,D,1,2,3,4 in header")
     return amp_ids
 
+def get_readout_mode(header):
+    """
+    Derive CCD readout mode from CCD header
+
+    Args:
+        header: dict-like FITS header object with BIASSEC keywrds
+
+    Returns "4Amp", "2AmpLeftRight", or "2AmpUpDown"
+
+    "4Amp" means all 4 amps (ABCD) were used for CCD readout;
+    "2AmpLeftRight" means 1 left amp (AC) and 1 right amp (BD) were used;
+    "2AmpUpDown" means 1 upper amp (CD) and one lower (AB) were used.
+    """
+
+    # Amp arrangement:
+    #   C D    3 4
+    #   A B or 1 2
+
+    # python note: set('ABCD') == set(['A', 'B', 'C', 'D']), not set(['ABCD',])
+    ampids = set(get_amp_ids(header))
+    if ampids in [set('ABCD'), set('1234')]:
+        return "4Amp"
+    elif ampids in [set('AB'), set('CD'), set('12'), set('34')]:
+        return "2AmpLeftRight"
+    elif ampids in [set('AC'), set('BD'), set('13'), set('24')]:
+        return "2AmpUpDown"
+    else:
+        log = get_logger()
+        msg = f"Unknown CCD readout mode with amps {ampids}"
+        log.error(msg)
+        raise ValueError(msg)
+
 def _parse_sec_keyword(value):
     log = get_logger()
     log.warning('please use parse_sec_keyword (no underscore)')
@@ -575,12 +607,15 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
             night = header2night(header)
             expid = header['EXPID']
             camera = header['CAMERA'].lower()
-            biasnight = findfile('biasnight', night, expid, camera)
-            if os.path.exists(biasnight):
-                log.info(f'Using {night} nightly bias for {expid} {camera}')
-                filename = biasnight
+            if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
+                biasnight = findfile('biasnight', night, expid, camera)
+                if os.path.exists(biasnight):
+                    log.info(f'Using {night} nightly bias for {expid} {camera}')
+                    filename = biasnight
+                else:
+                    log.warning(f'{night} nightly bias not found; using default bias for {expid} {camera}')
             else:
-                log.warning(f'{night} nightly bias not found; using default bias for {expid} {camera}')
+                log.warning(f'SPECPROD not set; using default bias instead of nightly bias for {expid} {camera}')
 
         if filename is None:
             if cfinder is None :
@@ -614,14 +649,58 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
+def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,
+        threshold=25000., smooth=100):
+    """
+    Find overscan columns that might be impacted by a trail from bright cosmic
+
+    Args:
+        rawimage: numpy 2D array of raw image
+        ov_col: tuple(yslice, xslice) from parse_sec_keyword('BIASSECx') defining overscan region
+
+    Options:
+        col_width: number of pixels from overscan region to consider
+        threshold: ADU threshold for what might cause a problematic trail
+        smooth: median filter smoothing scale
+
+    Returns (badrows, active_col_val) where badrows is a boolean array
+    of whether each row is bad or not, and active_col_val is an array of
+    column-summed and row median-filtered from the active region of the CCD
+    next to the overscan region.
+    """
+    # define a band in the active CCD region next to the overscan
+    left_amp = ov_col[1].start < rawimage.shape[1]//2
+    if left_amp :
+        if ov_col[1].start > rawimage.shape[1]//4 : # overscan is on the right of the active region
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+        else : # overscan is on the left of the active region which happens for some 2 amp read mode.
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
+    else :
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
+
+    # measure sum over columns in band
+    active_col_val = np.max(rawimage[active_col].astype(float),axis=1)
+    # subtract median filter (to limit effect of neighboring truly bright fiber)
+    active_col_val -= median_filter(active_col_val, smooth)
+    # flag rows with large signal in active region
+    badrows=(active_col_val>threshold)
+    med_overscan_col = median_filter(overscan_values, 20)
+    badrows &= np.abs(overscan_values-med_overscan_col) > 2.
+
+    # add 2 pixel margins to the list of badrows
+    for _ in range(2) :
+        badrows[1:] |= badrows[:-1]
+        badrows[:-1] |= badrows[1:]
+
+    return badrows, active_col_val
+
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_rows=False,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False):
-
+            keep_overscan_cols=False,no_overscan_per_row=False):
     '''
     preprocess image using metadata in header
 
@@ -664,6 +743,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         cosmics_c2fudge:  fudge factor applied to PSF
 
     Optional fit and subtraction of scattered light
+
+    Optional disabling of overscan subtraction per row if no_overscan_per_row=True
 
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
@@ -719,7 +800,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             depend.setdep(header, key, os.environ[key])
 
     cfinder = None
-
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
 
@@ -850,6 +930,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+
+    if no_overscan_per_row :
+        log.debug("Option no_overscan_per_row is set")
+
     for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
@@ -887,7 +971,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 saturlev_adu = 2**16-1 # 65535 is the max value in the images
                 log.warning(f'Camera {camera} Missing keyword SATURLEV{amp} in header and nothing in calib data; using {saturlev_adu} ADU')
         header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
-
 
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
@@ -937,10 +1020,27 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
+
+        # find rows impacted by a large cosmic charge deposit
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
+        if np.any(badrows) :
+            log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
+                camera,amp,np.where(badrows)[0],active_col_val[badrows]))
+            # do not use overscan value for those, use interpolation
+            goodrows = ~badrows
+            rr=np.arange(nrows)
+            try:
+                overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
+            except ValueError:
+                # If can't interpolate, log error but don't crash and let ostep do the flagging
+                ngood = np.sum(goodrows)
+                nbad = np.sum(badrows)
+                log.error(f'Camera {camera} amp {amp} unable to interpolate overscan_col over {nbad} bad rows using {ngood} good rows')
+
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
-        if overscan_step <  2 : # tuned to trig on the worst few
+        if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value

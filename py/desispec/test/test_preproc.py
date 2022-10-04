@@ -11,7 +11,7 @@ from pkg_resources import resource_filename
 
 import desispec.scripts.preproc
 from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
-from desispec.preproc import get_amp_ids
+from desispec.preproc import get_amp_ids, get_readout_mode
 from desispec import io
 
 def xy2hdr(xyslice):
@@ -221,6 +221,73 @@ class TestPreProc(unittest.TestCase):
         hdr = dict()
         with self.assertRaises(KeyError):
             get_amp_ids(hdr)
+
+    def test_readout_mode(self):
+        """Test 2-amp vs. 4-amp detection"""
+        hdr = dict(
+            BIASSECA=self.header['BIASSECA'],
+            BIASSECB=self.header['BIASSECB'],
+            BIASSECC=self.header['BIASSECC'],
+            BIASSECD=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "4Amp")
+
+        hdr = dict(
+            BIASSECA=self.header['BIASSECA'],
+            BIASSECB=self.header['BIASSECB'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpLeftRight")
+
+        hdr = dict(
+            BIASSECC=self.header['BIASSECC'],
+            BIASSECD=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpLeftRight")
+
+        hdr = dict(
+            BIASSECA=self.header['BIASSECA'],
+            BIASSECC=self.header['BIASSECC'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
+        hdr = dict(
+            BIASSECB=self.header['BIASSECB'],
+            BIASSECD=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
+        #- (very) old numbers instead of letters for amps
+        hdr = dict(
+            BIASSEC1=self.header['BIASSECA'],
+            BIASSEC2=self.header['BIASSECB'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpLeftRight")
+
+        hdr = dict(
+            BIASSEC3=self.header['BIASSECC'],
+            BIASSEC4=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpLeftRight")
+
+        hdr = dict(
+            BIASSEC1=self.header['BIASSECA'],
+            BIASSEC3=self.header['BIASSECC'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
+        hdr = dict(
+            BIASSEC2=self.header['BIASSECB'],
+            BIASSEC4=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
+        #- bad combos raise exception
+        with self.assertRaises(ValueError):
+            hdr = dict(
+                BIASSECA=self.header['BIASSECA'],
+                BIASSECD=self.header['BIASSECD'],
+                )
+            get_readout_mode(hdr)
 
     def test_bias(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=False)

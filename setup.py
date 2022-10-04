@@ -53,7 +53,7 @@ setup_keywords['provides'] = [setup_keywords['name']]
 setup_keywords['requires'] = ['Python (>2.7.0)']
 # setup_keywords['install_requires'] = ['Python (>2.7.0)']
 setup_keywords['zip_safe'] = False
-setup_keywords['use_2to3'] = False
+# setup_keywords['use_2to3'] = False
 setup_keywords['packages'] = find_packages('py')
 setup_keywords['package_dir'] = {'':'py'}
 setup_keywords['cmdclass'] = {'version': DesiVersion, 'test': DesiTest, 'sdist': DistutilsSdist}
@@ -77,4 +77,5 @@ setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
 #
 # Run setup command.
 #
-setup(**setup_keywords)
+if __name__ == '__main__':
+    setup(**setup_keywords)

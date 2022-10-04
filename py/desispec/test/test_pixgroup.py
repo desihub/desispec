@@ -2,6 +2,7 @@ import unittest, os, sys, shutil, tempfile
 import numpy as np
 import numpy.testing as nt
 from astropy.io import fits
+from astropy.table import Table
 from copy import deepcopy
 
 if __name__ == '__main__':
@@ -10,7 +11,7 @@ if __name__ == '__main__':
     sys.exit(1)
 
 from ..test.util import get_frame_data
-from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root
+from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
 from ..scripts import group_spectra
 from ..pixgroup import SpectraLite
@@ -55,6 +56,7 @@ class TestPixGroup(unittest.TestCase):
                     'r': fibermask.BADAMPR,\
                     'z': fibermask.BADAMPZ    }
         badamp_brz = ( fibermask.BADAMPB & fibermask.BADAMPR & fibermask.BADAMPZ )
+        exprows = list()
         for camera in ['b0', 'r0', 'z0']:
             X = camera[0].upper()
             dtype = [('COUNTS_'+X, int), ('FLUX_'+X, float)]
@@ -73,20 +75,30 @@ class TestPixGroup(unittest.TestCase):
                         curframe.fibermap['FIBERSTATUS'][cls.badslice] |= badbit
                     else:
                         curframe = frame
-                    
+
+                    tileid = expid*10
                     curframe.meta['NIGHT'] = night
                     curframe.meta['EXPID'] = expid
-                    curframe.meta['TILEID'] = expid*10
+                    curframe.meta['TILEID'] = tileid
                     curframe.meta['MJD-OBS'] = 55555.0+ii + 0.1*nfram
                     curframe.fibermap.meta['SURVEY'] = cls.survey
                     curframe.fibermap.meta['FAPRGRM'] = cls.faprogram
                     write_frame(findfile('cframe', night, expid, camera), curframe)
-                    
+                    exprows.append((night, expid, tileid,
+                        cls.survey, cls.faprogram, 0, cls.healpix))
+
         #- Remove one file to test missing data
         os.remove(findfile('cframe', cls.nights[0], 1, 'r0'))
 
+        cls.framefiles = list(iterfiles(cls.testdir, prefix='cframe'))
+        cls.exptable = Table(rows=exprows,
+                names=('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'PROGRAM', 'SPECTRO', 'HEALPIX'))
+        cls.expfile = os.path.join(cls.testdir, 'hpixexp.csv')
+        cls.exptable.write(cls.expfile)
+
         # Setup a dummy SpectraLite for I/O tests
         cls.fileio = 'test_spectralite.fits'
+        cls.fileiogz = 'test_spectralite.fits.gz'
 
         cls.nwave = 100
         cls.nspec = 5
@@ -142,6 +154,8 @@ class TestPixGroup(unittest.TestCase):
             shutil.rmtree(self.outdir)
         if os.path.exists(self.fileio):
             os.remove(self.fileio)
+        if os.path.exists(self.fileiogz):
+            os.remove(self.fileiogz)
 
     def verify_spectralite(self, spec, fmap):
         nt.assert_array_equal(spec.fibermap, fmap)
@@ -163,15 +177,16 @@ class TestPixGroup(unittest.TestCase):
         if os.path.exists(hpixdir):
             shutil.rmtree(hpixdir)
 
+    @unittest.skipIf(True, 'unsupported regroup without input list')
     def test_regroup_per_night(self):
         #- Run for each night and confirm that spectra file is correct size
         for i, night in enumerate(self.nights):
-            cmd = 'desi_group_spectra -o {} --nights {}'.format(self.outdir, night)
+            cmd = 'desi_group_spectra -o {} --nights {}'.format(
+                    self.specfile, night)
             args = group_spectra.parse(cmd.split()[1:])
             group_spectra.main(args)
 
-            specfile = os.path.join(self.outdir, self.specbase)
-            spectra = read_spectra(specfile)
+            spectra = read_spectra(self.specfile)
             num_nights = i+1
             nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
         
@@ -179,13 +194,13 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
     def test_regroup_fiberstatus_propagation(self):
-        #- run on a specific set of nights
-        cmd = 'desi_group_spectra -o {} --nights {}'.format(self.outdir, self.badnight)
+        """Test propagation of fiberstatus bits"""
+        cmd = 'desi_group_spectra -o {} --expfile {} --nights {}'.format(
+                self.specfile, self.expfile, self.badnight)
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, self.specbase)
-        spectra = read_spectra(specfile)
+        spectra = read_spectra(self.specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night
 
         fibermap_array = np.array(spectra.fibermap['FIBERSTATUS'])
@@ -199,28 +214,47 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(np.sum( (fibermap_array == badamp_brz) ), len(self.badslice))
         
     def test_regroup_nights(self):
-        #- run on a specific set of nights   
+        """Test filtering to a specific set of nights"""
         num_nights = 2
         nights = ','.join([str(tmp) for tmp in self.nights[0:num_nights]])
-        cmd = 'desi_group_spectra -o {} --nights {}'.format(self.outdir, nights)
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        cmd += f' --nights {nights}'
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, self.specbase)
-        spectra = read_spectra(specfile)
+        spectra = read_spectra(self.specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
         
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
         
-    def test_regroup(self):
-        #- self discover what nights to combine
-        cmd = 'desi_group_spectra -o {}'.format(self.outdir)
+    def test_regroup_inframes(self):
+        """Test grouping from an input list of frames"""
+        cmd = 'desi_group_spectra -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, self.specbase)
-        spectra = read_spectra(specfile)
+        spectra = read_spectra(self.specfile)
+        num_nights = len(self.nights)
+        nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
+
+        self.assertEqual(len(spectra.fibermap), nspec)
+        self.assertEqual(spectra.flux['b'].shape[0], nspec)
+
+        #- confirm that we can read the mask with memmap=True
+        with fits.open(self.specfile, memmap=True) as fx:
+            mask = fx['B_MASK'].data
+
+    def test_regroup_expfile(self):
+        """Test grouping from a table of exposures"""
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+
+        spectra = read_spectra(self.specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
     
@@ -228,14 +262,14 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
         #- confirm that we can read the mask with memmap=True
-        with fits.open(specfile, memmap=True) as fx:
+        with fits.open(self.specfile, memmap=True) as fx:
             mask = fx['B_MASK'].data
 
     def test_reduxdir(self):
         #- Test using a non-standard redux directory
         reduxdir = specprod_root()
-        cmd = 'desi_group_spectra -o {} --reduxdir {}'.format(
-                self.outdir, reduxdir)
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        cmd += f' --reduxdir {reduxdir}'
 
         #- Change SPECPROD and confirm that default location changed
         os.environ['SPECPROD'] = 'blatfoo'
@@ -244,8 +278,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, self.specbase)
-        spectra = read_spectra(specfile)
+        spectra = read_spectra(self.specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
 
@@ -263,39 +296,15 @@ class TestPixGroup(unittest.TestCase):
         path = write_spectra(self.fileio, spec)
         assert(path == os.path.abspath(self.fileio))
 
+        pathgz = write_spectra(self.fileiogz, spec)
+        assert(pathgz == os.path.abspath(self.fileiogz))
+
         # read back in and verify
         comp = read_spectra(self.fileio)
         self.verify_spectralite(comp, self.fmap1)
 
-    def test_outdir(self):
-        """Test output directory options"""
-        reduxdir = specprod_root()
-
-        #- output to a specific directory
-        cmd = f'desi_group_spectra --reduxdir {reduxdir} -o {self.outdir}'
-        specfile = os.path.join(self.outdir, self.specbase)
-        self.assertFalse(os.path.exists(specfile))
-        args = group_spectra.parse(cmd.split()[1:])
-        group_spectra.main(args)
-        self.assertTrue(os.path.exists(specfile))
-
-        #- output to a hierarchy under a specific directory
-        cmd = f'desi_group_spectra --reduxdir {reduxdir} --outroot {self.outdir}'
-        specfile = findfile('spectra', groupname=self.healpix,
-                survey=self.survey, faprogram=self.faprogram,
-                specprod_dir=self.outdir)
-        self.assertFalse(os.path.exists(specfile))
-        args = group_spectra.parse(cmd.split()[1:])
-        group_spectra.main(args)
-        self.assertTrue(os.path.exists(specfile))
-
-        #- output to default location under reduxdir
-        cmd = f'desi_group_spectra --reduxdir {reduxdir}'
-        self.assertFalse(os.path.exists(self.specfile))
-        args = group_spectra.parse(cmd.split()[1:])
-        group_spectra.main(args)
-        self.assertTrue(os.path.exists(self.specfile))
-
+        compgz = read_spectra(self.fileiogz)
+        self.verify_spectralite(compgz, self.fmap1)
 
 def test_suite():
     """Allows testing of only this module with the command::

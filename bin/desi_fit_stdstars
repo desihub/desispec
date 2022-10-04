@@ -13,9 +13,10 @@ desi_fit_stdstars
     --outfile X
 """
 
+import sys
 import desispec.scripts.stdstars as stdstars
 
 if __name__ == '__main__':
     args = stdstars.parse()
-    stdstars.main(args)
+    sys.exit(stdstars.main(args))
 

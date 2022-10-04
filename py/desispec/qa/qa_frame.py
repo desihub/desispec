@@ -326,11 +326,11 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
             dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
                                             specprod_dir=specprod_dir) # This is dummy
             path = os.path.dirname(os.path.dirname(dummy_fiberflat_fil))
-            fiberflat_files = glob.glob(os.path.join(path,'*','fiberflat-'+camera+'*.fits'))
+            fiberflat_files = glob.glob(os.path.join(path,'*','fiberflat-'+camera+'*.fits*'))
             if len(fiberflat_files) == 0:
                 path = path.replace('exposures', 'calib2d')
                 path,_ = os.path.split(path) # Remove night
-                fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
+                fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits*'))
 
             # Sort and take the first (same as old pipeline)
             fiberflat_files.sort()

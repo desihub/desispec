@@ -8,8 +8,9 @@
 Interactively display the status of a pipeline production.
 """
 
+import sys
 import desispec.scripts.pipe_status as pipe_status
 
 if __name__ == '__main__':
-    pipe_status.main()
+    sys.exit(pipe_status.main())
 

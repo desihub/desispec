@@ -16,7 +16,8 @@ from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 from desiutil.io import encode_table
 
-from .util import fitsheader, native_endian, makepath
+from .util import fitsheader, native_endian, makepath, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
@@ -49,13 +50,18 @@ def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
 
     hdu3 = fits.ImageHDU(fibers, name='FIBERS')
 
-    # metadata
-    from astropy.io.fits import Column
-    cols=[]
-    for k in data.colnames:
-        if len(data[k].shape)==1 :
-            cols.append(Column(name=k,format='D',array=data[k]))
-    tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
+    # Create metadata table, using table_to_hdu(Table(data)) to handle
+    # different column dtypes.
+    # Also remove 2D columns like COEFF, which are stored separately
+    metatable = Table(data)
+    for col in list(metatable.colnames):
+        ndim = len(metatable[col].shape)
+        if ndim != 1:
+            log.debug('Dropping %d-dim metadata column %s', ndim, col)
+            metatable.remove_column(col)
+
+    tbhdu = table_to_hdu(metatable)
+    tbhdu.name = 'METADATA'
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
 
@@ -72,7 +78,7 @@ def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
     hdulist.append(inhdu)
 
     t0 = time.time()
-    tmpfile = norm_modelfile+".tmp"
+    tmpfile = get_tempfilename(norm_modelfile)
     hdulist.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
     duration = time.time() - t0
@@ -90,6 +96,7 @@ def read_stdstar_models(filename):
     """
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False) as fx:
         flux = native_endian(fx['FLUX'].data.astype('f8'))
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
@@ -146,8 +153,9 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
         hx.append( fits.convenience.table_to_hdu(fibermap) )
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -161,6 +169,7 @@ def read_flux_calibration(filename):
     from ..fluxcalibration import FluxCalib
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False, uint=True) as fx:
         calib = native_endian(fx[0].data.astype('f8'))
         ivar = native_endian(fx["IVAR"].data.astype('f8'))
@@ -230,8 +239,9 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
         hx[-1].header['FSTNIGHT'] = averagefluxcalib.first_night
 
     t0 = time.time()
-    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -246,6 +256,7 @@ def read_average_flux_calibration(filename):
     from ..averagefluxcalibration import AverageFluxCalib
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, memmap=False, uint=True) as fx:
         average_calib = native_endian(fx[0].data.astype('f8'))
         atmospheric_extinction = native_endian(fx["ATERM"].data.astype('f8'))
@@ -309,6 +320,7 @@ def read_stdstar_templates(stellarmodelfile):
     """
     log = get_logger()
     t0 = time.time()
+    stellarmodelfile = checkgzip(stellarmodelfile)
     phdu=fits.open(stellarmodelfile, memmap=False)
 
     #- New templates have wavelength in HDU 2

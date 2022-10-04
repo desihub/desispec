@@ -124,9 +124,9 @@ Mock Data Tests
 DESI Environment
 ~~~~~~~~~~~~~~~~
 
-Ssh to edison.nersc.gov (remember to use `ssh -A` to propagate your keys for github access) and::
+Ssh to cori.nersc.gov (remember to use `ssh -A` to propagate your keys for github access) and::
 
-    source /project/projectdirs/desi/software/modules/desi_environment.sh
+    source /project/projectdirs/desi/software/desi_environment.sh
 
 Installation
 ~~~~~~~~~~~~

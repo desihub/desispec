@@ -11,9 +11,12 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from .. import io
+from ..io.meta import shorten_filename
+from ..io.util import checkgzip
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
+from ..coaddition import coadd
 
 def parse(options=None):
     import argparse
@@ -23,28 +26,26 @@ def parse(options=None):
             help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
     parser.add_argument("--nights", type=str,
             help="comma separated YEARMMDDs to add")
-    parser.add_argument("--expfile", type=str,
-            help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--survey", type=str,
             help="filter by SURVEY (or FA_SURV if SURVEY is missing in inputs)")
     parser.add_argument("--faprogram", type=str,
             help="filter by FAPRGRM.lower() (or FAFLAVOR mapped to a program for sv1")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
-    parser.add_argument("--healpix", type=str,
-            help="Comma separated list of healpix to generate")
+    parser.add_argument("--healpix", type=int,
+            help="nested healpix to generate")
     parser.add_argument("--header", type=str, nargs="*",
             help="KEYWORD=VALUE entries to add to the output header")
-    parser.add_argument("-o", "--outdir", type=str,
-            help="output directory; all outputs in this directory")
-    parser.add_argument("--outroot", type=str,
-            help="output root directory; files in subdirectories of this dir")
-    parser.add_argument("--mpi", action="store_true",
-            help="Use MPI for parallelism")
+    parser.add_argument("--expfile", type=str,
+            help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--inframes", type=str, nargs='*',
             help="input frame files; ignore --reduxdir, --nights, --nside")
-    parser.add_argument("--outfile", type=str,
-            help="output to this file; only used with --inframes")
+    parser.add_argument("-o", "--outfile", type=str,
+            help="output spectra filename")
+    parser.add_argument("-c", "--coaddfile", type=str,
+            help="output coadded spectra filename")
+    parser.add_argument("--onetile", action="store_true",
+            help="input spectra are from a single tile")
 
     if options is None:
         args = parser.parse_args()
@@ -53,203 +54,128 @@ def parse(options=None):
 
     return args
 
-def main(args=None, comm=None):
+def main(args=None):
 
     log = get_logger()
 
     if args is None:
         args = parse()
 
-    login_node = ('NERSC_HOST' in os.environ) & \
-                 ('SLURM_JOB_NAME' not in os.environ)
+    if (args.inframes is None) and (args.expfile is None):
+        log.critical('Must provide --inframes or --expfile')
+        sys.exit(1)
+    if (args.inframes is not None) and (args.expfile is not None):
+        log.critical('Must use --inframes or --expfile but not both')
+        sys.exit(1)
 
-    if comm:
-        rank = comm.rank
-        size = comm.size
-    elif args.mpi and not login_node: 
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.rank
-        size = comm.size
+    log.info('Starting at {}'.format(time.asctime()))
+
+    #- get list of frames from args.inframes or args.expfile
+    if args.inframes is not None:
+        framefiles = args.inframes
     else:
-        rank = 0
-        size = 1
+        assert args.expfile is not None
+        log.info(f'Reading exposures to use from {args.expfile}')
+        nightexp = Table.read(args.expfile)
 
-    if args.outroot is None and args.outdir is None:
-        args.outroot = io.specprod_root()
+        keep = np.ones(len(nightexp), dtype=bool)
+        if args.survey is not None:
+            log.info(f'Filtering by SURVEY={args.survey}')
+            keep &= nightexp['SURVEY'] == args.survey
 
-    header = dict()
+        if args.faprogram is not None:
+            log.info(f'Filtering by FAPRGRM={args.faprogram}')
+            keep &= nightexp['FAPRGRM'] == args.faprogram
+
+        if args.healpix is not None and 'HEALPIX' in nightexp.colnames:
+            log.info(f'Filtering by healpix={args.healpix}')
+            keep &= nightexp['HEALPIX'] == args.healpix
+
+        if args.nights is not None:
+            nights = [int(x) for x in args.nights.split(',')]
+            log.info(f'Filtering by night in {nights}')
+            keep &= np.isin(nightexp['NIGHT'], nights)
+
+        nightexp = nightexp[keep]
+        if len(nightexp) == 0:
+            log.critical('No exposures passed filters')
+            sys.exit(13)
+
+        framefiles = list()
+        for night, expid, spectro in nightexp['NIGHT', 'EXPID', 'SPECTRO']:
+            for band in ['b', 'r', 'z']:
+                camera = band+str(spectro)
+                framefile = io.findfile('cframe', night, expid, camera,
+                    specprod_dir=args.reduxdir)
+                framefiles.append(framefile)
+
+    frames = dict()
+    log.info(f'Reading {len(framefiles)} framefiles')
+    foundframefiles = list()
+    for filename in framefiles:
+        try:
+            filename = checkgzip(filename)
+        except FileNotFoundError:
+            log.warning(f'Missing {filename} but continueing anyway')
+            continue
+
+        foundframefiles.append(filename)
+        log.debug('Reading %s', filename)
+        frame = FrameLite.read(filename)
+        night = frame.meta['NIGHT']
+        expid = frame.meta['EXPID']
+        camera = frame.meta['CAMERA']
+        frames[(night, expid, camera)] = frame
+
+    if len(frames) == 0:
+        log.critical('No input frames found')
+        sys.exit(1)
+
+    log.info('Combining into spectra')
+    spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
+
+    if spectra.num_spectra() == 0:
+        log.critical(f'No input frame spectra pass nside={args.nside} nested healpix={args.healpix}')
+        from desimodel.footprint import radec2pix
+        input_hpix = set()
+        for frame in frames.values():
+            ra = frame.fibermap['TARGET_RA']
+            dec = frame.fibermap['TARGET_DEC']
+            input_hpix.update(set(radec2pix(args.nside, ra, dec)))
+        log.critical(f'Input frames have nside={args.nside} healpix {input_hpix}')
+        sys.exit(1)
+
+    #- Record input files
+    if spectra.meta is None:
+        spectra.meta = dict()
+
+    for i, filename in enumerate(foundframefiles):
+        spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
+
+    #- Add optional header keywords if requested
     if args.header is not None:
         for keyval in args.header:
             key, value = keyval.split('=', maxsplit=1)
             try:
-                header[key] = int(value)
+                spectra.meta[key] = int(value)
             except ValueError:
-                header[key] = value
+                try:
+                    spectra.meta[key] = float(value)
+                except ValueError:
+                    spectra.meta[key] = value
 
-    #- Combining a set of frame files instead of a healpix?
-    if args.inframes is not None:
-        if rank == 0:
-            log.info('Starting at {}'.format(time.asctime()))
-            log.info('Reading {} frame files'.format(len(args.inframes)))
-            frames = dict()
-            for filename in args.inframes:
-                frame = FrameLite.read(filename)
-                night = frame.meta['NIGHT']
-                expid = frame.meta['EXPID']
-                camera = frame.meta['CAMERA']
-                frames[(night, expid, camera)] = frame
-
-            log.info('Combining into spectra')
-            spectra = frames2spectra(frames)
-
-            log.info('Writing {}'.format(args.outfile))
-            spectra.write(args.outfile, header=header)
-            log.info('Done at {}'.format(time.asctime()))
-
-        #- All done; all ranks exit
-        return 0
-
-    #- options check
     if args.outfile is not None:
-        if rank == 0:
-            log.error('Only use --outfile with --inframes options')
-        return 1
+        log.info('Writing {}'.format(args.outfile))
+        io.write_spectra(args.outfile, spectra)
 
-    if args.expfile:
-        if rank == 0:
-            nightexp = Table.read(args.expfile)
-        else:
-            nightexp = None
+    if args.coaddfile is not None:
+        log.info('Coadding spectra')
+        #- in-place coadd updates spectra object
+        coadd(spectra, onetile=args.onetile)
+        log.info('Writing {}'.format(args.coaddfile))
+        io.write_spectra(args.coaddfile, spectra)
 
-        if comm is not None:
-            nightexp = comm.bcast(nightexp, root=0)
+    log.info('Done at {}'.format(time.asctime()))
 
-        #- all ranks parse table so that all will fail if there is a problem
-        if (('NIGHT' not in nightexp.colnames) or
-                ('EXPID' not in nightexp.colnames)):
-            msg = f'{args.explist} missing NIGHT and/or EXPID columns'
-            log.critical(msg)
-            raise ValueError(msg)
-
-        nights = np.unique(nightexp['NIGHT'])
-        expids = np.asarray(nightexp['EXPID'])
-
-    elif args.nights:
-        nights = [int(night) for night in args.nights.split(',')]
-        expids = None
-    else:
-        nights = None
-        expids = None
-
-    if rank == 0:
-        if args.survey is not None:
-            log.info(f'Filtering by SURVEY={args.survey}')
-        else:
-            log.info(f'Not filtering by SURVEY')
-
-        if args.faprogram is not None:
-            log.info(f'Filtering by FAPRGRM={args.faprogram}')
-        else:
-            log.info(f'Not filtering by FAPRGRM')
-
-    #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
-    t0 = time.time()
-    exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
-                                  nside=args.nside, specprod_dir=args.reduxdir,
-                                  survey=args.survey, faprogram=args.faprogram)
-    assert len(exp2pix) > 0
-    if rank == 0:
-        dt = time.time() - t0
-        log.debug('Exposure to healpix mapping took {:.1f} sec'.format(dt))
-        sys.stdout.flush()
-
-    npix = len(np.unique(exp2pix['HEALPIX']))
-    log.info(f'{npix} healpix found on {len(exp2pix)} x3 frames')
-    if args.healpix is not None:
-        keeppix = [int(tmp) for tmp in args.healpix.split(',')]
-        log.info(f'Processing healpix {keeppix}')
-        keep = np.isin(exp2pix['HEALPIX'], keeppix)
-        exp2pix = exp2pix[keep]
-
-    allpix = np.unique(exp2pix[['SURVEY', 'FAPROGRAM', 'HEALPIX']])
-    mypix = np.array_split(allpix, size)[rank]
-    log.info('Rank {} will process {} pixels'.format(rank, len(mypix)))
-    sys.stdout.flush()
-
-    frames = dict()
-    for survey, faprogram, pix in mypix:
-        keep = (exp2pix['SURVEY'] == survey)
-        keep &= (exp2pix['FAPROGRAM'] == faprogram)
-        keep &= (exp2pix['HEALPIX'] == pix)
-        iipix = np.where(keep)[0]
-        ntargets = np.sum(exp2pix['NTARGETS'][iipix])
-        log.info('Rank {} pix {} with {} targets on {} frames'.format(
-            rank, pix, ntargets, len(iipix)))
-        sys.stdout.flush()
-        framekeys = list()
-        for i in iipix:
-            night = exp2pix['NIGHT'][i]
-            expid = exp2pix['EXPID'][i]
-            spectro = exp2pix['SPECTRO'][i]
-            for band in ['b', 'r', 'z']:
-                camera = band + str(spectro)
-                framefile = io.findfile('cframe', night, expid, camera,
-                        specprod_dir=args.reduxdir)
-                if os.path.exists(framefile):
-                    framekeys.append((night, expid, camera))
-                else:
-                    #- print warning if file is missing, but proceed;
-                    #- will use add_missing_frames later.
-                    log.warning('missing {}; will use blank data'.format(framefile))
-
-        #- Identify any frames that are already in pre-existing output file
-        specfile = io.findfile('spectra', nside=args.nside, groupname=pix,
-                survey=survey, faprogram=faprogram,
-                specprod_dir=args.outroot)
-        if args.outdir:
-            specfile = os.path.join(args.outdir, os.path.basename(specfile))
-
-        oldspectra = None
-        if os.path.exists(specfile):
-            oldspectra = SpectraLite.read(specfile)
-            fm = oldspectra.fibermap
-            for night, expid, spectro in set(zip(fm['NIGHT'], fm['EXPID'], fm['PETAL_LOC'])):
-                for band in ['b', 'r', 'z']:
-                    camera = band + str(spectro)
-                    if (night, expid, camera) in framekeys:
-                        framekeys.remove((night, expid, camera))
-
-        if len(framekeys) == 0:
-            log.info('pix {} already has all exposures; moving on'.format(pix))
-            continue
-
-        #- Load new frames to add
-        log.info('pix {} has {} frames to add'.format(pix, len(framekeys)))
-        update_frame_cache(frames, framekeys, specprod_dir=args.reduxdir)
-
-        #- convert individual FrameLite objects into SpectraLite
-        newspectra = frames2spectra(frames, pix, nside=args.nside)
-
-        #- Combine with any previous spectra if needed
-        if oldspectra:
-            spectra = oldspectra + newspectra
-        else:
-            spectra = newspectra
-
-        #- Write new spectra file
-        hdr = dict(
-            HPXNSIDE=args.nside,
-            HPXPIXEL=pix,
-            HPXNEST=True,
-            SURVEY=survey,
-            FAPRGRM=faprogram,
-            SPGRPNAM='healpix',
-            SPGRPVAL=pix,   # yes, this is redundant with HPXPIXEL
-            )
-        hdr.update(header)
-        spectra.write(specfile, header=hdr)
-    
-    dt = time.time() - t0
-    log.info('Rank {} done in {:.1f} minutes'.format(rank, dt/60))
+    return 0
 

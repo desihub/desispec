@@ -18,7 +18,8 @@ from shutil import rmtree
 from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
+import fitsio
 from ..frame import Frame
 
 
@@ -31,6 +32,7 @@ class TestIO(unittest.TestCase):
         """Create unique test filename in a subdirectory.
         """
         cls.testDir = tempfile.mkdtemp()
+        cls.readonlyDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
@@ -38,12 +40,14 @@ class TestIO(unittest.TestCase):
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
+                       "DESI_ROOT_READONLY": None,
                        "DESI_SPECTRO_DATA": None,
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
                        }
         cls.testEnv = {'SPECPROD':'dailytest',
                        "DESI_ROOT": cls.testDir,
+                       "DESI_ROOT_READONLY": cls.readonlyDir,
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
                        "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
                        "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
@@ -210,6 +214,44 @@ class TestIO(unittest.TestCase):
         #
         write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
 
+    def test_read_table(self):
+        """test desispec.io.table.read_table"""
+        from ..io.table import read_table
+
+        t = Table()
+        t['a'] = ['a', 'b', '']
+        t['x'] = [1.0, 2.0, np.NaN]
+        t['blat'] = [10, 20, 30]
+        t.meta['EXTNAME'] = 'TABLE'
+        t.meta['BLAT'] = 'foo'
+
+        testfile = os.path.join(self.testDir, 'testtable.fits')
+        t.write(testfile)
+
+        tx = read_table(testfile)
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
+
+        #- read a non-default extension
+        t.meta['EXTNAME'] = 'KUMQUAT'
+        fitsio.write(testfile, np.array(t), header=t.meta, extname='KUMQUAT')
+
+        tx = read_table(testfile, 'KUMQUAT')
+        self.assertEqual(tx.meta['EXTNAME'], 'KUMQUAT')
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
 
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
@@ -290,6 +332,17 @@ class TestIO(unittest.TestCase):
         self.assertEqual(header['BAR'], 1)
         self.assertEqual(header.comments['BAR'], 'biz bat')
 
+        #- fitsio.FITSHDR -> fits.Header
+        hlist = [
+                {'name':'A', 'value':1, 'comment':'blat'},
+                {'name':'B', 'value':'xyz', 'comment':'foo'},
+                ]
+        header = fitsheader(fitsio.FITSHDR(hlist))
+        self.assertTrue(isinstance(header, fits.Header))
+        self.assertEqual(header['A'], 1)
+        self.assertEqual(header['B'], 'xyz')
+        self.assertEqual(header.comments['B'], 'foo')
+
         #- Can't convert and int into a fits Header
         self.assertRaises(ValueError, fitsheader, (1,))
 
@@ -341,6 +394,14 @@ class TestIO(unittest.TestCase):
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
             self.assertEqual(frame.meta['BLAT'], read_meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], read_meta['FOO'])
+
+        #- read_frame works even with "wrong" .fits / .fits.gz
+        if self.testfile.endswith('.fits'):
+            frame = read_frame(self.testfile + '.gz')  # finds file anyway
+        elif self.testfile.endswith('.fits.gz'):
+            frame = read_frame(self.testfile[:-3])     # finds file anyway
+        else:
+            raise ValueError(f'unrecognized extension for {self.testfile=}')
 
         #- Test float32 on disk vs. float64 in memory
         for extname in ['FLUX', 'IVAR', 'RESOLUTION']:
@@ -525,6 +586,15 @@ class TestIO(unittest.TestCase):
             else:
                 self.assertEqual(c1.dtype.kind, c2.dtype.kind)
                 self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
+
+        #- read_fibermap also works with open file pointer
+        with fitsio.FITS(self.testfile) as fp:
+            fm1 = read_fibermap(fp)
+            self.assertTrue(np.all(fm1 == fm))
+
+        with fits.open(self.testfile) as fp:
+            fm2 = read_fibermap(fp)
+            self.assertTrue(np.all(fm2 == fm))
 
     def test_stdstar(self):
         """Test reading and writing standard star files.
@@ -715,9 +785,30 @@ class TestIO(unittest.TestCase):
         file2 = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                     os.environ['SPECPROD'],'exposures',str(kwargs['night']),
                     '{expid:08d}'.format(**kwargs),
-                    'sky-{camera}-{expid:08d}.fits'.format(**kwargs))
+                    'sky-{camera}-{expid:08d}.fits.gz'.format(**kwargs))
 
         self.assertEqual(file1, file2)
+
+        # canonical case is gzipped, but if non-gzipped version exists
+        # return that instead
+        assert file1.endswith('.gz')
+        os.makedirs(os.path.dirname(file1), exist_ok=True)
+        file1nogzip = file1[:-3]
+        fx = open(file1nogzip, 'w')
+        fx.close()
+        file3 = findfile('sky', **kwargs)
+        self.assertEqual(file1nogzip, file3)
+
+        # and also the reverse: canonical non-gzip will return gzip if
+        # for whatever reason that exists
+        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertFalse(file4.endswith('.gz'))
+        file5 = file4 + '.gz'
+        os.makedirs(os.path.dirname(file5), exist_ok=True)
+        fx = open(file5, 'w')
+        fx.close()
+        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        self.assertEqual(file6, file5)  #- not file4
 
         # url1 = filepath2url(file1)
         url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
@@ -785,13 +876,13 @@ class TestIO(unittest.TestCase):
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'],
                          'healpix', 'main', 'bright', '52', '5286',
-                         'spectra-main-bright-5286.fits')
+                         'spectra-main-bright-5286.fits.gz')
         self.assertEqual(a, b)
         a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'], 'tiles', 'cumulative',
                          '68000', '20200314',
-                         'spectra-2-68000-thru20200314.fits')
+                         'spectra-2-68000-thru20200314.fits.gz')
         self.assertEqual(a, b)
 
         #- cumulative vs. pernight
@@ -810,6 +901,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits.gz'))
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
 
@@ -820,6 +913,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits.gz'))  #- no "thru"
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
 
@@ -835,9 +930,90 @@ class TestIO(unittest.TestCase):
             self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
             if filetype.endswith('png'):
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            elif filetype == 'spectra':
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits.gz'))  #- exp not thru
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
+    def test_desi_root_readonly(self):
+        """test $DESI_ROOT_READONLY + findfile"""
+        from ..io import meta
+
+        #- cache whatever $DESI_ROOT_READONLY was (or None)
+        orig_desi_root_readonly = os.getenv('DESI_ROOT_READONLY')
+        orig_cache = meta._desi_root_readonly
+
+        #- Reset cache for clean start
+        meta._desi_root_readonly = None
+
+        #- Case 1: $DESI_ROOT_READONLY is set and exists -> use it
+        os.environ['DESI_ROOT_READONLY'] = tempfile.mkdtemp()
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT_READONLY'])
+
+        #- Case 2: $DESI_ROOT_READONLY set but invalid -> $DESI_ROOT instead
+        meta._desi_root_readonly = None
+        os.environ['DESI_ROOT_READONLY'] = '/blat/foo/bar'
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT'])
+
+        #- Case 3: $DESI_ROOT_READONLY isn't set -> $DESI_ROOT instead
+        meta._desi_root_readonly = None
+        del os.environ['DESI_ROOT_READONLY']
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, os.environ['DESI_ROOT'])
+
+        #- Case 4: ensure we are using previous cached value
+        cache = meta._desi_root_readonly = '/does/not/exist'
+        os.environ['DESI_ROOT_READONLY'] = '/biz/bat/boo'
+        blat = meta.get_desi_root_readonly()
+        self.assertEqual(blat, cache)
+        self.assertNotEqual(blat, os.environ['DESI_ROOT_READONLY'])
+
+        #- get us back to where we were
+        meta._desi_root_readonly = orig_cache
+        if orig_desi_root_readonly is not None:
+            os.environ['DESI_ROOT_READONLY'] = orig_desi_root_readonly
+
+    def test_findfile_readonly(self):
+        """Test findfile(..., readonly=True) option
+        """
+        from ..io.meta import findfile
+        fn1 = findfile('frame', 20201010, 123, 'b0')
+        fn2 = findfile('frame', 20201010, 123, 'b0', readonly=True)
+        self.assertNotEqual(fn1, fn2)
+        self.assertTrue(fn1.startswith(self.testDir))
+        self.assertTrue(fn2.startswith(self.readonlyDir))
+
+        #- if outdir doesn't start with DESI_ROOT, RO is same as RW
+        fn1 = findfile('frame', 20201010, 123, 'b0', outdir='/blat/foo')
+        fn2 = findfile('frame', 20201010, 123, 'b0', outdir='/blat/foo',
+                readonly=True)
+        self.assertEqual(fn1, fn2)
+
+        #- if outdir starts with DESI_ROOT, RO is different
+        outdir = os.path.join(os.environ['DESI_ROOT'], 'blat', 'foo')
+        fn1 = findfile('frame', 20201010, 123, 'b0', outdir=outdir)
+        fn2 = findfile('frame', 20201010, 123, 'b0', outdir=outdir,
+                readonly=True)
+        self.assertNotEqual(fn1, fn2)
+        self.assertTrue(fn1.startswith(self.testDir))
+        self.assertTrue(fn2.startswith(self.readonlyDir))
+
+    def test_readonly_filepath(self):
+        """Test get_readonly_filepath"""
+        from ..io.meta import get_readonly_filepath
+
+        #- Starts with $DESI_ROOT, so fine readonly equivalent
+        rwfile = os.path.join(os.environ['DESI_ROOT'], 'blat', 'foo')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertNotEqual(rwfile, rofile)
+        self.assertTrue(rofile.startswith(os.environ['DESI_ROOT_READONLY']))
+
+        #- Doesn't start with $DESI_ROOT so no read-only equivalent
+        rwfile = os.path.join('blat', 'foo', 'bar')
+        rofile = get_readonly_filepath(rwfile)
+        self.assertEqual(rwfile, rofile)
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -855,15 +1031,18 @@ class TestIO(unittest.TestCase):
             'cmxelg', 'cmxlrgqso',
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
             'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
-            'sv2dark', 'sv3bright', 'mainbackup']
+            'sv2dark', 'sv3bright', 'mainbackup',
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
         program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
             'bright', 'backup', 'other', 'other',
-            'dark', 'bright', 'backup'])
+            'dark', 'bright', 'backup',
+            'other', 'other', 'other'])
 
         #- list input
         p = faflavor2program(flavor)
-        self.assertTrue(np.all(p==program))
+        for i in range(len(flavor)):
+            self.assertEqual(p[i], program[i], f'flavor {flavor[i]}')
 
         #- array input
         p = faflavor2program(np.array(flavor))
@@ -924,7 +1103,7 @@ class TestIO(unittest.TestCase):
         with open(x,'a') as f:
             pass
         # Find it
-        mfile = search_for_framefile('frame-b0-000123.fits')
+        mfile = search_for_framefile('frame-b0-000123.fits.gz')
         self.assertEqual(x, mfile)
 
     def test_get_reduced_frames(self):
@@ -992,7 +1171,7 @@ class TestIO(unittest.TestCase):
         paths = download(filename)
         self.assertEqual(paths[0], filename)
         self.assertTrue(os.path.exists(paths[0]))
-        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits',
+        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits.gz',
                                          auth=_auth_cache['data.desi.lbl.gov'])
         n.authenticators.assert_called_once_with('data.desi.lbl.gov')
         #
@@ -1105,11 +1284,31 @@ class TestIO(unittest.TestCase):
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.fits'))
+        self.assertTrue('/a/b/c' in tempfile)
+
+        filename = '/a/b/blat.fits.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.gz'))
+        self.assertTrue('/a/b/blat' in tempfile)
+
+        filename = '/a/b/blat.fits.fz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits.fz'))
+        self.assertTrue('/a/b/blat' in tempfile)
 
         filename = 'blat.ecsv'
         tempfile = get_tempfilename(filename)
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.ecsv'))
+        self.assertTrue('blat' in tempfile)
+
+        filename = 'blat.gz'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.gz'))
+        self.assertTrue('blat' in tempfile)
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
@@ -1179,6 +1378,9 @@ class TestIO(unittest.TestCase):
         self.assertEqual(parse_cameras(None), None)
         self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
 
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='WARNING'), 'a1b2')
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='warning'), 'a1b2')
+
     def test_shorten_filename(self):
         """Test desispec.io.meta.shorten_filename"""
         from ..io.meta import shorten_filename, specprod_root
@@ -1241,6 +1443,13 @@ class TestIO(unittest.TestCase):
         self.assertEqual(list(t['readwrite']), ['write', 'read'])
         self.assertEqual(list(t['duration']), [1.23, 2.56])
 
+        #- logfile without iotime messages
+        with open(self.testlog, 'w') as logfile:
+            logfile.write('INFO:blat.py:42:blat: hello\n')
+            logfile.write('ERROR:blat.py:45:blat: goodbye\n')
+
+        t = iotime.parse_logfile(self.testlog)
+        self.assertEqual(t, None)
 
 def test_suite():
     """Allows testing of only this module with the command::

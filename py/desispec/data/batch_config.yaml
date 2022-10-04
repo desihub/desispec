@@ -23,18 +23,18 @@ perlmutter-cpu:
     cores_per_node: 128
     threads_per_core: 2
     memory: 512
-    timefactor: 1.0
+    timefactor: 0.7
     gpus_per_node: 0
-    batch_opts: []      # TBD
+    batch_opts: ['--constraint=cpu', ]
 
 perlmutter-gpu:
     site: NERSC
     cores_per_node: 64
     threads_per_core: 2
     memory: 256
-    timefactor: 1.0
+    timefactor: 0.5
     gpus_per_node: 4
-    batch_opts: ['--constraint=gpu']      # TBD
+    batch_opts: ['--constraint=gpu', '--gpus-per-node=4']
 
 dirac:
     site: LBNL-HPCS

@@ -15,15 +15,67 @@ import re
 import numpy as np
 
 from desiutil.log import get_logger
-from .util import healpix_subdirectory
+from .util import healpix_subdirectory, checkgzip
 
+_desi_root_readonly=None
+def get_desi_root_readonly():
+    """
+    Returns $DESI_ROOT_READONLY if set and path exists, otherwise $DESI_ROOT.
+
+    Caches answer upon first call, i.e. setting $DESI_ROOT_READONLY to a
+    different value part way through running will use previously cached value.
+    This prevents it from re-checking a non-existent path N>>1 times.
+    """
+    global _desi_root_readonly
+    log = get_logger()
+    if _desi_root_readonly is not None:
+        log.debug('Using cached _desi_root_readonly=%s', _desi_root_readonly)
+        return _desi_root_readonly
+    elif 'DESI_ROOT_READONLY' in os.environ:
+        if os.path.exists(os.environ['DESI_ROOT_READONLY']):
+            _desi_root_readonly = os.environ['DESI_ROOT_READONLY']
+            log.debug("Using $DESI_ROOT_READONLY=%s", _desi_root_readonly)
+        else:
+            log.debug("$DESI_ROOT_READONLY=%s set but doesn't exist; using $DESI_ROOT=%s",
+                    os.environ['DESI_ROOT_READONLY'], os.environ['DESI_ROOT'])
+            _desi_root_readonly = os.environ['DESI_ROOT']
+    else:
+        log.debug('$DESI_ROOT_READONLY not set; using $DESI_ROOT=%s',
+                os.environ['DESI_ROOT'])
+        _desi_root_readonly = os.environ['DESI_ROOT']
+
+    return _desi_root_readonly
+
+def get_readonly_filepath(filepath):
+    """
+    Generate optimized path for read-only usage of filepath
+
+    Args:
+        filepath (str): full path to input file
+
+    Returns: readonly_filepath using $DESI_ROOT_READONLY
+
+    If a readonly filepath can't be derived, return original filepath
+    """
+    if 'DESI_ROOT' not in os.environ:
+        return filepath
+    else:
+        desi_root = os.environ['DESI_ROOT']
+
+    desi_root_readonly = get_desi_root_readonly()
+    if filepath.startswith(desi_root) and desi_root != desi_root_readonly:
+        filepath = filepath.replace(desi_root, desi_root_readonly, 1)
+
+    return filepath
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, nside=64,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
         rawdata_dir=None, specprod_dir=None,
-        download=False, outdir=None, qaprod_dir=None):
+        download=False, outdir=None, qaprod_dir=None,
+        return_exists=False,
+        readonly=False):
     """Returns location where file should be
 
     Args:
@@ -47,10 +99,18 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
+        return_exists: if True, also return whether the file exists
+        readonly: if True, return read-only version of path if possible
+
+    Returns filename, or (filename, exists) if return_exists=True
 
     Raises:
         ValueError: for invalid file types, and other invalid input
         KeyError: for missing environment variables
+
+    Notes:
+        The readonly option uses $DESI_ROOT_READONLY if it is set and
+        exists; otherwise it returns the normal read/write path.
     """
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
@@ -68,26 +128,27 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # Note: fibermap files will eventually move to preproc.
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
-        preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
-        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
+        preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
+        tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
         # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
         # Note: psfboot has been deprecated, but not ready to be removed yet.
         #
-        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
-        cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
-        fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits',
-        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
-        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
+        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits.gz',
+        cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits.gz',
+        fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits.gz',
+        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits.gz',
+        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits.gz',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         fitpsf='{specprod_dir}/exposures/{night}/{expid:08d}/fit-psf-{camera}-{expid:08d}.fits',
         qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
-        sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
-        sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
+        sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits.gz',
+        sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits.gz',
         skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
-        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits',
-        stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
+        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits.gz',
+        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits.gz',
+        stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits.gz',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #  qa
@@ -109,21 +170,21 @@ def findfile(filetype, night=None, expid=None, camera=None,
         zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{groupname}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{groupname}.h5',
-        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits',
+        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits.gz',
         redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.fits',
         #
         # spectra- tile based
         #
         coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
-        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits.gz',
         redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         #
         # spectra- single exp tile based
         #
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
-        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits.gz',
         redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
@@ -265,7 +326,19 @@ def findfile(filetype, night=None, expid=None, camera=None,
         log.debug("download('%s', single_thread=True)", filepath)
         filepath = download(filepath, single_thread=True)[0]
 
-    return filepath
+    try:
+        filepath = checkgzip(filepath)
+        exists = True
+    except FileNotFoundError:
+        exists = False
+
+    if readonly:
+        filepath = get_readonly_filepath(filepath)
+
+    if return_exists:
+        return filepath, exists
+    else:
+        return filepath
 
 def get_raw_files(filetype, night, expid, rawdata_dir=None):
     """Get files for a specified exposure.
@@ -581,7 +654,7 @@ def faflavor2program(faflavor):
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
-    bright |= np.char.endswith(faflavor, 'bright')
+    bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
     backup  = faflavor == 'sv1backup1'

@@ -1,6 +1,10 @@
 import time
 start_imports = time.time()
 
+#- enforce a batch-friendly matplotlib backend
+from desispec.util import set_backend
+set_backend()
+
 import sys, os, argparse, re
 import traceback
 import subprocess
@@ -14,14 +18,14 @@ from astropy.io import fits
 
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile, replace_prefix
-from desispec.io.util import create_camword
+from desispec.io import findfile, replace_prefix, get_readonly_filepath
+from desispec.io.util import create_camword, get_tempfilename
 from desispec.calibfinder import findcalibfile,CalibFinder
-from desispec.fiberflat import apply_fiberflat
-from desispec.sky import subtract_sky
 from desispec.util import runcmd, mpi_count_failures
-import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.stdstars
+import desispec.scripts.average_fiberflat
+import desispec.scripts.autocalib_fiberflat
 
 from desitarget.targetmask import desi_mask
 
@@ -40,9 +44,7 @@ def parse(options=None):
     return args
 
 def main(args=None, comm=None):
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     log = get_logger()
@@ -91,7 +93,7 @@ def main(args=None, comm=None):
                 args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
                 args.inputs = []
                 for expid in args.expids:
-                    infile = findfile('raw', night=args.night, expid=expid)
+                    infile = findfile('raw', night=args.night, expid=expid, readonly=True)
                     args.inputs.append(infile)
                     if not os.path.isfile(infile):
                         raise IOError('Missing input file: {}'.format(infile))
@@ -182,7 +184,7 @@ def main(args=None, comm=None):
             if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
                 psfs = list()
                 for expid in args.expids:
-                    psffile = findfile('fitpsf', args.night, expid, camera)
+                    psffile = findfile('fitpsf', args.night, expid, camera, readonly=True)
                     if os.path.exists(psffile):
                         psfs.append( psffile )
                     else:
@@ -257,7 +259,7 @@ def main(args=None, comm=None):
         for camera in args.cameras:
             inflats_for_camera[camera] = list()
             for expid in args.expids:
-                filename = findfile('fiberflat', args.night, expid, camera)
+                filename = findfile('fiberflat', args.night, expid, camera, readonly=True)
                 inflats.append(filename)
                 inflats_for_camera[camera].append(filename)
 
@@ -301,14 +303,22 @@ def main(args=None, comm=None):
         for camera, lampbox, ofile in camera_lampboxes[rank::size]:
             if not os.path.isfile(ofile):
                 log.info(f"Rank {rank} average flat for camera {camera} and lamp box #{lampbox}")
-                pg = f"CALIB DESI-CALIB-0{lampbox} LEDs only"
-
-                cmd = f"desi_average_fiberflat --program '{pg}' --outfile {ofile} -i "
+                cmd = []
+                cmd.append(f"desi_average_fiberflat")
+                cmd.append(f"--program")
+                cmd.append(f"CALIB DESI-CALIB-0{lampbox} LEDs only")
+                cmd.append(f"--outfile")
+                cmd.append(f"{ofile}")
+                cmd.append(f"-i")
                 for flat in inflats_for_camera[camera]:
-                    cmd += f" {flat} "
+                    cmd.append(f"{flat}")
                 num_cmd += 1
-                err = runcmd(cmd, inputs=inflats_for_camera[camera], outputs=[ofile, ])
-                if err:
+                cmdargs = cmd[1:]
+
+                result, success = runcmd(desispec.scripts.average_fiberflat.main,
+                        args=cmdargs, inputs=inflats_for_camera[camera], outputs=[ofile, ])
+
+                if not success:
                     num_err += 1
             else:
                 log.info(f"Rank {rank} will use existing {ofile}")
@@ -319,12 +329,22 @@ def main(args=None, comm=None):
         log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
         for camera_arm in ["b", "r", "z"][rank::size]:
             log.info(f"Rank {rank} autocalibrating across spectro for camera arm {camera_arm}")
-            cmd = f"desi_autocalib_fiberflat --night {args.night} --arm {camera_arm} -i "
+            cmd = []
+            cmd.append(f"desi_autocalib_fiberflat")
+            cmd.append(f"--night")
+            cmd.append(f"{args.night}")
+            cmd.append(f"--arm")
+            cmd.append(f"{camera_arm}")
+            cmd.append(f"-i")
             for flat in flats_for_arm[camera_arm]:
-                cmd += f" {flat} "
+                cmd.append(f"{flat}")
             num_cmd += 1
-            err = runcmd(cmd, inputs=flats_for_arm[camera_arm], outputs=[])
-            if err:
+            cmdargs = cmd[1:]
+
+            result, success = runcmd(desispec.scripts.autocalib_fiberflat.main,
+                    args=cmdargs, inputs=flats_for_arm[camera_arm], outputs=[])
+
+            if not success:
                 num_err += 1
 
         if comm is not None:
@@ -392,7 +412,7 @@ def main(args=None, comm=None):
                 elif args.calibnight is not None:
                     # look for a fiberflatnight for this calib night
                     fiberflatnightfile = findfile('fiberflatnight',
-                                                args.calibnight, args.expids[0], camera)
+                                            args.calibnight, args.expids[0], camera, readonly=True)
                     if not os.path.isfile(fiberflatnightfile):
                         log.error("no {}".format(fiberflatnightfile))
                         raise IOError("no {}".format(fiberflatnightfile))
@@ -400,7 +420,7 @@ def main(args=None, comm=None):
                 else:
                     # look for a fiberflatnight fiberflat
                     fiberflatnightfile = findfile('fiberflatnight',
-                                                args.night, args.expids[0], camera)
+                                                args.night, args.expids[0], camera, readonly=True)
                 if os.path.isfile(fiberflatnightfile):
                         input_fiberflat[camera] = fiberflatnightfile
                 elif args.most_recent_calib:
@@ -434,8 +454,8 @@ def main(args=None, comm=None):
 
                 fiberflatfiles[sp].append(input_fiberflat[camera])
                 for expid in args.expids:
-                    tmpframefile = findfile('frame', args.night, expid, camera)
-                    tmpskyfile = findfile('sky', args.night, expid, camera)
+                    tmpframefile = findfile('frame', args.night, expid, camera, readonly=True)
+                    tmpskyfile = findfile('sky', args.night, expid, camera, readonly=True)
 
                     inputsok = True
                     if not os.path.exists(tmpframefile):
@@ -460,11 +480,27 @@ def main(args=None, comm=None):
         # - Hardcoded stdstar model version
         starmodels = os.path.join(
             os.getenv('DESI_BASIS_TEMPLATES'), 'stdstar_templates_v2.2.fits')
+        starmodels = get_readonly_filepath(starmodels)
 
         # - Fit stdstars per spectrograph (not per-camera)
         spectro_nums = sorted(framefiles.keys())
-        ## for sp in spectro_nums[rank::size]:
-        for i in range(rank, len(spectro_nums), size):
+
+        if args.mpistdstars and comm is not None:
+            #- If using MPI parallelism in stdstar fit, divide comm into subcommunicators.
+            #- (spectro_start, spectro_step) determine stride pattern over spectro_nums.
+            #- Split comm by at most len(spectro_nums)
+            num_subcomms = min(size, len(spectro_nums))
+            subcomm_index = rank % num_subcomms
+            if rank == 0:
+                log.info(f"Splitting comm of {size=} into {num_subcomms=} for stdstar fitting")
+            subcomm = comm.Split(color=subcomm_index)
+            spectro_start, spectro_step = subcomm_index, num_subcomms
+        else:
+            #- Otherwise, use multiprocessing assuming 1 MPI rank per spectrograph
+            spectro_start, spectro_step = rank, size
+            subcomm = None
+
+        for i in range(spectro_start, len(spectro_nums), spectro_step):
             sp = spectro_nums[i]
 
             have_all_cameras = True
@@ -492,9 +528,23 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            num_cmd += 1
-            err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
-            if err:
+            num_cmd +=1 
+            if subcomm is None:
+                #- Using multiprocessing
+                result, success = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            else:
+                #- Using MPI
+                cmdargs = cmd.split()[1:]
+                result, success = runcmd(desispec.scripts.stdstars.main, 
+                    args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm
+                )
+
+                if not success:
+                    #- Catches sys.exit from stdstars.main
+                    log.error('Rank {} stdstars.main failed for {}'.format(rank, os.path.basename(stdfile)))
+                    err = True
+
+            if not success:
                 num_err += 1
 
         timer.stop('stdstarfit')
@@ -502,15 +552,18 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-        if rank == 0 and num_err > 0:
-            log.error(f'{num_err}/{num_cmd} stdstar commands failed')
-
-        sys.stdout.flush()
-        if num_err>0 and num_err==num_cmd:
+        #- all ranks exit with error if any failed
+        if num_err > 0:
             if rank == 0:
-                log.critical('All stdstar commands failed')
+                log.critical(f'{num_err}/{num_cmd} stdstar ranks failed')
+                if num_err==num_cmd:
+                    log.critical('All stdstar commands failed')
+
+            sys.stdout.flush()
             sys.exit(1)
 
+        link_errors = 0
+        num_link_cmds = 0
         if rank==0 and len(args.expids) > 1:
             for sp in spectro_nums:
                 saved_stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
@@ -523,11 +576,27 @@ def main(args=None, comm=None):
                     relpath_saved_std = os.path.relpath(saved_stdfile, new_dirname)
                     log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
                             f'to existing file at rel. path {relpath_saved_std}')
-                    runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), \
+                    num_link_cmds += 1
+                    result, success = runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), expandargs=True,
                         inputs=[saved_stdfile, ], outputs=[new_stdfile, ])
                     log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
                                                                                         os.path.isfile(new_stdfile),
                                                                                         os.path.islink(new_stdfile)))
+                    if not success:
+                        link_errors += 1
+
+        if comm is not None:
+            link_errors = comm.bcast(link_errors, root=0)
+            num_link_cmds = comm.bcast(num_link_cmds, root=0)
+
+        #- all ranks exit with error if any failed
+        if link_errors>0:
+            if rank == 0:
+                log.critical(f'{link_errors}/{num_link_cmds} stdstar link commands failed')
+                if link_errors==num_link_cmds:
+                    log.critical('All stdstar link commands failed')
+
+            sys.exit(1)
 
     # -------------------------------------------------------------------------
     # - Wrap up
@@ -557,10 +626,17 @@ def main(args=None, comm=None):
 
                 stats = previous_stats
 
-            tmpfile = args.timingfile + '.tmp'
+            tmpfile = get_tempfilename(args.timingfile)
             with open(tmpfile, 'w') as fx:
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, args.timingfile)
 
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
+
     if rank == 0:
         log.info('All done at {}'.format(time.asctime()))
+
+    return 0

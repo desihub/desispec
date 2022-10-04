@@ -19,14 +19,15 @@ def parse(options=None):
     parser.add_argument('-o','--outfile', type = str, default = None, required=True)
     parser.add_argument('--program', type = str, default = None, required=False,
             help="only use inputs with this PROGRAM header keyword")
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+
+    args = parser.parse_args(options)
+
     return args
 
-def main(args) :
+def main(args=None) :
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
     log=get_logger()
     log.info("starting at {}".format(time.asctime()))

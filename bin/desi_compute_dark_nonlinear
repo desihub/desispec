@@ -157,6 +157,7 @@ if 'CAMWORD' in colnames and 'BADCAMWORD' in colnames and 'BADAMPS' in colnames:
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
 
+
 #- Remove any EXPTIME_INTs with too few exposures to make a good dark
 keep = np.zeros(len(speclog), dtype=bool)
 for exptime in np.unique(speclog['EXPTIME_INT']):
@@ -173,12 +174,24 @@ speclog = speclog[keep]
 #- Print some summary stats before continuing
 isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
 isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
+
+badnights=[]
 for night in nights:
     ii = speclog[daynight] == night
     nzeros = np.count_nonzero(ii & isZero)
     ndarks = np.count_nonzero(ii & isDark)
     darktimes = sorted(set(speclog['EXPTIME_INT'][ii & isDark]))
     log.info(f'{night} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
+    if nzeros==0 or ndarks==0:
+        badnights.append(night)
+        log.warning(f"there are no good observations left for {daynight} {night}, skipping that {daynight}")
+
+#skip all nights that have no observations left
+nights = [n for n in nights if n not in badnights]
+if len(nights)==0:
+    log.critical('No nights left to process')
+    sys.exit(1)
+
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()

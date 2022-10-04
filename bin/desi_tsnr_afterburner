@@ -31,7 +31,9 @@ from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
 from   desispec.io import findfile
+from   desispec.io import read_table
 from   desispec.io.fluxcalibration import read_flux_calibration
+from   desispec.io.util import get_tempfilename
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
@@ -79,7 +81,7 @@ def parse(options=None):
                         help = 'path to table with sky magnitudes. Expected keys=NIGHT,EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z')
     parser.add_argument('--compute-skymags', action='store_true',
                         help = 'recompute sky mags')
-    parser.add_argument('--multinode', action='store_true',
+    parser.add_argument('--mpi', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
     parser.add_argument('--add-badexp', action='store_true',
                         help = "Include entries for known bad exposures that weren't processed")
@@ -136,10 +138,15 @@ def update_targ_info(entry, targ_in):
             entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
 
         if entry["SURVEY"]=="unknown" :
-            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
-            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
-            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
+            #- despite the name, "cmxlrgqso" and "cmxelg" are sv1 tiles
+            if faflavor.find("sv1")>=0. or faflavor in ('cmxlrgqso', 'cmxelg') :
+                entry["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. :
+                entry["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. :
+                entry["SURVEY"]="cmx"
 
+    entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
     if entry["GOALTYPE"]=="unknown" :
         if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0. or \
            entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
@@ -173,7 +180,7 @@ def read_gfa_data(gfa_proc_dir) :
         if len(filenames)==0 : continue
         filename=filenames[-1]
         log.info(f"Reading {filename}")
-        table=Table.read(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
+        table=read_table(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
         tables.append(table)
     if len(tables)==0 :
         log=get_logger()
@@ -537,8 +544,11 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
+    #- standardizing N>>1 sv1-era FAPRGRM/FAFLAVOR into dark/bright/backup/other
+    exp_summary['PROGRAM'] = faflavor2program(exp_summary['FAFLAVOR'])
+
     neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
-              'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+              'SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
               'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
@@ -565,13 +575,13 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
     return exp_summary, cam_summary
 
 def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename,output_csv_filename=None) :
-    """ Writes a summary fits file.
+    """Writes a summary fits file.
 
     Args:
-     tsnr2_expid_table: astropy.table.Table
-     tsnr2_frame_table: astropy.table.Table
-     output_fits_filename: str, output fits filename
-     output_csv_filename: str, output csv filename
+        tsnr2_expid_table: astropy.table.Table
+        tsnr2_frame_table: astropy.table.Table
+        output_fits_filename: str, output fits filename
+        output_csv_filename: str, output csv filename
 
     Returns nothing
     """
@@ -581,7 +591,7 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
     hdus.append(fits.convenience.table_to_hdu(tsnr2_expid_table))
     hdus.append(fits.convenience.table_to_hdu(tsnr2_frame_table))
 
-    tmpfile = output_fits_filename+'.tmp'
+    tmpfile = get_tempfilename(output_fits_filename)
     hdus.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile,  output_fits_filename)
 
@@ -589,6 +599,8 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
 
     # also write first table as csv
     if output_csv_filename is not None :
+        # make a copy before modifying precision of columns
+        tsnr2_expid_table = tsnr2_expid_table.copy(copy_data=True)
         for k in tsnr2_expid_table.keys() :
             if k.find("TIME")>=0 or k.find("SNR2")>=0 :
                 try :
@@ -621,7 +633,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
     log = get_logger()
 
-    cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(prod, night, expid, camera, expid)
+    cframe_filename = findfile('cframe', night, expid, camera, specprod_dir=prod)
     if not os.path.isfile(cframe_filename) :
         return None
 
@@ -679,7 +691,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     #- Write per-expid per-camera output if requested
     if compute_tsnr and table_output_filename is not None :
         Path(os.path.dirname(table_output_filename)).mkdir(parents=True,exist_ok=True)
-        tmpfile = table_output_filename +'.tmp'
+        tmpfile = get_tempfilename(table_output_filename)
         table.write(tmpfile, format='fits', overwrite=True)
         os.rename(tmpfile, table_output_filename)
         log.debug('Successfully wrote {}.'.format(table_output_filename))
@@ -740,6 +752,11 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         entry['EFFTIME_ETC'] = np.float32(0.)
 
         log.debug('Failed to retrieve ETCTEFF from etc json.')
+
+    #- treat NaN the same as missing data, i.e. 0.0
+    #- e.g. 20210516/00088872/etc-00088872.json etcdata['expinfo']['efftime']
+    if np.isnan(entry['EFFTIME_ETC']):
+        entry['EFFTIME_ETC'] = 0.0
 
     entry['CAMERA'] = camera
     for key in table.colnames:
@@ -821,7 +838,7 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    if args.multinode & use_mpi():
+    if args.mpi and use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
 
@@ -834,11 +851,11 @@ def main():
         multinode = True
 
         if args.update:
-            log.critical('--update is not supported for the --multinode option.  Remove --update.')
+            log.critical('--update is not supported for the --mpi option.  Remove --update.')
             raise RuntimeError()
 
         if not args.recompute:
-            log.critical('--recompute for the --multinode option.  Add --recompute.')
+            log.critical('need --recompute for the --mpi option.  Add --recompute.')
             raise RuntimeError()
 
         if (args.tile_completeness is not None):
@@ -896,15 +913,15 @@ def main():
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
         try:
-            preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
+            preexisting_tsnr2_expid_table = read_table(args.outfile,"EXPOSURES")
         except KeyError:
             log.warning("Couldn't find the EXPOSURES HDU, looking for old format name TSNR2_EXPID")
-            preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
+            preexisting_tsnr2_expid_table = read_table(args.outfile,"TSNR2_EXPID")
         try:
-            preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
+            preexisting_tsnr2_frame_table = read_table(args.outfile,"FRAMES")
         except KeyError:
             log.warning("Couldn't find the FRAMES HDU, looking for old format name TSNR2_FRAME")
-            preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+            preexisting_tsnr2_frame_table = read_table(args.outfile,"TSNR2_FRAME")
 
 
 
@@ -964,15 +981,13 @@ def main():
 
         nights     = comm.bcast(nights, root=0)
 
-        inight     = np.linspace(0, len(nights), size+1, dtype=int)
-        ranknights = nights[inight[rank]:inight[rank+1]]
+        #- which nights should this rank process
+        ranknights = nights[rank:len(nights):size]
 
         if len(ranknights) > 0:
             rank_summary_rows = list()
 
             log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
-
-            comm.barrier()
 
             outdir = os.path.dirname(args.outfile)
             if outdir == "" :
@@ -987,6 +1002,9 @@ def main():
                     tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
 
                     one_night(count, night, rank_summary_rows, tmpfilename)
+        else:
+            log.warning('Rank {:d} has no nights to process'.format(rank))
+
 
         comm.barrier()
 
@@ -1125,26 +1143,14 @@ def main():
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
 
         # end of loop on nights
-        if len(tsnr2_frame_table)>0 :
-            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
-                                 output_csv_filename=args.outfile.replace(".fits",".csv"))
 
-            # remove temporary file if successful
-            if os.path.isfile(args.outfile) :
-                tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-                if os.path.isfile(tmpfilename) :
-                    log.info("rm temporary file {}".format(tmpfilename))
-                    os.unlink(tmpfilename)
-                tmpfilename=args.outfile.replace(".fits","_tmp.csv")
-                if os.path.isfile(tmpfilename) :
-                    log.info("rm temporary file {}".format(tmpfilename))
-                    os.unlink(tmpfilename)
-            else :
-                log.error("no valid exposures added")
+        if len(tsnr2_frame_table) == 0:
+            log.error("no valid exposures added")
+            return 1
 
         if args.tile_completeness is not None :
-            # reread the exposure table
-            exposure_table = Table.read(args.outfile)
+            # renaming for historical code reasons
+            exposure_table = tsnr2_expid_table
 
             # get list of tiles to look at
             selection = np.repeat(True,len(exposure_table))
@@ -1168,5 +1174,40 @@ def main():
             new_tile_table.write(args.tile_completeness,overwrite=True)
             log.info("wrote {}".format(args.tile_completeness))
 
+            if args.tile_completeness.endswith('.fits'):
+                head, ext = os.path.splitext(args.tile_completeness)
+                csvtiles = head + '.csv'
+                new_tile_table.write(csvtiles, overwrite=True)
+                log.info("wrote {}".format(csvtiles))
+
+            # compute_tile_completeness_table may have found new GOALTIME info
+            # from auxiliary_table_filename, so update exposures if needed
+            for tileid, goaltime in new_tile_table['TILEID', 'GOALTIME']:
+                ii = tsnr2_expid_table['TILEID'] == tileid
+                if goaltime>0.0 and np.any(tsnr2_expid_table['GOALTIME'][ii] == 0.0):
+                    tsnr2_expid_table['GOALTIME'][ii] = goaltime
+
+                jj = tsnr2_frame_table['TILEID'] == tileid
+                if goaltime>0.0 and np.any(tsnr2_frame_table['GOALTIME'][jj] == 0.0):
+                    tsnr2_frame_table['GOALTIME'][jj] = goaltime
+
+        output_csv_filename = os.path.splitext(args.outfile)[0] + '.csv'
+        write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
+                             output_csv_filename=output_csv_filename)
+
+        # remove temporary file if successful
+        if os.path.isfile(args.outfile) :
+            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
+            tmpfilename=args.outfile.replace(".fits","_tmp.csv")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
+        else :
+            log.error("no valid exposures added")
+
+
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+import time
+import random
+
+if __name__ == '__main__':
+    import sys
+    from specex.specex import run_specex
+
+    sys.exit(run_specex(sys.argv))

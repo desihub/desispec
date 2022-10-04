@@ -8,18 +8,10 @@
 Re-group spectral data from cframe files into healpix indexed groups.
 """
 
-from desispec.parallel import use_mpi
-
-comm = None
-if use_mpi():
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-else:
-    print("mpi4py not found, using only one process")
-
-import desispec.scripts.group_spectra as group_spectra
+import sys
 
 if __name__ == '__main__':
+    import desispec.scripts.group_spectra as group_spectra
     args = group_spectra.parse()
-    group_spectra.main(args, comm=comm)
+    sys.exit(group_spectra.main(args))
 

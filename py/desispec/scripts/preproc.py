@@ -12,6 +12,7 @@ import sys
 import multiprocessing as mp
 import numpy as np
 from desispec import io
+from desispec.io.util import get_tempfilename
 from desispec.parallel import default_nproc
 from desiutil.log import get_logger
 log = get_logger()
@@ -68,6 +69,8 @@ Must specify --infile OR --night and --expid.
                         help = 'do not apply gain correction')
     parser.add_argument('--nodarktrail', action='store_true',
                         help = 'do not correct for dark trails if any')
+    parser.add_argument('--no-overscan-per-row', action='store_true',
+                        help = 'do not perform an overscan subtraction per row (which can be otherwise turned on automatically for some images)')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -102,9 +105,7 @@ Must specify --infile OR --night and --expid.
     return args
 
 def main(args=None):
-    if args is None:
-        args = parse()
-    elif isinstance(args, (list, tuple)):
+    if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
     # Use bias?
@@ -194,7 +195,8 @@ def main(args=None):
                 model_variance=args.model_variance,
                 zero_masked=args.zero_masked,
                 no_traceshift=args.no_traceshift,
-                keep_overscan_cols=args.keep_overscan_cols
+                keep_overscan_cols=args.keep_overscan_cols,
+                no_overscan_per_row=args.no_overscan_per_row
         )
         opts_array.append(opts)
 
@@ -219,7 +221,11 @@ def main(args=None):
     else:
         log.info(f'All {num_cameras} cameras successfully preprocessed')
 
-    return int(num_failed)
+    if num_failed > 0:
+        #- int to avoid np.int64 misinterpreted by sys.exit
+        sys.exit(int(num_failed))
+    else:
+        return 0
 
 def _preproc_file_kwargs_wrapper(opts):
     """
@@ -278,6 +284,8 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
         outfile = io.findfile('preproc', night=night,expid=expid,camera=camera,
                               outdir=outdir)
 
-    io.write_image(outfile, img)
+    tmpfile = get_tempfilename(outfile)
+    io.write_image(tmpfile, img)
+    os.rename(tmpfile, outfile)
     log.info("Wrote {}".format(outfile))
     return 0

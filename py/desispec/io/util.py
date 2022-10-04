@@ -9,6 +9,7 @@ import glob
 import time
 import datetime
 import subprocess
+import fitsio
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -88,6 +89,14 @@ def fitsheader(header):
         hdr = astropy.io.fits.Header()
         for key, value in header.items():
             hdr[key] = value
+        return hdr
+
+    if isinstance(header, fitsio.FITSHDR):
+        hdr = astropy.io.fits.Header()
+        for key in header.keys():
+            value = header.get(key)
+            comment = header.get_comment(key)
+            hdr[key] = (value, comment)
         return hdr
 
     if isinstance(header, astropy.io.fits.Header):
@@ -442,7 +451,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras):
+def parse_cameras(cameras, loglevel='INFO'):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -454,11 +463,14 @@ def parse_cameras(cameras):
     Args:
        cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
                                       Also accepts a list or iterable that is processed with create_camword().
+    Options:
+        loglevel, str: use e.g. "WARNING" to avoid INFO-level log messages for just this call
+
     Returns (str):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger()
+    log = get_logger(loglevel)
     if cameras is None:
         camword = None
     elif type(cameras) is str:
@@ -525,7 +537,7 @@ def parse_cameras(cameras):
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
 
-def difference_camwords(fullcamword,badcamword):
+def difference_camwords(fullcamword,badcamword,suppress_logging=False):
     """
     Returns the difference of two camwords. The second argument cameras are removed from the first argument and the
     remainer is returned. Smart enough to ignore bad cameras if they don't exist in full camword list.
@@ -773,9 +785,13 @@ def get_tempfilename(filename):
     race condition protection (the last one do do os.rename wins, but at least
     different processes won't corrupt each other's files).
     """
-    base, extension = os.path.splitext(filename)
     pid = os.getpid()
-    tempfile = f'{base}_tmp{pid}{extension}'
+    if filename.endswith(('.gz', '.fz')):
+        filename, second_ext = os.path.splitext(filename)
+    else:
+        second_ext = ''
+    base, extension = os.path.splitext(filename)
+    tempfile = f'{base}_tmp{pid}{extension}{second_ext}'
     return tempfile
 
 def addkeys(hdr1, hdr2, skipkeys=None):

@@ -8,9 +8,9 @@
 This script computes the fiber flat field correction from a DESI continuum lamp frame.
 """
 
+import sys
 import desispec.scripts.average_fiberflat as average_fiberflat
-
 
 if __name__ == '__main__':
     args = average_fiberflat.parse()
-    average_fiberflat.main(args)
+    sys.exit(average_fiberflat.main(args))

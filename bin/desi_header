@@ -14,7 +14,7 @@ parser.add_argument('-k','--key', type = str, default = None, required = False, 
                     help = 'header keys to display (show full header if none)')
 parser.add_argument('--info', action='store_true',
                     help = 'show list of image hdus')
-parser.add_argument('--hdu',type = str, default = 0, required = False, 
+parser.add_argument('--hdu',type = str, default = 0, required = False,
                     help = 'header HDU (int or string)')
 parser.add_argument('--cols', action='store_true', help ="show columns in Table")
 parser.add_argument('--no-filename', action='store_true', help ="do not list the filenames")
@@ -29,13 +29,11 @@ except ValueError:
 
 filenames = args.ifile2
 if args.ifile is not None :
-   filenames += args.ifile 
+   filenames += args.ifile
 
 if args.key is None or len(args.key)==0 :
     print("no key, will dump header")
     for filename in filenames :
-        print(filename)
-        print("======================")
         try :
             h=pyfits.open(filename)
         except Exception as e :
@@ -45,6 +43,13 @@ if args.key is None or len(args.key)==0 :
         if args.info :
             h.info()
             print("")
+        if not hdu in h :
+            print("no hdu",hdu,"in",filename)
+            continue
+
+        print(filename)
+        print("======================")
+
         header=h[hdu].header
         print(header.tostring)
         print("")
@@ -52,11 +57,11 @@ if args.key is None or len(args.key)==0 :
         if args.cols :
             print("Table columns:")
             print(h[hdu].data.dtype.names)
-        
+
         h.close()
 
 
-    
+
 
 
     sys.exit(0)
@@ -81,7 +86,7 @@ for filename in filenames :
         print("no HDU %s in %s"%(str(hdu),filename))
         continue
     header=h[hdu].header
-    line=""    
+    line=""
     for k in args.key :
         try :
             val=header[k]
@@ -97,7 +102,3 @@ for filename in filenames :
         print(h[hdu].data.dtype.names)
 
     h.close()
-
-    
-        
-    

@@ -8,9 +8,9 @@
 This script computes the fiber flat field correction from a DESI continuum lamp frame.
 """
 
+import sys
 import desispec.scripts.fiberflat as fiberflat
-
 
 if __name__ == '__main__':
     args = fiberflat.parse()
-    fiberflat.main(args)
+    sys.exit(fiberflat.main(args))

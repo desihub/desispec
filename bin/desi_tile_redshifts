@@ -38,10 +38,11 @@ Not supported yet: multiple tiles on a single night in a single call:
     desi_tile_redshifts --night 20201215 --tileid 80605 80606 80607 --group cumulative
 
 """
+import sys
 from desispec.scripts import tile_redshifts
 
 if __name__ == '__main__':
     args = tile_redshifts.parse()
-    tile_redshifts.main(args)
+    sys.exit(tile_redshifts.main(args))
 
 

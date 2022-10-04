@@ -79,6 +79,9 @@ Full desispec API Reference
 .. automodule:: desispec.io.params
     :members:
 
+.. automodule:: desispec.io.photo
+    :members:
+
 .. automodule:: desispec.io.qa
     :members:
 

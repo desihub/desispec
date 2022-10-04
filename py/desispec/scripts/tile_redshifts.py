@@ -2,6 +2,7 @@
 import sys, os, glob
 import re
 import subprocess
+import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
@@ -13,7 +14,6 @@ from desispec.workflow import batch
 from desispec.util import parse_int_args
 
 def parse(options=None):
-    import argparse
 
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
@@ -37,7 +37,7 @@ def parse(options=None):
                    help="batch reservation name")
     p.add_argument("--batch-dependency", type=str,
                    help="job dependencies passed to sbatch --dependency")
-    p.add_argument("--system-name", type=str,
+    p.add_argument("--system-name", type=str, default=batch.default_system(),
                    help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
 
     # TODO
@@ -45,14 +45,15 @@ def parse(options=None):
     # p.add_argument("--scriptdir", type=str, help="script directory")
     # p.add_argument("--per-exposure", action="store_true",
     #         help="fit redshifts per exposure instead of grouping")
-    if options is None:
-        args = p.parse_args()
-    else:
-        args = p.parse_args(options)
+
+    args = p.parse_args(options)
 
     return args
 
-def main(args):
+def main(args=None):
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
     num_error = len(failed_jobs)
     sys.exit(num_error)
@@ -189,9 +190,11 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
 
+    nexps = len(exptable)
     frame_glob = list()
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
-        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits')
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}'
+                          +'.fits{,.gz}')
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
@@ -219,7 +222,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
             spectro_string=spectro_string, suffix=suffix,
             frame_glob=frame_glob,
             queue=queue, system_name=system_name,
-            onetile=True, tileid=tileid, night=night, expid=expid,
+            onetile=True, tileid=tileid, night=night, expid=expid, nexps=nexps,
             run_zmtl=run_zmtl, noafterburners=noafterburners)
 
     err = 0
@@ -244,9 +247,12 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
 def write_redshift_script(batchscript, outdir,
         jobname, num_nodes,
-        group, spectro_string, suffix, frame_glob,
+        group, spectro_string, suffix,
+        frame_glob=None, expfile=None,
+        healpix=None,
+        extra_header=None,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None, expid=None,
+        onetile=True, tileid=None, night=None, expid=None, nexps=0,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
@@ -261,15 +267,19 @@ def write_redshift_script(batchscript, outdir,
         group (str): used for tile redshifts, e.g. 'cumulative'
         spectro_string (str): e.g. '0 1 2 3' spectrographs to run
         suffix (str): filename suffix (e.g. TILEID-thruNIGHT)
-        frame_glob (str): glob for finding input cframes
 
     Options:
+        frame_glob (str): glob for finding input cframes
+        expfile (str): filename with NIGHT EXPID SPECTRO
+        healpix (int): healpix number (to use with group=healpix)
+        extra_header (dict): extra key/value pairs to add to header
         queue (str): queue name
         system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
         onetile (bool): coadd assuming input is for a single tile?
         tileid (int): tileid to process; only needed for group='cumulative'
         night (int): process through or on night YEARMMDD; for group='cumulative' and 'pernight'
         expid (int): expid for group='perexp'
+        nexps (int): number of exposures to be fit
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
         redrock_nodes (int): number of nodes for each redrock call
@@ -280,6 +290,9 @@ def write_redshift_script(batchscript, outdir,
 
     Note: Use redrock_cores_per_rank > 1 to reserve extra memory per rank
     for large input coadd files (e.g. sv3 healpix).
+
+    Note: must specify frame_glob for tile-based groups, and expfile for
+    group=healpix.
     """
     log = get_logger()
 
@@ -316,10 +329,17 @@ def write_redshift_script(batchscript, outdir,
         headeropt += f' SPGRPVAL={night} NIGHT={night}'
     elif group == 'perexp':
         headeropt += f' SPGRPVAL={expid} NIGHT={night} EXPID={expid}'
+    elif group == 'healpix':
+        headeropt += f' SPGRPVAL={healpix}'
     else:
         headeropt += f' SPGRPVAL=None'
 
-    headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
+    if group != 'healpix':
+        headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
+
+    if extra_header is not None:
+        for key, value in extra_header.items():
+            headeropt += f' {key}={value}'
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -329,6 +349,10 @@ def write_redshift_script(batchscript, outdir,
     batch_opts = '\n'.join(batch_opts)
 
     runtime = 10 + int(10 * batch_config['timefactor'] * redrock_cores_per_rank)
+    #- some healpix have lots of targets; adhoc increase runtime
+    if group == 'healpix':
+        runtime += 15
+
     runtime_hh = runtime // 60
     runtime_mm = runtime % 60
 
@@ -338,17 +362,28 @@ def write_redshift_script(batchscript, outdir,
 
     logdir = os.path.join(outdir, 'logs')
 
+    account='desi'
+    redrock_gpu_opts=''
+    srun_redrock_gpu_opts=''
+    if system_name=='perlmutter-gpu':
+        account='desi_g'
+        redrock_gpu_opts='--gpu --max-gpuprocs 4'
+        srun_redrock_gpu_opts='--gpu-bind=map_gpu:3,2,1,0'
+
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
 
 #SBATCH -N {num_nodes}
-#SBATCH --account desi
+#SBATCH --account {account}
 #SBATCH --qos {queue}
 #SBATCH --job-name {jobname}
 #SBATCH --output {batchlog}
 #SBATCH --time={runtime_hh:02d}:{runtime_mm:02d}:00
 #SBATCH --exclusive
 {batch_opts}
+
+# batch-friendly matplotlib backend
+export MPLBACKEND=agg
 
 echo --- Starting at $(date)
 START_TIME=$SECONDS
@@ -358,26 +393,28 @@ mkdir -p {outdir}
 mkdir -p {logdir}
 
 echo
-echo --- Generating files in $(pwd)/{outdir}
+echo --- Generating files in {outdir}
 echo""")
 
         if frame_glob is not None:
             fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
         echo $(basename $spectra) already exists, skipping grouping
     else
         # Check if any input frames exist
-        CFRAMES=$(ls {frame_glob})
-        MISSING_CFRAMES=$?
+        # Use either .fits or .fits.gz search will fail and throw error, so catch them
+        CFRAMES=$(ls {frame_glob} 2>/dev/null)
+        NUM_EXPS={nexps}
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
-        if [ $MISSING_CFRAMES -ne 0 ] && [ $NUM_CFRAMES -gt 0 ]; then
-            echo ERROR: some expected cframes missing for spectrograph $SPECTRO but proceeding anyway
+        if [ $NUM_EXPS -gt $NUM_CFRAMES ]; then
+            echo WARNING: Some expected cframes may be missing for spectrograph $SPECTRO. Proceeding anyway
         fi
+        echo INFO: For spectrograph $SPECTRO, $NUM_CFRAMES cframes found for $NUM_EXPS exposures
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
             cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra {headeropt}"
@@ -392,12 +429,29 @@ done
 echo Waiting for desi_group_spectra to finish at $(date)
 wait
 """)
+        elif expfile is not None and group == 'healpix':
+            fx.write(f"""
+echo --- Grouping frames to spectra at $(date)
+for SPECTRO in {spectro_string}; do
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
+    splog={logdir}/spectra-$SPECTRO-{suffix}.log
+
+    if [ -f $spectra ]; then
+        echo $(basename $spectra) already exists, skipping grouping
+    else
+        cmd="desi_group_spectra --expfile {expfile} --outfile $spectra --healpix {healpix} {headeropt}"
+        echo RUNNING $cmd &> $splog
+        $cmd &>> $splog
+    fi
+done
+""")
+
 
         fx.write(f"""
 echo
 echo --- Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits.gz
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     colog={logdir}/coadd-$SPECTRO-{suffix}.log
 
@@ -432,7 +486,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} --cpu-bind=cores rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
+        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} --cpu-bind=cores {srun_redrock_gpu_opts} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails {redrock_gpu_opts}"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5
@@ -447,13 +501,16 @@ wait
         if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
+echo --- Running desi_tile_qa at $(date)
 tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
-    echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
+    echo $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo --- Running desi_tile_qa
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
+    echo Running desi_tile_qa, see $tile_qa_log
+    cmd="desi_tile_qa -g {group} -n {night} -t {tileid}"
+    echo RUNNING $cmd &> $tile_qa_log
+    $cmd &>> $tile_qa_log
 fi
 """)
 
@@ -486,15 +543,17 @@ wait
         if not noafterburners:
             fx.write(f"""
 echo
-echo --- Running QSO afterburners at $(date)
+echo --- Running QSO and emline afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
+    emfit={outdir}/emline-$SPECTRO-{suffix}.fits
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
     qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
-
+    emfitlog={logdir}/emline-$SPECTRO-{suffix}.log
+    
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
@@ -521,16 +580,29 @@ for SPECTRO in {spectro_string}; do
         echo ERROR: missing $(basename $redrock), skipping QSO QN afterburner
     fi
 
+    # EM Line Fit afterburner
+    if [ -f $emfit ]; then
+        echo $(basename $emfit) already exists, skipping EM Line Fit afterburner
+    elif [ -f $redrock ]; then
+        echo Running EM Line Fit afterburner, see $emfitlog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_emlinefit_afterburner --coadd $coadd --redrock $redrock --output $emfit"
+        echo RUNNING $cmd &> $emfitlog
+        $cmd &>> $emfitlog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $redrock), skipping EM Line Fit afterburner
+    fi
+
 done
-echo Waiting for QSO afterburners to finish at $(date)
+echo Waiting for QSO and emline afterburners to finish at $(date)
 wait
 """)
 
         fx.write(f"""
 echo
 echo --- Files in {outdir}:
-for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
-    echo  "   " $(ls {outdir}/$prefix*.fits | wc -l) $prefix
+for prefix in spectra coadd redrock tile-qa zmtl qso_qn qso_mgii emline; do
+    echo  "   " $(ls {outdir}/$prefix*.fits* |& grep -v 'cannot access' | wc -l) $prefix
 done
 
 popd &> /dev/null
@@ -645,7 +717,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
 
     else:
         log.info(f'Loading exposure list from {explist}')
-        if explist.endswith('.fits'):
+        if explist.endswith( ('.fits', '.fits.gz') ):
             exptable = Table.read(explist, format='fits')
         elif explist.endswith('.csv'):
             exptable = Table.read(explist, format='ascii.csv')

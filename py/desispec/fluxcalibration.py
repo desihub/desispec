@@ -143,14 +143,14 @@ try:
 except TypeError:
     hc = 1.9864458241717586e-08
 
-def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
+def resample_template(data_wave_per_camera,resolution_obj_per_camera,template_wave,template_flux,template_id) :
     """Resample a spectral template on the data wavelength grid. Then convolve the spectra by the resolution
     for each camera. Also returns the result of applySmoothingFilter. This routine is used internally in
     a call to multiprocessing.Pool.
 
     Args:
         data_wave_per_camera : A dictionary of 1D array of vacuum wavelengths [Angstroms], one entry per camera and exposure.
-        resolution_data_per_camera :  A dictionary of resolution corresponding for the fiber, one entry per camera and exposure.
+        resolution_obj_per_camera :  A dictionary of Resolution objects corresponding for the fiber, one entry per camera and exposure.
         template_wave : 1D array, input spectral template wavelength [Angstroms] (arbitrary spacing).
         template_flux : 1D array, input spectral template flux density.
         template_id   : int, template identification index, used to ensure matching of input/output after a multiprocessing run.
@@ -168,7 +168,7 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
     sorted_keys.sort() # force sorting the keys to agree with data (found unpredictable ordering in tests)
     for cam in sorted_keys :
         flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
-        flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
+        flux2=resolution_obj_per_camera[cam].dot(flux1)
         norme=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
@@ -707,11 +707,16 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # here we take into account the redshift once and for all
     shifted_stdwave=stdwave*(1+z)
 
+    # convert resolution_data to sparse R once; re-use for every template
+    R = dict()
+    for cam in resolution_data:
+        R[cam] = Resolution(resolution_data[cam])
+
     func_args = []
     # need to parallelize the model resampling
     for template_id in range(ntemplates) :
         arguments={"data_wave_per_camera":wave,
-                   "resolution_data_per_camera":resolution_data,
+                   "resolution_obj_per_camera":R,
                    "template_wave":shifted_stdwave,
                    "template_flux":stdflux[template_id],
                    "template_id":template_id}
@@ -1030,9 +1035,9 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         if "EXPTIME" in frame.meta : fluxcal *= frame.meta["EXPTIME"]
 
         # fit scale factor
-        ivar = (stdstars.mask==0)*stdstars.ivar
-        scaleivar = np.sum(ivar*(fluxcal[None,:]*convolved_model_flux)**2)
-        scale = np.sum(ivar*fluxcal[None,:]*convolved_model_flux*stdstars.flux)/scaleivar
+        # use a median instead of an optimal fit here
+        waveindices = np.where(fluxcal>0.5*np.median(fluxcal))[0]
+        scale = np.median(stdstars.flux[:,waveindices]/(fluxcal[waveindices][None,:]*convolved_model_flux[:,waveindices]*point_source_correction[stdfibers,None]))
         log.info("Scale factor = {:4.3f}".format(scale))
         minscale = 0.0001
         if scale<minscale :
@@ -1047,8 +1052,6 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         ccalibration = np.tile(fluxcal,(nfibers,1))
         ccalibivar = 1/(ccalibration**2+(ccalibration==0)) # 100% uncertainty!
         mask = np.ones(ccalibration.shape,dtype=int)
-        mccalibration = fluxcal
-
 
         fibercorr = dict()
         fibercorr_comments = dict()

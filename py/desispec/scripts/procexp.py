@@ -40,8 +40,9 @@ def parse(options=None):
                         help = 'path of output fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
-    parser.add_argument('--no-sky-throughput-correction', action='store_true',
-                        help = 'Do NOT apply a throughput correction when subtraction the sky')
+    parser.add_argument('--apply-sky-throughput-correction', action='store_true',
+                        help =('Apply a throughput correction when subtraction the sky '
+                               '(default: do not apply!)'))
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
     parser.add_argument('--no-tsnr', action='store_true',
@@ -50,15 +51,15 @@ def parse(options=None):
                         help = 'Do not apply fiber crosstalk correction')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute alpha of tsnr calc.')
-    
-    args = None
-    if options is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(options)
+
+    args = parser.parse_args(options)
     return args
 
 def main(args):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
     log = get_logger()
 
     if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):
@@ -120,11 +121,11 @@ def main(args):
             frame.mask = copied_frame.mask
 
             # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
+            subtract_sky(frame, skymodel, apply_throughput_correction = args.apply_sky_throughput_correction, zero_ivar = zero_ivar )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
+            subtract_sky(frame, skymodel, apply_throughput_correction = args.apply_sky_throughput_correction, zero_ivar = zero_ivar )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
 

@@ -61,8 +61,7 @@ class TestDatabase(unittest.TestCase):
     def test_datachallenge_classes(self):
         """Test SQLAlchemy classes in desispec.database.datachallenge.
         """
-        from ..database.redshift import (Truth, Target, ObsList,
-                                              FiberAssign, ZCat)
+        from ..database.redshift import (Tile, Exposure, Frame, Fiberassign, Potential, Target)
         pass
 
     @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping metadata DB tests.")
@@ -106,6 +105,22 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(ts.month, 1)
         self.assertEqual(ts.microsecond, 247000)
         self.assertIs(ts.tzinfo, utc)
+
+    def test_cameraid(self):
+        """Test desispec.database.util.cameraid.
+        """
+        from ..database.util import cameraid
+        self.assertEqual(cameraid('b0'), 0)
+        self.assertEqual(cameraid('r5'), 15)
+        self.assertEqual(cameraid('z9'), 29)
+
+    def test_frameid(self):
+        """Test desispec.database.util.frameid.
+        """
+        from ..database.util import frameid
+        self.assertEqual(frameid(12345, 'b0'), 1234500)
+        self.assertEqual(frameid(54321, 'r5'), 5432115)
+        self.assertEqual(frameid(9876543, 'z9'), 987654329)
 
 
 def test_suite():

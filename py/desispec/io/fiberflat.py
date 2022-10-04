@@ -19,7 +19,8 @@ from desiutil.log import get_logger
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
-from .util import fitsheader, native_endian, makepath
+from .util import fitsheader, native_endian, makepath, checkgzip
+from .util import get_tempfilename
 from . import iotime
 
 def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
@@ -72,8 +73,9 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     hdus["WAVELENGTH"].header['BUNIT'] = 'Angstrom'
 
     t0 = time.time()
-    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
-    os.rename(outfile+'.tmp', outfile)
+    tmpfile = get_tempfilename(outfile)
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
@@ -101,6 +103,7 @@ def read_fiberflat(filename):
 
     log = get_logger()
     t0 = time.time()
+    filename = checkgzip(filename)
     with fits.open(filename, uint=True, memmap=False) as fx:
         header    = fx[0].header
         fiberflat = native_endian(fx[0].data.astype('f8'))
