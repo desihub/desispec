@@ -76,6 +76,11 @@ def tpcorrmodel(tpcorrparam, xfib, yfib, pcacoeff=None):
         Throughput model evaluated at xfib, yfib with pca coefficients
         pcacoeff.
     """
+    xfib = xfib.copy()
+    yfib = yfib.copy()
+    m = ~np.isfinite(xfib) | ~np.isfinite(yfib) | (xfib == 0) | (yfib == 0)
+    xfib[m] = tpcorrparam.spatial['X'][m]
+    yfib[m] = tpcorrparam.spatial['Y'][m]
     res = tpcorrparam.mean + tpcorrspatialmodel(
         tpcorrparam.spatial, xfib, yfib) - 1
     if pcacoeff is not None:
