@@ -51,6 +51,11 @@ def configure_for_xyr(skygradpca, x, y, R, skyfibers=None):
         R: list of resolution matrices for each fiber (unitless)
         skyfibers: (optional) indices of sky fibers in list of all fibers
     """
+    x = x.copy()
+    y = y.copy()
+    m = ~np.isfinite(x) | ~np.isfinite(y)
+    x[m] = 0
+    y[m] = 0
     skygradpca.x = x
     skygradpca.y = y
     skygradpca.dx = x - np.mean(x)
