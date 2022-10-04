@@ -404,8 +404,11 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
 
         print("\nReached the end of current iteration of new exposures.")
-        sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
-                         dry_run=(dry_run and (override_night is not None) and (not continue_looping_debug)))
+        if override_night is not None and (not continue_looping_debug):
+            print("Override_night set, not waiting for new data before exiting.")
+        else:
+            sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
+                            dry_run=(dry_run and ()))
 
         if len(ptable) > 0:
             ptable = update_from_queue(ptable, dry_run=dry_run_level)
@@ -415,7 +418,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             if dry_run_level < 3:
                 write_table(ptable, tablename=proc_table_pathname)
-            sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
+            if override_night is None or continue_looping_debug:
+                sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
 
     ## Flush the outputs
     sys.stdout.flush()
