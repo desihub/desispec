@@ -405,7 +405,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     expdicts = dict()
     for expids, zerotype in zip([calib_expids, noncalib_expids],
                                 ['calib', 'noncalib']):
-        expids = np.array(expids)
+        expids = np.array(expids, dtype=int)
 
         #- drop first two zeros because they are sometimes still stabilizing
         if nskip > 0:
@@ -452,16 +452,16 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
         for camera,expids in expdict.items():
             log.info(f'Keeping {len(expids)} {zerotype} ZEROs for camera {camera}')
             #make sure everything is in np arrays again
-            expdict[camera] = np.sort(expids)
+            expdict[camera] = np.sort(expids).astype(int)
 
         expdicts[zerotype] = expdict
 
     #- Verify that all cameras in one are present in the other dictionary
     for cam in set(expdicts['calib'].keys()).union(set(expdicts['noncalib'].keys())):
         if cam not in expdicts['calib'].keys():
-            expdicts['calib'][cam] = np.array([])
+            expdicts['calib'][cam] = np.array([], dtype=int)
         if cam not in expdicts['noncalib'].keys():
-            expdicts['noncalib'][cam] = np.array([])
+            expdicts['noncalib'][cam] = np.array([], dtype=int)
 
     return expdicts['calib'], expdicts['noncalib']
 
@@ -534,7 +534,7 @@ def select_zero_expids(calib_exps, noncalib_exps, night, cam,
         n = (nexps - nzeros) // 2
         expids = expids[n:n + nzeros]
 
-    return expids
+    return expids.astype(int)
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         nskip=2, anyzeros=False, comm=None):
