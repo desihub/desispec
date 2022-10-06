@@ -375,7 +375,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         #- there are 30 cameras (coincidence).
         #- Use 32 as power of 2 for core packing
         ncores = 32
-        runtime = 5+1*nexps
+        runtime = 8+2*nexps
     elif jobdesc == 'POSTSTDSTAR':
         runtime = 10
         ncores = ncameras
