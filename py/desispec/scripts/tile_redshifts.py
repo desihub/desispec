@@ -189,6 +189,8 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
+    if system_name.startswith('perlmutter'):
+        num_nodes = 1
 
     nexps = len(exptable)
     frame_glob = list()
