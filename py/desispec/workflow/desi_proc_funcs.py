@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-
-
+import json
 import time
 
 import sys, os, argparse, re
@@ -8,9 +7,11 @@ import sys, os, argparse, re
 import numpy as np
 import fitsio
 import desispec.io
+import desiutil
 from desispec.io import findfile
 from desispec.io.meta import get_desi_root_readonly
-from desispec.io.util import create_camword, decode_camword, parse_cameras
+from desispec.io.util import create_camword, decode_camword, parse_cameras, \
+    get_tempfilename
 # from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 
@@ -303,6 +304,54 @@ def update_args_with_headers(args):
 
     fx.close()
     return args, hdr, camhdr
+
+def _log_timer(timer, timingfile=None, comm=None):
+    """
+    Log timing info, optionally writing to json timingfile
+
+    Args:
+        timer: desiutil.timer.Timer object
+
+    Options:
+        timingfile (str): write json output to this file
+        comm: MPI communicator
+
+    If comm is not None, collect timers across ranks.
+    If timmingfile already exists, read and append timing then re-write.
+    """
+
+    log = get_logger()
+    if comm is not None:
+        timers = comm.gather(timer, root=0)
+        rank, size = comm.rank, comm.size
+    else:
+        timers = [timer,]
+        rank, size = 0, 1
+
+    if rank == 0:
+        stats = desiutil.timer.compute_stats(timers)
+        if timingfile:
+            if os.path.exists(timingfile):
+                with open(timingfile) as fx:
+                    previous_stats = json.load(fx)
+
+                #- augment previous_stats with new entries, but don't overwrite old
+                for name in stats:
+                    if name not in previous_stats:
+                        previous_stats[name] = stats[name]
+
+                stats = previous_stats
+
+            tmpfile = get_tempfilename(timingfile)
+            with open(tmpfile, 'w') as fx:
+                json.dump(stats, fx, indent=2)
+            os.rename(tmpfile, timingfile)
+            log.info(f'Timing stats saved to {timingfile}')
+
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
 
 def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, system_name=None):
     """
