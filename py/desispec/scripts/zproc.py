@@ -21,7 +21,7 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename, get_readonly_filepath
-from desispec.io.util import create_camword, decode_camword, parse_cameras
+from desispec.io.util import create_camword, decode_camword, parse_cameras, camword_to_spectros
 from desispec.io.util import validate_badamps, get_tempfilename
 from desispec.util import runcmd
 
@@ -49,7 +49,7 @@ def parse(options=None):
     parser.add_argument("-e", "--expids", type=int, nargs='*', help="Exposure IDs")
     parser.add_argument("-t", "--tileid", type=str, default=None, help="Tile ID")
     parser.add_argument("-p", "--healpix", type=str, default=None, help="Healpix")
-    parser.add_argument("--cameras", type=str,
+    parser.add_argument("--cameras", type=str, default="a0123456789",
                         help="Explicitly define the spectrographs for which you want" +
                              " to reduce the data. Should be a comma separated list." +
                              " Numbers only assumes you want to reduce R, B, and Z " +
@@ -130,10 +130,16 @@ def main(args=None, comm=None):
         raise ValueError('obstype {} not in {}'.format(args.groupname, known_groups))
 
     if isinstance(args.cameras, str):
-        args.cameras = parse_cameras(args.cameras)
+        camword = parse_cameras(args.cameras)
+        args.cameras = decode_camword(camword)
+    else:
+        camword = create_camword(args.cameras)
 
+    all_spectros = camword_to_spectros(camword, full_spectros_only=False)
+    full_spectros = camword_to_spectros(camword, full_spectros_only=True)
     timer.stop('preflight')
 
+    timer.start('fibermap')
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
 
@@ -151,18 +157,36 @@ def main(args=None, comm=None):
         #     err = subprocess.call(['sbatch', scriptfile])
         sys.exit(err)
 
+    ## Should remove, just nice for printouts while performance isn't important
+    if comm is not None:
+        comm.barrier()
     #-------------------------------------------------------------------------
     #- Proceeding with running
 
+    if comm is not None:
+        nblocks = len(all_spectros)
+        block_size = int(size/nblocks)
+
+        block_num = int(rank/block_size)
+        block_rank = int(rank%block_size)
+
+        block_comm = comm.Split(block_num, block_rank)
+
+        assert  block_rank == block_comm.Get_rank()
+        log.info(f"WORLD RANK/SIZE: {rank}/{size} \t BLOCK #{block_num} RANK/SIZE: {block_rank}/{block_size}")
+
+    else:
+        block_num = block_rank = block_size = 1
+        block_comm = comm
+        
     #- What are we going to do?
     if rank == 0:
         log.info('----------')
-        log.info('Input {}'.format(args.input))
         log.info('Groupname {}'.format(args.groupname))
         if args.healpix is not None:
             log.info(f'Healpix {args.healpix} nights {args.nights} expids {args.expids}')
         else:
-            log.info(f'Tileid {args.tile} nights {args.nights} expids {args.expids}')
+            log.info(f'Tileid {args.tileid} nights {args.nights} expids {args.expids}')
         log.info('Cameras {}'.format(args.cameras))
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
@@ -179,7 +203,7 @@ def main(args=None, comm=None):
         # os.makedirs(preprocdir, exist_ok=True)
         # os.makedirs(expdir, exist_ok=True)
 
-    log.info(f"Print value for rank {rank}: val={val}")
+    log.info(f"Print val before broadcast for rank {rank}: val={val}")
     #- Wait for rank 0 to make directories before proceeding
     if comm is not None:
         comm.barrier()
@@ -189,7 +213,7 @@ def main(args=None, comm=None):
     if comm is not None:
         val = comm.bcast(val, root=0)
 
-    log.info(f"Print value for rank {rank}: val={val}")
+    log.info(f"Print val after broadcast for rank {rank}: val={val}")
 
     timer.stop('fibermap')
 
@@ -211,9 +235,13 @@ def main(args=None, comm=None):
     # dt = time.time() - t0
     # log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
 
-
+    oversub_fac = int(np.floor(float(size)/float(len(full_spectros))))
+    
     #- Compute flux calibration vectors per camera
-    # for camera in args.cameras[rank::size]:
+    if block_rank == 0:
+        for i,spectro in enumerate(full_spectros):
+            if block_num == i:
+                log.info(f'Rank {rank} running spectro {spectro}. WORLD RANK/SIZE: {rank}/{size} \t BLOCK #{block_num} RANK/SIZE: {block_rank}/{block_size}')
     #     framefile = findfile('frame', night, expid, camera, readonly=True)
     #     skyfile = findfile('sky', night, expid, camera, readonly=True)
     #     spectrograph = int(camera[1])
