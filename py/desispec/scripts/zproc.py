@@ -162,22 +162,28 @@ def main(args=None, comm=None):
         comm.barrier()
     #-------------------------------------------------------------------------
     #- Proceeding with running
-
-    if comm is not None:
+    nspectros = len(all_spectros)
+    if size <= nspectros:
+        nblocks = size
+        block_size = 1
+        block_rank = 0
+        block_num = rank
+    elif comm is not None:
         nblocks = len(all_spectros)
         block_size = int(size/nblocks)
 
         block_num = int(rank/block_size)
         block_rank = int(rank%block_size)
 
-        block_comm = comm.Split(block_num, block_rank)
+        #block_comm = comm.Split(block_num, block_rank)
+        #assert block_rank == block_comm.Get_rank()
 
-        assert  block_rank == block_comm.Get_rank()
         log.info(f"WORLD RANK/SIZE: {rank}/{size} \t BLOCK #{block_num} RANK/SIZE: {block_rank}/{block_size}")
 
     else:
-        block_num = block_rank = block_size = 1
-        block_comm = comm
+        nblocks = block_size = 1
+        block_rank = block_num = 0
+        #block_comm = comm
         
     #- What are we going to do?
     if rank == 0:
@@ -217,6 +223,63 @@ def main(args=None, comm=None):
 
     timer.stop('fibermap')
 
+    ## Do spectral group
+    timer.start('spectra')
+    if block_rank == 0:
+        for i in range(block_num, nspectros, nblocks):
+            spectro = all_spectros[i]
+            run_mock_func('spectra', 'cumulative', spectro=spectro, comm=comm)
+    if comm is not None:
+        comm.barrier()
+    if rank == 0:
+        log.info("Done with spectra")
+    time.stop('spectra')
+
+    ## Do coadding
+    timer.start('coadd')
+    if block_rank == 0:
+        for i in range(block_num, nspectros, nblocks):
+            spectro = all_spectros[i]
+            run_mock_func('coadd', 'cumulative', spectro=spectro, comm=comm)
+    if comm is not None:
+        comm.barrier()
+    if rank == 0:
+        log.info("Done with coadd")
+    time.stop('coadd')
+
+    ## Do redshifting
+    timer.start('redrock')
+    for spectro in full_spectros:
+        run_mock_func('redrock', 'cumulative', spectro=spectro, comm=comm)
+    if comm is not None:
+        comm.barrier()
+    if rank == 0:
+        log.info("Done with redrock")
+    time.stop('redrock')
+
+    ## Do afterburners
+    timer.start('qsoafterburners')
+    if block_rank == 0:
+        for i in range(block_num, nspectros, nblocks):
+            spectro = all_spectros[i]
+            run_mock_func('qsoafterburners', 'cumulative', spectro=spectro, comm=comm)
+    if comm is not None:
+        comm.barrier()
+    if rank == 0:
+        log.info("Done with qsoafterburners")
+    time.stop('qsoafterburners')
+    timer.start('mgiiafterburner')
+    if block_rank == 0:
+        for i in range(block_num, nspectros, nblocks):
+            spectro = all_spectros[i]
+            run_mock_func('mgiiafterburner', 'cumulative', spectro=spectro, comm=comm)
+    if comm is not None:
+        comm.barrier()
+    if rank == 0:
+        log.info("Done with mgiiafterburner")
+    time.stop('mgiiafterburner')
+
+
     # outpsf = replace_prefix(psfname,"psf","fit-psf-fixed-listed")
     # if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
     #     cmd = 'desi_interpolate_fiber_psf'
@@ -235,13 +298,7 @@ def main(args=None, comm=None):
     # dt = time.time() - t0
     # log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
 
-    oversub_fac = int(np.floor(float(size)/float(len(full_spectros))))
-    
-    #- Compute flux calibration vectors per camera
-    if block_rank == 0:
-        for i,spectro in enumerate(full_spectros):
-            if block_num == i:
-                log.info(f'Rank {rank} running spectro {spectro}. WORLD RANK/SIZE: {rank}/{size} \t BLOCK #{block_num} RANK/SIZE: {block_rank}/{block_size}')
+
     #     framefile = findfile('frame', night, expid, camera, readonly=True)
     #     skyfile = findfile('sky', night, expid, camera, readonly=True)
     #     spectrograph = int(camera[1])
@@ -296,3 +353,16 @@ def main(args=None, comm=None):
         sys.exit(int(error_count))
     else:
         return 0
+
+
+
+def run_mock_func(funcname, groupname, spectro, comm=None):
+    log = get_logger()
+    if comm is not None:
+        #- Use the provided comm to determine rank and size
+        rank = comm.rank
+        size = comm.size
+    else:
+        rank = 1
+        size = 1
+    log.info(f"Running {funcname} func for spectro={spectro} for group={groupname} with rank={rank}/{size}")
