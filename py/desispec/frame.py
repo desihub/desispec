@@ -155,7 +155,7 @@ class Frame(object):
                 minfiber = spectrograph*fibers_per_spectrograph
                 maxfiber = (spectrograph+1)*fibers_per_spectrograph
                 if np.any(fibers < minfiber) or np.any(maxfiber <= fibers):
-                    raise ValueError('fibers inconsistent with spectrograph')
+                    raise ValueError(f'fibers {np.min(fibers)}-{np.max(fibers)} inconsistent with spectrograph {spectrograph}')
             self.fibers = fibers
         else:
             if fibermap is not None:
