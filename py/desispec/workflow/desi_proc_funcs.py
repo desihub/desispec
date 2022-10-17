@@ -358,7 +358,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
-    elif jobdesc == 'DARK':
+    elif jobdesc in ('DARK', 'BADCOL'):
         ncores, runtime = ncameras, 5
     elif jobdesc == 'CCDCALIB':
         ncores, runtime = ncameras, 5

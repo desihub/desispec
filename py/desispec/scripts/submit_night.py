@@ -219,6 +219,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
     etable = etable[good_exps]
 
+    ## Count zeros before trimming by OBSTYPE since they are used for
+    ## nightly bias even if they aren't processed individually
+    num_zeros = np.sum([erow['OBSTYPE'] == 'zero' and
+                       (erow['PROGRAM'].startswith('calib zeros') or erow['PROGRAM'].startswith('zeros for dark'))
+                       for erow in etable])
+
     ## Cut on OBSTYPES
     good_types = np.isin(np.array(etable['OBSTYPE']).astype(str), proc_obstypes)
     etable = etable[good_types]
@@ -244,6 +250,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     isdarkcal = np.array([(erow['OBSTYPE'] == 'dark' and 'calib' in
                           erow['PROGRAM']) for erow in etable])
     isdark = np.array([(erow['OBSTYPE'] == 'dark') for erow in etable])
+
     ## If a cal, want to select that but ignore all other darks
     ## elif only a dark sequence, use that
     if np.sum(isdarkcal)>0:
@@ -296,7 +303,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## If just starting out and no dark, do the nightlybias
-    do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes)
+    do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes) and num_zeros>0
     if tableng == 0 and np.sum(isdark) == 0 and do_bias:
         print("\nNo dark found. Submitting nightlybias before processing exposures.\n")
         prow = default_prow()
@@ -387,7 +394,10 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         prow['INTID'] = internal_id
         internal_id += 1
         if prow['OBSTYPE'] == 'dark':
-            prow['JOBDESC'] = 'ccdcalib'
+            if num_zeros == 0:
+                prow['JOBDESC'] = 'badcol'   # process dark for bad columns even if we don't have zeros for nightlybias
+            else:
+                prow['JOBDESC'] = 'ccdcalib' # ccdcalib = nightlybias(zeros) + badcol(dark)
         else:
             prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, calibjobs)
@@ -402,7 +412,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             ## If processed a dark, assign that to the dark job
             if curtype == 'dark':
                 prow['CALIBRATOR'] = 1
-                calibjobs['ccdcalib'] = prow.copy()
+                calibjobs[prow['JOBDESC']] = prow.copy()
 
             ## Add the processing row to the processing table
             ptable.add_row(prow)
