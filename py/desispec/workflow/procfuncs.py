@@ -96,7 +96,6 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
             'nightlybias': 'biasnight',
-            'zero': 'biasnight',
             'ccdcalib': 'badcolumns',
             'badcol': 'badcolumns',
             'arc': 'fitpsf',
