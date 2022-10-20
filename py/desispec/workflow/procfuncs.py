@@ -97,6 +97,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             'poststdstar': 'cframe',
             'nightlybias': 'biasnight',
             'ccdcalib': 'badcolumns',
+            'badcol': 'badcolumns',
             'arc': 'fitpsf',
             'flat': 'fiberflat',
             'psfnight': 'psfnight',
@@ -558,8 +559,13 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
     elif prow['OBSTYPE'] == 'arc':
         if calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        else:
+        elif calibjobs['nightlybias'] is not None:
             dependency = calibjobs['nightlybias']
+        elif calibjobs['badcol'] is not None:
+            dependency = calibjobs['badcol']
+        else:
+            # arc job, but no ZEROs or DARKs to process ahead of time
+            dependency = None
     else:
         dependency = None
 
@@ -661,7 +667,7 @@ def parse_previous_tables(etable, ptable, night):
                                     all the flats, if multiple sets existed)
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
-        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'badcol', 'psfnight'
                        and 'nightlyflat'. Each key corresponds to a Table.Row or
                        None. The table.Row() values are for the corresponding
                        calibration job.
@@ -675,7 +681,7 @@ def parse_previous_tables(etable, ptable, night):
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
-    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'psfnight': None,
+    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None, 'psfnight': None,
                  'nightlyflat': None}
     curtype,lasttype = None,None
     curtile,lasttile = None,None
