@@ -1310,6 +1310,48 @@ class TestIO(unittest.TestCase):
         self.assertTrue(tempfile.endswith('.gz'))
         self.assertTrue('blat' in tempfile)
 
+    def test_get_log_pathname(self):
+        """test desispec.io.util.get_log_pathname
+        """
+        from ..io.util import get_log_pathname
+        filename = '/a/b/foo.fits'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/foo' in logfile)
+        self.assertTrue('.fits' not in logfile)
+
+        filename = '/a/b/blat.fits.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.gz' not in logfile)
+
+        filename = '/a/b/blat.fits.fz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.fz' not in logfile)
+
+        filename = 'blat.ecsv'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.ecsv' not in logfile)
+
+        filename = 'blat.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.gz' not in logfile)
+
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
         from ..io.fibermap import find_fiberassign_file

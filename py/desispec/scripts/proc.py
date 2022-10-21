@@ -333,7 +333,7 @@ def main(args=None, comm=None):
                     args=cmdargs, inputs=[], outputs=[fibermap])
 
             fibermap_ok = os.path.exists(fibermap)
-            if err != 0 or not fibermap_ok:
+            if not success or not fibermap_ok:
                 error_count += 1
 
     #- If assemble_fibermap failed and obstype is SCIENCE, exit now

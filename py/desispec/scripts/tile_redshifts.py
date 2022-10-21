@@ -6,6 +6,9 @@ import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
+from desispec.workflow.redshifts import read_minimal_exptables_columns, \
+    get_tile_redshift_script_pathname, get_tile_redshift_relpath, \
+    get_tile_redshift_script_suffix
 from desiutil.log import get_logger
 
 import desispec.io
@@ -57,81 +60,6 @@ def main(args=None):
     batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
     num_error = len(failed_jobs)
     sys.exit(num_error)
-
-def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
-    """
-    Determine the relative output directory of the tile redshift batch script for spectra+coadd+redshifts for a tile
-
-    Args:
-        tileid (int): Tile ID
-        group (str): cumulative, pernight, perexp, or a custom name
-        night (int): Night
-        expid (int): Exposure ID
-
-    Returns:
-        outdir (str): the relative path of output directory of the batch script from the specprod/run/scripts
-    """
-    log = get_logger()
-    # - output directory relative to reduxdir
-    if group == 'cumulative':
-        outdir = f'tiles/{group}/{tileid}/{night}'
-    elif group == 'pernight':
-        outdir = f'tiles/{group}/{tileid}/{night}'
-    elif group == 'perexp':
-        outdir = f'tiles/{group}/{tileid}/{expid:08d}'
-    elif group == 'pernight-v0':
-        outdir = f'tiles/{tileid}/{night}'
-    else:
-        outdir = f'tiles/{group}/{tileid}'
-        log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/*')
-    return outdir
-
-def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
-    """
-    Generate the pathname of the tile redshift batch script for spectra+coadd+redshifts for a tile
-
-    Args:
-        tileid (int): Tile ID
-        group (str): cumulative, pernight, perexp, or a custom name
-        night (int): Night
-        expid (int): Exposure ID
-
-    Returns:
-        (str): the pathname of the tile redshift batch script
-    """
-    reduxdir = desispec.io.specprod_root()
-    outdir = get_tile_redshift_relpath(tileid,group,night=night,expid=expid)
-    scriptdir = f'{reduxdir}/run/scripts/{outdir}'
-    suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
-    batchscript = f'coadd-redshifts-{suffix}.slurm'
-    return os.path.join(scriptdir, batchscript)
-
-def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
-    """
-    Generate the suffix of the tile redshift batch script for spectra+coadd+redshifts for a tile
-
-    Args:
-        tileid (int): Tile ID
-        group (str): cumulative, pernight, perexp, or a custom name
-        night (int): Night
-        expid (int): Exposure ID
-
-    Returns:
-        suffix (str): the suffix of the batch script
-    """
-    log = get_logger()
-    if group == 'cumulative':
-        suffix = f'{tileid}-thru{night}'
-    elif group == 'pernight':
-        suffix = f'{tileid}-{night}'
-    elif group == 'perexp':
-        suffix = f'{tileid}-exp{expid:08d}'
-    elif group == 'pernight-v0':
-        suffix = f'{tileid}-{night}'
-    else:
-        suffix = f'{tileid}-{group}'
-        log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
-    return suffix
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
                          submit=False, queue='realtime', reservation=None,
@@ -618,50 +546,6 @@ echo --- Done at $(date) in ${{DURATION_MINUTES}}m${{DURATION_SECONDS}}s
     log.info(f'Wrote {batchscript}')
 
 
-def _read_minimal_exptables(nights=None):
-    """
-    Read exposure tables while handling evolving formats
-
-    Args:
-        nights (list of int): nights to include (default all nights found)
-
-    Returns exptable with just columns TILEID, NIGHT, EXPID filtered by science
-        exposures with LASTSTEP='all' and TILEID>=0
-
-    Note: the returned table is *not* the full pipeline exposures table because
-        the format of that changed during SV1 and thus can't be stacked without
-        trimming down the columns.  This trims to just the minimal columns
-        needed by desi_tile_redshifts.
-    """
-    log = get_logger()
-    if nights is None:
-        reduxdir = desispec.io.specprod_root()
-        etab_files = glob.glob(f'{reduxdir}/exposure_tables/202???/exposure_table_202?????.csv')
-    else:
-        etab_files = list()
-        for night in nights:
-            etab_file = get_exposure_table_pathname(night)
-            if os.path.exists(etab_file):
-                etab_files.append(etab_file)
-            elif night >= 20201201:
-                log.error(f"Exposure table missing for night {night}")
-            else:
-                # - these are expected for the daily run, ok
-                log.debug(f"Exposure table missing for night {night}")
-
-    etab_files = sorted(etab_files)
-    exptables = list()
-    for etab_file in etab_files:
-        t = Table.read(etab_file)
-        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-        if 'LASTSTEP' in t.colnames:
-            keep &= (t['LASTSTEP'] == 'all')
-        t = t[keep]
-        exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
-
-    return vstack(exptables)
-
-
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
                                    spectrographs=None,
                                    run_zmtl=False, noafterburners=False,
@@ -713,7 +597,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         else:
             log.info(f'Loading production exposure tables for all nights')
 
-        exptable = _read_minimal_exptables(night)
+        exptable = read_minimal_exptables_columns(night)
 
     else:
         log.info(f'Loading exposure list from {explist}')
@@ -770,7 +654,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
     # - NOTE: this may not scale well several years into the survey
     if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-        allexp = _read_minimal_exptables()
+        allexp = read_minimal_exptables_columns()
         keep = np.in1d(allexp['TILEID'], tileids)
         exptable = allexp[keep]
         ## Ensure we only include data for nights up to and including specified nights

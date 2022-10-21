@@ -105,7 +105,11 @@ def parse(options=None, log=None):
         default=default_fm_keys,
         required=False,
     )
-    args = parser.parse_args(options)
+
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
 
     # AR sanity check
     for emname in args.emnames.split(","):

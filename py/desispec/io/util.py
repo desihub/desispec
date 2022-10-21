@@ -555,7 +555,7 @@ def difference_camwords(fullcamword,badcamword,suppress_logging=False):
     for cam in bad_cameras:
         if cam in full_cameras:
             full_cameras.remove(cam)
-        else:
+        elif not suppress_logging:
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
@@ -601,6 +601,69 @@ def camword_union(camwords, full_spectros_only=False):
     else:
         final_camword = camword
     return final_camword
+
+
+def erow_to_goodcamword(erow, suppress_logging=False):
+    """
+    Takes a dictionary-like object with at minimum keys for
+    OBSTYPE (type str), CAMWORD (type str), BADCAMWORD (type str),
+    BADAMPS (str).
+
+    Args:
+        erow (dict-like): the exposure table row with columns OBSTYPE, CAMWORD,
+                          BADCAMWORD, and BADAMPS.
+        suppress_logging (bool), whether to suppress logging messages. Default False.
+
+
+    Returns:
+        goodcamword (str): Camword for that observation given the obstype and
+                           input camera information.
+    """
+    return columns_to_goodcamword(camword=erow['CAMWORD'],
+                                  badcamword=erow['BADCAMWORD'],
+                                  badamps=erow['BADAMPS'],
+                                  obstype=erow['OBSTYPE'],
+                                  suppress_logging=supress_logging)
+
+
+def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
+                           suppress_logging=False):
+    """
+    Takes a camera information and obstype and returns the correct camword
+    of good cameras for that type of observation.
+
+    Args:
+        camword (type str): camword of available cameras
+        badcamword (str): camword of bad cameras
+        badamps (str): comma seperated list of bad amplifiers [brz][0-9][A-D]
+        obstype (str), obstype of exposure
+        suppress_logging (bool), whether to suppress logging messages. Default False.
+
+    Returns:
+        goodcamword (str): Camword for that observation given the obstype and
+                           input camera information.
+    """
+    log = get_logger()
+    if not suppress_logging:
+        if badamps is None:
+            log.info("No badamps given, proceeding without badamp removal")
+        elif obstype is None:
+            log.info("No obstype given, will remove badamps.")
+        elif obstype != 'science':
+            log.info("obstype!='science', will remove badamps.")
+
+    goodcamword = difference_camwords(camword, badcamword,
+                                      suppress_logging=suppress_logging)
+    if badcamword is not None and badamps != '':
+        if obstype is None or obstype != 'science':
+            badampcams = []
+            for (camera, petal, amplifier) in parse_badamps(badamps):
+                badampcams.append(f'{camera}{petal}')
+            badampcamword = create_camword(np.unique(badampcams))
+            goodcamword = difference_camwords(goodcamword, badampcamword,
+                                              suppress_logging=suppress_logging)
+
+    return goodcamword
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
@@ -793,6 +856,27 @@ def get_tempfilename(filename):
     base, extension = os.path.splitext(filename)
     tempfile = f'{base}_tmp{pid}{extension}{second_ext}'
     return tempfile
+
+def get_log_pathname(data_pathname):
+    """
+    Returns unique log pathname for a given data product.
+
+    Args:
+        data_pathname (str): input filename of output data
+
+    Returns:
+        log_pathname (str): pathname to the log
+    Returns unique filename in same directory
+    """
+    directory = os.path.dirname(data_pathname)
+    filename = os.path.basename(data_pathname)
+    if data_pathname.endswith(('.gz', '.fz')):
+        filename, second_ext = os.path.splitext(filename)
+    else:
+        second_ext = ''
+    base, extension = os.path.splitext(filename)
+    log_pathname = os.path.join(directory, 'logs', f'{base}.log')
+    return log_pathname
 
 def addkeys(hdr1, hdr2, skipkeys=None):
     """

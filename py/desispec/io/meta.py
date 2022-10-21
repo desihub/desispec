@@ -15,7 +15,7 @@ import re
 import numpy as np
 
 from desiutil.log import get_logger
-from .util import healpix_subdirectory, checkgzip
+from .util import healpix_subdirectory, checkgzip, get_log_pathname
 
 _desi_root_readonly=None
 def get_desi_root_readonly():
@@ -75,7 +75,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir=None, specprod_dir=None,
         download=False, outdir=None, qaprod_dir=None,
         return_exists=False,
-        readonly=False):
+        readonly=False, log=False):
     """Returns location where file should be
 
     Args:
@@ -101,6 +101,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
         readonly: if True, return read-only version of path if possible
+        log: if True, returns the pathname of the log instead of the data
+                   product itself
 
     Returns filename, or (filename, exists) if return_exists=True
 
@@ -172,6 +174,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{groupname}.h5',
         spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits.gz',
         redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.fits',
+        qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{groupname}.fits',
+        qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{groupname}.fits',
+        emline_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/emline-{survey}-{faprogram}-{groupname}.fits',
         #
         # spectra- tile based
         #
@@ -179,6 +184,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
         spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits.gz',
         redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+
         #
         # spectra- single exp tile based
         #
@@ -186,6 +195,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
         spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits.gz',
         redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        qso_mgii_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/qso_mgii-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        qso_qn_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/qso_qn-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        emline_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/emline-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
@@ -231,23 +243,26 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
         if groupname == 'perexp':
-            location['coadd'] = location['coadd_single']
-            location['redrock'] = location['redrock_single']
-            location['spectra'] = location['spectra_single']
-            location['rrdetails'] = location['rrdetails_single']
-            location['tileqa'] = location['tileqa_single']
-            location['tileqapng'] = location['tileqapng_single']
+            ## If perexp, then use the _single naming scheme
+            ## Do loop to improve scaling with additional file types
+            for key, val in location:
+                if key.endswith('_single'):
+                    root_key = key.split('_')[0]
+                    location[root_key] = location[key]
         else:
-            location['coadd'] = location['coadd_tile']
-            location['redrock'] = location['redrock_tile']
-            location['spectra'] = location['spectra_tile']
-            location['rrdetails'] = location['rrdetails_tile']
-            # tileqa/tileqapng default already correct for pernight/cumulative
+            ## If cumulative/pernight, then use the tile naming scheme
+            ## Do loop to improve scaling with additional file types
+            for key, val in location:
+                if key.endswith('_tile'):
+                    root_key = key.split('_')[0]
+                    location[root_key] = location[key]
     else:
-        location['coadd'] = location['coadd_hp']
-        location['redrock'] = location['redrock_hp']
-        location['spectra'] = location['spectra_hp']
-        location['rrdetails'] = location['rrdetails_hp']
+        ## If not tile based then use the hp naming scheme
+        ## Do loop to improve scaling with additional file types
+        for key, val in location:
+            if key.endswith('_hp'):
+                root_key = key.split('_')[0]
+                location[root_key] = location[key]
 
     if groupname is not None and tile is None:
         hpix = int(groupname)
@@ -320,6 +335,18 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     if outdir:
         filepath = os.path.join(outdir, os.path.basename(filepath))
+
+    if log:
+        logtypes = ['spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa',
+                    'tileqapng', 'zmtl', 'qso_qn', 'qso_mgii', 'emline']
+        if not np.any([filetype.startswith(term) for term in logtypes]):
+            msg = "Requested log pathname, but we don't produce logs " \
+                  + f"specific to filetype={filetype}. " \
+                  + f"Supported types are: {logtypes}."
+            log.error(msg)
+            raise NotImplementedError(msg)
+
+        filepath = get_log_pathname(filepath)
 
     if download:
         from .download import download
@@ -522,6 +549,34 @@ def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe', **kw
     # Return
     return all_frames
 
+def get_nights_up_to_date(date, specprod_dir=None):
+    """
+    Returns nights with an existing exposure_table in the current specprod
+
+    Args:
+        date (int): return all dates up to and including this date
+        specprod_dir (str): the specprod directory where the exposure_tables reside
+
+    Returns:
+        nights (list of ints): list of nights up to and including date that
+                               have an exposure table
+    """
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+
+    nights = []
+    exptabdir = os.path.join(specprod_dir, 'exposure_tables')
+    for yearmonth in os.listdir(exptabdir):
+        if int(yearmonth) > date // 100:
+            continue
+        exptabmonthdir = os.path.join(exptabdir, yearmonth)
+        for exptabname in os.listdir(exptabmonthdir):
+            try:
+                night = int(re.findall(r'[0-9]{8}', exptabname)[0])
+                if night <= date:
+                    nights.append(night)
+            except IndexError:
+                continue
 
 def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     """ Generate a list of nights in a given folder (default is exposures/)

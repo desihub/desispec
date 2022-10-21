@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 import os, sys, time
 
 import numpy as np
+import argparse
 from astropy.table import Table
 
 from desiutil.log import get_logger
@@ -18,9 +19,8 @@ from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
         frames2spectra, update_frame_cache, FrameLite)
 from ..coaddition import coadd
 
-def parse(options=None):
-    import argparse
 
+def parse(options=None):
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("--reduxdir", type=str,
             help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
@@ -54,12 +54,13 @@ def parse(options=None):
 
     return args
 
+
 def main(args=None):
 
-    log = get_logger()
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
 
-    if args is None:
-        args = parse()
+    log = get_logger()
 
     if (args.inframes is None) and (args.expfile is None):
         log.critical('Must provide --inframes or --expfile')

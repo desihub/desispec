@@ -389,7 +389,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         runtime = 25
-        if system_name[0:10] == 'perlmutter':
+        if system_name.startswith('perlmutter'):
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
@@ -397,13 +397,13 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         runtime  = int(60. / 140. * ncameras * nexps) # 140 frames per node hour
         runtime += 20                                 # overhead
         ncores = config['cores_per_node']
-        if system_name[0:10] != 'perlmutter':
+        if not system_name.startswith('perlmutter'):
             msg = 'tilenight cannot run on system_name={}'.format(system_name)
             log.critical(msg)
             raise ValueError(msg)
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR'):
         runtime = 30
-        if system_name[0:10] == 'perlmutter':
+        if system_name.startswith('perlmutter'):
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
@@ -431,6 +431,12 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
+    elif jobdesc in ['PEREXP', 'PERNIGHT', 'CUMULATIVE']:
+        if system_name.startswith('perlmutter'):
+            nodes, runtime = 1, 30
+        else:
+            nodes, runtime = 10, 10
+        ncores = nodes * config['cores_per_node']
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
