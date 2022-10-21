@@ -169,7 +169,7 @@ def main(args=None, comm=None):
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
 
-    # - Wait for rank 0 to make directories before proceeding
+    # - sync ranks before proceeding
     if comm is not None:
         comm.barrier()
 
@@ -179,6 +179,17 @@ def main(args=None, comm=None):
     if args.obstype in ['ARC']:
         timer.start('psfnight')
         num_cmd = num_err = 0
+
+        # rank 0 create output dir for everyone; other ranks wait at barrier
+        if rank == 0:
+            psfnightfile = findfile('psfnight', args.night, args.expids[0],
+                                                args.cameras[0])
+            dirname = os.path.dirname(psfnightfile)
+            os.makedirs(dirname, exist_ok=True)
+
+        if comm is not None:
+            comm.barrier()
+
         for camera in args.cameras[rank::size]:
             psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
             if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
@@ -194,9 +205,6 @@ def main(args=None, comm=None):
                         args.night, camera, len(psfs), len(args.expids)))
                 if len(psfs) >= 3:  # lets do it!
                     log.info(f"Rank {rank} computing {camera} psfnight ...")
-                    dirname = os.path.dirname(psfnightfile)
-                    if not os.path.isdir(dirname):
-                        os.makedirs(dirname)
                     num_cmd += 1
 
                     #- generic try/except so that any failure doesn't leave
