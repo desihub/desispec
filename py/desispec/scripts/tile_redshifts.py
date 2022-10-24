@@ -301,6 +301,9 @@ def write_redshift_script(batchscript, outdir,
         log.error(msg)
         raise ValueError(msg)
 
+    if system_name is None:
+        system_name = batch.default_system()
+
     batch_config = batch.get_config(system_name)
 
     batchlog = batchscript.replace('.slurm', r'-%j.log')

@@ -385,8 +385,6 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                ncameras=ncameras,
                                                                queue=queue,
                                                                mpistdstars=True,
-                                                               gpuspecter=gpuspecter,
-                                                               gpuextract=gpuextract,
                                                                system_name=system_name)
             else:
                 log.info("Running: {}".format(cmd.split()))
@@ -395,8 +393,6 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                cameras=prow['PROCCAMWORD'],
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
-                                                               gpuspecter=gpuspecter,
-                                                               gpuextract=gpuextract,
                                                                system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)

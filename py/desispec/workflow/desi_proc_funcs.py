@@ -529,7 +529,7 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
-                                  gpuspecter=False, gpuextract=False):
+                                  gpuspecter=None, gpuextract=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -557,8 +557,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         jobname: name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
         system_name: name of batch system, e.g. cori-haswell, cori-knl
-        gpuspecter: bool. Whether to use gpu_specter.
-        gpuextract: bool. Whether to perform gpu extraction with gpu_specter.
+        gpuspecter: bool. Whether to use gpu_specter (use None to auto-select).
+        gpuextract: bool. Whether to perform gpu extraction with gpu_specter (use None to auto-select).
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -588,6 +588,11 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     ## If system name isn't specified, guess it
     if system_name is None:
         system_name = batch.default_system(jobdesc=jobdesc)
+
+    if gpuextract is None:
+        gpuextract = (system_name == 'perlmutter-gpu')
+    if gpuspecter is None:
+        gpuspecter = (system_name == 'perlmutter-gpu')
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -799,8 +804,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     return scriptfile
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
-                                  system_name=None, mpistdstars=True, gpuspecter=False,
-                                  gpuextract=False,
+                                  system_name=None, mpistdstars=True, gpuspecter=None,
+                                  gpuextract=None,
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -817,8 +822,8 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
         system_name: name of batch system, e.g. cori-haswell, cori-knl.
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
-        gpuspecter: bool. Whether to use gpu_specter.
-        gpuextract: bool. Whether to perform gpu extraction with gpu_specter.
+        gpuspecter: bool. Whether to use gpu_specter (use None to auto-select).
+        gpuextract: bool. Whether to perform gpu extraction with gpu_specter (use None to auto-select).
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -838,6 +843,15 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
     timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
+
+    ## If system name isn't specified, guess it
+    if system_name is None:
+        system_name = batch.default_system(jobdesc='tilenight')
+
+    if gpuextract is None:
+        gpuextract = (system_name == 'perlmutter-gpu')
+    if gpuspecter is None:
+        gpuspecter = (system_name == 'perlmutter-gpu')
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
