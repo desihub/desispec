@@ -1282,7 +1282,8 @@ def main(args=None, comm=None):
             cmd += " --delta-color 0.1"
             if args.maxstdstars is not None:
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
-
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
             err = 0
             cmdargs = cmd.split()[1:]
@@ -1366,6 +1367,8 @@ def main(args=None, comm=None):
             cmd += " --models {}".format(stdfile)
             cmd += " --outfile {}".format(calibfile)
             cmd += " --selected-calibration-stars {}".format(calibstars)
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
 
             inputs = [framefile, skyfile, fiberflatfile, stdfile, calibstars]
             cmdargs = cmd.split()[1:]
@@ -1406,6 +1409,8 @@ def main(args=None, comm=None):
             cmd += " --sky {}".format(skyfile)
             cmd += " --calib {}".format(calibfile)
             cmd += " --outfile {}".format(cframefile)
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
             cmd += " --cosmics-nsig 6"
             if args.no_xtalk :
                 cmd += " --no-xtalk"
