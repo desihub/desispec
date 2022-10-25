@@ -769,8 +769,9 @@ def main(args=None, comm=None):
                     cmd += ' --use-gpu'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
-                    log.info('Include barycentric correction')
-                    cmd += ' --barycentric-correction'
+                    if not args.no_barycentric_correction :
+                        log.info('Include barycentric correction')
+                        cmd += ' --barycentric-correction'
 
                 missing_inputs = False
                 for infile in [preprocfile, psffile]:
