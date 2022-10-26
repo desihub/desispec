@@ -6,7 +6,8 @@
 import sys
 if __name__ == '__main__':
     print('Run this instead:')
-    print('python setup.py test -m desispec.test.test_io')
+    # print('python setup.py test -m desispec.test.test_io')
+    print('pytest py/desispec/test/test_io.py')
     sys.exit(1)
 
 import unittest
@@ -70,6 +71,10 @@ class TestIO(unittest.TestCase):
         for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
+
+        # restore environment variables if test changed them
+        for key, value in self.testEnv.items():
+            os.environ[key] = value
 
     @classmethod
     def tearDownClass(cls):
@@ -1450,6 +1455,50 @@ class TestIO(unittest.TestCase):
 
         t = iotime.parse_logfile(self.testlog)
         self.assertEqual(t, None)
+
+    def test_relsymlink(self):
+        from ..io.util import relsymlink
+        # basic
+        path = relsymlink('/blat/foo/a/b/c.fits', '/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        os.makedirs(self.testDir + '/a/b')
+        os.makedirs(self.testDir + '/x/y')
+        with open(self.testDir+'/a/b/test1.txt', 'w') as fp:
+            fp.write('blat')
+        relsymlink(self.testDir+'/a/b/test1.txt', self.testDir+'/x/y/test2.txt')
+        with open(self.testDir+'/x/y/test2.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+
+        # DESI_ROOT and DESI_ROOT_READONLY treated as same root path
+        self.assertNotEqual(os.environ['DESI_ROOT'], os.environ['DESI_ROOT_READONLY'])
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        # don't get confused by trailing slashes
+        self.assertFalse(os.environ['DESI_ROOT'].endswith('/'))
+        self.assertFalse(os.environ['DESI_ROOT_READONLY'].endswith('/'))
+        os.environ['DESI_ROOT'] = os.environ['DESI_ROOT'] + '/'
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        os.environ['DESI_ROOT_READONLY'] = os.environ['DESI_ROOT_READONLY'] + '/'
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        os.environ['DESI_ROOT'] = os.environ['DESI_ROOT'][0:-1]  # drop trailing /
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
 
 def test_suite():
     """Allows testing of only this module with the command::
