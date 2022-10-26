@@ -951,7 +951,7 @@ class SkyModel(object):
         return sky2
 
 
-def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar=True) :
+def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, apply_throughput_correction = False, zero_ivar=True) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -971,7 +971,7 @@ def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar
     assert frame.nwave == skymodel.nwave
 
     log=get_logger()
-    log.info("starting with apply_throughput_correction = {} and zero_ivar = {}".format(apply_throughput_correction, zero_ivar))
+    log.info("starting with apply_throughput_correction_to_lines = {} apply_throughput_correction = {} and zero_ivar = {}".format(apply_throughput_correction_to_lines,apply_throughput_correction, zero_ivar))
 
     # Set fibermask flagged spectra to have 0 flux and variance
     frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=zero_ivar)
@@ -982,24 +982,52 @@ def subtract_sky(frame, skymodel, apply_throughput_correction = False, zero_ivar
         log.error(message)
         raise ValueError(message)
 
-    if apply_throughput_correction and skymodel.throughput_corrections is not None :
-        # need to fit for a multiplicative factor of the sky model
-        # before subtraction
-        # we are going to use a set of bright sky lines,
-        # and fit a multiplicative factor + background around
-        # each of them individually, and then combine the results
-        # with outlier rejection in case a source emission line
-        # coincides with one of the sky lines.
-        for fiber in range(frame.flux.shape[0]) :
-            # apply this correction to the sky model even if we have not fit it (default can be 1 or 0)
-            skymodel.flux[fiber] *= skymodel.throughput_corrections[fiber]
+    if skymodel.throughput_corrections is not None :
+        # a multiplicative factor + background around
+        # each of the bright sky lines has been fit.
+        # here we apply this correction to the emission lines only or to the whole
+        # sky spectrum
+        if apply_throughput_correction  :
+            for fiber in range(frame.flux.shape[0]) :
+                # apply this correction to the sky model even if we have not fit it (default can be 1 or 0)
+                skymodel.flux[fiber] *= skymodel.throughput_corrections[fiber]
+
+        elif apply_throughput_correction_to_lines :
+
+            # we first identify bright lines on the sky model
+
+            # median sky of all fibers
+            msky  = np.median(skymodel.flux,axis=0)
+
+            # find minima in sky spectrum
+            minima = np.zeros(msky.shape)
+            minima[1:-1] = (msky[1:-1]<msky[:-2])&(msky[1:-1]<msky[2:])&(msky[1:-1]>-20)&(msky[1:-1]<0.5*np.max(msky))
+            minima  = np.where(minima)[0]
+            cont    = np.interp(skymodel.wave,skymodel.wave[minima],msky[minima])
+            # second minima
+            minima2 = np.zeros(msky.shape)
+            minima2[1:-1] = (cont[1:-1]<cont[:-2])&(cont[1:-1]<cont[2:])&(cont[1:-1]>-20)&(cont[1:-1]<0.5*np.max(cont))
+            minima2  = np.where(minima2)[0]
+            cont    = np.interp(skymodel.wave,skymodel.wave[minima2],msky[minima2])
+
+            # the continuum is the spectrum within 50 e/A of this interpolated minimal values
+            threshold = 50. # e/A
+            in_cont = np.where(np.abs(msky-cont)<threshold)[0] # keep all pixels without n sigma of cont for debiasing estimate
+
+            # apply this correction to the sky lines only
+            for fiber in range(frame.flux.shape[0]) :
+                # estimate and subtract continuum for this fiber specifically
+                cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
+                skylines = skymodel.flux[fiber] - cont
+                skylines[skylines<threshold] = 0
+                # apply correction to the sky lines only
+                skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
 
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
     frame.mask |= skymodel.mask
 
     log.info("done")
-
 
 def calculate_throughput_corrections(frame,skymodel):
     """
