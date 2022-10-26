@@ -998,30 +998,40 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
 
             # median sky of all fibers
             msky  = np.median(skymodel.flux,axis=0)
+            # the continuum is the spectrum within 50 e/A of this interpolated minimal values
+            threshold = 50. # e/A
 
             # find minima in sky spectrum
             minima = np.zeros(msky.shape)
             minima[1:-1] = (msky[1:-1]<msky[:-2])&(msky[1:-1]<msky[2:])&(msky[1:-1]>-20)&(msky[1:-1]<0.5*np.max(msky))
             minima  = np.where(minima)[0]
-            cont    = np.interp(skymodel.wave,skymodel.wave[minima],msky[minima])
-            # second minima
-            minima2 = np.zeros(msky.shape)
-            minima2[1:-1] = (cont[1:-1]<cont[:-2])&(cont[1:-1]<cont[2:])&(cont[1:-1]>-20)&(cont[1:-1]<0.5*np.max(cont))
-            minima2  = np.where(minima2)[0]
-            cont    = np.interp(skymodel.wave,skymodel.wave[minima2],msky[minima2])
+            if minima.size > 0 :
+                cont    = np.interp(skymodel.wave,skymodel.wave[minima],msky[minima])
+                # second minima
+                minima2 = np.zeros(msky.shape)
+                minima2[1:-1] = (cont[1:-1]<cont[:-2])&(cont[1:-1]<cont[2:])&(cont[1:-1]>-20)&(cont[1:-1]<0.5*np.max(cont))
+                minima2  = np.where(minima2)[0]
+                cont    = np.interp(skymodel.wave,skymodel.wave[minima2],msky[minima2])
+                in_cont = np.where(np.abs(msky-cont)<threshold)[0] # keep all pixels without n sigma of cont for debiasing estimate
 
-            # the continuum is the spectrum within 50 e/A of this interpolated minimal values
-            threshold = 50. # e/A
-            in_cont = np.where(np.abs(msky-cont)<threshold)[0] # keep all pixels without n sigma of cont for debiasing estimate
+            else :
+                in_cont = np.array([])
+                log.warning("Could not separate the sky continuum from the lines.")
 
-            # apply this correction to the sky lines only
-            for fiber in range(frame.flux.shape[0]) :
-                # estimate and subtract continuum for this fiber specifically
-                cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
-                skylines = skymodel.flux[fiber] - cont
-                skylines[skylines<threshold] = 0
-                # apply correction to the sky lines only
-                skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
+            if in_cont.size > 0 :
+                # apply this correction to the sky lines only
+                for fiber in range(frame.flux.shape[0]) :
+
+                    # estimate and subtract continuum for this fiber specifically
+
+                    cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
+                    skylines = skymodel.flux[fiber] - cont
+                    skylines[skylines<threshold] = 0
+
+                    # apply correction to the sky lines only
+                    skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
+            else :
+                log.warning("Could not determine sky continuum, do not apply throughput correction on sky lines")
 
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
