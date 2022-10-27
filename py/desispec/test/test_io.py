@@ -1459,20 +1459,31 @@ class TestIO(unittest.TestCase):
     def test_relsymlink(self):
         from ..io.util import relsymlink
         # basic
-        path = relsymlink('/blat/foo/a/b/c.fits', '/blat/foo/x/y/c.fits', pathonly=True)
+        path = relsymlink('/blat/foo/a/b/c.fits',
+                          '/blat/foo/x/y/c.fits', pathonly=True)
         self.assertEqual(path, '../../a/b/c.fits')
 
+        # test that it actually makes the link
         os.makedirs(self.testDir + '/a/b')
         os.makedirs(self.testDir + '/x/y')
         with open(self.testDir+'/a/b/test1.txt', 'w') as fp:
             fp.write('blat')
-        relsymlink(self.testDir+'/a/b/test1.txt', self.testDir+'/x/y/test2.txt')
+        path = relsymlink(self.testDir+'/a/b/test1.txt', self.testDir+'/x/y/test2.txt')
+        self.assertEqual(path, '../../a/b/test1.txt')
         with open(self.testDir+'/x/y/test2.txt') as fp:
             line = fp.readline()
             self.assertEqual(line, 'blat')
 
+        # test that directory (not file) linking works too
+        path = relsymlink(self.testDir+'/a/b', self.testDir+'/x/z')
+        self.assertEqual(path, '../a/b')
+        with open(self.testDir+'/x/z/test1.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+
         # DESI_ROOT and DESI_ROOT_READONLY treated as same root path
-        self.assertNotEqual(os.environ['DESI_ROOT'], os.environ['DESI_ROOT_READONLY'])
+        self.assertNotEqual(os.environ['DESI_ROOT'],
+                            os.environ['DESI_ROOT_READONLY'])
         path = relsymlink(
                 os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
                 os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)

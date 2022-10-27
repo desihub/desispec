@@ -19,7 +19,7 @@ from astropy.io import fits
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, get_readonly_filepath
-from desispec.io.util import create_camword, get_tempfilename
+from desispec.io.util import create_camword, get_tempfilename, relsymlink
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.specex
@@ -585,7 +585,7 @@ def main(args=None, comm=None):
                     log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
                             f'to existing file at rel. path {relpath_saved_std}')
                     num_link_cmds += 1
-                    result, success = runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), expandargs=True,
+                    result, success = runcmd(relsymlink, args=(relpath_saved_std, new_stdfile), expandargs=True,
                         inputs=[saved_stdfile, ], outputs=[new_stdfile, ])
                     log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
                                                                                         os.path.isfile(new_stdfile),
