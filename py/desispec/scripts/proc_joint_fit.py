@@ -537,6 +537,8 @@ def main(args=None, comm=None):
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
             num_cmd +=1 
+            if args.system_name == "perlmutter-gpu":
+                cmd += " --use-gpu"
             if subcomm is None:
                 #- Using multiprocessing
                 result, success = runcmd(cmd, inputs=inputs, outputs=[stdfile])
