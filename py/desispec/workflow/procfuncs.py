@@ -188,7 +188,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
 
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
-                      system_name=None,use_gpuspecter=False):
+                      system_name=None,use_specter=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -214,7 +214,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
@@ -230,7 +230,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
         if prow['STATUS'].upper() == 'COMPLETED':
             return prow
-    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name, use_gpuspecter=use_gpuspecter)
+    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name, use_specter=use_specter)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond to the pruned values. But we want to
     ## retain the full job's value, so get those from the old job.
@@ -301,7 +301,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
         cmd += f' -e {expid_str}'
     return cmd
 
-def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None, use_gpuspecter=False):
+def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None, use_specter=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -316,7 +316,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
@@ -368,7 +368,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             expids = prow['EXPID']
             if len(expids) == 0:
                 expids = None
-            gpuspecter = use_gpuspecter
+            gpuspecter = ((not use_specter) and prow['JOBDESC'] in ['science', 'prestdstar', 'tilenight'])
             gpuextract = (gpuspecter and system_name=="perlmutter-gpu")
             if prow['JOBDESC'] == 'tilenight':
                 log.info("Creating tilenight script for tile {}".format(prow['TILEID']))
@@ -893,7 +893,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_submit_types=None,
               dry_run=0, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
-              system_name=None,use_gpuspecter=False):
+              system_name=None):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
@@ -925,7 +925,6 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
 
     Returns:
         ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
@@ -960,8 +959,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
-                                   resubmit_partial_complete=resubmit_partial_complete, system_name=system_name,
-                                   use_gpuspecter=use_gpuspecter)
+                                   resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
     ptable.add_row(joint_prow)
 
     if descriptor in ['science','stdstarfit']:
@@ -1110,7 +1108,7 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
 #########################################
 def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
               dry_run=0, strictly_successful=False, resubmit_partial_complete=True,
-              system_name=None,use_gpuspecter=False):
+              system_name=None,use_specter=False):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     tilenight job given by descriptor. The returned ptable has all of these rows added to the
@@ -1136,7 +1134,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         ptable, Table. The same processing table as input except with added rows for the joint fit job.
@@ -1155,7 +1153,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
     tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=False,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name,
-                                   use_gpuspecter=use_gpuspecter)
+                                   use_specter=use_specter)
     ptable.add_row(tnight_prow)
 
     return ptable, tnight_prow, internal_id
@@ -1164,7 +1162,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservation=None,
                       z_submit_types=None, dry_run=0, strictly_successful=False,
                       check_for_outputs=True, resubmit_partial_complete=True,
-                      system_name=None,use_gpuspecter=False):
+                      system_name=None):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit and redshift fitting.
 
@@ -1313,7 +1311,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
-                                  system_name=None,use_gpuspecter=False):
+                                  system_name=None):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
     the decision criteria into a single function for easier maintainability over time. These are separate from the
@@ -1353,7 +1351,6 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
 
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
@@ -1410,8 +1407,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                                          strictly_successful=strictly_successful,
                                                          check_for_outputs=check_for_outputs,
                                                          resubmit_partial_complete=resubmit_partial_complete,
-                                                         system_name=system_name,use_gpuspecter=use_gpuspecter
-                                                         )
+                                                         system_name=system_name)
         if tilejob is not None:
             sciences = []
 
@@ -1439,7 +1435,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
 def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
-                                  z_submit_types=None, system_name=None,use_gpuspecter=False):
+                                  z_submit_types=None, system_name=None,use_specter=False):
     """
     Takes all the state-ful data from daily processing and determines whether a tilenight job needs to be submitted.
 
@@ -1468,7 +1464,7 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
         z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
                                         exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
-        use_gpuspecter, bool, optional. Default is False. If True, use gpu_specter for extractions.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
@@ -1482,7 +1478,7 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
                                              queue=queue, reservation=reservation,
                                              dry_run=dry_run, strictly_successful=strictly_successful,
                                              resubmit_partial_complete=resubmit_partial_complete,
-                                             system_name=system_name,use_gpuspecter=use_gpuspecter
+                                             system_name=system_name,use_specter=use_specter
                                              )
 
     ptable, internal_id = submit_redshifts(ptable, sciences, tnight, internal_id,
