@@ -239,7 +239,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
-def desi_proc_command(prow, queue=None, system_name, use_specter):
+def desi_proc_command(prow, system_name, use_specter, queue=None):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -364,7 +364,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             if joint:
                 cmd = desi_proc_joint_fit_command(prow, queue=queue)
             else:
-                cmd = desi_proc_command(prow, queue=queue, system_name, use_specter)
+                cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)
         if dry_run > 1:
             scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
