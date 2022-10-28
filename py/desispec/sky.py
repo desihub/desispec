@@ -994,7 +994,7 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
 
         elif apply_throughput_correction_to_lines :
 
-            if "CAMERA" in frame.meta and frame.meta["CAMERA"][0].lower() == "b" :
+            if frame.meta is not None and "CAMERA" in frame.meta and frame.meta["CAMERA"] is not None and frame.meta["CAMERA"][0].lower() == "b" :
                 log.info("Do not apply throughput correction to sky lines for blue cameras")
             else :
                 in_cont_boolean = np.repeat(True,skymodel.wave.shape)
