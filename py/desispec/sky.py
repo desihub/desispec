@@ -993,22 +993,30 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
                 skymodel.flux[fiber] *= skymodel.throughput_corrections[fiber]
 
         elif apply_throughput_correction_to_lines :
-            in_cont_boolean = np.repeat(True,skymodel.wave.shape)
-            for line in get_sky_lines() :
-                in_cont_boolean &= np.abs(skymodel.wave-line)>2. # A
-            in_cont = np.where(in_cont_boolean)[0]
 
-            if in_cont.size > 0 :
-                # apply this correction to the sky lines only
-                for fiber in range(frame.flux.shape[0]) :
-                    # estimate and subtract continuum for this fiber specifically
-                    cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
-                    skylines = skymodel.flux[fiber] - cont
-                    skylines[skylines<0]=0
-                    # apply correction to the sky lines only
-                    skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
+            if "CAMERA" in frame.meta and frame.meta["CAMERA"][0].lower() == "b" :
+                log.info("Do not apply throughput correction to sky lines for blue cameras")
             else :
-                log.warning("Could not determine sky continuum, do not apply throughput correction on sky lines")
+                in_cont_boolean = np.repeat(True,skymodel.wave.shape)
+                for line in get_sky_lines() :
+                    # ignore b-arm sky lines, because there is really only one significant line
+                    # at 5579A. without other lines, we could be erase a target emission line.
+                    # (this is a duplication of test on the camera ID above)
+                    if line < 5700 : continue
+                    in_cont_boolean &= np.abs(skymodel.wave-line)>2. # A
+                in_cont = np.where(in_cont_boolean)[0]
+
+                if in_cont.size > 0 :
+                    # apply this correction to the sky lines only
+                    for fiber in range(frame.flux.shape[0]) :
+                        # estimate and subtract continuum for this fiber specifically
+                        cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
+                        skylines = skymodel.flux[fiber] - cont
+                        skylines[skylines<0]=0
+                        # apply correction to the sky lines only
+                        skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
+                else :
+                    log.warning("Could not determine sky continuum, do not apply throughput correction on sky lines")
 
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
