@@ -70,8 +70,8 @@ def main(args):
         sys.exit(12)
 
     if (not args.no_tsnr) and (args.calib is None) :
-        log.critical('need --fiberflat --sky and --calib to compute template SNR')
-        sys.exit(12)
+        log.warning('Need --fiberflat --sky and --calib to compute template SNR. We are not computing it.')
+        args.no_tsnr = True
 
     frame = read_frame(args.infile)
 
