@@ -993,24 +993,10 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
                 skymodel.flux[fiber] *= skymodel.throughput_corrections[fiber]
 
         elif apply_throughput_correction_to_lines :
-
-            # we first identify bright lines on the sky model
-
-            # median sky of all fibers
-            msky  = np.median(skymodel.flux,axis=0)
-            # the continuum is the spectrum within 50 e/A of this interpolated minimal values
-            threshold = 50. # e/A
-
-            # find minima in sky spectrum
-            minima = np.zeros(msky.shape)
-            minima[1:-1] = (msky[1:-1]<msky[:-2])&(msky[1:-1]<msky[2:])&(msky[1:-1]>-20)&(msky[1:-1]<0.5*np.max(msky))
-            minima  = np.where(minima)[0]
-            if minima.size > 0 :
-                cont    = np.interp(skymodel.wave,skymodel.wave[minima],msky[minima])
-                in_cont = np.where(np.abs(msky-cont)<threshold)[0] # keep all pixels without n sigma of cont for debiasing estimate
-            else :
-                in_cont = np.array([])
-                log.warning("Could not separate the sky continuum from the lines.")
+            in_cont_boolean = np.repeat(True,skymodel.wave.shape)
+            for line in get_sky_lines() :
+                in_cont_boolean &= np.abs(skymodel.wave-line)>2. # A
+            in_cont = np.where(in_cont_boolean)[0]
 
             if in_cont.size > 0 :
                 # apply this correction to the sky lines only
@@ -1018,7 +1004,7 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
                     # estimate and subtract continuum for this fiber specifically
                     cont = np.interp(skymodel.wave,skymodel.wave[in_cont],skymodel.flux[fiber][in_cont])
                     skylines = skymodel.flux[fiber] - cont
-                    skylines[skylines<threshold] = 0
+                    skylines[skylines<0]=0
                     # apply correction to the sky lines only
                     skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
             else :
@@ -1029,6 +1015,13 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
     frame.mask |= skymodel.mask
 
     log.info("done")
+
+def get_sky_lines() :
+    # it's more robust to have a hardcoded set of sky lines here
+    # these are most of the dark sky lines at KPNO (faint lines are discarded)
+    # wavelength are A, in vacuum, (obviously in earth frame)
+    return np.array([4359.55,5199.27,5462.38,5578.85,5891.47,5897.51,5917.04,5934.63,5955.11,5978.80,6172.39,6204.48,6223.56,6237.36,6259.62,6266.96,6289.21,6302.06,6308.70,6323.09,6331.63,6350.26,6358.10,6365.57,6388.31,6467.83,6472.63,6500.48,6506.85,6524.31,6534.88,6545.95,6555.44,6564.59,6570.69,6579.14,6606.02,6831.19,6836.16,6843.66,6865.78,6873.06,6883.14,6891.22,6902.79,6914.52,6925.11,6941.43,6950.99,6971.84,6980.36,7005.76,7013.36,7050.01,7242.08,7247.18,7255.13,7278.23,7286.57,7298.03,7305.76,7318.31,7331.26,7342.93,7360.71,7371.44,7394.23,7403.92,7431.82,7440.56,7468.66,7473.57,7475.80,7481.74,7485.52,7495.74,7526.02,7532.80,7559.59,7573.90,7588.21,7600.49,7620.20,7630.86,7655.22,7664.52,7694.11,7701.75,7714.64,7718.99,7725.76,7728.26,7737.35,7752.67,7759.19,7762.17,7775.53,7782.58,7794.17,7796.27,7810.62,7823.65,7843.43,7851.81,7855.53,7860.06,7862.85,7870.17,7872.94,7880.89,7883.89,7892.04,7915.75,7921.90,7923.29,7933.51,7947.89,7951.41,7966.84,7970.48,7980.89,7982.00,7995.58,8016.34,8022.30,8028.03,8030.18,8054.15,8064.43,8087.35,8096.04,8104.77,8141.35,8149.00,8190.40,8197.67,8280.73,8283.97,8290.79,8298.52,8301.21,8305.09,8313.02,8320.68,8346.77,8352.10,8355.21,8363.19,8367.11,8384.59,8401.53,8417.58,8432.54,8436.62,8448.87,8454.61,8467.72,8477.00,8495.82,8507.19,8523.03,8541.04,8551.10,8590.62,8599.43,8620.40,8623.91,8627.34,8630.96,8634.50,8638.26,8642.53,8643.38,8649.38,8652.98,8657.70,8662.46,8667.36,8672.49,8677.88,8683.25,8689.10,8695.03,8702.18,8709.64,8762.40,8763.78,8770.00,8780.36,8793.54,8812.37,8829.35,8831.74,8835.98,8838.89,8847.90,8852.27,8864.96,8870.02,8888.31,8898.80,8905.60,8911.52,8922.12,8930.34,8945.87,8960.56,8973.21,8984.22,8990.85,8994.99,9003.85,9023.44,9030.80,9040.55,9052.03,9067.36,9095.13,9105.32,9154.58,9163.70,9219.04,9227.34,9265.26,9288.76,9296.23,9309.49,9315.79,9320.36,9326.25,9333.54,9340.43,9351.84,9364.59,9370.52,9378.34,9385.63,9399.67,9404.72,9422.34,9425.23,9442.27,9450.81,9461.13,9479.60,9486.22,9493.22,9505.47,9522.06,9532.66,9539.71,9555.14,9562.95,9570.04,9610.34,9623.30,9656.01,9661.88,9671.38,9676.93,9684.39,9693.15,9701.98,9714.38,9722.52,9737.51,9740.80,9748.49,9793.49,9799.16,9802.55,9810.34,9814.71,9819.99])
+
 
 def calculate_throughput_corrections(frame,skymodel):
     """
@@ -1050,23 +1043,7 @@ def calculate_throughput_corrections(frame,skymodel):
     # with outlier rejection in case a source emission line
     # coincides with one of the sky lines.
 
-    # it's more robust to have a hardcoded set of sky lines here
-    # these are all the sky lines with a flux >5% of the max flux
-    # except in b where we add an extra weaker line at 5199.4A
-    skyline=np.array([5199.4,5578.4,5656.4,5891.4,5897.4,6302.4,6308.4,6365.4,6500.4,6546.4,\
-                      6555.4,6618.4,6663.4,6679.4,6690.4,6765.4,6831.4,6836.4,6865.4,6925.4,\
-                      6951.4,6980.4,7242.4,7247.4,7278.4,7286.4,7305.4,7318.4,7331.4,7343.4,\
-                      7360.4,7371.4,7394.4,7404.4,7440.4,7526.4,7714.4,7719.4,7752.4,7762.4,\
-                      7782.4,7796.4,7810.4,7823.4,7843.4,7855.4,7862.4,7873.4,7881.4,7892.4,\
-                      7915.4,7923.4,7933.4,7951.4,7966.4,7982.4,7995.4,8016.4,8028.4,8064.4,\
-                      8280.4,8284.4,8290.4,8298.4,8301.4,8313.4,8346.4,8355.4,8367.4,8384.4,\
-                      8401.4,8417.4,8432.4,8454.4,8467.4,8495.4,8507.4,8627.4,8630.4,8634.4,\
-                      8638.4,8652.4,8657.4,8662.4,8667.4,8672.4,8677.4,8683.4,8763.4,8770.4,\
-                      8780.4,8793.4,8829.4,8835.4,8838.4,8852.4,8870.4,8888.4,8905.4,8922.4,\
-                      8945.4,8960.4,8990.4,9003.4,9040.4,9052.4,9105.4,9227.4,9309.4,9315.4,\
-                      9320.4,9326.4,9340.4,9378.4,9389.4,9404.4,9422.4,9442.4,9461.4,9479.4,\
-                      9505.4,9521.4,9555.4,9570.4,9610.4,9623.4,9671.4,9684.4,9693.4,9702.4,\
-                      9714.4,9722.4,9740.4,9748.4,9793.4,9802.4,9814.4,9820.4])
+    skyline=get_sky_lines()
 
     # half width of wavelength region around each sky line
     # larger values give a better statistical precision
