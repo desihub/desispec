@@ -905,8 +905,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         mps_wrapper=''
         if system_name == 'perlmutter-gpu':
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
-            if gpuextract or mpistdstars:
-                mps_wrapper='desi_mps_wrapper'
+            mps_wrapper='desi_mps_wrapper'
 
         fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
         srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
