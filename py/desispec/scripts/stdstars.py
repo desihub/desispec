@@ -53,7 +53,9 @@ def parse(options=None):
                          help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
     parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
-
+    parser.add_argument('--apply-sky-throughput-correction', action='store_true',
+                        help =('Apply a throughput correction when subtraction the sky '
+                               '(default: do not apply!)'))
     log = get_logger()
 
     args = parser.parse_args(options)
@@ -370,7 +372,7 @@ def main(args=None, comm=None) :
             frame.flux *= (frame.ivar > 0) # just for clean plots
 
             apply_fiberflat(frame, flat)
-            subtract_sky(frame, sky)
+            subtract_sky(frame, sky, apply_throughput_correction = args.apply_sky_throughput_correction)
 
             #- keep newly flat-fielded sky-subtracted frame
             frames[cam][i] = frame
