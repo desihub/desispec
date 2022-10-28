@@ -57,6 +57,7 @@ log.info(f'Linking {num_expids} exposures on {num_nights} nights')
 #- What type of copy or link are we making?
 if opts.fullcopy:
     link = shutil.copy2
+    opts.abspath = True
     log.debug('Performing full copy of selected NIGHT/EXPID')
 else:
     link = os.symlink

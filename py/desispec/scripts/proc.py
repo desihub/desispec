@@ -42,7 +42,7 @@ import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras
-from desispec.io.util import validate_badamps, get_tempfilename
+from desispec.io.util import validate_badamps, get_tempfilename, relsymlink
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -549,7 +549,7 @@ def main(args=None, comm=None):
                     expandargs = False
                 else:
                     cmdargs = (inpsf, outpsf)
-                    cmd = os.symlink
+                    cmd = relsymlink
                     expandargs = True
 
                 result, success = runcmd(cmd, args=cmdargs, expandargs=expandargs,

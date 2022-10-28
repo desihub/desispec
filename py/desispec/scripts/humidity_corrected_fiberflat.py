@@ -10,6 +10,7 @@ from desiutil.log import get_logger
 
 from desispec.io import read_fiberflat,write_fiberflat,findfile,read_frame
 from desispec.io.fiberflat_vs_humidity import get_humidity,read_fiberflat_vs_humidity
+from desispec.io.util import relsymlink
 from desispec.calibfinder import CalibFinder
 from desispec.fiberflat_vs_humidity import compute_humidity_corrected_fiberflat
 
@@ -50,8 +51,7 @@ def main(args=None) :
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
         log.info("No information on fiberflat vs humidity for camera {}, simply link the input fiberflat".format(frame_header["CAMERA"]))
         if not os.path.islink(args.outfile) :
-            relpath=os.path.relpath(args.fiberflat,os.path.dirname(args.outfile))
-            os.symlink(relpath,args.outfile)
+            relsymlink(args.fiberflat, args.outfile)
         return 0
 
     # read fiberflat
