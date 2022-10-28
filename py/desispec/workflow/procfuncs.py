@@ -239,7 +239,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
-def desi_proc_command(prow, queue=None):
+def desi_proc_command(prow, queue=None, system_name, use_specter):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -247,6 +247,8 @@ def desi_proc_command(prow, queue=None):
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
         queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
+        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         cmd, str. The proper command to be submitted to desi_proc to process the job defined by the prow values.
@@ -263,6 +265,10 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --noprestdstarfit --nostdstarfit'
     elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
+    elif prow['JOBDESC'] in ['flat'] and not use_specter:
+        cmd += ' --gpuspecter'
+        if system_name=="perlmutter-gpu":
+            cmd += ' --gpuextract'
     pcamw = str(prow['PROCCAMWORD'])
     cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
     if len(prow['EXPID']) > 0:
@@ -358,7 +364,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             if joint:
                 cmd = desi_proc_joint_fit_command(prow, queue=queue)
             else:
-                cmd = desi_proc_command(prow, queue=queue)
+                cmd = desi_proc_command(prow, queue=queue, system_name, use_specter)
         if dry_run > 1:
             scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
