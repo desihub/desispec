@@ -435,9 +435,17 @@ def update_survey_keywords(hdr):
         elif faflavor in ('cmxlrgqso', 'cmxelg'):
             updates['SURVEY'] = 'sv1'  # NOTE: yes sv1, not cmx despite faflavor prefix
             updates['FAPRGRM'] = faflavor[3:]
-        else:
+        elif faflavor in ('cmxm33', 'cmxposmapping', 'sv1backup1', 'sv1bgsmws',
+                          'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
+                          'sv1m31', 'sv1mwclusgaldeep', 'sv1orion',
+                          'sv1praesepe', 'sv1rosette', 'sv1scndcosmos',
+                          'sv1scndhetdex', 'sv1ssv', 'sv1umaii',
+                          'sv1unwisebluebright', 'sv1unwisebluefaint',
+                          'sv1unwisegreen'):
             updates['SURVEY'] = faflavor[0:3]
             updates['FAPRGRM'] = faflavor[3:]
+        else:
+            raise ValueError(f'Tile {tileid} Unrecognized FAFLAVOR={faflavor} without SURVEY or FAPRGRM; add code to handle this case')
 
     elif has_faflavor and has_survey and (not has_faprgrm):
         assert hdr['SURVEY'] == 'sv2'
@@ -462,6 +470,11 @@ def update_survey_keywords(hdr):
         for key, value in updates.items():
             log.debug('Tile %d setting %s=%s', tileid, key, value)
             hdr[key] = value
+
+    #- double check constency with FA_SURV keyword
+    if ('SURVEY' in updates) and ('FA_SURV' in hdr):
+        if updates['SURVEY'] != hdr['FA_SURV']:
+            raise ValueError(f"Tile {tileid} Derived SURVEY={updates['SURVEY']} doesn't match header FA_SURV={hdr['FA_SURV']}")
 
     #- did we get the right keywords into hdr?
     assert 'TILEID' in hdr
