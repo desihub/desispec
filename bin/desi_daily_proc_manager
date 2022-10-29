@@ -96,6 +96,8 @@ def parse_args():#options=None):
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
+    parser.add_argument("--use-specter", action="store_true",
+                        help="Use specter. Default is to use gpu_specter")
     # parser.add_argument("--force-specprod", action="store_true",
     #                     help="Force the files to be written to custom SPECPROD " +
     #                          "even if user is desi.")
@@ -158,4 +160,5 @@ if __name__ == '__main__':
                              continue_looping_debug=args.continue_looping_debug,
                              data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,
                              dont_check_job_outputs=args.dont_check_job_outputs,
-                             dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs)
+                             dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs,
+                             use_specter=args.use_specter)
