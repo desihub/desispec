@@ -41,10 +41,10 @@ def parse(options=None):
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--apply-sky-throughput-correction', action='store_true',
-                        help =('Apply a throughput correction to the whole sky spectrum'
-                               '(default: do not apply!)'))
+                        help =('Apply a throughput correction to the whole sky spectrum, not just the lines '
+                               '(default: a correction is applied to the sky lines but not the continuum)'))
     parser.add_argument('--no-sky-line-throughput-correction', action='store_true',
-                        help =('Do not apply a throughput correction to the sky spectrum lines'
+                        help =('Do not apply a throughput correction to the sky spectrum lines or the continuum '
                                '(default: a correction is applied to the sky lines but not the continuum)'))
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
@@ -72,6 +72,11 @@ def main(args):
     if (not args.no_tsnr) and (args.calib is None) :
         log.warning('Need --fiberflat --sky and --calib to compute template SNR. We are not computing it.')
         args.no_tsnr = True
+
+    if args.apply_sky_throughput_correction and args.no_sky_line_throughput_correction:
+        msg = "Use --apply-sky-throughput-correction OR --no-sky-line-throughput-correction (or neither) but not both"
+        log.critical(msg)
+        raise ValueError(msg)
 
     frame = read_frame(args.infile)
 
