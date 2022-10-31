@@ -578,18 +578,19 @@ def main(args=None, comm=None):
                 for expid in args.expids[1:]:
                     new_stdfile = findfile('stdstars', args.night, expid, spectrograph=sp)
                     new_dirname, new_fname = os.path.split(new_stdfile)
-                    log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
-                                                                                        os.path.isfile(new_stdfile),
-                                                                                        os.path.islink(new_stdfile)))
-                    relpath_saved_std = os.path.relpath(saved_stdfile, new_dirname)
-                    log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
-                            f'to existing file at rel. path {relpath_saved_std}')
+                    log.debug("Path exists: %s, file exists: %s, link exists: %s",
+                            os.path.exists(new_stdfile),
+                            os.path.isfile(new_stdfile),
+                            os.path.islink(new_stdfile))
+                    log.debug('Sym Linking jointly fitted stdstar file: %s '+\
+                            'to existing file at %s', new_stdfile, saved_stdfile)
                     num_link_cmds += 1
-                    result, success = runcmd(relsymlink, args=(relpath_saved_std, new_stdfile), expandargs=True,
+                    result, success = runcmd(relsymlink, args=(saved_stdfile, new_stdfile), expandargs=True,
                         inputs=[saved_stdfile, ], outputs=[new_stdfile, ])
-                    log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
-                                                                                        os.path.isfile(new_stdfile),
-                                                                                        os.path.islink(new_stdfile)))
+                    log.debug("Path exists: %s, file exists: %s, link exists: %s",
+                            os.path.exists(new_stdfile),
+                            os.path.isfile(new_stdfile),
+                            os.path.islink(new_stdfile))
                     if not success:
                         link_errors += 1
 
