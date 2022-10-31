@@ -64,10 +64,10 @@ def main(args=None):
 
     if (args.inframes is None) and (args.expfile is None):
         log.critical('Must provide --inframes or --expfile')
-        sys.exit(1)
+        return 1
     if (args.inframes is not None) and (args.expfile is not None):
         log.critical('Must use --inframes or --expfile but not both')
-        sys.exit(1)
+        return 1
 
     log.info('Starting at {}'.format(time.asctime()))
 
@@ -100,7 +100,7 @@ def main(args=None):
         nightexp = nightexp[keep]
         if len(nightexp) == 0:
             log.critical('No exposures passed filters')
-            sys.exit(13)
+            return 13
 
         framefiles = list()
         for night, expid, spectro in nightexp['NIGHT', 'EXPID', 'SPECTRO']:
@@ -130,7 +130,7 @@ def main(args=None):
 
     if len(frames) == 0:
         log.critical('No input frames found')
-        sys.exit(1)
+        return 1
 
     log.info('Combining into spectra')
     spectra = frames2spectra(frames, pix=args.healpix, nside=args.nside)
@@ -144,7 +144,7 @@ def main(args=None):
             dec = frame.fibermap['TARGET_DEC']
             input_hpix.update(set(radec2pix(args.nside, ra, dec)))
         log.critical(f'Input frames have nside={args.nside} healpix {input_hpix}')
-        sys.exit(1)
+        return 1
 
     #- Record input files
     if spectra.meta is None:

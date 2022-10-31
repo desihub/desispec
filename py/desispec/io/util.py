@@ -623,7 +623,7 @@ def erow_to_goodcamword(erow, suppress_logging=False):
                                   badcamword=erow['BADCAMWORD'],
                                   badamps=erow['BADAMPS'],
                                   obstype=erow['OBSTYPE'],
-                                  suppress_logging=supress_logging)
+                                  suppress_logging=suppress_logging)
 
 
 def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,

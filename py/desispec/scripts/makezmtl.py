@@ -176,3 +176,5 @@ def main(args=None):
                     log.error(f'Tile {tile} night {night} petal {pnum} failed; continuing')
 
         return numerr
+
+    return 0

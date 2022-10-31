@@ -244,7 +244,7 @@ def main(args=None):
                 log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
             else:
                 log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
-                sys.exit(1)
+                return 1
 
             # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
             DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
@@ -261,7 +261,7 @@ def main(args=None):
                 qso_mask_bit = cmx_mask.mask('MINI_SV_QSO|SV0_QSO')
             else:
                 log.error("**** DESI_TARGET IS NOT CMX / SV1 / SV2 / SV3 / MAIN ****")
-                sys.exit(1)
+                return 1
 
             is_qso_target = fibermap[DESI_TARGET] & qso_mask_bit != 0
             sel_RR = (redrock['SPECTYPE'] == 'QSO')
@@ -277,12 +277,12 @@ def main(args=None):
                 sel_to_mgii = np.ones(redrock['TARGETID'].size, dtype='bool')
             else:
                 log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (restricted / qso_targets / all_targets) ****")
-                sys.exit(1)
+                return 1
 
             # Check args.save_target to avoid a crash after the mgii fit
             if not (args.save_target in ['restricted', 'all']):
                 log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
-                sys.exit(1)
+                return 1
 
             log.info(f"Nbr objects for mgii: {sel_to_mgii.sum()}")
             QSO_from_MGII = select_targets_with_mgii_fitter(redrock, fibermap, sel_to_mgii, args.coadd, args.redrock, param_mgii_fitter, DESI_TARGET, args.save_target)
@@ -301,6 +301,7 @@ def main(args=None):
 
     else:  # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
-        sys.exit(1)
+        return 1
 
     log.info(f"EXECUTION TIME: {time.time() - start:3.2f} s.")
+    return 0

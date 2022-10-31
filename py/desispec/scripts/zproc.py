@@ -55,7 +55,7 @@ def parse(options=None):
     # TODO - finalize the arguments we need
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
-    parser.add_argument("-t", "--tileid", type=str, default=None, help="Tile ID")
+    parser.add_argument("-t", "--tileid", type=int, default=None, help="Tile ID")
     # parser.add_argument("-p", "--healpix", type=str, default=None, help="Healpix")
     parser.add_argument("-n", "--nights", type=int, nargs='*', default=None,
                         help="YEARMMDD night")
@@ -172,7 +172,7 @@ def main(args=None, comm=None):
         thistime=datetime.datetime.fromtimestamp(start_imports).isoformat()
         log.info(f'rank 0 started {thisfile} at {thistime}')
     ## Start timer; only print log messages from rank 0 (others are silent)
-    timer = desiutil.timer.Timer(silent=(rank>0))
+    timer = desiutil.timer.Timer(silent=rank>0)
 
     ## Fill in timing information for steps before we had the timer created
     if args.starttime is not None:
@@ -188,15 +188,13 @@ def main(args=None, comm=None):
     ## Freeze IERS after parsing args so that it doesn't bother if only --help
     timer.start('freeze_iers')
     ## Redirect all of the freeze_iers messages to /dev/null
-    with stdouterr_redirected(comm=comm):
-        desiutil.iers.freeze_iers()
-    if rank == 0:
-        log.info("Froze iers for all ranks")
+    #with stdouterr_redirected(comm=None):
+    desiutil.iers.freeze_iers()
+    #if rank == 0:
+    #    log.info("Froze iers for all ranks")
     timer.stop('freeze_iers')
 
     timer.start('preflight')
-    if comm is not None:
-        args = comm.bcast(args, root=0)
 
     ## Derive the available cameras
     if isinstance(args.cameras, str):
@@ -246,8 +244,8 @@ def main(args=None, comm=None):
 
         if args.batch:
             ## create the batch script
-            expids = np.unique(exposure_table['EXPID'])
-            nights = np.unique(exposure_table['NIGHT'])
+            expids = np.unique(exposure_table['EXPID'].data)
+            nights = np.unique(exposure_table['NIGHT'].data)
             scriptfile = create_desi_zproc_batch_script(tileid=tileid,
                                                         # healpix=healpix,
                                                         nights=nights,
@@ -280,9 +278,14 @@ def main(args=None, comm=None):
         comm.barrier()
         exposure_table = comm.bcast(exposure_table, root=0)
 
+    if len(exposure_table) == 0:
+        msg = f"Didn't find any exposures!"
+        log.error(msg)
+        raise ValueError(msg)
+    
     ## Get night and expid information
-    expids = np.unique(exposure_table['EXPID'])
-    nights = np.unique(exposure_table['NIGHT'])
+    expids = np.unique(exposure_table['EXPID'].data)
+    nights = np.unique(exposure_table['NIGHT'].data)
     thrunight = np.max(nights)
 
     #------------------------------------------------------------------------#
@@ -334,12 +337,8 @@ def main(args=None, comm=None):
     # full_spectros = camword_to_spectros(create_camword(list(complete_cam_set)),
     #                                            full_spectros_only=True)
 
-    if len(expnight_dict) == 0:
-        msg = f"Didn't find any exposures!"
-        log.error(msg)
-        raise ValueError(msg)
-    elif len(all_spectros) == 0:
-        msg = f"Didn't find any spectrographs!"
+    if len(all_spectros) == 0:
+        msg = f"Didn't find any spectrographs! complete_cam_set={complete_cam_set}"
         log.error(msg)
         raise ValueError(msg)
 
@@ -352,6 +351,12 @@ def main(args=None, comm=None):
     nblocks, block_size, block_rank, block_num = \
         distribute_ranks_to_blocks(len(all_spectros), rank=rank, size=size, log=log)
 
+    if rank == 0:
+        splog = findfile('spectra', night=thrunight, tile=tileid,
+                         groupname=groupname, spectrograph=0,
+                         logfile=True)
+        os.makedirs(os.path.dirname(splog), exist_ok=True)
+        
     if comm is not None:
         comm.barrier()
 
@@ -363,7 +368,7 @@ def main(args=None, comm=None):
                                    groupname=groupname, spectrograph=spectro)
             splog = findfile('spectra', night=thrunight, tile=tileid,
                              groupname=groupname, spectrograph=spectro,
-                             log=True)
+                             logfile=True)
             coaddfile = findfile('coadd', night=thrunight, tile=tileid,
                                  groupname=groupname, spectrograph=spectro)
             # generate list of cframes from dict of exposures, nights, and cameras
@@ -414,7 +419,7 @@ def main(args=None, comm=None):
                           groupname=groupname, spectrograph=spectro)
         rrlog = findfile('redrock', night=thrunight, tile=tileid,
                          groupname=groupname, spectrograph=spectro,
-                         log=True)
+                         logfile=True)
         redrock_cmd = "rrdesi_mpi"
 
         cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
@@ -441,45 +446,51 @@ def main(args=None, comm=None):
     if rank == 0:
         log.info("Done with redrock")
 
+    if comm is not None:
+        comm.barrier()
+        
     timer.stop('redrock')
+    print(f"--------->   Rank:{rank} has arrived before tileqa but after barrier")
 
     #-------------------------------------------------------------------------
     ## Do tileqa if a tile
-    if groupname in ['pernight', 'cumulative']:
-        from desispec.scripts import tileqa
+    try:
+        if groupname in ['pernight', 'cumulative']:
+            from desispec.scripts import tileqa
 
-        timer.start('tileqa')
-        if rank == 0:
-            result, success = 0, True
-            qafile = findfile('tileqa', night=thrunight,
-                              tile=tileid, groupname=groupname)
-            qapng = findfile('tileqapng', night=thrunight, tile=tileid,
-                             groupname=groupname)
-            qalog = findfile('tileqa', night=thrunight, tile=tileid,
-                             groupname=groupname, log=True)
-            cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
-            cmdargs = cmd.split()[1:]
-            if args.dryrun:
-                if rank == 0:
+            timer.start('tileqa')
+            if rank == 0:
+                result, success = 0, True
+                qafile = findfile('tileqa', night=thrunight,
+                                  tile=tileid, groupname=groupname)
+                qapng = findfile('tileqapng', night=thrunight, tile=tileid,
+                                 groupname=groupname)
+                qalog = findfile('tileqa', night=thrunight, tile=tileid,
+                                 groupname=groupname, logfile=True)
+                cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
+                cmdargs = cmd.split()[1:]
+                if args.dryrun:
                     log.info(f"dryrun: Would have run {cmd} with"
                              + f"outputs {qafile}, {qapng}")
-            else:
-                with stdouterr_redirected(qalog, comm=comm):
-                    result, success = runcmd(tileqa.main, comm=comm, args=cmdargs,
-                                             inputs=[], outputs=[qafile, qapng])
+                else:
+                    with stdouterr_redirected(qalog, comm=comm):
+                        result, success = runcmd(tileqa.main, comm=comm, args=cmdargs,
+                                                 inputs=[], outputs=[qafile, qapng])
+                        
+                ## count failure/success
+                if not success:
+                    error_count += 1
+                log.info("Done with tileqa")
+                
+            timer.stop('tileqa')
+    except (BaseException, Exception) as e:
+        log.error(e)
 
-            ## Since all ranks running redrock, only count failure/success once
-            if not success:
-                error_count += 1
-            ## Since all ranks running redrock, ensure we're all moving on to next
-            ## iteration together
-
-            log.info("Done with tileqa")
-
-        timer.stop('tileqa')
-
-        if comm is not None:
-            comm.barrier()
+            
+    print(f"--------->   Rank:{rank} has arrived after tileqa but before barrier")
+    if comm is not None:
+        comm.barrier()
+    print(f"--------->   Rank:{rank} has arrived after tileqa but before barrier")
 
     #-------------------------------------------------------------------------
     ## Do zmtl if asked to
@@ -498,7 +509,7 @@ def main(args=None, comm=None):
                                     groupname=groupname, spectrograph=spectro)
                 zmtllog = findfile('zmtl', night=thrunight, tile=tileid,
                                    groupname=groupname, spectrograph=spectro,
-                                   log=True)
+                                   logfile=True)
                 cmd = f"make_zmtl_files --input_file {rrfile} --output_file {zmtlfile}"
                 cmdargs = cmd.split()[1:]
                 if args.dryrun:
@@ -517,8 +528,8 @@ def main(args=None, comm=None):
 
         timer.stop('zmtl')
 
-        if comm is not None:
-            comm.barrier()
+    if comm is not None:
+        comm.barrier()
 
     #-------------------------------------------------------------------------
     ## Do afterburners if asked to
@@ -566,7 +577,7 @@ def main(args=None, comm=None):
                                         spectrograph=spectro)
                     mgiilog = findfile('qso_mgii', night=thrunight, tile=tileid,
                                        groupname=groupname, spectrograph=spectro,
-                                       log=True)
+                                       logfile=True)
                     cmd = f"desi_qso_mgii_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {mgiifile} " \
                           + f"--target_selection all --save_target all"
@@ -586,7 +597,7 @@ def main(args=None, comm=None):
                                       spectrograph=spectro)
                     qnlog = findfile('qso_qn', night=thrunight, tile=tileid,
                                      groupname=groupname, spectrograph=spectro,
-                                     log=True)
+                                     logfile=True)
                     cmd = f"desi_qso_qn_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {qnfile} " \
                           + f"--target_selection all --save_target all"
@@ -606,7 +617,7 @@ def main(args=None, comm=None):
                                       spectrograph=spectro)
                     emlog = findfile('emline', night=thrunight, tile=tileid,
                                      groupname=groupname, spectrograph=spectro,
-                                     log=True)
+                                     logfile=True)
                     cmd = f"desi_emlinefit_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {emfile}"
                     cmdargs = cmd.split()[1:]
@@ -631,15 +642,22 @@ def main(args=None, comm=None):
 
         timer.stop('afterburners')
 
-        if comm is not None:
-            comm.barrier()
+    if comm is not None:
+        comm.barrier()
 
     #-------------------------------------------------------------------------
     ## Collect error count
     if comm is not None:
+        print(f"--------->   Rank:{rank} has error_count:{error_count} before gather")
         all_error_counts = comm.gather(error_count, root=0)
-        error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
-
+        print(f"--------->   Rank:{rank} has all_error_counts:{all_error_counts}")
+        if rank != 0:
+            all_error_counts = [0]
+        error_count = int(comm.bcast(int(np.sum(all_error_counts)), root=0))
+        comm.barrier()
+        print(f"--------->   Rank:{rank} has error_count:{error_count} after gather")
+        comm.barrier()
+        
     if rank == 0 and error_count > 0:
         log.error(f'{error_count} processing errors; see logs above')
 
@@ -686,7 +704,7 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
                                only the ranks in the current block. Splits from
                                the world communicator
     """
-    if rank is None or size in None:
+    if rank is None or size is None:
         if comm is not None:
             # - Use the provided comm to determine rank and size
             rank = comm.rank
@@ -708,18 +726,19 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
         block_size = 1
         block_rank = 0
         block_num = rank
-        block_comm = comm
-    elif comm is not None:
+        if split_comm:
+            block_comm = comm
+    else:
         # nblocks = nblocks
         block_size = int(size / nblocks)
         block_num = int(rank / block_size)
         block_rank = int(rank % block_size)
-        block_comm = comm.Split(block_num, block_rank)
-        assert block_rank == block_comm.Get_rank()
-    else:
-        nblocks = block_size = 1
-        block_rank = block_num = 0
-        block_comm = comm
+        if split_comm:
+            if comm is not None:
+                block_comm = comm.Split(block_num, block_rank)
+                assert block_rank == block_comm.Get_rank()
+            else:
+                block_comm = comm            
 
     if log is not None:
         log.info(f"World rank/size: {rank}/{size} mapped to: Block #{block_num}, " +

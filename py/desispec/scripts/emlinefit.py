@@ -198,7 +198,9 @@ def main(args=None):
         log.info("{:.1f}s\tplot_done\tTIMESTAMP={}".format(time() - start, Time.now().isot))
 
     log.info("{:.1f}s\tdone\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
+    

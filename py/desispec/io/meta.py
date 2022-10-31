@@ -75,7 +75,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir=None, specprod_dir=None,
         download=False, outdir=None, qaprod_dir=None,
         return_exists=False,
-        readonly=False, log=False):
+        readonly=False, logfile=False):
     """Returns location where file should be
 
     Args:
@@ -101,7 +101,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
         readonly: if True, return read-only version of path if possible
-        log: if True, returns the pathname of the log instead of the data
+        logfile: if True, returns the pathname of the log instead of the data
                    product itself
 
     Returns filename, or (filename, exists) if return_exists=True
@@ -240,30 +240,32 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else:
         nightprefix = ""
 
+    loc_copy = location.copy()
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
         if groupname == 'perexp':
             ## If perexp, then use the _single naming scheme
             ## Do loop to improve scaling with additional file types
-            for key, val in location:
+            for key, val in loc_copy.items():
                 if key.endswith('_single'):
-                    root_key = key.split('_')[0]
-                    location[root_key] = location[key]
+                    root_key = key.removesuffix('_single')
+                    location[root_key] = val
         else:
             ## If cumulative/pernight, then use the tile naming scheme
             ## Do loop to improve scaling with additional file types
-            for key, val in location:
+            for key, val in loc_copy.items():
                 if key.endswith('_tile'):
-                    root_key = key.split('_')[0]
-                    location[root_key] = location[key]
+                    root_key = key.removesuffix('_tile')
+                    location[root_key] = val
     else:
         ## If not tile based then use the hp naming scheme
         ## Do loop to improve scaling with additional file types
-        for key, val in location:
+        for key, val in loc_copy.items():
             if key.endswith('_hp'):
-                root_key = key.split('_')[0]
-                location[root_key] = location[key]
-
+                root_key = key.removesuffix('_hp')
+                location[root_key] = val
+    del loc_copy
+    
     if groupname is not None and tile is None:
         hpix = int(groupname)
         log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
@@ -336,7 +338,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if outdir:
         filepath = os.path.join(outdir, os.path.basename(filepath))
 
-    if log:
+    if logfile:
         logtypes = ['spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa',
                     'tileqapng', 'zmtl', 'qso_qn', 'qso_mgii', 'emline']
         if not np.any([filetype.startswith(term) for term in logtypes]):

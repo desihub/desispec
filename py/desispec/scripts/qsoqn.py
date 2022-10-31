@@ -236,19 +236,20 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     lines = ['LYA', 'CIV(1548)', 'CIII(1909)', 'MgII(2796)', 'Hbeta', 'Halpha']
     lines_bal = ['CIV(1548)']
 
-    try:  # check if the env variable QN_MODEL_FILE is defined, otherwise load boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5
+    if 'QN_MODEL_FILE' in os.environ.keys():
+        # check if the env variable QN_MODEL_FILE is defined, otherwise load boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5
         model_QN_path = os.environ['QN_MODEL_FILE']
-    except KeyError:
+    else:
         log.warning(
             "$QN_MODEL_FILE is not set in the current environment. Default path will be used: $DESI_ROOT/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
-        try:
+        if 'DESI_ROOT' in os.environ.keys():
             DESI_ROOT = os.environ['DESI_ROOT']
             model_QN_path = os.path.join(DESI_ROOT,
                                          "science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
-        except KeyError:  # if $DESI_ROOT is not set, exit the program.
+        else:  # if $DESI_ROOT is not set, exit the program.
             log.error(
                 "$DESI_ROOT is not set in the current environment. Please set it before running this code.")
-            sys.exit(1)
+            raise KeyError("QN_MODEL_FILE and DESI_ROOT are not set in the current environment.")
 
     model_QN = load_model(model_QN_path)
 
@@ -445,7 +446,7 @@ def main(args=None):
                 log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
             else:
                 log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
-                sys.exit(1)
+                return 1
 
             # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
             DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
@@ -470,12 +471,12 @@ def main(args=None):
                 sel_to_QN = np.ones(redrock['TARGETID'].size, dtype=bool)
             else:
                 log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (qso_targets / all_targets) ****")
-                sys.exit(1)
+                return 1
 
             # Check args.save_target to avoid a crash after the QN + new RR Run
             if not (args.save_target in ['restricted', 'all']):
                 log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
-                sys.exit(1)
+                return 1
 
             log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
             QSO_from_QN = selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET,
@@ -495,6 +496,7 @@ def main(args=None):
 
     else:  # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
-        sys.exit(1)
+        return 1
 
     log.info(f"EXECUTION TIME: {time.time() - start:3.2f} s.")
+    return 0

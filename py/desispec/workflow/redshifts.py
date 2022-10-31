@@ -206,7 +206,7 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
         fx.write('\n')
 
         # batch-friendly matplotlib backend
-        fx.write('export MPLBACKEND = agg\n')
+        fx.write('export MPLBACKEND=agg\n')
 
         # fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         fx.write("export OMP_NUM_THREADS=1\n")

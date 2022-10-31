@@ -267,3 +267,5 @@ def main(args=None):
 
     if len(summary_rows)==0 :
         print("no data")
+
+    return 0
