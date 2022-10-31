@@ -855,19 +855,23 @@ def relsymlink(src, dst, pathonly=False):
     Returns:
         the releative path from dst -> src
     """
-    #- Standardize path
-    src = os.path.normpath(os.path.abspath(src))
-    dst = os.path.normpath(os.path.abspath(dst))
+    #- if src is already a relative path, just use that
+    if src.startswith('..'):
+        relpath = src
+    else:
+        #- Standardize path
+        src = os.path.normpath(os.path.abspath(src))
+        dst = os.path.normpath(os.path.abspath(dst))
 
-    #- handle DESI_ROOT (required) vs. DESI_ROOT_READONLY (optional)
-    if 'DESI_ROOT_READONLY' in os.environ:
-        ro_root = os.path.normpath(os.environ['DESI_ROOT_READONLY'])
-        rw_root = os.path.normpath(os.environ['DESI_ROOT'])
+        #- handle DESI_ROOT (required) vs. DESI_ROOT_READONLY (optional)
+        if 'DESI_ROOT_READONLY' in os.environ:
+            ro_root = os.path.normpath(os.environ['DESI_ROOT_READONLY'])
+            rw_root = os.path.normpath(os.environ['DESI_ROOT'])
 
-        if (ro_root != rw_root) and src.startswith(ro_root):
-            src = src.replace(ro_root, rw_root, 1)
+            if (ro_root != rw_root) and src.startswith(ro_root):
+                src = src.replace(ro_root, rw_root, 1)
 
-    relpath = os.path.relpath(src, os.path.dirname(dst))
+        relpath = os.path.relpath(src, os.path.dirname(dst))
 
     if not pathonly:
         os.symlink(relpath, dst)
