@@ -10,6 +10,8 @@ Major:
 * Restore sky-modeling sector offsets (PR `#1825`_).
 * Add emlinefit afterburner to redshift scripts (PR `#1852`_).
 * emlinefit (1+z) normalization bugfix (PR `#1878`_).
+* Sky model use TPCORR to adjust sky line amplitudes, but not continuum
+  (PR `#1886`_).
 
 Minor:
 
@@ -43,7 +45,8 @@ Minor:
 * fix fallback to DESI_SPECTRO_CALIB if DESI_SPECTRO_DARK is set but doesn't
   have suitable files for date range (PR `#1882`_).
 * desi_proc options for sims (PR `#1885`_)
-* Fix relative symlinks to read-only mount of $DESI_ROOT_READONLY (PR `#1888`_).
+* Fix relative symlinks to read-only mount of $DESI_ROOT_READONLY
+  (PRs `#1888`_, `#1891`_).
 
 .. _`#1822`: https://github.com/desihub/desispec/pull/1822
 .. _`#1824`: https://github.com/desihub/desispec/pull/1824
@@ -77,7 +80,9 @@ Minor:
 .. _`#1879`: https://github.com/desihub/desispec/pull/1879
 .. _`#1882`: https://github.com/desihub/desispec/pull/1882
 .. _`#1885`: https://github.com/desihub/desispec/pull/1885
+.. _`#1886`: https://github.com/desihub/desispec/pull/1886
 .. _`#1888`: https://github.com/desihub/desispec/pull/1888
+.. _`#1891`: https://github.com/desihub/desispec/pull/1891
 
 0.54.0 (2022-08-15)
 -------------------
