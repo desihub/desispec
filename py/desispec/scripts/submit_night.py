@@ -28,7 +28,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
-                 all_tiles=False, specstatus_path=None):
+                 all_tiles=False, specstatus_path=None, use_specter=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -75,6 +75,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                               the table pointed to by specstatus_path.
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
         None.
@@ -359,7 +360,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                     check_for_outputs=check_for_outputs,
                                                     resubmit_partial_complete=resubmit_partial_complete,
                                                     z_submit_types=z_submit_types,
-                                                    system_name=system_name)
+                                                    system_name=system_name,use_specter=use_specter)
             else:
                 cur_z_submit_types = z_submit_types
                 ## If running redshifts and there is a future exposure of the same tile
@@ -407,7 +408,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                  reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs,
                                  resubmit_partial_complete=resubmit_partial_complete,
-                                 system_name=system_name)
+                                 system_name=system_name,use_specter=use_specter)
 
             ## If processed a dark, assign that to the dark job
             if curtype == 'dark':
@@ -454,7 +455,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
                                                 z_submit_types=z_submit_types,
-                                                system_name=system_name)
+                                                system_name=system_name,use_specter=use_specter)
         else:
             ptable, calibjobs, sciences, internal_id \
                 = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
