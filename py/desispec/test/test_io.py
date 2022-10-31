@@ -1510,6 +1510,19 @@ class TestIO(unittest.TestCase):
                 os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
         self.assertEqual(path, '../../a/b/c.fits')
 
+        #- src itself can be a relative path, in which case it means relative
+        #- to dirname(dst), not current directory
+        origdir = os.getcwd()
+        os.chdir(self.testDir)
+        path = relsymlink(
+                '../../a/b/test1.txt',
+                self.testDir+'/x/y/test3.txt')
+        self.assertEqual(path, '../../a/b/test1.txt')
+        with open(self.testDir+'/x/y/test3.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+        os.chdir(origdir)
+
 
 def test_suite():
     """Allows testing of only this module with the command::
