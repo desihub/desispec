@@ -466,13 +466,14 @@ def stdouterr_redirected(to=None, comm=None):
             comm.barrier()
 
         # concatenate per-process files
-        if rank == 0:
+        if rank == 0 and to != "/dev/null":
             with open(to, "w") as outfile:
                 for p in range(nproc):
-                    outfile.write("================= Process {} =================\n".format(p))
+                    outfile.write("================ Start of Process {} ================\n".format(p))
                     fname = "{}_{}".format(to, p)
                     with open(fname) as infile:
                         outfile.write(infile.read())
+                    outfile.write("================= End of Process {} =================\n\n".format(p))
                     os.remove(fname)
 
         if nproc > 1:

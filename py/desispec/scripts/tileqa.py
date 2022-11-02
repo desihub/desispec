@@ -102,15 +102,16 @@ def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
         specprod_dir = specprod_root() # $DESI_SPECTRO_REDUX/$SPECPROD
 
     log = get_logger()
-    try:
-        figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
-    except Exception as err:
-        figfile = None
-        import traceback
-        lines = traceback.format_exception(*sys.exc_info())
-        log.error("make_tile_qa_plot raised an exception:")
-        print("".join(lines))
-
+    #try:
+    #    figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
+    #except Exception as err:
+    #    figfile = None
+    #    import traceback
+    #    lines = traceback.format_exception(*sys.exc_info())
+    #    log.error("make_tile_qa_plot raised an exception:")
+    #    print("".join(lines))
+    figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
+    
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :

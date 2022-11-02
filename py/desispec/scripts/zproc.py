@@ -188,12 +188,13 @@ def main(args=None, comm=None):
     ## Freeze IERS after parsing args so that it doesn't bother if only --help
     timer.start('freeze_iers')
     ## Redirect all of the freeze_iers messages to /dev/null
-    #with stdouterr_redirected(comm=None):
-    desiutil.iers.freeze_iers()
-    #if rank == 0:
-    #    log.info("Froze iers for all ranks")
+    with stdouterr_redirected(comm=comm):
+        desiutil.iers.freeze_iers()
+    if rank == 0:
+        log.info("Froze iers for all ranks")
     timer.stop('freeze_iers')
 
+    
     timer.start('preflight')
 
     ## Derive the available cameras
@@ -450,47 +451,47 @@ def main(args=None, comm=None):
         comm.barrier()
         
     timer.stop('redrock')
-    print(f"--------->   Rank:{rank} has arrived before tileqa but after barrier")
 
     #-------------------------------------------------------------------------
     ## Do tileqa if a tile
-    try:
-        if groupname in ['pernight', 'cumulative']:
-            from desispec.scripts import tileqa
+    timer.start('tileqa')
 
-            timer.start('tileqa')
-            if rank == 0:
-                result, success = 0, True
-                qafile = findfile('tileqa', night=thrunight,
-                                  tile=tileid, groupname=groupname)
-                qapng = findfile('tileqapng', night=thrunight, tile=tileid,
-                                 groupname=groupname)
-                qalog = findfile('tileqa', night=thrunight, tile=tileid,
-                                 groupname=groupname, logfile=True)
-                cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
-                cmdargs = cmd.split()[1:]
-                if args.dryrun:
-                    log.info(f"dryrun: Would have run {cmd} with"
-                             + f"outputs {qafile}, {qapng}")
-                else:
-                    with stdouterr_redirected(qalog, comm=comm):
-                        result, success = runcmd(tileqa.main, comm=comm, args=cmdargs,
-                                                 inputs=[], outputs=[qafile, qapng])
-                        
-                ## count failure/success
-                if not success:
-                    error_count += 1
-                log.info("Done with tileqa")
+    if rank == 0 and groupname in ['pernight', 'cumulative']:
+        from desispec.scripts import tileqa
+
+        result, success = 0, True
+        qafile = findfile('tileqa', night=thrunight,
+                          tile=tileid, groupname=groupname)
+        qapng = findfile('tileqapng', night=thrunight, tile=tileid,
+                         groupname=groupname)
+        qalog = findfile('tileqa', night=thrunight, tile=tileid,
+                         groupname=groupname, logfile=True)
+        infiles = []
+        for spectro in all_spectros:
+            infiles.append(findfile('coadd', night=thrunight, tile=tileid,
+                                    groupname=groupname, spectrograph=spectro))
+            infiles.append(findfile('redrock', night=thrunight, tile=tileid,
+                                    groupname=groupname, spectrograph=spectro))
+        cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
+        cmdargs = cmd.split()[1:]
+        if args.dryrun:
+            log.info(f"dryrun: Would have run {cmd} with"
+                     + f"outputs {qafile}, {qapng}")
+        else:
+            with stdouterr_redirected(qalog):
+                result, success = runcmd(tileqa.main, args=cmdargs,
+                                         inputs=infiles, outputs=[qafile, qapng])
+                    
+            ## count failure/success
+            if not success:
+                error_count += 1
                 
-            timer.stop('tileqa')
-    except (BaseException, Exception) as e:
-        log.error(e)
+        log.info("Done with tileqa")
+                
+    timer.stop('tileqa')
 
-            
-    print(f"--------->   Rank:{rank} has arrived after tileqa but before barrier")
     if comm is not None:
         comm.barrier()
-    print(f"--------->   Rank:{rank} has arrived after tileqa but before barrier")
 
     #-------------------------------------------------------------------------
     ## Do zmtl if asked to
@@ -557,14 +558,20 @@ def main(args=None, comm=None):
         nblocks, block_size, block_rank, block_num = \
             distribute_ranks_to_blocks(ntasks, rank=rank, size=size, log=log)
 
+        if comm is not None:
+            comm.barrier()
+            
         if block_rank == 0:
+            ## If running mutiple afterburners at once, wait some time so
+            ## I/O isn't hit all at once
+            ## afterburner 2 runs with 10s delay, 3 with 20s delay
+            time.sleep(0.2*block_num)
             for i in range(block_num, ntasks, nblocks):
                 result, success = 0, True
                 ## If running mutiple afterburners at once, wait some time so
                 ## I/O isn't hit all at once
                 ## afterburner 2 runs with 10s delay, 3 with 20s delay
-                if size > len(all_spectros):
-                    time.sleep(10*(i % nspectros))
+                #time.sleep(0.2*i)
                 spectro = all_spectros[i % nspectros]
                 coaddfile = findfile('coadd', night=thrunight, tile=tileid,
                                      groupname=groupname, spectrograph=spectro)
@@ -572,6 +579,7 @@ def main(args=None, comm=None):
                                        groupname=groupname, spectrograph=spectro)
                 ## First set of nspectros ranks go to desi_qso_mgii_afterburner
                 if i // nspectros == 0:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso mgii")
                     mgiifile = findfile('qso_mgii', night=thrunight, tile=tileid,
                                         groupname=groupname,
                                         spectrograph=spectro)
@@ -592,6 +600,7 @@ def main(args=None, comm=None):
                                                      outputs=[mgiifile])
                 ## Second set of nspectros ranks go to desi_qso_qn_afterburner
                 elif i // nspectros == 1:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso qn")
                     qnfile = findfile('qso_qn', night=thrunight, tile=tileid,
                                       groupname=groupname,
                                       spectrograph=spectro)
@@ -612,6 +621,7 @@ def main(args=None, comm=None):
                                                      outputs=[qnfile])
                 ## Third set of nspectros ranks go to desi_emlinefit_afterburner
                 elif i // nspectros == 2:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefiti")
                     emfile = findfile('emline', night=thrunight, tile=tileid,
                                       groupname=groupname,
                                       spectrograph=spectro)
@@ -648,15 +658,12 @@ def main(args=None, comm=None):
     #-------------------------------------------------------------------------
     ## Collect error count
     if comm is not None:
-        print(f"--------->   Rank:{rank} has error_count:{error_count} before gather")
         all_error_counts = comm.gather(error_count, root=0)
-        print(f"--------->   Rank:{rank} has all_error_counts:{all_error_counts}")
-        if rank != 0:
-            all_error_counts = [0]
-        error_count = int(comm.bcast(int(np.sum(all_error_counts)), root=0))
-        comm.barrier()
-        print(f"--------->   Rank:{rank} has error_count:{error_count} after gather")
-        comm.barrier()
+        if rank == 0:
+            final_error_count = int(np.sum(all_error_counts))
+        else:
+            final_error_count = 0
+        error_count = comm.bcast(final_error_count, root=0)
         
     if rank == 0 and error_count > 0:
         log.error(f'{error_count} processing errors; see logs above')
