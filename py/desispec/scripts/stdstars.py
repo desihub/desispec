@@ -336,6 +336,8 @@ def main(args=None, comm=None) :
     fibermap   = fibermap[keep_stds]
     assert(len(fibermap)==len(starfibers)) # check same size
     assert(len(fibermap)==np.sum(keep_stds)) # test for funny astropy Table issue
+    assert(np.all(fibermap['FIBER']==starfibers)) # same order
+
     log.info(f'sp{spectrograph} stdstar fibers {starfibers}')
 
     # excessive check but just in case
@@ -418,6 +420,7 @@ def main(args=None, comm=None) :
     del flats
 
     # Double check indexing
+    assert np.all(fibermap['FIBER'] == starfibers)
     for cam in frames:
         for frame in frames[cam]:
             assert np.all(frame.fibermap['FIBER'] == starfibers)
@@ -462,6 +465,12 @@ def main(args=None, comm=None) :
     starfibers  = starfibers[validstars]
     fibermap = Table(fibermap[validstars])
     nstars = starfibers.size
+
+    # Check indexing yet again
+    assert np.all(fibermap['FIBER'] == starfibers)
+    for cam in frames:
+        for frame in frames[cam]:
+            assert np.all(frame.fibermap['FIBER'] == starfibers)
 
     # MASK OUT THROUGHPUT DIP REGION
     ############################################
