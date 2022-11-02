@@ -333,6 +333,9 @@ def main(args=None, comm=None) :
             spectrograph, np.sum(keep_stds), len(keep_stds)))
 
     starfibers = starfibers[keep_stds]
+    fibermap   = fibermap[keep_stds]
+    assert(len(fibermap)==len(starfibers)) # check same size
+    assert(len(fibermap)==np.sum(keep_stds)) # test for funny astropy Table issue
     log.info(f'sp{spectrograph} stdstar fibers {starfibers}')
 
     # excessive check but just in case
