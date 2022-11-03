@@ -72,7 +72,7 @@ fx.write(f"""<!DOCTYPE html>
 </head>
 <body>
   <h1>Night {args.night}</h1>
-  <p>{specproddir}</p>
+  <p><a href="{specprodurl}">{specproddir}</a></p>
   <div class="mermaid">
   graph TD
     classDef COMPLETED fill:#a8ddb5;
