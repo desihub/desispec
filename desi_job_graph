@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+
+"""
+Create a webpage with the dependency graph and status for DESI jobs on a night
+"""
+
+import os, sys, glob
+import numpy as np
+from astropy.table import Table
+
+import argparse
+
+from desispec.workflow.proctable import get_processing_table_path
+from desispec.workflow.proctable import get_processing_table_name
+from desispec.workflow.queue import queue_info_from_qids
+from desispec.io.meta import specprod_root
+
+p = argparse.ArgumentParser()
+p.add_argument('-n', '--night', type=int, required=True,
+        help='night to process')
+p.add_argument('-o', '--output', type=str, required=False,
+        help='output HTML file (default run/jobgraph/jobgraph-NIGHT.html in reduxdir)')
+p.add_argument('-s', '--specprod', type=str, required=False,
+        help=('override $SPECPROD, or full path '
+              'to override $DESI_SPECTRO_REDUX/$SPECPROD'))
+
+args = p.parse_args()
+
+#- Default output file into specprod directory
+if args.specprod is not None and os.path.isdir(args.specprod):
+    reduxdir = args.specprod
+else:
+    reduxdir = specprod_root(args.specprod)
+
+#- override environment variables for get_processing_table_* calls later
+os.environ['DESI_SPECTRO_REDUX'] = os.path.dirname(reduxdir)
+os.environ['SPECPROD'] = os.path.basename(reduxdir)
+
+if args.output is None:
+    args.output = f'{reduxdir}/run/jobgraph/jobgraph-{args.night}.html'
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+
+#- avoid logging from get_processing_table...
+os.environ['DESI_LOGLEVEL'] = 'warning'
+
+#- Read processing table
+procpath = get_processing_table_path(None)
+procfile = get_processing_table_name(None, str(args.night))
+procfile = os.path.join(procpath, procfile)
+proctable = Table.read(procfile)
+
+#- Get the job state from rows that are actually slurm jobs
+ii = proctable['LATEST_QID']>0
+qinfo = queue_info_from_qids(proctable['LATEST_QID'][ii])
+jobinfo = {row['JOBID']:row for row in qinfo}
+
+#- Map production directory -> URL for log links
+reduxurl = reduxdir.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+outputurl = args.output.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+
+#- Write the mermaid graph
+fx = open(args.output, 'w')
+fx.write(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    h1 {{font-family: Helvetica, sans-serif; margin-bottom: 0.1em;}}
+    p {{font-family: Menlo, Monospace; margin-top: 0.1em;}}
+  </style>
+</head>
+<body>
+  <h1>Night {args.night}</h1>
+  <p>{reduxdir}</p>
+  <div class="mermaid">
+  graph TD
+    classDef COMPLETED fill:#a8ddb5;
+    classDef PENDING   fill:#bdbdbd;
+    classDef RUNNING   fill:#bdd7e7;
+    classDef FAILED        fill:#d95f0e;
+    classDef OUT_OF_MEMORY fill:#d95f0e;
+    classDef TIMEOUT       fill:#d95f0e;
+    classDef CANCELLED     fill:#fed98e;
+    classDef UNKNOWN       fill:#ffffcc;
+""")
+
+jobs = dict()
+for row in proctable:
+    qid = row['LATEST_QID']
+    intid = row['INTID']        #- internal ID
+    jobdesc = row['JOBDESC']
+    expid = row['EXPID'][0:-1].replace('|', ',')  #- comma separated expids
+    e1 = int(expid.split(',')[0])  #- the first expid
+    tileid = row['TILEID']
+    proccamword = row['PROCCAMWORD']
+
+    if qid in jobinfo:
+        state = jobinfo[qid]['STATE'].split()[0]
+    else:
+        state = 'UNKNOWN'
+
+    if jobdesc == 'tilenight':
+        logfile = f'{reduxurl}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
+    else:
+        logfile = f'{reduxurl}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
+
+    if jobdesc in ('tilenight', 'pernight', 'perexp', 'cumulative'):
+        description = f'{jobdesc} {tileid}'
+    elif expid.count(',') == 0:
+        #- single expid job
+        description = f'{jobdesc} {expid}'
+    else:
+        #- multi-expid job, e.g. stdstar fits
+        description = f'{jobdesc}'
+
+    timing = ''
+    if state == 'COMPLETED':
+        hh, mm, ss = jobinfo[qid]['ELAPSED'].split(':')
+        minutes = int(hh)*60 + int(mm)
+        timing = f'<br>{minutes}m{ss}s'
+
+    description += f'<br><small><it>Job {qid}<br>{state}{timing}</it></small>'
+
+    tooltip = f'{jobdesc} Exp {expid} Job {qid} {state}'
+    if tileid > 0:
+        tooltip = f'Tile {tileid} {tooltip}'
+
+    fx.write(f'    {intid}({description}):::{state}\n')
+    fx.write(f'    click {intid} "{logfile}" "{tooltip}"\n')
+    for depid in row['INT_DEP_IDS'].split('|'):
+        if depid != '':
+            fx.write(f'    {depid} --> {intid}\n')
+
+fx.write(""" </div>
+
+<script src="https://unpkg.com/mermaid@9.1.7/dist/mermaid.min.js">mermaid.initialize({startOnLoad:true});</script>
+</body>
+</html>
+""")
+fx.close()
+
+print(f'Wrote {args.output}')
+if outputurl != args.output:
+    print(outputurl)
+
+
+
