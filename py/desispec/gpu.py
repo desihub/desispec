@@ -115,5 +115,3 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
 
     return device_id
 
-
-

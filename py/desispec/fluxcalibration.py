@@ -17,6 +17,7 @@ from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
+from desispec.gpu import is_gpu_available
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -25,16 +26,6 @@ import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 import numpy.linalg
 import copy
-
-try:
-    import cupy
-    import cupyx.scipy.ndimage
-    # true if cupy is able to detect a GPU device
-    _cupy_available = cupy.is_available()
-except ImportError:
-    _cupy_available = False
-use_gpu = _cupy_available
-
 
 try:
     from scipy import constants
@@ -113,9 +104,11 @@ def applySmoothingFilter(flux,width=200) :
 
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    if use_gpu:
+    if is_gpu_available():
+        import cupy
+        import cupyx.scipy.ndimage
         # move flux array to device
-        device_flux = cupy.array(flux)
+        device_flux = cupy.asarray(flux)
         # smooth flux array using median filter
         device_smoothed = cupyx.scipy.ndimage.median_filter(device_flux, width, mode='constant')
         # move smoothed flux array by to host and return
