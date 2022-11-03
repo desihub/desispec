@@ -113,33 +113,15 @@ def main(args):
         # read sky
         skymodel=read_sky(args.sky)
 
+        # subtract sky
+        subtract_sky(frame, skymodel,
+                     apply_throughput_correction_to_lines = (not args.no_sky_line_throughput_correction),
+                     apply_throughput_correction = args.apply_sky_throughput_correction,
+                     zero_ivar = zero_ivar)
+
         if args.cosmics_nsig>0 :
-
-            # use a copy the frame (not elegant but robust)
-            copied_frame = copy.deepcopy(frame)
-
-            # first subtract sky without throughput correction
-            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = zero_ivar)
-
-            # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
-            reject_cosmic_rays_1d(copied_frame,args.cosmics_nsig)
-
-            # copy mask
-            frame.mask = copied_frame.mask
-
-            # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel,
-                         apply_throughput_correction_to_lines = (not args.no_sky_line_throughput_correction),
-                         apply_throughput_correction = args.apply_sky_throughput_correction,
-                         zero_ivar = zero_ivar)
-
-        else :
-            # subtract sky
-            subtract_sky(frame, skymodel,
-                         apply_throughput_correction_to_lines = (not args.no_sky_line_throughput_correction),
-                         apply_throughput_correction = args.apply_sky_throughput_correction,
-                         zero_ivar = zero_ivar)
+            reject_cosmic_rays_1d(frame,args.cosmics_nsig)
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
 
