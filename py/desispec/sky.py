@@ -982,15 +982,18 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
         log.error(message)
         raise ValueError(message)
 
+
+    skymodel_flux = skymodel.flux.copy() # always use a copy to avoid overwriting model
+
     if skymodel.throughput_corrections is not None :
         # a multiplicative factor + background around
         # each of the bright sky lines has been fit.
         # here we apply this correction to the emission lines only or to the whole
         # sky spectrum
+
         if apply_throughput_correction  :
-            for fiber in range(frame.flux.shape[0]) :
-                # apply this correction to the sky model even if we have not fit it (default can be 1 or 0)
-                skymodel.flux[fiber] *= skymodel.throughput_corrections[fiber]
+
+            skymodel_flux *= skymodel.throughput_corrections[:,None]
 
         elif apply_throughput_correction_to_lines :
 
@@ -1014,11 +1017,11 @@ def subtract_sky(frame, skymodel, apply_throughput_correction_to_lines = True, a
                         skylines = skymodel.flux[fiber] - cont
                         skylines[skylines<0]=0
                         # apply correction to the sky lines only
-                        skymodel.flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
+                        skymodel_flux[fiber] += (skymodel.throughput_corrections[fiber]-1.)*skylines
                 else :
                     log.warning("Could not determine sky continuum, do not apply throughput correction on sky lines")
 
-    frame.flux -= skymodel.flux
+    frame.flux -= skymodel_flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
     frame.mask |= skymodel.mask
 
