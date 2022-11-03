@@ -14,12 +14,13 @@ from desispec.workflow.proctable import get_processing_table_path
 from desispec.workflow.proctable import get_processing_table_name
 from desispec.workflow.queue import queue_info_from_qids
 from desispec.io.meta import specprod_root
+from desispec.scripts.tile_redshifts import get_tile_redshift_script_pathname
 
 p = argparse.ArgumentParser()
 p.add_argument('-n', '--night', type=int, required=True,
         help='night to process')
 p.add_argument('-o', '--output', type=str, required=False,
-        help='output HTML file (default run/jobgraph/jobgraph-NIGHT.html in reduxdir)')
+        help='output HTML file (default run/jobgraph/jobgraph-NIGHT.html in specproddir)')
 p.add_argument('-s', '--specprod', type=str, required=False,
         help=('override $SPECPROD, or full path '
               'to override $DESI_SPECTRO_REDUX/$SPECPROD'))
@@ -28,16 +29,16 @@ args = p.parse_args()
 
 #- Default output file into specprod directory
 if args.specprod is not None and os.path.isdir(args.specprod):
-    reduxdir = args.specprod
+    specproddir = args.specprod
 else:
-    reduxdir = specprod_root(args.specprod)
+    specproddir = specprod_root(args.specprod)
 
 #- override environment variables for get_processing_table_* calls later
-os.environ['DESI_SPECTRO_REDUX'] = os.path.dirname(reduxdir)
-os.environ['SPECPROD'] = os.path.basename(reduxdir)
+os.environ['DESI_SPECTRO_REDUX'] = os.path.dirname(specproddir)
+os.environ['SPECPROD'] = os.path.basename(specproddir)
 
 if args.output is None:
-    args.output = f'{reduxdir}/run/jobgraph/jobgraph-{args.night}.html'
+    args.output = f'{specproddir}/run/jobgraph/jobgraph-{args.night}.html'
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
 #- avoid logging from get_processing_table...
@@ -55,7 +56,7 @@ qinfo = queue_info_from_qids(proctable['LATEST_QID'][ii])
 jobinfo = {row['JOBID']:row for row in qinfo}
 
 #- Map production directory -> URL for log links
-reduxurl = reduxdir.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+specprodurl = specproddir.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
 outputurl = args.output.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
 
 #- Write the mermaid graph
@@ -71,7 +72,7 @@ fx.write(f"""<!DOCTYPE html>
 </head>
 <body>
   <h1>Night {args.night}</h1>
-  <p>{reduxdir}</p>
+  <p>{specproddir}</p>
   <div class="mermaid">
   graph TD
     classDef COMPLETED fill:#a8ddb5;
@@ -100,14 +101,24 @@ for row in proctable:
         state = 'UNKNOWN'
 
     if jobdesc == 'tilenight':
-        logfile = f'{reduxurl}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
+        logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
+    elif jobdesc in ('cumulative', 'pernight'):
+        logfile = get_tile_redshift_script_pathname(tileid, jobdesc, night=args.night)
+        logfile = logfile.replace('.slurm', f'-{qid}.log')
+    elif jobdesc == 'perexp':
+        logfile = get_tile_redshift_script_pathname(tileid, jobdesc, expid=e1)
+        logfile = logfile.replace('.slurm', f'-{qid}.log')
     else:
-        logfile = f'{reduxurl}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
+        logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
+
+    logurl = logfile.replace(specproddir, specprodurl)
 
     if jobdesc in ('tilenight', 'pernight', 'perexp', 'cumulative'):
         description = f'{jobdesc} {tileid}'
+        if jobdesc == 'perexp':
+            description += '-{expid}'
     elif expid.count(',') == 0:
-        #- single expid job
+        #- single expid job, e.g. arc, flat, prestdstar, ...
         description = f'{jobdesc} {expid}'
     else:
         #- multi-expid job, e.g. stdstar fits
@@ -126,7 +137,7 @@ for row in proctable:
         tooltip = f'Tile {tileid} {tooltip}'
 
     fx.write(f'    {intid}({description}):::{state}\n')
-    fx.write(f'    click {intid} "{logfile}" "{tooltip}"\n')
+    fx.write(f'    click {intid} "{logurl}" "{tooltip}"\n')
     for depid in row['INT_DEP_IDS'].split('|'):
         if depid != '':
             fx.write(f'    {depid} --> {intid}\n')
