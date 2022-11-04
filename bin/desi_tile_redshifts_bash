@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+
+"""
+Another version of running redshifts per tile
+
+Examples:
+
+All exposures of tile 80605 on night 20201215:
+
+    desi_tile_redshifts_bash --tile 80605 --night 20201215 --group pernight
+
+All exposures of tile 80605 on night 20201215 and prior:
+
+    desi_tile_redshifts_bash --tile 80605 --night 20201215 --group cumulative
+
+Tile 80605 combined across all nights:
+
+    desi_tile_redshifts_bash --tile 80605 --group cumulative
+
+Tile 80605 on nights 20201214 20201215:
+
+    desi_tile_redshifts_bash --tile 80605 --night 20201214 20201215 --group blat
+
+Exposures E1 E2 E3 on night 20201215 (auto splitting by TILEID if needed):
+
+    desi_tile_redshifts_bash --night 20201215 --expid 67972 67973 67968 67969 --group foo
+
+Generate scripts for every tile on 20201215 but don't submit batch jobs:
+
+    desi_tile_redshifts_bash --night 20201215 --group pernight --nosubmit
+
+Use exposures from a separately curated input list:
+
+    desi_tile_redshifts_bash --explist explist-deep.txt --group deep
+
+Not supported yet: multiple tiles on a single night in a single call:
+
+    desi_tile_redshifts_bash --night 20201215 --tileid 80605 80606 80607 --group cumulative
+
+"""
+import sys
+from desispec.scripts import tile_redshifts_bash
+
+if __name__ == '__main__':
+    args = tile_redshifts_bash.parse()
+    sys.exit(tile_redshifts_bash.main(args))
+
+

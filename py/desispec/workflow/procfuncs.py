@@ -10,12 +10,16 @@ from collections import OrderedDict
 import subprocess
 from copy import deepcopy
 
-from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts, get_tile_redshift_script_pathname, \
-                                            get_tile_redshift_relpath, get_tile_redshift_script_suffix
+from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
+from desispec.workflow.redshifts import get_tile_redshift_script_pathname, \
+                                        get_tile_redshift_relpath, \
+                                        get_tile_redshift_script_suffix
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
-from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
-                                              get_desi_proc_batch_file_path, get_desi_proc_tilenight_batch_file_pathname, \
+from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
+                                              create_desi_proc_batch_script, \
+                                              get_desi_proc_batch_file_path, \
+                                              get_desi_proc_tilenight_batch_file_pathname, \
                                               create_desi_proc_tilenight_batch_script
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
@@ -334,11 +338,13 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         else:
             #- run zmtl for cumulative redshifts but not others
             run_zmtl = (prow['JOBDESC'] == 'cumulative')
+            run_afterburners = True
 
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
                                                                      night=[prow['NIGHT']], expid=prow['EXPID'],
-                                                                     run_zmtl=run_zmtl,
                                                                      batch_queue=queue, system_name=system_name,
+                                                                     run_zmtl=run_zmtl,
+                                                                     run_afterburners=run_afterburners,
                                                                      nosubmit=True)
             if len(failed_scripts) > 0:
                 log.error(f"Redshifts failed for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+

@@ -47,15 +47,14 @@ stop_imports = time.time()
 #########################################
 ######## Begin Body of the Code #########
 #########################################
-
 def parse(options=None):
     """
-    Create an argparser object for use with desi_proc AND desi_proc_joint_fit based on arguments from sys.argv
+    Parses an argparser object for use with desi_zproc and returns arguments
     """
-    # TODO - finalize the arguments we need
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
-    parser.add_argument("-t", "--tileid", type=int, default=None, help="Tile ID")
+    parser.add_argument("-t", "--tileid", type=int, default=None,
+                        help="Tile ID")
     # parser.add_argument("-p", "--healpix", type=str, default=None, help="Healpix")
     parser.add_argument("-n", "--nights", type=int, nargs='*', default=None,
                         help="YEARMMDD night")
@@ -66,14 +65,14 @@ def parse(options=None):
                              + "cumulative redshift jobs. Used instead of nights.")
     parser.add_argument("-g", "--groupname", type=str, default='cumulative',
                         help="Redshift grouping type: cumulative, perexp, pernight")
-    parser.add_argument("--cameras", type=str, default="a0123456789",
+    parser.add_argument("-c", "--cameras", type=str, default="a0123456789",
                         help="Explicitly define the spectrographs for which you want" +
                              " to reduce the data. Should be a comma separated list." +
                              " Numbers only assumes you want to reduce R, B, and Z " +
                              "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
     parser.add_argument("--mpi", action="store_true",
                         help="Use MPI parallelism")
-    parser.add_argument("--nogpu", action="store_true",
+    parser.add_argument("--no-gpu", action="store_true",
                         help="Don't use gpus")
     parser.add_argument("--max-gpuprocs", type=int, default=4,
                         help="Number of GPU prcocesses per node")
@@ -90,19 +89,21 @@ def parse(options=None):
     parser.add_argument("--batch-opts", type=str, default=None,
                         help="additional batch commands")
     parser.add_argument("--batch-reservation", type=str,
-                   help="batch reservation name")
+                        help="batch reservation name")
     parser.add_argument("--batch-dependency", type=str,
-                   help="job dependencies passed to sbatch --dependency")
+                        help="job dependencies passed to sbatch --dependency")
     parser.add_argument("--runtime", type=int, default=None,
                         help="batch runtime in minutes")
     parser.add_argument("--starttime", type=str,
                         help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str,
                         help='save runtime info to this json file; augment if pre-existing')
-    parser.add_argument("--system-name", type=str, default=batch.default_system(),
+    parser.add_argument("--system-name", type=str,
+                        default=None,
                         help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("-d", "--dryrun", action="store_true",
                         help="show commands only, do not run")
+
     if options is not None:
         args = parser.parse_args(options)
     else:
@@ -199,21 +200,56 @@ def main(args=None, comm=None):
 
     ## Derive the available cameras
     if isinstance(args.cameras, str):
-        camword = parse_cameras(args.cameras)
-        cameras = decode_camword(camword)
+        if rank == 0:
+            camword = parse_cameras(args.cameras)
+        else:
+            camword = parse_cameras(args.cameras, loglevel='ERROR')
     else:
         camword = create_camword(args.cameras)
-        cameras = args.cameras
 
     ## Unpack arguments for shorter names
     tileid, groupname = args.tileid, args.groupname
 
     known_groups = ['cumulative', 'pernight', 'perexp']
     if groupname not in known_groups:
-        raise ValueError('obstype {} not in {}'.format(groupname, known_groups))
+        msg = 'obstype {} not in {}'.format(groupname, known_groups)
+        log.error(msg)
+        raise ValueError(msg)
+
+    if args.batch:
+        err = 0
+        #-------------------------------------------------------------------------
+        ## Create and submit a batch job if requested
+        if rank == 0:
+            ## create the batch script
+            cmdline = list(sys.argv).copy()
+            scriptfile = create_desi_zproc_batch_script(tileid=tileid,
+                                                        cameras=camword,
+                                                        jobdesc=groupname,
+                                                        queue=args.queue,
+                                                        # healpix=healpix,
+                                                        thrunight=args.thrunight,
+                                                        nights=args.nights,
+                                                        expids=args.expids,
+                                                        runtime=args.runtime,
+                                                        batch_opts=args.batch_opts,
+                                                        timingfile=args.timingfile,
+                                                        system_name=args.system_name,
+                                                        no_gpu=args.no_gpu,
+                                                        max_gpuprocs=args.max_gpuprocs,
+                                                        cmdline=cmdline)
+
+            log.info("Generating batch script and exiting.")
+
+            if not args.nosubmit and not args.dryrun:
+                err = subprocess.call(['sbatch', scriptfile])
+
+        ## All ranks need to exit if submitted batch
+        if comm is not None:
+            err = comm.bcast(err, root=0)
+        sys.exit(err)
 
     exposure_table = Table()
-    err = 0
     if rank == 0:
         if groupname == 'perexp' and args.nights is not None \
                 and args.cameras is not None and args.expids is not None:
@@ -239,40 +275,6 @@ def main(args=None, comm=None):
                 exposure_table = exposure_table[np.isin(exposure_table['EXPID'],
                                                         args.expids)]
             exposure_table.sort(keys=['EXPID'])
-
-        #-------------------------------------------------------------------------
-        ## Create and submit a batch job if requested
-
-        if args.batch:
-            ## create the batch script
-            expids = np.unique(exposure_table['EXPID'].data)
-            nights = np.unique(exposure_table['NIGHT'].data)
-            scriptfile = create_desi_zproc_batch_script(tileid=tileid,
-                                                        # healpix=healpix,
-                                                        nights=nights,
-                                                        expids=expids,
-                                                        cameras=camword,
-                                                        jobdesc=groupname,
-                                                        queue=args.queue,
-                                                        runtime=args.runtime,
-                                                        batch_opts=args.batch_opts,
-                                                        timingfile=args.timingfile,
-                                                        system_name=args.system_name,
-                                                        nogpu=args.nogpu,
-                                                        max_gpuprocs=args.max_gpuprocs,
-                                                        run_zmtl=args.run_zmtl,
-                                                        noafterburners=args.noafterburners)
-
-            log.info("Generating batch script and exiting.")
-
-            if not args.nosubmit and not args.dryrun:
-                err = subprocess.call(['sbatch', scriptfile])
-
-    ## All ranks need to exit if submitted batch
-    if args.batch:
-        if comm is not None:
-            err = comm.bcast(err, root=0)
-        sys.exit(err)
 
     ## Should remove, just nice for printouts while performance isn't important
     if comm is not None:
@@ -335,8 +337,6 @@ def main(args=None, comm=None):
     ## Derive the available spectrographs
     all_spectros = camword_to_spectros(create_camword(list(complete_cam_set)),
                                        full_spectros_only=False)
-    # full_spectros = camword_to_spectros(create_camword(list(complete_cam_set)),
-    #                                            full_spectros_only=True)
 
     if len(all_spectros) == 0:
         msg = f"Didn't find any spectrographs! complete_cam_set={complete_cam_set}"
@@ -424,7 +424,7 @@ def main(args=None, comm=None):
         redrock_cmd = "rrdesi_mpi"
 
         cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
-        if not args.nogpu:
+        if not args.no_gpu:
             cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
 
         cmdargs = cmd.split()[1:]

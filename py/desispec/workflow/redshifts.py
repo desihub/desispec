@@ -95,11 +95,12 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
     return suffix
 
 
-def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
-                                   queue, runtime=None, batch_opts=None,
-                                   timingfile=None, batchdir=None, jobname=None,
-                                   cmdline=None, system_name=None, max_gpuprocs=None,
-                                   nogpu=False, run_zmtl=False, noafterburners=False):
+def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=None,
+                                   nights=None, expids=None, batch_opts=None,
+                                   runtime=None, timingfile=None, batchdir=None,
+                                   jobname=None, cmdline=None, system_name=None,
+                                   max_gpuprocs=None, no_gpu=False, run_zmtl=False,
+                                   noafterburners=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -125,7 +126,7 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
                       of reading from argv.
         system_name (str): name of batch system, e.g. cori-haswell, cori-knl
         max_gpuprocs (int): Number of gpu processes
-        nogpu (bool): Default false. If true it doesn't use GPU's even if available.
+        no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
         run_zmtl (bool): Default false. If true it runs zmtl.
         noafterburners (bool): Default false. If true it doesn't run afterburners.
 
@@ -136,15 +137,29 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
         batchdir and jobname can be used to define an alternative pathname, but
            may not work with assumptions in the spectro pipeline.
     """
-    night = np.max(nights)
+    log = get_logger()
 
-    if jobdesc == 'perexp':
-        expid = expids[0]
+    if nights is not None:
+        night = np.max(nights)
+    elif thrunight is not None:
+        night = thrunight
     else:
-        expid = None
+        msg = f"Must define either nights or thrunight"
+        log.error(msg)
+        raise ValueError(msg)
+
+    expid = None
+    if jobdesc == 'perexp':
+        if expids is None:
+            msg = f"Must define expids for perexp exposure"
+            log.error(msg)
+            raise ValueError(msg)
+        else:
+            expid = expids[0]
+
 
     scriptpath = get_tile_redshift_script_pathname(tileid, group=jobdesc,
-                                                 night=night, expid=expid)
+                                                   night=night, expid=expid)
 
     if np.isscalar(cameras):
         camword = parse_cameras(cameras)
@@ -166,7 +181,7 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
 
     ## If system name isn't specified, guess it
     if system_name is None:
-        system_name = batch.default_system(jobdesc=jobdesc, nogpu=nogpu)
+        system_name = batch.default_system(jobdesc=jobdesc, no_gpu=no_gpu)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -178,6 +193,56 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
     nexps = 1
     if expids is not None and type(expids) is not str:
         nexps = len(expids)
+
+    if cmdline is None:
+        inparams = list(sys.argv).copy()
+    elif np.isscalar(cmdline):
+        inparams = []
+        for param in cmdline.split(' '):
+            for subparam in param.split("="):
+                inparams.append(subparam)
+    else:
+        inparams = list(cmdline)
+    for parameter in ['--queue', '-q', '--batch-opts']:
+        ## If a parameter is in the list, remove it and its argument
+        ## Elif it is a '--' command, it might be --option=value, which won't be split.
+        ##      check for that and remove the whole "--option=value"
+        if parameter in inparams:
+            loc = np.where(np.array(inparams) == parameter)[0][0]
+            # Remove the command
+            inparams.pop(loc)
+            # Remove the argument of the command (now in the command location after pop)
+            inparams.pop(loc)
+        elif '--' in parameter:
+            for ii, inparam in enumerate(inparams.copy()):
+                if parameter in inparam:
+                    inparams.pop(ii)
+                    break
+
+    cmd = ' '.join(inparams)
+    cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
+
+    srun_rr_gpu_opts = ''
+    if not no_gpu:
+        if system_name == 'perlmutter-gpu':
+            if '--max-gpuprocs' not in cmd:
+                cmd += f' --max-gpuprocs {gpus_per_node}'
+            gpumap = ','.join(np.arange(gpus_per_node).astype(str)[::-1])
+            srun_rr_gpu_opts = f' --gpu-bind=map_gpu:{gpumap}'
+        else:
+            ## no_gpu isn't set, but we want it set since not perlmutter-gpu
+            cmd += ' --no-gpu'
+
+    if run_zmtl and '--run_zmtl' not in cmd:
+        cmd += ' --run_zmtl'
+    if noafterburners and '--noafterburners' not in cmd:
+        cmd += ' --noafterburners'
+
+    cmd += ' --starttime $(date +%s)'
+    cmd += f' --timingfile {timingfile}'
+
+    if '--mpi' not in cmd:
+        cmd += ' --mpi'
 
     ncores, nodes, runtime = determine_resources(
             ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
@@ -194,7 +259,7 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
             fx.write('#SBATCH {}\n'.format(opts))
         if batch_opts is not None:
             fx.write('#SBATCH {}\n'.format(batch_opts))
-        if system_name == 'perlmutter-gpu' and not nogpu:
+        if system_name == 'perlmutter-gpu' and not no_gpu:
             # perlmutter-gpu requires projects name with "_g" appended
             fx.write('#SBATCH --account desi_g\n')
         else:
@@ -222,61 +287,6 @@ def create_desi_zproc_batch_script(tileid, nights, expids, cameras, jobdesc,
 
         if readonlydir is not None:
             fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
-
-        if cmdline is None:
-            inparams = list(sys.argv).copy()
-        elif np.isscalar(cmdline):
-            inparams = []
-            for param in cmdline.split(' '):
-                for subparam in param.split("="):
-                    inparams.append(subparam)
-        else:
-            inparams = list(cmdline)
-        for parameter in ['--queue', '-q', '--batch-opts', '--thrunight']:
-            ## If a parameter is in the list, remove it and its argument
-            ## Elif it is a '--' command, it might be --option=value, which won't be split.
-            ##      check for that and remove the whole "--option=value"
-            if parameter in inparams:
-                loc = np.where(np.array(inparams) == parameter)[0][0]
-                # Remove the command
-                inparams.pop(loc)
-                # Remove the argument of the command (now in the command location after pop)
-                inparams.pop(loc)
-            elif '--' in parameter:
-                for ii,inparam in enumerate(inparams.copy()):
-                    if parameter in inparam:
-                        inparams.pop(ii)
-                        break
-
-        cmd = ' '.join(inparams)
-        cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
-
-        ## If we had been provided thrunight (removed above) or no nights,
-        ## now give actual nights
-        if '-n ' not in cmd and '--nights' not in cmd:
-            cmd += ' -n' + ' '.join(nights)
-
-        srun_rr_gpu_opts = ''
-        if not nogpu:
-            if system_name == 'perlmutter-gpu':
-                if '--max-gpuprocs' not in cmd:
-                    cmd += f' --max-gpuprocs {gpus_per_node}'
-                gpumap = ','.join(np.arange(gpus_per_node).astype(str)[::-1])
-                srun_rr_gpu_opts = f' --gpu-bind=map_gpu:{gpumap}'
-            else:
-                ## nogpu isn't set, but we want it set since not perlmutter-gpu
-                cmd += ' --nogpu'
-
-        if run_zmtl and '--run_zmtl' not in cmd:
-            cmd += ' --run_zmtl'
-        if noafterburners and '--noafterburners' not in cmd:
-            cmd += ' --noafterburners'
-
-        cmd += ' --starttime $(date +%s)'
-        cmd += f' --timingfile {timingfile}'
-
-        if '--mpi' not in cmd:
-            cmd += ' --mpi'
 
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
