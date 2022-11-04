@@ -338,13 +338,13 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         else:
             #- run zmtl for cumulative redshifts but not others
             run_zmtl = (prow['JOBDESC'] == 'cumulative')
-            run_afterburners = True
+            no_afterburners = False
 
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
                                                                      nights=[prow['NIGHT']], expids=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,
                                                                      run_zmtl=run_zmtl,
-                                                                     run_afterburners=run_afterburners,
+                                                                     no_afterburners=no_afterburners,
                                                                      nosubmit=True)
             if len(failed_scripts) > 0:
                 log.error(f"Redshifts failed for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
