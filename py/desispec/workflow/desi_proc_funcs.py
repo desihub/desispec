@@ -415,7 +415,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     #- Allow KNL jobs to be slower than Haswell,
     #- except for ARC so that we don't have ridiculously long times
     #- (Normal arc is still ~15 minutes, albeit with a tail)
-    if jobdesc not in ['ARC', 'TESTARC', 'NIGHTLYFLAT']:
+    if jobdesc not in ['ARC', 'TESTARC']:
         runtime *= config['timefactor']
 
     #- Do not allow runtime to be less than 5 min
