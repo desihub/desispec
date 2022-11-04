@@ -341,7 +341,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             run_afterburners = True
 
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
-                                                                     night=[prow['NIGHT']], expid=prow['EXPID'],
+                                                                     nights=[prow['NIGHT']], expids=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,
                                                                      run_zmtl=run_zmtl,
                                                                      run_afterburners=run_afterburners,

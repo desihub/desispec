@@ -78,7 +78,7 @@ def parse(options=None):
                         help="Number of GPU prcocesses per node")
     parser.add_argument("--run-zmtl", action="store_true",
                         help="Whether to run zmtl or not")
-    parser.add_argument("--noafterburners", action="store_true",
+    parser.add_argument("--no-afterburners", action="store_true",
                         help="Set if you don't want to run afterburners")
     parser.add_argument("--batch", action="store_true",
                         help="Submit a batch job to process this exposure")
@@ -310,7 +310,7 @@ def main(args=None, comm=None):
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         if args.run_zmtl:
             log.info(f'Will be running zmtl')
-        if not args.noafterburners:
+        if not args.no_afterburners:
             log.info(f'Will be running aferburners')
         log.info('------------------------------')
 
@@ -534,7 +534,7 @@ def main(args=None, comm=None):
 
     #-------------------------------------------------------------------------
     ## Do afterburners if asked to
-    if not args.noafterburners:
+    if not args.no_afterburners:
         from desispec.scripts import qsoqn, qsomgii, emlinefit
         """
         for SPECTRO in 0 1 2 3 4 5 6 7 8 9; do

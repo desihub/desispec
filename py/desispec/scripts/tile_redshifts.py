@@ -33,7 +33,7 @@ def parse(options=None):
                         help="Number of GPU prcocesses per node")
     parser.add_argument("--nosubmit", action="store_true",
                    help="generate scripts but don't submit batch jobs")
-    parser.add_argument("--noafterburners", action="store_true",
+    parser.add_argument("--no-afterburners", action="store_true",
                    help="Do not run afterburners (like QSO fits)")
     parser.add_argument("--batch-queue", type=str, default='realtime',
                    help="batch queue name")
@@ -56,9 +56,9 @@ def main(args=None):
     num_error = len(failed_jobs)
     sys.exit(num_error)
 
-def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=None, explist=None,
+def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
                                    camword=None, max_gpuprocs=None, no_gpu=False,
-                                   run_zmtl=False, noafterburners=False,
+                                   run_zmtl=False, no_afterburners=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
     """
@@ -66,7 +66,7 @@ def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=Non
     is True, the script is created but not submitted to Slurm.
 
     Args:
-        jobdesc (str): Type of coadd redshifts to run. Options are cumulative, pernight, perexp, or a custom name.
+        group (str): Type of coadd redshifts to run. Options are cumulative, pernight, perexp, or a custom name.
         nights (int, or list or np.array of int's): YEARMMDD nights.
         tileid (int): Tile ID.
         expids (int, or list or np.array of int's): Exposure IDs.
@@ -75,7 +75,7 @@ def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=Non
         max_gpuprocs (int): Number of gpu processes
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
         run_zmtl (bool): If True, also run make_zmtl_files
-        noafterburners (bool): If True, do not run QSO afterburners
+        no_afterburners (bool): If True, do not run QSO afterburners
         batch_queue (str): Batch queue name. Default is 'realtime'.
         batch_reservation (str): Batch reservation name.
         batch_dependency (str): Job dependencies passed to sbatch --dependency .
@@ -164,7 +164,7 @@ def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=Non
     # - If cumulative, find all prior exposures that also observed these tiles
     # - NOTE: depending upon options, this might re-read all the exptables again
     # - NOTE: this may not scale well several years into the survey
-    if jobdesc == 'cumulative':
+    if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
         allexp = read_minimal_exptables_columns()
         keep = np.in1d(allexp['TILEID'], tileids)
@@ -191,24 +191,24 @@ def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=Non
                 max_gpuprocs=max_gpuprocs,
                 no_gpu=no_gpu,
                 run_zmtl=run_zmtl,
-                noafterburners=noafterburners,
+                no_afterburners=no_afterburners,
                 queue=batch_queue,
                 reservation=batch_reservation,
                 dependency=batch_dependency,
                 system_name=system_name,
             )
-        if jobdesc == 'perexp':
+        if group == 'perexp':
             for i in range(len(exptable[tilerows])):
                 batchscript, batcherr = batch_tile_redshifts(
-                    tileid, exptable[tilerows][i:i + 1], jobdesc, **opts)
-        elif jobdesc in ['pernight', 'pernight-v0']:
+                    tileid, exptable[tilerows][i:i + 1], group, **opts)
+        elif group in ['pernight', 'pernight-v0']:
             for night in inights:
                 thisnight = exptable['NIGHT'] == night
                 batchscript, batcherr = batch_tile_redshifts(
-                    tileid, exptable[tilerows & thisnight], jobdesc, **opts)
+                    tileid, exptable[tilerows & thisnight], group, **opts)
         else:
             batchscript, batcherr = batch_tile_redshifts(
-                tileid, exptable[tilerows], jobdesc, **opts)
+                tileid, exptable[tilerows], group, **opts)
         if batcherr != 0:
             failed_jobs.append(batchscript)
         else:
@@ -224,11 +224,11 @@ def generate_tile_redshift_scripts(jobdesc, nights=None, tileid=None, expids=Non
     return batch_scripts, failed_jobs
 
 
-def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
+def batch_tile_redshifts(tileid, exptable, group, camword=None,
                          submit=False, queue='realtime', reservation=None,
                          max_gpuprocs=None, no_gpu=False,
                          dependency=None, system_name=None, run_zmtl=False,
-                         noafterburners=False):
+                         no_afterburners=False):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -236,7 +236,7 @@ def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
         tileid (int): Tile ID
         exptable (Table): has columns NIGHT EXPID to use; ignores other columns.
             Doesn't need to be full pipeline exposures table (but could be)
-        jobdesc (str): cumulative, pernight, perexp, or a custom name
+        group (str): cumulative, pernight, perexp, or a custom name
 
     Options:
         camword (str): camword of cameras to include
@@ -248,7 +248,7 @@ def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
         dependency (str): passed to sbatch --dependency upon submit
         system_name (str): batch system name, e.g. cori-haswell, perlmutter-gpu
         run_zmtl (bool): if True, also run make_zmtl_files
-        noafterburners (bool): if True, do not run QSO afterburners
+        no_afterburners (bool): if True, do not run QSO afterburners
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -260,13 +260,13 @@ def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
     if camword is None:
         camword = 'a0123456789'
 
-    if (jobdesc == 'perexp') and len(exptable)>1:
+    if (group == 'perexp') and len(exptable)>1:
         msg = f'group=perexp requires 1 exptable row, not {len(exptable)}'
         log.error(msg)
         raise ValueError(msg)
 
     nights = np.unique(np.asarray(exptable['NIGHT'])).astype(int)
-    if (jobdesc in ['pernight', 'pernight-v0']) and len(nights)>1:
+    if (group in ['pernight', 'pernight-v0']) and len(nights)>1:
         msg = f'group=pernight requires all exptable rows to be same night, not {nights}'
         log.error(msg)
         raise ValueError(msg)
@@ -287,7 +287,7 @@ def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
 
     cmdline = ['desi_zproc',
                '-t', str(tileid),
-               '-g', jobdesc,
+               '-g', group,
                '-n', ' '.join(nights),
                '-e', ' '.join(expids),
                '-c', camword,
@@ -295,10 +295,10 @@ def batch_tile_redshifts(tileid, exptable, jobdesc, camword=None,
 
     if run_zmtl:
         cmdline.append('--run_zmtl')
-    if noafterburners:
-        cmdline.append('--noafterburners')
+    if no_afterburners:
+        cmdline.append('--no_afterburners')
 
-    scriptfile = create_desi_zproc_batch_script(tileid, camword, jobdesc, queue,
+    scriptfile = create_desi_zproc_batch_script(tileid, camword, group, queue,
                                                 nights=nights, expids=expids,
                                                 cmdline=cmdline,
                                                 system_name=system_name,

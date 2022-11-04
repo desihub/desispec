@@ -95,12 +95,12 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
     return suffix
 
 
-def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=None,
+def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None,
                                    nights=None, expids=None, batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
                                    max_gpuprocs=None, no_gpu=False, run_zmtl=False,
-                                   noafterburners=False):
+                                   no_afterburners=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -110,7 +110,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
         expids (list of int): The exposure id(s) for the data.
         cameras (str or list of str): List of cameras to include in the processing
                                       or a camword.
-        jobdesc (str): Description of the job to be performed. zproc options include:
+        group (str): Description of the job to be performed. zproc options include:
                      'perexp', 'pernight', 'cumulative'.
         queue (str): Queue to be used.
 
@@ -128,7 +128,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
         max_gpuprocs (int): Number of gpu processes
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
         run_zmtl (bool): Default false. If true it runs zmtl.
-        noafterburners (bool): Default false. If true it doesn't run afterburners.
+        no_afterburners (bool): Default false. If true it doesn't run afterburners.
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -149,7 +149,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
         raise ValueError(msg)
 
     expid = None
-    if jobdesc == 'perexp':
+    if group == 'perexp':
         if expids is None:
             msg = f"Must define expids for perexp exposure"
             log.error(msg)
@@ -158,7 +158,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
             expid = expids[0]
 
 
-    scriptpath = get_tile_redshift_script_pathname(tileid, group=jobdesc,
+    scriptpath = get_tile_redshift_script_pathname(tileid, group=group,
                                                    night=night, expid=expid)
 
     if np.isscalar(cameras):
@@ -181,7 +181,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
 
     ## If system name isn't specified, guess it
     if system_name is None:
-        system_name = batch.default_system(jobdesc=jobdesc, no_gpu=no_gpu)
+        system_name = batch.default_system(jobdesc=group, no_gpu=no_gpu)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -235,8 +235,8 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
 
     if run_zmtl and '--run_zmtl' not in cmd:
         cmd += ' --run_zmtl'
-    if noafterburners and '--noafterburners' not in cmd:
-        cmd += ' --noafterburners'
+    if no_afterburners and '--no_afterburners' not in cmd:
+        cmd += ' --no_afterburners'
 
     cmd += ' --starttime $(date +%s)'
     cmd += f' --timingfile {timingfile}'
@@ -245,7 +245,7 @@ def create_desi_zproc_batch_script(tileid, cameras, jobdesc, queue, thrunight=No
         cmd += ' --mpi'
 
     ncores, nodes, runtime = determine_resources(
-            ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
+            ncameras, group.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
     runtime_hh = int(runtime // 60)

@@ -36,13 +36,13 @@ def get_config(name):
 
     return config[name]
 
-def default_system(jobdesc=None, nogpu=False):
+def default_system(jobdesc=None, no_gpu=False):
     """
     Guess default system to use based on environment
 
     Args:
         jobdesc (str): Description of the job in the processing table (optional).
-        nogpu (bool): Don't use GPU's even if available. Default False.
+        no_gpu (bool): Don't use GPU's even if available. Default False.
 
     Returns:
          name (str): default system name to use
@@ -56,7 +56,7 @@ def default_system(jobdesc=None, nogpu=False):
             ## HARDCODED: for now arcs and biases can't use gpu's, so use cpu's
             if jobdesc in ['arc', 'nightlybias', 'ccdcalib']:
                 name = 'perlmutter-cpu'
-            elif nogpu:
+            elif no_gpu:
                 name = 'perlmutter-cpu'
             else:
                 name = 'perlmutter-gpu'
