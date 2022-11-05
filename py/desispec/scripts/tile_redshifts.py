@@ -265,7 +265,7 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
         log.error(msg)
         raise ValueError(msg)
 
-    nights = np.unique(np.asarray(exptable['NIGHT'])).astype(int)
+    nights = np.unique(np.asarray(exptable['NIGHT'])).astype(str)
     if (group in ['pernight', 'pernight-v0']) and len(nights)>1:
         msg = f'group=pernight requires all exptable rows to be same night, not {nights}'
         log.error(msg)
@@ -283,7 +283,7 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
-    expids = np.unique(np.asarray(exptable['EXPID'])).astype(int)
+    expids = np.unique(np.asarray(exptable['EXPID'])).astype(str)
 
     cmdline = ['desi_zproc',
                '-t', str(tileid),
