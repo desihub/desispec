@@ -225,7 +225,7 @@ def main(args=None, comm=None):
             cmdline = list(sys.argv).copy()
             scriptfile = create_desi_zproc_batch_script(tileid=tileid,
                                                         cameras=camword,
-                                                        jobdesc=groupname,
+                                                        group=groupname,
                                                         queue=args.queue,
                                                         # healpix=healpix,
                                                         thrunight=args.thrunight,
