@@ -45,7 +45,7 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
     """Redistribute which MPI ranks are assigned to which GPUs
 
     Args:
-        comm: MPI communicator
+        comm: MPI communicator, or None
 
     Options:
         method: 'round-robin' (default) or 'contiguous'
@@ -57,6 +57,7 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
     be assigned [0,1,2,3,0,1,2,3].
     'continuous' assigns contiguous ranks to the same GPU, e.g.
     [0,0,1,1,2,2,3,3,4,4]
+    If `comm` is None, assign the process to GPU 0 (if present).
     """
     device_id = -1  #- default if no GPUs
     if is_gpu_available():
