@@ -62,21 +62,26 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
     if is_gpu_available():
         log = get_logger()
         ngpu = cupy.cuda.runtime.getDeviceCount()
-        if method == 'round-robin':
-            device_id = comm.rank % ngpu
-        elif method == 'contiguous':
-            device_id = int(comm.rank / ngpu)
+        if comm is None:
+            device_id = 0
+            cupy.cuda.Device(device_id).use()
+            log.info(f'No MPI communicator; assigning process to GPU {device_id}/{ngpu}')
         else:
-            msg = f'method should be "round-robin" or "contiguous", not "{method}"'
-            log.error(msg)
-            raise ValueError(msg)
+            if method == 'round-robin':
+                device_id = comm.rank % ngpu
+            elif method == 'contiguous':
+                device_id = int(comm.rank / ngpu)
+            else:
+                msg = f'method should be "round-robin" or "contiguous", not "{method}"'
+                log.error(msg)
+                raise ValueError(msg)
 
-        cupy.cuda.Device(device_id).use()
-        log.debug('Assigning rank=%d to GPU=%d/%d', comm.rank, device_id, ngpu)
+            cupy.cuda.Device(device_id).use()
+            log.debug('Assigning rank=%d to GPU=%d/%d', comm.rank, device_id, ngpu)
 
-        device_assignments = comm.gather(device_id, root=0)
-        if comm.rank == 0:
-            log.info(f'Assigned MPI ranks to GPUs {device_assignments}')
+            device_assignments = comm.gather(device_id, root=0)
+            if comm.rank == 0:
+                log.info(f'Assigned MPI ranks to GPUs {device_assignments}')
 
     return device_id
 
