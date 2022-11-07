@@ -20,6 +20,8 @@ import desispec.scripts.proc_joint_fit as proc_joint_fit
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tilenight_parser
 from desispec.workflow.desi_proc_funcs import update_args_with_headers, create_desi_proc_tilenight_batch_script
 
+import desispec.gpu
+
 #########################################
 ######## Begin Body of the Code #########
 #########################################
@@ -180,6 +182,10 @@ def main(args=None, comm=None):
             log.info(f'prestdstar failed with {error_count_pre} errors, skipping rest of tilenight steps')
         continue_tilenight=False
 
+    #- Cleanup GPU memory and rank assignments before continuing
+    desispec.gpu.free_gpu_memory()
+    desispec.gpu.redistribute_gpu_ranks(comm)
+
     if continue_tilenight:
         #- run joint stdstar fit using all exp for this tile night
         stdstar_args  = common_args + mpi_args
@@ -210,6 +216,10 @@ def main(args=None, comm=None):
             if rank == 0:
                 log.info(f'joint fitting failed with {error_count_jnt} errors, skipping rest of tilenight steps')
             continue_tilenight=False
+
+    #- Cleanup GPU memory and rank assignments before continuing
+    desispec.gpu.free_gpu_memory()
+    desispec.gpu.redistribute_gpu_ranks(comm)
 
     if continue_tilenight:
         #- run desiproc poststdstar over exps
