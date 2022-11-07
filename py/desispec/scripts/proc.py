@@ -64,6 +64,7 @@ import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
+from desispec.gpu import is_gpu_available
 
 from desitarget.targetmask import desi_mask
 
@@ -169,6 +170,16 @@ def main(args=None, comm=None):
 
     timer.start('mpi_connect', starttime=start_mpi_connect)
     timer.stop('mpi_connect', stoptime=stop_mpi_connect)
+
+    #- Use GPUs?
+    if is_gpu_available():
+        if args.no_gpu:
+            log.warning("GPUs are available but not using them due to --no-gpu")
+            use_gpu = False
+        else:
+            use_gpu = True
+    else:
+        use_gpu = False
 
     #- Freeze IERS after parsing args so that it doesn't bother if only --help
     timer.start('freeze_iers')
@@ -759,14 +770,14 @@ def main(args=None, comm=None):
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.01'
 
-                if args.gpuspecter:
-                    cmd += ' --gpu-specter'
+                if args.use_specter:
+                    cmd += ' --use-specter'
                     #- default for CPU is nsubbundles=6 but gpu_specter only allows 1, 5, or 25
                     cmd += ' --nsubbundles 5'
                     cmd += ' --mpi'
 
-                if args.gpuextract:
-                    cmd += ' --use-gpu'
+                if not use_gpu:
+                    cmd += ' --no-gpu'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     if not args.no_barycentric_correction :
@@ -797,7 +808,7 @@ def main(args=None, comm=None):
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
 
-            if args.gpuextract:
+            if use_gpu and (not args.use_specter):
                 import cupy as cp
                 ngpus = cp.cuda.runtime.getDeviceCount()
                 if rank == 0 and len(cmds)>0:
@@ -806,21 +817,21 @@ def main(args=None, comm=None):
             #- Set extraction subcomm group size
             extract_subcomm_size = args.extract_subcomm_size
             if extract_subcomm_size is None:
-                if args.gpuextract:
-                    #- GPU extraction with gpu_specter uses
-                    #- 5 ranks per GPU plus 2 for IO.
-                    extract_subcomm_size = 2 + 5 * ngpus
-                elif args.gpuspecter:
-                    #- CPU extraction with gpu_specter uses
-                    #- 16 ranks.
-                    extract_subcomm_size = 16
-                else:
+                if args.use_specter:
                     #- CPU extraction with specter uses
                     #- 20 ranks.
                     extract_subcomm_size = 20
+                elif use_gpu:
+                    #- GPU extraction with gpu_specter uses
+                    #- 5 ranks per GPU plus 2 for IO.
+                    extract_subcomm_size = 2 + 5 * ngpus
+                else:
+                    #- CPU extraction with gpu_specter uses
+                    #- 16 ranks.
+                    extract_subcomm_size = 16
 
             #- Create list of ranks that will perform extraction
-            if args.gpuextract:
+            if use_gpu:
                 #- GPU extraction uses only one extraction group
                 extract_group      = 0
                 num_extract_groups = 1
@@ -831,7 +842,7 @@ def main(args=None, comm=None):
             extract_ranks = list(range(num_extract_groups*extract_subcomm_size))
 
             #- Create subcomm groups
-            if args.gpuextract and len(cmds)>0:
+            if use_gpu and len(cmds)>0:
                 if rank in extract_ranks:
                     #- GPU extraction
                     extract_incl = comm.group.Incl(extract_ranks)
@@ -854,15 +865,15 @@ def main(args=None, comm=None):
                             print('RUNNING: {}'.format(cmds[camera]))
 
                         try:
-                            if args.gpuextract:
-                                #- GPU extraction with gpu_specter
-                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
-                            elif args.gpuspecter:
-                                #- CPU extraction with gpu_specter
-                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
-                            else:
+                            if args.use_specter:
                                 #- CPU extraction with specter
                                 desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                            elif use_gpu:
+                                #- GPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                            else:
+                                #- CPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
                         except Exception as err:
                             import traceback
                             lines = traceback.format_exception(*sys.exc_info())

@@ -82,10 +82,10 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='disable fiber crosstalk correction')
-    parser.add_argument("--system-name", type=str, default=batch.default_system(), help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
+    parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("--extract-subcomm-size", type=int, default=None, help="Size to use for GPU extract subcomm")
-    parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
-    parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
+    parser.add_argument("--no-gpu", action="store_true", help="Do not use GPU for extractions even if available")
+    parser.add_argument("--use-specter", action="store_true", help="Use classic specter instead of gpu_specter")
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
     parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
     parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not apply tpcorrparam spatial model or fit tpcorrparam pca terms")
@@ -529,7 +529,7 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
-                                  gpuspecter=None, gpuextract=None):
+                                  use_specter=False, no_gpu=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -557,8 +557,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         jobname: name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
         system_name: name of batch system, e.g. cori-haswell, cori-knl
-        gpuspecter: bool. Whether to use gpu_specter (use None to auto-select).
-        gpuextract: bool. Whether to perform gpu extraction with gpu_specter (use None to auto-select).
+        use_specter: bool. Use classic specter instead of gpu_specter for extractions
+        no_gpu: bool. Do not use GPU even if available
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -585,14 +585,13 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
-    ## If system name isn't specified, guess it
+    ## If system name isn't specified, pick it based upon jobdesc
     if system_name is None:
         system_name = batch.default_system(jobdesc=jobdesc)
 
-    if gpuextract is None:
-        gpuextract = (system_name == 'perlmutter-gpu')
-    if gpuspecter is None:
-        gpuspecter = (system_name == 'perlmutter-gpu')
+    #- We don't check is_gpu_available when creating the batch script,
+    #- because in the future we may submit GPU batch jobs from non-GPU nodes
+    use_gpu = (not no_gpu)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -706,12 +705,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if jobdesc.lower() == 'stdstarfit':
             cmd += ' --mpistdstars'
 
-        if gpuextract and '--gpuextract' not in cmd:
-            cmd += ' --gpuextract'
-        if gpuspecter and '--gpuspecter' not in cmd:
-            cmd += ' --gpuspecter'
+        if no_gpu and '--no-gpu' not in cmd:
+            cmd += ' --no-gpu'
+
+        if use_specter and '--use-specter' not in cmd:
+            cmd += ' --use-specter'
+
         cmd += ' --starttime $(date +%s)'
-        cmd += f' --timingfile {timingfile}'
+        ### cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
@@ -804,8 +805,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     return scriptfile
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
-                                  system_name=None, mpistdstars=True, gpuspecter=None,
-                                  gpuextract=None,
+                                  system_name=None, mpistdstars=True, use_specter=False,
+                                  no_gpu=False,
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -822,8 +823,8 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
         system_name: name of batch system, e.g. cori-haswell, cori-knl.
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
-        gpuspecter: bool. Whether to use gpu_specter (use None to auto-select).
-        gpuextract: bool. Whether to perform gpu extraction with gpu_specter (use None to auto-select).
+        use_specter: bool. Use classic specter instead of gpu_specter for extractions
+        no_gpu: bool. Do not use GPU even if available
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -844,14 +845,13 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
-    ## If system name isn't specified, guess it
+    ## If system name isn't specified, pick it based upon jobdesc
     if system_name is None:
         system_name = batch.default_system(jobdesc='tilenight')
 
-    if gpuextract is None:
-        gpuextract = (system_name == 'perlmutter-gpu')
-    if gpuspecter is None:
-        gpuspecter = (system_name == 'perlmutter-gpu')
+    #- We don't check is_gpu_available here when creating the batch script,
+    #- because in the future we may submit GPU batch jobs from non-GPU nodes
+    use_gpu = (not no_gpu)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -903,14 +903,15 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         cmd = 'desi_proc_tilenight'
         cmd += f' -n {night}'
         cmd += f' -t {tileid}'
-        cmd += f' --timingfile {timingfile}'
         cmd += f' --mpi'
         if mpistdstars:
             cmd += f' --mpistdstars'
-        if gpuextract:
-            cmd += f' --gpuspecter --gpuextract'
-        elif gpuspecter:
-            cmd += f' --gpuspecter'
+        if no_gpu:
+            cmd += f' --no-gpu'
+        elif use_specter:
+            cmd += f' --use-specter'
+
+        ### cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')

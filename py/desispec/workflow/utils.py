@@ -229,8 +229,8 @@ def sleep_and_report(sleep_duration, message_suffix="", logfunc=print, dry_run=F
     """
     message = f"Sleeping {sleep_duration}s {message_suffix}"
     if dry_run:
-        logfunc(f"\n\nDry run, sleeping 1s instead of: '{message}'\n\n")
-        time.sleep(1)
+        logfunc(f"\n\nDry run, sleeping 0.1s instead of: '{message}'\n\n")
+        time.sleep(0.1)
     else:
         logfunc(f"\n\n{message}")
         if sleep_duration > 10:

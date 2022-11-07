@@ -265,10 +265,8 @@ def desi_proc_command(prow, system_name, use_specter, queue=None):
             cmd += ' --noprestdstarfit --nostdstarfit'
     elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
-    elif prow['JOBDESC'] in ['flat'] and not use_specter:
-        cmd += ' --gpuspecter'
-        if system_name=="perlmutter-gpu":
-            cmd += ' --gpuextract'
+    elif prow['JOBDESC'] in ['flat'] and use_specter:
+        cmd += ' --use-specter'
     pcamw = str(prow['PROCCAMWORD'])
     cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
     if len(prow['EXPID']) > 0:
@@ -374,8 +372,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             expids = prow['EXPID']
             if len(expids) == 0:
                 expids = None
-            gpuspecter = ((not use_specter) and prow['JOBDESC'] in ['science', 'prestdstar', 'tilenight'])
-            gpuextract = (gpuspecter and system_name=="perlmutter-gpu")
+
             if prow['JOBDESC'] == 'tilenight':
                 log.info("Creating tilenight script for tile {}".format(prow['TILEID']))
                 ncameras = len(decode_camword(prow['PROCCAMWORD']))
@@ -385,6 +382,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                ncameras=ncameras,
                                                                queue=queue,
                                                                mpistdstars=True,
+                                                               use_specter=use_specter,
                                                                system_name=system_name)
             else:
                 log.info("Running: {}".format(cmd.split()))
@@ -393,6 +391,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                cameras=prow['PROCCAMWORD'],
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
+                                                               use_specter=use_specter,
                                                                system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
@@ -477,7 +476,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if dry_run:
         ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
         current_qid = int(time.time() - 1.6e9)
-        time.sleep(1)
+        time.sleep(0.1)
     else:
         #- sbatch sometimes fails; try several times before giving up
         max_attempts = 3

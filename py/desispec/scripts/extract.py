@@ -53,7 +53,7 @@ def parse(options=None):
                         help="regularization amount (default %(default)s)")
     parser.add_argument("--bundlesize", type=int, required=False, default=25,
                         help="number of spectra per bundle")
-    parser.add_argument("--nsubbundles", type=int, required=False, default=6,
+    parser.add_argument("--nsubbundles", type=int, required=False, default=5,
                         help="number of extraction sub-bundles")
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
@@ -66,8 +66,8 @@ def parse(options=None):
     # parser.add_argument("--fibermap-index", type=int, default=None, required=False,
     #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
     parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
-    parser.add_argument("--gpu-specter", action="store_true", help="use gpu_specter instead of specter")
-    parser.add_argument("--use-gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
+    parser.add_argument("--use-specter", action="store_true", help="use classic specter instead of gpu_specter")
+    parser.add_argument("--no-gpu", action="store_true", help="Do not use GPU even if available")
     parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
     parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
 
@@ -142,10 +142,10 @@ def main(args=None):
     else:
         comm = None
 
-    if args.gpu_specter:
-        return main_gpu_specter(args, comm)
-    else:
+    if args.use_specter:
         return main_mpi(args, comm)
+    else:
+        return main_gpu_specter(args, comm)
 
 def gpu_specter_check_input_options(args):
     """
@@ -170,38 +170,22 @@ def gpu_specter_check_input_options(args):
         msg = 'specmin ({}) must begin at a bundle boundary'.format(args.specmin)
         return False, msg
 
-    if args.use_gpu:
-        is_numba_cuda_available = False
-        try:
-            import numba.cuda
-            is_numba_cuda_available = numba.cuda.is_available()
-        except ImportError:
-            return False, 'cannot import numba.cuda'
-        is_cupy_available = False
-        try:
-            import cupy
-            is_cupy_available = cupy.is_available()
-        except ImportError:
-            return False, 'cannot import cupy'
-        if not (is_numba_cuda_available and is_cupy_available):
-            return False, f'gpu is not available ({is_numba_cuda_available=}, {is_cupy_available=})'
-
     if args.decorrelate_fibers:
-        msg = "--decorrelate-fibers not implemented with --gpu-specter"
+        msg = "--decorrelate-fibers not implemented with gpu_specter"
         return False, msg
-
-    # if args.fibermap_index:
-    #     msg = "--fibermap-index not implemented with --gpu-specter"
-    #     return False, msg
 
     return True, 'OK'
 
 def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
+    from desispec.gpu import is_gpu_available
+
     freeze_iers()
 
     time_start = time.time()
 
     log = get_logger()
+
+    use_gpu = is_gpu_available() and (not args.no_gpu)
 
     #- Preflight checks on input arguments
     ok, message = gpu_specter_check_input_options(args)
@@ -243,7 +227,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             'ivar': img.ivar*((img.mask & extractmaskval)==0)
         }
         #- If GPU, move image and ivar arrays to device
-        if args.use_gpu:
+        if use_gpu:
             import cupy as cp
             image['image'] = cp.asarray(image['image'])
             image['ivar'] = cp.asarray(image['ivar'])
@@ -362,7 +346,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             args.regularize,
             args.psferr,
             coordinator.work_comm,             # mpi parameters
-            args.use_gpu,                      # gpu parameters
+            use_gpu,                           # gpu parameters
             loglevel=None,
             timing=core_timing,
             wavepad_frac=args.wavepad_frac,
