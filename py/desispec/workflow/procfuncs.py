@@ -239,7 +239,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
-def desi_proc_command(prow, system_name, use_specter, queue=None):
+def desi_proc_command(prow, system_name, use_specter=False, queue=None):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -263,6 +263,10 @@ def desi_proc_command(prow, system_name, use_specter, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
+
+        if use_specter:
+            cmd += ' --use-specter'
+
     elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
     elif prow['JOBDESC'] in ['flat'] and use_specter:

@@ -708,7 +708,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if no_gpu and '--no-gpu' not in cmd:
             cmd += ' --no-gpu'
 
-        if use_specter and '--use-specter' not in cmd:
+        if (use_specter and ('--use-specter' not in cmd) and
+                jobdesc.lower() in ['flat', 'science', 'prestdstar', 'tilenight']):
             cmd += ' --use-specter'
 
         cmd += ' --starttime $(date +%s)'
