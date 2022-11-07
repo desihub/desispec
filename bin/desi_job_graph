@@ -116,7 +116,7 @@ for row in proctable:
     if jobdesc in ('tilenight', 'pernight', 'perexp', 'cumulative'):
         description = f'{jobdesc} {tileid}'
         if jobdesc == 'perexp':
-            description += '-{expid}'
+            description += f'-{expid}'
     elif expid.count(',') == 0:
         #- single expid job, e.g. arc, flat, prestdstar, ...
         description = f'{jobdesc} {expid}'
