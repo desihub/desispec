@@ -1044,7 +1044,6 @@ def main(args=None, comm=None):
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
             framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
-            hdr = fitsio.read_header(framefile, 'FLUX')
             input_fiberflatfile=input_fiberflat[camera]
             if input_fiberflatfile is None :
                 log.error("No input fiberflat for {}".format(camera))
