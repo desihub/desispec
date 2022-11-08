@@ -6,6 +6,7 @@ Utility functions for working with GPUs
 """
 
 import os
+import socket
 from desiutil.log import get_logger
 
 #- Require both cupy and numba.cuda,
@@ -55,12 +56,29 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
 
     'round-robin' assigns cyclically, e.g. 8 ranks on 4 GPUs would
     be assigned [0,1,2,3,0,1,2,3].
+
     'continuous' assigns contiguous ranks to the same GPU, e.g.
-    [0,0,1,1,2,2,3,3,4,4]
+    [0,0,1,1,2,2,3,3,4,4].
+
+    CAUTION: If the MPI communicator spans multiple
+    nodes, this assumes that all nodes have the same number of
+    GPUs, the same number of ranks per node, and that the MPI ranks
+    are themselves contiguously assigned to nodes (which is often
+    the case, but not required in general).
+
     If `comm` is None, assign the process to GPU 0 (if present).
+
+    Note: this also calls free_gpu_memory to release memory on each
+    GPU before assigning ranks to other GPUs.
     """
     device_id = -1  #- default if no GPUs
     if is_gpu_available():
+
+        #- Free GPU memory pool before reallocating ranks so that the
+        #- memory associated with the previous device isn't tied up
+        #- by a rank that isn't using that device anymore.
+        free_gpu_memory()
+
         log = get_logger()
         ngpu = cupy.cuda.runtime.getDeviceCount()
         if comm is None:
@@ -71,7 +89,18 @@ def redistribute_gpu_ranks(comm, method='round-robin'):
             if method == 'round-robin':
                 device_id = comm.rank % ngpu
             elif method == 'contiguous':
-                device_id = int(comm.rank / ngpu)
+                #- Handle case of MPI communicator spanning multiple hosts,
+                #- but assume that all hosts have the same number of GPUs
+                #- and that the MPI ranks are contiguously assigned across
+                #- hosts
+                hostnames = comm.gather(socket.gethostname(), root=0)
+                nhosts = 0
+                if comm.rank == 0:
+                    nhosts = len(set(hostnames))
+                    log.debug('nhosts=%d', nhosts)
+                nhosts = comm.bcast(nhosts, root=0)
+
+                device_id = int(comm.rank / (comm.size / (ngpu*nhosts))) % ngpu
             else:
                 msg = f'method should be "round-robin" or "contiguous", not "{method}"'
                 log.error(msg)

@@ -183,7 +183,6 @@ def main(args=None, comm=None):
         continue_tilenight=False
 
     #- Cleanup GPU memory and rank assignments before continuing
-    desispec.gpu.free_gpu_memory()
     desispec.gpu.redistribute_gpu_ranks(comm)
 
     if continue_tilenight:
@@ -218,7 +217,6 @@ def main(args=None, comm=None):
             continue_tilenight=False
 
     #- Cleanup GPU memory and rank assignments before continuing
-    desispec.gpu.free_gpu_memory()
     desispec.gpu.redistribute_gpu_ranks(comm)
 
     if continue_tilenight:
