@@ -589,10 +589,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     if system_name is None:
         system_name = batch.default_system(jobdesc=jobdesc)
 
-    #- We don't check is_gpu_available when creating the batch script,
-    #- because in the future we may submit GPU batch jobs from non-GPU nodes
-    use_gpu = (not no_gpu)
-
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
     gpus_per_node = batch_config['gpus_per_node']
@@ -713,7 +709,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             cmd += ' --use-specter'
 
         cmd += ' --starttime $(date +%s)'
-        ### cmd += f' --timingfile {timingfile}'
+        cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
@@ -850,10 +846,6 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
     if system_name is None:
         system_name = batch.default_system(jobdesc='tilenight')
 
-    #- We don't check is_gpu_available here when creating the batch script,
-    #- because in the future we may submit GPU batch jobs from non-GPU nodes
-    use_gpu = (not no_gpu)
-
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
     gpus_per_node = batch_config['gpus_per_node']
@@ -912,7 +904,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         elif use_specter:
             cmd += f' --use-specter'
 
-        ### cmd += f' --timingfile {timingfile}'
+        cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
