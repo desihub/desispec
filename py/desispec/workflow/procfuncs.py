@@ -232,6 +232,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
         if prow['STATUS'].upper() == 'COMPLETED':
             return prow
+
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond to the pruned values. But we want to
@@ -339,7 +340,6 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             #- run zmtl for cumulative redshifts but not others
             run_zmtl = (prow['JOBDESC'] == 'cumulative')
             no_afterburners = False
-
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
                                                                      nights=[prow['NIGHT']], expids=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,

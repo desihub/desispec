@@ -138,7 +138,7 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
            may not work with assumptions in the spectro pipeline.
     """
     log = get_logger()
-
+    nights = np.asarray(nights, dtype=int)
     if nights is not None:
         night = np.max(nights)
     elif thrunight is not None:
@@ -156,7 +156,6 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
             raise ValueError(msg)
         else:
             expid = expids[0]
-
 
     scriptpath = get_tile_redshift_script_pathname(tileid, group=group,
                                                    night=night, expid=expid)
@@ -233,10 +232,10 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
             ## no_gpu isn't set, but we want it set since not perlmutter-gpu
             cmd += ' --no-gpu'
 
-    if run_zmtl and '--run_zmtl' not in cmd:
-        cmd += ' --run_zmtl'
-    if no_afterburners and '--no_afterburners' not in cmd:
-        cmd += ' --no_afterburners'
+    if run_zmtl and '--run-zmtl' not in cmd:
+        cmd += ' --run-zmtl'
+    if no_afterburners and '--no-afterburners' not in cmd:
+        cmd += ' --no-afterburners'
 
     cmd += ' --starttime $(date +%s)'
     cmd += f' --timingfile {timingfile}'
@@ -352,7 +351,9 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
     etab_files = sorted(etab_files)
     exptables = list()
     for etab_file in etab_files:
-        t = load_table(etab_file, tabletype='etable')
+        ## correct way but slower and we don't need multivalue columns
+        #t = load_table(etab_file, tabletype='etable')
+        t = Table.read(etab_file, format='ascii.csv')
         keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
         if 'LASTSTEP' in t.colnames:
             keep &= (t['LASTSTEP'] == 'all')
@@ -360,6 +361,19 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
             # Default false
             keep &= np.isin(t['TILEID'], tileids)
         t = t[keep]
+        ## Need to ensure that the string columns are consistent
+        for col in ['CAMWORD', 'BADCAMWORD']:
+            ## Masked arrays need special handling
+            ## else just reassign with consistent dtype
+            if isinstance(t[col], Table.MaskedColumn):
+                ## If compeltely empty it's loaded as type int
+                ## otherwise fill masked with ''
+                if t[col].dtype == int:
+                    t[col] = Table.Column(['' for i in range(len(t))], dtype='S36', name=col)
+                else:
+                    t[col] = Table.Column(t[col].filled(fill_value=''), dtype='S36', name=col)
+            else:
+                t[col] = Table.Column(t[col], dtype='S36', name=col)
         exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
 
     return vstack(exptables)

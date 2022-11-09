@@ -265,7 +265,7 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
         log.error(msg)
         raise ValueError(msg)
 
-    nights = np.unique(np.asarray(exptable['NIGHT'])).astype(str)
+    nights = np.unique(np.asarray(exptable['NIGHT']))
     if (group in ['pernight', 'pernight-v0']) and len(nights)>1:
         msg = f'group=pernight requires all exptable rows to be same night, not {nights}'
         log.error(msg)
@@ -283,20 +283,20 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
 
     #- Be explicit about naming. Night should be the most recent Night.
     #- Expid only used for labeling perexp, for which there is only one row here anyway
-    expids = np.unique(np.asarray(exptable['EXPID'])).astype(str)
+    expids = np.unique(np.asarray(exptable['EXPID']))
 
     cmdline = ['desi_zproc',
                '-t', str(tileid),
                '-g', group,
-               '-n', ' '.join(nights),
-               '-e', ' '.join(expids),
+               '-n', ' '.join(nights.astype(str)),
+               '-e', ' '.join(expids.astype(str)),
                '-c', camword,
                '--mpi']
 
     if run_zmtl:
-        cmdline.append('--run_zmtl')
+        cmdline.append('--run-zmtl')
     if no_afterburners:
-        cmdline.append('--no_afterburners')
+        cmdline.append('--no-afterburners')
 
     scriptfile = create_desi_zproc_batch_script(tileid, camword, group, queue,
                                                 nights=nights, expids=expids,
