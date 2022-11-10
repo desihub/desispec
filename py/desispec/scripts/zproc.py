@@ -558,8 +558,13 @@ def main(args=None, comm=None):
         nblocks, block_size, block_rank, block_num = \
             distribute_ranks_to_blocks(ntasks, rank=rank, size=size, log=log)
 
+        #- Create a subcommunicator with just this rank, e.g. for
+        #- qsoqn afterburner that needs a communicator to pass to
+        #- redrock, but is otherwise only a single rank.
         if comm is not None:
-            comm.barrier()
+            monocomm = comm.Split(color=comm.rank)
+        else:
+            monocomm = None
             
         if block_rank == 0:
             ## If running mutiple afterburners at once, wait some time so
@@ -618,7 +623,7 @@ def main(args=None, comm=None):
                         with stdouterr_redirected(qnlog):
                             result, success = runcmd(qsoqn.main, args=cmdargs,
                                                      inputs=[coaddfile, rrfile],
-                                                     outputs=[qnfile])
+                                                     outputs=[qnfile], comm=monocomm)
                 ## Third set of nspectros ranks go to desi_emlinefit_afterburner
                 elif i // nspectros == 2:
                     log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefiti")

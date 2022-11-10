@@ -80,7 +80,7 @@ def parse(options=None):
     return args
 
 
-def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
+def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, comm=None):
     """
     Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
     with z_prior using the template contained in template_file
@@ -92,6 +92,10 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
                                redshift estimated by QN for the associated targetid
         param_RR (dict): contains info to re-run RR as the template_filename,
                         filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
+
+    Options:
+        comm: MPI communicator to pass to redrock; must be size=1
+
     Returns:
         redshift (numpy array): Array containing best redshift estimation by the new run of RR
         err_redshift (numpy array): Array containing the associated error for the redshift
@@ -191,7 +195,10 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
                                      '--outfile', filename_redrock_rerun_RR]
             # NEW RUN RR
             log.info(f'Running redrock with priors on selected targets with {template_filename}')
-            rrdesi(argument_for_rerun_RR)
+            log.info('rrdesi '+' '.join(argument_for_rerun_RR))
+
+            rrdesi(argument_for_rerun_RR, comm=comm)
+
             log.info('Done running redrock')
 
             # Extract information from the new run of RR
@@ -213,7 +220,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     return redshift, err_redshift, coeffs
 
 
-def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR, save_target):
+def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR, save_target, comm=None):
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
@@ -227,6 +234,10 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         param_RR (dict): contains info to re-run RR as the template_filename,
                          filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
         save_target (str) : restricted (save only IS_QSO_QN_NEW_RR==true targets) / all (save all the sample)
+
+    Options:
+        comm: MPI communicator to pass to redrock; must be size=1
+
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
@@ -282,7 +293,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         log.info(f"RUN RR on {sel_QN.sum()}")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
-            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_QN[index_with_QN_with_no_pb], param_RR)
+            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_QN[index_with_QN_with_no_pb], param_RR, comm=comm)
 
     if save_target == 'restricted':
         index_to_save = sel_QN.copy()
@@ -397,12 +408,17 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     return
 
 
-def main(args=None):
+def main(args=None, comm=None):
     log = get_logger()
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
+    #- We need an MPI communicator to pass to redrock, but the rest of
+    #- the qsoqn code isn't instrumented for MPI parallelism, so we require
+    #- that the communicator is size=1
+    if comm is not None and comm.size>1:
+        raise ValueError(f'{comm.size=} not allowed, must be size=1')
 
     start = time.time()
 
@@ -480,7 +496,7 @@ def main(args=None):
 
             log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
             QSO_from_QN = selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET,
-                                                    args.coadd, param_QN, param_RR, args.save_target)
+                                                    args.coadd, param_QN, param_RR, args.save_target, comm=comm)
 
             if QSO_from_QN.shape[0] > 0:
                 log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
