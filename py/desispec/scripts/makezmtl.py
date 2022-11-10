@@ -105,6 +105,8 @@ def parse(options=None):
     else:
         args = parser.parse_args(options)
 
+    return args
+
 
 def main(args=None):
     if not isinstance(args, argparse.Namespace):
