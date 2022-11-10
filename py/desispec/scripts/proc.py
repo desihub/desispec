@@ -772,9 +772,7 @@ def main(args=None, comm=None):
 
                 if args.use_specter:
                     cmd += ' --use-specter'
-                    #- default for CPU is nsubbundles=6 but gpu_specter only allows 1, 5, or 25
-                    cmd += ' --nsubbundles 5'
-                    cmd += ' --mpi'
+                    cmd += ' --mpi'  # gpu_specter is MPI by default, but specter isn't
 
                 if not use_gpu:
                     cmd += ' --no-gpu'
