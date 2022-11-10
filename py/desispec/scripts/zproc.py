@@ -380,12 +380,20 @@ def main(args=None, comm=None):
                         cframes.append(findfile('cframe', night=night,
                                                 expid=expid, camera=camera))
 
+            if groupname == 'healpix':
+                raise ValueError('groupname=healpix not yet supported; needs different desi_group_spectra options')
+
             cmd = f"desi_group_spectra --inframes {' '.join(cframes)} " \
                   + f"--outfile {spectrafile} " \
                   + f"--coaddfile {coaddfile} " \
+                  +  "--onetile " \
                   + f"--header SPGRP={groupname} SPGRPVAL={thrunight} " \
                   + f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} " \
-                  + f"PETAL={spectro}"
+                  + f"PETAL={spectro} "
+
+            if groupname == 'perexp':
+                cmd += 'EXPID={expid} '
+
             cmdargs = cmd.split()[1:]
             if args.dryrun:
                 if rank == 0:
@@ -397,6 +405,7 @@ def main(args=None, comm=None):
                                              outputs=[spectrafile, coaddfile])
 
             if not success:
+                log.error(f'desi_group_spectra petal {spectro} failed; see {splog}')
                 error_count += 1
 
     if rank == 0:
@@ -438,7 +447,9 @@ def main(args=None, comm=None):
 
         ## Since all ranks running redrock, only count failure/success once
         if rank == 0 and not success:
+            log.error(f'Redrock petal {spectro} failed; see {rrlog}')
             error_count += 1
+
         ## Since all ranks running redrock, ensure we're all moving on to next
         ## iteration together
         if comm is not None:
@@ -484,6 +495,7 @@ def main(args=None, comm=None):
                     
             ## count failure/success
             if not success:
+                log.error(f'tileqa failed; see {qalog}')
                 error_count += 1
                 
         log.info("Done with tileqa")
@@ -522,6 +534,7 @@ def main(args=None, comm=None):
                                                  inputs=[rrfile],
                                                  outputs=[zmtlfile])
                 if not success:
+                    log.error(f'zmtl petal {spectro} failed; see {zmtllog}')
                     error_count += 1
 
         if rank == 0:
@@ -603,6 +616,10 @@ def main(args=None, comm=None):
                             result, success = runcmd(qsomgii.main, args=cmdargs,
                                                      inputs=[coaddfile, rrfile],
                                                      outputs=[mgiifile])
+
+                        if not success:
+                            log.error(f'qsomgii afterburner petal {spectro} failed; see {mgiilog}')
+
                 ## Second set of nspectros ranks go to desi_qso_qn_afterburner
                 elif i // nspectros == 1:
                     log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso qn")
@@ -624,6 +641,10 @@ def main(args=None, comm=None):
                             result, success = runcmd(qsoqn.main, args=cmdargs,
                                                      inputs=[coaddfile, rrfile],
                                                      outputs=[qnfile], comm=monocomm)
+
+                        if not success:
+                            log.error(f'qsoqn afterburner petal {spectro} failed; see {mgiilog}')
+
                 ## Third set of nspectros ranks go to desi_emlinefit_afterburner
                 elif i // nspectros == 2:
                     log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefiti")
@@ -644,6 +665,10 @@ def main(args=None, comm=None):
                             result, success = runcmd(emlinefit.main, args=cmdargs,
                                                      inputs=[coaddfile, rrfile],
                                                      outputs=[emfile])
+
+                        if not success:
+                            log.error(f'emlinefit afterburner petal {spectro} failed; see {emlog}')
+
                 ## For now only 3 afterburners, so shout if we loop goes higher than that
                 else:
                     log.error(f"Index i={i} // nspectros={nspectros} should " \
