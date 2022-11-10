@@ -480,7 +480,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if dry_run:
         ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
         current_qid = int(time.time() - 1.6e9)
-        time.sleep(0.1)
+        time.sleep(1)
     else:
         #- sbatch sometimes fails; try several times before giving up
         max_attempts = 3
