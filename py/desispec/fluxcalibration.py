@@ -17,7 +17,7 @@ from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
-from desispec.gpu import is_gpu_available
+from desispec.gpu import is_gpu_available, NoGPU
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -720,14 +720,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         # All reduce here because we'll need to divide the work out again
         results = comm.allreduce(results, op=MPI.SUM)
     elif ncpu > 1:
-        log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
-        pool = multiprocessing.Pool(ncpu)
-        log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
-        results  =  pool.map(_func, func_args)
+        log.debug("Running pool(%d).map() for %d items", ncpu, len(func_args)); sys.stdout.flush()
+        with NoGPU():
+            with multiprocessing.Pool(ncpu) as pool:
+                results  =  pool.map(_func, func_args)
         log.debug("Finished pool.map()"); sys.stdout.flush()
-        pool.close()
-        pool.join()
-        log.debug("Finished pool.join()"); sys.stdout.flush()
     else:
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
 
@@ -803,13 +800,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         results = list(map(_func2, func_args[rank::size]))
         results = comm.reduce(results, op=MPI.SUM, root=0)
     elif ncpu > 1:
-        log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
-        pool = multiprocessing.Pool(ncpu)
-        results  =  pool.map(_func2, func_args)
+        log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d", ncpu)
+        with NoGPU():
+            with multiprocessing.Pool(ncpu) as pool:
+                results  =  pool.map(_func2, func_args)
         log.debug("finished pool.map()"); sys.stdout.flush()
-        pool.close()
-        pool.join()
-        log.debug("finished pool.join()"); sys.stdout.flush()
     else :
         log.debug("divide templates serially")
         results = [_func2(x) for x in func_args]

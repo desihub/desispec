@@ -31,10 +31,23 @@ if 'DESI_NO_GPU' in os.environ:
 else:
     _desi_use_gpu = True
 
+#- context manager for temporarily turning off GPU usage,
+#- e.g. within multiprocessing.map
+_context_use_gpu = True
+class NoGPU:
+    def __enter__(self):
+        global _context_use_gpu
+        _context_use_gpu = False
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        global _context_use_gpu
+        _context_use_gpu = True
+
+
 def is_gpu_available():
     """Return whether cupy and numba.cuda are installed and a GPU
     is available to use, and $DESI_NO_GPU is *not* set"""
-    return _cupy_available and _numba_cuda_available and _desi_use_gpu
+    return _cupy_available and _numba_cuda_available and _desi_use_gpu and _context_use_gpu
 
 def free_gpu_memory():
     """Release all cupy GPU memory; ok to call even if no GPUs"""
