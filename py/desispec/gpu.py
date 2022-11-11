@@ -24,17 +24,15 @@ try:
 except ImportError:
     _numba_cuda_available = False
 
-#- If $DESI_NO_GPU is set to anything, don't use a GPU.
-#- This is primarily for debugging to globally disable GPU usage.
-if 'DESI_NO_GPU' in os.environ:
-    _desi_use_gpu = False
-else:
-    _desi_use_gpu = True
-
 #- context manager for temporarily turning off GPU usage,
 #- e.g. within multiprocessing.map
 _context_use_gpu = True
 class NoGPU:
+    """Context manager to temporarily disable GPU usage, e.g.
+
+    with desispec.gpu.NoGPU()
+        blat()
+    """
     def __enter__(self):
         global _context_use_gpu
         _context_use_gpu = False
@@ -43,11 +41,11 @@ class NoGPU:
         global _context_use_gpu
         _context_use_gpu = True
 
-
 def is_gpu_available():
     """Return whether cupy and numba.cuda are installed and a GPU
     is available to use, and $DESI_NO_GPU is *not* set"""
-    return _cupy_available and _numba_cuda_available and _desi_use_gpu and _context_use_gpu
+    return (_cupy_available and _numba_cuda_available and _context_use_gpu and
+            ('DESI_NO_GPU' not in os.environ))
 
 def free_gpu_memory():
     """Release all cupy GPU memory; ok to call even if no GPUs"""
