@@ -269,7 +269,7 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
 
     elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
-    elif prow['JOBDESC'] in ['flat'] and use_specter:
+    elif prow['JOBDESC'] in ['flat', 'prestdstar'] and use_specter:
         cmd += ' --use-specter'
     pcamw = str(prow['PROCCAMWORD'])
     cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
