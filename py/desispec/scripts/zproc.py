@@ -39,7 +39,7 @@ import desiutil.iers
 from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
 from desispec.workflow.exptable import get_exposure_table_pathname
-from desispec.workflow.desi_proc_funcs import assign_mpi, update_args_with_headers, _log_timer
+from desispec.workflow.desi_proc_funcs import assign_mpi, update_args_with_headers, log_timer
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
 stop_imports = time.time()
@@ -706,7 +706,8 @@ def main(args=None, comm=None):
         comm.barrier()
 
     #-------------------------------------------------------------------------
-    ## Collect error count
+    ## Collect error count and wrap up
+
     if comm is not None:
         all_error_counts = comm.gather(error_count, root=0)
         if rank == 0:
@@ -714,21 +715,22 @@ def main(args=None, comm=None):
         else:
             final_error_count = 0
         error_count = comm.bcast(final_error_count, root=0)
-        
-    if rank == 0 and error_count > 0:
-        log.error(f'{error_count} processing errors; see logs above')
 
-    #-------------------------------------------------------------------------
-    ## Wrap up
+    #- save / print timing information
+    log_timer(timer, args.timingfile, comm=comm)
 
-    _log_timer(timer, args.timingfile, comm=comm)
     if rank == 0:
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
+        goodbye = f'All done at {}; duration {}m{}s'.format(
+                time.asctime(), mm, ss)
 
-        log.info('All done at {}; duration {}m{}s'.format(
-            time.asctime(), mm, ss))
+        if error_count > 0:
+            log.error(f'{error_count} processing errors; see logs above')
+            log.error(goodbye)
+        else:
+            log.info(goodbye)
 
     if error_count > 0:
         sys.exit(int(error_count))

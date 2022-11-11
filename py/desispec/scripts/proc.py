@@ -70,7 +70,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, \
-    update_args_with_headers, find_most_recent, _log_timer
+    update_args_with_headers, find_most_recent, log_timer
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
 stop_imports = time.time()
@@ -1410,25 +1410,26 @@ def main(args=None, comm=None):
         timer.stop('exposure_qa')
 
     #-------------------------------------------------------------------------
-    #- Collect error count
+    #- Collect error count and wrap up
     if comm is not None:
         all_error_counts = comm.gather(error_count, root=0)
         error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
 
-    if rank == 0 and error_count > 0:
-        log.error(f'{error_count} processing errors; see logs above')
+    #- save / print timing information
+    log_timer(timer, args.timingfile, comm=comm)
 
-    #-------------------------------------------------------------------------
-    #- Wrap up
-
-    _log_timer(timer, args.timingfile, comm=comm)
     if rank == 0:
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
+        goodbye = f'All done at {}; duration {}m{}s'.format(
+                time.asctime(), mm, ss)
 
-        log.info('All done at {}; duration {}m{}s'.format(
-            time.asctime(), mm, ss))
+        if error_count > 0:
+            log.error(f'{error_count} processing errors; see logs above')
+            log.error(goodbye)
+        else:
+            log.info(goodbye)
 
     if error_count > 0:
         sys.exit(int(error_count))

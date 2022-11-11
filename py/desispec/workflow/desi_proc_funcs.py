@@ -306,7 +306,7 @@ def update_args_with_headers(args):
     fx.close()
     return args, hdr, camhdr
 
-def _log_timer(timer, timingfile=None, comm=None):
+def log_timer(timer, timingfile=None, comm=None):
     """
     Log timing info, optionally writing to json timingfile
 
@@ -318,7 +318,7 @@ def _log_timer(timer, timingfile=None, comm=None):
         comm: MPI communicator
 
     If comm is not None, collect timers across ranks.
-    If timmingfile already exists, read and append timing then re-write.
+    If timingfile already exists, read and append timing then re-write.
     """
 
     log = get_logger()
