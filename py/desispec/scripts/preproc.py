@@ -75,7 +75,7 @@ Must specify --infile OR --night and --expid.
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
                         help = 'for cosmic ray rejection : number of sigma inconsistent with PSF required')
-    parser.add_argument('--cosmics-c2fudge', type = float, default = 0.5, required=False,
+    parser.add_argument('--cosmics-c2fudge', type = float, default = None, required=False,
                         help = 'for cosmic ray rejection : fudge factor applied to PSF')
 
     parser.add_argument('--bkgsub-for-dark', action='store_true',
