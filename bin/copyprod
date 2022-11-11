@@ -22,6 +22,8 @@ parser = optparse.OptionParser(usage = "%prog [options] indir outdir")
 parser.add_option("--explist", help="file with NIGHT EXPID to copy")
 parser.add_option("-n", "--night", default='20??????',
         help="YEARMMDD to copy (can include glob wildcards)")
+parser.add_option("-t", "--tiles",
+        help="Commas separated list of tiles to copy")
 parser.add_option("--fullcopy", action="store_true",
         help="Copy files instead of linking")
 parser.add_option("--abspath", action="store_true",
@@ -30,7 +32,9 @@ parser.add_option("--filter-exptables", action="store_true",
         help="Filter exposure_tables to ignore entries not in input explist")
 
 opts, args = parser.parse_args()
-inroot, outroot = args
+inroot = os.path.abspath(args[0])
+outroot = os.path.abspath(args[1])
+
 log = get_logger()
 
 #- Get list of NIGHT EXPID to copy
@@ -49,6 +53,22 @@ else:
 
     explist = Table(rows=rows, names=('NIGHT', 'EXPID'))
 
+if opts.tiles is not None:
+    tiles = np.array([int(t) for t in opts.tiles.split(',')])
+
+    keep = np.zeros(len(explist), dtype=bool)
+    for night in np.unique(explist['NIGHT']):
+        yearmm = night//100
+        exptabfile = f'{inroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
+        exptab = Table.read(exptabfile)
+        ii = np.isin(exptab['TILEID'], tiles)
+        keep |= np.isin(explist['EXPID'], exptab['EXPID'][ii])
+
+    if np.sum(keep) > 0:
+        explist = explist[keep]
+    else:
+        raise ValueError(f'Tile {tileid} not found on nights {np.unique(explist["NIGHT"])}')
+
 num_nights = len(np.unique(explist['NIGHT']))
 num_expids = len(np.unique(explist['EXPID']))
 assert num_expids == len(explist)
@@ -57,6 +77,7 @@ log.info(f'Linking {num_expids} exposures on {num_nights} nights')
 #- What type of copy or link are we making?
 if opts.fullcopy:
     link = shutil.copy2
+    opts.abspath = True
     log.debug('Performing full copy of selected NIGHT/EXPID')
 else:
     link = os.symlink

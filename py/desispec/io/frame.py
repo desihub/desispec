@@ -232,10 +232,18 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         if mask is not None:
             mask = mask[0:nspec]
 
+    if 'SPECGRPH' in hdr:
+        spectrograph = hdr['SPECGRPH']
+    elif 'CAMERA' in hdr:
+        spectrograph = int(hdr['CAMERA'][1])
+    else:
+        spectrograph = None
+
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
                   scores=scores,scores_comments=scores_comments,
-                  wsigma=qwsigma,ndiag=qndiag, suppress_res_warning=skip_resolution)
+                  wsigma=qwsigma,ndiag=qndiag, suppress_res_warning=skip_resolution,
+                  spectrograph=spectrograph)
 
     # This Frame came from a file, so set that
     frame.filename = os.path.abspath(filename)

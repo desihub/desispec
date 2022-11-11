@@ -251,7 +251,7 @@ def emlines_gaussfit(
                     emdict["FLUX"] = popt[1]
                     emdict["FLUX_IVAR"] = diag[1] ** -1
                     # AR rest-frame equivalent width
-                    factor = (1 + zspec) / emdict["CONT"]
+                    factor = 1 / ((1 + zspec) * emdict["CONT"])
                     emdict["EW"] = emdict["FLUX"] * factor
                     emdict["EW_IVAR"] = emdict["FLUX_IVAR"] / factor ** 2
     # AR fitted waves / fluxes / ivars / models

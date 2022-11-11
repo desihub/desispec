@@ -41,7 +41,7 @@ import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras
-from desispec.io.util import validate_badamps, get_tempfilename
+from desispec.io.util import validate_badamps, get_tempfilename, relsymlink
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -499,7 +499,7 @@ def main(args=None, comm=None):
                     expandargs = False
                 else:
                     cmdargs = (inpsf, outpsf)
-                    cmd = os.symlink
+                    cmd = relsymlink
                     expandargs = True
 
                 result, success = runcmd(cmd, args=cmdargs, expandargs=expandargs,
@@ -719,8 +719,9 @@ def main(args=None, comm=None):
                     cmd += ' --use-gpu'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
-                    log.info('Include barycentric correction')
-                    cmd += ' --barycentric-correction'
+                    if not args.no_barycentric_correction :
+                        log.info('Include barycentric correction')
+                        cmd += ' --barycentric-correction'
 
                 missing_inputs = False
                 for infile in [preprocfile, psffile]:
@@ -1231,7 +1232,8 @@ def main(args=None, comm=None):
             cmd += " --delta-color 0.1"
             if args.maxstdstars is not None:
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
-
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
             err = 0
             cmdargs = cmd.split()[1:]
@@ -1315,6 +1317,8 @@ def main(args=None, comm=None):
             cmd += " --models {}".format(stdfile)
             cmd += " --outfile {}".format(calibfile)
             cmd += " --selected-calibration-stars {}".format(calibstars)
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
 
             inputs = [framefile, skyfile, fiberflatfile, stdfile, calibstars]
             cmdargs = cmd.split()[1:]
@@ -1355,6 +1359,8 @@ def main(args=None, comm=None):
             cmd += " --sky {}".format(skyfile)
             cmd += " --calib {}".format(calibfile)
             cmd += " --outfile {}".format(cframefile)
+            if args.apply_sky_throughput_correction :
+                cmd += " --apply-sky-throughput-correction"
             cmd += " --cosmics-nsig 6"
             if args.no_xtalk :
                 cmd += " --no-xtalk"

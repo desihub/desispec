@@ -61,6 +61,9 @@ def parse(options=None):
     parser.add_argument('--nsig-flux-scale', type = float, default = 3, required=False,
                        help = 'n sigma cutoff of the flux scale among standard stars')
     parser.add_argument("--use-gpu", action="store_true", help="Use GPUs")
+    parser.add_argument('--apply-sky-throughput-correction', action='store_true',
+                        help =('Apply a throughput correction when subtraction the sky '
+                               '(default: do not apply!)'))
 
     parser.set_defaults(nostdcheck=False)
 
@@ -102,7 +105,7 @@ def main(args=None) :
     skymodel=read_sky(args.sky)
 
     # subtract sky
-    subtract_sky(frame, skymodel)
+    subtract_sky(frame, skymodel, apply_throughput_correction = args.apply_sky_throughput_correction)
 
     log.info("compute flux calibration")
 

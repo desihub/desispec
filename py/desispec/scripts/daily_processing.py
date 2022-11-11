@@ -32,7 +32,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
                              exps_to_ignore=None, data_cadence_time=300, queue_cadence_time=1800,
                              dry_run_level=0, dry_run=False, no_redshifts=False, continue_looping_debug=False, dont_check_job_outputs=False,
-                             dont_resubmit_partial_jobs=False, verbose=False):
+                             dont_resubmit_partial_jobs=False, verbose=False, use_specter=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -76,6 +76,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                           remaining cameras not found to exist.
         verbose: bool. True if you want more verbose output, false otherwise. Current not propagated to lower code,
                        so it is only used in the main daily_processing script itself.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns: Nothing
 
@@ -372,7 +373,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             print(f"\nProcessing: {prow}\n")
             prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                      strictly_successful=True, check_for_outputs=check_for_outputs,
-                                     resubmit_partial_complete=resubmit_partial_complete)
+                                     resubmit_partial_complete=resubmit_partial_complete,use_specter=use_specter)
 
             ## If processed a dark, assign that to the dark job
             if curtype == 'dark':

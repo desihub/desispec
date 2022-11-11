@@ -90,6 +90,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
     parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
     parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not apply tpcorrparam spatial model or fit tpcorrparam pca terms")
+    parser.add_argument("--no-barycentric-correction", action="store_true", help="Do not apply barycentric correction to wavelength")
     parser.add_argument("--apply-sky-throughput-correction", action="store_true", help="Apply throughput correction to sky fibers (default: do not apply!)")
     return parser
 
@@ -407,7 +408,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
             ncores = config['cores_per_node']
         else:
             ncores = 20 * nspectro
-    elif jobdesc == 'DARK':
+    elif jobdesc in ('DARK', 'BADCOL'):
         ncores, runtime = ncameras, 5
     elif jobdesc == 'CCDCALIB':
         ncores, runtime = ncameras, 5
@@ -424,7 +425,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         #- there are 30 cameras (coincidence).
         #- Use 32 as power of 2 for core packing
         ncores = 32
-        runtime = 5+1*nexps
+        runtime = 8+2*nexps
     elif jobdesc == 'POSTSTDSTAR':
         runtime = 10
         ncores = ncameras
@@ -469,7 +470,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     #- Allow KNL jobs to be slower than Haswell,
     #- except for ARC so that we don't have ridiculously long times
     #- (Normal arc is still ~15 minutes, albeit with a tail)
-    if jobdesc not in ['ARC', 'TESTARC', 'NIGHTLYFLAT']:
+    if jobdesc not in ['ARC', 'TESTARC']:
         runtime *= config['timefactor']
 
     #- Do not allow runtime to be less than 5 min
