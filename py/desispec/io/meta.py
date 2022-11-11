@@ -101,8 +101,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
         readonly: if True, return read-only version of path if possible
-        logfile: if True, returns the pathname of the log instead of the data
-                 product itself
+        logfile: if True, returns the pathname of the log instead of the data product itself
 
     Returns filename, or (filename, exists) if return_exists=True
 
