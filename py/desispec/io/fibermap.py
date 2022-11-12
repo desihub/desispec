@@ -471,11 +471,6 @@ def update_survey_keywords(hdr):
             log.debug('Tile %d setting %s=%s', tileid, key, value)
             hdr[key] = value
 
-    #- double check constency with FA_SURV keyword
-    if ('SURVEY' in updates) and ('FA_SURV' in hdr):
-        if updates['SURVEY'] != hdr['FA_SURV']:
-            raise ValueError(f"Tile {tileid} Derived SURVEY={updates['SURVEY']} doesn't match header FA_SURV={hdr['FA_SURV']}")
-
     #- did we get the right keywords into hdr?
     assert 'TILEID' in hdr
     assert 'SURVEY' in hdr
