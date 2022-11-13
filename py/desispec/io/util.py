@@ -15,8 +15,6 @@ import numpy as np
 from astropy.table import Table
 from desiutil.log import get_logger
 
-from ..util import healpix_degrade_fixed
-
 def checkgzip(filename):
     """
     Check for existence of filename, with or without .gz extension
@@ -363,13 +361,6 @@ def healpix_subdirectory(nside, pixel):
     subdir = str(pixel//100)
     pixdir = str(pixel)
     return os.path.join(subdir, pixdir)
-
-    #- Note: currently nside isn't used, but if we did want to do a strict
-    #- superpix grouping, we would need to know nside and do something like:
-
-    # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
-    # return os.path.join("{}-{}".format(subnside, subpixel),
-    #     "{}-{}".format(nside, pixel))
 
     
 def create_camword(cameras):
@@ -961,4 +952,28 @@ def relsymlink(src, dst, pathonly=False):
         os.symlink(relpath, dst)
 
     return relpath
+
+def backup_filename(filename):
+    """rename filename to next available filename.N
+
+    Args:
+        filename (str): full path to filename
+
+    Returns:
+        New filename.N, or filename if original file didn't already exist
+    """
+    if filename == '/dev/null' or not os.path.exists(filename):
+        return filename
+
+    n = 0
+    while True:
+        altfile = f'{filename}.{n}'
+        if os.path.exists(altfile):
+            n += 1
+        else:
+            break
+
+    os.rename(filename, altfile)
+
+    return altfile
 

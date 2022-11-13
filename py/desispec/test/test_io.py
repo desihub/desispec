@@ -1565,6 +1565,23 @@ class TestIO(unittest.TestCase):
             self.assertEqual(line, 'blat')
         os.chdir(origdir)
 
+    def test_backup_filename(self):
+        from ..io.util import backup_filename
+
+        fx = open(self.testDir+'/a.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.0', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.1', 'w'); fx.close()
+
+        test = backup_filename(self.testDir+'/a.log')
+        self.assertEqual(test, self.testDir+'/a.log.0')
+
+        test = backup_filename(self.testDir+'/b.log')
+        self.assertEqual(test, self.testDir+'/b.log.2')
+
+        test = backup_filename(self.testDir+'/c.log')
+        self.assertEqual(test, self.testDir+'/c.log')
+
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -31,7 +31,7 @@ import desispec.io
 from desispec.io import findfile, specprod_root, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras, \
     camword_to_spectros, columns_to_goodcamword, difference_camwords
-from desispec.io.util import validate_badamps, get_tempfilename
+from desispec.io.util import validate_badamps, get_tempfilename, backup_filename
 from desispec.util import runcmd
 from desispec.scripts import group_spectra
 from desiutil.log import get_logger, DEBUG, INFO
@@ -723,8 +723,7 @@ def main(args=None, comm=None):
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
-        goodbye = f'All done at {}; duration {}m{}s'.format(
-                time.asctime(), mm, ss)
+        goodbye = f'All done at {time.asctime()}; duration {mm}m{ss}s'
 
         if error_count > 0:
             log.error(f'{error_count} processing errors; see logs above')

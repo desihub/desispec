@@ -1422,8 +1422,7 @@ def main(args=None, comm=None):
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
-        goodbye = f'All done at {}; duration {}m{}s'.format(
-                time.asctime(), mm, ss)
+        goodbye = f'All done at {time.asctime()}; duration {mm}m{ss}s'
 
         if error_count > 0:
             log.error(f'{error_count} processing errors; see logs above')
