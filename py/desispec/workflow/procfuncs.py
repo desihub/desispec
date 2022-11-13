@@ -239,7 +239,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
-def desi_proc_command(prow, system_name, use_specter, queue=None):
+def desi_proc_command(prow, system_name, use_specter=False, queue=None):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -263,12 +263,14 @@ def desi_proc_command(prow, system_name, use_specter, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
+
+        if use_specter:
+            cmd += ' --use-specter'
+
     elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
-    elif prow['JOBDESC'] in ['flat'] and not use_specter:
-        cmd += ' --gpuspecter'
-        if system_name=="perlmutter-gpu":
-            cmd += ' --gpuextract'
+    elif prow['JOBDESC'] in ['flat', 'prestdstar'] and use_specter:
+        cmd += ' --use-specter'
     pcamw = str(prow['PROCCAMWORD'])
     cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
     if len(prow['EXPID']) > 0:
@@ -374,8 +376,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             expids = prow['EXPID']
             if len(expids) == 0:
                 expids = None
-            gpuspecter = ((not use_specter) and prow['JOBDESC'] in ['science', 'prestdstar', 'tilenight'])
-            gpuextract = (gpuspecter and system_name=="perlmutter-gpu")
+
             if prow['JOBDESC'] == 'tilenight':
                 log.info("Creating tilenight script for tile {}".format(prow['TILEID']))
                 ncameras = len(decode_camword(prow['PROCCAMWORD']))
@@ -385,8 +386,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                ncameras=ncameras,
                                                                queue=queue,
                                                                mpistdstars=True,
-                                                               gpuspecter=gpuspecter,
-                                                               gpuextract=gpuextract,
+                                                               use_specter=use_specter,
                                                                system_name=system_name)
             else:
                 log.info("Running: {}".format(cmd.split()))
@@ -395,8 +395,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                cameras=prow['PROCCAMWORD'],
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
-                                                               gpuspecter=gpuspecter,
-                                                               gpuextract=gpuextract,
+                                                               use_specter=use_specter,
                                                                system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)

@@ -60,7 +60,6 @@ def parse(options=None):
                         help = 'seeing FWHM in arcsec, used for fiberloss correction')
     parser.add_argument('--nsig-flux-scale', type = float, default = 3, required=False,
                        help = 'n sigma cutoff of the flux scale among standard stars')
-    parser.add_argument("--use-gpu", action="store_true", help="Use GPUs")
     parser.add_argument('--apply-sky-throughput-correction', action='store_true',
                         help =('Apply a throughput correction when subtraction the sky '
                                '(default: do not apply!)'))
@@ -238,7 +237,6 @@ def main(args=None) :
         log.warning('All standard-star spectra are masked!')
         return
 
-    if not args.use_gpu: desispec.fluxcalibration.use_gpu = False
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux,
             model_fibers%500,
             highest_throughput_nstars=args.highest_throughput,
