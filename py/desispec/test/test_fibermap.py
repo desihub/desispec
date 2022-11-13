@@ -127,7 +127,7 @@ class TestFibermap(unittest.TestCase):
         self.assertEqual(hdr['FAPRGRM'], 'bgsmws')
 
         #- TILEID, SURVEY, and FAFLAVOR but not FAPRGRM
-        hdr = dict(TILEID=81000, FAFLAVOR='sv2dark')
+        hdr = dict(TILEID=81000, SURVEY='sv2', FAFLAVOR='sv2dark')
         update_survey_keywords(hdr)
         self.assertEqual(hdr['SURVEY'], 'sv2')
         self.assertEqual(hdr['FAPRGRM'], 'dark')
