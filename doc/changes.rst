@@ -5,7 +5,12 @@ desispec Change Log
 0.56.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Add update_survey_keywords to standardize early FA headers (PR `#1858`_).
+* Standardize GPU options (opt-out with --no-gpu) and fix options for
+  desi_run_night auto-deriving GPU vs. CPU per job (PR `#1901`_).
+
+.. _`#1858`: https://github.com/desihub/desispec/pull/1858
+.. _`#1901`: https://github.com/desihub/desispec/pull/1901
 
 0.55.0 (2022-11-11)
 -------------------
