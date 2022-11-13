@@ -99,13 +99,6 @@ def main(args=None, comm=None):
     #- Create and submit a batch job if requested
 
     if args.batch:
-        # Use GPU extraction if system_name==perlmutter-gpu
-        # otherwise don't
-        gpuextract=False
-        gpuspecter=args.gpuspecter
-        if args.system_name == "perlmutter-gpu":
-            gpuspecter=True
-            gpuextract=True
         ncameras = len(decode_camword(joint_camwords))
         scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
                                                    exp=expids,
@@ -114,8 +107,8 @@ def main(args=None, comm=None):
                                                    queue=args.queue,
                                                    system_name=args.system_name,
                                                    mpistdstars=args.mpistdstars,
-                                                   gpuspecter=gpuspecter,
-                                                   gpuextract=gpuextract
+                                                   use_specter=args.use_specter,
+                                                   no_gpu=args.no_gpu,
                                                    )
         err = 0
         if not args.nosubmit:
@@ -134,13 +127,13 @@ def main(args=None, comm=None):
     
     #- common arguments
     common_args = f'--night {args.night}'
+    if args.no_gpu:
+        common_args += ' --no-gpu'
 
-    #- gpu options
-    gpu_args=''
-    if args.gpuspecter:
-        gpu_args += ' --gpuspecter'
-    if args.gpuextract:
-        gpu_args += ' --gpuextract'
+    #- extract options
+    extract_args=''
+    if args.use_specter:
+        extract_args += ' --use-specter'
 
     #- mpi options
     mpi_args=''
@@ -149,7 +142,7 @@ def main(args=None, comm=None):
 
     #- run desiproc prestdstar over exps
     for expid in prestdstar_expids:
-        prestdstar_args = common_args + gpu_args
+        prestdstar_args = common_args + extract_args
         prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {camwords[expid]}'
         if len(badamps[expid]) > 0:
             prestdstar_args += f' --badamps {badamps[expid]}'

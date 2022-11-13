@@ -142,10 +142,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     if laststeps is None:
-        if use_tilenight:
-            laststeps = ['all','skysub']
-        else:
-            laststeps = ['all']
+        laststeps = ['all',]
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:

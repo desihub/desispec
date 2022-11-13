@@ -52,7 +52,6 @@ def parse(options=None):
                          nargs='*',
                          help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
-    parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
     parser.add_argument('--apply-sky-throughput-correction', action='store_true',
                         help =('Apply a throughput correction when subtraction the sky '
                                '(default: do not apply!)'))
@@ -154,19 +153,6 @@ def main(args=None, comm=None) :
     if ncpu > 1:
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
-
-    if not args.use_gpu and desispec.fluxcalibration.use_gpu:
-        # Opt-out of GPU usage
-        desispec.fluxcalibration.use_gpu = False
-        if rank == 0:
-            log.info('ignoring GPU')
-    elif desispec.fluxcalibration.use_gpu:
-        # Nothing to do here, GPU is used by default if available
-        if rank == 0:
-            log.info('using GPU')
-    else:
-        if rank == 0:
-            log.info('GPU not available')
 
     # READ DATA
     ############################################
