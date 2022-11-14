@@ -2,7 +2,17 @@
 desispec Change Log
 ===================
 
-0.55.0 (unreleased)
+0.56.0 (unreleased)
+-------------------
+
+* Add update_survey_keywords to standardize early FA headers (PR `#1858`_).
+* Standardize GPU options (opt-out with --no-gpu) and fix options for
+  desi_run_night auto-deriving GPU vs. CPU per job (PR `#1901`_).
+
+.. _`#1858`: https://github.com/desihub/desispec/pull/1858
+.. _`#1901`: https://github.com/desihub/desispec/pull/1901
+
+0.55.0 (2022-11-11)
 -------------------
 
 Major:
@@ -11,7 +21,7 @@ Major:
 * Add emlinefit afterburner to redshift scripts (PR `#1852`_).
 * emlinefit (1+z) normalization bugfix (PR `#1878`_).
 * Sky model use TPCORR to adjust sky line amplitudes, but not continuum
-  (PR `#1886`_).
+  (PRs `#1886`_, `#1895`_).
 
 Minor:
 
@@ -31,7 +41,7 @@ Minor:
 * improve cframe file globbing to avoid tempfiles (PR `#1853`_).
 * tilenight exit early if no good exposures (PR `#1854`_).
 * fix psferr option in desi_extract_spectra (PR `#1855`_).
-* Add support for NERSC CFS readonly mount (PR `#1856`_).
+* Add support for NERSC CFS readonly mount (PRs `#1856`_, `#1888`_, `#1891`_).
 * Use non-calibration zeros if not enough calib zeros are available (PR `#1857`_).
 * Perlmutter use CPU for nightlybias, ccdcalib, arcs; GPUs otherwise (PR `#1859`_).
 * Have desi_night_qa announce its completion (PR `#1860`_).
@@ -45,8 +55,11 @@ Minor:
 * fix fallback to DESI_SPECTRO_CALIB if DESI_SPECTRO_DARK is set but doesn't
   have suitable files for date range (PR `#1882`_).
 * desi_proc options for sims (PR `#1885`_)
-* Fix relative symlinks to read-only mount of $DESI_ROOT_READONLY
-  (PRs `#1888`_, `#1891`_).
+* Add ``copyprod --tiles`` option (PR `#1893`_).
+* Fix fibermap indexing bug when mix of LEGACY and GAIA (PR `#1894`_).
+* Add ``desi_job_graph`` to make job dependency graph webpages (PR `#1896`_).
+* Apply job timefactor to nightlyflat jobs too (PR `#1898`_).
+* Add GPU memory and rank allocation tools (PR `#1899`_).
 
 .. _`#1822`: https://github.com/desihub/desispec/pull/1822
 .. _`#1824`: https://github.com/desihub/desispec/pull/1824
@@ -83,6 +96,13 @@ Minor:
 .. _`#1886`: https://github.com/desihub/desispec/pull/1886
 .. _`#1888`: https://github.com/desihub/desispec/pull/1888
 .. _`#1891`: https://github.com/desihub/desispec/pull/1891
+.. _`#1893`: https://github.com/desihub/desispec/pull/1893
+.. _`#1894`: https://github.com/desihub/desispec/pull/1894
+.. _`#1895`: https://github.com/desihub/desispec/pull/1895
+.. _`#1896`: https://github.com/desihub/desispec/pull/1896
+.. _`#1898`: https://github.com/desihub/desispec/pull/1898
+.. _`#1899`: https://github.com/desihub/desispec/pull/1899
+
 
 0.54.0 (2022-08-15)
 -------------------

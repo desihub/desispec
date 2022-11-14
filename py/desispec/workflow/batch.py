@@ -54,7 +54,7 @@ def default_system(jobdesc=None, no_gpu=False):
             name = 'cori-haswell'
         elif os.environ['NERSC_HOST'] == 'perlmutter':
             ## HARDCODED: for now arcs and biases can't use gpu's, so use cpu's
-            if jobdesc in ['arc', 'nightlybias', 'ccdcalib']:
+            if jobdesc in ['arc', 'nightlybias', 'ccdcalib', 'badcol', 'psfnight', 'nightlyflat']:
                 name = 'perlmutter-cpu'
             elif no_gpu:
                 name = 'perlmutter-cpu'
