@@ -23,8 +23,8 @@ def parse(options=None):
             help="input spectra file or input frame files")
     parser.add_argument("-o","--outfile", type=str,
             help="output spectra file")
-    parser.add_argument("--nsig", type=float, default=4,
-            help="nsigma rejection threshold for cosmic rays (default %(default)s)")
+    parser.add_argument("--nsig", type=float,
+            help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None,
             help="resampling to single linear wave array of given step in A")
     parser.add_argument("--log10-step", type=float, default=None,
