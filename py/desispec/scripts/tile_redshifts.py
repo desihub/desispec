@@ -57,7 +57,8 @@ def main(args=None):
     sys.exit(num_error)
 
 def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
-                                   camword=None, max_gpuprocs=None, no_gpu=False,
+                                   spectrographs=None, camword=None,
+                                   max_gpuprocs=None, no_gpu=False,
                                    run_zmtl=False, no_afterburners=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
@@ -71,6 +72,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         tileid (int): Tile ID.
         expids (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
+        spectrographs (str or list of int): spectrographs to include
         camword (str): camword of cameras to include
         max_gpuprocs (int): Number of gpu processes
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
@@ -87,6 +89,8 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
                                      that returned a null batcherr.
         failed_jobs (list of str): The path names of the scripts created during the function call
                                    that returned a batcherr.
+
+    Note: specify ``spectrographs`` or ``camword`` but not both
     """
     log = get_logger()
 
@@ -154,6 +158,14 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
     if len(exptable) == 0:
         log.critical(f'No exposures left after filtering by tileid/nights/expids')
         sys.exit(1)
+
+    if (spectrographs is not None) and (camword is not None):
+        msg = f'Give {spectrographs=} OR {camword=} but not both'
+        log.error(msg)
+        raise ValueError(msg)
+
+    if spectrographs is not None:
+        camword = spectro_to_camword(spectrographs)
 
     if camword is not None:
         if isinstance(camword, str):

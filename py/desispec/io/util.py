@@ -15,6 +15,8 @@ import numpy as np
 from astropy.table import Table
 from desiutil.log import get_logger
 
+from desispec.util import parse_int_args
+
 def checkgzip(filename):
     """
     Check for existence of filename, with or without .gz extension
@@ -677,6 +679,25 @@ def camword_to_spectros(camword, full_spectros_only=False):
         elif full_spectros_only and char in ['b','r','z']:
             break
     return list(spectros)
+
+def spectros_to_camword(spectros):
+    """
+    Converts a specification of spectrographs to the equivalent camword
+
+    Args:
+        spectros: str (e.g. "0-7,9") or list of ints spectrographs
+
+    Returns: camword str (e.g. a012345679)
+    """
+    if isinstance(spectros, str):
+        spectros = parse_int_args(spectros, include_end=True)
+
+    spectros = sorted(spectros)
+    camword = "a" + "".join(str(sp) for sp in spectros)
+    check = camword_to_spectros(camword)
+    assert sorted(spectros) == check
+
+    return camword
 
 def parse_badamps(badamps,joinsymb=','):
     """

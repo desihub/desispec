@@ -1582,6 +1582,20 @@ class TestIO(unittest.TestCase):
         test = backup_filename(self.testDir+'/c.log')
         self.assertEqual(test, self.testDir+'/c.log')
 
+    def test_camword_spectros(self):
+        from ..io.util import spectros_to_camword, camword_to_spectros
+
+        self.assertEqual(camword_to_spectros('a01'), [0,1])
+        self.assertEqual(camword_to_spectros('a135'), [1,3,5])
+        self.assertEqual(camword_to_spectros('a135b7'), [1,3,5,7])
+        self.assertEqual(camword_to_spectros('a135b7', full_spectros_only=True), [1,3,5])
+
+        self.assertEqual(spectros_to_camword('1-3'), 'a123')
+        self.assertEqual(spectros_to_camword('1,3,5'), 'a135')
+        self.assertEqual(spectros_to_camword('1,3-5'), 'a1345')
+        self.assertEqual(spectros_to_camword([0,5,6]), 'a056')
+        self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
+
 
 def test_suite():
     """Allows testing of only this module with the command::
