@@ -35,7 +35,7 @@ def parse(options=None):
                    help="generate scripts but don't submit batch jobs")
     parser.add_argument("--no-afterburners", action="store_true",
                    help="Do not run afterburners (like QSO fits)")
-    parser.add_argument("--batch-queue", type=str, default='realtime',
+    parser.add_argument("--batch-queue", type=str, default='regular',
                    help="batch queue name")
     parser.add_argument("--batch-reservation", type=str,
                    help="batch reservation name")
@@ -60,7 +60,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
                                    spectrographs=None, camword=None,
                                    max_gpuprocs=None, no_gpu=False,
                                    run_zmtl=False, no_afterburners=False,
-                                   batch_queue='realtime', batch_reservation=None,
+                                   batch_queue='regular', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
     """
     Creates a slurm script to run redshifts per tile. By default it also submits the job to Slurm. If nosubmit
@@ -78,7 +78,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
         run_zmtl (bool): If True, also run make_zmtl_files
         no_afterburners (bool): If True, do not run QSO afterburners
-        batch_queue (str): Batch queue name. Default is 'realtime'.
+        batch_queue (str): Batch queue name. Default is 'regular'.
         batch_reservation (str): Batch reservation name.
         batch_dependency (str): Job dependencies passed to sbatch --dependency .
         system_name (str): Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu.
@@ -237,7 +237,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
 
 
 def batch_tile_redshifts(tileid, exptable, group, camword=None,
-                         submit=False, queue='realtime', reservation=None,
+                         submit=False, queue='regular', reservation=None,
                          max_gpuprocs=None, no_gpu=False,
                          dependency=None, system_name=None, run_zmtl=False,
                          no_afterburners=False):
