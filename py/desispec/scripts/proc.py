@@ -29,7 +29,6 @@ set_backend()
 import sys, os, argparse, re
 import subprocess
 from copy import deepcopy
-import json
 
 import numpy as np
 import fitsio
@@ -71,8 +70,8 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
-    find_most_recent
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, \
+    update_args_with_headers, find_most_recent, log_timer
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
 stop_imports = time.time()
@@ -85,55 +84,6 @@ def parse(options=None):
     parser = get_desi_proc_parser()
     args = parser.parse_args(options)
     return args
-
-def _log_timer(timer, timingfile=None, comm=None):
-    """
-    Log timing info, optionally writing to json timingfile
-
-    Args:
-        timer: desiutil.timer.Timer object
-
-    Options:
-        timingfile (str): write json output to this file
-        comm: MPI communicator
-
-    If comm is not None, collect timers across ranks.
-    If timmingfile already exists, read and append timing then re-write.
-    """
-
-    log = get_logger()
-    if comm is not None:
-        timers = comm.gather(timer, root=0)
-        rank, size = comm.rank, comm.size
-    else:
-        timers = [timer,]
-        rank, size = 0, 1
-
-    if rank == 0:
-        stats = desiutil.timer.compute_stats(timers)
-        if timingfile:
-            if os.path.exists(timingfile):
-                with open(timingfile) as fx:
-                    previous_stats = json.load(fx)
-
-                #- augment previous_stats with new entries, but don't overwrite old
-                for name in stats:
-                    if name not in previous_stats:
-                        previous_stats[name] = stats[name]
-
-                stats = previous_stats
-
-            tmpfile = get_tempfilename(timingfile)
-            with open(tmpfile, 'w') as fx:
-                json.dump(stats, fx, indent=2)
-            os.rename(tmpfile, timingfile)
-            log.info(f'Timing stats saved to {timingfile}')
-
-        log.info('Timing max duration per step [seconds]:')
-        for stepname, steptiming in stats.items():
-            tmax = steptiming['duration.max']
-            log.info(f'  {stepname:16s} {tmax:.2f}')
-
 
 def main(args=None, comm=None):
     if not isinstance(args, argparse.Namespace):
@@ -394,7 +344,7 @@ def main(args=None, comm=None):
                     args=cmdargs, inputs=[], outputs=[fibermap])
 
             fibermap_ok = os.path.exists(fibermap)
-            if err != 0 or not fibermap_ok:
+            if not success or not fibermap_ok:
                 error_count += 1
 
     #- If assemble_fibermap failed and obstype is SCIENCE, exit now
@@ -1468,25 +1418,25 @@ def main(args=None, comm=None):
         timer.stop('exposure_qa')
 
     #-------------------------------------------------------------------------
-    #- Collect error count
+    #- Collect error count and wrap up
     if comm is not None:
         all_error_counts = comm.gather(error_count, root=0)
         error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
 
-    if rank == 0 and error_count > 0:
-        log.error(f'{error_count} processing errors; see logs above')
+    #- save / print timing information
+    log_timer(timer, args.timingfile, comm=comm)
 
-    #-------------------------------------------------------------------------
-    #- Wrap up
-
-    _log_timer(timer, args.timingfile, comm=comm)
     if rank == 0:
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
+        goodbye = f'All done at {time.asctime()}; duration {mm}m{ss}s'
 
-        log.info('All done at {}; duration {}m{}s'.format(
-            time.asctime(), mm, ss))
+        if error_count > 0:
+            log.error(f'{error_count} processing errors; see logs above')
+            log.error(goodbye)
+        else:
+            log.info(goodbye)
 
     if error_count > 0:
         sys.exit(int(error_count))

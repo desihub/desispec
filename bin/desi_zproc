@@ -1,0 +1,13 @@
+#!/usr/bin/env python
+
+# small time jitter so MPI parallel imports don't hit the disk simultaneously
+import time
+import random
+time.sleep(2*random.random())
+
+if __name__ == '__main__':
+    import sys
+    import desispec.scripts.zproc as zproc
+
+    args = zproc.parse()
+    sys.exit(zproc.main(args))
