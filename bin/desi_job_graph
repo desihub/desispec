@@ -57,7 +57,8 @@ jobinfo = {row['JOBID']:row for row in qinfo}
 
 #- Map production directory -> URL for log links
 specprodurl = specproddir.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
-outputurl = args.output.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+outputurl = os.path.abspath(args.output).replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+outputdir = os.path.dirname(os.path.abspath(args.output))
 
 #- Write the mermaid graph
 fx = open(args.output, 'w')
@@ -111,7 +112,7 @@ for row in proctable:
     else:
         logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
 
-    logurl = logfile.replace(specproddir, specprodurl)
+    logurl = os.path.relpath(logfile, outputdir)
 
     if jobdesc in ('tilenight', 'pernight', 'perexp', 'cumulative'):
         description = f'{jobdesc} {tileid}'
@@ -144,7 +145,11 @@ for row in proctable:
 
 fx.write(""" </div>
 
-<script src="https://unpkg.com/mermaid@9.1.7/dist/mermaid.min.js">mermaid.initialize({startOnLoad:true});</script>
+<script src="https://unpkg.com/mermaid@9.1.7/dist/mermaid.min.js">
+    mermaid.initialize({
+        startOnLoad:true
+    });
+</script>
 </body>
 </html>
 """)
