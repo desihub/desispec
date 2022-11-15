@@ -68,7 +68,7 @@ def clipped_mean_image(image_filenames) :
     smimage2=np.sum(mimage**2)
     for i in range(len(images)) :
         a=np.sum(images[i]*mimage)/smimage2
-        log.debug("scale %d = %f"%(i,a))
+        log.debug("scale %d = %f", i,a)
         if a<=0 :
             raise ValueError("scale = %f for image %s"%(a,image_filenames[i]))
         images[i] /= a
@@ -165,7 +165,7 @@ def gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=2,dxdy=0.,dydx=0.) :
 
     for p in range(npass) : # possibly do several passes
         for a in range(2) : # convolve in 1d on each axis
-            #log.debug("p=%d a=%d"%(p,a))
+            #log.debug("p=%d a=%d", p,a)
             res=convolve2d(tmp,kernels[a],weight=tmpivar)
             model *= res
             tmpivar *= res**2 # ?
@@ -236,21 +236,21 @@ def amplifier_matching(image) :
     vband_a = np.median(image[c0-lw:c0,c1-w:c1],axis=1)
     vband_b = np.median(image[c0-lw:c0,c1::c1+w],axis=1)
     rab = np.sqrt( np.median(vband_a/vband_b) / np.median(vband_b/vband_a) ) # to debias
-    log.debug("a/b=",rab)
+    log.debug("a/b=%f", rab)
     image[:c0,:c1] /= np.sqrt(rab)
     image[:c0,c1:] *= np.sqrt(rab)
 
     vband_c = np.median(image[c0:c0+lw,c1-w:c1],axis=1)
     vband_d = np.median(image[c0:c0+lw,c1::c1+w],axis=1)
     rcd = np.sqrt( np.median(vband_c/vband_d) / np.median(vband_d/vband_c) ) # to debias
-    log.debug("c/d=",rcd)
+    log.debug("c/d=%f", rcd)
     image[c0:,:c1] /= np.sqrt(rcd)
     image[c0:,c1:] *= np.sqrt(rcd)
 
     hband_ab = np.median(image[c0-w:c0,lw:-lw],axis=0)
     hband_cd = np.median(image[c0:c0+w,lw:-lw],axis=0)
     rac = np.sqrt( np.median(hband_ab/hband_cd) / np.median(hband_cd/hband_ab) ) # to debias
-    log.debug("a/c = b/d =",rac)
+    log.debug("a/c = b/d = %f", rac)
     image[:c0] /= np.sqrt(rac)
     image[c0:] *= np.sqrt(rac)
 
@@ -293,6 +293,10 @@ if args.out_mean is not None :
     log.info("writing median image %s ..."%args.out_mean)
     h=pyfits.HDUList([pyfits.PrimaryHDU(image),pyfits.ImageHDU(ivar,name="IVAR")])
     h.writeto(args.out_mean,overwrite=True)
+
+if np.any(np.isnan(image)) :
+    log.error("median image has nan values")
+    sys.exit(12)
 
 # hardcoded values for the pixel flat field
 #############################################################
@@ -458,19 +462,27 @@ n1=image.shape[1]
 b1=n1//2-pixel_band_width_for_initial_spectral_model//2
 e1=n1//2+pixel_band_width_for_initial_spectral_model//2
 band=image[:,b1:e1].copy()
+
+if np.any(np.isnan(band)) :
+    log.error("band image has nan values")
+    sys.exit(12)
+
 for loop in range(3) :
-    medspec=np.median(band,axis=1)
+    medspec=np.nanmedian(band,axis=1)
+    medspec[medspec<1]=1
     for i in range(band.shape[1]) :
-        band[:,i] *= np.median(band[:,i]/medspec)
-    medspec=np.median(band,axis=1)
+        norm=np.median(band[:,i]/medspec)
+        log.debug("%d %f", i, norm)
+        if not np.isnan(norm) :
+            band[:,i] *= norm
+
+medspec=np.median(band,axis=1)
 
 # smooth the spectrum with a gaussian kernel
 y=np.arange(n0)
 k=np.exp(-(y-n0/2.)**2/2./sigma_of_gaussian_smoothing_for_initial_spectral_model**2)
 k/=np.sum(k)
 medspec=scipy.signal.fftconvolve(medspec,k,'same')
-
-
 
 model = np.zeros(image.shape)
 
@@ -488,7 +500,7 @@ for i in range(n1):
     offsets[i]  = dy[c]
     corrvals[i] = corr[c]
     if i%100 == 0 :
-        log.debug(i,offsets[i],corrvals[i])
+        log.debug("%d %f %f", i,offsets[i],corrvals[i])
 
 # refit the best offset as a polynomial of X to remove statistical jitter
 x=np.arange(n1)
@@ -538,7 +550,7 @@ for loop in range(1) :
         B = sqwH.dot(sqrtw*image[:,i])
         Ai = np.linalg.inv(A)
         param[i] = Ai.dot(B)
-        if i%100 == 0 : log.debug(i,loop,param[i])
+        if i%100 == 0 : log.debug("%d %d %f", i,loop,param[i])
 
     # fit smooth params
     dx=(np.arange(n1)-n1//2)/(n1/2.)
