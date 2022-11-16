@@ -91,8 +91,15 @@ for row in proctable:
     qid = row['LATEST_QID']
     intid = row['INTID']        #- internal ID
     jobdesc = row['JOBDESC']
-    expid = row['EXPID'][0:-1].replace('|', ',')  #- comma separated expids
-    e1 = int(expid.split(',')[0])  #- the first expid
+
+    #- nightly bias job doesn't have expids associated with it
+    if row['EXPID'] == '|':
+        expid = ''
+        e1 = -1
+    else:
+        expid = row['EXPID'][0:-1].replace('|', ',')  #- comma separated expids
+        e1 = int(expid.split(',')[0])  #- the first expid
+
     tileid = row['TILEID']
     proccamword = row['PROCCAMWORD']
 
