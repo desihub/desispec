@@ -130,7 +130,6 @@ def add_desi_proc_tilenight_terms(parser):
     """
     parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
     parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
-    parser.add_argument("--laststeps", action="store_true", help="show commands only, do not run")
     parser.add_argument("--laststeps", type=str, default='all',
                         help="Comma separated list of LASTSTEP's to process "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
