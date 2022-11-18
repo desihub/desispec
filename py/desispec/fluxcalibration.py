@@ -1036,7 +1036,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         # use a median instead of an optimal fit here
         waveindices = np.where(fluxcal>0.5*np.median(fluxcal))[0]
         scale = np.median(stdstars.flux[:,waveindices]/(fluxcal[waveindices][None,:]*convolved_model_flux[:,waveindices]*point_source_correction[stdfibers,None]))
-        log.info("{camera} scale factor = {scale:4.3f}")
+        log.info(f"{camera} scale factor = {scale:4.3f}")
         minscale = 0.0001
         if scale<minscale :
             scale=minscale
