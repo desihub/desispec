@@ -121,7 +121,8 @@ def main(args=None, comm=None):
     #- What are we going to do?
     if rank == 0:
         log.info('----------')
-        log.info('Tile {} night {}'.format(args.tileid, args.night))
+        log.info('Tile {} night {} exposures {}'.format(
+            args.tileid, args.night, prestdstar_expids))
         log.info('Output root {}'.format(specprod_root()))
         log.info('----------')
     

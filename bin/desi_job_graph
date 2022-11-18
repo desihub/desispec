@@ -87,6 +87,7 @@ fx.write(f"""<!DOCTYPE html>
 """)
 
 jobs = dict()
+state_counter = dict()
 for row in proctable:
     qid = row['LATEST_QID']
     intid = row['INTID']        #- internal ID
@@ -107,6 +108,11 @@ for row in proctable:
         state = jobinfo[qid]['STATE'].split()[0]
     else:
         state = 'UNKNOWN'
+
+    if state not in state_counter:
+        state_counter[state] = 1
+    else:
+        state_counter[state] += 1
 
     if jobdesc == 'tilenight':
         logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
@@ -165,6 +171,9 @@ fx.close()
 print(f'Wrote {args.output}')
 if outputurl != args.output:
     print(outputurl)
+
+for state, n in state_counter.items():
+    print(f"{state:12s} {n:2}")
 
 
 
