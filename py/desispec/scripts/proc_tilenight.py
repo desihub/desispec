@@ -29,6 +29,11 @@ import desispec.gpu
 def parse(options=None):
     parser = get_desi_proc_tilenight_parser()
     args = parser.parse_args(options)
+
+    #- convert comma separated steps to list of str
+    if isinstance(args.laststeps, str):
+        args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
     return args
 
 def main(args=None, comm=None):
@@ -65,6 +70,9 @@ def main(args=None, comm=None):
     #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
     keep &= exptable['TILEID']  == int(args.tileid)
+    if args.laststeps is not None:
+        keep &= np.isin(exptable['LASTSTEP'], args.laststeps)
+
     exptable = exptable[keep]
 
     expids = list(exptable['EXPID'])
