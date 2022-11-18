@@ -905,7 +905,14 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     """
 
     log=get_logger()
-    log.info("starting")
+
+    if frame.meta is not None and 'CAMERA' in frame.meta:
+        camera = frame.meta['CAMERA']
+    else:
+        camera = 'cam?'
+        log.warning(f'CAMERA not in frame header; using {camera}')
+
+    log.info(f"starting {camera} flux calibration")
 
     # add margin to frame
     def add_margin_2d_dim1(iarray,margin) :
@@ -924,7 +931,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         return oarray
 
     margin = 3
-    log.info("adding margin of {} pixels on each side".format(margin))
+    log.info(f"{camera} adding margin of {margin} pixels on each side")
     nwave=frame.wave.size
     dw=frame.wave[1]-frame.wave[0]
     wave_with_margin=np.zeros(nwave+2*margin)
@@ -941,7 +948,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
 
     #- Compute point source flux correction and fiber flux correction
-    log.info("compute point source flux correction for seeing FWHM = {:4.2f} arcsec".format(exposure_seeing_fwhm))
+    log.info("{} compute point source flux correction for seeing FWHM = {:4.2f} arcsec".format(
+        camera, exposure_seeing_fwhm))
     point_source_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm)
     good=(point_source_correction!=0)
     bad=~good
@@ -949,9 +957,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     tframe.ivar[bad]=0.
 
     if np.sum(good)>1 :
-        log.info("point source correction mean = {} rms = {}, nbad = {}".format(np.mean(point_source_correction[good]),np.std(point_source_correction[good]),np.sum(bad)))
+        log.info("{} point source correction mean = {} rms = {}, nbad = {}".format(
+            camera, np.mean(point_source_correction[good]),np.std(point_source_correction[good]),np.sum(bad)))
     else :
-        log.warning("bad point source correction for most fibers ngood = {} nbad = {}".format(np.sum(good),np.sum(bad)))
+        log.warning("{} bad point source correction for most fibers ngood = {} nbad = {}".format(
+            camera, np.sum(good),np.sum(bad)))
 
     #- Set back to 1 the correction for bad fibers
     point_source_correction[bad]=1.
@@ -969,7 +979,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         if not np.all(np.in1d(stdfibers, input_model_fibers)):
             bad = set(input_model_fibers) - set(stdfibers)
             if len(bad) > 0:
-                log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
+                log.error('Discarding {} input_model_fibers that are not standards: {}'.format(camera, bad))
             stdfibers = np.intersect1d(stdfibers, input_model_fibers)
 
         # also other way around
@@ -977,7 +987,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     else:
         stdfibers = input_model_fibers
 
-    log.info("Std stars fibers: {}".format(stdfibers))
+    log.info(f"{camera} stdstar fibers: {stdfibers}")
 
     stdstars = tframe[stdfibers]
     nwave=stdstars.nwave
@@ -997,12 +1007,12 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # check S/N before doing anything else
     ii=(stdstars.ivar>0)*(stdstars.mask==0)
     median_snr = np.median(stdstars.flux[ii]*np.sqrt(stdstars.ivar[ii]))
-    log.info("Median S/N per flux bin in stars= {}".format(median_snr))
+    log.info(f"{camera} median S/N per flux bin in stars= {median_snr}")
 
     if median_snr < 2. :
-        log.warning("Very low S/N, use simple scaled version of the average throughput")
+        log.warning(f"{camera} very low S/N, use simple scaled version of the average throughput")
         fluxcalib_filename = findcalibfile([frame.meta],"FLUXCALIB")
-        log.warning("Will scale throughput starting from {}".format(fluxcalib_filename))
+        log.warning(f"{camera} will scale throughput starting from {fluxcalib_filename}")
         acal = read_average_flux_calibration(fluxcalib_filename)
         if "AIRMASS" in frame.meta :
             airmass = frame.meta["AIRMASS"]
@@ -1012,7 +1022,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         # apply heliocentric/barocentric correction if exists
         if 'HELIOCOR' in stdstars.meta :
             heliocor = stdstars.meta['HELIOCOR']
-            log.info("Also apply heliocentric correction scale factor {} to calibration".format(heliocor))
+            log.info(f"{camera} also apply heliocentric correction scale factor {heliocor} to calibration")
             acal.wave *= heliocor # now the calibration wave are also in the solar system frame
 
         # interpolate wavelength
@@ -1026,11 +1036,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         # use a median instead of an optimal fit here
         waveindices = np.where(fluxcal>0.5*np.median(fluxcal))[0]
         scale = np.median(stdstars.flux[:,waveindices]/(fluxcal[waveindices][None,:]*convolved_model_flux[:,waveindices]*point_source_correction[stdfibers,None]))
-        log.info("Scale factor = {:4.3f}".format(scale))
+        log.info("{camera} scale factor = {scale:4.3f}")
         minscale = 0.0001
         if scale<minscale :
             scale=minscale
-            log.warning("Force scale factor = {:5.4f}".format(scale))
+            log.warning(f"{camera} force scale factor = {scale:5.4f}")
         fluxcal *= scale
 
         # return FluxCalib object
@@ -1070,7 +1080,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     for star in range(nstds) :
         if badfiber[star] : continue
         if np.sum(current_ivar[star]) == 0 :
-            log.warning("null inverse variance for star {}".format(star))
+            log.warning(f"{camera} null inverse variance for star {star}")
             badfiber[star] = 1
             continue
 
@@ -1081,9 +1091,9 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
             scale[star] = b/a
         else :
             scale[star] = 0
-        log.info("star {} initial scale = {}".format(star,scale[star]))
+        log.info("{} star {} initial scale = {}".format(camera, star, scale[star]))
         if scale[star] < 0.2 :
-            log.warning("ignore star {} with scale = {}".format(star,scale[star]))
+            log.warning("{} ignore star {} with scale = {}".format(camera, star, scale[star]))
             badfiber[star] = 1
             current_ivar[star]=0.
             continue
@@ -1098,7 +1108,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # (we don't do that directly to reduce noise)
     # so we want to average the inverse of the scale
     mscale=1./np.mean(1./scale[badfiber==0])
-    log.info("mean scale = {:4.3f}".format(mscale))
+    log.info(f"{camera} mean scale = {mscale:4.3f}")
     scale /= mscale
     median_calib *= mscale
 
@@ -1137,18 +1147,19 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
             B += sqrtwmodelR.T*sqrtwflux[star]
 
         if np.sum(current_ivar>0)==0 :
-            log.error("null ivar, cannot calibrate this frame")
-            raise ValueError("null ivar, cannot calibrate this frame")
+            msg = f"{camera} null ivar, cannot calibrate this frame"
+            log.error(msg)
+            raise ValueError(msg)
 
         #- Add a weak prior that calibration = median_calib
         #- to keep A well conditioned
         minivar = np.min(current_ivar[current_ivar>0])
-        log.debug('min(ivar[ivar>0]) = {}'.format(minivar))
+        log.debug('%s min(ivar[ivar>0]) = %f', camera, minivar)
         epsilon = minivar/10000
         A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
         B += median_calib*epsilon
 
-        log.info("iter %d solving"%iteration)
+        log.info("%s iter %d solving", camera, iteration)
         w = np.diagonal(A)>0
         A_pos_def = A[w,:]
         A_pos_def = A_pos_def[:,w]
@@ -1156,7 +1167,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         try:
             calibration[w]=cholesky_solve(A_pos_def, B[w])
         except np.linalg.linalg.LinAlgError :
-            log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
+            log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
         wmask = (np.diagonal(A)<=0)
@@ -1164,12 +1175,12 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
             wmask = wmask.astype(float)
             wmask = R.dot(R.dot(wmask))
             bad = np.where(wmask!=0)[0]
-            log.info("nbad={}".format(bad.size))
+            log.info("{} nbad={}".format(camera, bad.size))
             good = np.where(wmask==0)[0]
             calibration[bad] = np.interp(bad,good,calibration[good],left=0,right=0)
 
 
-        log.info("iter %d fit scale per fiber"%iteration)
+        log.info("%s iter %d fit scale per fiber", camera, iteration)
         for star in range(nstds) :
 
             if badfiber[star]: continue
@@ -1181,9 +1192,9 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
                 scale[star] = b/a
             else :
                 scale[star] = 0
-            log.debug("iter {} star {} scale = {}".format(iteration,star,scale[star]))
+            log.debug("%s iter %d star %d scale = %f", camera, iteration, star, scale[star])
             if scale[star] < 0.2 :
-                log.warning("iter {} ignore star {} with scale = {}".format(iteration,star,scale[star]))
+                log.warning("{} iter {} ignore star {} with scale = {}".format(camera, iteration,star,scale[star]))
                 badfiber[star] = 1
                 current_ivar[star]=0.
                 continue
@@ -1191,7 +1202,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
             chi2[star]=current_ivar[star]*(stdstars.flux[star]-scale[star]*M)**2
 
 
-        log.info("iter {0:d} rejecting".format(iteration))
+        log.info(f"{camera} iter {iteration} rejecting")
 
         nout_iter=0
         if iteration<1 :
@@ -1230,55 +1241,59 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         mscale=1./np.mean(1./scale[badfiber==0])
 
         if highest_throughput_nstars > 0 :
-            log.info("keeping {} stars with highest throughput".format(highest_throughput_nstars))
+            log.info("{} keeping {} stars with highest throughput".format(camera, highest_throughput_nstars))
             ii=np.argsort(scale)[::-1][:highest_throughput_nstars]
-            log.info("use those fibers = {}".format(stdfibers[ii]))
-            log.info("with median correction = {}".format(medcorr[ii]))
+            log.info("{} use those fibers = {}".format(camera, stdfibers[ii]))
+            log.info("{} with median correction = {}".format(camera, medcorr[ii]))
             mscale=1./np.mean(1./scale[ii][badfiber[ii]==0])
         else :
             medscale = np.median(scale[badfiber==0])
             rmscorr = 1.4*np.median(np.abs(scale[badfiber==0]-medscale))
-            log.info("iter {} mean median rms scale = {:4.3f} {:4.3f} {:4.3f}".format(iteration,mscale,medscale,rmscorr))
+            log.info("{} iter {} mean median rms scale = {:4.3f} {:4.3f} {:4.3f}".format(
+                camera,iteration,mscale,medscale,rmscorr))
             if nsig_flux_scale>0 :
                 bad=(np.abs(scale-medscale)> nsig_flux_scale*rmscorr)
             else :
                 bad=np.repeat(False,scale.size)
             if np.sum(bad)>0 :
                 good=~bad
-                log.info("iter {} use {} stars, discarding {} sigma outlier stars with medcorr = {}".format(iteration,np.sum(good),nsig_flux_scale,scale[bad]))
+                log.info("{} iter {} use {} stars, discarding {} sigma outlier stars with medcorr = {}".format(
+                    camera, iteration,np.sum(good),nsig_flux_scale,scale[bad]))
                 mscale=1./np.mean(1./scale[good][badfiber[good]==0])
                 newly_bad = bad&(badfiber==0)&(np.abs(scale-1)>0.05)
                 if np.sum(newly_bad)>0 :
-                    log.info("Newly bad fiber(s) at scale(s) = {}".format(list(scale[newly_bad])))
+                    log.info("{} newly bad fiber(s) at scale(s) = {}".format(camera, list(scale[newly_bad])))
                     i=np.argmax(np.abs(scale[newly_bad]-1))
                     new_badfiber_index = np.where(newly_bad)[0][i]
-                    log.info("Set worst fiber ({}) as badfiber".format(new_badfiber_index))
+                    log.info("{} set worst fiber ({}) as badfiber".format(camera, new_badfiber_index))
                     badfiber[new_badfiber_index] = 1
 
             else :
-                log.info("iter {} use {} stars".format(iteration,np.sum(badfiber==0)))
+                log.info("{} iter {} use {} stars".format(camera, iteration,np.sum(badfiber==0)))
 
         scale /= mscale
         calibration *= mscale
 
-        log.info("iter %d chi2=%4.3f ndf=%d chi2pdf=%4.3f nout=%d mscale=%4.3f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,mscale))
+        log.info("%s iter %d chi2=%4.3f ndf=%d chi2pdf=%4.3f nout=%d mscale=%4.3f",
+                camera, iteration, sum_chi2, ndf, chi2pdf, nout_iter, mscale)
 
         if nout_iter == 0 and np.abs(mscale-1.)<0.0001 :
             break
 
     for star in range(nstds) :
         if badfiber[star]==0 :
-            log.info("star {} final scale = {}".format(star,scale[star]))
-    log.info("n stars kept           = {}".format(np.sum(badfiber==0)))
-    log.info("rms of scales          = {:4.3f}".format(np.std(scale[badfiber==0])))
-    log.info("n stars excluded       = {}".format(np.sum(badfiber>0)))
-    log.info("n flux values excluded = %d"%nout_tot)
+            log.info("{} star {} final scale = {}".format(camera, star, scale[star]))
+
+    log.info("{} n stars kept           = {}".format(camera, np.sum(badfiber==0)))
+    log.info("{} rms of scales          = {:4.3f}".format(camera, np.std(scale[badfiber==0])))
+    log.info("{} n stars excluded       = {}".format(camera, np.sum(badfiber>0)))
+    log.info("{} n flux values excluded = {}".format(camera, nout_tot))
 
     # solve once again to get deconvolved variance
     #calibration,calibcovar=cholesky_solve_and_invert(A.todense(),B)
     calibcovar=np.linalg.inv(A)
     calibvar=np.diagonal(calibcovar)
-    log.info("mean(var)={0:f}".format(np.mean(calibvar)))
+    log.info("{} mean(var)={:f}".format(camera, np.mean(calibvar)))
 
     calibvar=np.array(np.diagonal(calibcovar))
     # apply the mean (as in the iterative loop)
@@ -1312,7 +1327,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     bad[1:-1] |= bad[2:]
     bad[1:-1] |= bad[:-2]
     nbad=np.sum(bad>0)
-    log.info("Requesting at least {} star spectra at each wavelength results in masking {} add. flux bins ({} already masked)".format(min_number_of_stars,nbad-nallbad,nallbad))
+    log.info("{} requesting at least {} star spectra at each wavelength results in masking {} add. flux bins ({} already masked)".format(camera, min_number_of_stars,nbad-nallbad,nallbad))
 
     ccalibivar[bad]=0.
     ccalibration[:,bad]=0.
@@ -1330,7 +1345,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     #- Apply point source flux correction
     ccalibration /= point_source_correction[:,None]
 
-    log.info("interpolate calibration over Ca and Na ISM lines")
+    log.info(f"{camera} interpolate calibration over Ca and Na ISM lines")
     # do this after convolution with resolution
     ismlines=np.array([3934.77,3969.59,5891.58,5897.56]) # in vacuum
 
