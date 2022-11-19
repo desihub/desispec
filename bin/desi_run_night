@@ -3,7 +3,7 @@
 
 import argparse
 
-import sys
+import os, sys
 from desispec.scripts.submit_night import submit_night
 
 def parse_args():  # options=None):
@@ -72,8 +72,9 @@ def parse_args():  # options=None):
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
-    parser.add_argument("--use-tilenight", action="store_true",
-                        help="Use desi_proc_tilenight for prestdstar, stdstar, and poststdstar steps.")
+    parser.add_argument("--use-tilenight", action=argparse.BooleanOptionalAction,
+                        help="Use desi_proc_tilenight (or not) for prestdstar, stdstar, and poststdstar steps. "+
+                             "Default False for NERSC Cori, True otherwise")
     parser.add_argument("--all-tiles", action="store_true",
                         help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
     parser.add_argument("--specstatus-path", type=str, required=False, default=None,
@@ -96,6 +97,12 @@ def parse_args():  # options=None):
 
     if args.laststeps is not None:
         args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
+    if args.use_tilenight is None:
+        if 'NERSC_HOST' in os.environ and os.environ['NERSC_HOST'] == 'cori':
+            args.use_tilenight = False
+        else:
+            args.use_tilenight = True
 
     return args
 
