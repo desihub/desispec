@@ -29,6 +29,11 @@ import desispec.gpu
 def parse(options=None):
     parser = get_desi_proc_tilenight_parser()
     args = parser.parse_args(options)
+
+    #- convert comma separated steps to list of str
+    if isinstance(args.laststeps, str):
+        args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
     return args
 
 def main(args=None, comm=None):
@@ -65,7 +70,15 @@ def main(args=None, comm=None):
     #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
     keep &= exptable['TILEID']  == int(args.tileid)
+    if args.laststeps is not None:
+        keep &= np.isin(exptable['LASTSTEP'].astype(str), args.laststeps)
+
     exptable = exptable[keep]
+
+    if len(exptable) == 0:
+        if rank == 0:
+            log.critical(f'No good exposures found for tile {args.tileid} night {args.night}')
+        sys.exit(1)
 
     expids = list(exptable['EXPID'])
     prestdstar_expids = []
@@ -82,18 +95,14 @@ def main(args=None, comm=None):
             camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
             camwords[expids[i]] = camword
-        laststep = exptable['LASTSTEP'][i]
-        if laststep == 'all' or laststep == 'skysub':
+        laststep = str(exptable['LASTSTEP'][i]).lower()
+        if laststep in ('all', 'fluxcalib', 'skysub'):
             prestdstar_expids.append(expid)
-        if laststep == 'all':
+        if laststep in ('all', 'fluxcalib'):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
-    joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
 
-    if len(prestdstar_expids) == 0:
-        if rank == 0:
-            log.critical(f'No good exposures found for tile {args.tileid} night {args.night}')
-        sys.exit(1)
+    joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True)
 
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
