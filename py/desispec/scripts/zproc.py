@@ -662,7 +662,7 @@ def main(args=None, comm=None):
                                                      outputs=[qnfile], comm=monocomm)
 
                         if not success:
-                            log.error(f'qsoqn afterburner petal {spectro} failed; see {mgiilog}')
+                            log.error(f'qsoqn afterburner petal {spectro} failed; see {qnlog}')
 
                 ## Third set of nspectros ranks go to desi_emlinefit_afterburner
                 elif i // nspectros == 2:
