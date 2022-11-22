@@ -1270,6 +1270,22 @@ class TestIO(unittest.TestCase):
             outcw = camword_union(fcws, full_spectros_only=True)
             self.assertEqual(outcw, truespecw)
 
+    def test_camword_intersection(self):
+        """Test desispec.io.camword_intersection"""
+        from ..io.util import camword_intersection as cx
+
+        self.assertEqual(cx(['a012', 'a123']), 'a12')
+        self.assertEqual(cx(['a012', 'a123', 'a157']), 'a1')
+        self.assertEqual(cx(['a012', 'a1b2']), 'a1b2')
+        self.assertEqual(cx(['a012', 'a01b2'], full_spectros_only=True), 'a01')
+        self.assertEqual(cx(['a012', 'a012']), 'a012')
+        self.assertEqual(cx(['a012',]), 'a012')
+        self.assertEqual(cx(['a012', 'a456']), '')
+        self.assertEqual(cx(['b012', 'r012']), '')
+        self.assertEqual(cx(['b012', 'r012'], full_spectros_only=True), '')
+        self.assertEqual(cx(['b012', 'a012']), 'b012')
+        self.assertEqual(cx(['a2', '', 'a2']), '')
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
