@@ -9,11 +9,22 @@ into a database.
 
 Notes
 -----
+* EDR development:
+
+  - Load as much data as possible from patched fiberassign files.
+  - If necessary, create intermediate files for ingestion by running
+    the lsdr9-photometry code.
+  - For every duplicate potential targetid, use only the most recent desitarget
+    version containing that targetid, rather than the default associated with
+    the fiberassign file.
+
 * Future devlopment:
 
   - Plan for how to support fuji+guadalupe combined analysis.  May need to look
     into cross-schema views, or daughter tables that inherit from both schemas.
   - Anticipating loading afterburners and VACs into the database.
+  - Load redshifts from all redrock files in tile/cumulative, rather than
+    from the ztile-cumulative summary file.
 
 """
 import os
