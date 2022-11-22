@@ -39,6 +39,7 @@ test*.fits.gz
 test-*
 test_raw-*
 test_redux-*
+.pytest_cache
 
 # Mac OSX
 .DS_Store
