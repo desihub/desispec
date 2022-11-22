@@ -13,19 +13,23 @@ Notes
 
   - Load as much data as possible from patched fiberassign files.
   - If necessary, create intermediate files for ingestion by running
-    the lsdr9-photometry code.
+    the lsdr9-photometry_ code.
   - For every duplicate potential targetid, use only the most recent desitarget
     version containing that targetid, rather than the default associated with
     the fiberassign file.
+  - Read redshifts from ``zall-*.fits`` files to get the ``*_primary``
+    columns, or run the primary generation code on the data
+    (:func:`~desispec.zcatalog.find_primary_spectra`).
 
 * Future devlopment:
 
   - Plan for how to support fuji+guadalupe combined analysis.  May need to look
     into cross-schema views, or daughter tables that inherit from both schemas.
   - Anticipating loading afterburners and VACs into the database.
-  - Load redshifts from all redrock files in tile/cumulative, rather than
-    from the ztile-cumulative summary file.
+  - Load redshifts from all redrock files in ``tiles/cumulative``, rather than
+    from the ``ztile-*-cumulative.fits`` summary file.
 
+.. _lsdr9-photometry: https://github.com/moustakas/lsdr9-photometry
 """
 import os
 import re
@@ -555,6 +559,10 @@ class Zpix(SchemaMixin, Base):
     tsnr2_gpbbackup = Column(REAL, nullable=False)
     tsnr2_qso = Column(REAL, nullable=False)
     tsnr2_lrg = Column(REAL, nullable=False)
+    sv_nspec = Column(SmallInteger, nullable=False)
+    sv_primary = Column(Boolean, nullable=False)
+    main_nspec = Column(SmallInteger, nullable=False)
+    main_primary = Column(Boolean, nullable=False)
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
@@ -644,6 +652,10 @@ class Ztile(SchemaMixin, Base):
     tsnr2_gpbbackup = Column(REAL, nullable=False)
     tsnr2_qso = Column(REAL, nullable=False)
     tsnr2_lrg = Column(REAL, nullable=False)
+    sv_nspec = Column(SmallInteger, nullable=False)
+    sv_primary = Column(Boolean, nullable=False)
+    main_nspec = Column(SmallInteger, nullable=False)
+    main_primary = Column(Boolean, nullable=False)
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 

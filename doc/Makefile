@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    =
+SPHINXOPTS    = -W --keep-going
 # For macports, use the second line...
 SPHINXBUILD   = sphinx-build
 #SPHINXBUILD   = sphinx-build-2.7
