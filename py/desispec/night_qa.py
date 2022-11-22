@@ -771,7 +771,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                             cbar.mappable.set_clim(clim)
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
-                        ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
+                        ax.set_title("EXPID={:08d}  NIGHT={}  TILEID={}  {} SKY fibers".format(
                             mydict["expid"], mydict["night"], mydict["tileid"], nsky)
                         )
                     ax.set_xlim(xlim)
