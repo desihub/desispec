@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib
 import matplotlib.image as mpimg
-
+from textwrap import wrap
 
 log = get_logger()
 
@@ -667,14 +667,19 @@ def print_petal_infos(ax, petalqa, fiberqa):
     y += 2 * dy
     # AR failed cases
     if len(fails)>0 :
+        # AR fixed length display
+        nchar = 180
+        txt = ", ".join(fails)
+        txt = "\n".join(wrap(txt, nchar))
         ax.text(
             x0,
             y,
-            "Alert: {}".format(", ".join(fails)),
+            "Alert: {}".format(txt),
             color="r",
             fontsize=fs,
             #fontweight="bold",
             ha="left",
+            va="bottom",
             transform=ax.transAxes,
         )
 
