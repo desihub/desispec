@@ -65,12 +65,15 @@ class SchemaMixin(object):
         return {'schema': schemaname}
 
 
-class Tractor(SchemaMixin, Base):
+class Photometry(SchemaMixin, Base):
     """Contains *only* photometric quantities associated with a ``TARGETID``.
 
     This table is deliberately designed so that ``TARGETID`` can serve as a
     primary key. Any quantities created or modified by desitarget are
     defined in the :class:`~desispec.database.redshift.Target` class.
+
+    However we *avoid* the use of the term "tractor" for this table,
+    because not every target will have *tractor* photometry,
 
     Notes
     -----
@@ -78,27 +81,27 @@ class Tractor(SchemaMixin, Base):
     which are vector-valued, are not yet implemented.
     """
     ls_id = Column(BigInteger, nullable=False, index=True)  # (release << 40) | (brickid << 16) | brick_objid
-    release = Column(SmallInteger, nullable=False)
-    brickid = Column(Integer, nullable=False)
-    brickname = Column(String(8), nullable=False)
-    brick_objid = Column(Integer, nullable=False)
-    morphtype = Column(String(4), nullable=False)
-    ra = Column(DOUBLE_PRECISION, nullable=False)
+    release = Column(SmallInteger, nullable=False)  # fiberassign
+    brickid = Column(Integer, nullable=False)  # fiberassign
+    brickname = Column(String(8), nullable=False)  # fiberassign
+    brick_objid = Column(Integer, nullable=False)  # fiberassign
+    morphtype = Column(String(4), nullable=False)  # fiberassign
+    ra = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign: target_ra?
     ra_ivar = Column(REAL, nullable=False)
-    dec = Column(DOUBLE_PRECISION, nullable=False)
+    dec = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign: target_dec?
     dec_ivar = Column(REAL, nullable=False)
     dchisq_psf = Column(REAL, nullable=False)
     dchisq_rex = Column(REAL, nullable=False)
     dchisq_dev = Column(REAL, nullable=False)
     dchisq_exp = Column(REAL, nullable=False)
     dchisq_ser = Column(REAL, nullable=False)
-    ebv = Column(REAL, nullable=False)
-    flux_g = Column(REAL, nullable=False)
-    flux_r = Column(REAL, nullable=False)
-    flux_z = Column(REAL, nullable=False)
-    flux_ivar_g = Column(REAL, nullable=False)
-    flux_ivar_r = Column(REAL, nullable=False)
-    flux_ivar_z = Column(REAL, nullable=False)
+    ebv = Column(REAL, nullable=False)  # fiberassign
+    flux_g = Column(REAL, nullable=False)  # fiberassign
+    flux_r = Column(REAL, nullable=False)  # fiberassign
+    flux_z = Column(REAL, nullable=False)  # fiberassign
+    flux_ivar_g = Column(REAL, nullable=False)  # fiberassign
+    flux_ivar_r = Column(REAL, nullable=False)  # fiberassign
+    flux_ivar_z = Column(REAL, nullable=False)  # fiberassign
     mw_transmission_g = Column(REAL, nullable=False)
     mw_transmission_r = Column(REAL, nullable=False)
     mw_transmission_z = Column(REAL, nullable=False)
@@ -120,12 +123,12 @@ class Tractor(SchemaMixin, Base):
     galdepth_g = Column(REAL, nullable=False)
     galdepth_r = Column(REAL, nullable=False)
     galdepth_z = Column(REAL, nullable=False)
-    flux_w1 = Column(REAL, nullable=False)
-    flux_w2 = Column(REAL, nullable=False)
+    flux_w1 = Column(REAL, nullable=False)  # fiberassign
+    flux_w2 = Column(REAL, nullable=False)  # fiberassign
     flux_w3 = Column(REAL, nullable=False)
     flux_w4 = Column(REAL, nullable=False)
-    flux_ivar_w1 = Column(REAL, nullable=False)
-    flux_ivar_w2 = Column(REAL, nullable=False)
+    flux_ivar_w1 = Column(REAL, nullable=False)  # fiberassign
+    flux_ivar_w2 = Column(REAL, nullable=False)  # fiberassign
     flux_ivar_w3 = Column(REAL, nullable=False)
     flux_ivar_w4 = Column(REAL, nullable=False)
     mw_transmission_w1 = Column(REAL, nullable=False)
@@ -135,48 +138,48 @@ class Tractor(SchemaMixin, Base):
     allmask_g = Column(SmallInteger, nullable=False)
     allmask_r = Column(SmallInteger, nullable=False)
     allmask_z = Column(SmallInteger, nullable=False)
-    fiberflux_g = Column(REAL, nullable=False)
-    fiberflux_r = Column(REAL, nullable=False)
-    fiberflux_z = Column(REAL, nullable=False)
-    fibertotflux_g = Column(REAL, nullable=False)
-    fibertotflux_r = Column(REAL, nullable=False)
-    fibertotflux_z = Column(REAL, nullable=False)
-    ref_epoch = Column(REAL, nullable=False)
+    fiberflux_g = Column(REAL, nullable=False)  # fiberassign
+    fiberflux_r = Column(REAL, nullable=False)  # fiberassign
+    fiberflux_z = Column(REAL, nullable=False)  # fiberassign
+    fibertotflux_g = Column(REAL, nullable=False)  # fiberassign
+    fibertotflux_r = Column(REAL, nullable=False)  # fiberassign
+    fibertotflux_z = Column(REAL, nullable=False)  # fiberassign
+    ref_epoch = Column(REAL, nullable=False)  # fiberassign
     wisemask_w1 = Column(SmallInteger, nullable=False)
     wisemask_w2 = Column(SmallInteger, nullable=False)
-    maskbits = Column(SmallInteger, nullable=False)
+    maskbits = Column(SmallInteger, nullable=False)  # fiberassign
     # LC_...
-    shape_r = Column(REAL, nullable=False)
-    shape_e1 = Column(REAL, nullable=False)
-    shape_e2 = Column(REAL, nullable=False)
+    shape_r = Column(REAL, nullable=False)  # fiberassign
+    shape_e1 = Column(REAL, nullable=False)  # fiberassign
+    shape_e2 = Column(REAL, nullable=False)  # fiberassign
     shape_r_ivar = Column(REAL, nullable=False)
     shape_e1_ivar = Column(REAL, nullable=False)
     shape_e2_ivar = Column(REAL, nullable=False)
-    sersic = Column(REAL, nullable=False)
+    sersic = Column(REAL, nullable=False)  # fiberassign
     sersic_ivar = Column(REAL, nullable=False)
-    ref_id = Column(BigInteger, nullable=False)
-    ref_cat = Column(String(2), nullable=False)
-    gaia_phot_g_mean_mag = Column(REAL, nullable=False)
+    ref_id = Column(BigInteger, nullable=False)  # fiberassign
+    ref_cat = Column(String(2), nullable=False)  # fiberassign
+    gaia_phot_g_mean_mag = Column(REAL, nullable=False)  # fiberassign
     gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)  # fiberassign
     gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)  # fiberassign
     gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
     gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
     gaia_duplicated_source = Column(Boolean, nullable=False)
     gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
     gaia_astrometric_params_solved = Column(Boolean, nullable=False)
-    parallax = Column(REAL, nullable=False)
+    parallax = Column(REAL, nullable=False)  # fiberassign
     parallax_ivar = Column(REAL, nullable=False)
-    pmra = Column(REAL, nullable=False)
+    pmra = Column(REAL, nullable=False)  # fiberassign
     pmra_ivar = Column(REAL, nullable=False)
-    pmdec = Column(REAL, nullable=False)
+    pmdec = Column(REAL, nullable=False)  # fiberassign
     pmdec_ivar = Column(REAL, nullable=False)
-    photsys = Column(String(1), nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    photsys = Column(String(1), nullable=False)  # fiberassign
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # fiberassign
 
     def __repr__(self):
-        return "Tractor(targetid={0.targetid:d})".format(self)
+        return "Photometry(targetid={0.targetid:d})".format(self)
 
 
 class Target(SchemaMixin, Base):
@@ -185,11 +188,11 @@ class Target(SchemaMixin, Base):
     """
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
-    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
-    subpriority = Column(DOUBLE_PRECISION, nullable=False)
-    obsconditions = Column(BigInteger, nullable=False)
-    priority_init = Column(BigInteger, nullable=False)
-    numobs_init = Column(BigInteger, nullable=False)
+    targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)  # fiberassign
+    subpriority = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign
+    obsconditions = Column(BigInteger, nullable=False)  # fiberassign
+    priority_init = Column(BigInteger, nullable=False)  # fiberassign
+    numobs_init = Column(BigInteger, nullable=False)  # fiberassign
     hpxpixel = Column(BigInteger, nullable=False, index=True)
     cmx_target = Column(BigInteger, nullable=False)
     desi_target = Column(BigInteger, nullable=False)
@@ -210,9 +213,9 @@ class Target(SchemaMixin, Base):
     sv3_scnd_target = Column(BigInteger, nullable=False)
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
-    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)  # fiberassign
 
-    photometry = relationship("Tractor", back_populates="targets")
+    photometry = relationship("Photometry", back_populates="targets")
     tile = relationship("Tile", back_populates="targets")
 
     def __repr__(self):
@@ -421,7 +424,7 @@ class Fiberassign(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
-    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
+    targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
     location = Column(Integer, nullable=False)
@@ -438,7 +441,7 @@ class Fiberassign(SchemaMixin, Base):
     plate_ra = Column(DOUBLE_PRECISION, nullable=False)
     plate_dec = Column(DOUBLE_PRECISION, nullable=False)
 
-    photometry = relationship("Tractor", back_populates="fiberassign")
+    photometry = relationship("Photometry", back_populates="fiberassign")
     tile = relationship("Tile", back_populates="fiberassign")
 
     def __repr__(self):
@@ -451,11 +454,11 @@ class Potential(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
-    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
+    targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     fiber = Column(Integer, nullable=False)
     location = Column(Integer, nullable=False)
 
-    photometry = relationship("Tractor", back_populates="potential")
+    photometry = relationship("Photometry", back_populates="potential")
     tile = relationship("Tile", back_populates="potential")
 
     def __repr__(self):
@@ -467,7 +470,7 @@ class Zpix(SchemaMixin, Base):
     """
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
-    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
+    targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
     spgrp = Column(String(10), nullable=False, index=True)
@@ -544,7 +547,7 @@ class Zpix(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
-    photometry = relationship("Tractor", back_populates="zpix_redshifts")
+    photometry = relationship("Photometry", back_populates="zpix_redshifts")
 
     def __repr__(self):
         return "Zpix(targetid={0.targetid:d}, survey='{0.survey}', program='{0.program}')".format(self)
@@ -556,7 +559,7 @@ class Ztile(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetphotid = Column(Numeric(39), ForeignKey("target.id"), nullable=False, index=True)
-    targetid = Column(BigInteger, ForeignKey('tractor.targetid'), nullable=False, index=True)
+    targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     survey = Column(String(7), nullable=False, index=True)
     program = Column(String(6), nullable=False, index=True)
     spgrp = Column(String, nullable=False, index=True)
@@ -633,7 +636,7 @@ class Ztile(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
-    photometry = relationship("Tractor", back_populates="zpix_redshifts")
+    photometry = relationship("Photometry", back_populates="zpix_redshifts")
     tile = relationship("Tile", back_populates="ztile_redshifts")
 
     def __repr__(self):
