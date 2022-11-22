@@ -12,7 +12,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 from desispec.io import specprod_root
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table
-from desispec.io.util import decode_camword, create_camword, camword_union, difference_camwords
+from desispec.io.util import decode_camword, create_camword, camword_union, camword_intersection, difference_camwords
 
 import desispec.scripts.proc as proc
 import desispec.scripts.proc_joint_fit as proc_joint_fit
@@ -71,7 +71,7 @@ def main(args=None, comm=None):
     prestdstar_expids = []
     stdstar_expids = []
     poststdstar_expids = []
-    camwords = dict()
+    prestd_camwords = dict()
     badamps = dict()
     for i in range(len(expids)):
         expid=expids[i]
@@ -79,16 +79,20 @@ def main(args=None, comm=None):
         badcamword=exptable['BADCAMWORD'][i]
         badamps[expid] = exptable['BADAMPS'][i]
         if isinstance(badcamword, str):
-            camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
+            prestd_camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
-            camwords[expids[i]] = camword
+            prestd_camwords[expids[i]] = camword
         laststep = exptable['LASTSTEP'][i]
         if laststep == 'all' or laststep == 'skysub':
             prestdstar_expids.append(expid)
         if laststep == 'all':
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
-    joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True) 
+    joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True) 
+
+    poststd_camwords = dict()
+    for expid, camword in prestd_camwords.items():
+        poststd_camwords[expid] = camword_intersection([joint_camwords, camword])
 
     if len(prestdstar_expids) == 0:
         if rank == 0:
@@ -150,7 +154,7 @@ def main(args=None, comm=None):
     #- run desiproc prestdstar over exps
     for expid in prestdstar_expids:
         prestdstar_args = common_args + gpu_args
-        prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {camwords[expid]}'
+        prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {prestd_camwords[expid]}'
         if len(badamps[expid]) > 0:
             prestdstar_args += f' --badamps {badamps[expid]}'
         if rank==0:
@@ -223,7 +227,7 @@ def main(args=None, comm=None):
         #- run desiproc poststdstar over exps
         for expid in poststdstar_expids:
             poststdstar_args  = common_args
-            poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {camwords[expid]}'
+            poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {poststd_camwords[expid]}'
             if len(badamps[expid]) > 0:
                 poststdstar_args += f' --badamps {badamps[expid]}'
             if rank==0:

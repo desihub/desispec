@@ -24,7 +24,7 @@ from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
 from desispec.io.util import decode_camword, create_camword, difference_camwords, \
-                             camword_to_spectros, camword_union
+                             camword_to_spectros, camword_union, camword_intersection
 
 #################################################
 ############## Misc Functions ###################
@@ -981,8 +981,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             # poststdstar job can't process cameras not included in its stdstar joint fit
             stdcamword = joint_prow['PROCCAMWORD']
             thiscamword = row['PROCCAMWORD']
-            okcams = set(decode_camword(stdcamword)) & set(decode_camword(thiscamword))
-            proccamword = create_camword(okcams)
+            proccamword = camword_intersection([stdcamword, thiscamword])
             if proccamword != thiscamword:
                 dropcams = difference_camwords(thiscamword, proccamword)
                 assert dropcams != ''  #- i.e. if they differ, we should be dropping something
