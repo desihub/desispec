@@ -69,7 +69,8 @@ def get_readonly_filepath(filepath):
     return filepath
 
 def findfile(filetype, night=None, expid=None, camera=None,
-        tile=None, groupname=None, nside=64,
+        tile=None, groupname=None,
+        healpix=None, nside=64,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
         rawdata_dir=None, specprod_dir=None,
@@ -86,7 +87,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
-        groupname : spectral grouping name (healpix pixel, tile "cumulative" or "pernight")
+        groupname : spectral grouping name (e.g. "healpix", "cumulative", "pernight")
+        healpix : healpix pixel number
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
         spectrograph : integer spectrograph number, 0-9
@@ -169,13 +171,13 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # spectra- healpix based
         #
         zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
-        coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{groupname}.fits',
-        rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{groupname}.h5',
-        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits.gz',
-        redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.fits',
-        qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{groupname}.fits',
-        qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{groupname}.fits',
-        emline_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/emline-{survey}-{faprogram}-{groupname}.fits',
+        coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
+        rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
+        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{healpix}.fits.gz',
+        redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{healpix}.fits',
+        qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
+        qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
+        emline_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/emline-{survey}-{faprogram}-{healpix}.fits',
         #
         # spectra- tile based
         #
@@ -239,6 +241,21 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else:
         nightprefix = ""
 
+    #- backwards compatibility: try interpreting groupname as a healpix number
+    if healpix is None and tile is None and groupname is not None:
+        try:
+            healpix = int(groupname)
+            groupname = 'healpix'
+        except (TypeError, ValueError):
+            pass
+
+    #- be robust to str vs. int
+    if isinstance(healpix, str): healpix = int(healpix)
+    if isinstance(night, str):   night = int(night)
+    if isinstance(expid, str):   expid = int(night)
+    if isinstance(tile, str):    tile = int(night)
+    if isinstance(spectrograph, str): spectrogrpah = int(night)
+
     loc_copy = location.copy()
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
@@ -266,9 +283,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     del loc_copy
     
     if groupname is not None and tile is None:
-        hpix = int(groupname)
-        log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
-        hpixdir = healpix_subdirectory(nside, hpix)
+        hpixdir = healpix_subdirectory(nside, healpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
         hpixdir = 'hpix'
@@ -316,7 +331,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
-        'nside':nside, 'hpixdir':hpixdir, 'band':band,
+        'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix,
         }
 
