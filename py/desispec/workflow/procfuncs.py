@@ -28,7 +28,7 @@ from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
 from desispec.io.util import decode_camword, create_camword, difference_camwords, \
-                             camword_to_spectros, camword_union
+                             camword_to_spectros, camword_union, camword_intersection
 
 #################################################
 ############## Misc Functions ###################
@@ -982,6 +982,17 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             if row['LASTSTEP'] == 'stdstarfit':
                 continue
             row['JOBDESC'] = 'poststdstar'
+
+            # poststdstar job can't process cameras not included in its stdstar joint fit
+            stdcamword = joint_prow['PROCCAMWORD']
+            thiscamword = row['PROCCAMWORD']
+            proccamword = camword_intersection([stdcamword, thiscamword])
+            if proccamword != thiscamword:
+                dropcams = difference_camwords(thiscamword, proccamword)
+                assert dropcams != ''  #- i.e. if they differ, we should be dropping something
+                log.warning(f"Dropping exp {row['EXPID']} poststdstar cameras {dropcams} since they weren't included in stdstar fit {stdcamword}")
+                row['PROCCAMWORD'] = proccamword
+
             row['INTID'] = internal_id
             internal_id += 1
             row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
