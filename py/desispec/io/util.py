@@ -530,7 +530,7 @@ def parse_cameras(cameras, loglevel='INFO'):
     else:
         log.error(f"Couldn't understand cameras={cameras}.")
         raise ValueError(f"Couldn't understand cameras={cameras}.")
-    if camword == '':
+    if camword == '' and len(cameras)>0:
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
         raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
@@ -601,6 +601,38 @@ def camword_union(camwords, full_spectros_only=False):
     else:
         final_camword = camword
     return final_camword
+
+def camword_intersection(camwords, full_spectros_only=False):
+    """
+    Return the camword intersection of cameras in a list of camwords
+
+    Args:
+        camwords: list of str camwords
+
+    Options:
+        full_spectros_only: if True, only include spectrographs that have all 3 brz cameras
+
+    Returns:
+        final_camword (str): intersection of input camwords
+    """
+    if len(camwords) == 0:
+        return ''
+
+    cameras = set(decode_camword(camwords[0]))
+    if len(camwords) > 1:
+        for cw in camwords[1:]:
+            cameras &= set(decode_camword(cw))
+
+    camword = parse_cameras(sorted(cameras))
+
+    if full_spectros_only:
+        spectros = camword_to_spectros(camword, full_spectros_only)
+        if len(spectros) > 0:
+            camword = 'a'+''.join([str(sp) for sp in spectros])
+        else:
+            camword = ''
+
+    return camword
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
