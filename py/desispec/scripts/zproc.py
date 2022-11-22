@@ -306,7 +306,6 @@ def main(args=None, comm=None):
         log.info(f'Tileid={tileid} nights={nights} expids={expids}')
 
         log.info(f'Supplied camword: {camword}')
-        #log.info(f'All Spectros:  {all_spectros}')
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         if args.run_zmtl:
             log.info(f'Will be running zmtl')
@@ -352,11 +351,13 @@ def main(args=None, comm=None):
     nblocks, block_size, block_rank, block_num = \
         distribute_ranks_to_blocks(len(all_spectros), rank=rank, size=size, log=log)
 
+    findfileopts = dict(night=thrunight, tile=tileid, groupname=groupname)
+    if groupname == 'perexp':
+        assert len(expids) == 1
+        findfileopts['expid'] = expids[0]
+
     if rank == 0:
-        splog = findfile('spectra', night=thrunight, tile=tileid,
-                         groupname=groupname, spectrograph=0,
-                         expid=expids[0],  # needed for perexp; ignored otherwise
-                         logfile=True)
+        splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
         os.makedirs(os.path.dirname(splog), exist_ok=True)
         
     if comm is not None:
@@ -366,16 +367,10 @@ def main(args=None, comm=None):
         for i in range(block_num, len(all_spectros), nblocks):
             result, success = 0, True
             spectro = all_spectros[i]
-            spectrafile = findfile('spectra', night=thrunight, tile=tileid,
-                                   expid=expids[0],
-                                   groupname=groupname, spectrograph=spectro)
-            splog = findfile('spectra', night=thrunight, tile=tileid,
-                             expid=expids[0],
-                             groupname=groupname, spectrograph=spectro,
-                             logfile=True)
-            coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                                 expid=expids[0],
-                                 groupname=groupname, spectrograph=spectro)
+            findfileopts['spectrograph'] = spectro
+            spectrafile = findfile('spectra', **findfileopts)
+            splog = findfile('spectra', logfile=True, **findfileopts)
+            coaddfile = findfile('coadd', **findfileopts)
             # generate list of cframes from dict of exposures, nights, and cameras
             cframes = []
             for (expid, night), cameras in expnight_dict.items():
@@ -425,19 +420,11 @@ def main(args=None, comm=None):
     for spectro in all_spectros:
         result, success = 0, True
 
-        coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                             expid=expids[0],
-                             groupname=groupname, spectrograph=spectro)
-        rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                          expid=expids[0],
-                          groupname=groupname, spectrograph=spectro)
-        rdfile = findfile('rrdetails', night=thrunight, tile=tileid,
-                          expid=expids[0],
-                          groupname=groupname, spectrograph=spectro)
-        rrlog = findfile('redrock', night=thrunight, tile=tileid,
-                         expid=expids[0],
-                         groupname=groupname, spectrograph=spectro,
-                         logfile=True)
+        findfileopts['spectrograph'] = spectro
+        coaddfile = findfile('coadd', **findfileopts)
+        rrfile = findfile('redrock', **findfileopts)
+        rdfile = findfile('rrdetails', **findfileopts)
+        rrlog = findfile('redrock', logfile=True, **findfileopts)
         redrock_cmd = "rrdesi_mpi"
 
         cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
@@ -479,22 +466,14 @@ def main(args=None, comm=None):
         from desispec.scripts import tileqa
 
         result, success = 0, True
-        qafile = findfile('tileqa', night=thrunight, expid=expids[0],
-                          tile=tileid, groupname=groupname)
-        qapng = findfile('tileqapng', night=thrunight,
-                         tile=tileid, expid=expids[0],
-                         groupname=groupname)
-        qalog = findfile('tileqa', night=thrunight,
-                         tile=tileid, expid=expids[0],
-                         groupname=groupname, logfile=True)
+        qafile = findfile('tileqa', **findfileopts)
+        qapng = findfile('tileqapng', **findfileopts)
+        qalog = findfile('tileqa', logfile=True, **findfileopts)
         infiles = []
         for spectro in all_spectros:
-            infiles.append(findfile('coadd', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro))
-            infiles.append(findfile('redrock', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro))
+            findfileopts['spectrograph'] = spectro
+            infiles.append(findfile('coadd', **findfileopts))
+            infiles.append(findfile('redrock', **findfileopts))
         cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
         cmdargs = cmd.split()[1:]
         if args.dryrun:
@@ -527,17 +506,10 @@ def main(args=None, comm=None):
             for i in range(block_num, len(all_spectros), nblocks):
                 result, success = 0, True
                 spectro = all_spectros[i]
-                # run_mock_func('spectra', 'cumulative', spectro=spectro, comm=comm)
-                rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                                       expid=expids[0],
-                                       groupname=groupname, spectrograph=spectro)
-                zmtlfile = findfile('zmtl', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro)
-                zmtllog = findfile('zmtl', night=thrunight, tile=tileid,
-                                   expid=expids[0],
-                                   groupname=groupname, spectrograph=spectro,
-                                   logfile=True)
+                findfileopts['spectrograph'] = spectro
+                rrfile = findfile('redrock', **findfileopts)
+                zmtlfile = findfile('zmtl', **findfileopts)
+                zmtllog = findfile('zmtl', logfile=True, **findfileopts)
                 cmd = f"make_zmtl_files --input_file {rrfile} --output_file {zmtlfile}"
                 cmdargs = cmd.split()[1:]
                 if args.dryrun:
@@ -606,22 +578,14 @@ def main(args=None, comm=None):
                 ## afterburner 2 runs with 10s delay, 3 with 20s delay
                 #time.sleep(0.2*i)
                 spectro = all_spectros[i % nspectros]
-                coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                                     expid=expids[0],
-                                     groupname=groupname, spectrograph=spectro)
-                rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                                  expid=expids[0],
-                                  groupname=groupname, spectrograph=spectro)
+                findfileopts['spectrograph'] = spectro
+                coaddfile = findfile('coadd', **findfileopts)
+                rrfile = findfile('redrock', **findfileopts)
                 ## First set of nspectros ranks go to desi_qso_mgii_afterburner
                 if i // nspectros == 0:
                     log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso mgii")
-                    mgiifile = findfile('qso_mgii', night=thrunight, tile=tileid,
-                                        groupname=groupname, expid=expids[0],
-                                        spectrograph=spectro)
-                    mgiilog = findfile('qso_mgii', night=thrunight, tile=tileid,
-                                       expid=expids[0],
-                                       groupname=groupname, spectrograph=spectro,
-                                       logfile=True)
+                    mgiifile = findfile('qso_mgii', **findfileopts)
+                    mgiilog = findfile('qso_mgii', logfile=True, **findfileopts)
                     cmd = f"desi_qso_mgii_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {mgiifile} " \
                           + f"--target_selection all --save_target all"
@@ -641,13 +605,8 @@ def main(args=None, comm=None):
                 ## Second set of nspectros ranks go to desi_qso_qn_afterburner
                 elif i // nspectros == 1:
                     log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso qn")
-                    qnfile = findfile('qso_qn', night=thrunight, tile=tileid,
-                                      groupname=groupname, expid=expids[0],
-                                      spectrograph=spectro)
-                    qnlog = findfile('qso_qn', night=thrunight, tile=tileid,
-                                     groupname=groupname, spectrograph=spectro,
-                                     expid=expids[0],
-                                     logfile=True)
+                    qnfile = findfile('qso_qn', **findfileopts)
+                    qnlog = findfile('qso_qn', logfile=True, **findfileopts)
                     cmd = f"desi_qso_qn_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {qnfile} " \
                           + f"--target_selection all --save_target all"
@@ -666,14 +625,9 @@ def main(args=None, comm=None):
 
                 ## Third set of nspectros ranks go to desi_emlinefit_afterburner
                 elif i // nspectros == 2:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefiti")
-                    emfile = findfile('emline', night=thrunight, tile=tileid,
-                                      groupname=groupname, expid=expids[0],
-                                      spectrograph=spectro)
-                    emlog = findfile('emline', night=thrunight, tile=tileid,
-                                     groupname=groupname, spectrograph=spectro,
-                                     expid=expids[0],
-                                     logfile=True)
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefit")
+                    emfile = findfile('emline', **findfileopts)
+                    emlog = findfile('emline', logfile=True, **findfileopts)
                     cmd = f"desi_emlinefit_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {emfile}"
                     cmdargs = cmd.split()[1:]
