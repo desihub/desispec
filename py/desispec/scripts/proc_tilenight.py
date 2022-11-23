@@ -109,8 +109,6 @@ def main(args=None, comm=None):
     for expid, camword in prestd_camwords.items():
         poststd_camwords[expid] = camword_intersection([joint_camwords, camword])
 
-    joint_camwords = camword_union(list(camwords.values()), full_spectros_only=True)
-
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
 
