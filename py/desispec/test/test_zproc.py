@@ -48,9 +48,7 @@ class TestZProc(unittest.TestCase):
 
             #- are the ranks assigend within each block actually unique and contiguous?
             for block_num in block_ranks:
-                self.assertEqual(len(block_ranks[block_num]), block_sizes[block_num])
-                self.assertEqual(np.min(block_ranks[block_num]), 0)
-                self.assertEqual(np.max(block_ranks[block_num]), block_sizes[block_num]-1)
+                self.assertEqual(set(block_ranks[block_num]), set(range(block_sizes[block_num])))
 
 
 if __name__ == '__main__':
