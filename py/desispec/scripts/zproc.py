@@ -73,6 +73,8 @@ def parse(options=None):
     #- Options for healpix-based redshifts
     parser.add_argument("-p", "--healpix", type=int, nargs='*', default=None,
             help="healpix pixels")
+    parser.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
+    parser.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
 
     #- Processing options
     parser.add_argument("--mpi", action="store_true",
@@ -205,7 +207,7 @@ def main(args=None, comm=None):
 
     ## Derive the available cameras
     if args.groupname == 'healpix':
-        camword == 'a0123456789'
+        camword = 'a0123456789'
     elif isinstance(args.cameras, str):
         if rank == 0:
             camword = parse_cameras(args.cameras)
@@ -237,6 +239,8 @@ def main(args=None, comm=None):
                                                         nights=args.nights,
                                                         expids=args.expids,
                                                         healpix=args.healpix,
+                                                        survey=args.survey,
+                                                        program=args.program,
                                                         queue=args.queue,
                                                         runtime=args.runtime,
                                                         batch_opts=args.batch_opts,
@@ -256,10 +260,16 @@ def main(args=None, comm=None):
             err = comm.bcast(err, root=0)
         sys.exit(err)
 
-    exposure_table = Table()
+    exposure_table = None
+    hpixexp = None
     if rank == 0:
         if groupname == 'healpix':
-            raise NotImplementedError('TODO: healpix exposure table equivalent')
+            #- TODO: offer faster pre-cached alternatives
+            from desispec.pixgroup import get_exp2healpix_map
+            hpixexp = get_exp2healpix_map()
+            keep = np.isin(hpixexp['HEALPIX'], args.healpix)
+            hpixexp = hpixexp[keep]
+
         elif groupname == 'perexp' and args.nights is not None \
                 and args.cameras is not None and args.expids is not None:
             assert len(args.expids) == 1, "perexp job should only have one exposure"
@@ -288,17 +298,25 @@ def main(args=None, comm=None):
     ## Should remove, just nice for printouts while performance isn't important
     if comm is not None:
         comm.barrier()
-        exposure_table = comm.bcast(exposure_table, root=0)
+        if groupname == 'healpix':
+            hpixexp = comm.bcast(hpixexp, root=0)
+        else:
+            exposure_table = comm.bcast(exposure_table, root=0)
 
-    if len(exposure_table) == 0:
-        msg = f"Didn't find any exposures!"
-        log.error(msg)
-        raise ValueError(msg)
-    
-    ## Get night and expid information
-    expids = np.unique(exposure_table['EXPID'].data)
-    nights = np.unique(exposure_table['NIGHT'].data)
-    thrunight = np.max(nights)
+    if groupname != 'healpix':
+        if len(exposure_table) == 0:
+            msg = f"Didn't find any exposures!"
+            log.error(msg)
+            raise ValueError(msg)
+
+        ## Get night and expid information
+        expids = np.unique(exposure_table['EXPID'].data)
+        nights = np.unique(exposure_table['NIGHT'].data)
+        thrunight = np.max(nights)
+    else:
+        expids = None
+        nights = None
+        thrunight = None
 
     #------------------------------------------------------------------------#
     #------------------------ Proceed with running --------------------------#
@@ -324,27 +342,26 @@ def main(args=None, comm=None):
     if comm is not None:
         comm.barrier()
 
-    ## Find nights, exposures, and camwords
-    expnight_dict = dict()
-    complete_cam_set = set()
-
-    camword_set = set(decode_camword(camword))
-    for erow in exposure_table:
-        key = (erow['EXPID'],erow['NIGHT'])
-        val = set(decode_camword(difference_camwords(erow['CAMWORD'],
-                                                     erow['BADCAMWORD'],
-                                                     suppress_logging=True)))
-        if camword != 'a0123456789':
-            val = camword_set.intersection(val)
-
-        complete_cam_set = complete_cam_set.union(val)
-        expnight_dict[key] = val
-
-
     ## Derive the available spectrographs
     if groupname == 'healpix':
         all_subgroups = args.healpix
     else:
+        ## Find nights, exposures, and camwords
+        expnight_dict = dict()
+        complete_cam_set = set()
+
+        camword_set = set(decode_camword(camword))
+        for erow in exposure_table:
+            key = (erow['EXPID'],erow['NIGHT'])
+            val = set(decode_camword(difference_camwords(erow['CAMWORD'],
+                                                         erow['BADCAMWORD'],
+                                                         suppress_logging=True)))
+            if camword != 'a0123456789':
+                val = camword_set.intersection(val)
+
+            complete_cam_set = complete_cam_set.union(val)
+            expnight_dict[key] = val
+
         all_subgroups = camword_to_spectros(create_camword(list(complete_cam_set)),
                                            full_spectros_only=False)
 
@@ -352,6 +369,15 @@ def main(args=None, comm=None):
             msg = f"Didn't find any spectrographs! complete_cam_set={complete_cam_set}"
             log.error(msg)
             raise ValueError(msg)
+
+    ## options to be used by findfile for all output files
+    if groupname == 'healpix':
+        findfileopts = dict(groupname=groupname, survey=args.survey, faprogram=args.program)
+    else:
+        findfileopts = dict(night=thrunight, tile=tileid, groupname=groupname)
+        if groupname == 'perexp':
+            assert len(expids) == 1
+            findfileopts['expid'] = expids[0]
 
     timer.stop('preflight')
 
@@ -362,14 +388,15 @@ def main(args=None, comm=None):
     nblocks, block_size, block_rank, block_num = \
         distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
 
-    findfileopts = dict(night=thrunight, tile=tileid, groupname=groupname)
-    if groupname == 'perexp':
-        assert len(expids) == 1
-        findfileopts['expid'] = expids[0]
-
     if rank == 0:
-        splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
-        os.makedirs(os.path.dirname(splog), exist_ok=True)
+        if groupname == 'healpix':
+            for hpix in args.healpix:
+                findfileopts['healpix'] = hpix
+                splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
+                os.makedirs(os.path.dirname(splog), exist_ok=True)
+        else:
+            splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
+            os.makedirs(os.path.dirname(splog), exist_ok=True)
         
     if comm is not None:
         comm.barrier()
@@ -379,8 +406,18 @@ def main(args=None, comm=None):
             result, success = 0, True
             if groupname == 'healpix':
                 healpix = all_subgroups[i]
-                #- TODO: update findfile to accept healpix (instead of groupname as int healpix number)
                 findfileopts['healpix'] = healpix
+
+                cframes = []
+                ii = hpixexp['HEALPIX'] == healpix
+                for night, expid, spectro in hpixexp['NIGHT', 'EXPID', 'SPECTRO'][ii]:
+                    for band in ('b', 'r', 'z'):
+                        camera = band+str(spectro)
+                        filename = findfile('cframe', night=night, expid=expid, camera=camera)
+                        if os.path.exists(filename):
+                            cframes.append(filename)
+
+                assert len(cframes) >= 3
             else:
                 spectro = all_subgroups[i]
                 findfileopts['spectrograph'] = spectro
@@ -580,6 +617,8 @@ def main(args=None, comm=None):
         nsubgroups = len(all_subgroups)
         ntasks = nafterburners * nsubgroups
 
+        # TODO: for 64//3, this creates 4 blocks, with rank 63/64 being block 3 block_rank==0,
+        # which ends up running mgii afterburner twice
         nblocks, block_size, block_rank, block_num = \
             distribute_ranks_to_blocks(ntasks, rank=rank, size=size, log=log)
 
