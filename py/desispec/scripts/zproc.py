@@ -451,7 +451,8 @@ def main(args=None, comm=None):
                   + f"--coaddfile {coaddfile} "
 
             if groupname == 'healpix':
-                cmd +=  f"--header SPGRP={groupname} SPGRPVAL={healpix} "
+                cmd += f"--healpix {healpix} "
+                cmd += f"--header SPGRP={groupname} SPGRPVAL={healpix} "
             else:
                 cmd += "--onetile "
                 cmd += f"--header SPGRP={groupname} SPGRPVAL={thrunight} " \
