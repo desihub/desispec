@@ -788,9 +788,17 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
             block_comm = comm
     else:
         # nblocks = nblocks
-        block_size = int(size / nblocks)
-        block_num = int(rank / block_size)
-        block_rank = int(rank % block_size)
+        block_num = int(rank / (size/nblocks))
+        block_rank = int(rank % (size/nblocks))
+
+        # Calculate assignment for all ranks to be able to calculate
+        # how many other ranks are in this same block
+        all_ranks = np.arange(size)
+        all_block_num = (all_ranks / (size/nblocks)).astype(int)
+        assert all_block_num[rank] == block_num
+        ii_this_block = all_block_num == block_num
+        block_size = np.sum(ii_this_block)
+
         if split_comm:
             if comm is not None:
                 block_comm = comm.Split(block_num, block_rank)
