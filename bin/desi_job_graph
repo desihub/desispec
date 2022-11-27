@@ -14,7 +14,7 @@ from desispec.workflow.proctable import get_processing_table_path
 from desispec.workflow.proctable import get_processing_table_name
 from desispec.workflow.queue import queue_info_from_qids
 from desispec.io.meta import specprod_root
-from desispec.workflow.redshifts import get_tile_redshift_script_pathname
+from desispec.workflow.redshifts import get_ztile_script_pathname
 
 p = argparse.ArgumentParser()
 p.add_argument('-n', '--night', type=int, required=True,
@@ -117,10 +117,10 @@ for row in proctable:
     if jobdesc == 'tilenight':
         logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
     elif jobdesc in ('cumulative', 'pernight'):
-        logfile = get_tile_redshift_script_pathname(tileid, jobdesc, night=args.night)
+        logfile = get_ztile_script_pathname(tileid, jobdesc, night=args.night)
         logfile = logfile.replace('.slurm', f'-{qid}.log')
     elif jobdesc == 'perexp':
-        logfile = get_tile_redshift_script_pathname(tileid, jobdesc, expid=e1)
+        logfile = get_ztile_script_pathname(tileid, jobdesc, expid=e1)
         logfile = logfile.replace('.slurm', f'-{qid}.log')
     else:
         logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
