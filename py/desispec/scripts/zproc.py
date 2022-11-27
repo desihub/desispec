@@ -475,12 +475,13 @@ def main(args=None, comm=None):
                 log.error(f'desi_group_spectra petal {spectro} failed; see {splog}')
                 error_count += 1
 
-    if rank == 0:
-        log.info("Done with spectra")
     timer.stop('groupspec')
 
     if comm is not None:
         comm.barrier()
+
+    if rank == 0:
+        log.info("Done with spectra")
 
     #-------------------------------------------------------------------------
     ## Do redshifting
@@ -522,13 +523,13 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-    if rank == 0:
-        log.info("Done with redrock")
-
     if comm is not None:
         comm.barrier()
         
     timer.stop('redrock')
+
+    if rank == 0:
+        log.info("Done with redrock")
 
     #-------------------------------------------------------------------------
     ## Do tileqa if a tile (i.e. not for healpix)
