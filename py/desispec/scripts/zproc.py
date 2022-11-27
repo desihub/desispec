@@ -52,8 +52,9 @@ def parse(options=None):
     """
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
-    parser.add_argument("-g", "--groupname", type=str, default='cumulative',
+    parser.add_argument("-g", "--groupname", type=str,
                         help="Redshift grouping type: cumulative, perexp, pernight, healpix")
+
     #- Options for tile-based redshifts
     parser.add_argument("-t", "--tileid", type=int, default=None,
                         help="Tile ID")
@@ -100,7 +101,7 @@ def parse(options=None):
     parser.add_argument("--nosubmit", action="store_true",
                         help="Create batch script but don't submit")
     parser.add_argument("-q", "--queue", type=str, default="realtime",
-                        help="batch queue to use")
+                        help="batch queue to use (default %(default)s)")
     parser.add_argument("--batch-opts", type=str, default=None,
                         help="additional batch commands")
     parser.add_argument("--batch-reservation", type=str,
@@ -126,6 +127,17 @@ def main(args=None, comm=None):
         args = parse(options=args)
 
     log = get_logger()
+
+    #- set default groupname if needed (cumulative for tiles, otherwise healpix)
+    if args.groupname is None:
+        if args.tileid is not None:
+            args.groupname = 'cumulative'
+        elif args.healpix is not None:
+            args.groupname = 'healpix'
+        else:
+            msg = 'Must specify --tileid or --healpix'
+            log.critical(msg)
+            raise ValueError(msg)
 
     #- consistency of options
     if args.groupname == 'healpix':
