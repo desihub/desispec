@@ -199,6 +199,10 @@ class Photometry(SchemaMixin, Base):
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # fiberassign
 
     targets = relationship("Target", back_populates="photometry")
+    fiberassign = relationship("Fiberassign", back_populates="photometry")
+    potential = relationship("Potential", back_populates="photometry")
+    zpix_redshifts = relationship("Zpix", back_populates="photometry")
+    ztile_redshifts = relationship("Ztile", back_populates="photometry")
 
     def __repr__(self):
         return "Photometry(targetid={0.targetid:d})".format(self)
@@ -1364,7 +1368,7 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': glob.glob(os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zpix-*.fits')),
+              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-pix-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Zpix,
                'hdu': 'ZCATALOG',
                'preload': _survey_program,
@@ -1375,7 +1379,7 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
-              {'filepaths': glob.glob(os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'ztile-*.fits')),
+              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-tilecumulative-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Ztile,
                'hdu': 'ZCATALOG',
                'preload': _survey_program,
