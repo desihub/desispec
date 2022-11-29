@@ -198,6 +198,8 @@ class Photometry(SchemaMixin, Base):
     photsys = Column(String(1), nullable=False)  # fiberassign
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # fiberassign
 
+    targets = relationship("Target", back_populates="photometry")
+
     def __repr__(self):
         return "Photometry(targetid={0.targetid:d})".format(self)
 
