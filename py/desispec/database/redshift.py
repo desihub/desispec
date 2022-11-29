@@ -195,7 +195,6 @@ class Photometry(SchemaMixin, Base):
     pmra_ivar = Column(REAL, nullable=False)
     pmdec = Column(REAL, nullable=False)  # fiberassign
     pmdec_ivar = Column(REAL, nullable=False)
-    photsys = Column(String(1), nullable=False)  # fiberassign
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # fiberassign
 
     targets = relationship("Target", back_populates="photometry")
@@ -215,6 +214,7 @@ class Target(SchemaMixin, Base):
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)  # fiberassign
+    photsys = Column(String(1), nullable=False)  # fiberassign
     subpriority = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign
     obsconditions = Column(BigInteger, nullable=False)  # fiberassign
     priority_init = Column(BigInteger, nullable=False)  # fiberassign
