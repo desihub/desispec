@@ -14,6 +14,10 @@ Notes
   - Load as much data as possible from patched fiberassign files.
   - If necessary, create intermediate files for ingestion by running
     the lsdr9-photometry_ code.
+  - In the tractorphot files, TARGETID really is unique.  However, some
+    TARGETIDs are not present because they do not match an object to within
+    1 arcsec. For these, fill in what can be filled in from target files or
+    fiberassign files.
   - For every duplicate potential targetid, use only the most recent desitarget
     version containing that targetid, rather than the default associated with
     the fiberassign file.
@@ -64,6 +68,7 @@ engine = None
 dbSession = scoped_session(sessionmaker())
 schemaname = None
 log = None
+_targetid_cache = None
 
 
 class SchemaMixin(object):
@@ -775,6 +780,27 @@ def _target_unique_id(data):
     return data
 
 
+def _remove_loaded_targetid(data):
+    """Remove rows with TARGETID already loaded into the database.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`numpy.array`
+        An array of rows that are safe to load.
+    """
+    targetid = data['TARGETID'].data
+    good_rows = np.ones((len(targetid),), dtype=np.bool)
+    q = dbSession.query(Photometry.targetid).filter(Photometry.targetid.in_(targetid.tolist())).all()
+    for row in q:
+        good_rows[targetid == row[0]] = False
+    return good_rows
+
+
 def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, convert=None,
               index=None, rowfilter=None, q3c=None,
               chunksize=50000, maxrows=0):
@@ -821,6 +847,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
     :class:`int`
         The grand total of rows loaded.
     """
+    global _targetid_cache
     tn = tcls.__tablename__
     if isinstance(filepaths, str):
         filepaths = [filepaths]
@@ -1319,12 +1346,18 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
               },
-              {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Target,
-               'hdu': 'TARGETPHOT',
-               'preload': _target_unique_id,
+              {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'tractorphot', 'tractorphot*.fits')),
+               'tcls': Photometry,
+               'hdu': 'TRACTORPHOT',
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+               },
+              {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'tractorphot', 'tractorphot*.fits')),
+               'tcls': Photometry,
+               'hdu': 'TRACTORPHOT',
+               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+               'rowfilter': _remove_loaded_targetid,
                'q3c': 'ra',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
@@ -1336,7 +1369,7 @@ def main():
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': {'id': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: x['TARGETID'] > 0,
+               'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
