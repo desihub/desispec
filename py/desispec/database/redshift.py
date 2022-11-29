@@ -670,7 +670,7 @@ class Ztile(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
-    photometry = relationship("Photometry", back_populates="zpix_redshifts")
+    photometry = relationship("Photometry", back_populates="ztile_redshifts")
     tile = relationship("Tile", back_populates="ztile_redshifts")
 
     def __repr__(self):
