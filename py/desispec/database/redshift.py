@@ -1364,7 +1364,7 @@ def main():
                'tcls': Photometry,
                'hdu': 'TRACTORPHOT',
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
-                          'OBJID', 'brick_objid'},
+                          'OBJID': 'brick_objid'},
                'rowfilter': _remove_loaded_targetid,
                'q3c': 'ra',
                'chunksize': options.chunksize,
