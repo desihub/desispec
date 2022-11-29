@@ -4,7 +4,7 @@ import re
 import subprocess
 import argparse
 import numpy as np
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, Column
 
 from desispec.io.util import parse_cameras, decode_camword
 from desispec.workflow.desi_proc_funcs import determine_resources
@@ -354,6 +354,10 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
         ## correct way but slower and we don't need multivalue columns
         #t = load_table(etab_file, tabletype='etable')
         t = Table.read(etab_file, format='ascii.csv')
+        ## For backwards compatibility if BADCAMWORD column does not
+        ## exist then add a blank one
+        if 'BADCAMWORD' not in t.colnames:
+            t.add_column(Table.Column(['' for i in range(len(t))], dtype='S36', name='BADCAMWORD'))
         keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
         if 'LASTSTEP' in t.colnames:
             keep &= (t['LASTSTEP'] == 'all')
