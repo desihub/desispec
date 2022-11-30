@@ -30,7 +30,6 @@ from   desispec.io.meta import findfile, specprod_root, faflavor2program
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
-from   desispec.io import findfile
 from   desispec.io import read_table
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desispec.io.util import get_tempfilename
@@ -210,10 +209,11 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     log = get_logger()
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
-                      camera=camera, specprod_dir=specprod_dir)
+                      camera=camera, specprod_dir=specprod_dir,
+                      readonly=True)
 
-    hdr0 = cframe_hdulist[0].header
-    hdr1 = cframe_hdulist[1].header
+    hdr0 = cframe_hdulist[0].read_header()
+    hdr1 = cframe_hdulist[1].read_header()
 
     if 'FIBERFLT' not in hdr0:
         log.critical('Failed to find FIBERFLT in cframe hdr of {:08d} on {}'.format(expid, night))
@@ -222,7 +222,7 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
         flat = CalibFinder([hdr0, hdr1]).findfile('FIBERFLAT')
 
     else:
-        flat = cframe_hdulist[0].header['FIBERFLT']
+        flat = hdr0['FIBERFLT']
 
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
@@ -440,7 +440,8 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
 
                 # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
                 # as of 20210624: SURVEY present in table_exposure since 20210611 only
-                dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                dirname = os.path.dirname(
+                        findfile("raw", night, entry["EXPID"], readonly=True))
                 fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
                 if len(fns) > 0:
                     fiberassign_header = fits.getheader(fns[0], 0)
@@ -633,12 +634,13 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
     log = get_logger()
 
-    cframe_filename = findfile('cframe', night, expid, camera, specprod_dir=prod)
+    cframe_filename = findfile('cframe', night, expid, camera,
+            specprod_dir=prod, readonly=True)
     if not os.path.isfile(cframe_filename) :
         return None
 
-    cframe_hdulist = fits.open(cframe_filename)
-    hdr    = cframe_hdulist[0].header
+    cframe_hdulist = fitsio.FITS(cframe_filename)
+    hdr    = cframe_hdulist[0].read_header()
     flavor = hdr['FLAVOR']
     if flavor != 'science':
         return None
@@ -653,7 +655,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
     #- check if already computed in cframe
     if "SCORES" in cframe_hdulist and not recompute:
-        table = Table(cframe_hdulist["SCORES"].data)
+        table = Table(cframe_hdulist["SCORES"].read())
         key = "TSNR2_ELG_"+camera[0].upper()
         if key in table.colnames :
             log.debug("Use TSNR values in cframe file")
@@ -678,7 +680,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             for k in tsnr_table.columns :
                 table[k] = tsnr_table[k]
 
-    fibermap = cframe_hdulist["FIBERMAP"].data
+    fibermap = cframe_hdulist["FIBERMAP"].read()
 
     table['FIBER']       = fibermap['FIBER']
     table['TARGETID']    = fibermap['TARGETID']
@@ -707,6 +709,8 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
     entry['EBV'] = 0.
+    etcfilename = findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'],
+                           readonly=True)
     if 'EBV' in fibermap.dtype.names:
         sel = (fibermap["EBV"] > 0)
         if sel.sum() > 0:
@@ -717,8 +721,8 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
         log.debug('Retrieved ACQFWHM from frame hdr.')
 
-    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
-        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
+    elif os.path.exists(etcfilename):
+        with open(etcfilename) as etc_file:
             etcdata = json.load(etc_file)
         try:
             entry['SEEING_ETC'] = np.float32(etcdata['expinfo']['acq_fwhm'])
@@ -737,8 +741,8 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
         log.debug('Retrieved ETCTEFF from frame hdr.')
 
-    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
-        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
+    elif os.path.exists(etcfilename):
+        with open(etcfilename) as etc_file:
             etcdata = json.load(etc_file)
 
         try:
@@ -772,7 +776,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
 
     #- Add information from targeting (SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME)
-    fibermap_header = cframe_hdulist["FIBERMAP"].header
+    fibermap_header = cframe_hdulist["FIBERMAP"].read_header()
     targ_dict = {key : fibermap_header[key] for key in fibermap_header.keys()}
     entry = update_targ_info(entry, targ_dict)
 
@@ -840,13 +844,10 @@ def main():
 
     if args.mpi and use_mpi():
         from mpi4py import  MPI
-        from desispec.parallel import default_nproc
 
         comm  = MPI.COMM_WORLD
         rank  = comm.Get_rank()
         size  = comm.Get_size()
-
-        args.nproc = default_nproc
 
         multinode = True
 
@@ -879,7 +880,7 @@ def main():
 
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
-        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
+        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(str))]
     else:
         cameras = args.cameras.split(',')
 
@@ -945,7 +946,6 @@ def main():
                 return
         log.info("{} {}".format(night,night_expids))
 
-        #pool = multiprocessing.Pool(ncpu)
         func_args = []
         for expid in night_expids :
             for camera in cameras:
@@ -953,19 +953,18 @@ def main():
                                   'recompute':args.recompute,'alpha_only':args.alpha_only,'details_dir':args.details_dir})
 
         if args.nproc == 1 :
+            log.info(f"--nproc={args.nproc} so not multiprocessing")
             for func_arg in func_args :
                 entry = func(**func_arg)
                 if entry is not None :
                     rows.append(entry)
         else :
             log.info("Multiprocessing with {} procs".format(args.nproc))
-            pool = multiprocessing.Pool(args.nproc)
-            results  =  pool.map(_func, func_args)
-            for entry in results :
-                if entry is not None :
-                    rows.append(entry)
-            pool.close()
-            pool.join()
+            with multiprocessing.Pool(args.nproc) as pool:
+                results  =  pool.map(_func, func_args)
+                for entry in results :
+                    if entry is not None :
+                        rows.append(entry)
 
         # write result after every night.
         if len(rows)>0 :
@@ -987,7 +986,7 @@ def main():
         if len(ranknights) > 0:
             rank_summary_rows = list()
 
-            log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
+            log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, args.nproc))
 
             outdir = os.path.dirname(args.outfile)
             if outdir == "" :
@@ -1083,19 +1082,18 @@ def main():
                     func2_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
 
                 if args.nproc == 1 :
+                    log.info(f"--nproc={args.nproc} so not multiprocessing")
                     for func2_arg in func2_args :
                         entry = func2(**func2_arg)
                         if entry is not None :
                             skymag_rows.append(entry)
                 else :
                     log.info("Multiprocessing with {} procs".format(args.nproc))
-                    pool = multiprocessing.Pool(args.nproc)
-                    results  =  pool.map(_func2, func2_args)
-                    for entry in results :
-                        if entry is not None :
-                            skymag_rows.append(entry)
-                    pool.close()
-                    pool.join()
+                    with multiprocessing.Pool(args.nproc) as pool:
+                        results  =  pool.map(_func2, func2_args)
+                        for entry in results :
+                            if entry is not None :
+                                skymag_rows.append(entry)
 
             colnames = list(skymag_rows[0].keys())
             skymags_table = Table(rows=skymag_rows, names=colnames)
