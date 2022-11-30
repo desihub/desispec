@@ -45,27 +45,28 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2healpix_map(survey=None, program=None, expfile=None,
-        specprod_dir=None, strict=False, nights=None, expids=None):
+def get_exp2healpix_map(survey=None, program=None, exptabfile=None,
+        specprod_dir=None, nights=None, expids=None):
     """
     Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
     Options:
         survey (str): filter by this survey (main, sv3, sv1, ...)
         program (str): filter by this FAPRGRM (dark, bright, backup, other)
+        exptabfile (str): filepath to exposure table with NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR
         specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
+        nights (array-like): filter to only these nights
+        expids (array-like): filter to only these exposure IDs
 
-        TODO...
-
-    Returns table with columns NIGHT EXPID SPECTRO HEALPIX
+    Returns table with columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
     """
     log = get_logger()
     if specprod_dir is None:
         specprod_dir = io.specprod_root()
 
-    if expfile is not None:
-        log.info(f'Reading exposures list from {expfile}')
-        t = Table.read(expfile)
+    if exptabfile is not None:
+        log.info(f'Reading exposures list from {exptabfile}')
+        t = Table.read(exptabfile)
         #- override FAPRGRM with what we would set it to now
         t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
         keep = t['TILEID'] > 0
@@ -85,18 +86,18 @@ def get_exp2healpix_map(survey=None, program=None, expfile=None,
         expdir = f'{specprod_dir}/exposure_tables'
         log.info(f'Reading exposures from {expdir}')
         exp_tables = list()
-        for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
+        for exptabfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
 
             #- don't read file if it isn't in the nights list
             if nights is not None:
-                tmp = os.path.splitext(os.path.basename(expfile))[0]
+                tmp = os.path.splitext(os.path.basename(exptabfile))[0]
                 night = int(tmp.split('_')[2])
                 if night not in nights:
                     continue
 
             #- read and filter entries to good science exposures of
             #- requested survey/program/expids
-            t = Table.read(expfile)
+            t = Table.read(exptabfile)
             keep = (t['OBSTYPE'] == 'science')
             keep &= (t['LASTSTEP'] == 'all')
             keep &= (t['TILEID'] > 0)
@@ -122,14 +123,7 @@ def get_exp2healpix_map(survey=None, program=None, expfile=None,
         night = exptab['NIGHT'][i]
         expid = exptab['EXPID'][i]
         tileid = exptab['TILEID'][i]
-        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
-
-        if not os.path.exists(tilepixfile):
-            if strict:
-                raise FileNotFoundError(tilepixfile)
-            else:
-                continue
-
+        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid, readonly=True)
         with open(tilepixfile) as fp:
             tilepix.update( json.load(fp) )
 

@@ -197,7 +197,9 @@ def create_desi_zproc_batch_script(group,
         scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                    night=night, expid=expid)
 
-    if np.isscalar(cameras):
+    if cameras is None:
+        cameras = decode_camword('a0123456789')
+    elif np.isscalar(cameras):
         camword = parse_cameras(cameras)
         cameras = decode_camword(camword)
 
@@ -238,7 +240,9 @@ def create_desi_zproc_batch_script(group,
             for subparam in param.split("="):
                 inparams.append(subparam)
     else:
-        inparams = list(cmdline)
+        # ensure all elements are str (not int or float)
+        inparams = [str(x) for x in cmdline]
+
     for parameter in ['--queue', '-q', '--batch-opts']:
         ## If a parameter is in the list, remove it and its argument
         ## Elif it is a '--' command, it might be --option=value, which won't be split.

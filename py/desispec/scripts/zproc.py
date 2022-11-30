@@ -2,30 +2,34 @@
 One stop shopping for redshifting  DESI spectra
 """
 
-import time, datetime
+import time
+start_imports = time.time()
+
+#- python imports
+import datetime
+import sys, os, argparse, re
+import subprocess
+from copy import deepcopy
+import json
+import glob
+
+#- external 3rd party imports
+import numpy as np
+import fitsio
+from astropy.io import fits
+from astropy.table import Table,vstack
+
+#- external desi imports
+from redrock.external import desi
+import desiutil.timer
+from desiutil.log import get_logger, DEBUG, INFO
+import desiutil.iers
 
 from desispec.io.meta import get_nights_up_to_date
 from desispec.workflow.redshifts import read_minimal_exptables_columns, \
     create_desi_zproc_batch_script
 
-start_imports = time.time()
-
-import sys, os, argparse, re
-import subprocess
-from copy import deepcopy
-import json
-
-import numpy as np
-import fitsio
-from astropy.io import fits
-
-from astropy.table import Table,vstack
-
-import glob
-
-from redrock.external import desi
-
-import desiutil.timer
+#- internal desispec imports
 import desispec.io
 from desispec.io import findfile, specprod_root, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras, \
@@ -33,8 +37,6 @@ from desispec.io.util import create_camword, decode_camword, parse_cameras, \
 from desispec.io.util import validate_badamps, get_tempfilename, backup_filename
 from desispec.util import runcmd
 from desispec.scripts import group_spectra
-from desiutil.log import get_logger, DEBUG, INFO
-import desiutil.iers
 from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
 from desispec.workflow.exptable import get_exposure_table_pathname
@@ -54,6 +56,8 @@ def parse(options=None):
 
     parser.add_argument("-g", "--groupname", type=str,
                         help="Redshift grouping type: cumulative, perexp, pernight, healpix")
+    parser.add_argument("--expfile",
+                        help="csv file with NIGHT,EXPID to use, plus HEALPIX,SPECTRO for --groupname=healpix")
 
     #- Options for tile-based redshifts
     parser.add_argument("-t", "--tileid", type=int, default=None,
@@ -88,8 +92,8 @@ def parse(options=None):
                         help="Whether to run zmtl or not")
     parser.add_argument("--no-afterburners", action="store_true",
                         help="Set if you don't want to run afterburners")
-    parser.add_argument("--starttime", type=str,
-                        help='start time; use "--starttime `date +%%s`"')
+    parser.add_argument("--starttime", type=float,
+                        help='start time; use "--starttime $(date +%%s)"')
     parser.add_argument("--timingfile", type=str,
                         help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("-d", "--dryrun", action="store_true",
@@ -125,6 +129,11 @@ def parse(options=None):
 def main(args=None, comm=None):
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
+
+    if args.starttime is not None:
+        start_time = args.starttime
+    else:
+        start_time = time.time()
 
     log = get_logger()
 
@@ -174,7 +183,6 @@ def main(args=None, comm=None):
             log.error(msg)
             raise ValueError(msg)
 
-    start_time = time.time()
     error_count = 0
 
     start_mpi_connect = time.time()
@@ -275,10 +283,19 @@ def main(args=None, comm=None):
     exposure_table = None
     hpixexp = None
     if rank == 0:
+
+        if groupname != 'healpix' and args.expfile is not None:
+            tmp = Table.read(args.expfile)
+            args.expids = list(tmp['EXPID'])
+            args.nights = list(tmp['NIGHT'])
+
         if groupname == 'healpix':
-            #- TODO: offer faster pre-cached alternatives
-            from desispec.pixgroup import get_exp2healpix_map
-            hpixexp = get_exp2healpix_map()
+            if args.expfile is not None:
+                hpixexp = Table.read(args.expfile)
+            else:
+                from desispec.pixgroup import get_exp2healpix_map
+                hpixexp = get_exp2healpix_map()
+
             keep = np.isin(hpixexp['HEALPIX'], args.healpix)
             hpixexp = hpixexp[keep]
 
@@ -452,11 +469,13 @@ def main(args=None, comm=None):
 
             if groupname == 'healpix':
                 cmd += f"--healpix {healpix} "
-                cmd += f"--header SPGRP={groupname} SPGRPVAL={healpix} "
+                cmd += (f"--header SPGRP={groupname} SPGRPVAL={healpix} "
+                        f"HPXPIXEL={healpix} HPXNSIDE=64 HPXNEST=True "
+                        f"SURVEY={args.survey} PROGRAM={args.program} ")
             else:
                 cmd += "--onetile "
-                cmd += f"--header SPGRP={groupname} SPGRPVAL={thrunight} " \
-                       + f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} PETAL={spectro} "
+                cmd += (f"--header SPGRP={groupname} SPGRPVAL={thrunight} "
+                        f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} PETAL={spectro} ")
 
                 if groupname == 'perexp':
                     cmd += f'EXPID={expids[0]} '
