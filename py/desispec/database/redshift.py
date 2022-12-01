@@ -101,101 +101,101 @@ class Photometry(SchemaMixin, Base):
     which are vector-valued, are not yet implemented.
     """
     ls_id = Column(BigInteger, nullable=False, index=True)  # (release << 40) | (brickid << 16) | brick_objid
-    release = Column(SmallInteger, nullable=False)  # fiberassign
-    brickid = Column(Integer, nullable=False)  # fiberassign
-    brickname = Column(String(8), nullable=False)  # fiberassign
-    brick_objid = Column(Integer, nullable=False)  # fiberassign
-    morphtype = Column(String(4), nullable=False)  # fiberassign
-    ra = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign: target_ra?
-    ra_ivar = Column(REAL, nullable=False)
-    dec = Column(DOUBLE_PRECISION, nullable=False)  # fiberassign: target_dec?
-    dec_ivar = Column(REAL, nullable=False)
-    dchisq_psf = Column(REAL, nullable=False)
-    dchisq_rex = Column(REAL, nullable=False)
-    dchisq_dev = Column(REAL, nullable=False)
-    dchisq_exp = Column(REAL, nullable=False)
-    dchisq_ser = Column(REAL, nullable=False)
-    ebv = Column(REAL, nullable=False)  # fiberassign
-    flux_g = Column(REAL, nullable=False)  # fiberassign
-    flux_r = Column(REAL, nullable=False)  # fiberassign
-    flux_z = Column(REAL, nullable=False)  # fiberassign
-    flux_ivar_g = Column(REAL, nullable=False)  # fiberassign
-    flux_ivar_r = Column(REAL, nullable=False)  # fiberassign
-    flux_ivar_z = Column(REAL, nullable=False)  # fiberassign
-    mw_transmission_g = Column(REAL, nullable=False)
-    mw_transmission_r = Column(REAL, nullable=False)
-    mw_transmission_z = Column(REAL, nullable=False)
-    fracflux_g = Column(REAL, nullable=False)
-    fracflux_r = Column(REAL, nullable=False)
-    fracflux_z = Column(REAL, nullable=False)
-    fracmasked_g = Column(REAL, nullable=False)
-    fracmasked_r = Column(REAL, nullable=False)
-    fracmasked_z = Column(REAL, nullable=False)
-    fracin_g = Column(REAL, nullable=False)
-    fracin_r = Column(REAL, nullable=False)
-    fracin_z = Column(REAL, nullable=False)
-    nobs_g = Column(SmallInteger, nullable=False)
-    nobs_r = Column(SmallInteger, nullable=False)
-    nobs_z = Column(SmallInteger, nullable=False)
-    psfdepth_g = Column(REAL, nullable=False)
-    psfdepth_r = Column(REAL, nullable=False)
-    psfdepth_z = Column(REAL, nullable=False)
-    galdepth_g = Column(REAL, nullable=False)
-    galdepth_r = Column(REAL, nullable=False)
-    galdepth_z = Column(REAL, nullable=False)
-    flux_w1 = Column(REAL, nullable=False)  # fiberassign
-    flux_w2 = Column(REAL, nullable=False)  # fiberassign
-    flux_w3 = Column(REAL, nullable=False)
-    flux_w4 = Column(REAL, nullable=False)
+    release = Column(SmallInteger, nullable=False)  # targetphot, fiberassign
+    brickid = Column(Integer, nullable=False)  # targetphot, fiberassign
+    brickname = Column(String(8), nullable=False)  # targetphot, fiberassign
+    brick_objid = Column(Integer, nullable=False)  # targetphot, fiberassign
+    morphtype = Column(String(4), nullable=False)  # targetphot, fiberassign
+    ra = Column(DOUBLE_PRECISION, nullable=False)  # targetphot, fiberassign: target_ra?
+    ra_ivar = Column(REAL, nullable=False)  # targetphot
+    dec = Column(DOUBLE_PRECISION, nullable=False)  # targetphot, fiberassign: target_dec?
+    dec_ivar = Column(REAL, nullable=False)  # targetphot
+    dchisq_psf = Column(REAL, nullable=False)  # targetphot
+    dchisq_rex = Column(REAL, nullable=False)  # targetphot
+    dchisq_dev = Column(REAL, nullable=False)  # targetphot
+    dchisq_exp = Column(REAL, nullable=False)  # targetphot
+    dchisq_ser = Column(REAL, nullable=False)  # targetphot
+    ebv = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_g = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_r = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_z = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_ivar_g = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_ivar_r = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_ivar_z = Column(REAL, nullable=False)  # targetphot, fiberassign
+    mw_transmission_g = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_r = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_z = Column(REAL, nullable=False)  # targetphot
+    fracflux_g = Column(REAL, nullable=False)  # targetphot
+    fracflux_r = Column(REAL, nullable=False)  # targetphot
+    fracflux_z = Column(REAL, nullable=False)  # targetphot
+    fracmasked_g = Column(REAL, nullable=False)  # targetphot
+    fracmasked_r = Column(REAL, nullable=False)  # targetphot
+    fracmasked_z = Column(REAL, nullable=False)  # targetphot
+    fracin_g = Column(REAL, nullable=False)  # targetphot
+    fracin_r = Column(REAL, nullable=False)  # targetphot
+    fracin_z = Column(REAL, nullable=False)  # targetphot
+    nobs_g = Column(SmallInteger, nullable=False)  # targetphot
+    nobs_r = Column(SmallInteger, nullable=False)  # targetphot
+    nobs_z = Column(SmallInteger, nullable=False)  # targetphot
+    psfdepth_g = Column(REAL, nullable=False)  # targetphot
+    psfdepth_r = Column(REAL, nullable=False)  # targetphot
+    psfdepth_z = Column(REAL, nullable=False)  # targetphot
+    galdepth_g = Column(REAL, nullable=False)  # targetphot
+    galdepth_r = Column(REAL, nullable=False)  # targetphot
+    galdepth_z = Column(REAL, nullable=False)  # targetphot
+    flux_w1 = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_w2 = Column(REAL, nullable=False)  # targetphot, fiberassign
+    flux_w3 = Column(REAL, nullable=False)  # targetphot
+    flux_w4 = Column(REAL, nullable=False)  # targetphot
     flux_ivar_w1 = Column(REAL, nullable=False)  # fiberassign
     flux_ivar_w2 = Column(REAL, nullable=False)  # fiberassign
-    flux_ivar_w3 = Column(REAL, nullable=False)
-    flux_ivar_w4 = Column(REAL, nullable=False)
-    mw_transmission_w1 = Column(REAL, nullable=False)
-    mw_transmission_w2 = Column(REAL, nullable=False)
-    mw_transmission_w3 = Column(REAL, nullable=False)
-    mw_transmission_w4 = Column(REAL, nullable=False)
-    allmask_g = Column(SmallInteger, nullable=False)
-    allmask_r = Column(SmallInteger, nullable=False)
-    allmask_z = Column(SmallInteger, nullable=False)
-    fiberflux_g = Column(REAL, nullable=False)  # fiberassign
-    fiberflux_r = Column(REAL, nullable=False)  # fiberassign
-    fiberflux_z = Column(REAL, nullable=False)  # fiberassign
-    fibertotflux_g = Column(REAL, nullable=False)  # fiberassign
-    fibertotflux_r = Column(REAL, nullable=False)  # fiberassign
-    fibertotflux_z = Column(REAL, nullable=False)  # fiberassign
-    ref_epoch = Column(REAL, nullable=False)  # fiberassign
-    wisemask_w1 = Column(SmallInteger, nullable=False)
-    wisemask_w2 = Column(SmallInteger, nullable=False)
-    maskbits = Column(SmallInteger, nullable=False)  # fiberassign
+    flux_ivar_w3 = Column(REAL, nullable=False)  # targetphot
+    flux_ivar_w4 = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_w1 = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_w2 = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_w3 = Column(REAL, nullable=False)  # targetphot
+    mw_transmission_w4 = Column(REAL, nullable=False)  # targetphot
+    allmask_g = Column(SmallInteger, nullable=False)  # targetphot
+    allmask_r = Column(SmallInteger, nullable=False)  # targetphot
+    allmask_z = Column(SmallInteger, nullable=False)  # targetphot
+    fiberflux_g = Column(REAL, nullable=False)  # targetphot, fiberassign
+    fiberflux_r = Column(REAL, nullable=False)  # targetphot, fiberassign
+    fiberflux_z = Column(REAL, nullable=False)  # targetphot, fiberassign
+    fibertotflux_g = Column(REAL, nullable=False)  # targetphot, fiberassign
+    fibertotflux_r = Column(REAL, nullable=False)  # targetphot, fiberassign
+    fibertotflux_z = Column(REAL, nullable=False)  # targetphot, fiberassign
+    ref_epoch = Column(REAL, nullable=False)  # targetphot, fiberassign
+    wisemask_w1 = Column(SmallInteger, nullable=False)  # targetphot
+    wisemask_w2 = Column(SmallInteger, nullable=False)  # targetphot
+    maskbits = Column(SmallInteger, nullable=False)  # targetphot, fiberassign
     # LC_...
-    shape_r = Column(REAL, nullable=False)  # fiberassign
-    shape_e1 = Column(REAL, nullable=False)  # fiberassign
-    shape_e2 = Column(REAL, nullable=False)  # fiberassign
-    shape_r_ivar = Column(REAL, nullable=False)
-    shape_e1_ivar = Column(REAL, nullable=False)
-    shape_e2_ivar = Column(REAL, nullable=False)
-    sersic = Column(REAL, nullable=False)  # fiberassign
-    sersic_ivar = Column(REAL, nullable=False)
-    ref_id = Column(BigInteger, nullable=False)  # fiberassign
-    ref_cat = Column(String(2), nullable=False)  # fiberassign
-    gaia_phot_g_mean_mag = Column(REAL, nullable=False)  # fiberassign
-    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)  # fiberassign
-    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)  # fiberassign
-    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
-    gaia_duplicated_source = Column(Boolean, nullable=False)
-    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
-    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
-    parallax = Column(REAL, nullable=False)  # fiberassign
-    parallax_ivar = Column(REAL, nullable=False)
-    pmra = Column(REAL, nullable=False)  # fiberassign
-    pmra_ivar = Column(REAL, nullable=False)
-    pmdec = Column(REAL, nullable=False)  # fiberassign
-    pmdec_ivar = Column(REAL, nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # fiberassign
+    shape_r = Column(REAL, nullable=False)  # targetphot, fiberassign
+    shape_e1 = Column(REAL, nullable=False)  # targetphot, fiberassign
+    shape_e2 = Column(REAL, nullable=False)  # targetphot, fiberassign
+    shape_r_ivar = Column(REAL, nullable=False)  # targetphot
+    shape_e1_ivar = Column(REAL, nullable=False)  # targetphot
+    shape_e2_ivar = Column(REAL, nullable=False)  # targetphot
+    sersic = Column(REAL, nullable=False)  # targetphot, fiberassign
+    sersic_ivar = Column(REAL, nullable=False)  # targetphot
+    ref_id = Column(BigInteger, nullable=False)  # targetphot, fiberassign
+    ref_cat = Column(String(2), nullable=False)  # targetphot, fiberassign
+    gaia_phot_g_mean_mag = Column(REAL, nullable=False)  # targetphot, fiberassign
+    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)  # targetphot
+    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)  # targetphot, fiberassign
+    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)  # targetphot
+    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)  # targetphot, fiberassign
+    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)  # targetphot
+    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)  # targetphot
+    gaia_duplicated_source = Column(Boolean, nullable=False)  # targetphot
+    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)  # targetphot
+    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)  # targetphot, but inconsistent type!
+    parallax = Column(REAL, nullable=False)  # targetphot, fiberassign
+    parallax_ivar = Column(REAL, nullable=False)  # targetphot
+    pmra = Column(REAL, nullable=False)  # targetphot, fiberassign
+    pmra_ivar = Column(REAL, nullable=False)  # targetphot
+    pmdec = Column(REAL, nullable=False)  # targetphot, fiberassign
+    pmdec_ivar = Column(REAL, nullable=False)  # targetphot
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # targetphot, fiberassign
 
     targets = relationship("Target", back_populates="photometry")
     fiberassign = relationship("Fiberassign", back_populates="photometry")
@@ -742,22 +742,31 @@ def _survey_program(data):
     KeyError
         If a necessary header could not be found.
     """
-    for i, key in enumerate(('SURVEY', 'PROGRAM', 'SPGRP')):
-        try:
-            val = data.meta[key]
-        except KeyError:
-            log.error("Could not find %s in metadata!", key)
-            raise
-        log.debug("Adding %s column.", key)
-        data.add_column(np.array([val]*len(data)), name=key, index=i+1)
+    # for i, key in enumerate(('SURVEY', 'PROGRAM', 'SPGRP')):
+    for i, key in enumerate(('SURVEY', 'PROGRAM')):
+        if key in data.colnames:
+            log.info("Column %s is already in the table.", key)
+        else:
+            try:
+                val = data.meta[key]
+            except KeyError:
+                log.error("Could not find %s in metadata!", key)
+                raise
+            log.debug("Adding %s column.", key)
+            data.add_column(np.array([val]*len(data)), name=key, index=i+1)
+    objid, brickid, release, mock, sky, gaiadr = decode_targetid(data['TARGETID'])
+    data.add_column(sky, name='SKY', index=0)
+    if 'MAIN_NSPEC' not in data.colnames:
+        data.add_column(np.array([0]*len(data), dtype=np.int16), name='MAIN_NSPEC', index=data.colnames.index('SV_PRIMARY')+1)
+        data.add_column(np.array([False]*len(data), dtype=np.int16), name='MAIN_PRIMARY', index=data.colnames.index('MAIN_NSPEC')+1)
     if 'TILEID' in data.colnames:
-        objid, brickid, release, mock, sky, gaiadr = decode_targetid(data['TARGETID'])
-        data.add_column(sky, name='SKY', index=0)
+        data.add_column(np.array(['cumulative']*len(data)), name='SPGRP', index=data.colnames.index('PROGRAM')+1)
         data = _target_unique_id(data)
         data.rename_column('ID', 'TARGETPHOTID')
         s = np.array([spgrpid(s) for s in data['SPGRP']], dtype=np.int64)
         id0 = (s << 27 | data['SPGRPVAL'].base.astype(np.int64)) << 32 | data['TILEID'].base.astype(np.int64)
     else:
+        data.add_column(np.array(['healpix']*len(data)), name='SPGRP', index=data.colnames.index('PROGRAM')+1)
         s = np.array([surveyid(s) for s in data['SURVEY']], dtype=np.int64)
         p = np.array([programid(s) for s in data['PROGRAM']], dtype=np.int64)
         id0 = p << 32 | s
@@ -783,7 +792,39 @@ def _target_unique_id(data):
     id0 = s << 32 | data['TILEID'].base.astype(np.int64)
     composite_id = np.array([id0, data['TARGETID'].base]).T
     data.add_column(composite_id, name='ID', index=0)
-    return data
+
+
+def _deduplicate_targetid(data):
+    """Find targetphot rows that are not already loaded into the Photometry
+    table *and* resolve any duplicate TARGETID.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        Updated data table.
+    """
+    #
+    # Find TARGETIDs that do not exist in Photometry
+    #
+    load_rows = np.ones((len(data),), dtype=np.bool)
+    for targetid in np.unique(data['TARGETID'].data).tolist():
+        q = dbSession.query(Photometry.targetid).filter(Photometry.targetid == targetid).one()
+        if q is None:
+            log.debug("TARGETID = %d is missing from Photometry.", targetid)
+            unloaded_rows = data[data[TARGETID] == targetid]
+            multiplicity = len(unloaded_rows)
+        else:
+            multiplicity = 0
+            load_rows[data['TARGETID'] == targetid] = False
+        if multiplicity > 1:
+            log.info('Found %d rows with TARGETID = %d.', multiplicity, targetid)
+
+    return data[load_rows]
 
 
 def _remove_loaded_targetid(data):
@@ -1270,6 +1311,9 @@ def get_options(*args):
     prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
                       metavar='HOSTNAME', default='nerscdb03.nersc.gov',
                       help='If specified, connect to a PostgreSQL database on HOSTNAME (default %(default)s).')
+    prsr.add_argument('-l', '--load', action='store', dest='load',
+                      default='exposures', metavar='STAGE',
+                      help='Load the set of files associated with STAGE (default "%(default)s").')
     prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
@@ -1329,129 +1373,152 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Tile,
-               'hdu': 'TILE_COMPLETENESS',
-               'q3c': 'tilera',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-               {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Exposure,
-               'hdu': 'EXPOSURES',
-               'insert': {'mjd': ('date_obs',)},
-               'convert': {'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
-               'q3c': 'tilera',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Frame,
-               'hdu': 'FRAMES',
-               'preload': _frameid,
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-              },
-              {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'tractorphot', 'tractorphot*.fits')),
-               'tcls': Photometry,
-               'hdu': 'TRACTORPHOT',
-               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
-                          'OBJID': 'brick_objid',
-                          'TYPE': 'morphtype'},
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-              {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'tractorphot', 'tractorphot*.fits')),
-               'tcls': Photometry,
-               'hdu': 'TRACTORPHOT',
-               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
-                          'OBJID': 'brick_objid',
-                          'TYPE': 'morphtype'},
-               'rowfilter': _remove_loaded_targetid,
-               'q3c': 'ra',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-pix-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Zpix,
-               'hdu': 'ZCATALOG',
-               'preload': _survey_program,
-               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
-                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               },
-              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-tilecumulative-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-               'tcls': Ztile,
-               'hdu': 'ZCATALOG',
-               'preload': _survey_program,
-               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
-                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-               'convert': {'id': lambda x: x[0] << 64 | x[1],
-                           'targetphotid': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-               }]
-
-    #
-    # Load the tables that correspond to a small set of files.
-    #
-    for l in loader:
-        tn = l['tcls'].__tablename__
-        #
-        # Don't use .one().  It actually fetches *all* rows.
-        #
-        q = dbSession.query(l['tcls']).first()
-        if q is None:
-            log.info("Loading %s from %s.", tn, str(l['filepaths']))
-            load_file(**l)
-            log.info("Finished loading %s.", tn)
-        else:
-            log.info("%s table already loaded.", tn.title())
+    loaders = {'exposures': [{'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                              'tcls': Tile,
+                              'hdu': 'TILE_COMPLETENESS',
+                              'q3c': 'tilera',
+                              'chunksize': options.chunksize,
+                              'maxrows': options.maxrows
+                             },
+                             {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                              'tcls': Exposure,
+                              'hdu': 'EXPOSURES',
+                              'insert': {'mjd': ('date_obs',)},
+                              'convert': {'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
+                              'q3c': 'tilera',
+                              'chunksize': options.chunksize,
+                              'maxrows': options.maxrows
+                             },
+                             {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                              'tcls': Frame,
+                              'hdu': 'FRAMES',
+                              'preload': _frameid,
+                              'chunksize': options.chunksize,
+                               'maxrows': options.maxrows
+                             }],
+                'photometry': [{'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'tractorphot', 'tractorphot*.fits')),
+                                'tcls': Photometry,
+                                'hdu': 'TRACTORPHOT',
+                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
+                                           'OBJID': 'brick_objid',
+                                           'TYPE': 'morphtype'},
+                                'chunksize': options.chunksize,
+                                'maxrows': options.maxrows
+                               },
+                               {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'tractorphot', 'tractorphot*.fits')),
+                                'tcls': Photometry,
+                                'hdu': 'TRACTORPHOT',
+                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
+                                           'OBJID': 'brick_objid',
+                                           'TYPE': 'morphtype'},
+                                'rowfilter': _remove_loaded_targetid,
+                                'chunksize': options.chunksize,
+                                'maxrows': options.maxrows
+                               }],
+                'targetphot': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                                'tcls': Photometry,
+                                'hdu': 'TARGETPHOT',
+                                'preload': _deduplicate_targetid,
+                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+                                'rowfilter': _remove_loaded_targetid,
+                                'chunksize': options.chunksize,
+                                'maxrows': options.maxrows
+                               },
+                               {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                                'tcls': Photometry,
+                                'hdu': 'TARGETPHOT',
+                                'preload': _deduplicate_targetid,
+                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+                                'rowfilter': _remove_loaded_targetid,
+                                'q3c': 'ra',
+                                'chunksize': options.chunksize,
+                                'maxrows': options.maxrows
+                               }],
+                'target': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                            'tcls': Target,
+                            'hdu': 'TARGETPHOT',
+                            'preload': _target_unique_id,
+                            'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                            'chunksize': options.chunksize,
+                            'maxrows': options.maxrows
+                           },
+                           {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                            'tcls': Target,
+                            'hdu': 'TARGETPHOT',
+                            'preload': _target_unique_id,
+                            'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                            'chunksize': options.chunksize,
+                            'maxrows': options.maxrows
+                           }],
+                'redshift': [{'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-pix-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                              'tcls': Zpix,
+                              'hdu': 'ZCATALOG',
+                              'preload': _survey_program,
+                              'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                                   'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+                              'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                              'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
+                              'chunksize': options.chunksize,
+                              'maxrows': options.maxrows
+                             },
+                             {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-tilecumulative-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                             'tcls': Ztile,
+                             'hdu': 'ZCATALOG',
+                             'preload': _survey_program,
+                             'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                                  'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+                             'convert': {'id': lambda x: x[0] << 64 | x[1],
+                                         'targetphotid': lambda x: x[0] << 64 | x[1]},
+                             'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
+                             'chunksize': options.chunksize,
+                             'maxrows': options.maxrows
+                            }],
+                'fiberassign': [{'filepaths': None,
+                                 'tcls': Fiberassign,
+                                 'hdu': 'FIBERASSIGN',
+                                 'preload': _tileid,
+                                 'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                                 'rowfilter': lambda x: x['TARGETID'] > 0,
+                                 'q3c': 'target_ra',
+                                 'chunksize': options.chunksize,
+                                 'maxrows': options.maxrows
+                                },
+                                {'filepaths': None,
+                                 'tcls': Potential,
+                                 'hdu': 'POTENTIAL_ASSIGNMENTS',
+                                 'preload': _tileid,
+                                 'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                                 'rowfilter': lambda x: x['TARGETID'] > 0,
+                                 'chunksize': options.chunksize,
+                                 'maxrows': options.maxrows
+                                }]
+                }
+    try:
+        loader = loaders[options.load]
+    except KeyError:
+        log.critical("Unknown loading stage '%s'!", options.load)
+        return 1
     #
     # Find the tiles that need to be loaded. Not all fiberassign files are compressed!
     #
-    try:
-        fiberassign_files = [checkgzip(os.path.join(options.tilespath, (f"{tileid[0]:06d}")[0:3], f"fiberassign-{tileid[0]:06d}.fits"))
-                             for tileid in dbSession.query(Tile.tileid).order_by(Tile.tileid)]
-    except FileNotFoundError:
-        log.error("Some fiberassign files were not found!")
-        return 1
-    log.debug(fiberassign_files)
-    loader = [{'filepaths': fiberassign_files,
-               'tcls': Fiberassign,
-               'hdu': 'FIBERASSIGN',
-               'preload': _tileid,
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: x['TARGETID'] > 0,
-               'q3c': 'target_ra',
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-              },
-              {'filepaths': fiberassign_files,
-               'tcls': Potential,
-               'hdu': 'POTENTIAL_ASSIGNMENTS',
-               'preload': _tileid,
-               'convert': {'id': lambda x: x[0] << 64 | x[1]},
-               'rowfilter': lambda x: x['TARGETID'] > 0,
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows
-              }]
+    if options.load == 'fiberassign':
+        try:
+            fiberassign_files = [checkgzip(os.path.join(options.tilespath, (f"{tileid[0]:06d}")[0:3], f"fiberassign-{tileid[0]:06d}.fits"))
+                                for tileid in dbSession.query(Tile.tileid).order_by(Tile.tileid)]
+        except FileNotFoundError:
+            log.error("Some fiberassign files were not found!")
+            return 1
+        log.debug(fiberassign_files)
+        for k in range(len(loader)):
+            loader[k]['filepaths'] = fiberassign_files
+    #
+    # Load the tables that correspond to a set of files.
+    #
     for l in loader:
         tn = l['tcls'].__tablename__
-        #
-        # Don't use .one().  It actually fetches *all* rows.
-        #
-        q = dbSession.query(l['tcls']).first()
-        if q is None:
-            log.info("Loading %s from %s.", tn, str(l['filepaths']))
-            load_file(**l)
-            log.info("Finished loading %s.", tn)
-        else:
-            log.info("%s table already loaded.", tn.title())
+        log.info("Loading %s from %s.", tn, str(l['filepaths']))
+        load_file(**l)
+        log.info("Finished loading %s.", tn)
     return 0
 
 
