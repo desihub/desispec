@@ -682,6 +682,12 @@ def _read_sframesky(night, prod, expid):
                         sel = fibermap["OBJTYPE"] == "SKY"
                         fibermap = fibermap[sel]
                         flux = h["FLUX"].read()[sel]
+                        # AR set flux=np.nan for ivar=0 pixels
+                        # AR so that those are displayed with a special
+                        # AR color in the sframesky
+                        # AR ivar is not used further, so we do not propagate it
+                        ivar = h["IVAR"].read()[sel]
+                        flux[ivar == 0] = np.nan
                         wave = h["WAVELENGTH"].read()
                         flux_header = h["FLUX"].read_header()
                         fibermap_header = h["FIBERMAP"].read_header()
@@ -739,6 +745,8 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
     with pool:
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
+    cmap = matplotlib.cm.Greys_r
+    cmap.set_bad(color="y")
     with PdfPages(outpdf) as pdf:
         for mydict in mydicts:
             if mydict is not None:
@@ -751,7 +759,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                     nsky = 0
                     if "flux" in mydict[camera]:
                         nsky = mydict[camera]["flux"].shape[0]
-                        im = ax.imshow(mydict[camera]["flux"], cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1], zorder=0)
+                        im = ax.imshow(mydict[camera]["flux"], cmap=cmap, vmin=clim[0], vmax=clim[1], zorder=0)
                         for petal in petals:
                             ii = np.where(mydict[camera]["petals"] == petal)[0]
                             if len(ii) > 0:
@@ -1681,7 +1689,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
             "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
-            "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
+            "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nPixels with IVAR=0 are displayed in yellow.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
             "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
             "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)\nIn particular, if some maindark tiles have been observed, pay attention to the two Ly-a related plots on the first row.".format(night),
