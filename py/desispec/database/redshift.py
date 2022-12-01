@@ -817,7 +817,7 @@ def _deduplicate_targetid(data):
         q = dbSession.query(Photometry.targetid).filter(Photometry.targetid == int(t)).first()
         if q is None:
             log.debug("TARGETID = %d is missing from Photometry.", targetid)
-            multiplicity = targetid_counts[k]
+            multiplicity = int(targetid_counts[k])
         else:
             multiplicity = 0
             load_rows[targetid_index[k]] = False
