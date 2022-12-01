@@ -798,6 +798,8 @@ def _deduplicate_targetid(data):
     """Find targetphot rows that are not already loaded into the Photometry
     table *and* resolve any duplicate TARGETID.
 
+    Also add LS_ID.
+
     Parameters
     ----------
     data : :class:`astropy.table.Table`
@@ -808,23 +810,26 @@ def _deduplicate_targetid(data):
     :class:`astropy.table.Table`
         Updated data table.
     """
+    ls_id = ((data['RELEASE'].data.astype(np.int64) << 40) |
+             (data['BRICKID'].data.astype(np.int64) << 16) |
+             data['BRICK_OBJID'].data.astype(np.int64))
+    data.add_column(ls_id, name='LS_ID', index=0)
     #
     # Find TARGETIDs that do not exist in Photometry
     #
     load_rows = np.ones((len(data),), dtype=np.bool)
     targetid, targetid_index, targetid_inverse, targetid_counts = np.unique(data['TARGETID'].data, return_index=True, return_inverse=True, return_counts=True)
+    rows = dbSession.query(Photometry.targetid).order_by(Photometry.targetid).all()
+    loaded_targetid = np.array([r[0] for r in rows])
     for k, t in enumerate(targetid):
-        q = dbSession.query(Photometry.targetid).filter(Photometry.targetid == int(t)).first()
-        if q is None:
-            log.debug("TARGETID = %d is missing from Photometry.", targetid)
-            multiplicity = int(targetid_counts[k])
-        else:
-            multiplicity = 0
+        if t in loaded_targetid:
             load_rows[targetid_index[k]] = False
-        if multiplicity > 1:
-            log.info('Found %d rows with TARGETID = %d.', multiplicity, targetid)
-            extra_rows = np.nonzero(targetid_inverse == k)[0][1:]
-            load_rows[extra_rows] = False
+        else:
+            log.debug("TARGETID = %d is missing from Photometry.", t)
+            if targetid_counts[k] > 1:
+                log.info('Found %d rows with TARGETID = %d.', targetid_counts[k], t)
+                extra_rows = np.nonzero(targetid_inverse == k)[0][1:]
+                load_rows[extra_rows] = False
     return data[load_rows]
 
 
