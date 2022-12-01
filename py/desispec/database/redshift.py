@@ -812,18 +812,19 @@ def _deduplicate_targetid(data):
     # Find TARGETIDs that do not exist in Photometry
     #
     load_rows = np.ones((len(data),), dtype=np.bool)
-    for targetid in np.unique(data['TARGETID'].data).tolist():
-        q = dbSession.query(Photometry.targetid).filter(Photometry.targetid == targetid).one()
+    targetid, targetid_index, targetid_inverse, targetid_counts = np.unique(data['TARGETID'].data, return_index=True, return_inverse=True, return_counts=True)
+    for k, t in enumerate(targetid):
+        q = dbSession.query(Photometry.targetid).filter(Photometry.targetid == int(t)).first()
         if q is None:
             log.debug("TARGETID = %d is missing from Photometry.", targetid)
-            unloaded_rows = data[data[TARGETID] == targetid]
-            multiplicity = len(unloaded_rows)
+            multiplicity = targetid_counts[k]
         else:
             multiplicity = 0
-            load_rows[data['TARGETID'] == targetid] = False
+            load_rows[targetid_index[k]] = False
         if multiplicity > 1:
             log.info('Found %d rows with TARGETID = %d.', multiplicity, targetid)
-
+            extra_rows = np.nonzero(targetid_inverse == k)[0][1:]
+            load_rows[extra_rows] = False
     return data[load_rows]
 
 
