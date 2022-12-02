@@ -42,7 +42,7 @@ import sys
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table, MaskedColumn
+from astropy.table import Table, MaskedColumn, join
 from astropy.time import Time
 from pytz import utc
 
@@ -68,7 +68,6 @@ engine = None
 dbSession = scoped_session(sessionmaker())
 schemaname = None
 log = None
-_targetid_cache = None
 
 
 class SchemaMixin(object):
@@ -792,13 +791,11 @@ def _target_unique_id(data):
     id0 = s << 32 | data['TILEID'].base.astype(np.int64)
     composite_id = np.array([id0, data['TARGETID'].base]).T
     data.add_column(composite_id, name='ID', index=0)
+    return data
 
 
-def _deduplicate_targetid(data):
-    """Find targetphot rows that are not already loaded into the Photometry
-    table *and* resolve any duplicate TARGETID.
-
-    Also add LS_ID.
+def _add_ls_id(data):
+    """Add LS_ID to targetphot data.
 
     Parameters
     ----------
@@ -814,23 +811,37 @@ def _deduplicate_targetid(data):
              (data['BRICKID'].data.astype(np.int64) << 16) |
              data['BRICK_OBJID'].data.astype(np.int64))
     data.add_column(ls_id, name='LS_ID', index=0)
+    return data
+
+
+def _deduplicate_targetid(data):
+    """Find targetphot rows that are not already loaded into the Photometry
+    table *and* resolve any duplicate TARGETID.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`numpy.array`
+        An array of rows that are safe to load.
+    """
+    rows = dbSession.query(Photometry.targetid, Photometry.ls_id).order_by(Photometry.targetid).all()
+    loaded_targetid = Table()
+    loaded_targetid['TARGETID'] = np.array([r[0] for r in rows])
+    loaded_targetid['LS_ID'] = np.array([r[1] for r in rows])
     #
     # Find TARGETIDs that do not exist in Photometry
     #
-    load_rows = np.ones((len(data),), dtype=np.bool)
-    targetid, targetid_index, targetid_inverse, targetid_counts = np.unique(data['TARGETID'].data, return_index=True, return_inverse=True, return_counts=True)
-    rows = dbSession.query(Photometry.targetid).order_by(Photometry.targetid).all()
-    loaded_targetid = np.array([r[0] for r in rows])
-    for k, t in enumerate(targetid):
-        if t in loaded_targetid:
-            load_rows[targetid_index[k]] = False
-        else:
-            log.debug("TARGETID = %d is missing from Photometry.", t)
-            if targetid_counts[k] > 1:
-                log.info('Found %d rows with TARGETID = %d.', targetid_counts[k], t)
-                extra_rows = np.nonzero(targetid_inverse == k)[0][1:]
-                load_rows[extra_rows] = False
-    return data[load_rows]
+    j = join(data['TARGETID', 'RELEASE'], loaded_targetid, join_type='left', keys='TARGETID')
+    load_targetids = j['TARGETID'][j['LS_ID'].mask]
+    load_rows = np.zeros((len(data),), dtype=np.bool)
+    unique_targetid, targetid_index = np.unique(data['TARGETID'].data, return_index=True)
+    for t in load_targetids:
+        load_rows[targetid_index[unique_targetid == t]] = True
+    return load_rows
 
 
 def _remove_loaded_targetid(data):
@@ -851,6 +862,54 @@ def _remove_loaded_targetid(data):
     q = dbSession.query(Photometry.targetid).filter(Photometry.targetid.in_(targetid.tolist())).all()
     for row in q:
         good_rows[targetid == row[0]] = False
+    return good_rows
+
+
+def _remove_loaded_unique_id(data):
+    """Remove rows with UNIQUE ID already loaded into the database.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`numpy.array`
+        An array of rows that are safe to load.
+    """
+    rows = dbSession.query(Target.targetid, Target.survey, Target.tileid, Target.release).order_by(Target.targetid).all()
+    loaded_id = Table()
+    loaded_id['TARGETID'] = np.array([r[0] for r in rows], dtype=np.int64)
+    loaded_id['SURVEY'] = np.array([r[1] for r in rows])
+    loaded_id['TILEID'] = np.array([r[2] for r in rows], dtype=np.int32)
+    loaded_id['RELEASE'] = np.array([r[3] for r in rows], dtype=np.int16)
+    j = join(data['TARGETID', 'SURVEY', 'TILEID', 'RELEASE'], loaded_id,
+             join_type='left', keys=('TARGETID', 'SURVEY', 'TILEID'),
+             table_names=['POTENTIAL', 'OBSERVED'])
+    # w = j['RELEASE_OBSERVED'].mask
+    # load_surveyid = (np.array([surveyid(s) for s in j['SURVEY'][w]], dtype=np.int64) << 32 |
+    #                  j['TILEID'][w].data.astype(np.int64))
+    # load_id = np.array([load_surveyid, j['TARGETID'][w].data]).T
+    ww = ~j['RELEASE_OBSERVED'].mask
+    omit_surveyid = (np.array([surveyid(s) for s in j['SURVEY'][ww]], dtype=np.int64) << 32 |
+                     j['TILEID'][ww].data.astype(np.int64))
+    omit_id = np.array([load_surveyid, j['TARGETID'][ww].data]).T
+    good_rows = np.ones((len(data),), dtype=np.bool)
+    for k in range(omit_id.shape[0]):
+        good_rows[(data['ID'] == omit_id[k,:]).all()] = False
+
+    # load_rows = np.zeros((len(data),), dtype=np.bool)
+    # unique_targetid, targetid_index = np.unique(data['TARGETID'].data, return_index=True)
+    # for t in load_targetids:
+    #     load_rows[targetid_index[unique_targetid == t]] = True
+    # return load_rows
+
+    # unique_id = [u[0] << 64 | u[1] for u in data['ID'].data.tolist()]
+    # good_rows = np.ones((len(unique_id),), dtype=np.bool)
+    # q = dbSession.query(Target.id).all()
+    # for row in q:
+    #     good_rows[unique_id.index(row[0])] = False
     return good_rows
 
 
@@ -900,7 +959,6 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
     :class:`int`
         The grand total of rows loaded.
     """
-    global _targetid_cache
     tn = tcls.__tablename__
     if isinstance(filepaths, str):
         filepaths = [filepaths]
@@ -1424,35 +1482,39 @@ def main():
                 'targetphot': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                                 'tcls': Photometry,
                                 'hdu': 'TARGETPHOT',
-                                'preload': _deduplicate_targetid,
+                                'preload': _add_ls_id,
                                 'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-                                'rowfilter': _remove_loaded_targetid,
+                                'convert': {'gaia_astrometric_params_solved': lambda x: int(x)},
+                                'rowfilter': _deduplicate_targetid,
                                 'chunksize': options.chunksize,
                                 'maxrows': options.maxrows
                                },
                                {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                                 'tcls': Photometry,
                                 'hdu': 'TARGETPHOT',
-                                'preload': _deduplicate_targetid,
+                                'preload': _add_ls_id,
                                 'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-                                'rowfilter': _remove_loaded_targetid,
+                                'convert': {'gaia_astrometric_params_solved': lambda x: int(x)},
+                                'rowfilter': _deduplicate_targetid,
                                 'q3c': 'ra',
                                 'chunksize': options.chunksize,
                                 'maxrows': options.maxrows
                                }],
-                'target': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                            'tcls': Target,
-                            'hdu': 'TARGETPHOT',
-                            'preload': _target_unique_id,
-                            'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                            'chunksize': options.chunksize,
-                            'maxrows': options.maxrows
-                           },
+                'target': [
+                        #    {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                        #     'tcls': Target,
+                        #     'hdu': 'TARGETPHOT',
+                        #     'preload': _target_unique_id,
+                        #     'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                        #     'chunksize': options.chunksize,
+                        #     'maxrows': options.maxrows
+                        #    },
                            {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                             'tcls': Target,
                             'hdu': 'TARGETPHOT',
                             'preload': _target_unique_id,
                             'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                            'rowfilter': _remove_loaded_unique_id,
                             'chunksize': options.chunksize,
                             'maxrows': options.maxrows
                            }],
@@ -1468,17 +1530,17 @@ def main():
                               'maxrows': options.maxrows
                              },
                              {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'zcatalog', 'zall-tilecumulative-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                             'tcls': Ztile,
-                             'hdu': 'ZCATALOG',
-                             'preload': _survey_program,
-                             'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
-                                                  'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-                             'convert': {'id': lambda x: x[0] << 64 | x[1],
-                                         'targetphotid': lambda x: x[0] << 64 | x[1]},
-                             'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
-                             'chunksize': options.chunksize,
-                             'maxrows': options.maxrows
-                            }],
+                              'tcls': Ztile,
+                              'hdu': 'ZCATALOG',
+                              'preload': _survey_program,
+                              'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                                   'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+                              'convert': {'id': lambda x: x[0] << 64 | x[1],
+                                          'targetphotid': lambda x: x[0] << 64 | x[1]},
+                              'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
+                              'chunksize': options.chunksize,
+                              'maxrows': options.maxrows
+                             }],
                 'fiberassign': [{'filepaths': None,
                                  'tcls': Fiberassign,
                                  'hdu': 'FIBERASSIGN',
