@@ -50,14 +50,14 @@ from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Boolean, Integer, String, Float, DateTime,
                         SmallInteger, bindparam, Numeric)
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
-from sqlalchemy.orm import scoped_session, sessionmaker, relationship
-from sqlalchemy.schema import CreateSchema
+from sqlalchemy.orm import (declarative_base, declarative_mixin, declared_attr,
+                            scoped_session, sessionmaker, relationship)
+from sqlalchemy.schema import CreateSchema, Index
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL
 
 from desiutil.iers import freeze_iers
 from desiutil.log import get_logger, DEBUG, INFO
-from desitarget.targets import decode_targetid
+# from desitarget.targets import decode_targetid
 
 from ..io.meta import specprod_root, faflavor2program
 from ..io.util import checkgzip
@@ -69,7 +69,7 @@ dbSession = scoped_session(sessionmaker())
 schemaname = None
 log = None
 
-
+@declarative_mixin
 class SchemaMixin(object):
     """Mixin class to allow schema name to be changed at runtime. Also
     automatically sets the table name.
@@ -210,6 +210,10 @@ class Target(SchemaMixin, Base):
     """Representation of the pure-desitarget quantities in the
     ``TARGETPHOT`` table in the targetphot files.
     """
+    @declared_attr
+    def __table_args__(cls):
+        return (Index(f'ix_{cls.__tablename__}_unique', "targetid", "survey", "tileid", unique=True),
+                SchemaMixin.__table_args__)
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)  # fiberassign
@@ -446,13 +450,17 @@ class Fiberassign(SchemaMixin, Base):
       be different if chromatic offsets in targeting positions were
       ever implemented.
     """
+    @declared_attr
+    def __table_args__(cls):
+        return (Index(f'ix_{cls.__tablename__}_unique', "tileid", "targetid", "location", unique=True),
+                SchemaMixin.__table_args__)
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
     targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
-    location = Column(Integer, nullable=False)
+    location = Column(Integer, nullable=False, index=True)
     fiber = Column(Integer, nullable=False)
     fiberstatus = Column(Integer, nullable=False)
     target_ra = Column(DOUBLE_PRECISION, nullable=False)
@@ -476,12 +484,16 @@ class Fiberassign(SchemaMixin, Base):
 class Potential(SchemaMixin, Base):
     """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
     """
+    @declared_attr
+    def __table_args__(cls):
+        return (Index(f'ix_{cls.__tablename__}_unique', "tileid", "targetid", "location", unique=True),
+                SchemaMixin.__table_args__)
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
     targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
     fiber = Column(Integer, nullable=False)
-    location = Column(Integer, nullable=False)
+    location = Column(Integer, nullable=False, index=True)
 
     photometry = relationship("Photometry", back_populates="potential")
     tile = relationship("Tile", back_populates="potential")
@@ -493,6 +505,10 @@ class Potential(SchemaMixin, Base):
 class Zpix(SchemaMixin, Base):
     """Representation of the ``ZCATALOG`` table in zpix files.
     """
+    @declared_attr
+    def __table_args__(cls):
+        return (Index(f'ix_{cls.__tablename__}_unique', "targetid", "survey", "program", unique=True),
+                SchemaMixin.__table_args__)
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetid = Column(BigInteger, ForeignKey('photometry.targetid'), nullable=False, index=True)
@@ -585,6 +601,10 @@ class Zpix(SchemaMixin, Base):
 class Ztile(SchemaMixin, Base):
     """Representation of the ``ZCATALOG`` table in ztile files.
     """
+    @declared_attr
+    def __table_args__(cls):
+        return (Index(f'ix_{cls.__tablename__}_unique', "targetid", "spgrp", "spgrpval", "tileid", unique=True),
+                SchemaMixin.__table_args__)
 
     id = Column(Numeric(39), primary_key=True, autoincrement=False)
     targetphotid = Column(Numeric(39), ForeignKey("target.id"), nullable=False, index=True)
@@ -753,8 +773,8 @@ def _survey_program(data):
                 raise
             log.debug("Adding %s column.", key)
             data.add_column(np.array([val]*len(data)), name=key, index=i+1)
-    objid, brickid, release, mock, sky, gaiadr = decode_targetid(data['TARGETID'])
-    data.add_column(sky, name='SKY', index=0)
+    # objid, brickid, release, mock, sky, gaiadr = decode_targetid(data['TARGETID'])
+    # data.add_column(sky, name='SKY', index=0)
     if 'MAIN_NSPEC' not in data.colnames:
         data.add_column(np.array([0]*len(data), dtype=np.int16), name='MAIN_NSPEC', index=data.colnames.index('SV_PRIMARY')+1)
         data.add_column(np.array([False]*len(data), dtype=np.int16), name='MAIN_PRIMARY', index=data.colnames.index('MAIN_NSPEC')+1)
@@ -837,7 +857,7 @@ def _deduplicate_targetid(data):
     #
     j = join(data['TARGETID', 'RELEASE'], loaded_targetid, join_type='left', keys='TARGETID')
     load_targetids = j['TARGETID'][j['LS_ID'].mask]
-    load_rows = np.zeros((len(data),), dtype=np.bool)
+    load_rows = np.zeros((len(data),), dtype=bool)
     unique_targetid, targetid_index = np.unique(data['TARGETID'].data, return_index=True)
     for t in load_targetids:
         load_rows[targetid_index[unique_targetid == t]] = True
@@ -858,7 +878,7 @@ def _remove_loaded_targetid(data):
         An array of rows that are safe to load.
     """
     targetid = data['TARGETID'].data
-    good_rows = np.ones((len(targetid),), dtype=np.bool)
+    good_rows = np.ones((len(targetid),), dtype=bool)
     q = dbSession.query(Photometry.targetid).filter(Photometry.targetid.in_(targetid.tolist())).all()
     for row in q:
         good_rows[targetid == row[0]] = False
@@ -878,38 +898,14 @@ def _remove_loaded_unique_id(data):
     :class:`numpy.array`
         An array of rows that are safe to load.
     """
-    rows = dbSession.query(Target.targetid, Target.survey, Target.tileid, Target.release).order_by(Target.targetid).all()
-    loaded_id = Table()
-    loaded_id['TARGETID'] = np.array([r[0] for r in rows], dtype=np.int64)
-    loaded_id['SURVEY'] = np.array([r[1] for r in rows])
-    loaded_id['TILEID'] = np.array([r[2] for r in rows], dtype=np.int32)
-    loaded_id['RELEASE'] = np.array([r[3] for r in rows], dtype=np.int16)
-    j = join(data['TARGETID', 'SURVEY', 'TILEID', 'RELEASE'], loaded_id,
-             join_type='left', keys=('TARGETID', 'SURVEY', 'TILEID'),
-             table_names=['POTENTIAL', 'OBSERVED'])
-    # w = j['RELEASE_OBSERVED'].mask
-    # load_surveyid = (np.array([surveyid(s) for s in j['SURVEY'][w]], dtype=np.int64) << 32 |
-    #                  j['TILEID'][w].data.astype(np.int64))
-    # load_id = np.array([load_surveyid, j['TARGETID'][w].data]).T
-    ww = ~j['RELEASE_OBSERVED'].mask
-    omit_surveyid = (np.array([surveyid(s) for s in j['SURVEY'][ww]], dtype=np.int64) << 32 |
-                     j['TILEID'][ww].data.astype(np.int64))
-    omit_id = np.array([load_surveyid, j['TARGETID'][ww].data]).T
-    good_rows = np.ones((len(data),), dtype=np.bool)
-    for k in range(omit_id.shape[0]):
-        good_rows[(data['ID'] == omit_id[k,:]).all()] = False
-
-    # load_rows = np.zeros((len(data),), dtype=np.bool)
-    # unique_targetid, targetid_index = np.unique(data['TARGETID'].data, return_index=True)
-    # for t in load_targetids:
-    #     load_rows[targetid_index[unique_targetid == t]] = True
-    # return load_rows
-
-    # unique_id = [u[0] << 64 | u[1] for u in data['ID'].data.tolist()]
-    # good_rows = np.ones((len(unique_id),), dtype=np.bool)
-    # q = dbSession.query(Target.id).all()
-    # for row in q:
-    #     good_rows[unique_id.index(row[0])] = False
+    rows = dbSession.query(Target.id).all()
+    loaded_id = [r[0] for r in rows]
+    data_id = [(int(data['ID'][k][0]) << 64) | int(data['ID'][k][1])
+               for k in range(len(data))]
+    id_index = dict(zip(data_id, range(len(data))))
+    good_rows = np.ones((len(data),), dtype=bool)
+    for i in loaded_id:
+        good_rows[id_index[i]] = False
     return good_rows
 
 
@@ -1016,7 +1012,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
                         data[col][0:mr][bad] = -9999.0
         log.info("Integrity check complete on %s.", tn)
         if rowfilter is None:
-            good_rows = np.ones((mr,), dtype=np.bool)
+            good_rows = np.ones((mr,), dtype=bool)
         else:
             good_rows = rowfilter(data[0:mr])
         log.info("Row filter applied on %s; %d rows remain.", tn, good_rows.sum())
@@ -1500,15 +1496,14 @@ def main():
                                 'chunksize': options.chunksize,
                                 'maxrows': options.maxrows
                                }],
-                'target': [
-                        #    {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                        #     'tcls': Target,
-                        #     'hdu': 'TARGETPHOT',
-                        #     'preload': _target_unique_id,
-                        #     'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                        #     'chunksize': options.chunksize,
-                        #     'maxrows': options.maxrows
-                        #    },
+                'target': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                            'tcls': Target,
+                            'hdu': 'TARGETPHOT',
+                            'preload': _target_unique_id,
+                            'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                            'chunksize': options.chunksize,
+                            'maxrows': options.maxrows
+                           },
                            {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                             'tcls': Target,
                             'hdu': 'TARGETPHOT',
@@ -1525,7 +1520,7 @@ def main():
                               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                               'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                              'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
+                              'rowfilter': lambda x: (x['TARGETID'] > 0) & ((x['TARGETID'] & 2**59) == 0),
                               'chunksize': options.chunksize,
                               'maxrows': options.maxrows
                              },
@@ -1537,7 +1532,7 @@ def main():
                                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                               'convert': {'id': lambda x: x[0] << 64 | x[1],
                                           'targetphotid': lambda x: x[0] << 64 | x[1]},
-                              'rowfilter': lambda x: (x['TARGETID'] > 0) & (x['SKY'] == 0),
+                              'rowfilter': lambda x: (x['TARGETID'] > 0) & ((x['TARGETID'] & 2**59) == 0),
                               'chunksize': options.chunksize,
                               'maxrows': options.maxrows
                              }],
@@ -1546,7 +1541,7 @@ def main():
                                  'hdu': 'FIBERASSIGN',
                                  'preload': _tileid,
                                  'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                                 'rowfilter': lambda x: x['TARGETID'] > 0,
+                                 'rowfilter': lambda x: (x['TARGETID'] > 0) & ((x['TARGETID'] & 2**59) == 0),
                                  'q3c': 'target_ra',
                                  'chunksize': options.chunksize,
                                  'maxrows': options.maxrows
@@ -1556,7 +1551,7 @@ def main():
                                  'hdu': 'POTENTIAL_ASSIGNMENTS',
                                  'preload': _tileid,
                                  'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                                 'rowfilter': lambda x: x['TARGETID'] > 0,
+                                 'rowfilter': lambda x: (x['TARGETID'] > 0) & ((x['TARGETID'] & 2**59) == 0),
                                  'chunksize': options.chunksize,
                                  'maxrows': options.maxrows
                                 }]
