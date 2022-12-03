@@ -778,6 +778,9 @@ def _survey_program(data):
     if 'MAIN_NSPEC' not in data.colnames:
         data.add_column(np.array([0]*len(data), dtype=np.int16), name='MAIN_NSPEC', index=data.colnames.index('SV_PRIMARY')+1)
         data.add_column(np.array([False]*len(data), dtype=np.int16), name='MAIN_PRIMARY', index=data.colnames.index('MAIN_NSPEC')+1)
+    if 'SV_NSPEC' not in data.colnames:
+        data.add_column(np.array([0]*len(data), dtype=np.int16), name='SV_NSPEC', index=data.colnames.index('TSNR2_LRG')+1)
+        data.add_column(np.array([False]*len(data), dtype=np.int16), name='SV_PRIMARY', index=data.colnames.index('SV_NSPEC')+1)
     if 'TILEID' in data.colnames:
         data.add_column(np.array(['cumulative']*len(data)), name='SPGRP', index=data.colnames.index('PROGRAM')+1)
         data = _target_unique_id(data)
@@ -1456,35 +1459,40 @@ def main():
                               'chunksize': options.chunksize,
                                'maxrows': options.maxrows
                              }],
-                'photometry': [{'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'tractorphot', 'tractorphot*.fits')),
-                                'tcls': Photometry,
-                                'hdu': 'TRACTORPHOT',
-                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
-                                           'OBJID': 'brick_objid',
-                                           'TYPE': 'morphtype'},
-                                'chunksize': options.chunksize,
-                                'maxrows': options.maxrows
-                               },
+                'photometry': [
+                            #
+                            # TEST: in principle, the potential targets include data for all targets.
+                            #
+                            #    {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'tractorphot', 'tractorphot*.fits')),
+                            #     'tcls': Photometry,
+                            #     'hdu': 'TRACTORPHOT',
+                            #     'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
+                            #                'OBJID': 'brick_objid',
+                            #                'TYPE': 'morphtype'},
+                            #     'chunksize': options.chunksize,
+                            #     'maxrows': options.maxrows
+                            #    },
                                {'filepaths': glob.glob(os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'tractorphot', 'tractorphot*.fits')),
                                 'tcls': Photometry,
                                 'hdu': 'TRACTORPHOT',
                                 'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',),
                                            'OBJID': 'brick_objid',
                                            'TYPE': 'morphtype'},
-                                'rowfilter': _remove_loaded_targetid,
+                                # 'rowfilter': _remove_loaded_targetid,
                                 'chunksize': options.chunksize,
                                 'maxrows': options.maxrows
                                }],
-                'targetphot': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                                'tcls': Photometry,
-                                'hdu': 'TARGETPHOT',
-                                'preload': _add_ls_id,
-                                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-                                'convert': {'gaia_astrometric_params_solved': lambda x: int(x)},
-                                'rowfilter': _deduplicate_targetid,
-                                'chunksize': options.chunksize,
-                                'maxrows': options.maxrows
-                               },
+                'targetphot': [
+                            #    {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                            #     'tcls': Photometry,
+                            #     'hdu': 'TARGETPHOT',
+                            #     'preload': _add_ls_id,
+                            #     'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+                            #     'convert': {'gaia_astrometric_params_solved': lambda x: int(x)},
+                            #     'rowfilter': _deduplicate_targetid,
+                            #     'chunksize': options.chunksize,
+                            #     'maxrows': options.maxrows
+                            #    },
                                {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                                 'tcls': Photometry,
                                 'hdu': 'TARGETPHOT',
@@ -1496,20 +1504,21 @@ def main():
                                 'chunksize': options.chunksize,
                                 'maxrows': options.maxrows
                                }],
-                'target': [{'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                            'tcls': Target,
-                            'hdu': 'TARGETPHOT',
-                            'preload': _target_unique_id,
-                            'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                            'chunksize': options.chunksize,
-                            'maxrows': options.maxrows
-                           },
+                'target': [
+                        #    {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'observed-targets', 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                        #     'tcls': Target,
+                        #     'hdu': 'TARGETPHOT',
+                        #     'preload': _target_unique_id,
+                        #     'convert': {'id': lambda x: x[0] << 64 | x[1]},
+                        #     'chunksize': options.chunksize,
+                        #     'maxrows': options.maxrows
+                        #    },
                            {'filepaths': os.path.join(options.targetpath, 'vac', 'lsdr9-photometry', os.environ['SPECPROD'], 'v1.0', 'potential-targets', 'targetphot-potential-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                             'tcls': Target,
                             'hdu': 'TARGETPHOT',
                             'preload': _target_unique_id,
                             'convert': {'id': lambda x: x[0] << 64 | x[1]},
-                            'rowfilter': _remove_loaded_unique_id,
+                            # 'rowfilter': _remove_loaded_unique_id,
                             'chunksize': options.chunksize,
                             'maxrows': options.maxrows
                            }],
