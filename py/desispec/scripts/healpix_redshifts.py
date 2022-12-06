@@ -66,6 +66,7 @@ def main(args):
     for i in range(0, len(allpixels), args.bundle_healpix):
         healpixels = allpixels[i:i+args.bundle_healpix]
         expfiles = list()
+        ntilepetals = 0
         for healpix in healpixels:
             #- outdir is relative to specprod
             rrfile = io.findfile('redrock', healpix=healpix, survey=args.survey, faprogram=args.program)
@@ -75,6 +76,7 @@ def main(args):
             ii = exppix['HEALPIX'] == healpix
             expfile = f'{outdir}/hpixexp-{args.survey}-{args.program}-{healpix}.csv'
             exppix[ii].write(expfile, overwrite=True)
+            ntilepetals += len(set(list(zip(exppix['TILEID'][ii], exppix['SPECTRO'][ii]))))
             expfiles.append(expfile)
 
         cmdline = [
@@ -88,6 +90,8 @@ def main(args):
         cmdline.append('--expfiles')
         cmdline.extend(expfiles)
 
+        #- very roughly, one minute per input tile-petal with min/max applied
+        runtime = max(20, min(ntilepetals, 120))
 
         batchscript = create_desi_zproc_batch_script(
                 group='healpix',
@@ -97,6 +101,7 @@ def main(args):
                 queue=args.batch_queue,
                 system_name=args.system_name,
                 cmdline=cmdline,
+                runtime=runtime,
                 )
 
         if not args.nosubmit:

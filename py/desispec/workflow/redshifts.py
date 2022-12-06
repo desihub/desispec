@@ -145,7 +145,7 @@ def create_desi_zproc_batch_script(group,
         healpix (list of int): healpixels to process (group='healpix')
         queue (str): Queue to be used.
         batch_opts (str): Other options to give to the slurm batch scheduler (written into the script).
-        runtime (str): Timeout wall clock time.
+        runtime (str): Timeout wall clock time in minutes.
         timingfile (str): Specify the name of the timing file.
         batchdir (str): can define an alternative location to write the file. The default
                   is to SPECPROD under run/scripts/tiles/GROUP/TILE/NIGHT
