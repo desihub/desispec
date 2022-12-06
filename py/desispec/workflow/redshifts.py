@@ -98,7 +98,7 @@ def get_zpix_redshift_script_pathname(healpix, survey, program):
     """Return healpix-based coadd+redshift+afterburner script pathname
 
     Args:
-        healpix (int): healpixel
+        healpix (int or array-like): healpixel(s)
         survey (str): DESI survey, e.g. main, sv1, sv3
         program (str): survey program, e.g. dark, bright, backup
 

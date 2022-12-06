@@ -56,8 +56,8 @@ def parse(options=None):
 
     parser.add_argument("-g", "--groupname", type=str,
                         help="Redshift grouping type: cumulative, perexp, pernight, healpix")
-    parser.add_argument("--expfile",
-                        help="csv file with NIGHT,EXPID to use, plus HEALPIX,SPECTRO for --groupname=healpix")
+    parser.add_argument("--expfiles", nargs='*',
+                        help="csv files with NIGHT,EXPID to use, plus HEALPIX,SPECTRO for --groupname=healpix")
 
     #- Options for tile-based redshifts
     parser.add_argument("-t", "--tileid", type=int, default=None,
@@ -284,14 +284,14 @@ def main(args=None, comm=None):
     hpixexp = None
     if rank == 0:
 
-        if groupname != 'healpix' and args.expfile is not None:
-            tmp = Table.read(args.expfile)
+        if groupname != 'healpix' and args.expfiles is not None:
+            tmp = vstack([Table.read(fn) for fn in args.expfiles])
             args.expids = list(tmp['EXPID'])
             args.nights = list(tmp['NIGHT'])
 
         if groupname == 'healpix':
-            if args.expfile is not None:
-                hpixexp = Table.read(args.expfile)
+            if args.expfiles is not None:
+                hpixexp = vstack([Table.read(fn) for fn in args.expfiles])
             else:
                 from desispec.pixgroup import get_exp2healpix_map
                 hpixexp = get_exp2healpix_map()

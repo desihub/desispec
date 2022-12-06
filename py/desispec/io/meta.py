@@ -249,6 +249,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
         except (TypeError, ValueError):
             pass
 
+    #- tile or healpix but not both
+    if tile is not None and healpix is not None:
+        raise ValueError(f'Set healpix or tile but not both ({healpix}, {tile})')
+
+    #- Setting healpix implies groupname='healpix'
+    if healpix is not None and groupname is None:
+        groupname = 'healpix'
+
     #- be robust to str vs. int
     if isinstance(healpix, str): healpix = int(healpix)
     if isinstance(night, str):   night = int(night)
