@@ -444,7 +444,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores = nodes * config['cores_per_node']
     elif jobdesc == 'HEALPIX':
         nodes = 1
-        runtime = 60
+        runtime = 100
         ncores = nodes * config['cores_per_node']
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)

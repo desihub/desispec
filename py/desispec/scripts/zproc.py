@@ -519,9 +519,17 @@ def main(args=None, comm=None):
         rrlog = findfile('redrock', logfile=True, **findfileopts)
         redrock_cmd = "rrdesi_mpi"
 
+        #- Check number of targets; currently gpu only works with <= 1000 due to memory
+        #- NAXIS2 = number of rows in the coadded fibermap table
+        ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']
+
         cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
         if not args.no_gpu:
-            cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
+            if ntargets <= 1000:
+                cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
+            else:
+                if rank == 0:
+                    log.warning(f'Not using GPU for {os.path.basename(coaddfile)} with {ntargets}>1000 targets')
 
         cmdargs = cmd.split()[1:]
         if args.dryrun:
