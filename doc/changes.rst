@@ -11,12 +11,15 @@ desispec Change Log
 * cosmics parameters in yaml file for 500 micron mosaic z5 CCD (PR `#1905`_).
 * cosmics_nsig default cleanup (PR `#1906`_).
 * Reduce size of jobgraph diagrams (PR `#1910`_).
+* Merge ongoing work on spectroscopic production database in preparation for
+  EDR (PR `#1928`_).
 
 .. _`#1858`: https://github.com/desihub/desispec/pull/1858
 .. _`#1901`: https://github.com/desihub/desispec/pull/1901
 .. _`#1905`: https://github.com/desihub/desispec/pull/1905
 .. _`#1906`: https://github.com/desihub/desispec/pull/1906
 .. _`#1910`: https://github.com/desihub/desispec/pull/1910
+.. _`#1928`: https://github.com/desihub/desispec/pull/1928
 
 0.55.0 (2022-11-11)
 -------------------

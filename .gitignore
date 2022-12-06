@@ -30,6 +30,8 @@ distribute-*.tar.gz
 # Other
 .*.swp
 *~
+.vscode
+.env
 
 # Test directories and files
 test-*.fits
@@ -37,6 +39,7 @@ test*.fits.gz
 test-*
 test_raw-*
 test_redux-*
+.pytest_cache
 
 # Mac OSX
 .DS_Store
