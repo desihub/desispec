@@ -445,8 +445,14 @@ def main(args=None, comm=None):
                         filename = findfile('cframe', night=night, expid=expid, camera=camera)
                         if os.path.exists(filename):
                             cframes.append(filename)
+                        else:
+                            log.warning(f'Missing {filename}')
 
-                assert len(cframes) >= 3
+                if len(cframes) < 3:
+                    log.error(f'healpix {healpix} only has {len(cframes)} cframes; skipping')
+                    error_count += 1
+                    continue
+
             else:
                 spectro = all_subgroups[i]
                 findfileopts['spectrograph'] = spectro
@@ -521,29 +527,39 @@ def main(args=None, comm=None):
 
         #- Check number of targets; currently gpu only works with <= 1000 due to memory
         #- NAXIS2 = number of rows in the coadded fibermap table
-        ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']
-
-        cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
-        if not args.no_gpu:
-            if ntargets <= 1000:
-                cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
+        if rank == 0:
+            if os.path.exists(coaddfile):
+                ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']
             else:
+                log.error(f"Missing {coaddfile}; can't run redrock")
+                ntargets = -1
+                error_count += 1
+
+        if comm is not None:
+            ntargets = comm.bcast(ntargets, root=0)
+
+        if ntargets > 0:
+            cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
+            if not args.no_gpu:
+                if ntargets <= 1000:
+                    cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
+                else:
+                    if rank == 0:
+                        log.warning(f'Not using GPU for {os.path.basename(coaddfile)} with {ntargets}>1000 targets')
+
+            cmdargs = cmd.split()[1:]
+            if args.dryrun:
                 if rank == 0:
-                    log.warning(f'Not using GPU for {os.path.basename(coaddfile)} with {ntargets}>1000 targets')
+                    log.info(f"dryrun: Would have run {cmd}")
+            else:
+                with stdouterr_redirected(rrlog, comm=comm):
+                    result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
+                                             inputs=[coaddfile], outputs=[rrfile, rdfile])
 
-        cmdargs = cmd.split()[1:]
-        if args.dryrun:
-            if rank == 0:
-                log.info(f"dryrun: Would have run {cmd}")
-        else:
-            with stdouterr_redirected(rrlog, comm=comm):
-                result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
-                                         inputs=[coaddfile], outputs=[rrfile, rdfile])
-
-        ## Since all ranks running redrock, only count failure/success once
-        if rank == 0 and not success:
-            log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
-            error_count += 1
+            ## Since all ranks running redrock, only count failure/success once
+            if rank == 0 and not success:
+                log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
+                error_count += 1
 
         ## Since all ranks running redrock, ensure we're all moving on to next
         ## iteration together
