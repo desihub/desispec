@@ -11,9 +11,9 @@ import subprocess
 from copy import deepcopy
 
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
-from desispec.workflow.redshifts import get_tile_redshift_script_pathname, \
-                                        get_tile_redshift_relpath, \
-                                        get_tile_redshift_script_suffix
+from desispec.workflow.redshifts import get_ztile_script_pathname, \
+                                        get_ztile_relpath, \
+                                        get_ztile_script_suffix
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
@@ -145,8 +145,8 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         tileid = prow['TILEID']
         expid = prow['EXPID'][0]
         redux_dir = specprod_root()
-        outdir = os.path.join(redux_dir,get_tile_redshift_relpath(tileid,group=prow['JOBDESC'],night=night,expid=expid))
-        suffix = get_tile_redshift_script_suffix(tileid, group=prow['JOBDESC'], night=night, expid=expid)
+        outdir = os.path.join(redux_dir,get_ztile_relpath(tileid,group=prow['JOBDESC'],night=night,expid=expid))
+        suffix = get_ztile_script_suffix(tileid, group=prow['JOBDESC'], night=night, expid=expid)
         existing_spectros = []
         for spectro in spectros:
             if os.path.exists(os.path.join(outdir, f"redrock-{spectro}-{suffix}.fits")):
@@ -343,7 +343,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
     log = get_logger()
     if prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
         if dry_run > 1:
-            scriptpathname = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+            scriptpathname = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                                night=prow['NIGHT'], expid=prow['EXPID'][0])
 
             log.info("Output file would have been: {}".format(scriptpathname))
@@ -468,7 +468,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     # script = f'{jobname}.slurm'
     # script_path = pathjoin(batchdir, script)
     if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
-        script_path = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+        script_path = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                         night=prow['NIGHT'], expid=np.min(prow['EXPID']))
         jobname = os.path.split(script_path)[-1]
     else:
