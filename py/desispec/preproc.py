@@ -871,13 +871,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     
         if isinstance(dark,str):
-            if os.path.exists(dark_filename):
-                dark_filename=dark
-            else:
+            dark_filename=dark
+            if not os.path.exists(dark_filename):
                 message=f"Supplied a filename for the dark to be used for preprocessing ({dark}), but does not exist"
                 log.error(message)
                 raise ValueError(message)
-
         else:
             dark_filename = cfinder.findfile("DARK")
 
