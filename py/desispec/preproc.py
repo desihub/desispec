@@ -859,7 +859,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- Load dark
     if cfinder and cfinder.haskey("DARK") and (dark is not False):
-
+        
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
@@ -869,7 +869,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
-        dark_filename = cfinder.findfile("DARK")
+    
+        if isinstance(dark,str):
+            if os.path.exists(dark_filename):
+                dark_filename=dark
+            else:
+                message=f"Supplied a filename for the dark to be used for preprocessing ({dark}), but does not exist"
+                log.error(message)
+                raise ValueError(message)
+
+        else:
+            dark_filename = cfinder.findfile("DARK")
+
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
