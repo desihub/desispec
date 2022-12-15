@@ -82,6 +82,9 @@ def parse_args():  # options=None):
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")
     parser.add_argument("--use-specter", action="store_true",
                         help="Use specter. Default is to use gpu_specter")
+    parser.add_argument("--do-cte-flat", action="store_true",
+                        help="If flag set then one second flat exposures are "
+                             + "processed for cte identification.")
     args = parser.parse_args()
 
     # convert str lists to actual lists
