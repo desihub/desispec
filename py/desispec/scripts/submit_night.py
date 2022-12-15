@@ -237,8 +237,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME']) - 300.) > 1:
             good_exptimes.append(False)
-        elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1:
-            if not do_cte_flat or np.abs(float(erow['EXPTIME']) - 1.) > 0.5:
+        elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1 \
+            and (not do_cte_flat or np.abs(float(erow['EXPTIME']) - 1.) > 0.5):
                 good_exptimes.append(False)
         else:
             good_exptimes.append(True)
