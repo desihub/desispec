@@ -23,6 +23,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.calibfinder import CalibFinder
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
@@ -548,12 +549,21 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
             mydict["is_onesec_flat"] = True
         else:
             mydict["is_onesec_flat"] = False
+        # AR grab columns with identified problem
+        cfinder = CalibFinder([hdr])
+        for key in ["OFFCOLSA", "OFFCOLSB", "OFFCOLSC", "OFFCOLSD"]:
+            if cfinder.haskey(key):
+                mydict[key] = cfinder.value(key)
+            else:
+                 mydict[key] = None
         return mydict
     else:
         return None
 
 
-def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
+def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10),
+    yoffcols={"A" : -2.5, "B" : -3.5, "C" : -2.5, "D" : -3.5},
+):
     """
     For a given night, create a pdf with a CTE diagnosis (from preproc files).
 
@@ -564,9 +574,11 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
         nproc: number of processes running at the same time (int)
         nrow (optional, defaults to 21): number of rows to include in median (int)
-        xmin (optional, defaults to None): minimum column to display (int)
-        xmax (optional, defaults to None): maximum column to display (int)
+        xmin (optional, defaults to None): minimum column to display (float)
+        xmax (optional, defaults to None): maximum column to display (float)
         ylim (optional, default to (-5, 10)): ylim for the median plot (duplet)
+        yoffcols (optional, defaults to {"A" : -2.5, "B" : -3.5, "C" : -2.5, "D" : -3.5}):
+            y-values to report the per-amplifier OFFCOLS info, if any (dictionnary of floats)
 
     Notes:
         Credits to S. Bailey.
@@ -590,6 +602,8 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         mydicts = pool.starmap(_read_ctedet, myargs)
     # AR plotting
     clim = (-5, 5)
+    tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {"A" : tmpcols[1], "B" : tmpcols[1], "C" : tmpcols[0], "D" : tmpcols[0]}
     with PdfPages(outpdf) as pdf:
         for mydict in mydicts:
             petcam_xmin, petcam_xmax = xmin, xmax
@@ -625,9 +639,22 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
                 ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
                 ax2d.xaxis.tick_top()
+                # AR known columns with offset?
+                # AR     stored in format like "12:24,1700:1900"
+                for amp in ["A", "B", "C", "D"]:
+                    key = "OFFCOLS{}".format(amp)
+                    if mydict[key] is not None:
+                        for colrange in mydict[key].split(","):
+                            colmin, colmax = int(colrange.split(":")[0]), int(colrange.split(":")[1])
+                            ax1d.annotate("", xy=(colmax, yoffcols[amp]), xytext=(colmin, yoffcols[amp]), arrowprops=dict(arrowstyle="<->", lw="3", color=colors[amp]))
+                            if amp in ["A", "C"]:
+                                tmpy = yoffcols[amp] + 0.025 * (ylim[1] - ylim[0])
+                            else:
+                                tmpy = yoffcols[amp] - 0.030 * (ylim[1] - ylim[0])
+                            ax1d.text(0.5 * (colmin + colmax), tmpy, "AMP{} known offset: {}".format(amp, colrange), ha="center", va="center")
                 # AR plot 1d median
-                ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, above, alpha=0.5, color=colors["C"], label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, below, alpha=0.5, color=colors["A"], label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
                 ax1d.legend(loc=2)
                 # AR amplifier x-boundary
                 ax1d.axvline(nx // 2 - 1, color="k", ls="--")
