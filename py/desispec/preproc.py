@@ -539,7 +539,7 @@ def compute_background_between_fiber_blocks(image,xyset) :
 
             # set average value to masked interblocks
             if np.any(vinterblock==0) :
-                vinterblock[vinterblock==0] = np.median(vinterblock[vinterblock>0])
+                vinterblock[vinterblock==0] = np.median(vinterblock[vinterblock!=0])
 
             # interpolate along x
             xx=np.arange(sec[1].start,sec[1].stop)
