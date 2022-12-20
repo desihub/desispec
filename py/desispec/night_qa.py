@@ -709,12 +709,7 @@ def _read_sframesky(night, prod, expid):
                         sel = fibermap["OBJTYPE"] == "SKY"
                         fibermap = fibermap[sel]
                         flux = h["FLUX"].read()[sel]
-                        # AR set flux=np.nan for ivar=0 pixels
-                        # AR so that those are displayed with a special
-                        # AR color in the sframesky
-                        # AR ivar is not used further, so we do not propagate it
                         ivar = h["IVAR"].read()[sel]
-                        flux[ivar == 0] = np.nan
                         wave = h["WAVELENGTH"].read()
                         flux_header = h["FLUX"].read_header()
                         fibermap_header = h["FIBERMAP"].read_header()
@@ -724,8 +719,10 @@ def _read_sframesky(night, prod, expid):
                         nwave = len(mydict[camera]["wave"])
                         mydict[camera]["petals"] = np.zeros(0, dtype=int)
                         mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
+                        mydict[camera]["nullivar"] = np.zeros(0, dtype=bool).reshape((0, nwave))
                         mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
                     mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
+                    mydict[camera]["nullivar"] = np.append(mydict[camera]["nullivar"], ivar == 0, axis=0)
                     mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
                     band = camera.lower()[0]
                     mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
@@ -773,7 +770,6 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
     cmap = matplotlib.cm.Greys_r
-    cmap.set_bad(color="y")
     with PdfPages(outpdf) as pdf:
         for mydict in mydicts:
             if mydict is not None:
@@ -787,6 +783,12 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                     if "flux" in mydict[camera]:
                         nsky = mydict[camera]["flux"].shape[0]
                         im = ax.imshow(mydict[camera]["flux"], cmap=cmap, vmin=clim[0], vmax=clim[1], zorder=0)
+                        # AR overlay in transparent pixels with ivar=0
+                        # AR a bit obscure why I need to add +1 in xs, ys...
+                        # AR probably some indexing convention in imshow()
+                        xys = np.argwhere(mydict[camera]["nullivar"])
+                        xs, ys = 1 + xys[:, 0], 1 + xys[:, 1]
+                        ax.scatter(ys, xs, c="g", s=0.1, alpha=0.1, zorder=1, rasterized=True)
                         for petal in petals:
                             ii = np.where(mydict[camera]["petals"] == petal)[0]
                             if len(ii) > 0:
