@@ -414,30 +414,71 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
     with pool:
         mydicts = pool.starmap(_read_dark, myargs)
     # AR plotting
+    # AR remarks:
+    # AR - the (x,y) conversions for the side panels
+    # AR    are a bit counter-intuitive, as ax.imshow()
+    # AR    reverses the displayed axes...
+    # AR - the panels positioning is not very elegant,
+    # AR    probably could be coded in a nicer way!
     clim = (-5, 5)
     cmap = matplotlib.cm.Greys_r
     cmap.set_bad(color="r")
+    width_ratios = 0.1 + np.zeros(2 * len(cameras))
+    width_ratios[::2] = 1
+    tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     with PdfPages(outpdf) as pdf:
         for petal in petals:
             fig = plt.figure(figsize=(20, 10))
-            gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
+            gs = gridspec.GridSpec(2, 2 * len(cameras), wspace=0.1, width_ratios = width_ratios, hspace=0.0, height_ratios = [0.05, 1])
             for ic, camera in enumerate(cameras):
-                ax = plt.subplot(gs[ic])
+                ax = fig.add_subplot(gs[1, 2 * ic])
+                ax_y = fig.add_subplot(gs[0, 2 * ic])
+                ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
                 ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
                 assert(len(ii) == 1)
                 mydict = mydicts[ii[0]]
                 if mydict is not None:
                     assert(mydict["petal"] == petal)
                     assert(mydict["camera"] == camera)
-                    ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-                    im = ax.imshow(mydict["image"], cmap=cmap, vmin=clim[0], vmax=clim[1])
+                    img = mydict["image"]
+                    im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                    pos = ax.get_position().bounds
+                    # AR median profile along x, for each pair of amps
+                    tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
+                    tmpys = np.arange(len(tmpxs))
+                    ax_x.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                    tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
+                    tmpys = np.arange(len(tmpxs))
+                    ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                    ax_x.set_ylim(ax.get_xlim()[::-1])
+                    ax_x.set_xlim(-0.5, 0.5)
+                    ax_x.set_yticklabels([])
+                    ax_x.grid()
+                    pos_x =  list(ax_x.get_position().bounds)
+                    pos_x[0], pos_x[1], pos_x[3] = pos[0] + pos[2], pos[1], pos[3]
+                    ax_x.set_position(pos_x)
+                    # AR median profile along y, for each pair of amps
+                    tmpys = np.nanmedian(img[: img.shape[0] // 2, :], axis=0)
+                    tmpxs = np.arange(len(tmpys))
+                    ax_y.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                    tmpys = np.nanmedian(img[img.shape[0] // 2 :, :], axis=0)
+                    tmpxs = np.arange(len(tmpys))
+                    ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                    ax_y.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
+                    ax_y.set_xlim(ax.get_ylim()[::-1])
+                    ax_y.set_ylim(-0.5, 0.5)
+                    ax_y.set_xticklabels([])
+                    ax_y.grid()
+                    pos_y =  list(ax_y.get_position().bounds)
+                    pos_y[0], pos_y[1], pos_y[2] = pos[0], pos[1] + pos[3], pos[2]
+                    ax_y.set_position(pos_y)
                     if camera == cameras[-1]:
-                        p =  ax.get_position().get_points().flatten()
+                        p = ax_x.get_position().get_points().flatten()
                         cax = fig.add_axes([
-                            p[0] + 1.05 * (p[2] - p[0]),
+                            p[0] + 1.5 * (p[2] - p[0]),
                             p[1],
-                            0.05 * (p[2] - p[0]),
-                            1.0 * (p[3]-p[1])
+                            0.5 * (p[2] - p[0]),
+                            1.0 * (p[3] - p[1])
                         ])
                         cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
                         cbar.set_label("Units : ?")
