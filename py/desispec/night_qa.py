@@ -24,6 +24,7 @@ from desitarget.geomask import match_to
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
 from desispec.calibfinder import CalibFinder
+from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
@@ -53,6 +54,7 @@ def get_nightqa_outfns(outdir, night):
     return {
         "html" : os.path.join(outdir, "nightqa-{}.html".format(night)),
         "dark" : os.path.join(outdir, "dark-{}.pdf".format(night)),
+        "morningdark" : os.path.join(outdir, "morningdark-{}.pdf".format(night)),
         "badcol" : os.path.join(outdir, "badcol-{}.png".format(night)),
         "ctedet" : os.path.join(outdir, "ctedet-{}.pdf".format(night)),
         "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
@@ -178,6 +180,58 @@ def get_dark_night_expid(night, prod):
             )
     return expid
 
+
+def get_morning_dark_night_expid(night, prod, exptime=1200):
+    """
+    Returns the EXPID of the latest 1200s DARK exposure for a given night.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        exptime (optional, defaults to 1200): exposure time we are looking for (float)
+
+    Returns:
+        expid: EXPID (int)
+
+    Notes:
+        If nothing found, returns None.
+        As of now (20221220), those morning darks are not processed by the daily
+            pipeline; hence we do not use the processing_tables, but the
+            exposure_tables.
+    """
+    #
+    expid = None
+    exptable_fn = os.path.join(
+        prod,
+        "exposure_tables",
+        str(night // 100),
+        "exposure_table_{}.csv".format(night),
+    )
+    log.info("exptable_fn = {}".format(exptable_fn))
+    if not os.path.isfile(exptable_fn):
+        log.warning("no {} found; returning None".format(exptable_fn))
+    else:
+        d = Table.read(exptable_fn)
+        sel = d["OBSTYPE"] == "dark"
+        sel &= d["COMMENTS"] == "|" # AR we request an exposure with no known issue
+        sel &= np.abs(d["EXPTIME"] - exptime) < 1
+        if sel.sum() == 0:
+            log.warning(
+                "found zero exposures with OBSTYPE=dark and COMMENTS='|' and abs(EXPTIME-{})<1 in expable_fn; returning None".format(
+                    exptime,
+                )
+            )
+        else:
+            d = d[sel]
+            # AR pick the latest one
+            d = d[d["MJD-OBS"].argsort()]
+            expid = d["EXPID"][-1]
+            log.info(
+                "found EXPID={} as the latest {}s DARK for NIGHT={}".format(
+                    expid, exptime, night,
+                )
+            )
+    return expid
 
 def get_ctedet_night_expid(night, prod):
     """
@@ -322,11 +376,12 @@ def create_mp4(fns, outmp4, duration=15):
         os.remove("{}/tmp-{:04d}.png".format(tmpoutdir, i))
 
 
-def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
+def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
     """
     Internal function used by create_dark_pdf(), to read and bin the 300s dark.
 
     Args:
+        fn: full path to the dark image (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
@@ -340,8 +395,6 @@ def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
         Else:
             None
     """
-    fn = findfile('preproc', night, dark_expid, camera+str(petal),
-            specprod_dir=prod)
     if os.path.isfile(fn):
         mydict = {}
         mydict["dark_expid"] = dark_expid
@@ -391,16 +444,63 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
         outpdf: output pdf file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
-        dark_expid: EXPID of the 300s DARK exposure to display (int)
+        dark_expid: EXPID of the 300s or 1200s DARK exposure to display (int)
         nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
+
+    Notes:
+        If the identified dark image is not processed and if the raw data is there,
+            we do process it (in a temporary folder), so that we can generate the plots.
     """
+    # AR first check if we need to process this dark image
+    proctable_fn = os.path.join(
+        prod,
+        "processing_tables",
+        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
+    )
+    run_preproc = False
+    if not os.path.isfile(proctable_fn):
+        run_preproc = True
+    else:
+        d = Table.read(proctable_fn)
+        sel = d["OBSTYPE"] == "dark"
+        d = d[sel]
+        proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+        if dark_expid not in proc_expids:
+            run_preproc = True
+    # AR run preproc?
+    if run_preproc:
+        # AR does the raw exposure exist?
+        rawfn = findfile("raw", night, dark_expid)
+        if os.path.isfile(rawfn):
+            specprod_dir = tempfile.mkdtemp()
+            outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+            os.makedirs(outdir, exist_ok=True)
+            # AR set SPECPROD=daily in order to use the nightly bias
+            # AR    (and because of that this has to be run after the daily prod)
+            specprod_save = os.environ["SPECPROD"]
+            os.environ["SPECPROD"] = "daily"
+            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {}".format(
+                night, dark_expid, outdir, nproc,
+            )
+            log.info("run: {}".format(cmd))
+            os.system(cmd)
+            # AR reset SPECPROD to its original value
+            os.environ["SPECPROD"] = specprod_save
+        # AR if we reached this stage, we expect the raw data to be there
+        else:
+            msg = "no raw image {} -> skipping".format(rawfn)
+            log.error(msg)
+            raise ValueError(msg)
+    else:
+        specprod_dir = prod
     #
     myargs = []
     for petal in petals:
         for camera in cameras:
             myargs.append(
                 [
+                    findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=specprod_dir),
                     night,
                     prod,
                     dark_expid,
@@ -434,7 +534,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
                 ax = fig.add_subplot(gs[1, 2 * ic])
                 ax_y = fig.add_subplot(gs[0, 2 * ic])
                 ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
-                ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
+                ii = [i for i in range(len(myargs)) if myargs[i][4] == petal and myargs[i][5] == camera]
                 assert(len(ii) == 1)
                 mydict = mydicts[ii[0]]
                 if mydict is not None:
