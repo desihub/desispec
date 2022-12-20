@@ -158,7 +158,7 @@ def get_all_nonamp_fiberbitmask_val():
     Also does not include POORPOSITION which is bad for stdstars
     but not necessarily fatal for otherwise processing a normal fiber.
     """
-    return (fmsk.UNASSIGNED | fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
+    return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
             fmsk.BADPOSITION | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
