@@ -23,6 +23,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.calibfinder import CalibFinder
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
@@ -413,30 +414,71 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
     with pool:
         mydicts = pool.starmap(_read_dark, myargs)
     # AR plotting
+    # AR remarks:
+    # AR - the (x,y) conversions for the side panels
+    # AR    are a bit counter-intuitive, as ax.imshow()
+    # AR    reverses the displayed axes...
+    # AR - the panels positioning is not very elegant,
+    # AR    probably could be coded in a nicer way!
     clim = (-5, 5)
     cmap = matplotlib.cm.Greys_r
     cmap.set_bad(color="r")
+    width_ratios = 0.1 + np.zeros(2 * len(cameras))
+    width_ratios[::2] = 1
+    tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     with PdfPages(outpdf) as pdf:
         for petal in petals:
             fig = plt.figure(figsize=(20, 10))
-            gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
+            gs = gridspec.GridSpec(2, 2 * len(cameras), wspace=0.1, width_ratios = width_ratios, hspace=0.0, height_ratios = [0.05, 1])
             for ic, camera in enumerate(cameras):
-                ax = plt.subplot(gs[ic])
+                ax = fig.add_subplot(gs[1, 2 * ic])
+                ax_y = fig.add_subplot(gs[0, 2 * ic])
+                ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
                 ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
                 assert(len(ii) == 1)
                 mydict = mydicts[ii[0]]
                 if mydict is not None:
                     assert(mydict["petal"] == petal)
                     assert(mydict["camera"] == camera)
-                    ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-                    im = ax.imshow(mydict["image"], cmap=cmap, vmin=clim[0], vmax=clim[1])
+                    img = mydict["image"]
+                    im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                    pos = ax.get_position().bounds
+                    # AR median profile along x, for each pair of amps
+                    tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
+                    tmpys = np.arange(len(tmpxs))
+                    ax_x.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                    tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
+                    tmpys = np.arange(len(tmpxs))
+                    ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                    ax_x.set_ylim(ax.get_xlim()[::-1])
+                    ax_x.set_xlim(-0.5, 0.5)
+                    ax_x.set_yticklabels([])
+                    ax_x.grid()
+                    pos_x =  list(ax_x.get_position().bounds)
+                    pos_x[0], pos_x[1], pos_x[3] = pos[0] + pos[2], pos[1], pos[3]
+                    ax_x.set_position(pos_x)
+                    # AR median profile along y, for each pair of amps
+                    tmpys = np.nanmedian(img[: img.shape[0] // 2, :], axis=0)
+                    tmpxs = np.arange(len(tmpys))
+                    ax_y.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                    tmpys = np.nanmedian(img[img.shape[0] // 2 :, :], axis=0)
+                    tmpxs = np.arange(len(tmpys))
+                    ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                    ax_y.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
+                    ax_y.set_xlim(ax.get_ylim()[::-1])
+                    ax_y.set_ylim(-0.5, 0.5)
+                    ax_y.set_xticklabels([])
+                    ax_y.grid()
+                    pos_y =  list(ax_y.get_position().bounds)
+                    pos_y[0], pos_y[1], pos_y[2] = pos[0], pos[1] + pos[3], pos[2]
+                    ax_y.set_position(pos_y)
                     if camera == cameras[-1]:
-                        p =  ax.get_position().get_points().flatten()
+                        p = ax_x.get_position().get_points().flatten()
                         cax = fig.add_axes([
-                            p[0] + 1.05 * (p[2] - p[0]),
+                            p[0] + 1.5 * (p[2] - p[0]),
                             p[1],
-                            0.05 * (p[2] - p[0]),
-                            1.0 * (p[3]-p[1])
+                            0.5 * (p[2] - p[0]),
+                            1.0 * (p[3] - p[1])
                         ])
                         cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
                         cbar.set_label("Units : ?")
@@ -548,12 +590,21 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
             mydict["is_onesec_flat"] = True
         else:
             mydict["is_onesec_flat"] = False
+        # AR grab columns with identified problem
+        cfinder = CalibFinder([hdr])
+        for key in ["OFFCOLSA", "OFFCOLSB", "OFFCOLSC", "OFFCOLSD"]:
+            if cfinder.haskey(key):
+                mydict[key] = cfinder.value(key)
+            else:
+                 mydict[key] = None
         return mydict
     else:
         return None
 
 
-def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
+def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10),
+    yoffcols={"A" : -2.5, "B" : -3.5, "C" : -2.5, "D" : -3.5},
+):
     """
     For a given night, create a pdf with a CTE diagnosis (from preproc files).
 
@@ -564,9 +615,11 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
         nproc: number of processes running at the same time (int)
         nrow (optional, defaults to 21): number of rows to include in median (int)
-        xmin (optional, defaults to None): minimum column to display (int)
-        xmax (optional, defaults to None): maximum column to display (int)
+        xmin (optional, defaults to None): minimum column to display (float)
+        xmax (optional, defaults to None): maximum column to display (float)
         ylim (optional, default to (-5, 10)): ylim for the median plot (duplet)
+        yoffcols (optional, defaults to {"A" : -2.5, "B" : -3.5, "C" : -2.5, "D" : -3.5}):
+            y-values to report the per-amplifier OFFCOLS info, if any (dictionnary of floats)
 
     Notes:
         Credits to S. Bailey.
@@ -590,6 +643,8 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         mydicts = pool.starmap(_read_ctedet, myargs)
     # AR plotting
     clim = (-5, 5)
+    tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {"A" : tmpcols[1], "B" : tmpcols[1], "C" : tmpcols[0], "D" : tmpcols[0]}
     with PdfPages(outpdf) as pdf:
         for mydict in mydicts:
             petcam_xmin, petcam_xmax = xmin, xmax
@@ -625,9 +680,22 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
                 ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
                 ax2d.xaxis.tick_top()
+                # AR known columns with offset?
+                # AR     stored in format like "12:24,1700:1900"
+                for amp in ["A", "B", "C", "D"]:
+                    key = "OFFCOLS{}".format(amp)
+                    if mydict[key] is not None:
+                        for colrange in mydict[key].split(","):
+                            colmin, colmax = int(colrange.split(":")[0]), int(colrange.split(":")[1])
+                            ax1d.annotate("", xy=(colmax, yoffcols[amp]), xytext=(colmin, yoffcols[amp]), arrowprops=dict(arrowstyle="<->", lw="3", color=colors[amp]))
+                            if amp in ["A", "C"]:
+                                tmpy = yoffcols[amp] + 0.025 * (ylim[1] - ylim[0])
+                            else:
+                                tmpy = yoffcols[amp] - 0.030 * (ylim[1] - ylim[0])
+                            ax1d.text(0.5 * (colmin + colmax), tmpy, "AMP{} known offset: {}".format(amp, colrange), ha="center", va="center")
                 # AR plot 1d median
-                ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
-                ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, above, alpha=0.5, color=colors["C"], label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                ax1d.plot(xx, below, alpha=0.5, color=colors["A"], label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
                 ax1d.legend(loc=2)
                 # AR amplifier x-boundary
                 ax1d.axvline(nx // 2 - 1, color="k", ls="--")
@@ -1686,7 +1754,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         ["DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
         ["100%", "35%", "100%", "75%", "90%", "90%", "100%"],
         [
-            "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nWatch it and report unsual features (easy to say!)",
+            "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nThe side panels report the median profiles for each pair of amps along each direction.\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nPixels with IVAR=0 are displayed in yellow.\nWatch it and report unsual features (easy to say!)",
