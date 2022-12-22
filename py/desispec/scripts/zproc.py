@@ -154,16 +154,26 @@ def main(args=None, comm=None):
         assert args.nights is None, f"--groupname healpix doesn't use --nights {args.nights}"
         assert args.expids is None, f"--groupname healpix doesn't use --expids {args.expids}"
         assert args.thrunight is None, f"--groupname healpix doesn't use --thrunight {args.thrunight}"
+        assert args.cameras is None, f"--groupname healpix doesn't use --cameras {args.cameras}"
     else:
         assert args.tileid is not None, f"--groupname {args.groupname} requires setting --tileid too"
 
+    if args.expfiles is not None:
+        if args.nights is not None or args.expids is not None:
+            msg = "use --expfiles OR --nights and --expids, but not both"
+            log.error(msg)
+            raise ValueError(msg)
+
+    today = int(time.strftime('%Y%m%d'))
     if args.thrunight is not None:
         if args.groupname not in ['cumulative',]:
             msg = f"--thrunight only valid for cumulative redshifts."
             log.error(msg)
             raise ValueError(msg)
-        elif args.thrunight < 20200214:
-            msg = f"--thrunight must be 20200214 or later"
+        #- very early data isn't supported, and future dates aren't supported
+        #- because that implies data are included that don't yet exist
+        elif args.thrunight < 20200214 or args.thrunight > today:
+            msg = f"--thrunight must be between 20200214 and today"
             log.error(msg)
             raise ValueError(msg)
 
