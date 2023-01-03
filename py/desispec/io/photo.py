@@ -911,6 +911,8 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)
 
     if columns is not None:
+        if type(columns) is not list:
+            columns = columns.tolist()
         out = out[columns]
 
     return out
