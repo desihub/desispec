@@ -449,6 +449,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                     # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
                     targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                     entry = update_targ_info(entry, targ_dict)
+                    entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
                     # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
                     # as of 20210624: SURVEY present in table_exposure since 20210611 only
