@@ -291,18 +291,20 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_badexp=True) :
+def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
+                           preexisting_tsnr2_frame_table, specprod_dir,
+                           add_badexp=True, nights=None):
     """ Compute summary tables.
 
     Args:
       summary_rows: list of dictionnaries
-      output_filename: str, output filename
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
 
     Options:
       add_badexp (bool): add known bad exposures that weren't processed
+      nights: None or list, list of nights to compute bad exposures summary tales for
 
     Returns tsnr2_expid_table , tsnr2_frame_table
     """
@@ -310,173 +312,183 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
 
     #- Create camera summary table; specify names to preserve column order
     ## Get copy of the columns, one to preserve the original cols and one to add any new cols encountered
-    colnames = list(summary_rows[0].keys())
-    orig_colnames = list(summary_rows[0].keys())
-    first_print = True
-    for ii,row in enumerate(summary_rows):
-        missing = [key for key in orig_colnames if key not in row.keys()]
-        additional =  [key for key in row.keys() if key not in orig_colnames]
-        if len(missing) > 0 or len(additional) > 0:
-            ## Only print the column names once to reduce verbosity
-            if first_print:
-                log.warning(f"First row of summary_rows had colnames={orig_colnames}")
-                first_print = False
-            ## List missing columns compared to the first row (if any)
-            if len(missing) > 0:
-                log.warning(f"Row {ii} differs from first, row is missing columns={missing}" )
-            ## Could have both additional and missing columns, so this is independent check. List additional
-            if len(additional) > 0:
-                log.warning(f"Row {ii} differs from first, row has additional columns={additional}" )
+    if len(summary_rows) == 0 and preexisting_tsnr2_expid_table is not None\
+       and preexisting_tsnr2_frame_table is not None:
+        cam_summary = Table(names=preexisting_tsnr2_frame_table.colnames,
+                            dtype=preexisting_tsnr2_frame_table.dtype)
+        cam_summary.meta['EXTNAME'] = 'FRAMES'
+        exp_summary = Table(names=preexisting_tsnr2_expid_table.colnames,
+                            dtype=preexisting_tsnr2_expid_table.dtype)
+        exp_summary.meta['EXTNAME'] = 'EXPOSURES'
+    else:
+        colnames = list(summary_rows[0].keys())
+        orig_colnames = list(summary_rows[0].keys())
+        first_print = True
+        for ii,row in enumerate(summary_rows):
+            missing = [key for key in orig_colnames if key not in row.keys()]
+            additional =  [key for key in row.keys() if key not in orig_colnames]
+            if len(missing) > 0 or len(additional) > 0:
+                ## Only print the column names once to reduce verbosity
+                if first_print:
+                    log.warning(f"First row of summary_rows had colnames={orig_colnames}")
+                    first_print = False
+                ## List missing columns compared to the first row (if any)
+                if len(missing) > 0:
+                    log.warning(f"Row {ii} differs from first, row is missing columns={missing}" )
+                ## Could have both additional and missing columns, so this is independent check. List additional
+                if len(additional) > 0:
+                    log.warning(f"Row {ii} differs from first, row has additional columns={additional}" )
 
-        ## Beyond the differences listed above, make sure to keep a complete list of column names
-        ## for the table generation
-        newcols =  [key for key in row.keys() if key not in colnames]
-        if len(newcols) > 0:
-            log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
-            colnames.extend(newcols)
+            ## Beyond the differences listed above, make sure to keep a complete list of column names
+            ## for the table generation
+            newcols =  [key for key in row.keys() if key not in colnames]
+            if len(newcols) > 0:
+                log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
+                colnames.extend(newcols)
 
 
-    #- specify names to preserve column order
-    masked_cam_summary = Table(rows=summary_rows, names=colnames)
-    for col in masked_cam_summary.colnames:
-        if isinstance(masked_cam_summary[col],Table.MaskedColumn):
-            if col in ['NIGHT', 'EXPID', 'TILEID']:
-                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0 .')
-                masked_cam_summary[col].set_fill_value(0)
-            elif col in ['SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE']:
-                log.warning(f'Column {col} identified as masked column, filling masked rows with value "unknown".')
-                masked_cam_summary[col].set_fill_value('unknown')
-            else:
-                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0.0.')
-                masked_cam_summary[col].set_fill_value(0.0)
-    cam_summary = masked_cam_summary.filled()
+        #- specify names to preserve column order
+        masked_cam_summary = Table(rows=summary_rows, names=colnames)
+        for col in masked_cam_summary.colnames:
+            if isinstance(masked_cam_summary[col],Table.MaskedColumn):
+                if col in ['NIGHT', 'EXPID', 'TILEID']:
+                    log.warning(f'Column {col} identified as masked column, filling masked rows with value 0 .')
+                    masked_cam_summary[col].set_fill_value(0)
+                elif col in ['SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE']:
+                    log.warning(f'Column {col} identified as masked column, filling masked rows with value "unknown".')
+                    masked_cam_summary[col].set_fill_value('unknown')
+                else:
+                    log.warning(f'Column {col} identified as masked column, filling masked rows with value 0.0.')
+                    masked_cam_summary[col].set_fill_value(0.0)
+        cam_summary = masked_cam_summary.filled()
 
-    cam_summary.meta['EXTNAME'] = 'FRAMES'
+        cam_summary.meta['EXTNAME'] = 'FRAMES'
 
-    tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
+        tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
 
-    #- which rows go with which petals:
-    ispetal = dict()
-    for petal in range(10):
-        ii  = (cam_summary['CAMERA'] == 'b'+str(petal))
-        ii |= (cam_summary['CAMERA'] == 'r'+str(petal))
-        ii |= (cam_summary['CAMERA'] == 'z'+str(petal))
-        ispetal[petal] = ii
+        #- which rows go with which petals:
+        ispetal = dict()
+        for petal in range(10):
+            ii  = (cam_summary['CAMERA'] == 'b'+str(petal))
+            ii |= (cam_summary['CAMERA'] == 'r'+str(petal))
+            ii |= (cam_summary['CAMERA'] == 'z'+str(petal))
+            ispetal[petal] = ii
 
-    #- Distill into exposure summary per-petal
-    rows = list()
+        #- Distill into exposure summary per-petal
+        rows = list()
 
-    #- The unique key is the exposure Id
-    for expid in np.unique(cam_summary['EXPID'] ) :
-        ii = (cam_summary['EXPID'] == expid)
+        #- The unique key is the exposure Id
+        for expid in np.unique(cam_summary['EXPID'] ) :
+            ii = (cam_summary['EXPID'] == expid)
 
-        row = dict()
-        for k in ["NIGHT","EXPID","TILEID","TILERA","TILEDEC","MJD",
-                  "AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
-                  "MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
-            row[k]=cam_summary[k][ii][0]
-        # mean
-        row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
+            row = dict()
+            for k in ["NIGHT","EXPID","TILEID","TILERA","TILEDEC","MJD",
+                      "AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
+                      "MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
+                row[k]=cam_summary[k][ii][0]
+            # mean
+            row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
 
-        #- Per EXPID TSNR2 is summed over cameras, averaged over petals
-        for colname in tsnr2_colnames:
-            tsnr2_petal = list()  #- TSNR^2 summed over cameras, per petal
-            for petal in range(10):
-                jj = ii & ispetal[petal]
-                if np.any(jj):
-                    tsnr2_petal.append(np.sum(cam_summary[colname][jj]))
-            row[colname] = np.mean(tsnr2_petal) # mean of petals (each being median of valid fibers)
+            #- Per EXPID TSNR2 is summed over cameras, averaged over petals
+            for colname in tsnr2_colnames:
+                tsnr2_petal = list()  #- TSNR^2 summed over cameras, per petal
+                for petal in range(10):
+                    jj = ii & ispetal[petal]
+                    if np.any(jj):
+                        tsnr2_petal.append(np.sum(cam_summary[colname][jj]))
+                row[colname] = np.mean(tsnr2_petal) # mean of petals (each being median of valid fibers)
 
-        rows.append(row)
+            rows.append(row)
 
-    colnames = list(rows[0].keys())
-    exp_summary = Table(rows=rows, names=colnames)
-    exp_summary.meta['EXTNAME'] = 'EXPOSURES'
+        colnames = list(rows[0].keys())
+        exp_summary = Table(rows=rows, names=colnames)
+        exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
     if add_badexp:
-      # check the production exposure table
-      for night in np.unique(exp_summary["NIGHT"]) :
-        prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
-        if not os.path.isfile(prod_table_filename) :
-            log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
-            continue
-        prod_table = Table.read(prod_table_filename)
-        missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
-        nmissing=np.sum(missing)
-        if nmissing>0 :
+        # check the production exposure table
+        if nights is None:
+            nights = np.unique(exp_summary["NIGHT"])
+        for night in nights:
+            prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
+            if not os.path.isfile(prod_table_filename) :
+                log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
+                continue
+            prod_table = Table.read(prod_table_filename)
+            missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
+            nmissing=np.sum(missing)
+            if nmissing>0:
+                ucam=np.unique(cam_summary["CAMERA"])
 
-            ucam=np.unique(cam_summary["CAMERA"])
+                for i in np.where(missing)[0] :
 
-            for i in np.where(missing)[0] :
+                    #- If the exposure was supposed to be processed but is unexpectedly
+                    #- missing from prod, log error but don't add it to table because
+                    #- we are in an ambiguous/error state of processing
+                    if prod_table["LASTSTEP"][i] == 'all':
+                        tileid = prod_table['TILEID'][i]
+                        expid = prod_table['EXPID'][i]
+                        log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
+                        continue
 
-                #- If the exposure was supposed to be processed but is unexpectedly
-                #- missing from prod, log error but don't add it to table because
-                #- we are in an ambiguous/error state of processing
-                if prod_table["LASTSTEP"][i] == 'all':
-                    tileid = prod_table['TILEID'][i]
-                    expid = prod_table['EXPID'][i]
-                    log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
-                    continue
+                    entry={}
+                    entry["EXPID"]=prod_table["EXPID"][i]
+                    entry["NIGHT"]=night
+                    entry["TILEID"]=prod_table["TILEID"][i]
+                    entry["MJD"] = prod_table["MJD-OBS"][i]
+                    entry["AIRMASS"]=0.
+                    entry["EBV"]=0.
+                    # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
+                    if "EBVFAC" in prod_table.dtype.names:
+                        entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
+                    entry["EXPTIME"]=prod_table["EXPTIME"][i]
+                    entry['SEEING_ETC']=0.
+                    entry["EFFTIME_ETC"] = 0.
+                    if "EFFTIME_ETC" in prod_table.dtype.names:
+                        entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
 
-                entry={}
-                entry["EXPID"]=prod_table["EXPID"][i]
-                entry["NIGHT"]=night
-                entry["TILEID"]=prod_table["TILEID"][i]
-                entry["MJD"] = prod_table["MJD-OBS"][i]
-                entry["AIRMASS"]=0.
-                entry["EBV"]=0.
-                # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
-                if "EBVFAC" in prod_table.dtype.names:
-                    entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
-                entry["EXPTIME"]=prod_table["EXPTIME"][i]
-                entry['SEEING_ETC']=0.
-                entry["EFFTIME_ETC"] = 0.
-                if "EFFTIME_ETC" in prod_table.dtype.names:
-                    entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
-
-                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
-                targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
-                entry = update_targ_info(entry, targ_dict)
-
-                # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
-                # as of 20210624: SURVEY present in table_exposure since 20210611 only
-                dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
-                fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
-                if len(fns) > 0:
-                    fiberassign_header = fits.getheader(fns[0], 0)
-                    targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
-                    if 'SURVEY' not in targ_dict and 'FA_SURV' in targ_dict:
-                        targ_dict['SURVEY'] = targ_dict['FA_SURV']
-
+                    # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
+                    targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                     entry = update_targ_info(entry, targ_dict)
-                    entry['TILERA'] = fiberassign_header['TILERA']
-                    entry['TILEDEC'] = fiberassign_header['TILEDEC']
-                else:
-                    log.error(f'No fiberassign*.fits* file in {dirname}')
-                    entry["TILERA"] = -999.0
-                    entry["TILEDEC"] = -999.0
 
-                vals=[]
-                for j,k in enumerate(exp_summary.dtype.names) :
-                    if k in entry :
-                        vals.append(entry[k])
-                    else :
-                        vals.append(0.)
+                    # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
+                    # as of 20210624: SURVEY present in table_exposure since 20210611 only
+                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                    fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
+                    if len(fns) > 0:
+                        fiberassign_header = fits.getheader(fns[0], 0)
+                        targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
+                        if 'SURVEY' not in targ_dict and 'FA_SURV' in targ_dict:
+                            targ_dict['SURVEY'] = targ_dict['FA_SURV']
 
-                log.warning("Adding missing exposure {}".format(vals))
-                exp_summary.add_row(vals)
+                        entry = update_targ_info(entry, targ_dict)
+                        entry['TILERA'] = fiberassign_header['TILERA']
+                        entry['TILEDEC'] = fiberassign_header['TILEDEC']
+                    else:
+                        log.error(f'No fiberassign*.fits* file in {dirname}')
+                        entry["TILERA"] = -999.0
+                        entry["TILEDEC"] = -999.0
 
-                # same for other table
-                for cam in ucam :
-                    entry["CAMERA"]=cam
                     vals=[]
-                    for j,k in enumerate(cam_summary.dtype.names) :
+                    for j,k in enumerate(exp_summary.dtype.names) :
                         if k in entry :
                             vals.append(entry[k])
                         else :
                             vals.append(0.)
-                    log.debug("Adding missing exposure.cam {}".format(vals))
-                    cam_summary.add_row(vals)
+
+                    log.warning("Adding missing exposure {}".format(vals))
+                    exp_summary.add_row(vals)
+
+                    # same for other table
+                    for cam in ucam :
+                        entry["CAMERA"]=cam
+                        vals=[]
+                        for j,k in enumerate(cam_summary.dtype.names) :
+                            if k in entry :
+                                vals.append(entry[k])
+                            else :
+                                vals.append(0.)
+                        log.debug("Adding missing exposure.cam {}".format(vals))
+                        cam_summary.add_row(vals)
 
 
     log.info("Add effective times from TSNR2 values")
@@ -968,10 +980,11 @@ def main():
             pool.join()
 
         # write result after every night.
-        if len(rows)>0 :
+        if len(rows)>0 or args.add_badexp:
             tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
                                                                          preexisting_tsnr2_expid_table,
-                                                                         preexisting_tsnr2_frame_table,args.prod,
+                                                                         preexisting_tsnr2_frame_table,
+                                                                         args.prod, nights=[night],
                                                                          add_badexp=args.add_badexp)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
