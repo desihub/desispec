@@ -10,6 +10,7 @@ from desiutil.log import get_logger
 
 from desispec.io import read_fiberflat,write_fiberflat,findfile,read_frame
 from desispec.io.fiberflat_vs_humidity import get_humidity,read_fiberflat_vs_humidity
+from desispec.io.util import relsymlink
 from desispec.calibfinder import CalibFinder
 from desispec.fiberflat_vs_humidity import compute_humidity_corrected_fiberflat
 
@@ -37,21 +38,19 @@ def main(args=None) :
 
     log = get_logger()
 
-    # just read frame header in case we don't need to do anything
-    frame_header = fitsio.read_header(args.infile,"FLUX")
-
     if args.use_sky_fibers :
         # need full frame to adjust correction on data
         frame = read_frame(args.infile)
+        frame_header = frame.meta
     else :
         frame = None
+        frame_header = fitsio.read_header(args.infile,"FLUX")
 
     cfinder = CalibFinder([frame_header])
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
         log.info("No information on fiberflat vs humidity for camera {}, simply link the input fiberflat".format(frame_header["CAMERA"]))
         if not os.path.islink(args.outfile) :
-            relpath=os.path.relpath(args.fiberflat,os.path.dirname(args.outfile))
-            os.symlink(relpath,args.outfile)
+            relsymlink(args.fiberflat, args.outfile)
         return 0
 
     # read fiberflat

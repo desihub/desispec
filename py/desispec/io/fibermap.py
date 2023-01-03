@@ -391,6 +391,93 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
         return badcol
 
+def update_survey_keywords(hdr):
+    """
+    Standardize fiberassign header keywords SURVEY, FAPRGRM, FAFLAVOR
+
+    Args:
+        hdr (dict-like): HDU 0 header from a fiberassign file
+
+    Returns:
+        dict of key:value pairs added
+
+    Note: updates hdr object in-place
+    """
+    if 'TILEID' not in hdr:
+        raise ValueError('Input header missing TILEID keyword')
+
+    log = get_logger()
+    tileid = hdr['TILEID']
+    has_survey = 'SURVEY' in hdr
+    has_faprgrm = 'FAPRGRM' in hdr
+    has_faflavor = 'FAFLAVOR' in hdr
+    updates = dict()
+    #- Standard case, nothing to do
+    if has_survey and has_faprgrm and has_faflavor:
+        pass
+    #- Missing all keywords
+    elif (not has_survey) and (not has_faprgrm) and (not has_faflavor):
+        if tileid in (63501,63502,63503,63504,63505):
+            updates['SURVEY'] = 'cmx'
+            updates['FAPRGRM'] = 'bright'
+            updates['FAFLAVOR'] = 'cmxbright'
+        else:
+            assert 59026 <= tileid <= 78013
+            updates['SURVEY'] = 'cmx'
+            updates['FAPRGRM'] = 'unknown'
+            updates['FAFLAVOR'] = 'cmxunknown'
+
+    elif has_faflavor and (not has_survey) and (not has_faprgrm):
+        faflavor = hdr['FAFLAVOR']
+        if faflavor.startswith('dith'):
+            updates['SURVEY'] = 'cmx'
+            updates['FAPRGRM'] = faflavor
+        elif faflavor in ('cmxlrgqso', 'cmxelg'):
+            updates['SURVEY'] = 'sv1'  # NOTE: yes sv1, not cmx despite faflavor prefix
+            updates['FAPRGRM'] = faflavor[3:]
+        elif faflavor in ('cmxm33', 'cmxposmapping', 'sv1backup1', 'sv1bgsmws',
+                          'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
+                          'sv1m31', 'sv1mwclusgaldeep', 'sv1orion',
+                          'sv1praesepe', 'sv1rosette', 'sv1scndcosmos',
+                          'sv1scndhetdex', 'sv1ssv', 'sv1umaii',
+                          'sv1unwisebluebright', 'sv1unwisebluefaint',
+                          'sv1unwisegreen'):
+            updates['SURVEY'] = faflavor[0:3]
+            updates['FAPRGRM'] = faflavor[3:]
+        else:
+            raise ValueError(f'Tile {tileid} Unrecognized FAFLAVOR={faflavor} without SURVEY or FAPRGRM; add code to handle this case')
+
+    elif has_faflavor and has_survey and (not has_faprgrm):
+        assert hdr['SURVEY'] == 'sv2'
+        assert hdr['FAFLAVOR'].startswith('sv2')
+        updates['FAPRGRM'] = hdr['FAFLAVOR'][3:]
+
+    #- All known cases are covered above, but log anything else that makes it through
+    else:
+        msg = 'Unrecognized case:'
+        for key in ('TILEID', 'SURVEY', 'FAPRGRM', 'FAFLAVOR'):
+            if key in hdr:
+                msg += f' {key}={hdr[key]}'
+            else:
+                msg += f' {key}=(MISSING)'
+
+        log.error(msg)
+        raise ValueError(msg)
+
+    if len(updates) == 0:
+        log.debug('Tile %d has SURVEY, FAPRGRM, FAFLAVOR; no updates needed', tileid)
+    else:
+        for key, value in updates.items():
+            log.debug('Tile %d setting %s=%s', tileid, key, value)
+            hdr[key] = value
+
+    #- did we get the right keywords into hdr?
+    assert 'TILEID' in hdr
+    assert 'SURVEY' in hdr
+    assert 'FAPRGRM' in hdr
+    assert 'FAFLAVOR' in hdr
+
+    return updates
 
 def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                       force=False, allow_svn_override=True):
@@ -615,7 +702,12 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.debug("Inserting LONGSTRN keyword before TILEID")
         fa_hdr0.insert('TILEID', longstrn)
 
-    #
+    # standardize TILEID, SURVEY, FAPRGRM, FAFLAVOR
+    if 'TILEID' not in fa_hdr0:
+        fa_hdr0['TILEID'] = tileid
+
+    update_survey_keywords(fa_hdr0)
+
     # Merge fa_hdr0 into fa_header.  unique=True means prefer cards from
     # fa_header over fa_hdr0
     #

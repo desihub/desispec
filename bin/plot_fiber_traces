@@ -105,7 +105,7 @@ if args.other_psf is not None :
     else :
         wave_to_compare = np.mean(wave)
 
-    plt.figure()
+    
     otset = read_xytraceset(args.other_psf)
     xx=np.zeros(len(fibers))
     yy=np.zeros(len(fibers))
@@ -120,12 +120,34 @@ if args.other_psf is not None :
         dy[i]=np.mean(y-oy)
         xx[i]=np.mean(x)
         yy[i]=np.mean(y)
+
+    plt.figure("delta-x")
     plt.subplot(111,title="lambda={:d}A <y>={:d}".format(int(wave_to_compare),int(np.mean(yy))))
     plt.plot(fibers,dx,"-",label="dx")
     plt.plot(fibers,dy,"-",label="dy")
     plt.xlabel("fiber")
-    plt.ylabel("delta")
+    plt.ylabel("delta X")
     plt.legend()
+    plt.tight_layout()
+
+    plt.figure("delta-y")
+    nw=50
+    waves = np.linspace(tset.wavemin,tset.wavemax,nw)
+    fiber_to_compare = int(np.median(fibers))
+    print("fiber=",fiber_to_compare)
+    yy=[]
+    dyy=[]
+    for i,wave in enumerate(waves) :
+        x = tset.x_vs_wave(fiber_to_compare,wave)
+        y = tset.y_vs_wave(fiber_to_compare,wave)
+        ox = otset.x_vs_wave(fiber_to_compare,wave)
+        oy = otset.y_vs_wave(fiber_to_compare,wave)
+        yy.append(y)
+        dyy.append(y-oy)
+        plt.subplot(111,title="fiber={:d}".format(int(fiber_to_compare)))
+    plt.plot(yy,dyy,"-",label="dy")
+    plt.xlabel("Y")
+    plt.ylabel("delta Y")
     plt.tight_layout()
 
 plt.show()

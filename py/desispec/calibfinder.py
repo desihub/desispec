@@ -203,6 +203,9 @@ class CalibFinder() :
         else :
             ccdtming = None
 
+        log.debug("camera=%s specid=%s detector=%s ccdcfg=%s ccdtming=%s",
+                camera, specid, detector, ccdcfg, ccdtming)
+
         #if "DOSVER" in header :
         #    dosver = str(header["DOSVER"]).strip()
         #else :
@@ -469,12 +472,12 @@ class CalibFinder() :
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
                     break
-            dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
-            bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
-            if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
-                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
-                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
-                
+            if found:
+                dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
+                bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
+                if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
+                    log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")        
 
         else:   #this will only be done as long as files do not yet exist
             log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
@@ -484,5 +487,5 @@ class CalibFinder() :
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
-            log.warning("Didn't find matching calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
+            log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
 

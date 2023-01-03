@@ -96,7 +96,7 @@ class TestBinScripts(unittest.TestCase):
         else:
             os.environ['PYTHONPATH'] = cls.origPath
 
-    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607',gaia_only=False):
+    def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
         """Write a fake frame"""
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))*100 # S/N=10
@@ -251,9 +251,9 @@ class TestBinScripts(unittest.TestCase):
         Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
 for legacy standards
         """
-        self._write_frame(flavor='science', camera='b0')
-        self._write_fiberflat(camera='b0')
-        self._write_skymodel(camera='b0')
+        self._write_frame(flavor='science', camera='b3')
+        self._write_fiberflat(camera='b3')
+        self._write_skymodel(camera='b3')
         self._write_models()
         for opt in ['','--color=R-Z', '--std-targetids 0 1 2 3 4 5']:
             cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
@@ -277,9 +277,9 @@ for legacy standards
         Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         for gaia standards
         """
-        self._write_frame(flavor='science', camera='b0', gaia_only=True)
-        self._write_fiberflat(camera='b0')
-        self._write_skymodel(camera='b0')
+        self._write_frame(flavor='science', camera='b3', gaia_only=True)
+        self._write_fiberflat(camera='b3')
+        self._write_skymodel(camera='b3')
         self._write_models()
         for opt in ['', '--color=GAIA-BP-RP']:
             cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
@@ -308,7 +308,7 @@ for legacy standards
             print("do not test desi_compute_fluxcalib without DESI_SPECTRO_CALIB set")
             return
 
-        self._write_frame(flavor='science', camera='b0')
+        self._write_frame(flavor='science', camera='b3')
         self._write_fiberflat()
         self._write_fibermap()
         self._write_skymodel()
@@ -334,7 +334,7 @@ for legacy standards
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='science', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
+        self._write_frame(flavor='science', camera='b3')  # MUST MATCH FLUXCALIB ABOVE
         self._write_fiberflat()
         self._write_fibermap()
 

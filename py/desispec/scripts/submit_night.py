@@ -28,7 +28,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
-                 all_tiles=False, specstatus_path=None):
+                 all_tiles=False, specstatus_path=None, use_specter=False, do_cte_flat=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -75,6 +75,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                               the table pointed to by specstatus_path.
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
+        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        do_cte_flat, bool, optional. Default is False. If True, one second flat exposures are processed for cte identification.
 
     Returns:
         None.
@@ -141,10 +143,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     if laststeps is None:
-        if use_tilenight:
-            laststeps = ['all','skysub']
-        else:
-            laststeps = ['all']
+        laststeps = ['all',]
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:
@@ -219,12 +218,19 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
     etable = etable[good_exps]
 
+    ## Count zeros before trimming by OBSTYPE since they are used for
+    ## nightly bias even if they aren't processed individually
+    num_zeros = np.sum([erow['OBSTYPE'] == 'zero' and
+                       (erow['PROGRAM'].startswith('calib zeros') or erow['PROGRAM'].startswith('zeros for dark'))
+                       for erow in etable])
+
     ## Cut on OBSTYPES
     good_types = np.isin(np.array(etable['OBSTYPE']).astype(str), proc_obstypes)
     etable = etable[good_types]
 
     ## Cut on EXPTIME
     good_exptimes = []
+    already_found_cte_flat = False
     for erow in etable:
         if erow['OBSTYPE'] == 'science' and erow['EXPTIME'] < 60:
             good_exptimes.append(False)
@@ -233,7 +239,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME']) - 300.) > 1:
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1:
-            good_exptimes.append(False)
+            if do_cte_flat and not already_found_cte_flat \
+               and np.abs(float(erow['EXPTIME']) - 1.) < 0.5:
+                good_exptimes.append(True)
+                already_found_cte_flat = True
+            else:
+                good_exptimes.append(False)
         else:
             good_exptimes.append(True)
     etable = etable[np.array(good_exptimes)]
@@ -244,6 +255,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     isdarkcal = np.array([(erow['OBSTYPE'] == 'dark' and 'calib' in
                           erow['PROGRAM']) for erow in etable])
     isdark = np.array([(erow['OBSTYPE'] == 'dark') for erow in etable])
+
     ## If a cal, want to select that but ignore all other darks
     ## elif only a dark sequence, use that
     if np.sum(isdarkcal)>0:
@@ -296,7 +308,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## If just starting out and no dark, do the nightlybias
-    do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes)
+    do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes) and num_zeros>0
     if tableng == 0 and np.sum(isdark) == 0 and do_bias:
         print("\nNo dark found. Submitting nightlybias before processing exposures.\n")
         prow = default_prow()
@@ -352,7 +364,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                     check_for_outputs=check_for_outputs,
                                                     resubmit_partial_complete=resubmit_partial_complete,
                                                     z_submit_types=z_submit_types,
-                                                    system_name=system_name)
+                                                    system_name=system_name,use_specter=use_specter)
             else:
                 cur_z_submit_types = z_submit_types
                 ## If running redshifts and there is a future exposure of the same tile
@@ -387,7 +399,10 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         prow['INTID'] = internal_id
         internal_id += 1
         if prow['OBSTYPE'] == 'dark':
-            prow['JOBDESC'] = 'ccdcalib'
+            if num_zeros == 0:
+                prow['JOBDESC'] = 'badcol'   # process dark for bad columns even if we don't have zeros for nightlybias
+            else:
+                prow['JOBDESC'] = 'ccdcalib' # ccdcalib = nightlybias(zeros) + badcol(dark)
         else:
             prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, calibjobs)
@@ -397,12 +412,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                  reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs,
                                  resubmit_partial_complete=resubmit_partial_complete,
-                                 system_name=system_name)
+                                 system_name=system_name,use_specter=use_specter)
 
             ## If processed a dark, assign that to the dark job
             if curtype == 'dark':
                 prow['CALIBRATOR'] = 1
-                calibjobs['ccdcalib'] = prow.copy()
+                calibjobs[prow['JOBDESC']] = prow.copy()
 
             ## Add the processing row to the processing table
             ptable.add_row(prow)
@@ -411,7 +426,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and calibjobs['nightlyflat'] is None \
-                and int(erow['SEQTOT']) < 5:
+                and int(erow['SEQTOT']) < 5 \
+                and np.abs(float(erow['EXPTIME'])-120.) < 1.:
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
@@ -444,7 +460,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
                                                 z_submit_types=z_submit_types,
-                                                system_name=system_name)
+                                                system_name=system_name,use_specter=use_specter)
         else:
             ptable, calibjobs, sciences, internal_id \
                 = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,

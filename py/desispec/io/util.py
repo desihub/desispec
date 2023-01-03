@@ -15,7 +15,7 @@ import numpy as np
 from astropy.table import Table
 from desiutil.log import get_logger
 
-from ..util import healpix_degrade_fixed
+from desispec.util import parse_int_args
 
 def checkgzip(filename):
     """
@@ -364,13 +364,6 @@ def healpix_subdirectory(nside, pixel):
     pixdir = str(pixel)
     return os.path.join(subdir, pixdir)
 
-    #- Note: currently nside isn't used, but if we did want to do a strict
-    #- superpix grouping, we would need to know nside and do something like:
-
-    # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
-    # return os.path.join("{}-{}".format(subnside, subpixel),
-    #     "{}-{}".format(nside, pixel))
-
     
 def create_camword(cameras):
     """
@@ -530,7 +523,7 @@ def parse_cameras(cameras, loglevel='INFO'):
     else:
         log.error(f"Couldn't understand cameras={cameras}.")
         raise ValueError(f"Couldn't understand cameras={cameras}.")
-    if camword == '':
+    if camword == '' and len(cameras)>0:
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
         raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
@@ -555,7 +548,7 @@ def difference_camwords(fullcamword,badcamword,suppress_logging=False):
     for cam in bad_cameras:
         if cam in full_cameras:
             full_cameras.remove(cam)
-        else:
+        elif not suppress_logging:
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
@@ -602,6 +595,103 @@ def camword_union(camwords, full_spectros_only=False):
         final_camword = camword
     return final_camword
 
+
+def camword_intersection(camwords, full_spectros_only=False):
+    """
+    Return the camword intersection of cameras in a list of camwords
+
+    Args:
+        camwords: list of str camwords
+
+    Options:
+        full_spectros_only: if True, only include spectrographs that have all 3 brz cameras
+
+    Returns:
+        final_camword (str): intersection of input camwords
+    """
+    if len(camwords) == 0:
+        return ''
+
+    cameras = set(decode_camword(camwords[0]))
+    if len(camwords) > 1:
+        for cw in camwords[1:]:
+            cameras &= set(decode_camword(cw))
+
+    camword = parse_cameras(sorted(cameras))
+
+    if full_spectros_only:
+        spectros = camword_to_spectros(camword, full_spectros_only)
+        if len(spectros) > 0:
+            camword = 'a'+''.join([str(sp) for sp in spectros])
+        else:
+            camword = ''
+
+    return camword
+
+
+def erow_to_goodcamword(erow, suppress_logging=False):
+    """
+    Takes a dictionary-like object with at minimum keys for
+    OBSTYPE (type str), CAMWORD (type str), BADCAMWORD (type str),
+    BADAMPS (str).
+
+    Args:
+        erow (dict-like): the exposure table row with columns OBSTYPE, CAMWORD,
+                          BADCAMWORD, and BADAMPS.
+        suppress_logging (bool), whether to suppress logging messages. Default False.
+
+
+    Returns:
+        goodcamword (str): Camword for that observation given the obstype and
+                           input camera information.
+    """
+    return columns_to_goodcamword(camword=erow['CAMWORD'],
+                                  badcamword=erow['BADCAMWORD'],
+                                  badamps=erow['BADAMPS'],
+                                  obstype=erow['OBSTYPE'],
+                                  suppress_logging=suppress_logging)
+
+
+def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
+                           suppress_logging=False):
+    """
+    Takes a camera information and obstype and returns the correct camword
+    of good cameras for that type of observation.
+
+    Args:
+        camword (type str): camword of available cameras
+        badcamword (str): camword of bad cameras
+        badamps (str): comma seperated list of bad amplifiers [brz][0-9][A-D]
+        obstype (str), obstype of exposure
+        suppress_logging (bool), whether to suppress logging messages. Default False.
+
+    Returns:
+        goodcamword (str): Camword for that observation given the obstype and
+                           input camera information.
+    """
+    log = get_logger()
+    if not suppress_logging:
+        if badamps is None:
+            log.info("No badamps given, proceeding without badamp removal")
+        elif obstype is None:
+            log.info("No obstype given, will remove badamps.")
+        elif obstype != 'science':
+            log.info("obstype!='science', will remove badamps.")
+
+    goodcamword = difference_camwords(camword, badcamword,
+                                      suppress_logging=suppress_logging)
+    if badcamword is not None and badamps != '':
+        if obstype is None or obstype != 'science':
+            badampcams = []
+            for (camera, petal, amplifier) in parse_badamps(badamps):
+                badampcams.append(f'{camera}{petal}')
+            badampcamword = create_camword(np.unique(badampcams))
+            goodcamword = difference_camwords(goodcamword, badampcamword,
+                                              suppress_logging=suppress_logging)
+
+    return goodcamword
+
+
 def camword_to_spectros(camword, full_spectros_only=False):
     """
     Takes a camword as input and returns any spectrograph represented within that camword. By default this includes partial
@@ -623,6 +713,25 @@ def camword_to_spectros(camword, full_spectros_only=False):
         elif full_spectros_only and char in ['b','r','z']:
             break
     return list(spectros)
+
+def spectros_to_camword(spectros):
+    """
+    Converts a specification of spectrographs to the equivalent camword
+
+    Args:
+        spectros: str (e.g. "0-7,9") or list of ints spectrographs
+
+    Returns: camword str (e.g. a012345679)
+    """
+    if isinstance(spectros, str):
+        spectros = parse_int_args(spectros, include_end=True)
+
+    spectros = sorted(spectros)
+    camword = "a" + "".join(str(sp) for sp in spectros)
+    check = camword_to_spectros(camword)
+    assert sorted(spectros) == check
+
+    return camword
 
 def parse_badamps(badamps,joinsymb=','):
     """
@@ -794,6 +903,27 @@ def get_tempfilename(filename):
     tempfile = f'{base}_tmp{pid}{extension}{second_ext}'
     return tempfile
 
+def get_log_pathname(data_pathname):
+    """
+    Returns unique log pathname for a given data product.
+
+    Args:
+        data_pathname (str): input filename of output data
+
+    Returns:
+        log_pathname (str): pathname to the log
+    Returns unique filename in same directory
+    """
+    directory = os.path.dirname(data_pathname)
+    filename = os.path.basename(data_pathname)
+    if data_pathname.endswith(('.gz', '.fz')):
+        filename, second_ext = os.path.splitext(filename)
+    else:
+        second_ext = ''
+    base, extension = os.path.splitext(filename)
+    log_pathname = os.path.join(directory, 'logs', f'{base}.log')
+    return log_pathname
+
 def addkeys(hdr1, hdr2, skipkeys=None):
     """
     Add new header keys from hdr2 to hdr1, skipping skipkeys
@@ -839,4 +969,66 @@ def is_svn_current(dirname):
         msg = f'FAILED {cmd}'
         log.error(msg)
         raise ValueError(msg)
+
+def relsymlink(src, dst, pathonly=False):
+    """
+    Create a relative symlink from dst -> src, while also handling
+    $DESI_ROOT vs $DESI_ROOT_READONLY
+
+    Args:
+        src (str): the pre-existing file to point to
+        dst (str): the symlink file to create
+
+    Options:
+        pathonly (bool): return the path, but don't make the link
+
+    Returns:
+        the releative path from dst -> src
+    """
+    #- if src is already a relative path, just use that
+    if src.startswith('..'):
+        relpath = src
+    else:
+        #- Standardize path
+        src = os.path.normpath(os.path.abspath(src))
+        dst = os.path.normpath(os.path.abspath(dst))
+
+        #- handle DESI_ROOT (required) vs. DESI_ROOT_READONLY (optional)
+        if 'DESI_ROOT_READONLY' in os.environ:
+            ro_root = os.path.normpath(os.environ['DESI_ROOT_READONLY'])
+            rw_root = os.path.normpath(os.environ['DESI_ROOT'])
+
+            if (ro_root != rw_root) and src.startswith(ro_root):
+                src = src.replace(ro_root, rw_root, 1)
+
+        relpath = os.path.relpath(src, os.path.dirname(dst))
+
+    if not pathonly:
+        os.symlink(relpath, dst)
+
+    return relpath
+
+def backup_filename(filename):
+    """rename filename to next available filename.N
+
+    Args:
+        filename (str): full path to filename
+
+    Returns:
+        New filename.N, or filename if original file didn't already exist
+    """
+    if filename == '/dev/null' or not os.path.exists(filename):
+        return filename
+
+    n = 0
+    while True:
+        altfile = f'{filename}.{n}'
+        if os.path.exists(altfile):
+            n += 1
+        else:
+            break
+
+    os.rename(filename, altfile)
+
+    return altfile
 

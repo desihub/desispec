@@ -60,7 +60,9 @@ def parse(options=None):
                         help = 'seeing FWHM in arcsec, used for fiberloss correction')
     parser.add_argument('--nsig-flux-scale', type = float, default = 3, required=False,
                        help = 'n sigma cutoff of the flux scale among standard stars')
-    parser.add_argument("--use-gpu", action="store_true", help="Use GPUs")
+    parser.add_argument('--apply-sky-throughput-correction', action='store_true',
+                        help =('Apply a throughput correction when subtraction the sky '
+                               '(default: do not apply!)'))
 
     parser.set_defaults(nostdcheck=False)
 
@@ -83,28 +85,30 @@ def main(args=None) :
     cmd = ' '.join(cmd)
     log.info(cmd)
 
-    log.info("read frame")
     # read frame
+    basename = os.path.basename(args.infile)
+    log.info(f"read frame {basename}")
     frame = read_frame(args.infile)
+    camera = frame.meta['CAMERA']
 
     # Set fibermask flagged spectra to have 0 flux and variance
     frame = get_fiberbitmasked_frame(frame, bitmask='flux',ivar_framemask=True)
 
-    log.info("apply fiberflat")
+    log.info(f"apply fiberflat {camera}")
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)
 
     # apply fiberflat
     apply_fiberflat(frame, fiberflat)
 
-    log.info("subtract sky")
+    log.info(f"subtract sky {camera}")
     # read sky
     skymodel=read_sky(args.sky)
 
     # subtract sky
-    subtract_sky(frame, skymodel)
+    subtract_sky(frame, skymodel, apply_throughput_correction = args.apply_sky_throughput_correction)
 
-    log.info("compute flux calibration")
+    log.info(f"compute flux calibration {camera}")
 
     # read models
     model_flux, model_wave, model_fibers, model_metadata=read_stdstar_models(args.models)
@@ -113,32 +117,34 @@ def main(args=None) :
         table=Table.read(args.selected_calibration_stars)
         good=table["VALID"]==1
         good_models = np.in1d( model_fibers , table["FIBER"][good] )
-        log.info("Selected {} good stars, fibers = {}, from {}".format(np.sum(good_models),model_fibers[good_models],args.selected_calibration_stars))
+        log.info("Selected {} good stars on {}, fibers = {}, from {}".format(
+            np.sum(good_models), camera, model_fibers[good_models], args.selected_calibration_stars))
         model_flux   = model_flux[good_models]
         model_fibers = model_fibers[good_models]
         model_metadata = model_metadata[good_models]
 
         if args.delta_color_cut > 0 :
-            log.warning("will ignore color cut because a preselected list of stars was given")
+            log.warning(f"{camera} will ignore color cut because a preselected list of stars was given")
             args.delta_color_cut = 0
         if args.min_color is not None :
-            log.warning("will ignore min color because a preselected list of stars was given")
+            log.warning(f"{camera} will ignore min color because a preselected list of stars was given")
             args.min_color = None
         if args.chi2cut_nsig > 0 :
-            log.warning("will ignore chi2 cut because a preselected list of stars was given")
+            log.warning(f"{camera} will ignore chi2 cut because a preselected list of stars was given")
             args.chi2cut_nsig = 0
         if args.nsig_flux_scale > 0 :
-            log.warning("set nsig_flux_scale because a preselected list of stars was given")
+            log.warning(f"{camera} set nsig_flux_scale because a preselected list of stars was given")
             args.nsig_flux_scale = 0.
     ok=np.ones(len(model_metadata),dtype=bool)
 
     if args.chi2cut > 0 :
-        log.info("apply cut CHI2DOF<{}".format(args.chi2cut))
+        log.info(f"{camera} apply cut CHI2DOF<{args.chi2cut}")
         good = (model_metadata["CHI2DOF"]<args.chi2cut)
         bad  = ~good
         ok  &= good
         if np.any(bad) :
-            log.info(" discard {} stars with CHI2DOF= {}".format(np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
+            log.info("{} discard {} stars with CHI2DOF= {}".format(
+                camera, np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
 
     legacy_filters = ('G-R', 'R-Z')
     gaia_filters = ('GAIA-BP-RP', 'GAIA-G-RP')
@@ -150,64 +156,67 @@ def main(args=None) :
             log.info('Using Gaia filters')
             color ='GAIA-BP-RP'
         else:
-            log.error("Can't find either G-R or BP-RP color in the model file.")
+            log.error(f"{camera} Can't find either G-R or BP-RP color in the model file.")
             sys.exit(15)
     else:
         if args.color not in legacy_filters and args.color not in gaia_filters:
-            log.error('Color name {} is not allowed, must be one of {} {}'.format(args.color, legacy_filters,gaia_filters))
+            log.error('{} Color name {} is not allowed, must be one of {} {}'.format(
+                camera, args.color, legacy_filters, gaia_filters))
             sys.exit(14)
         color = args.color
         if color not in model_column_list:
             # This should't happen
-            log.error('The color {} was not computed in the models'.format(color))
+            log.error(f'{camera} the color {color} was not computed in the models')
             sys.exit(16)
 
 
     if args.delta_color_cut > 0 :
         # check dust extinction values for those stars
         stars_ebv = np.array(frame.fibermap[model_fibers % 500]["EBV"])
-        log.info("min max E(B-V) for std stars = {:4.3f} {:4.3f}".format(np.min(stars_ebv),np.max(stars_ebv)))
+        log.info("{} min max E(B-V) for std stars = {:4.3f} {:4.3f}".format(
+            camera, np.min(stars_ebv),np.max(stars_ebv)))
         star_gr_reddening_relative_error = 0.2 * stars_ebv
-        log.info("Consider a g-r reddening sys. error in the range {:4.3f} {:4.3f}".format(np.min(star_gr_reddening_relative_error),np.max(star_gr_reddening_relative_error)))
+        log.info("{} consider a g-r reddening sys. error in the range {:4.3f} {:4.3f}".format(
+            camera, np.min(star_gr_reddening_relative_error),np.max(star_gr_reddening_relative_error)))
 
-
-        log.info("apply cut |delta color|<{}+reddening error".format(args.delta_color_cut))
+        log.info("{} apply cut |delta color|<{}+reddening error".format(camera, args.delta_color_cut))
         good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut+star_gr_reddening_relative_error)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
             vals=model_metadata["MODEL_"+color][bad]-model_metadata["DATA_"+color][bad]
-            log.info(" discard {} stars with dcolor= {}".format(np.sum(bad),list(vals)))
+            log.info("{} discard {} stars with dcolor= {}".format(camera, np.sum(bad),list(vals)))
 
     if args.min_color is not None :
-        log.info("apply cut DATA_{}>{}".format(color, args.min_color))
+        log.info("{} apply cut DATA_{}>{}".format(camera, color, args.min_color))
         good = (model_metadata["DATA_{}".format(color)]>args.min_color)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
             vals=model_metadata["DATA_{}".format(color)][bad]
-            log.info(" discard {} stars with {}= {}".format(np.sum(bad),color,list(vals)))
+            log.info("{} discard {} stars with {}= {}".format(camera, np.sum(bad),color,list(vals)))
 
     if args.chi2cut_nsig > 0 :
         # automatically reject stars that ar chi2 outliers
         mchi2=np.median(model_metadata["CHI2DOF"])
         rmschi2=np.std(model_metadata["CHI2DOF"])
         maxchi2=mchi2+args.chi2cut_nsig*rmschi2
-        log.info("apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(maxchi2,args.chi2cut_nsig))
+        log.info("{} apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(camera, maxchi2,args.chi2cut_nsig))
         good = (model_metadata["CHI2DOF"]<=maxchi2)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
-            log.info(" discard {} stars with CHI2DOF={}".format(np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
+            log.info("{} discard {} stars with CHI2DOF={}".format(
+                camera, np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
 
     ok=np.where(ok)[0]
     if ok.size == 0 :
-        log.error("selection cuts discarded all stars")
+        log.error(f"{camera} selection cuts discarded all stars")
         sys.exit(12)
     nstars=model_flux.shape[0]
     nbad=nstars-ok.size
     if nbad>0 :
-        log.warning("discarding %d star(s) out of %d because of cuts"%(nbad,nstars))
+        log.warning(f"{camera} discarding {nbad} star(s) out of {nstars} because of cuts")
         model_flux=model_flux[ok]
         model_fibers=model_fibers[ok]
         model_metadata=model_metadata[:][ok]
@@ -232,10 +241,9 @@ def main(args=None) :
         fibermap_std_indices = model_fibers % 500
     # Make sure the fibers of interest aren't entirely masked.
     if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
-        log.warning('All standard-star spectra are masked!')
+        log.warning(f'{camera} all standard-star spectra are masked!')
         return
 
-    if not args.use_gpu: desispec.fluxcalibration.use_gpu = False
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux,
             model_fibers%500,
             highest_throughput_nstars=args.highest_throughput,
@@ -272,4 +280,4 @@ def main(args=None) :
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
 
-    log.info("successfully wrote %s"%args.outfile)
+    log.info(f"successfully wrote {args.outfile}")

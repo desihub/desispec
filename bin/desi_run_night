@@ -3,7 +3,7 @@
 
 import argparse
 
-import sys
+import os, sys
 from desispec.scripts.submit_night import submit_night
 
 def parse_args():  # options=None):
@@ -37,7 +37,7 @@ def parse_args():  # options=None):
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
     #                         "Overwrites the environment variable SPECPROD")
-    parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
+    parser.add_argument("-q", "--queue", type=str, required=False, default='regular',
                         help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
@@ -72,13 +72,19 @@ def parse_args():  # options=None):
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
-    parser.add_argument("--use-tilenight", action="store_true",
-                        help="Use desi_proc_tilenight for prestdstar, stdstar, and poststdstar steps.")
+    parser.add_argument("--use-tilenight", action=argparse.BooleanOptionalAction,
+                        help="Use desi_proc_tilenight (or not) for prestdstar, stdstar, and poststdstar steps. "+
+                             "Default False for NERSC Cori, True otherwise")
     parser.add_argument("--all-tiles", action="store_true",
                         help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
     parser.add_argument("--specstatus-path", type=str, required=False, default=None,
                         help="Location of the surveyops specstatus table. Default is "+
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")
+    parser.add_argument("--use-specter", action="store_true",
+                        help="Use specter. Default is to use gpu_specter")
+    parser.add_argument("--do-cte-flat", action="store_true",
+                        help="If flag set then one second flat exposures are "
+                             + "processed for cte identification.")
     args = parser.parse_args()
 
     # convert str lists to actual lists
@@ -94,6 +100,12 @@ def parse_args():  # options=None):
 
     if args.laststeps is not None:
         args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
+    if args.use_tilenight is None:
+        if 'NERSC_HOST' in os.environ and os.environ['NERSC_HOST'] == 'cori':
+            args.use_tilenight = False
+        else:
+            args.use_tilenight = True
 
     return args
 

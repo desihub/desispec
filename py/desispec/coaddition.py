@@ -316,7 +316,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
-def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
+def coadd(spectra, cosmics_nsig=None, onetile=False) :
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -324,7 +324,7 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
        spectra: desispec.spectra.Spectra object
 
     Options:
-       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
        onetile: bool, if True, inputs are from a single tile
 
     Notes: if `onetile` is True, additional tile-specific columns
@@ -336,6 +336,18 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
     targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
+
+    #- Use "None" as default -> 4.0 so that scripts can use args.nsig
+    #- with default None, which lets this function be the sole "owner" of
+    #- the true numeric default
+    if cosmics_nsig is None:
+        cosmics_nsig = 4.0   # Note: if you change this, also change docstring
+
+    if cosmics_nsig > 0:
+        log.info(f'Clipping cosmics with {cosmics_nsig=}')
+    else:
+        log.info(f'Not performing cosmics sigma clipping ({cosmics_nsig=})')
+
     for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
         nwave=spectra.wave[b].size

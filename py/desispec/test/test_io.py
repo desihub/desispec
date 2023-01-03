@@ -6,7 +6,8 @@
 import sys
 if __name__ == '__main__':
     print('Run this instead:')
-    print('python setup.py test -m desispec.test.test_io')
+    # print('python setup.py test -m desispec.test.test_io')
+    print('pytest py/desispec/test/test_io.py')
     sys.exit(1)
 
 import unittest
@@ -70,6 +71,10 @@ class TestIO(unittest.TestCase):
         for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
+
+        # restore environment variables if test changed them
+        for key, value in self.testEnv.items():
+            os.environ[key] = value
 
     @classmethod
     def tearDownClass(cls):
@@ -1265,6 +1270,22 @@ class TestIO(unittest.TestCase):
             outcw = camword_union(fcws, full_spectros_only=True)
             self.assertEqual(outcw, truespecw)
 
+    def test_camword_intersection(self):
+        """Test desispec.io.camword_intersection"""
+        from ..io.util import camword_intersection as cx
+
+        self.assertEqual(cx(['a012', 'a123']), 'a12')
+        self.assertEqual(cx(['a012', 'a123', 'a157']), 'a1')
+        self.assertEqual(cx(['a012', 'a1b2']), 'a1b2')
+        self.assertEqual(cx(['a012', 'a01b2'], full_spectros_only=True), 'a01')
+        self.assertEqual(cx(['a012', 'a012']), 'a012')
+        self.assertEqual(cx(['a012',]), 'a012')
+        self.assertEqual(cx(['a012', 'a456']), '')
+        self.assertEqual(cx(['b012', 'r012']), '')
+        self.assertEqual(cx(['b012', 'r012'], full_spectros_only=True), '')
+        self.assertEqual(cx(['b012', 'a012']), 'b012')
+        self.assertEqual(cx(['a2', '', 'a2']), '')
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
@@ -1309,6 +1330,48 @@ class TestIO(unittest.TestCase):
         self.assertNotEqual(filename, tempfile)
         self.assertTrue(tempfile.endswith('.gz'))
         self.assertTrue('blat' in tempfile)
+
+    def test_get_log_pathname(self):
+        """test desispec.io.util.get_log_pathname
+        """
+        from ..io.util import get_log_pathname
+        filename = '/a/b/foo.fits'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/foo' in logfile)
+        self.assertTrue('.fits' not in logfile)
+
+        filename = '/a/b/blat.fits.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.gz' not in logfile)
+
+        filename = '/a/b/blat.fits.fz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.fz' not in logfile)
+
+        filename = 'blat.ecsv'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.ecsv' not in logfile)
+
+        filename = 'blat.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.gz' not in logfile)
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
@@ -1450,6 +1513,105 @@ class TestIO(unittest.TestCase):
 
         t = iotime.parse_logfile(self.testlog)
         self.assertEqual(t, None)
+
+    def test_relsymlink(self):
+        from ..io.util import relsymlink
+        # basic
+        path = relsymlink('/blat/foo/a/b/c.fits',
+                          '/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        # test that it actually makes the link
+        os.makedirs(self.testDir + '/a/b')
+        os.makedirs(self.testDir + '/x/y')
+        with open(self.testDir+'/a/b/test1.txt', 'w') as fp:
+            fp.write('blat')
+        path = relsymlink(self.testDir+'/a/b/test1.txt', self.testDir+'/x/y/test2.txt')
+        self.assertEqual(path, '../../a/b/test1.txt')
+        with open(self.testDir+'/x/y/test2.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+
+        # test that directory (not file) linking works too
+        path = relsymlink(self.testDir+'/a/b', self.testDir+'/x/z')
+        self.assertEqual(path, '../a/b')
+        with open(self.testDir+'/x/z/test1.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+
+        # DESI_ROOT and DESI_ROOT_READONLY treated as same root path
+        self.assertNotEqual(os.environ['DESI_ROOT'],
+                            os.environ['DESI_ROOT_READONLY'])
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        # don't get confused by trailing slashes
+        self.assertFalse(os.environ['DESI_ROOT'].endswith('/'))
+        self.assertFalse(os.environ['DESI_ROOT_READONLY'].endswith('/'))
+        os.environ['DESI_ROOT'] = os.environ['DESI_ROOT'] + '/'
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        os.environ['DESI_ROOT_READONLY'] = os.environ['DESI_ROOT_READONLY'] + '/'
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        os.environ['DESI_ROOT'] = os.environ['DESI_ROOT'][0:-1]  # drop trailing /
+        path = relsymlink(
+                os.environ['DESI_ROOT_READONLY']+'/blat/foo/a/b/c.fits',
+                os.environ['DESI_ROOT']+'/blat/foo/x/y/c.fits', pathonly=True)
+        self.assertEqual(path, '../../a/b/c.fits')
+
+        #- src itself can be a relative path, in which case it means relative
+        #- to dirname(dst), not current directory
+        origdir = os.getcwd()
+        os.chdir(self.testDir)
+        path = relsymlink(
+                '../../a/b/test1.txt',
+                self.testDir+'/x/y/test3.txt')
+        self.assertEqual(path, '../../a/b/test1.txt')
+        with open(self.testDir+'/x/y/test3.txt') as fp:
+            line = fp.readline()
+            self.assertEqual(line, 'blat')
+        os.chdir(origdir)
+
+    def test_backup_filename(self):
+        from ..io.util import backup_filename
+
+        fx = open(self.testDir+'/a.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.0', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.1', 'w'); fx.close()
+
+        test = backup_filename(self.testDir+'/a.log')
+        self.assertEqual(test, self.testDir+'/a.log.0')
+
+        test = backup_filename(self.testDir+'/b.log')
+        self.assertEqual(test, self.testDir+'/b.log.2')
+
+        test = backup_filename(self.testDir+'/c.log')
+        self.assertEqual(test, self.testDir+'/c.log')
+
+    def test_camword_spectros(self):
+        from ..io.util import spectros_to_camword, camword_to_spectros
+
+        self.assertEqual(camword_to_spectros('a01'), [0,1])
+        self.assertEqual(camword_to_spectros('a135'), [1,3,5])
+        self.assertEqual(camword_to_spectros('a135b7'), [1,3,5,7])
+        self.assertEqual(camword_to_spectros('a135b7', full_spectros_only=True), [1,3,5])
+
+        self.assertEqual(spectros_to_camword('1-3'), 'a123')
+        self.assertEqual(spectros_to_camword('1,3,5'), 'a135')
+        self.assertEqual(spectros_to_camword('1,3-5'), 'a1345')
+        self.assertEqual(spectros_to_camword([0,5,6]), 'a056')
+        self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
+
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -539,7 +539,7 @@ def compute_background_between_fiber_blocks(image,xyset) :
 
             # set average value to masked interblocks
             if np.any(vinterblock==0) :
-                vinterblock[vinterblock==0] = np.median(vinterblock[vinterblock>0])
+                vinterblock[vinterblock==0] = np.median(vinterblock[vinterblock!=0])
 
             # interpolate along x
             xx=np.arange(sec[1].start,sec[1].stop)
@@ -680,7 +680,7 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
     return badrows, active_col_val
 
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
-            bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
+            bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=None,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
@@ -728,7 +728,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional tuning of cosmic ray rejection parameters:
         cosmics_nsig: number of sigma above background required
         cosmics_cfudge: number of sigma inconsistent with PSF required
-        cosmics_c2fudge:  fudge factor applied to PSF
+        cosmics_c2fudge:  fudge factor applied to PSF (default is 0.5, set in code)
 
     Optional fit and subtraction of scattered light
 
@@ -859,7 +859,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- Load dark
     if cfinder and cfinder.haskey("DARK") and (dark is not False):
-
+        
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
@@ -869,7 +869,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
-        dark_filename = cfinder.findfile("DARK")
+    
+        if isinstance(dark,str):
+            dark_filename=dark
+            if not os.path.exists(dark_filename):
+                message=f"Supplied a filename for the dark to be used for preprocessing ({dark}), but does not exist"
+                log.error(message)
+                raise ValueError(message)
+        else:
+            dark_filename = cfinder.findfile("DARK")
+
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
@@ -1286,6 +1295,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- update img.mask to mask cosmic rays
     if not nocosmic :
+
+        if cfinder is not None and cfinder.haskey("COSMICS_C2") :
+            if cosmics_c2fudge is None :
+                cosmics_c2fudge = cfinder.value("COSMICS_C2")
+                log.info(f"Using custom cosmics C2 parameter = {cosmics_c2fudge}")
+            else :
+                cosmics_c2fudge_in_calib = cfinder.value("COSMICS_C2")
+                log.warning(f"Cosmics C2 parameter from calibration ({cosmics_c2fudge_in_calib}) overridden by function arg = {cosmics_c2fudge}")
+        
+        if cosmics_c2fudge is None :
+            cosmics_c2fudge = 0.5
+            log.debug(f"Using default cosmics C2 parameter = {cosmics_c2fudge}")
+            
+
         cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
         mask = img.mask
 

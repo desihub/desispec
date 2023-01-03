@@ -52,8 +52,9 @@ def parse(options=None):
                          nargs='*',
                          help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
-    parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
-
+    parser.add_argument('--apply-sky-throughput-correction', action='store_true',
+                        help =('Apply a throughput correction when subtraction the sky '
+                               '(default: do not apply!)'))
     log = get_logger()
 
     args = parser.parse_args(options)
@@ -153,19 +154,6 @@ def main(args=None, comm=None) :
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
-    if not args.use_gpu and desispec.fluxcalibration.use_gpu:
-        # Opt-out of GPU usage
-        desispec.fluxcalibration.use_gpu = False
-        if rank == 0:
-            log.info('ignoring GPU')
-    elif desispec.fluxcalibration.use_gpu:
-        # Nothing to do here, GPU is used by default if available
-        if rank == 0:
-            log.info('using GPU')
-    else:
-        if rank == 0:
-            log.info('GPU not available')
-
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
@@ -203,7 +191,6 @@ def main(args=None, comm=None) :
 
     spectrograph=None
     starfibers=None
-    starindices=None
     fibermap=None
     # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
     # cameras and then proceed with extracting the frame information
@@ -223,42 +210,30 @@ def main(args=None, comm=None) :
             frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
             frame_fibermap = frame.fibermap
 
-            # frame was filtered to just stdstars upon reading, so initial list of starindices is full range
-            frame_starindices = np.arange(len(frame.fibermap), dtype=int)
-
             #- Confirm that all fluxes have entries but trust targeting bits
             #- to get basic magnitude range correct
-            keep_legacy = np.ones(len(frame_starindices), dtype=bool)
-
+            keep_legacy = np.ones(len(frame_fibermap), dtype=bool)
             for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
-                keep_legacy &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
-                keep_legacy &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
-            keep_gaia = np.ones(len(frame_starindices), dtype=bool)
+                keep_legacy &= frame_fibermap[colname] > 10**((22.5-30)/2.5)
+                keep_legacy &= frame_fibermap[colname] < 10**((22.5-0)/2.5)
 
-            for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
-                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
-                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
+            keep_gaia = np.ones(len(frame_fibermap), dtype=bool)
+            for colname in ['G', 'BP', 'RP']:
+                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'] > 10
+                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'] < 20
+
             n_legacy_std = keep_legacy.sum()
             n_gaia_std = keep_gaia.sum()
-            keep = keep_legacy | keep_gaia
-            # accept both types of standards for the time being
-
-            # keep the indices for gaia/legacy subsets
-            is_gaia_std = keep_gaia[keep]
-            is_legacy_std = keep_legacy[keep]
-
-            frame_starindices = frame_starindices[keep]
 
             if spectrograph is None :
                 spectrograph = frame.spectrograph
                 fibermap = frame_fibermap
-                starindices=frame_starindices
-                starfibers=np.asarray(fibermap["FIBER"][starindices])
+                starfibers=np.asarray(fibermap["FIBER"])
 
             elif spectrograph != frame.spectrograph :
                 log.error("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
                 raise ValueError("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
-            elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
+            elif len(fibermap) != len(frame_fibermap) or np.any(fibermap['FIBER'] != frame_fibermap['FIBER']):
                 log.error("incompatible fibermap")
                 raise ValueError("incompatible fibermap")
 
@@ -309,10 +284,10 @@ def main(args=None, comm=None) :
         if n_gaia_std == 0 and gaia_color:
             raise Exception('Specified gaia color, but no gaia stds')
 
-    if starindices.size == 0:
+    if starfibers.size == 0:
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
-    log.info("found %d STD stars" % starindices.size)
+    log.info("found %d STD stars" % starfibers.size)
 
     if n_legacy_std == 0:
         gaia_std = True
@@ -331,16 +306,25 @@ def main(args=None, comm=None) :
         color_band1, color_band2  = ['GAIA-'+ _ for _ in color[5:].split('-')]
         log.info("Using Gaia standards with color {} and normalizing to {}".format(color, ref_mag_name))
         # select appropriate subset of standards
-        starindices = np.where(is_gaia_std)[0]
-        starfibers = starfibers[is_gaia_std]
+        keep_stds = keep_gaia
     else:
         ref_mag_name = 'R'
         color_band1, color_band2  = color.split('-')
         log.info("Using Legacy standards with color {} and normalizing to {}".format(color, ref_mag_name))
         # select appropriate subset of standards
-        starindices = np.where(is_legacy_std)[0]
-        starfibers = starfibers[is_legacy_std]
+        keep_stds = keep_legacy
 
+    if np.sum(keep_stds) != len(keep_stds):
+        log.warning('sp{} has {}/{} standards with good photometry'.format(
+            spectrograph, np.sum(keep_stds), len(keep_stds)))
+
+    starfibers = starfibers[keep_stds]
+    fibermap   = fibermap[keep_stds]
+    assert(len(fibermap)==len(starfibers)) # check same size
+    assert(len(fibermap)==np.sum(keep_stds)) # test for funny astropy Table issue
+    assert(np.all(fibermap['FIBER']==starfibers)) # same order
+
+    log.info(f'sp{spectrograph} stdstar fibers {starfibers}')
 
     # excessive check but just in case
     if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
@@ -364,11 +348,11 @@ def main(args=None, comm=None) :
             frames.pop(cam)
             continue
 
-        flat = flats[cam][starindices]
+        flat = flats[cam][keep_stds]
 
         for i in range(len(frames[cam])):
-            frame = frames[cam][i][starindices]
-            sky = skies[cam][i][starindices]
+            frame = frames[cam][i][keep_stds]
+            sky = skies[cam][i][keep_stds]
 
             #- don't use masked or ivar=0 data
             frame.ivar *= (frame.mask == 0)
@@ -379,7 +363,7 @@ def main(args=None, comm=None) :
             frame.flux *= (frame.ivar > 0) # just for clean plots
 
             apply_fiberflat(frame, flat)
-            subtract_sky(frame, sky)
+            subtract_sky(frame, sky, apply_throughput_correction = args.apply_sky_throughput_correction)
 
             #- keep newly flat-fielded sky-subtracted frame
             frames[cam][i] = frame
@@ -397,7 +381,7 @@ def main(args=None, comm=None) :
             log.debug("medflux = {}".format(medflux))
             medflux *= (medflux>0)
             if np.sum(medflux>0)==0 :
-               log.error("mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"][starindices])))
+               log.error("mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"])))
                sys.exit(12)
             mmedflux = np.mean(medflux[medflux>0])
             weights=medflux/mmedflux
@@ -421,12 +405,18 @@ def main(args=None, comm=None) :
     del skies
     del flats
 
+    # Double check indexing
+    assert np.all(fibermap['FIBER'] == starfibers)
+    for cam in frames:
+        for frame in frames[cam]:
+            assert np.all(frame.fibermap['FIBER'] == starfibers)
+
     # CHECK S/N
     ############################################
     # for each band in 'brz', record quadratic sum of median S/N across wavelength
     snr=dict()
     for band in ['b','r','z'] :
-        snr[band]=np.zeros(starindices.size)
+        snr[band]=np.zeros(starfibers.size)
     for cam in frames :
         band=cam[0].lower()
         for frame in frames[cam] :
@@ -458,10 +448,15 @@ def main(args=None, comm=None) :
         for i in range(len(frames[cam])) :
             frames[cam][i] = frames[cam][i][validstars]
 
-    starindices = starindices[validstars]
     starfibers  = starfibers[validstars]
-    nstars = starindices.size
-    fibermap = Table(fibermap[starindices])
+    fibermap = Table(fibermap[validstars])
+    nstars = starfibers.size
+
+    # Check indexing yet again
+    assert np.all(fibermap['FIBER'] == starfibers)
+    for cam in frames:
+        for frame in frames[cam]:
+            assert np.all(frame.fibermap['FIBER'] == starfibers)
 
     # MASK OUT THROUGHPUT DIP REGION
     ############################################

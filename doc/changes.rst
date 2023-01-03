@@ -2,10 +2,116 @@
 desispec Change Log
 ===================
 
-0.54.1 (unreleased)
+0.56.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Add update_survey_keywords to standardize early FA headers (PR `#1858`_).
+* Standardize GPU options (opt-out with --no-gpu) and fix options for
+  desi_run_night auto-deriving GPU vs. CPU per job (PR `#1901`_).
+* cosmics parameters in yaml file for 500 micron mosaic z5 CCD (PR `#1905`_).
+* cosmics_nsig default cleanup (PR `#1906`_).
+* Reduce size of jobgraph diagrams (PR `#1910`_).
+* Merge ongoing work on spectroscopic production database in preparation for
+  EDR (PR `#1928`_).
+
+.. _`#1858`: https://github.com/desihub/desispec/pull/1858
+.. _`#1901`: https://github.com/desihub/desispec/pull/1901
+.. _`#1905`: https://github.com/desihub/desispec/pull/1905
+.. _`#1906`: https://github.com/desihub/desispec/pull/1906
+.. _`#1910`: https://github.com/desihub/desispec/pull/1910
+.. _`#1928`: https://github.com/desihub/desispec/pull/1928
+
+0.55.0 (2022-11-11)
+-------------------
+
+Major:
+
+* Restore sky-modeling sector offsets (PR `#1825`_).
+* Add emlinefit afterburner to redshift scripts (PR `#1852`_).
+* emlinefit (1+z) normalization bugfix (PR `#1878`_).
+* Sky model use TPCORR to adjust sky line amplitudes, but not continuum
+  (PRs `#1886`_, `#1895`_).
+
+Minor:
+
+* Fix desi_proc stdstar args (PR `#1822`_).
+* Set default system_name while parsing args (PR `#1824`_).
+* Add ``desi_purge_night`` script (PR `#1828`_).
+* Fix ``find_overscan_cosmics_trails`` in 2-amp CCD readout mode (PR `#1831`_).
+* Fix ``iotime.parse_logfile`` when there aren't any iotime messages (PR `#1833`_).
+* Make $SPECPROD optional for running ``desi_preproc`` (PR `#1835`_).
+* Catch exceptions in tilenight and update Perlmutter runtimes (PR `#1837`_).
+* Add biasnight check to nightqa (PR `#1841`_).
+* ``desi_run_night`` only launches obs completed tiles by default (PR `#1843`_).
+* Fix 2-amp readout biasnight (PR `#1844`_).
+* Add color coding to the nightly and monthly buttons in dashboards (PR `#1845`_).
+* Sort on EXPID as well as TILEID in desi_run_night (PR `#1848`_).
+* biasnight job shouldn't "fail" if default bias is better anyway (PR `#1850`_).
+* improve cframe file globbing to avoid tempfiles (PR `#1853`_).
+* tilenight exit early if no good exposures (PR `#1854`_).
+* fix psferr option in desi_extract_spectra (PR `#1855`_).
+* Add support for NERSC CFS readonly mount (PRs `#1856`_, `#1888`_, `#1891`_).
+* Use non-calibration zeros if not enough calib zeros are available (PR `#1857`_).
+* Perlmutter use CPU for nightlybias, ccdcalib, arcs; GPUs otherwise (PR `#1859`_).
+* Have desi_night_qa announce its completion (PR `#1860`_).
+* Handle NaNs and zeros in skytpcorr, skygradpca x/y inputs (PR `#1865`_).
+* Don't wait for new data when override_night set in daily_proc_manager (PR `#1866`_).
+* Ensure expids are ints in ccdcalib (PR `#1868`_).
+* Give more time to stdstar jobs (PR `#1869`_).
+* Fix stdstar indexing crash (PR `#1872`_).
+* desi_run_night support case of no good zeros (PR `#1875`_).
+* avoid stdstars joint fit makedirs race condition (PR `#1879`_).
+* fix fallback to DESI_SPECTRO_CALIB if DESI_SPECTRO_DARK is set but doesn't
+  have suitable files for date range (PR `#1882`_).
+* desi_proc options for sims (PR `#1885`_)
+* Add ``copyprod --tiles`` option (PR `#1893`_).
+* Fix fibermap indexing bug when mix of LEGACY and GAIA (PR `#1894`_).
+* Add ``desi_job_graph`` to make job dependency graph webpages (PR `#1896`_).
+* Apply job timefactor to nightlyflat jobs too (PR `#1898`_).
+* Add GPU memory and rank allocation tools (PR `#1899`_).
+
+.. _`#1822`: https://github.com/desihub/desispec/pull/1822
+.. _`#1824`: https://github.com/desihub/desispec/pull/1824
+.. _`#1825`: https://github.com/desihub/desispec/pull/1825
+.. _`#1828`: https://github.com/desihub/desispec/pull/1828
+.. _`#1831`: https://github.com/desihub/desispec/pull/1831
+.. _`#1833`: https://github.com/desihub/desispec/pull/1833
+.. _`#1835`: https://github.com/desihub/desispec/pull/1835
+.. _`#1837`: https://github.com/desihub/desispec/pull/1837
+.. _`#1841`: https://github.com/desihub/desispec/pull/1841
+.. _`#1843`: https://github.com/desihub/desispec/pull/1843
+.. _`#1844`: https://github.com/desihub/desispec/pull/1844
+.. _`#1845`: https://github.com/desihub/desispec/pull/1845
+.. _`#1848`: https://github.com/desihub/desispec/pull/1848
+.. _`#1850`: https://github.com/desihub/desispec/pull/1850
+.. _`#1852`: https://github.com/desihub/desispec/pull/1852
+.. _`#1853`: https://github.com/desihub/desispec/pull/1853
+.. _`#1854`: https://github.com/desihub/desispec/pull/1854
+.. _`#1855`: https://github.com/desihub/desispec/pull/1855
+.. _`#1856`: https://github.com/desihub/desispec/pull/1856
+.. _`#1857`: https://github.com/desihub/desispec/pull/1857
+.. _`#1859`: https://github.com/desihub/desispec/pull/1859
+.. _`#1860`: https://github.com/desihub/desispec/pull/1860
+.. _`#1865`: https://github.com/desihub/desispec/pull/1865
+.. _`#1866`: https://github.com/desihub/desispec/pull/1866
+.. _`#1868`: https://github.com/desihub/desispec/pull/1868
+.. _`#1869`: https://github.com/desihub/desispec/pull/1869
+.. _`#1872`: https://github.com/desihub/desispec/pull/1872
+.. _`#1875`: https://github.com/desihub/desispec/pull/1875
+.. _`#1878`: https://github.com/desihub/desispec/pull/1878
+.. _`#1879`: https://github.com/desihub/desispec/pull/1879
+.. _`#1882`: https://github.com/desihub/desispec/pull/1882
+.. _`#1885`: https://github.com/desihub/desispec/pull/1885
+.. _`#1886`: https://github.com/desihub/desispec/pull/1886
+.. _`#1888`: https://github.com/desihub/desispec/pull/1888
+.. _`#1891`: https://github.com/desihub/desispec/pull/1891
+.. _`#1893`: https://github.com/desihub/desispec/pull/1893
+.. _`#1894`: https://github.com/desihub/desispec/pull/1894
+.. _`#1895`: https://github.com/desihub/desispec/pull/1895
+.. _`#1896`: https://github.com/desihub/desispec/pull/1896
+.. _`#1898`: https://github.com/desihub/desispec/pull/1898
+.. _`#1899`: https://github.com/desihub/desispec/pull/1899
+
 
 0.54.0 (2022-08-15)
 -------------------
