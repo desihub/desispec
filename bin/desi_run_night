@@ -12,7 +12,7 @@ def parse_args():  # options=None):
     """
     parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
 
-    parser.add_argument("-n","--night", type=str, required=True, help="The night you want processed.")
+    parser.add_argument("-n","--night", type=int, required=True, help="The night you want processed.")
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
