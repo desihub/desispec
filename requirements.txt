@@ -8,7 +8,7 @@ speclite
 sqlalchemy
 fitsio
 # Pin scipy to version at NERSC
-scipy@1.7.3
+scipy == 1.7.3
 # Install desiutil separately since it is needed for the other installs.
 # git+https://github.com/desihub/desiutil.git@3.2.5#egg=desiutil
 git+https://github.com/desihub/specter.git@0.10.0#egg=specter
