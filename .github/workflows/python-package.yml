@@ -23,7 +23,7 @@ jobs:
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
             DESIUTIL_VERSION: 3.2.5
-            DESIMODEL_DATA: branches/test-0.17
+            DESIMODEL_DATA: branches/test-0.18
 
         steps:
             - name: Checkout code
@@ -61,7 +61,7 @@ jobs:
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
             DESIUTIL_VERSION: 3.2.5
-            DESIMODEL_DATA: branches/test-0.17
+            DESIMODEL_DATA: branches/test-0.18
 
         steps:
             - name: Checkout code

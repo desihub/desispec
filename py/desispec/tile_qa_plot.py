@@ -891,13 +891,30 @@ def get_expids_efftimes(tileqafits, prod):
                 )
                 tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits*')
                 spectra_fns = sorted(glob(tmpstr))
+    # AR store the TSNR2 values + (EXPID, NIGHT)
     if len(spectra_fns) > 0:
-        fmap = vstack([read_fibermap(spectra_fn) for spectra_fn in spectra_fns])
-        expids, ii = np.unique(fmap["EXPID"], return_index=True)
-        nights = fmap["NIGHT"][ii]
-    # AR then try based on prod
+        myds = []
+        for spectra_fn in spectra_fns:
+            f = fitsio.FITS(spectra_fn)
+            myd = Table()
+            myd["TARGETID"] = f["FIBERMAP"].read_column("TARGETID")
+            myd["EXPID"] = f["FIBERMAP"].read_column("EXPID")
+            myd["NIGHT"] = f["FIBERMAP"].read_column("NIGHT")
+            myd["PETAL_LOC"] = f["FIBERMAP"].read_column("PETAL_LOC")
+            myd["TSNR2_B"] = f["SCORES"].read_column("{}_B".format(tsnr2_key))
+            myd["TSNR2_R"] = f["SCORES"].read_column("{}_R".format(tsnr2_key))
+            myd["TSNR2_Z"] = f["SCORES"].read_column("{}_Z".format(tsnr2_key))
+            f.close()
+            log.info(f"read {len(myd)} rows from {spectra_fn}")
+            myds.append(myd)
+        myd = vstack(myds)
+        # AR unique list of (EXPID, NIGHT)
+        expids, ii = np.unique(myd["EXPID"], return_index=True)
+        nights = myd["NIGHT"][ii]
+    # AR no spectra files found
     else:
         expids, nights = [], []
+        log.warning(f"found no spectra files related to {tileqafits}")
     nexp = len(expids)
 
     # AR looping on EXPIDS
@@ -907,19 +924,22 @@ def get_expids_efftimes(tileqafits, prod):
     d["EFFTIME_SPEC"], d["QA_EFFTIME_SPEC"] = np.zeros(nexp), np.zeros(nexp)
     for i in range(nexp):
         # AR EFFTIME_SPEC, with looping on petals and cameras
-        tsnr2_petals = np.zeros(10)
-        for petal in range(10):
+        tsnr2_petals = []
+        sel_i = myd["EXPID"] == expids[i]
+        for petal in np.unique(myd["PETAL_LOC"][sel_i]):
+            tsnr2_petal = 0
+            sel_ip = (sel_i) & (myd["PETAL_LOC"] == petal)
             for camera in ["b", "r", "z"]:
-                tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
-                fn, exists = findfile('cframe', nights[i], expids[i], camera+str(petal),
-                    specprod_dir=prod, return_exists=True)
-                if not exists:
-                    log.warning(f'{fn} not found; skipping')
-                    continue
+                tsnr2_key_cam = "TSNR2_{}".format(camera.upper())
+                vals = myd[tsnr2_key_cam][sel_ip]
+                vals = vals[vals > 0]
+                if len(vals) > 0:
+                    tsnr2_petal += np.median(vals)
+                else:
+                    log.info(f"found no rows with {tsnr2_key_cam}>0 for EXPID={expids[i]} and PETAL_LOC={petal}")
+            tsnr2_petals.append(tsnr2_petal)
 
-                vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
-                tsnr2_petals[petal] += np.median(vals[vals > 0])
-                    
+        tsnr2_petals = np.array(tsnr2_petals)
         d["EFFTIME_SPEC"][i] = tsnr2_to_efftime(tsnr2_petals[tsnr2_petals > 0].mean(), tsnr2_key.split("_")[-1])
         # QA_EFFTIME_SPEC, reading exposure-qa*fits
         fn = os.path.join(
