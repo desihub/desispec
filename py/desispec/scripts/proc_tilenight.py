@@ -29,6 +29,11 @@ import desispec.gpu
 def parse(options=None):
     parser = get_desi_proc_tilenight_parser()
     args = parser.parse_args(options)
+
+    #- convert comma separated steps to list of str
+    if isinstance(args.laststeps, str):
+        args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
     return args
 
 def main(args=None, comm=None):
@@ -65,7 +70,15 @@ def main(args=None, comm=None):
     #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
     keep &= exptable['TILEID']  == int(args.tileid)
+    if args.laststeps is not None:
+        keep &= np.isin(exptable['LASTSTEP'].astype(str), args.laststeps)
+
     exptable = exptable[keep]
+
+    if len(exptable) == 0:
+        if rank == 0:
+            log.critical(f'No good exposures found for tile {args.tileid} night {args.night}')
+        sys.exit(1)
 
     expids = list(exptable['EXPID'])
     prestdstar_expids = []
@@ -82,34 +95,24 @@ def main(args=None, comm=None):
             prestd_camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
             prestd_camwords[expids[i]] = camword
-        laststep = exptable['LASTSTEP'][i]
-        if laststep == 'all' or laststep == 'skysub':
+
+        laststep = str(exptable['LASTSTEP'][i]).lower()
+        if laststep in ('all', 'fluxcalib', 'skysub'):
             prestdstar_expids.append(expid)
-        if laststep == 'all':
+        if laststep in ('all', 'fluxcalib'):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
+
     joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True) 
 
     poststd_camwords = dict()
     for expid, camword in prestd_camwords.items():
         poststd_camwords[expid] = camword_intersection([joint_camwords, camword])
 
-    if len(prestdstar_expids) == 0:
-        if rank == 0:
-            log.critical(f'No good exposures found for tile {args.tileid} night {args.night}')
-        sys.exit(1)
-
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
 
     if args.batch:
-        # Use GPU extraction if system_name==perlmutter-gpu
-        # otherwise don't
-        gpuextract=False
-        gpuspecter=args.gpuspecter
-        if args.system_name == "perlmutter-gpu":
-            gpuspecter=True
-            gpuextract=True
         ncameras = len(decode_camword(joint_camwords))
         scriptfile = create_desi_proc_tilenight_batch_script(night=args.night,
                                                    exp=expids,
@@ -118,8 +121,8 @@ def main(args=None, comm=None):
                                                    queue=args.queue,
                                                    system_name=args.system_name,
                                                    mpistdstars=args.mpistdstars,
-                                                   gpuspecter=gpuspecter,
-                                                   gpuextract=gpuextract
+                                                   use_specter=args.use_specter,
+                                                   no_gpu=args.no_gpu,
                                                    )
         err = 0
         if not args.nosubmit:
@@ -132,19 +135,20 @@ def main(args=None, comm=None):
     #- What are we going to do?
     if rank == 0:
         log.info('----------')
-        log.info('Tile {} night {}'.format(args.tileid, args.night))
+        log.info('Tile {} night {} exposures {}'.format(
+            args.tileid, args.night, prestdstar_expids))
         log.info('Output root {}'.format(specprod_root()))
         log.info('----------')
     
     #- common arguments
     common_args = f'--night {args.night}'
+    if args.no_gpu:
+        common_args += ' --no-gpu'
 
-    #- gpu options
-    gpu_args=''
-    if args.gpuspecter:
-        gpu_args += ' --gpuspecter'
-    if args.gpuextract:
-        gpu_args += ' --gpuextract'
+    #- extract options
+    extract_args=''
+    if args.use_specter:
+        extract_args += ' --use-specter'
 
     #- mpi options
     mpi_args=''
@@ -153,7 +157,7 @@ def main(args=None, comm=None):
 
     #- run desiproc prestdstar over exps
     for expid in prestdstar_expids:
-        prestdstar_args = common_args + gpu_args
+        prestdstar_args = common_args + extract_args
         prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {prestd_camwords[expid]}'
         if len(badamps[expid]) > 0:
             prestdstar_args += f' --badamps {badamps[expid]}'

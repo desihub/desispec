@@ -1331,6 +1331,48 @@ class TestIO(unittest.TestCase):
         self.assertTrue(tempfile.endswith('.gz'))
         self.assertTrue('blat' in tempfile)
 
+    def test_get_log_pathname(self):
+        """test desispec.io.util.get_log_pathname
+        """
+        from ..io.util import get_log_pathname
+        filename = '/a/b/foo.fits'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/foo' in logfile)
+        self.assertTrue('.fits' not in logfile)
+
+        filename = '/a/b/blat.fits.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.gz' not in logfile)
+
+        filename = '/a/b/blat.fits.fz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('/a/b' in logfile)
+        self.assertTrue('/blat' in logfile)
+        self.assertTrue('.fits.fz' not in logfile)
+
+        filename = 'blat.ecsv'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.ecsv' not in logfile)
+
+        filename = 'blat.gz'
+        logfile = get_log_pathname(filename)
+        self.assertNotEqual(filename, logfile)
+        self.assertTrue(logfile.endswith('.log'))
+        self.assertTrue('blat' in logfile)
+        self.assertTrue('.gz' not in logfile)
+
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
         from ..io.fibermap import find_fiberassign_file
@@ -1538,6 +1580,37 @@ class TestIO(unittest.TestCase):
             line = fp.readline()
             self.assertEqual(line, 'blat')
         os.chdir(origdir)
+
+    def test_backup_filename(self):
+        from ..io.util import backup_filename
+
+        fx = open(self.testDir+'/a.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.0', 'w'); fx.close()
+        fx = open(self.testDir+'/b.log.1', 'w'); fx.close()
+
+        test = backup_filename(self.testDir+'/a.log')
+        self.assertEqual(test, self.testDir+'/a.log.0')
+
+        test = backup_filename(self.testDir+'/b.log')
+        self.assertEqual(test, self.testDir+'/b.log.2')
+
+        test = backup_filename(self.testDir+'/c.log')
+        self.assertEqual(test, self.testDir+'/c.log')
+
+    def test_camword_spectros(self):
+        from ..io.util import spectros_to_camword, camword_to_spectros
+
+        self.assertEqual(camword_to_spectros('a01'), [0,1])
+        self.assertEqual(camword_to_spectros('a135'), [1,3,5])
+        self.assertEqual(camword_to_spectros('a135b7'), [1,3,5,7])
+        self.assertEqual(camword_to_spectros('a135b7', full_spectros_only=True), [1,3,5])
+
+        self.assertEqual(spectros_to_camword('1-3'), 'a123')
+        self.assertEqual(spectros_to_camword('1,3,5'), 'a135')
+        self.assertEqual(spectros_to_camword('1,3-5'), 'a1345')
+        self.assertEqual(spectros_to_camword([0,5,6]), 'a056')
+        self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
 
 
 def test_suite():

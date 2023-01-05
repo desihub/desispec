@@ -14,7 +14,7 @@ from desispec.workflow.proctable import get_processing_table_path
 from desispec.workflow.proctable import get_processing_table_name
 from desispec.workflow.queue import queue_info_from_qids
 from desispec.io.meta import specprod_root
-from desispec.scripts.tile_redshifts import get_tile_redshift_script_pathname
+from desispec.workflow.redshifts import get_tile_redshift_script_pathname
 
 p = argparse.ArgumentParser()
 p.add_argument('-n', '--night', type=int, required=True,
@@ -87,12 +87,20 @@ fx.write(f"""<!DOCTYPE html>
 """)
 
 jobs = dict()
+state_counter = dict()
 for row in proctable:
     qid = row['LATEST_QID']
     intid = row['INTID']        #- internal ID
     jobdesc = row['JOBDESC']
-    expid = row['EXPID'][0:-1].replace('|', ',')  #- comma separated expids
-    e1 = int(expid.split(',')[0])  #- the first expid
+
+    #- nightly bias job doesn't have expids associated with it
+    if row['EXPID'] == '|':
+        expid = ''
+        e1 = -1
+    else:
+        expid = row['EXPID'][0:-1].replace('|', ',')  #- comma separated expids
+        e1 = int(expid.split(',')[0])  #- the first expid
+
     tileid = row['TILEID']
     proccamword = row['PROCCAMWORD']
 
@@ -100,6 +108,11 @@ for row in proctable:
         state = jobinfo[qid]['STATE'].split()[0]
     else:
         state = 'UNKNOWN'
+
+    if state not in state_counter:
+        state_counter[state] = 1
+    else:
+        state_counter[state] += 1
 
     if jobdesc == 'tilenight':
         logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{tileid}-{qid}.log'
@@ -158,6 +171,9 @@ fx.close()
 print(f'Wrote {args.output}')
 if outputurl != args.output:
     print(outputurl)
+
+for state, n in state_counter.items():
+    print(f"{state:12s} {n:2}")
 
 
 

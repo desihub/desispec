@@ -28,7 +28,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
-                 all_tiles=False, specstatus_path=None, use_specter=False):
+                 all_tiles=False, specstatus_path=None, use_specter=False, do_cte_flat=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -76,6 +76,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        do_cte_flat, bool, optional. Default is False. If True, one second flat exposures are processed for cte identification.
 
     Returns:
         None.
@@ -142,10 +143,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     if laststeps is None:
-        if use_tilenight:
-            laststeps = ['all','skysub']
-        else:
-            laststeps = ['all']
+        laststeps = ['all',]
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:
@@ -232,6 +230,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## Cut on EXPTIME
     good_exptimes = []
+    already_found_cte_flat = False
     for erow in etable:
         if erow['OBSTYPE'] == 'science' and erow['EXPTIME'] < 60:
             good_exptimes.append(False)
@@ -240,7 +239,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME']) - 300.) > 1:
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1:
-            good_exptimes.append(False)
+            if do_cte_flat and not already_found_cte_flat \
+               and np.abs(float(erow['EXPTIME']) - 1.) < 0.5:
+                good_exptimes.append(True)
+                already_found_cte_flat = True
+            else:
+                good_exptimes.append(False)
         else:
             good_exptimes.append(True)
     etable = etable[np.array(good_exptimes)]
@@ -422,7 +426,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and calibjobs['nightlyflat'] is None \
-                and int(erow['SEQTOT']) < 5:
+                and int(erow['SEQTOT']) < 5 \
+                and np.abs(float(erow['EXPTIME'])-120.) < 1.:
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)

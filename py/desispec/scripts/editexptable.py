@@ -233,6 +233,14 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             row_numbers.append(rownum[0])
     row_numbers = np.asarray(row_numbers)
 
+    if len(row_numbers) == 0:
+        raise ValueError(f"Exposures {exposure_list} not found in exposure table")
+
+    if len(row_numbers) < len(exposure_list):
+        found_exposures = list(exptable['EXPID'][row_numbers])
+        missing_exposures = sorted(set(exposure_list) - set(found_exposures))
+        print(f'WARNING: Exposures {missing_exposures} not found in exposure table, but proceeding with {found_exposures}')
+
     ## Make sure the value will work
     ## (returns as is if fine, corrects syntax if it can, or raises an error if it can't)
     value = validate_value(colname, value, joinsymb)

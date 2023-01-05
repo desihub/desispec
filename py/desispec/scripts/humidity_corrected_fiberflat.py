@@ -38,14 +38,13 @@ def main(args=None) :
 
     log = get_logger()
 
-    # just read frame header in case we don't need to do anything
-    frame_header = fitsio.read_header(args.infile,"FLUX")
-
     if args.use_sky_fibers :
         # need full frame to adjust correction on data
         frame = read_frame(args.infile)
+        frame_header = frame.meta
     else :
         frame = None
+        frame_header = fitsio.read_header(args.infile,"FLUX")
 
     cfinder = CalibFinder([frame_header])
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
