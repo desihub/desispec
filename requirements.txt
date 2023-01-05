@@ -10,7 +10,7 @@ fitsio
 # Install desiutil separately since it is needed for the other installs.
 # git+https://github.com/desihub/desiutil.git@3.2.5#egg=desiutil
 git+https://github.com/desihub/specter.git@0.10.0#egg=specter
-git+https://github.com/desihub/desimodel.git@0.17.0#egg=desimodel
+git+https://github.com/desihub/desimodel.git@0.18.0#egg=desimodel
 # Don't forget to install desimodel test data.
 git+https://github.com/desihub/desitarget.git@2.4.0#egg=desitarget
 git+https://github.com/desihub/redrock.git@0.15.2#egg=redrock
