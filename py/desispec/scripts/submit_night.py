@@ -19,6 +19,7 @@ from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile
                                         checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
+from desispec.workflow.redshifts import read_minimal_exptables_columns
 from desispec.io.util import decode_camword, difference_camwords, create_camword
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime',
@@ -110,7 +111,6 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     name = get_processing_table_name(prodmod=night, extension=tab_filetype)
     proc_table_pathname = pathjoin(proc_table_path, name)
 
-    ## Define the group types of redshifts you want to generate for each tile
     ## Define the group types of redshifts you want to generate for each tile
     if no_redshifts:
         z_submit_types = None
@@ -217,6 +217,21 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## Cut on LASTSTEP
     good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
     etable = etable[good_exps]
+
+    ## For cumulative redshifts, identify tiles for which this is the last night that they were observed
+    tiles_cumulative = list()
+    if z_submit_types is not None and 'cumulative' in z_submit_types:
+        tiles_this_night = np.unique(np.asarray(etable['TILEID']))
+        tiles_this_night = tiles_this_night[tiles_this_night>0]  # science tiles, not calibs
+        allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
+        for tileid in tiles_this_night:
+            ii = (allexp['TILEID'] == tileid)
+            lastnight = np.max(allexp['NIGHT'][ii])
+            if lastnight == night:
+                tiles_cumulative.append(tileid)
+
+        log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}/{len(tiles_this_night)} tiles '
+                 f'for which {night} is the last night: {tiles_cumulative}')
 
     ## Count zeros before trimming by OBSTYPE since they are used for
     ## nightly bias even if they aren't processed individually
@@ -351,7 +366,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         curtype, curtile = get_type_and_tile(erow)
 
+        # if this is a new tile/obstype, proceed with submitting all of the jobs for the previous tile
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+            # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
+            if (z_submit_types is not None) and ('cumulative' in z_submit_types) and (lasttile not in tiles_cumulative):
+                cur_z_submit_types = z_submit_types.copy()
+                cur_z_submit_types.remove('cumulative')
+            else:
+                cur_z_submit_types = z_submit_types
+
             # If done with science exposures for a tile and use_tilenight==True, use
             # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
             if use_tilenight and lasttype == 'science' and len(sciences)>0:
@@ -363,10 +386,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                     strictly_successful=True,
                                                     check_for_outputs=check_for_outputs,
                                                     resubmit_partial_complete=resubmit_partial_complete,
-                                                    z_submit_types=z_submit_types,
+                                                    z_submit_types=cur_z_submit_types,
                                                     system_name=system_name,use_specter=use_specter)
             else:
-                cur_z_submit_types = z_submit_types
                 ## If running redshifts and there is a future exposure of the same tile
                 ## then only run per exposure redshifts until then
                 if lasttype == 'science' and z_submit_types is not None and not use_tilenight:
@@ -450,6 +472,14 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
+
+        # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
+        if (z_submit_types is not None) and ('cumulative' in z_submit_types) and (lasttile not in tiles_cumulative):
+            cur_z_submit_types = z_submit_types.copy()
+            cur_z_submit_types.remove('cumulative')
+        else:
+            cur_z_submit_types = z_submit_types
+
         if use_tilenight and len(sciences)>0:
             ptable, sciences, internal_id \
                 = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
@@ -459,7 +489,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 strictly_successful=True,
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
-                                                z_submit_types=z_submit_types,
+                                                z_submit_types=cur_z_submit_types,
                                                 system_name=system_name,use_specter=use_specter)
         else:
             ptable, calibjobs, sciences, internal_id \
@@ -469,7 +499,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                             strictly_successful=True,
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
-                                            z_submit_types=z_submit_types,
+                                            z_submit_types=cur_z_submit_types,
                                             system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
