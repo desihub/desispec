@@ -21,6 +21,7 @@ import numpy as np
 import desiutil.log
 from desiutil.log import get_logger
 
+from desispec.io.util import backup_filename
 
 # C file descriptors for stderr and stdout, used in redirection
 # context manager.
@@ -347,7 +348,7 @@ def weighted_partition(weights, n, groups_per_node=None):
         return distributed_groups
 
 @contextmanager
-def stdouterr_redirected(to=None, comm=None):
+def stdouterr_redirected(to=None, comm=None, overwrite=False):
     """
     Redirect stdout and stderr to a file.
 
@@ -364,6 +365,7 @@ def stdouterr_redirected(to=None, comm=None):
     Args:
         to (str): The output file name.
         comm (mpi4py.MPI.Comm): The optional MPI communicator.
+        overwrite (bool): if True overwrite file, otherwise backup to to.N first
     """
     nproc = 1
     rank = 0
@@ -430,6 +432,12 @@ def stdouterr_redirected(to=None, comm=None):
     if rank == 0:
         log = get_logger()
         log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
+        if not overwrite:
+            backup_filename(to)
+
+    #- all ranks wait for logfile backup
+    if comm is not None:
+        comm.barrier()
 
     # Save the original file descriptors so we can restore them later
     saved_fd_out = os.dup(fd_out)
@@ -466,13 +474,14 @@ def stdouterr_redirected(to=None, comm=None):
             comm.barrier()
 
         # concatenate per-process files
-        if rank == 0:
+        if rank == 0 and to != "/dev/null":
             with open(to, "w") as outfile:
                 for p in range(nproc):
-                    outfile.write("================= Process {} =================\n".format(p))
+                    outfile.write("================ Start of Process {} ================\n".format(p))
                     fname = "{}_{}".format(to, p)
                     with open(fname) as infile:
                         outfile.write(infile.read())
+                    outfile.write("================= End of Process {} =================\n\n".format(p))
                     os.remove(fname)
 
         if nproc > 1:

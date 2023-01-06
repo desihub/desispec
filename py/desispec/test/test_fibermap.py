@@ -81,6 +81,58 @@ class TestFibermap(unittest.TestCase):
         assert np.all(nanequal(fm1['DELTA_X'], fm2['DELTA_X']))
         assert np.all(nanequal(fm1['DELTA_Y'], fm2['DELTA_Y']))
 
+    def test_update_survey_keywords(self):
+        """Test desispec.io.fibermap.update_survey_keywords"""
+        from ..io.fibermap import update_survey_keywords
+
+        #- Standard case with all the keywords - no changes
+        hdr = dict(TILEID=1, SURVEY='dark', FAPRGRM='main', FAFLAVOR='maindark')
+        hdr0 = hdr.copy()
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr, hdr0)
+
+        #- Tiles 63501-63505 only have TILEID
+        hdr = dict(TILEID=63501)
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'cmx')
+        self.assertEqual(hdr['FAPRGRM'], 'bright')
+        self.assertEqual(hdr['FAFLAVOR'], 'cmxbright')
+
+        #- Other cases with TILEID but unknown details
+        hdr = dict(TILEID=70004)
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'cmx')
+        self.assertEqual(hdr['FAPRGRM'], 'unknown')
+        self.assertEqual(hdr['FAFLAVOR'], 'cmxunknown')
+
+        #- TILEID and FAFLAVOR but not SURVEY or FAPRGRM
+        hdr = dict(TILEID=80220, FAFLAVOR='dithlost')
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'cmx')
+        self.assertEqual(hdr['FAPRGRM'], 'dithlost')
+
+        hdr = dict(TILEID=80605, FAFLAVOR='cmxlrgqso')
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'sv1')  # yes, sv1 not cmx
+        self.assertEqual(hdr['FAPRGRM'], 'lrgqso')
+
+        hdr = dict(TILEID=80606, FAFLAVOR='cmxelg')
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'sv1')  # yes, sv1 not cmx
+        self.assertEqual(hdr['FAPRGRM'], 'elg')
+
+        hdr = dict(TILEID=80611, FAFLAVOR='sv1bgsmws')
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'sv1')
+        self.assertEqual(hdr['FAPRGRM'], 'bgsmws')
+
+        #- TILEID, SURVEY, and FAFLAVOR but not FAPRGRM
+        hdr = dict(TILEID=81000, SURVEY='sv2', FAFLAVOR='sv2dark')
+        update_survey_keywords(hdr)
+        self.assertEqual(hdr['SURVEY'], 'sv2')
+        self.assertEqual(hdr['FAPRGRM'], 'dark')
+
+
 def test_suite():
     """Allows testing of only this module with the command::
 

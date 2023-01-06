@@ -19,6 +19,7 @@ from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile
                                         checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
+from desispec.workflow.redshifts import read_minimal_exptables_columns
 from desispec.io.util import decode_camword, difference_camwords, create_camword
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime',
@@ -28,7 +29,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
-                 all_tiles=False, specstatus_path=None, use_specter=False):
+                 all_tiles=False, specstatus_path=None, use_specter=False,
+                 do_cte_flat=False, complete_tiles_thrunight=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -76,7 +78,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
-
+        do_cte_flat, bool, optional. Default is False. If True, one second flat exposures are processed for cte identification.
+        complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
+                                                on or before the supplied YYYYMMDD are considered
+                                                completed and will be processed. All complete
+                                                tiles are submitted if None or all_tiles is True.
     Returns:
         None.
     """
@@ -110,7 +116,6 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     proc_table_pathname = pathjoin(proc_table_path, name)
 
     ## Define the group types of redshifts you want to generate for each tile
-    ## Define the group types of redshifts you want to generate for each tile
     if no_redshifts:
         z_submit_types = None
     else:
@@ -142,10 +147,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     if laststeps is None:
-        if use_tilenight:
-            laststeps = ['all','skysub']
-        else:
-            laststeps = ['all']
+        laststeps = ['all',]
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:
@@ -207,18 +209,39 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If asked to do so, only process tiles deemed complete by the specstatus file
     if not all_tiles:
-        completed_tiles = get_completed_tiles(specstatus_path)
+        all_completed_tiles = get_completed_tiles(specstatus_path,
+                                              complete_tiles_thrunight=complete_tiles_thrunight)
 
         ## Add -99 to keep calibration exposures
-        completed_tiles = np.append([-99], completed_tiles)
+        all_completed_tiles_withcalib = np.append([-99], all_completed_tiles)
         if etable is not None:
-            keep = np.isin(etable['TILEID'], completed_tiles)
-            log.info(f'Filtering by completed tiles retained {sum(keep)}/{len(etable)} exposures')
+            keep = np.isin(etable['TILEID'], all_completed_tiles_withcalib)
+            sciselect = np.isin(etable['TILEID'], all_completed_tiles)
+            completed_tiles = np.unique(etable['TILEID'][keep])
+            sci_tiles = np.unique(etable['TILEID'][sciselect])
+            log.info(f"Processing completed science tiles: {', '.join(sci_tiles.astype(str))}")
+            log.info(f"Filtering by completed tiles retained {len(sci_tiles)}/{sum(np.unique(etable['TILEID'])>0)} science tiles")
+            log.info(f"Filtering by completed tiles retained {sum(sciselect)}/{sum(etable['TILEID']>0)} science exposures")
             etable = etable[keep]
 
     ## Cut on LASTSTEP
     good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
     etable = etable[good_exps]
+
+    ## For cumulative redshifts, identify tiles for which this is the last night that they were observed
+    tiles_cumulative = list()
+    if z_submit_types is not None and 'cumulative' in z_submit_types:
+        tiles_this_night = np.unique(np.asarray(etable['TILEID']))
+        tiles_this_night = tiles_this_night[tiles_this_night>0]  # science tiles, not calibs
+        allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
+        for tileid in tiles_this_night:
+            ii = (allexp['TILEID'] == tileid)
+            lastnight = np.max(allexp['NIGHT'][ii])
+            if lastnight == night:
+                tiles_cumulative.append(tileid)
+
+        log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}/{len(tiles_this_night)} tiles '
+                 f'for which {night} is the last night: {tiles_cumulative}')
 
     ## Count zeros before trimming by OBSTYPE since they are used for
     ## nightly bias even if they aren't processed individually
@@ -232,6 +255,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## Cut on EXPTIME
     good_exptimes = []
+    already_found_cte_flat = False
     for erow in etable:
         if erow['OBSTYPE'] == 'science' and erow['EXPTIME'] < 60:
             good_exptimes.append(False)
@@ -240,7 +264,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME']) - 300.) > 1:
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1:
-            good_exptimes.append(False)
+            if do_cte_flat and not already_found_cte_flat \
+               and np.abs(float(erow['EXPTIME']) - 1.) < 0.5:
+                good_exptimes.append(True)
+                already_found_cte_flat = True
+            else:
+                good_exptimes.append(False)
         else:
             good_exptimes.append(True)
     etable = etable[np.array(good_exptimes)]
@@ -347,7 +376,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         curtype, curtile = get_type_and_tile(erow)
 
+        # if this is a new tile/obstype, proceed with submitting all of the jobs for the previous tile
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+            # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
+            if (z_submit_types is not None) and ('cumulative' in z_submit_types) and (lasttile not in tiles_cumulative):
+                cur_z_submit_types = z_submit_types.copy()
+                cur_z_submit_types.remove('cumulative')
+            else:
+                cur_z_submit_types = z_submit_types
+
             # If done with science exposures for a tile and use_tilenight==True, use
             # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
             if use_tilenight and lasttype == 'science' and len(sciences)>0:
@@ -359,10 +396,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                     strictly_successful=True,
                                                     check_for_outputs=check_for_outputs,
                                                     resubmit_partial_complete=resubmit_partial_complete,
-                                                    z_submit_types=z_submit_types,
+                                                    z_submit_types=cur_z_submit_types,
                                                     system_name=system_name,use_specter=use_specter)
             else:
-                cur_z_submit_types = z_submit_types
                 ## If running redshifts and there is a future exposure of the same tile
                 ## then only run per exposure redshifts until then
                 if lasttype == 'science' and z_submit_types is not None and not use_tilenight:
@@ -422,7 +458,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and calibjobs['nightlyflat'] is None \
-                and int(erow['SEQTOT']) < 5:
+                and int(erow['SEQTOT']) < 5 \
+                and np.abs(float(erow['EXPTIME'])-120.) < 1.:
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
@@ -445,6 +482,14 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
+
+        # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
+        if (z_submit_types is not None) and ('cumulative' in z_submit_types) and (lasttile not in tiles_cumulative):
+            cur_z_submit_types = z_submit_types.copy()
+            cur_z_submit_types.remove('cumulative')
+        else:
+            cur_z_submit_types = z_submit_types
+
         if use_tilenight and len(sciences)>0:
             ptable, sciences, internal_id \
                 = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
@@ -454,7 +499,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 strictly_successful=True,
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
-                                                z_submit_types=z_submit_types,
+                                                z_submit_types=cur_z_submit_types,
                                                 system_name=system_name,use_specter=use_specter)
         else:
             ptable, calibjobs, sciences, internal_id \
@@ -464,7 +509,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                             strictly_successful=True,
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
-                                            z_submit_types=z_submit_types,
+                                            z_submit_types=cur_z_submit_types,
                                             system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
@@ -474,7 +519,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')
 
 
-def get_completed_tiles(specstatus_path=None):
+def get_completed_tiles(specstatus_path=None, complete_tiles_thrunight=None):
     """
     Uses a tiles-specstatus.ecsv file and selection criteria to determine
     what tiles have beeen completed. Takes an optional argument to point
@@ -482,6 +527,10 @@ def get_completed_tiles(specstatus_path=None):
     Args:
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
                                         Location of the surveyops specstatus table.
+        complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
+                                                on or before the supplied YYYYMMDD are considered
+                                                completed and will be processed. All complete
+                                                tiles are submitted if None.
 
     Returns:
         array-like. The tiles from the specstatus file determined by the
@@ -511,5 +560,8 @@ def get_completed_tiles(specstatus_path=None):
     goodtiles |= (isenoughtime & isnotmain)
     ## main backup also don't have zdone set, so also pass those with enough time
     goodtiles |= (isenoughtime & (specstatus['FAPRGRM'] == 'backup'))
+
+    if complete_tiles_thrunight is not None:
+        goodtiles &= (specstatus['LASTNIGHT'] <= complete_tiles_thrunight)
 
     return np.array(specstatus['TILEID'][goodtiles])

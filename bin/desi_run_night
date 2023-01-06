@@ -3,7 +3,7 @@
 
 import argparse
 
-import sys
+import os, sys
 from desispec.scripts.submit_night import submit_night
 
 def parse_args():  # options=None):
@@ -12,7 +12,7 @@ def parse_args():  # options=None):
     """
     parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
 
-    parser.add_argument("-n","--night", type=str, required=True, help="The night you want processed.")
+    parser.add_argument("-n","--night", type=int, required=True, help="The night you want processed.")
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
@@ -37,7 +37,7 @@ def parse_args():  # options=None):
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
     #                         "Overwrites the environment variable SPECPROD")
-    parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
+    parser.add_argument("-q", "--queue", type=str, required=False, default='regular',
                         help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
@@ -49,6 +49,10 @@ def parse_args():  # options=None):
                         help="Directory name where the output processing table should be saved.")
     parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
                         help="File format and extension for the exp and proc tables.")
+    parser.add_argument("--complete-tiles-thrunight", type=int, required=False, default=None,
+                        help="Only tiles completed on or before the supplied YYYYMMDD are "
+                        +"considered complete and will be processed. None will process "
+                        +"all completed tiles.")
     # Code Flags
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
@@ -72,8 +76,9 @@ def parse_args():  # options=None):
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
-    parser.add_argument("--use-tilenight", action="store_true",
-                        help="Use desi_proc_tilenight for prestdstar, stdstar, and poststdstar steps.")
+    parser.add_argument("--use-tilenight", action=argparse.BooleanOptionalAction,
+                        help="Use desi_proc_tilenight (or not) for prestdstar, stdstar, and poststdstar steps. "+
+                             "Default False for NERSC Cori, True otherwise")
     parser.add_argument("--all-tiles", action="store_true",
                         help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
     parser.add_argument("--specstatus-path", type=str, required=False, default=None,
@@ -81,6 +86,10 @@ def parse_args():  # options=None):
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")
     parser.add_argument("--use-specter", action="store_true",
                         help="Use specter. Default is to use gpu_specter")
+    parser.add_argument("--do-cte-flat", action="store_true",
+                        help="If flag set then one second flat exposures are "
+                             + "processed for cte identification.")
+
     args = parser.parse_args()
 
     # convert str lists to actual lists
@@ -96,6 +105,12 @@ def parse_args():  # options=None):
 
     if args.laststeps is not None:
         args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+
+    if args.use_tilenight is None:
+        if 'NERSC_HOST' in os.environ and os.environ['NERSC_HOST'] == 'cori':
+            args.use_tilenight = False
+        else:
+            args.use_tilenight = True
 
     return args
 

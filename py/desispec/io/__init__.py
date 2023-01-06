@@ -43,7 +43,7 @@ from .skygradpca import read_skygradpca, write_skygradpca
 from .tpcorrparam import read_tpcorrparam
 from .table import read_table
 from .util import (header2wave, fitsheader, native_endian, makepath,
-                   write_bintable, iterfiles, healpix_degrade_fixed,
+                   write_bintable, iterfiles,
                    healpix_subdirectory, replace_prefix)
 
 # Why is this even here?

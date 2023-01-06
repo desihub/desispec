@@ -29,7 +29,6 @@ set_backend()
 import sys, os, argparse, re
 import subprocess
 from copy import deepcopy
-import json
 
 import numpy as np
 import fitsio
@@ -64,14 +63,15 @@ import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
+from desispec.gpu import is_gpu_available
 
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
-    find_most_recent
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, \
+    update_args_with_headers, find_most_recent, log_timer
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
 stop_imports = time.time()
@@ -84,55 +84,6 @@ def parse(options=None):
     parser = get_desi_proc_parser()
     args = parser.parse_args(options)
     return args
-
-def _log_timer(timer, timingfile=None, comm=None):
-    """
-    Log timing info, optionally writing to json timingfile
-
-    Args:
-        timer: desiutil.timer.Timer object
-
-    Options:
-        timingfile (str): write json output to this file
-        comm: MPI communicator
-
-    If comm is not None, collect timers across ranks.
-    If timmingfile already exists, read and append timing then re-write.
-    """
-
-    log = get_logger()
-    if comm is not None:
-        timers = comm.gather(timer, root=0)
-        rank, size = comm.rank, comm.size
-    else:
-        timers = [timer,]
-        rank, size = 0, 1
-
-    if rank == 0:
-        stats = desiutil.timer.compute_stats(timers)
-        if timingfile:
-            if os.path.exists(timingfile):
-                with open(timingfile) as fx:
-                    previous_stats = json.load(fx)
-
-                #- augment previous_stats with new entries, but don't overwrite old
-                for name in stats:
-                    if name not in previous_stats:
-                        previous_stats[name] = stats[name]
-
-                stats = previous_stats
-
-            tmpfile = get_tempfilename(timingfile)
-            with open(tmpfile, 'w') as fx:
-                json.dump(stats, fx, indent=2)
-            os.rename(tmpfile, timingfile)
-            log.info(f'Timing stats saved to {timingfile}')
-
-        log.info('Timing max duration per step [seconds]:')
-        for stepname, steptiming in stats.items():
-            tmax = steptiming['duration.max']
-            log.info(f'  {stepname:16s} {tmax:.2f}')
-
 
 def main(args=None, comm=None):
     if not isinstance(args, argparse.Namespace):
@@ -169,6 +120,16 @@ def main(args=None, comm=None):
 
     timer.start('mpi_connect', starttime=start_mpi_connect)
     timer.stop('mpi_connect', stoptime=stop_mpi_connect)
+
+    #- Use GPUs?
+    if is_gpu_available():
+        if args.no_gpu:
+            log.warning("GPUs are available but not using them due to --no-gpu")
+            use_gpu = False
+        else:
+            use_gpu = True
+    else:
+        use_gpu = False
 
     #- Freeze IERS after parsing args so that it doesn't bother if only --help
     timer.start('freeze_iers')
@@ -383,7 +344,7 @@ def main(args=None, comm=None):
                     args=cmdargs, inputs=[], outputs=[fibermap])
 
             fibermap_ok = os.path.exists(fibermap)
-            if err != 0 or not fibermap_ok:
+            if not success or not fibermap_ok:
                 error_count += 1
 
     #- If assemble_fibermap failed and obstype is SCIENCE, exit now
@@ -759,14 +720,12 @@ def main(args=None, comm=None):
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.01'
 
-                if args.gpuspecter:
-                    cmd += ' --gpu-specter'
-                    #- default for CPU is nsubbundles=6 but gpu_specter only allows 1, 5, or 25
-                    cmd += ' --nsubbundles 5'
-                    cmd += ' --mpi'
+                if args.use_specter:
+                    cmd += ' --use-specter'
+                    cmd += ' --mpi'  # gpu_specter is MPI by default, but specter isn't
 
-                if args.gpuextract:
-                    cmd += ' --use-gpu'
+                if not use_gpu:
+                    cmd += ' --no-gpu'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     if not args.no_barycentric_correction :
@@ -797,7 +756,7 @@ def main(args=None, comm=None):
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
 
-            if args.gpuextract:
+            if use_gpu and (not args.use_specter):
                 import cupy as cp
                 ngpus = cp.cuda.runtime.getDeviceCount()
                 if rank == 0 and len(cmds)>0:
@@ -806,21 +765,21 @@ def main(args=None, comm=None):
             #- Set extraction subcomm group size
             extract_subcomm_size = args.extract_subcomm_size
             if extract_subcomm_size is None:
-                if args.gpuextract:
-                    #- GPU extraction with gpu_specter uses
-                    #- 5 ranks per GPU plus 2 for IO.
-                    extract_subcomm_size = 2 + 5 * ngpus
-                elif args.gpuspecter:
-                    #- CPU extraction with gpu_specter uses
-                    #- 16 ranks.
-                    extract_subcomm_size = 16
-                else:
+                if args.use_specter:
                     #- CPU extraction with specter uses
                     #- 20 ranks.
                     extract_subcomm_size = 20
+                elif use_gpu:
+                    #- GPU extraction with gpu_specter uses
+                    #- 5 ranks per GPU plus 2 for IO.
+                    extract_subcomm_size = 2 + 5 * ngpus
+                else:
+                    #- CPU extraction with gpu_specter uses
+                    #- 16 ranks.
+                    extract_subcomm_size = 16
 
             #- Create list of ranks that will perform extraction
-            if args.gpuextract:
+            if use_gpu:
                 #- GPU extraction uses only one extraction group
                 extract_group      = 0
                 num_extract_groups = 1
@@ -831,7 +790,7 @@ def main(args=None, comm=None):
             extract_ranks = list(range(num_extract_groups*extract_subcomm_size))
 
             #- Create subcomm groups
-            if args.gpuextract and len(cmds)>0:
+            if use_gpu and len(cmds)>0:
                 if rank in extract_ranks:
                     #- GPU extraction
                     extract_incl = comm.group.Incl(extract_ranks)
@@ -854,15 +813,15 @@ def main(args=None, comm=None):
                             print('RUNNING: {}'.format(cmds[camera]))
 
                         try:
-                            if args.gpuextract:
-                                #- GPU extraction with gpu_specter
-                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
-                            elif args.gpuspecter:
-                                #- CPU extraction with gpu_specter
-                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
-                            else:
+                            if args.use_specter:
                                 #- CPU extraction with specter
                                 desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                            elif use_gpu:
+                                #- GPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
+                            else:
+                                #- CPU extraction with gpu_specter
+                                desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
                         except Exception as err:
                             import traceback
                             lines = traceback.format_exception(*sys.exc_info())
@@ -1033,7 +992,6 @@ def main(args=None, comm=None):
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
             framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
-            hdr = fitsio.read_header(framefile, 'FLUX')
             input_fiberflatfile=input_fiberflat[camera]
             if input_fiberflatfile is None :
                 log.error("No input fiberflat for {}".format(camera))
@@ -1460,25 +1418,25 @@ def main(args=None, comm=None):
         timer.stop('exposure_qa')
 
     #-------------------------------------------------------------------------
-    #- Collect error count
+    #- Collect error count and wrap up
     if comm is not None:
         all_error_counts = comm.gather(error_count, root=0)
         error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
 
-    if rank == 0 and error_count > 0:
-        log.error(f'{error_count} processing errors; see logs above')
+    #- save / print timing information
+    log_timer(timer, args.timingfile, comm=comm)
 
-    #-------------------------------------------------------------------------
-    #- Wrap up
-
-    _log_timer(timer, args.timingfile, comm=comm)
     if rank == 0:
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
         ss = int(duration_seconds - mm*60)
+        goodbye = f'All done at {time.asctime()}; duration {mm}m{ss}s'
 
-        log.info('All done at {}; duration {}m{}s'.format(
-            time.asctime(), mm, ss))
+        if error_count > 0:
+            log.error(f'{error_count} processing errors; see logs above')
+            log.error(goodbye)
+        else:
+            log.info(goodbye)
 
     if error_count > 0:
         sys.exit(int(error_count))
