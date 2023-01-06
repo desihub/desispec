@@ -33,7 +33,7 @@ from   desispec.io import read_fibermap
 from   desispec.io import findfile
 from   desispec.io import read_table
 from   desispec.io.fluxcalibration import read_flux_calibration
-from   desispec.io.util import get_tempfilename
+from   desispec.io.util import get_tempfilename, decode_camword, difference_camwords
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
@@ -43,6 +43,7 @@ from   desispec.skymag import compute_skymag
 from   desispec.efftime import compute_efftime
 from   desispec.parallel import  stdouterr_redirected, use_mpi
 from   desispec.util import parse_int_args
+from desispec.workflow.tableio import load_table
 
 
 def parse(options=None):
@@ -413,12 +414,10 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
             if not os.path.isfile(prod_table_filename) :
                 log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
                 continue
-            prod_table = Table.read(prod_table_filename)
+            prod_table = load_table(tablename=prod_table_filename, tabletype="exptable", suppress_logging=True)
             missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
             nmissing=np.sum(missing)
             if nmissing>0:
-                ucam=np.unique(cam_summary["CAMERA"])
-
                 for i in np.where(missing)[0] :
 
                     #- If the exposure was supposed to be processed but is unexpectedly
@@ -483,7 +482,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                     exp_summary.add_row(vals)
 
                     # same for other table
-                    for cam in ucam :
+                    for cam in decode_camword(difference_camwords(prod_table['CAMWORD'][i],prod_table["BADCAMWORD"][i])):
                         entry["CAMERA"]=cam
                         vals=[]
                         for j,k in enumerate(cam_summary.dtype.names) :
@@ -895,7 +894,7 @@ def main():
 
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
-        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
+        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(str))]
     else:
         cameras = args.cameras.split(',')
 
