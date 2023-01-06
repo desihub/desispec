@@ -209,14 +209,19 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## If asked to do so, only process tiles deemed complete by the specstatus file
     if not all_tiles:
-        completed_tiles = get_completed_tiles(specstatus_path,
+        all_completed_tiles = get_completed_tiles(specstatus_path,
                                               complete_tiles_thrunight=complete_tiles_thrunight)
 
         ## Add -99 to keep calibration exposures
-        completed_tiles = np.append([-99], completed_tiles)
+        all_completed_tiles_withcalib = np.append([-99], all_completed_tiles)
         if etable is not None:
-            keep = np.isin(etable['TILEID'], completed_tiles)
-            log.info(f'Filtering by completed tiles retained {sum(keep)}/{len(etable)} exposures')
+            keep = np.isin(etable['TILEID'], all_completed_tiles_withcalib)
+            sciselect = np.isin(etable['TILEID'], all_completed_tiles)
+            completed_tiles = np.unique(etable['TILEID'][keep])
+            sci_tiles = np.unique(etable['TILEID'][sciselect])
+            log.info(f"Processing completed science tiles: {', '.join(sci_tiles.astype(str))}")
+            log.info(f"Filtering by completed tiles retained {len(sci_tiles)}/{sum(np.unique(etable['TILEID'])>0)} science tiles")
+            log.info(f"Filtering by completed tiles retained {sum(sciselect)}/{sum(etable['TILEID']>0)} science exposures")
             etable = etable[keep]
 
     ## Cut on LASTSTEP
