@@ -469,6 +469,9 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                         entry["TILERA"] = -999.0
                         entry["TILEDEC"] = -999.0
 
+                    for key in ("SKY_MAG_G_SPEC", "SKY_MAG_R_SPEC", "SKY_MAG_Z_SPEC"):
+                        entry[key] = np.nan
+
                     vals=[]
                     for j,k in enumerate(exp_summary.dtype.names) :
                         if k in entry :
