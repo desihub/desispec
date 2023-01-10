@@ -901,9 +901,14 @@ def get_expids_efftimes(tileqafits, prod):
             myd["EXPID"] = f["FIBERMAP"].read_column("EXPID")
             myd["NIGHT"] = f["FIBERMAP"].read_column("NIGHT")
             myd["PETAL_LOC"] = f["FIBERMAP"].read_column("PETAL_LOC")
-            myd["TSNR2_B"] = f["SCORES"].read_column("{}_B".format(tsnr2_key))
-            myd["TSNR2_R"] = f["SCORES"].read_column("{}_R".format(tsnr2_key))
-            myd["TSNR2_Z"] = f["SCORES"].read_column("{}_Z".format(tsnr2_key))
+            scores_keys = f["SCORES"].get_colnames()
+            for camera in ["B", "R", "Z"]:
+                key = "{}_{}".format(tsnr2_key, camera)
+                if key in scores_keys:
+                    myd["TSNR2_{}".format(camera)] = f["SCORES"].read_column(key)
+                else:
+                    myd["TSNR2_{}".format(camera)] = 0
+                    log.warning(f"no {key} column in {spectra_fn} -> set TSNR2_{camera}=0")
             f.close()
             log.info(f"read {len(myd)} rows from {spectra_fn}")
             myds.append(myd)
