@@ -221,6 +221,14 @@ def main(args=None, comm=None):
 
             raise ValueError(msg)
 
+    #- redrock non-MPI mode isn't compatible with GPUs,
+    #- so if zproc is running in non-MPI mode, force --no-gpu
+    #- https://github.com/desihub/redrock/issues/223
+    if (args.mpi == False) and (args.no_gpu == False):
+        log.warning("Redrock+GPU currently only works with MPI; since this is non-MPI, forcing --no-gpu")
+        log.warning("See https://github.com/desihub/redrock/issues/223")
+        args.no_gpu = True
+
     error_count = 0
 
     if rank == 0:
