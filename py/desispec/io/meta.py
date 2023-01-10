@@ -127,6 +127,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         fiberassign = '{rawdata_dir}/{night}/{expid:08d}/fiberassign-{tile:06d}.fits.gz',
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
+        # Top level
+        exposures = '{specprod_dir}/exposures-{specprod}.fits',
+        tiles = '{specprod_dir}/tiles-{specprod}.fits',
+        exposures_csv = '{specprod_dir}/exposures-{specprod}.csv',
+        tiles_csv = '{specprod_dir}/tiles-{specprod}.csv',
+        #
         # preproc/
         # Note: fibermap files will eventually move to preproc.
         #

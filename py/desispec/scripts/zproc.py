@@ -56,65 +56,68 @@ def parse(options=None):
 
     parser.add_argument("-g", "--groupname", type=str,
                         help="Redshift grouping type: cumulative, perexp, pernight, healpix")
-    parser.add_argument("--expfiles", nargs='*',
-                        help="csv files with NIGHT,EXPID to use, plus HEALPIX,SPECTRO for --groupname=healpix")
 
     #- Options for tile-based redshifts
-    parser.add_argument("-t", "--tileid", type=int, default=None,
+    tiles_options = parser.add_argument_group("tile-based options (--groupname perexp, pernight, or cumulative)")
+    tiles_options.add_argument("-t", "--tileid", type=int, default=None,
                         help="Tile ID")
-    parser.add_argument("-n", "--nights", type=int, nargs='*', default=None,
+    tiles_options.add_argument("-n", "--nights", type=int, nargs='*', default=None,
                         help="YEARMMDD night")
-    parser.add_argument("-e", "--expids", type=int, nargs='*', default=None,
+    tiles_options.add_argument("-e", "--expids", type=int, nargs='*', default=None,
                         help="Exposure IDs")
-    parser.add_argument("--thrunight", type=int, default=None,
+    tiles_options.add_argument("--thrunight", type=int, default=None,
                         help="Last night to include (YEARMMDD night) for "
                              + "cumulative redshift jobs. Used instead of nights.")
-    parser.add_argument("-c", "--cameras", type=str, default="a0123456789",
-                        help="Explicitly define the spectrographs for which you want" +
-                             " to reduce the data. Should be a comma separated list." +
-                             " Numbers only assumes you want to reduce R, B, and Z " +
-                             "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
+    tiles_options.add_argument("-c", "--cameras", type=str,
+                        help="Subset of cameras to process, either as a camword (e.g. a012)" +
+                             "Or a comma separated list (e.g. b0,r0,z0).")
 
     #- Options for healpix-based redshifts
-    parser.add_argument("-p", "--healpix", type=int, nargs='*', default=None,
-            help="healpix pixels")
-    parser.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
-    parser.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
+    healpix_options = parser.add_argument_group("healpix-based options (--groupname healpix)")
+    healpix_options.add_argument("-p", "--healpix", type=int, nargs='*', default=None,
+            help="healpix pixels (nested nside=64")
+    healpix_options.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
+    healpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
+    healpix_options.add_argument("--expfiles", nargs='*',
+                        help="csv files with NIGHT,EXPID,SPECTRO,HEALPIX")
+    healpix_options.add_argument("--prodexpfile", help="production summary exposure file (using pre-generated --expfiles is more efficient)")
 
     #- Processing options
-    parser.add_argument("--mpi", action="store_true",
+    processing_options = parser.add_argument_group('processing options')
+    processing_options.add_argument("--mpi", action="store_true",
                         help="Use MPI parallelism")
-    parser.add_argument("--no-gpu", action="store_true",
+    processing_options.add_argument("--no-gpu", action="store_true",
                         help="Don't use gpus")
-    parser.add_argument("--max-gpuprocs", type=int, default=4,
+    processing_options.add_argument("--max-gpuprocs", type=int, default=4,
                         help="Number of GPU prcocesses per node")
-    parser.add_argument("--run-zmtl", action="store_true",
+    processing_options.add_argument("--run-zmtl", action="store_true",
                         help="Whether to run zmtl or not")
-    parser.add_argument("--no-afterburners", action="store_true",
+    processing_options.add_argument("--no-afterburners", action="store_true",
                         help="Set if you don't want to run afterburners")
-    parser.add_argument("--starttime", type=float,
+    processing_options.add_argument("--starttime", type=float,
                         help='start time; use "--starttime $(date +%%s)"')
-    parser.add_argument("--timingfile", type=str,
+    processing_options.add_argument("--timingfile", type=str,
                         help='save runtime info to this json file; augment if pre-existing')
-    parser.add_argument("-d", "--dryrun", action="store_true",
+    processing_options.add_argument("-d", "--dryrun", action="store_true",
                         help="show commands only, do not run")
 
     #- Batch submission options
-    parser.add_argument("--batch", action="store_true",
+    batch_options = parser.add_argument_group("batch queue options")
+    batch_options.add_argument("--batch", action="store_true",
                         help="Submit a batch job to process this exposure")
-    parser.add_argument("--nosubmit", action="store_true",
+    batch_options.add_argument("--nosubmit", action="store_true",
                         help="Create batch script but don't submit")
-    parser.add_argument("-q", "--queue", type=str, default="realtime",
+    batch_options.add_argument("-q", "--queue", type=str, default="realtime",
                         help="batch queue to use (default %(default)s)")
-    parser.add_argument("--batch-opts", type=str, default=None,
+    batch_options.add_argument("--batch-opts", type=str, default=None,
                         help="additional batch commands")
-    parser.add_argument("--batch-reservation", type=str,
+    batch_options.add_argument("--batch-reservation", type=str,
                         help="batch reservation name")
-    parser.add_argument("--batch-dependency", type=str,
+    batch_options.add_argument("--batch-dependency", type=str,
                         help="job dependencies passed to sbatch --dependency")
-    parser.add_argument("--runtime", type=int, default=None,
+    batch_options.add_argument("--runtime", type=int, default=None,
                         help="batch runtime in minutes")
-    parser.add_argument("--system-name", type=str,
+    batch_options.add_argument("--system-name", type=str,
                         default=None,
                         help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
 
@@ -155,8 +158,12 @@ def main(args=None, comm=None):
         assert args.expids is None, f"--groupname healpix doesn't use --expids {args.expids}"
         assert args.thrunight is None, f"--groupname healpix doesn't use --thrunight {args.thrunight}"
         assert args.cameras is None, f"--groupname healpix doesn't use --cameras {args.cameras}"
+        assert (args.expfiles is None) or (args.prodexpfile is None), \
+                "--groupname healpix use --expfiles OR --prodexpfile but not both"
     else:
         assert args.tileid is not None, f"--groupname {args.groupname} requires setting --tileid too"
+        if args.cameras is None:
+            args.cameras = 'a0123456789'
 
     if args.expfiles is not None:
         if args.nights is not None or args.expids is not None:
@@ -304,7 +311,7 @@ def main(args=None, comm=None):
                 hpixexp = vstack([Table.read(fn) for fn in args.expfiles])
             else:
                 from desispec.pixgroup import get_exp2healpix_map
-                hpixexp = get_exp2healpix_map()
+                hpixexp = get_exp2healpix_map(args.prodexpfile, survey=args.survey, program=args.program)
 
             keep = np.isin(hpixexp['HEALPIX'], args.healpix)
             hpixexp = hpixexp[keep]
@@ -533,10 +540,10 @@ def main(args=None, comm=None):
         rrfile = findfile('redrock', **findfileopts)
         rdfile = findfile('rrdetails', **findfileopts)
         rrlog = findfile('redrock', logfile=True, **findfileopts)
-        redrock_cmd = "rrdesi_mpi"
 
         #- Check number of targets; currently gpu only works with <= 1000 due to memory
         #- NAXIS2 = number of rows in the coadded fibermap table
+        ntargets = -1
         if rank == 0:
             if os.path.exists(coaddfile):
                 ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']

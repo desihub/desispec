@@ -64,7 +64,7 @@ def get_ztile_script_pathname(tileid,group,night=None,expid=None):
     outdir = get_ztile_relpath(tileid,group,night=night,expid=expid)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
     suffix = get_ztile_script_suffix(tileid,group,night=night,expid=expid)
-    batchscript = f'coadd-redshifts-{suffix}.slurm'
+    batchscript = f'ztile-{suffix}.slurm'
     return os.path.join(scriptdir, batchscript)
 
 def get_ztile_script_suffix(tileid,group,night=None,expid=None):
