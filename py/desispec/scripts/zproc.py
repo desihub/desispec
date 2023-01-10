@@ -140,6 +140,16 @@ def main(args=None, comm=None):
 
     log = get_logger()
 
+    start_mpi_connect = time.time()
+    if comm is not None:
+        ## Use the provided comm to determine rank and size
+        rank = comm.rank
+        size = comm.size
+    else:
+        ## Check MPI flags and determine the comm, rank, and size given the arguments
+        comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
+    stop_mpi_connect = time.time()
+
     #- set default groupname if needed (cumulative for tiles, otherwise healpix)
     if args.groupname is None:
         if args.tileid is not None:
@@ -200,17 +210,18 @@ def main(args=None, comm=None):
             log.error(msg)
             raise ValueError(msg)
 
-    error_count = 0
+    if (args.groupname == 'healpix') and (args.expfiles is None) and (args.prodexpfile is None):
+        args.prodexpfile = findfile('exposures')
+        if rank == 0:
+            log.info(f'Using default --prodexpfile {args.prodexpfile}')
+        if not os.path.exists(args.prodexpfile):
+            msg = f'Missing {args.prodexpfile}; please create with desi_tsnr_afterburner or specify different --prodexpfile'
+            if rank == 0:
+                log.critical(msg)
 
-    start_mpi_connect = time.time()
-    if comm is not None:
-        ## Use the provided comm to determine rank and size
-        rank = comm.rank
-        size = comm.size
-    else:
-        ## Check MPI flags and determine the comm, rank, and size given the arguments
-        comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
-    stop_mpi_connect = time.time()
+            raise ValueError(msg)
+
+    error_count = 0
 
     if rank == 0:
         thisfile=os.path.dirname(os.path.abspath(__file__))
@@ -548,9 +559,12 @@ def main(args=None, comm=None):
             if os.path.exists(coaddfile):
                 ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']
             else:
-                log.error(f"Missing {coaddfile}; can't run redrock")
-                ntargets = -1
-                error_count += 1
+                if args.dryrun:
+                    ntargets = 500  #- make something up just so that dry run will proceed
+                else:
+                    log.error(f"Missing {coaddfile}; can't run redrock")
+                    ntargets = -1
+                    error_count += 1
 
         if comm is not None:
             ntargets = comm.bcast(ntargets, root=0)
