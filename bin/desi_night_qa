@@ -23,6 +23,7 @@ from desispec.night_qa import (
     get_nightqa_outfns,
     get_surveys_night_expids,
     get_dark_night_expid,
+    get_morning_dark_night_expid,
     get_ctedet_night_expid,
     create_dark_pdf,
     create_badcol_png,
@@ -137,6 +138,9 @@ def main():
     if np.in1d(["dark", "badcol"], steps_tbd).sum() > 0:
         dark_expid = get_dark_night_expid(args.night, args.prod)
 
+    if "morningdark" in steps_tbd:
+        morningdark_expid = get_morning_dark_night_expid(args.night, args.prod)
+
     # AR CTE detector expid
     if "ctedet" in steps_tbd:
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
@@ -145,6 +149,11 @@ def main():
     if "dark" in steps_tbd:
         if dark_expid is not None:
             create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc)
+
+    # AR morning dark expid
+    if "morningdark" in steps_tbd:
+        if morningdark_expid is not None:
+            create_dark_pdf(outfns["morningdark"], args.night, args.prod, morningdark_expid, args.nproc)
 
     # AR badcolumn
     if "badcol" in steps_tbd:
