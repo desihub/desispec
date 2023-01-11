@@ -19,7 +19,7 @@ from desispec.util import parse_int_args
 
 
 
-def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
+def get_ztile_relpath(tileid,group,night=None,expid=None):
     """
     Determine the relative output directory of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -47,7 +47,7 @@ def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
         log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/*')
     return outdir
 
-def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
+def get_ztile_script_pathname(tileid,group,night=None,expid=None):
     """
     Generate the pathname of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -61,13 +61,13 @@ def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
         (str): the pathname of the tile redshift batch script
     """
     reduxdir = desispec.io.specprod_root()
-    outdir = get_tile_redshift_relpath(tileid,group,night=night,expid=expid)
+    outdir = get_ztile_relpath(tileid,group,night=night,expid=expid)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
-    suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
-    batchscript = f'coadd-redshifts-{suffix}.slurm'
+    suffix = get_ztile_script_suffix(tileid,group,night=night,expid=expid)
+    batchscript = f'ztile-{suffix}.slurm'
     return os.path.join(scriptdir, batchscript)
 
-def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
+def get_ztile_script_suffix(tileid,group,night=None,expid=None):
     """
     Generate the suffix of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -94,9 +94,36 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
 
+def get_zpix_redshift_script_pathname(healpix, survey, program):
+    """Return healpix-based coadd+redshift+afterburner script pathname
 
-def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None,
-                                   nights=None, expids=None, batch_opts=None,
+    Args:
+        healpix (int or array-like): healpixel(s)
+        survey (str): DESI survey, e.g. main, sv1, sv3
+        program (str): survey program, e.g. dark, bright, backup
+
+    Returns:
+        zpix_script_pathname
+    """
+    if np.isscalar(healpix):
+        healpix = [healpix,]
+
+    hpixmin = np.min(healpix)
+    hpixmax = np.max(healpix)
+    if len(healpix) == 1:
+        scriptname = f'zpix-{survey}-{program}-{healpix[0]}.slurm'
+    else:
+        scriptname = f'zpix-{survey}-{program}-{hpixmin}-{hpixmax}.slurm'
+
+    reduxdir = desispec.io.specprod_root()
+    return os.path.join(reduxdir, 'run', 'scripts', 'healpix',
+                        survey, program, str(hpixmin//100), scriptname)
+
+def create_desi_zproc_batch_script(group,
+                                   tileid=None, cameras=None,
+                                   thrunight=None, nights=None, expids=None,
+                                   healpix=None, survey=None, program=None,
+                                   queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
                                    max_gpuprocs=None, no_gpu=False, run_zmtl=False,
@@ -105,25 +132,27 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
     Args:
-        tileid (int): The tile id for the data.
-        nights (list of int). The nights the data was acquired.
-        expids (list of int): The exposure id(s) for the data.
-        cameras (str or list of str): List of cameras to include in the processing
-                                      or a camword.
         group (str): Description of the job to be performed. zproc options include:
                      'perexp', 'pernight', 'cumulative'.
-        queue (str): Queue to be used.
 
     Options:
-        runtime (str): Timeout wall clock time.
+        tileid (int): The tile id for the data.
+        cameras (str or list of str): List of cameras to include in the processing
+                                      or a camword.
+        thrunight (int). For group=cumulative, include exposures through this night
+        nights (list of int). The nights the data was acquired.
+        expids (list of int): The exposure id(s) for the data.
+        healpix (list of int): healpixels to process (group='healpix')
+        queue (str): Queue to be used.
         batch_opts (str): Other options to give to the slurm batch scheduler (written into the script).
+        runtime (str): Timeout wall clock time in minutes.
         timingfile (str): Specify the name of the timing file.
         batchdir (str): can define an alternative location to write the file. The default
                   is to SPECPROD under run/scripts/tiles/GROUP/TILE/NIGHT
         jobname (str): name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
-        cmdline (str): Complete command as would be given in terminal to run the desi_zproc. Can be used instead
-                      of reading from argv.
+        cmdline (str or list of str): Complete command as would be given in terminal to run the desi_zproc,
+                 or list of args.  Can be used instead of reading from argv.
         system_name (str): name of batch system, e.g. cori-haswell, cori-knl
         max_gpuprocs (int): Number of gpu processes
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
@@ -138,13 +167,18 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
            may not work with assumptions in the spectro pipeline.
     """
     log = get_logger()
-    nights = np.asarray(nights, dtype=int)
     if nights is not None:
+        nights = np.asarray(nights, dtype=int)
         night = np.max(nights)
     elif thrunight is not None:
         night = thrunight
+    elif group == 'healpix':
+        if (healpix is None or survey is None or program is None):
+            msg = f"group='healpix' must define healpix,survey,program (got {healpix},{survey},{program})"
+            log.error(msg)
+            raise ValueError(msg)
     else:
-        msg = f"Must define either nights or thrunight"
+        msg = f"group {group} must define either nights or thrunight"
         log.error(msg)
         raise ValueError(msg)
 
@@ -157,10 +191,15 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
         else:
             expid = expids[0]
 
-    scriptpath = get_tile_redshift_script_pathname(tileid, group=group,
+    if group == 'healpix':
+        scriptpath = get_zpix_redshift_script_pathname(healpix, survey, program)
+    else:
+        scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                    night=night, expid=expid)
 
-    if np.isscalar(cameras):
+    if cameras is None:
+        cameras = decode_camword('a0123456789')
+    elif np.isscalar(cameras):
         camword = parse_cameras(cameras)
         cameras = decode_camword(camword)
 
@@ -201,7 +240,9 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
             for subparam in param.split("="):
                 inparams.append(subparam)
     else:
-        inparams = list(cmdline)
+        # ensure all elements are str (not int or float)
+        inparams = [str(x) for x in cmdline]
+
     for parameter in ['--queue', '-q', '--batch-opts']:
         ## If a parameter is in the list, remove it and its argument
         ## Elif it is a '--' command, it might be --option=value, which won't be split.
@@ -299,7 +340,7 @@ def create_desi_zproc_batch_script(tileid, cameras, group, queue, thrunight=None
 
         srun = f"srun -N {nodes} -n {ncores} -c {threads_per_core}" \
                + f"{srun_rr_gpu_opts} --cpu-bind=cores {cmd}"
-        fx.write(f"echo RUNNING ${srun}\n")
+        fx.write(f"echo RUNNING {srun}\n")
         fx.write(f'{srun}\n')
 
         fx.write('\nif [ $? -eq 0 ]; then\n')

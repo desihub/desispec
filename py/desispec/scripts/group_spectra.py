@@ -15,8 +15,7 @@ from .. import io
 from ..io.meta import shorten_filename
 from ..io.util import checkgzip
 from ..pixgroup import FrameLite, SpectraLite
-from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
-        frames2spectra, update_frame_cache, FrameLite)
+from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 
 

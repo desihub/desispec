@@ -45,91 +45,54 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2healpix_map(survey=None, program=None, expfile=None,
-        specprod_dir=None, strict=False, nights=None, expids=None):
+def get_exp2healpix_map(expfile, survey=None, program=None,
+        specprod_dir=None, nights=None, expids=None):
     """
     Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
+
+    Args:
+        expfile (str): filepath to exposure with NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR
 
     Options:
         survey (str): filter by this survey (main, sv3, sv1, ...)
         program (str): filter by this FAPRGRM (dark, bright, backup, other)
         specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
+        nights (array-like): filter to only these nights
+        expids (array-like): filter to only these exposure IDs
 
-        TODO...
-
-    Returns table with columns NIGHT EXPID SPECTRO HEALPIX
+    Returns table with columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
     """
     log = get_logger()
     if specprod_dir is None:
         specprod_dir = io.specprod_root()
 
-    if expfile is not None:
-        log.info(f'Reading exposures list from {expfile}')
-        t = Table.read(expfile)
-        #- override FAPRGRM with what we would set it to now
-        t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
-        keep = t['TILEID'] > 0
-        if survey is not None:
-            keep &= (t['SURVEY'] == survey)
-        if program is not None:
-            keep &= (t['FAPRGRM'] == program)
-        if expids is not None:
-            keep &= np.isin(t['EXPID'], expids)
-        if nights is not None:
-            keep &= np.isin(t['NIGHT'], nights)
-
-        exptab = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
-
+    log.info(f'Reading exposures list from {expfile}')
+    if expfile.endswith( (".fits", ".fits.gz") ):
+        t = Table.read(expfile, 1)
     else:
-        #- Read all exposure tables, filtered by SURVEY and FAPRGRM
-        expdir = f'{specprod_dir}/exposure_tables'
-        log.info(f'Reading exposures from {expdir}')
-        exp_tables = list()
-        for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
+        t = Table.read(expfile)
 
-            #- don't read file if it isn't in the nights list
-            if nights is not None:
-                tmp = os.path.splitext(os.path.basename(expfile))[0]
-                night = int(tmp.split('_')[2])
-                if night not in nights:
-                    continue
+    #- override FAPRGRM with what we would set it to now
+    t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
+    keep = t['TILEID'] > 0
+    if survey is not None:
+        keep &= (t['SURVEY'] == survey)
+    if program is not None:
+        keep &= (t['FAPRGRM'] == program)
+    if expids is not None:
+        keep &= np.isin(t['EXPID'], expids)
+    if nights is not None:
+        keep &= np.isin(t['NIGHT'], nights)
 
-            #- read and filter entries to good science exposures of
-            #- requested survey/program/expids
-            t = Table.read(expfile)
-            keep = (t['OBSTYPE'] == 'science')
-            keep &= (t['LASTSTEP'] == 'all')
-            keep &= (t['TILEID'] > 0)
-            if survey is not None:
-                keep &= (t['SURVEY'] == survey)
-            if program is not None:
-                keep &= (t['FAPRGRM'] == program)
-            if expids is not None:
-                keep &= np.isin(t['EXPID'], expids)
+    exptab = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
 
-            if np.any(keep):
-                t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
-                exp_tables.append(t)
-
-        if len(exp_tables) == 0:
-            raise RuntimeError('No matching tiles found in exposure tables')
-
-        exptab = vstack(exp_tables)
-
-    #- read one tilepix file per TILEID
+    #- read one tilepix file per TILEID to get healpix mapping
     tilepix = dict()
     for i in np.unique(exptab['TILEID'], return_index=True)[1]:
         night = exptab['NIGHT'][i]
         expid = exptab['EXPID'][i]
         tileid = exptab['TILEID'][i]
-        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
-
-        if not os.path.exists(tilepixfile):
-            if strict:
-                raise FileNotFoundError(tilepixfile)
-            else:
-                continue
-
+        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid, readonly=True)
         with open(tilepixfile) as fp:
             tilepix.update( json.load(fp) )
 
