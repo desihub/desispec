@@ -476,17 +476,14 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
             specprod_dir = tempfile.mkdtemp()
             outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
             os.makedirs(outdir, exist_ok=True)
-            # AR set SPECPROD=daily in order to use the nightly bias
-            # AR    (and because of that this has to be run after the daily prod)
-            specprod_save = os.environ["SPECPROD"]
-            os.environ["SPECPROD"] = "daily"
             cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {}".format(
                 night, dark_expid, outdir, nproc,
             )
             log.info("run: {}".format(cmd))
-            os.system(cmd)
-            # AR reset SPECPROD to its original value
-            os.environ["SPECPROD"] = specprod_save
+
+            # like os.system(cmd), but avoids system call for MPI compatibility
+            preproc.main(cmd.split()[1:])
+
         # AR if we reached this stage, we expect the raw data to be there
         else:
             msg = "no raw image {} -> skipping".format(rawfn)
