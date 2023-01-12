@@ -5,21 +5,68 @@ desispec Change Log
 0.56.0 (unreleased)
 -------------------
 
+QA and pipelining updates in support of daily ops and Iron/DR1:
+
 * Add update_survey_keywords to standardize early FA headers (PR `#1858`_).
 * Standardize GPU options (opt-out with --no-gpu) and fix options for
   desi_run_night auto-deriving GPU vs. CPU per job (PR `#1901`_).
 * cosmics parameters in yaml file for 500 micron mosaic z5 CCD (PR `#1905`_).
 * cosmics_nsig default cleanup (PR `#1906`_).
 * Reduce size of jobgraph diagrams (PR `#1910`_).
+* Fluxcalib logging include cameras (PR `#1912`_).
+* tilenight options and bug fixes (PR `#1913`_).
+* poststd bugfix for expected cameras compared to stdstar fit (PR `#1916`_).
+* QA updates (PRs `#1917`_, `#1926`_, `#1938`_, `#1944`_, `#1945`_, `#1947`_,
+  `#1954`_, `#1962`_)
+* distribute_ranks_to_blocks bugfix (PR `#1919`_).
+* desi_run_night robust to exposure tables without BADCAMWORD (PR `#1921`_).
+* Improved calibfinder logging (PR `#1922`_).
+* tsnr_afterburner MPI+multiprocessing updates; use fitsio (PR `#1924`_).
+* NaN fix for negative CCD bkg (PR `#1927`_, `#1939`_).
 * Merge ongoing work on spectroscopic production database in preparation for
   EDR (PR `#1928`_).
+* healpix redshifts added to zproc (PR `#1931`_).
+* Check for type of dark option in preprocessing (PR `#1936`_).
+* Add ``desi_run_night --do-cte-flat`` option (PR `#1937`_).
+* Don't set ivar=0 for unassigned fibers by default (PR `#1942`_).
+* Fix tsnr_afterburner when no cframes on a night (PR `#1950`_).
+* Submit cumulative redshifts only for last night of each tile (PR `#1955`_).
+* Use desimodel/0.18.0 for testing for scipy/1.10.0 support (PR `#1957`_).
+* Allow cutoff date for tile completion during reprocessing (PR `#1959`_).
+* copyprod support for missing exposure tables (PR `#1964`_).
 
 .. _`#1858`: https://github.com/desihub/desispec/pull/1858
 .. _`#1901`: https://github.com/desihub/desispec/pull/1901
 .. _`#1905`: https://github.com/desihub/desispec/pull/1905
 .. _`#1906`: https://github.com/desihub/desispec/pull/1906
 .. _`#1910`: https://github.com/desihub/desispec/pull/1910
+.. _`#1912`: https://github.com/desihub/desispec/pull/1912
+.. _`#1913`: https://github.com/desihub/desispec/pull/1913
+.. _`#1916`: https://github.com/desihub/desispec/pull/1916
+.. _`#1917`: https://github.com/desihub/desispec/pull/1917
+.. _`#1919`: https://github.com/desihub/desispec/pull/1919
+.. _`#1921`: https://github.com/desihub/desispec/pull/1921
+.. _`#1922`: https://github.com/desihub/desispec/pull/1922
+.. _`#1924`: https://github.com/desihub/desispec/pull/1924
+.. _`#1926`: https://github.com/desihub/desispec/pull/1926
+.. _`#1927`: https://github.com/desihub/desispec/pull/1927
 .. _`#1928`: https://github.com/desihub/desispec/pull/1928
+.. _`#1931`: https://github.com/desihub/desispec/pull/1931
+.. _`#1936`: https://github.com/desihub/desispec/pull/1936
+.. _`#1937`: https://github.com/desihub/desispec/pull/1937
+.. _`#1938`: https://github.com/desihub/desispec/pull/1938
+.. _`#1939`: https://github.com/desihub/desispec/pull/1939
+.. _`#1942`: https://github.com/desihub/desispec/pull/1942
+.. _`#1944`: https://github.com/desihub/desispec/pull/1944
+.. _`#1945`: https://github.com/desihub/desispec/pull/1945
+.. _`#1947`: https://github.com/desihub/desispec/pull/1947
+.. _`#1950`: https://github.com/desihub/desispec/pull/1950
+.. _`#1954`: https://github.com/desihub/desispec/pull/1954
+.. _`#1955`: https://github.com/desihub/desispec/pull/1955
+.. _`#1957`: https://github.com/desihub/desispec/pull/1957
+.. _`#1959`: https://github.com/desihub/desispec/pull/1959
+.. _`#1962`: https://github.com/desihub/desispec/pull/1962
+.. _`#1964`: https://github.com/desihub/desispec/pull/1964
 
 0.55.0 (2022-11-11)
 -------------------
