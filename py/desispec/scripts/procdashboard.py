@@ -162,18 +162,22 @@ def populate_night_info(night, check_on_disk=False,
     ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
     ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
-    expected_by_type['arc'] =      {'psf': 1,    'frame': 0, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['cteflat'] =  {'psf': 1,    'frame': 1, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['flat'] =     {'psf': 1,    'frame': 1, 'ff': 1,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['science'] =  {'psf': 1,    'frame': 1, 'ff': 0,
-                                    'sframe': 1, 'std': 1,   'cframe': 1}
-    expected_by_type['twilight'] = {'psf': 1,    'frame': 1, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['arc'] =         {'psf': 1,    'frame': 0, 'ff': 0,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['psfnight'] =    {'psf': 1,    'frame': 0, 'ff': 0,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['cteflat'] =     {'psf': 1,    'frame': 1, 'ff': 0,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['flat'] =        {'psf': 1,    'frame': 1, 'ff': 1,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['nightlyflat'] = {'psf': 0,    'frame': 0, 'ff': 1,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['science'] =     {'psf': 1,    'frame': 1, 'ff': 0,
+                                       'sframe': 1, 'std': 1,   'cframe': 1}
+    expected_by_type['twilight'] =    {'psf': 1,    'frame': 1, 'ff': 0,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['zero'] =        {'psf': 0,    'frame': 0, 'ff': 0,
+                                       'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['dark'] = expected_by_type['zero']
     expected_by_type['sky'] = expected_by_type['science']
     expected_by_type['null'] = expected_by_type['zero']

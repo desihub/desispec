@@ -440,7 +440,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         if system_name.startswith('perlmutter'):
             nodes, runtime = 1, 50  #- timefactor will bring time back down
         else:
-            nodes, runtime = 10, 10
+            nodes, runtime = 5, 20
         ncores = nodes * config['cores_per_node']
     elif jobdesc == 'HEALPIX':
         nodes = 1
