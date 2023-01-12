@@ -224,7 +224,7 @@ def main(args=None, comm=None):
     #- redrock non-MPI mode isn't compatible with GPUs,
     #- so if zproc is running in non-MPI mode, force --no-gpu
     #- https://github.com/desihub/redrock/issues/223
-    if (args.mpi == False) and (args.no_gpu == False):
+    if (args.mpi == False) and (args.no_gpu == False) and (not args.batch):
         log.warning("Redrock+GPU currently only works with MPI; since this is non-MPI, forcing --no-gpu")
         log.warning("See https://github.com/desihub/redrock/issues/223")
         args.no_gpu = True
@@ -560,45 +560,23 @@ def main(args=None, comm=None):
         rdfile = findfile('rrdetails', **findfileopts)
         rrlog = findfile('redrock', logfile=True, **findfileopts)
 
-        #- Check number of targets; currently gpu only works with <= 1000 due to memory
-        #- NAXIS2 = number of rows in the coadded fibermap table
-        ntargets = -1
-        if rank == 0:
-            if os.path.exists(coaddfile):
-                ntargets = fitsio.read_header(coaddfile, 'FIBERMAP')['NAXIS2']
-            else:
-                if args.dryrun:
-                    ntargets = 500  #- make something up just so that dry run will proceed
-                else:
-                    log.error(f"Missing {coaddfile}; can't run redrock")
-                    ntargets = -1
-                    error_count += 1
+        cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
+        if not args.no_gpu:
+            cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
 
-        if comm is not None:
-            ntargets = comm.bcast(ntargets, root=0)
+        cmdargs = cmd.split()[1:]
+        if args.dryrun:
+            if rank == 0:
+                log.info(f"dryrun: Would have run {cmd}")
+        else:
+            with stdouterr_redirected(rrlog, comm=comm):
+                result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
+                                         inputs=[coaddfile], outputs=[rrfile, rdfile])
 
-        if ntargets > 0:
-            cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
-            if not args.no_gpu:
-                if ntargets <= 1000:
-                    cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
-                else:
-                    if rank == 0:
-                        log.warning(f'Not using GPU for {os.path.basename(coaddfile)} with {ntargets}>1000 targets')
-
-            cmdargs = cmd.split()[1:]
-            if args.dryrun:
-                if rank == 0:
-                    log.info(f"dryrun: Would have run {cmd}")
-            else:
-                with stdouterr_redirected(rrlog, comm=comm):
-                    result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
-                                             inputs=[coaddfile], outputs=[rrfile, rdfile])
-
-            ## Since all ranks running redrock, only count failure/success once
-            if rank == 0 and not success:
-                log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
-                error_count += 1
+        ## Since all ranks running redrock, only count failure/success once
+        if rank == 0 and not success:
+            log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
+            error_count += 1
 
         ## Since all ranks running redrock, ensure we're all moving on to next
         ## iteration together
