@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.56.0 (unreleased)
+0.56.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.56.0 (2023-01-12)
 -------------------
 
 QA and pipelining updates in support of daily ops and Iron/DR1:
@@ -25,7 +30,7 @@ QA and pipelining updates in support of daily ops and Iron/DR1:
 * NaN fix for negative CCD bkg (PR `#1927`_, `#1939`_).
 * Merge ongoing work on spectroscopic production database in preparation for
   EDR (PR `#1928`_).
-* healpix redshifts added to zproc (PR `#1931`_).
+* healpix redshifts added to zproc (PR `#1931`_, `#1966`_).
 * Check for type of dark option in preprocessing (PR `#1936`_).
 * Add ``desi_run_night --do-cte-flat`` option (PR `#1937`_).
 * Don't set ivar=0 for unassigned fibers by default (PR `#1942`_).
@@ -34,6 +39,8 @@ QA and pipelining updates in support of daily ops and Iron/DR1:
 * Use desimodel/0.18.0 for testing for scipy/1.10.0 support (PR `#1957`_).
 * Allow cutoff date for tile completion during reprocessing (PR `#1959`_).
 * copyprod support for missing exposure tables (PR `#1964`_).
+* Change zproc on cori realtime to 2 nodes and 30 minutes
+  (PRs `#1968`_, `#1969`_).
 
 .. _`#1858`: https://github.com/desihub/desispec/pull/1858
 .. _`#1901`: https://github.com/desihub/desispec/pull/1901
@@ -67,6 +74,9 @@ QA and pipelining updates in support of daily ops and Iron/DR1:
 .. _`#1959`: https://github.com/desihub/desispec/pull/1959
 .. _`#1962`: https://github.com/desihub/desispec/pull/1962
 .. _`#1964`: https://github.com/desihub/desispec/pull/1964
+.. _`#1966`: https://github.com/desihub/desispec/pull/1966
+.. _`#1968`: https://github.com/desihub/desispec/pull/1968
+.. _`#1969`: https://github.com/desihub/desispec/pull/1969
 
 0.55.0 (2022-11-11)
 -------------------
