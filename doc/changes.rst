@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.56.1 (unreleased)
+0.56.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.56.1 (2023-01-13)
+-------------------
+
+* Increase flat job time limit (PR `#1970`_).
+
+.. _`#1970`: https://github.com/desihub/desispec/pull/1970
 
 0.56.0 (2023-01-12)
 -------------------
