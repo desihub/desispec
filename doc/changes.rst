@@ -2,7 +2,14 @@
 desispec Change Log
 ===================
 
-0.56.2 (unreleased)
+0.56.3 (unreleased)
+-------------------
+
+* Minor fixes to io.photo (PR `#1971`_).
+
+.. _`#1971`: https://github.com/desihub/desispec/pull/1971
+
+0.56.2 (2023-01-23)
 -------------------
 
 * Minor fixes to io.photo (PR `#1971`_).
