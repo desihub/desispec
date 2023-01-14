@@ -369,8 +369,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                     if 'dedicated' in targetdir:
                         targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
                     else:
-                        targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits')) # use??
-                        #targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+                        targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
                 else:
                     targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
             elif 'ToO' in targetdir:
@@ -391,7 +390,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                             targetfiles.append(_targetfile)
     
             targetfiles = np.unique(targetfiles)
-    
+
             if len(targetfiles) == 0:
                 continue
     
@@ -421,7 +420,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                         photofiles.append(targetfile)
                         photo.append(_photo)
                     continue
-    
+
                 if 'ToO' in targetfile:
                     photo1 = Table.read(targetfile, guess=False, format='ascii.ecsv')
                     I = np.where(np.isin(photo1['TARGETID'], input_cat1['TARGETID']))[0]
@@ -465,7 +464,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                     del photo1
                     photofiles.append(targetfile)
                     photo.append(_photo)
-    
+
         # backup programs have no target catalog photometry at all
         if len(photo) == 0:
             continue
