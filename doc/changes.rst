@@ -13,6 +13,7 @@ desispec Change Log
 * Reduce size of jobgraph diagrams (PR `#1910`_).
 * Merge ongoing work on spectroscopic production database in preparation for
   EDR (PR `#1928`_).
+* Minor fixes to io.photo (PR `#1971`_).
 
 .. _`#1858`: https://github.com/desihub/desispec/pull/1858
 .. _`#1901`: https://github.com/desihub/desispec/pull/1901
@@ -20,6 +21,7 @@ desispec Change Log
 .. _`#1906`: https://github.com/desihub/desispec/pull/1906
 .. _`#1910`: https://github.com/desihub/desispec/pull/1910
 .. _`#1928`: https://github.com/desihub/desispec/pull/1928
+.. _`#1971`: https://github.com/desihub/desispec/pull/1971
 
 0.55.0 (2022-11-11)
 -------------------
