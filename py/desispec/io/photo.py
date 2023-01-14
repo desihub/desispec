@@ -269,7 +269,7 @@ def targetphot_datamodel(from_file=False):
             ('GAIA_ASTROMETRIC_EXCESS_NOISE', (1,), '>f4'),
             ('GAIA_DUPLICATED_SOURCE', (1,), 'bool'),
             ('GAIA_ASTROMETRIC_SIGMA5D_MAX', (1,), '>f4'),
-            ('GAIA_ASTROMETRIC_PARAMS_SOLVED', (1,), 'int8'),
+            ('GAIA_ASTROMETRIC_PARAMS_SOLVED', (1,), 'uint8'),
             ('PARALLAX', (1,), '>f4'),
             ('PARALLAX_IVAR', (1,), '>f4'),
             ('PMRA', (1,), '>f4'),
@@ -911,6 +911,8 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)
 
     if columns is not None:
+        if type(columns) is not list:
+            columns = columns.tolist()
         out = out[columns]
 
     return out
