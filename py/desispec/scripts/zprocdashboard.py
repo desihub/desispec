@@ -279,16 +279,16 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         if ztype == 'perexp':
             unique_key = f'{zfild_expid}_{ztype}'
             logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                           'coadd-redshifts-{tileid}-{zexpid}{jobid}.{ext}')
+                                           'ztile-{tileid}-{zexpid}{jobid}.{ext}')
         else:
             unique_key = f'{tileid}_{ztype}'
             if ztype =='cumulative':
                 logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                           'coadd-redshifts-{tileid}-thru{night}{jobid}.{ext}')
+                                           'ztile-{tileid}-thru{night}{jobid}.{ext}')
             else:
                 # pernight
                 logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                               'coadd-redshifts-{tileid}-{night}{jobid}.{ext}')
+                                               'ztile-{tileid}-{night}{jobid}.{ext}')
 
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
         if night_json_zinfo is not None and unique_key in night_json_zinfo \

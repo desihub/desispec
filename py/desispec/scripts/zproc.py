@@ -1,32 +1,35 @@
 """
 One stop shopping for redshifting  DESI spectra
-
 """
 
-import time, datetime
+import time
+start_imports = time.time()
+
+#- python imports
+import datetime
+import sys, os, argparse, re
+import subprocess
+from copy import deepcopy
+import json
+import glob
+
+#- external 3rd party imports
+import numpy as np
+import fitsio
+from astropy.io import fits
+from astropy.table import Table,vstack
+
+#- external desi imports
+from redrock.external import desi
+import desiutil.timer
+from desiutil.log import get_logger, DEBUG, INFO
+import desiutil.iers
 
 from desispec.io.meta import get_nights_up_to_date
 from desispec.workflow.redshifts import read_minimal_exptables_columns, \
     create_desi_zproc_batch_script
 
-start_imports = time.time()
-
-import sys, os, argparse, re
-import subprocess
-from copy import deepcopy
-import json
-
-import numpy as np
-import fitsio
-from astropy.io import fits
-
-from astropy.table import Table,vstack
-
-import glob
-
-from redrock.external import desi
-
-import desiutil.timer
+#- internal desispec imports
 import desispec.io
 from desispec.io import findfile, specprod_root, replace_prefix, shorten_filename, get_readonly_filepath
 from desispec.io.util import create_camword, decode_camword, parse_cameras, \
@@ -34,8 +37,6 @@ from desispec.io.util import create_camword, decode_camword, parse_cameras, \
 from desispec.io.util import validate_badamps, get_tempfilename, backup_filename
 from desispec.util import runcmd
 from desispec.scripts import group_spectra
-from desiutil.log import get_logger, DEBUG, INFO
-import desiutil.iers
 from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
 from desispec.workflow.exptable import get_exposure_table_pathname
@@ -53,56 +54,72 @@ def parse(options=None):
     """
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
-    parser.add_argument("-t", "--tileid", type=int, default=None,
+    parser.add_argument("-g", "--groupname", type=str,
+                        help="Redshift grouping type: cumulative, perexp, pernight, healpix")
+
+    #- Options for tile-based redshifts
+    tiles_options = parser.add_argument_group("tile-based options (--groupname perexp, pernight, or cumulative)")
+    tiles_options.add_argument("-t", "--tileid", type=int, default=None,
                         help="Tile ID")
-    # parser.add_argument("-p", "--healpix", type=str, default=None, help="Healpix")
-    parser.add_argument("-n", "--nights", type=int, nargs='*', default=None,
+    tiles_options.add_argument("-n", "--nights", type=int, nargs='*', default=None,
                         help="YEARMMDD night")
-    parser.add_argument("-e", "--expids", type=int, nargs='*', default=None,
+    tiles_options.add_argument("-e", "--expids", type=int, nargs='*', default=None,
                         help="Exposure IDs")
-    parser.add_argument("--thrunight", type=int, default=None,
+    tiles_options.add_argument("--thrunight", type=int, default=None,
                         help="Last night to include (YEARMMDD night) for "
                              + "cumulative redshift jobs. Used instead of nights.")
-    parser.add_argument("-g", "--groupname", type=str, default='cumulative',
-                        help="Redshift grouping type: cumulative, perexp, pernight")
-    parser.add_argument("-c", "--cameras", type=str, default="a0123456789",
-                        help="Explicitly define the spectrographs for which you want" +
-                             " to reduce the data. Should be a comma separated list." +
-                             " Numbers only assumes you want to reduce R, B, and Z " +
-                             "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
-    parser.add_argument("--mpi", action="store_true",
+    tiles_options.add_argument("-c", "--cameras", type=str,
+                        help="Subset of cameras to process, either as a camword (e.g. a012)" +
+                             "Or a comma separated list (e.g. b0,r0,z0).")
+
+    #- Options for healpix-based redshifts
+    healpix_options = parser.add_argument_group("healpix-based options (--groupname healpix)")
+    healpix_options.add_argument("-p", "--healpix", type=int, nargs='*', default=None,
+            help="healpix pixels (nested nside=64")
+    healpix_options.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
+    healpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
+    healpix_options.add_argument("--expfiles", nargs='*',
+                        help="csv files with NIGHT,EXPID,SPECTRO,HEALPIX")
+    healpix_options.add_argument("--prodexpfile", help="production summary exposure file (using pre-generated --expfiles is more efficient)")
+
+    #- Processing options
+    processing_options = parser.add_argument_group('processing options')
+    processing_options.add_argument("--mpi", action="store_true",
                         help="Use MPI parallelism")
-    parser.add_argument("--no-gpu", action="store_true",
+    processing_options.add_argument("--no-gpu", action="store_true",
                         help="Don't use gpus")
-    parser.add_argument("--max-gpuprocs", type=int, default=4,
+    processing_options.add_argument("--max-gpuprocs", type=int, default=4,
                         help="Number of GPU prcocesses per node")
-    parser.add_argument("--run-zmtl", action="store_true",
+    processing_options.add_argument("--run-zmtl", action="store_true",
                         help="Whether to run zmtl or not")
-    parser.add_argument("--no-afterburners", action="store_true",
+    processing_options.add_argument("--no-afterburners", action="store_true",
                         help="Set if you don't want to run afterburners")
-    parser.add_argument("--batch", action="store_true",
-                        help="Submit a batch job to process this exposure")
-    parser.add_argument("--nosubmit", action="store_true",
-                        help="Create batch script but don't submit")
-    parser.add_argument("-q", "--queue", type=str, default="realtime",
-                        help="batch queue to use")
-    parser.add_argument("--batch-opts", type=str, default=None,
-                        help="additional batch commands")
-    parser.add_argument("--batch-reservation", type=str,
-                        help="batch reservation name")
-    parser.add_argument("--batch-dependency", type=str,
-                        help="job dependencies passed to sbatch --dependency")
-    parser.add_argument("--runtime", type=int, default=None,
-                        help="batch runtime in minutes")
-    parser.add_argument("--starttime", type=str,
-                        help='start time; use "--starttime `date +%%s`"')
-    parser.add_argument("--timingfile", type=str,
+    processing_options.add_argument("--starttime", type=float,
+                        help='start time; use "--starttime $(date +%%s)"')
+    processing_options.add_argument("--timingfile", type=str,
                         help='save runtime info to this json file; augment if pre-existing')
-    parser.add_argument("--system-name", type=str,
+    processing_options.add_argument("-d", "--dryrun", action="store_true",
+                        help="show commands only, do not run")
+
+    #- Batch submission options
+    batch_options = parser.add_argument_group("batch queue options")
+    batch_options.add_argument("--batch", action="store_true",
+                        help="Submit a batch job to process this exposure")
+    batch_options.add_argument("--nosubmit", action="store_true",
+                        help="Create batch script but don't submit")
+    batch_options.add_argument("-q", "--queue", type=str, default="realtime",
+                        help="batch queue to use (default %(default)s)")
+    batch_options.add_argument("--batch-opts", type=str, default=None,
+                        help="additional batch commands")
+    batch_options.add_argument("--batch-reservation", type=str,
+                        help="batch reservation name")
+    batch_options.add_argument("--batch-dependency", type=str,
+                        help="job dependencies passed to sbatch --dependency")
+    batch_options.add_argument("--runtime", type=int, default=None,
+                        help="batch runtime in minutes")
+    batch_options.add_argument("--system-name", type=str,
                         default=None,
                         help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
-    parser.add_argument("-d", "--dryrun", action="store_true",
-                        help="show commands only, do not run")
 
     if options is not None:
         args = parser.parse_args(options)
@@ -116,47 +133,12 @@ def main(args=None, comm=None):
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
 
+    if args.starttime is not None:
+        start_time = args.starttime
+    else:
+        start_time = time.time()
+
     log = get_logger()
-
-    # if args.healpix is not None:
-    #     msg = f"Healpix redshifts is not yet implemented"
-    #     log.error(msg)
-    #     raise NotImplementedError(msg)
-    if args.tileid is None:
-        msg = "Must specify tile"
-        log.error(msg)
-        raise ValueError(msg)
-
-    today = int(time.strftime('%Y%m%d'))
-    if args.thrunight is not None:
-        ## change if implementing healpix
-        if args.groupname not in ['cumulative']:
-            msg = f"--thrunight only valid for cumulative redshifts."
-            log.error(msg)
-            raise ValueError(msg)
-        elif args.thrunight < 20200214 or args.thrunight > today:
-            msg = f"--thrunight must be between 20200214 and today."
-            log.error(msg)
-            raise ValueError(msg)
-
-    if args.expids is not None:
-        if args.nights is None:
-            msg = f"Must specify --nights if specifying --expids."
-            log.error(msg)
-            raise ValueError(msg)
-        else:
-            msg = f"Only using exposures specified with --expids"
-            log.info(msg)
-
-    if args.groupname in ['perexp', 'pernight'] and args.nights is not None:
-        if len(args.nights) > 1:
-            msg = f"Only expect one night for groupname {args.groupname}" \
-                  + f" but received nights={args.nights}."
-            log.error(msg)
-            raise ValueError(msg)
-
-    start_time = time.time()
-    error_count = 0
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -167,6 +149,87 @@ def main(args=None, comm=None):
         ## Check MPI flags and determine the comm, rank, and size given the arguments
         comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
     stop_mpi_connect = time.time()
+
+    #- set default groupname if needed (cumulative for tiles, otherwise healpix)
+    if args.groupname is None:
+        if args.tileid is not None:
+            args.groupname = 'cumulative'
+        elif args.healpix is not None:
+            args.groupname = 'healpix'
+        else:
+            msg = 'Must specify --tileid or --healpix'
+            log.critical(msg)
+            raise ValueError(msg)
+
+    #- consistency of options
+    if args.groupname == 'healpix':
+        assert args.healpix is not None, "--groupname healpix requires setting --healpix too"
+        assert args.nights is None, f"--groupname healpix doesn't use --nights {args.nights}"
+        assert args.expids is None, f"--groupname healpix doesn't use --expids {args.expids}"
+        assert args.thrunight is None, f"--groupname healpix doesn't use --thrunight {args.thrunight}"
+        assert args.cameras is None, f"--groupname healpix doesn't use --cameras {args.cameras}"
+        assert (args.expfiles is None) or (args.prodexpfile is None), \
+                "--groupname healpix use --expfiles OR --prodexpfile but not both"
+    else:
+        assert args.tileid is not None, f"--groupname {args.groupname} requires setting --tileid too"
+        if args.cameras is None:
+            args.cameras = 'a0123456789'
+
+    if args.expfiles is not None:
+        if args.nights is not None or args.expids is not None:
+            msg = "use --expfiles OR --nights and --expids, but not both"
+            log.error(msg)
+            raise ValueError(msg)
+
+    today = int(time.strftime('%Y%m%d'))
+    if args.thrunight is not None:
+        if args.groupname not in ['cumulative',]:
+            msg = f"--thrunight only valid for cumulative redshifts."
+            log.error(msg)
+            raise ValueError(msg)
+        #- very early data isn't supported, and future dates aren't supported
+        #- because that implies data are included that don't yet exist
+        elif args.thrunight < 20200214 or args.thrunight > today:
+            msg = f"--thrunight must be between 20200214 and today"
+            log.error(msg)
+            raise ValueError(msg)
+
+    if args.expids is not None:
+        if args.nights is None:
+            msg = f"Must specify --nights if specifying --expids."
+            log.error(msg)
+            raise ValueError(msg)
+        else:
+            msg = f"Only using exposures specified with --expids {args.expids}"
+            log.info(msg)
+
+    if args.groupname in ['perexp', 'pernight'] and args.nights is not None:
+        if len(args.nights) > 1:
+            msg = f"Only expect one night for groupname {args.groupname}" \
+                  + f" but received nights={args.nights}."
+            log.error(msg)
+            raise ValueError(msg)
+
+    if (args.groupname == 'healpix') and (args.expfiles is None) and (args.prodexpfile is None):
+        args.prodexpfile = findfile('exposures')
+        if rank == 0:
+            log.info(f'Using default --prodexpfile {args.prodexpfile}')
+        if not os.path.exists(args.prodexpfile):
+            msg = f'Missing {args.prodexpfile}; please create with desi_tsnr_afterburner or specify different --prodexpfile'
+            if rank == 0:
+                log.critical(msg)
+
+            raise ValueError(msg)
+
+    #- redrock non-MPI mode isn't compatible with GPUs,
+    #- so if zproc is running in non-MPI mode, force --no-gpu
+    #- https://github.com/desihub/redrock/issues/223
+    if (args.mpi == False) and (args.no_gpu == False) and (not args.batch):
+        log.warning("Redrock+GPU currently only works with MPI; since this is non-MPI, forcing --no-gpu")
+        log.warning("See https://github.com/desihub/redrock/issues/223")
+        args.no_gpu = True
+
+    error_count = 0
 
     if rank == 0:
         thisfile=os.path.dirname(os.path.abspath(__file__))
@@ -199,7 +262,9 @@ def main(args=None, comm=None):
     timer.start('preflight')
 
     ## Derive the available cameras
-    if isinstance(args.cameras, str):
+    if args.groupname == 'healpix':
+        camword = 'a0123456789'
+    elif isinstance(args.cameras, str):
         if rank == 0:
             camword = parse_cameras(args.cameras)
         else:
@@ -207,10 +272,10 @@ def main(args=None, comm=None):
     else:
         camword = create_camword(args.cameras)
 
-    ## Unpack arguments for shorter names
+    ## Unpack arguments for shorter names (tileid might be None, ok)
     tileid, groupname = args.tileid, args.groupname
 
-    known_groups = ['cumulative', 'pernight', 'perexp']
+    known_groups = ['cumulative', 'pernight', 'perexp', 'healpix']
     if groupname not in known_groups:
         msg = 'obstype {} not in {}'.format(groupname, known_groups)
         log.error(msg)
@@ -223,14 +288,16 @@ def main(args=None, comm=None):
         if rank == 0:
             ## create the batch script
             cmdline = list(sys.argv).copy()
-            scriptfile = create_desi_zproc_batch_script(tileid=tileid,
+            scriptfile = create_desi_zproc_batch_script(group=groupname,
+                                                        tileid=tileid,
                                                         cameras=camword,
-                                                        group=groupname,
-                                                        queue=args.queue,
-                                                        # healpix=healpix,
                                                         thrunight=args.thrunight,
                                                         nights=args.nights,
                                                         expids=args.expids,
+                                                        healpix=args.healpix,
+                                                        survey=args.survey,
+                                                        program=args.program,
+                                                        queue=args.queue,
                                                         runtime=args.runtime,
                                                         batch_opts=args.batch_opts,
                                                         timingfile=args.timingfile,
@@ -249,9 +316,26 @@ def main(args=None, comm=None):
             err = comm.bcast(err, root=0)
         sys.exit(err)
 
-    exposure_table = Table()
+    exposure_table = None
+    hpixexp = None
     if rank == 0:
-        if groupname == 'perexp' and args.nights is not None \
+
+        if groupname != 'healpix' and args.expfiles is not None:
+            tmp = vstack([Table.read(fn) for fn in args.expfiles])
+            args.expids = list(tmp['EXPID'])
+            args.nights = list(tmp['NIGHT'])
+
+        if groupname == 'healpix':
+            if args.expfiles is not None:
+                hpixexp = vstack([Table.read(fn) for fn in args.expfiles])
+            else:
+                from desispec.pixgroup import get_exp2healpix_map
+                hpixexp = get_exp2healpix_map(args.prodexpfile, survey=args.survey, program=args.program)
+
+            keep = np.isin(hpixexp['HEALPIX'], args.healpix)
+            hpixexp = hpixexp[keep]
+
+        elif groupname == 'perexp' and args.nights is not None \
                 and args.cameras is not None and args.expids is not None:
             assert len(args.expids) == 1, "perexp job should only have one exposure"
             assert len(args.nights) == 1, "perexp job should only have one night"
@@ -279,17 +363,25 @@ def main(args=None, comm=None):
     ## Should remove, just nice for printouts while performance isn't important
     if comm is not None:
         comm.barrier()
-        exposure_table = comm.bcast(exposure_table, root=0)
+        if groupname == 'healpix':
+            hpixexp = comm.bcast(hpixexp, root=0)
+        else:
+            exposure_table = comm.bcast(exposure_table, root=0)
 
-    if len(exposure_table) == 0:
-        msg = f"Didn't find any exposures!"
-        log.error(msg)
-        raise ValueError(msg)
-    
-    ## Get night and expid information
-    expids = np.unique(exposure_table['EXPID'].data)
-    nights = np.unique(exposure_table['NIGHT'].data)
-    thrunight = np.max(nights)
+    if groupname != 'healpix':
+        if len(exposure_table) == 0:
+            msg = f"Didn't find any exposures!"
+            log.error(msg)
+            raise ValueError(msg)
+
+        ## Get night and expid information
+        expids = np.unique(exposure_table['EXPID'].data)
+        nights = np.unique(exposure_table['NIGHT'].data)
+        thrunight = np.max(nights)
+    else:
+        expids = None
+        nights = None
+        thrunight = None
 
     #------------------------------------------------------------------------#
     #------------------------ Proceed with running --------------------------#
@@ -299,14 +391,12 @@ def main(args=None, comm=None):
     if rank == 0:
         log.info('------------------------------')
         log.info('Groupname {}'.format(groupname))
-        # if healpix is not None:
-        #     log.info(f'Healpix {healpix} night {thrunight} expids {args.expids}')
-        # else:
-        #     log.info(f'Tileid {tileid} night {thrunight} expids {args.expids}')
-        log.info(f'Tileid={tileid} nights={nights} expids={expids}')
+        if args.healpix is not None:
+            log.info(f'Healpixels {args.healpix}')
+        else:
+            log.info(f'Tileid={tileid} nights={nights} expids={expids}')
 
         log.info(f'Supplied camword: {camword}')
-        #log.info(f'All Spectros:  {all_spectros}')
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         if args.run_zmtl:
             log.info(f'Will be running zmtl')
@@ -317,31 +407,42 @@ def main(args=None, comm=None):
     if comm is not None:
         comm.barrier()
 
-    ## Find nights, exposures, and camwords
-    expnight_dict = dict()
-    complete_cam_set = set()
-
-    camword_set = set(decode_camword(camword))
-    for erow in exposure_table:
-        key = (erow['EXPID'],erow['NIGHT'])
-        val = set(decode_camword(difference_camwords(erow['CAMWORD'],
-                                                     erow['BADCAMWORD'],
-                                                     suppress_logging=True)))
-        if camword != 'a0123456789':
-            val = camword_set.intersection(val)
-
-        complete_cam_set = complete_cam_set.union(val)
-        expnight_dict[key] = val
-
-
     ## Derive the available spectrographs
-    all_spectros = camword_to_spectros(create_camword(list(complete_cam_set)),
-                                       full_spectros_only=False)
+    if groupname == 'healpix':
+        all_subgroups = args.healpix
+    else:
+        ## Find nights, exposures, and camwords
+        expnight_dict = dict()
+        complete_cam_set = set()
 
-    if len(all_spectros) == 0:
-        msg = f"Didn't find any spectrographs! complete_cam_set={complete_cam_set}"
-        log.error(msg)
-        raise ValueError(msg)
+        camword_set = set(decode_camword(camword))
+        for erow in exposure_table:
+            key = (erow['EXPID'],erow['NIGHT'])
+            val = set(decode_camword(difference_camwords(erow['CAMWORD'],
+                                                         erow['BADCAMWORD'],
+                                                         suppress_logging=True)))
+            if camword != 'a0123456789':
+                val = camword_set.intersection(val)
+
+            complete_cam_set = complete_cam_set.union(val)
+            expnight_dict[key] = val
+
+        all_subgroups = camword_to_spectros(create_camword(list(complete_cam_set)),
+                                           full_spectros_only=False)
+
+        if len(all_subgroups) == 0:
+            msg = f"Didn't find any spectrographs! complete_cam_set={complete_cam_set}"
+            log.error(msg)
+            raise ValueError(msg)
+
+    ## options to be used by findfile for all output files
+    if groupname == 'healpix':
+        findfileopts = dict(groupname=groupname, survey=args.survey, faprogram=args.program)
+    else:
+        findfileopts = dict(night=thrunight, tile=tileid, groupname=groupname)
+        if groupname == 'perexp':
+            assert len(expids) == 1
+            findfileopts['expid'] = expids[0]
 
     timer.stop('preflight')
 
@@ -350,53 +451,76 @@ def main(args=None, comm=None):
     timer.start('groupspec')
 
     nblocks, block_size, block_rank, block_num = \
-        distribute_ranks_to_blocks(len(all_spectros), rank=rank, size=size, log=log)
+        distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
 
     if rank == 0:
-        splog = findfile('spectra', night=thrunight, tile=tileid,
-                         groupname=groupname, spectrograph=0,
-                         expid=expids[0],  # needed for perexp; ignored otherwise
-                         logfile=True)
-        os.makedirs(os.path.dirname(splog), exist_ok=True)
+        if groupname == 'healpix':
+            for hpix in args.healpix:
+                findfileopts['healpix'] = hpix
+                splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
+                os.makedirs(os.path.dirname(splog), exist_ok=True)
+        else:
+            splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
+            os.makedirs(os.path.dirname(splog), exist_ok=True)
         
     if comm is not None:
         comm.barrier()
 
     if block_rank == 0:
-        for i in range(block_num, len(all_spectros), nblocks):
+        for i in range(block_num, len(all_subgroups), nblocks):
             result, success = 0, True
-            spectro = all_spectros[i]
-            spectrafile = findfile('spectra', night=thrunight, tile=tileid,
-                                   expid=expids[0],
-                                   groupname=groupname, spectrograph=spectro)
-            splog = findfile('spectra', night=thrunight, tile=tileid,
-                             expid=expids[0],
-                             groupname=groupname, spectrograph=spectro,
-                             logfile=True)
-            coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                                 expid=expids[0],
-                                 groupname=groupname, spectrograph=spectro)
-            # generate list of cframes from dict of exposures, nights, and cameras
-            cframes = []
-            for (expid, night), cameras in expnight_dict.items():
-                for camera in cameras:
-                    if int(spectro) == int(camera[1]):
-                        cframes.append(findfile('cframe', night=night,
-                                                expid=expid, camera=camera))
-
             if groupname == 'healpix':
-                raise ValueError('groupname=healpix not yet supported; needs different desi_group_spectra options')
+                healpix = all_subgroups[i]
+                findfileopts['healpix'] = healpix
+
+                cframes = []
+                ii = hpixexp['HEALPIX'] == healpix
+                for night, expid, spectro in hpixexp['NIGHT', 'EXPID', 'SPECTRO'][ii]:
+                    for band in ('b', 'r', 'z'):
+                        camera = band+str(spectro)
+                        filename = findfile('cframe', night=night, expid=expid, camera=camera)
+                        if os.path.exists(filename):
+                            cframes.append(filename)
+                        else:
+                            log.warning(f'Missing {filename}')
+
+                if len(cframes) < 3:
+                    log.error(f'healpix {healpix} only has {len(cframes)} cframes; skipping')
+                    error_count += 1
+                    continue
+
+            else:
+                spectro = all_subgroups[i]
+                findfileopts['spectrograph'] = spectro
+
+                # generate list of cframes from dict of exposures, nights, and cameras
+                cframes = []
+                for (expid, night), cameras in expnight_dict.items():
+                    for camera in cameras:
+                        if int(spectro) == int(camera[1]):
+                            cframes.append(findfile('cframe', night=night,
+                                                    expid=expid, camera=camera))
+
+            spectrafile = findfile('spectra', **findfileopts)
+            splog = findfile('spectra', logfile=True, **findfileopts)
+            coaddfile = findfile('coadd', **findfileopts)
 
             cmd = f"desi_group_spectra --inframes {' '.join(cframes)} " \
                   + f"--outfile {spectrafile} " \
-                  + f"--coaddfile {coaddfile} " \
-                  +  "--onetile " \
-                  + f"--header SPGRP={groupname} SPGRPVAL={thrunight} " \
-                  + f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} " \
-                  + f"PETAL={spectro} "
+                  + f"--coaddfile {coaddfile} "
 
-            if groupname == 'perexp':
-                cmd += 'EXPID={expids[0]} '
+            if groupname == 'healpix':
+                cmd += f"--healpix {healpix} "
+                cmd += (f"--header SPGRP={groupname} SPGRPVAL={healpix} "
+                        f"HPXPIXEL={healpix} HPXNSIDE=64 HPXNEST=True "
+                        f"SURVEY={args.survey} PROGRAM={args.program} ")
+            else:
+                cmd += "--onetile "
+                cmd += (f"--header SPGRP={groupname} SPGRPVAL={thrunight} "
+                        f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} PETAL={spectro} ")
+
+                if groupname == 'perexp':
+                    cmd += f'EXPID={expids[0]} '
 
             cmdargs = cmd.split()[1:]
             if args.dryrun:
@@ -412,33 +536,29 @@ def main(args=None, comm=None):
                 log.error(f'desi_group_spectra petal {spectro} failed; see {splog}')
                 error_count += 1
 
-    if rank == 0:
-        log.info("Done with spectra")
     timer.stop('groupspec')
 
     if comm is not None:
         comm.barrier()
 
+    if rank == 0:
+        log.info("Done with spectra")
+
     #-------------------------------------------------------------------------
     ## Do redshifting
     timer.start('redrock')
-    for spectro in all_spectros:
+    for subgroup in all_subgroups:
         result, success = 0, True
 
-        coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                             expid=expids[0],
-                             groupname=groupname, spectrograph=spectro)
-        rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                          expid=expids[0],
-                          groupname=groupname, spectrograph=spectro)
-        rdfile = findfile('rrdetails', night=thrunight, tile=tileid,
-                          expid=expids[0],
-                          groupname=groupname, spectrograph=spectro)
-        rrlog = findfile('redrock', night=thrunight, tile=tileid,
-                         expid=expids[0],
-                         groupname=groupname, spectrograph=spectro,
-                         logfile=True)
-        redrock_cmd = "rrdesi_mpi"
+        if groupname == 'healpix':
+            findfileopts['healpix'] = subgroup
+        else:
+            findfileopts['spectrograph'] = subgroup
+
+        coaddfile = findfile('coadd', **findfileopts)
+        rrfile = findfile('redrock', **findfileopts)
+        rdfile = findfile('rrdetails', **findfileopts)
+        rrlog = findfile('redrock', logfile=True, **findfileopts)
 
         cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
         if not args.no_gpu:
@@ -455,7 +575,7 @@ def main(args=None, comm=None):
 
         ## Since all ranks running redrock, only count failure/success once
         if rank == 0 and not success:
-            log.error(f'Redrock petal {spectro} failed; see {rrlog}')
+            log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
             error_count += 1
 
         ## Since all ranks running redrock, ensure we're all moving on to next
@@ -463,38 +583,30 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-    if rank == 0:
-        log.info("Done with redrock")
-
     if comm is not None:
         comm.barrier()
         
     timer.stop('redrock')
 
+    if rank == 0:
+        log.info("Done with redrock")
+
     #-------------------------------------------------------------------------
-    ## Do tileqa if a tile
+    ## Do tileqa if a tile (i.e. not for healpix)
     timer.start('tileqa')
 
     if rank == 0 and groupname in ['pernight', 'cumulative']:
         from desispec.scripts import tileqa
 
         result, success = 0, True
-        qafile = findfile('tileqa', night=thrunight, expid=expids[0],
-                          tile=tileid, groupname=groupname)
-        qapng = findfile('tileqapng', night=thrunight,
-                         tile=tileid, expid=expids[0],
-                         groupname=groupname)
-        qalog = findfile('tileqa', night=thrunight,
-                         tile=tileid, expid=expids[0],
-                         groupname=groupname, logfile=True)
+        qafile = findfile('tileqa', **findfileopts)
+        qapng = findfile('tileqapng', **findfileopts)
+        qalog = findfile('tileqa', logfile=True, **findfileopts)
         infiles = []
-        for spectro in all_spectros:
-            infiles.append(findfile('coadd', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro))
-            infiles.append(findfile('redrock', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro))
+        for spectro in all_subgroups:
+            findfileopts['spectrograph'] = spectro
+            infiles.append(findfile('coadd', **findfileopts))
+            infiles.append(findfile('redrock', **findfileopts))
         cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
         cmdargs = cmd.split()[1:]
         if args.dryrun:
@@ -524,20 +636,16 @@ def main(args=None, comm=None):
 
         timer.start('zmtl')
         if block_rank == 0:
-            for i in range(block_num, len(all_spectros), nblocks):
+            for i in range(block_num, len(all_subgroups), nblocks):
                 result, success = 0, True
-                spectro = all_spectros[i]
-                # run_mock_func('spectra', 'cumulative', spectro=spectro, comm=comm)
-                rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                                       expid=expids[0],
-                                       groupname=groupname, spectrograph=spectro)
-                zmtlfile = findfile('zmtl', night=thrunight, tile=tileid,
-                                    expid=expids[0],
-                                    groupname=groupname, spectrograph=spectro)
-                zmtllog = findfile('zmtl', night=thrunight, tile=tileid,
-                                   expid=expids[0],
-                                   groupname=groupname, spectrograph=spectro,
-                                   logfile=True)
+                if groupname == 'healpix':
+                    findfileopts['healpix'] = all_subgroups[i]
+                else:
+                    findfileopts['spectrograph'] = all_subgroups[i]
+
+                rrfile = findfile('redrock', **findfileopts)
+                zmtlfile = findfile('zmtl', **findfileopts)
+                zmtllog = findfile('zmtl', logfile=True, **findfileopts)
                 cmd = f"make_zmtl_files --input_file {rrfile} --output_file {zmtlfile}"
                 cmdargs = cmd.split()[1:]
                 if args.dryrun:
@@ -549,7 +657,7 @@ def main(args=None, comm=None):
                                                  inputs=[rrfile],
                                                  outputs=[zmtlfile])
                 if not success:
-                    log.error(f'zmtl petal {spectro} failed; see {zmtllog}')
+                    log.error(f'zmtl petal/healpix {all_subgroups[i]} failed; see {zmtllog}')
                     error_count += 1
 
         if rank == 0:
@@ -580,9 +688,11 @@ def main(args=None, comm=None):
         """
         timer.start('afterburners')
         nafterburners = 3
-        nspectros = len(all_spectros)
-        ntasks = nafterburners * nspectros
+        nsubgroups = len(all_subgroups)
+        ntasks = nafterburners * nsubgroups
 
+        # TODO: for 64//3, this creates 4 blocks, with rank 63/64 being block 3 block_rank==0,
+        # which ends up running mgii afterburner twice
         nblocks, block_size, block_rank, block_num = \
             distribute_ranks_to_blocks(ntasks, rank=rank, size=size, log=log)
 
@@ -605,23 +715,19 @@ def main(args=None, comm=None):
                 ## I/O isn't hit all at once
                 ## afterburner 2 runs with 10s delay, 3 with 20s delay
                 #time.sleep(0.2*i)
-                spectro = all_spectros[i % nspectros]
-                coaddfile = findfile('coadd', night=thrunight, tile=tileid,
-                                     expid=expids[0],
-                                     groupname=groupname, spectrograph=spectro)
-                rrfile = findfile('redrock', night=thrunight, tile=tileid,
-                                  expid=expids[0],
-                                  groupname=groupname, spectrograph=spectro)
-                ## First set of nspectros ranks go to desi_qso_mgii_afterburner
-                if i // nspectros == 0:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso mgii")
-                    mgiifile = findfile('qso_mgii', night=thrunight, tile=tileid,
-                                        groupname=groupname, expid=expids[0],
-                                        spectrograph=spectro)
-                    mgiilog = findfile('qso_mgii', night=thrunight, tile=tileid,
-                                       expid=expids[0],
-                                       groupname=groupname, spectrograph=spectro,
-                                       logfile=True)
+                subgroup = all_subgroups[i % nsubgroups]
+                if groupname == 'healpix':
+                    findfileopts['healpix'] = subgroup
+                else:
+                    findfileopts['spectrograph'] = subgroup
+
+                coaddfile = findfile('coadd', **findfileopts)
+                rrfile = findfile('redrock', **findfileopts)
+                ## First set of nsubgroups ranks go to desi_qso_mgii_afterburner
+                if i // nsubgroups == 0:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for qso mgii")
+                    mgiifile = findfile('qso_mgii', **findfileopts)
+                    mgiilog = findfile('qso_mgii', logfile=True, **findfileopts)
                     cmd = f"desi_qso_mgii_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {mgiifile} " \
                           + f"--target_selection all --save_target all"
@@ -636,18 +742,13 @@ def main(args=None, comm=None):
                                                      outputs=[mgiifile])
 
                         if not success:
-                            log.error(f'qsomgii afterburner petal {spectro} failed; see {mgiilog}')
+                            log.error(f'qsomgii afterburner petal/healpix {subgroup} failed; see {mgiilog}')
 
-                ## Second set of nspectros ranks go to desi_qso_qn_afterburner
-                elif i // nspectros == 1:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for qso qn")
-                    qnfile = findfile('qso_qn', night=thrunight, tile=tileid,
-                                      groupname=groupname, expid=expids[0],
-                                      spectrograph=spectro)
-                    qnlog = findfile('qso_qn', night=thrunight, tile=tileid,
-                                     groupname=groupname, spectrograph=spectro,
-                                     expid=expids[0],
-                                     logfile=True)
+                ## Second set of nsubgroups ranks go to desi_qso_qn_afterburner
+                elif i // nsubgroups == 1:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for qso qn")
+                    qnfile = findfile('qso_qn', **findfileopts)
+                    qnlog = findfile('qso_qn', logfile=True, **findfileopts)
                     cmd = f"desi_qso_qn_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {qnfile} " \
                           + f"--target_selection all --save_target all"
@@ -662,18 +763,13 @@ def main(args=None, comm=None):
                                                      outputs=[qnfile], comm=monocomm)
 
                         if not success:
-                            log.error(f'qsoqn afterburner petal {spectro} failed; see {qnlog}')
+                            log.error(f'qsoqn afterburner petal/healpix {subgroup} failed; see {qnlog}')
 
-                ## Third set of nspectros ranks go to desi_emlinefit_afterburner
-                elif i // nspectros == 2:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro {spectro} for emlinefiti")
-                    emfile = findfile('emline', night=thrunight, tile=tileid,
-                                      groupname=groupname, expid=expids[0],
-                                      spectrograph=spectro)
-                    emlog = findfile('emline', night=thrunight, tile=tileid,
-                                     groupname=groupname, spectrograph=spectro,
-                                     expid=expids[0],
-                                     logfile=True)
+                ## Third set of nsubgroups ranks go to desi_emlinefit_afterburner
+                elif i // nsubgroups == 2:
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for emlinefit")
+                    emfile = findfile('emline', **findfileopts)
+                    emlog = findfile('emline', logfile=True, **findfileopts)
                     cmd = f"desi_emlinefit_afterburner --coadd {coaddfile} " \
                           + f"--redrock {rrfile} --output {emfile}"
                     cmdargs = cmd.split()[1:]
@@ -687,11 +783,11 @@ def main(args=None, comm=None):
                                                      outputs=[emfile])
 
                         if not success:
-                            log.error(f'emlinefit afterburner petal {spectro} failed; see {emlog}')
+                            log.error(f'emlinefit afterburner petal/healpix {subgroup} failed; see {emlog}')
 
                 ## For now only 3 afterburners, so shout if we loop goes higher than that
                 else:
-                    log.error(f"Index i={i} // nspectros={nspectros} should " \
+                    log.error(f"Index i={i} // nsubgroups={nsubgroups} should " \
                               + f"be between 0 and {nafterburners-1}!")
 
                 if not success:

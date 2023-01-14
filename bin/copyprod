@@ -60,6 +60,16 @@ if opts.tiles is not None:
     for night in np.unique(explist['NIGHT']):
         yearmm = night//100
         exptabfile = f'{inroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
+        if not os.path.exists(exptabfile):
+            # commissioning data without exposure tables isn't supported
+            # by copyprod, but if later nights are missing exptab then error
+            if night > 20201119:
+                log.error(f'Missing exposure table for {night}; stopping')
+                sys.exit(1)
+            else:
+                log.warning(f'No exposure table for CMX {night}; skipping')
+                continue
+
         exptab = Table.read(exptabfile)
         ii = np.isin(exptab['TILEID'], tiles)
         keep |= np.isin(explist['EXPID'], exptab['EXPID'][ii])

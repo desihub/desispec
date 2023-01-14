@@ -393,7 +393,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
-        runtime = 25
+        runtime = 40
         if system_name.startswith('perlmutter'):
             ncores = config['cores_per_node']
         else:
@@ -440,7 +440,11 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         if system_name.startswith('perlmutter'):
             nodes, runtime = 1, 50  #- timefactor will bring time back down
         else:
-            nodes, runtime = 10, 10
+            nodes, runtime = 2, 30
+        ncores = nodes * config['cores_per_node']
+    elif jobdesc == 'HEALPIX':
+        nodes = 1
+        runtime = 100
         ncores = nodes * config['cores_per_node']
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)

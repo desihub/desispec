@@ -24,6 +24,7 @@ from desitarget.geomask import match_to
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
 from desispec.calibfinder import CalibFinder
+from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
@@ -53,6 +54,7 @@ def get_nightqa_outfns(outdir, night):
     return {
         "html" : os.path.join(outdir, "nightqa-{}.html".format(night)),
         "dark" : os.path.join(outdir, "dark-{}.pdf".format(night)),
+        "morningdark" : os.path.join(outdir, "morningdark-{}.pdf".format(night)),
         "badcol" : os.path.join(outdir, "badcol-{}.png".format(night)),
         "ctedet" : os.path.join(outdir, "ctedet-{}.pdf".format(night)),
         "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
@@ -178,6 +180,58 @@ def get_dark_night_expid(night, prod):
             )
     return expid
 
+
+def get_morning_dark_night_expid(night, prod, exptime=1200):
+    """
+    Returns the EXPID of the latest 1200s DARK exposure for a given night.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        exptime (optional, defaults to 1200): exposure time we are looking for (float)
+
+    Returns:
+        expid: EXPID (int)
+
+    Notes:
+        If nothing found, returns None.
+        As of now (20221220), those morning darks are not processed by the daily
+            pipeline; hence we do not use the processing_tables, but the
+            exposure_tables.
+    """
+    #
+    expid = None
+    exptable_fn = os.path.join(
+        prod,
+        "exposure_tables",
+        str(night // 100),
+        "exposure_table_{}.csv".format(night),
+    )
+    log.info("exptable_fn = {}".format(exptable_fn))
+    if not os.path.isfile(exptable_fn):
+        log.warning("no {} found; returning None".format(exptable_fn))
+    else:
+        d = Table.read(exptable_fn)
+        sel = d["OBSTYPE"] == "dark"
+        sel &= d["COMMENTS"] == "|" # AR we request an exposure with no known issue
+        sel &= np.abs(d["EXPTIME"] - exptime) < 1
+        if sel.sum() == 0:
+            log.warning(
+                "found zero exposures with OBSTYPE=dark and COMMENTS='|' and abs(EXPTIME-{})<1 in expable_fn; returning None".format(
+                    exptime,
+                )
+            )
+        else:
+            d = d[sel]
+            # AR pick the latest one
+            d = d[d["MJD-OBS"].argsort()]
+            expid = d["EXPID"][-1]
+            log.info(
+                "found EXPID={} as the latest {}s DARK for NIGHT={}".format(
+                    expid, exptime, night,
+                )
+            )
+    return expid
 
 def get_ctedet_night_expid(night, prod):
     """
@@ -322,11 +376,12 @@ def create_mp4(fns, outmp4, duration=15):
         os.remove("{}/tmp-{:04d}.png".format(tmpoutdir, i))
 
 
-def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
+def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
     """
     Internal function used by create_dark_pdf(), to read and bin the 300s dark.
 
     Args:
+        fn: full path to the dark image (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
@@ -340,8 +395,6 @@ def _read_dark(night, prod, dark_expid, petal, camera, binning=4):
         Else:
             None
     """
-    fn = findfile('preproc', night, dark_expid, camera+str(petal),
-            specprod_dir=prod)
     if os.path.isfile(fn):
         mydict = {}
         mydict["dark_expid"] = dark_expid
@@ -391,16 +444,60 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
         outpdf: output pdf file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
-        dark_expid: EXPID of the 300s DARK exposure to display (int)
+        dark_expid: EXPID of the 300s or 1200s DARK exposure to display (int)
         nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
+
+    Notes:
+        If the identified dark image is not processed and if the raw data is there,
+            we do process it (in a temporary folder), so that we can generate the plots.
     """
+    # AR first check if we need to process this dark image
+    proctable_fn = os.path.join(
+        prod,
+        "processing_tables",
+        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
+    )
+    run_preproc = False
+    if not os.path.isfile(proctable_fn):
+        run_preproc = True
+    else:
+        d = Table.read(proctable_fn)
+        sel = d["OBSTYPE"] == "dark"
+        d = d[sel]
+        proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+        if dark_expid not in proc_expids:
+            run_preproc = True
+    # AR run preproc?
+    if run_preproc:
+        # AR does the raw exposure exist?
+        rawfn = findfile("raw", night, dark_expid)
+        if os.path.isfile(rawfn):
+            specprod_dir = tempfile.mkdtemp()
+            outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+            os.makedirs(outdir, exist_ok=True)
+            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {}".format(
+                night, dark_expid, outdir, nproc,
+            )
+            log.info("run: {}".format(cmd))
+
+            # like os.system(cmd), but avoids system call for MPI compatibility
+            preproc.main(cmd.split()[1:])
+
+        # AR if we reached this stage, we expect the raw data to be there
+        else:
+            msg = "no raw image {} -> skipping".format(rawfn)
+            log.error(msg)
+            raise ValueError(msg)
+    else:
+        specprod_dir = prod
     #
     myargs = []
     for petal in petals:
         for camera in cameras:
             myargs.append(
                 [
+                    findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=specprod_dir),
                     night,
                     prod,
                     dark_expid,
@@ -434,7 +531,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
                 ax = fig.add_subplot(gs[1, 2 * ic])
                 ax_y = fig.add_subplot(gs[0, 2 * ic])
                 ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
-                ii = [i for i in range(len(myargs)) if myargs[i][3] == petal and myargs[i][4] == camera]
+                ii = [i for i in range(len(myargs)) if myargs[i][4] == petal and myargs[i][5] == camera]
                 assert(len(ii) == 1)
                 mydict = mydicts[ii[0]]
                 if mydict is not None:
@@ -750,12 +847,7 @@ def _read_sframesky(night, prod, expid):
                         sel = fibermap["OBJTYPE"] == "SKY"
                         fibermap = fibermap[sel]
                         flux = h["FLUX"].read()[sel]
-                        # AR set flux=np.nan for ivar=0 pixels
-                        # AR so that those are displayed with a special
-                        # AR color in the sframesky
-                        # AR ivar is not used further, so we do not propagate it
                         ivar = h["IVAR"].read()[sel]
-                        flux[ivar == 0] = np.nan
                         wave = h["WAVELENGTH"].read()
                         flux_header = h["FLUX"].read_header()
                         fibermap_header = h["FIBERMAP"].read_header()
@@ -765,8 +857,10 @@ def _read_sframesky(night, prod, expid):
                         nwave = len(mydict[camera]["wave"])
                         mydict[camera]["petals"] = np.zeros(0, dtype=int)
                         mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
+                        mydict[camera]["nullivar"] = np.zeros(0, dtype=bool).reshape((0, nwave))
                         mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
                     mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], flux, axis=0)
+                    mydict[camera]["nullivar"] = np.append(mydict[camera]["nullivar"], ivar == 0, axis=0)
                     mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(flux.shape[0], dtype=int))
                     band = camera.lower()[0]
                     mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (fibermap["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
@@ -814,7 +908,6 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
     cmap = matplotlib.cm.Greys_r
-    cmap.set_bad(color="y")
     with PdfPages(outpdf) as pdf:
         for mydict in mydicts:
             if mydict is not None:
@@ -828,6 +921,12 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                     if "flux" in mydict[camera]:
                         nsky = mydict[camera]["flux"].shape[0]
                         im = ax.imshow(mydict[camera]["flux"], cmap=cmap, vmin=clim[0], vmax=clim[1], zorder=0)
+                        # AR overlay in transparent pixels with ivar=0
+                        # AR a bit obscure why I need to add +1 in xs, ys...
+                        # AR probably some indexing convention in imshow()
+                        xys = np.argwhere(mydict[camera]["nullivar"])
+                        xs, ys = 1 + xys[:, 0], 1 + xys[:, 1]
+                        ax.scatter(ys, xs, c="g", s=0.1, alpha=0.1, zorder=1, rasterized=True)
                         for petal in petals:
                             ii = np.where(mydict[camera]["petals"] == petal)[0]
                             if len(ii) > 0:
@@ -1743,6 +1842,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
 
     # AR various tabs:
     # AR - dark
+    # AR - morningdark
     # AR - badcol
     # AR - ctedet
     # AR - sframesky
@@ -1750,11 +1850,12 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR - skyzfiber
     # AR - petalnz
     for case, caselab, width, text in zip(
-        ["dark", "badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
-        ["DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
-        ["100%", "35%", "100%", "75%", "90%", "90%", "100%"],
+        ["dark", "morningdark", "badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
+        ["DARK", "Morning DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
+        ["100%", "100%", "35%", "100%", "75%", "90%", "90%", "100%"],
         [
             "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nThe side panels report the median profiles for each pair of amps along each direction.\nWatch it and report unsual features (easy to say!)",
+             "This pdf displays the 1200s (binned) morning DARK (one page per spectrograph; non-valid pixels are displayed in red)\nThe side panels report the median profiles for each pair of amps along each direction.\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nPixels with IVAR=0 are displayed in yellow.\nWatch it and report unsual features (easy to say!)",

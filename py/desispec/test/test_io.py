@@ -890,6 +890,29 @@ class TestIO(unittest.TestCase):
                          'spectra-2-68000-thru20200314.fits.gz')
         self.assertEqual(a, b)
 
+        #- Can't set both tile and healpix
+        with self.assertRaises(ValueError):
+            findfile('redrock', tile=1234, healpix=1234, survey='main', faprogram='dark')
+
+        with self.assertRaises(ValueError):
+            findfile('redrock', tile=1234, healpix=1234, night=20201010, groupname='cumulative')
+
+        # More healpix tests
+        refpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                               os.environ['SPECPROD'],
+                               'healpix', 'main', 'bright', '52', '5286',
+                               'spectra-main-bright-5286.fits.gz')
+        a = findfile('spectra', groupname='healpix', healpix=5286, survey='main', faprogram='BRIGHT')
+        b = findfile('spectra', groupname='healpix', healpix='5286', survey='main', faprogram='BRIGHT')
+        c = findfile('spectra', groupname='5286', survey='main', faprogram='BRIGHT')
+        d = findfile('spectra', groupname=5286, survey='main', faprogram='BRIGHT')
+        e = findfile('spectra', healpix=5286, survey='main', faprogram='BRIGHT')
+        self.assertEqual(a, refpath)
+        self.assertEqual(b, refpath)
+        self.assertEqual(c, refpath)
+        self.assertEqual(d, refpath)
+        self.assertEqual(e, refpath)
+
         #- cumulative vs. pernight
         tileid = 1234
         night = 20201010

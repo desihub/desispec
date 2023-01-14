@@ -814,7 +814,7 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
 
         # SB tile-qa file doesn't have spectro num so requires more parsing
         # /path/redrock-0-1234-20201220.fits -> /path/tile-qa-1234-20201220.fits
-        tmp = redrockfn.split('-')
+        tmp = basename.split('-')
         tileqafn = '-'.join(['tile-qa',] + tmp[2:])
         tileqafn = os.path.join(dirname, tileqafn)
 
