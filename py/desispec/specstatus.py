@@ -8,14 +8,14 @@ from astropy.table import Table, vstack
 from desiutil.log import get_logger
 
 def update_specstatus(specstatus, tiles, update_only=False,
-                      clear_qa_status=False):
+                      clear_qa=False):
     """
     return new specstatus table, updated with tiles table
 
     Args:
         specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
         tiles: astropy Table from spectro/redux/daily/tiles.csv
-        clear_qa_status: bool indicating whether QA data should be cleared
+        clear_qa: bool indicating whether QA data should be cleared
 
     Returns: updated specstatus table, sorted by TILEID
 
@@ -83,7 +83,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
                 if col not in qacols:
                     if tiles[col][i] != specstatus[col][j]:
                         different = True
-            if not different:
+            if not different and not clear_qa:
                 continue
             log.info('Updating TILEID {} LASTNIGHT {} (orig LASTNIGHT {})'.format(
                 tileid, tiles['LASTNIGHT'][i], specstatus['LASTNIGHT'][j]))
@@ -92,7 +92,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
             for col in specstatus.colnames:
                 if col not in qacols:
                     specstatus[col][j] = tiles[col][i]
-            if clear_qa_status:
+            if clear_qa:
                 specstatus['QA'][j] = 'none'
 
     log.info(f'Added {num_newtiles} and updated {num_updatedtiles} tiles')
