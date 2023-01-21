@@ -11,7 +11,7 @@ import numba
 import time
 
 from scipy import signal
-from scipy.ndimage.filters import median_filter
+from scipy.ndimage import median_filter
 from scipy.signal import fftconvolve
 
 from desispec.image import Image
