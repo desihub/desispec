@@ -1,4 +1,7 @@
 '''
+desispec.io.raw
+===============
+
 I/O for DESI raw data files
 
 See DESI-1229 for format details

@@ -1,3 +1,9 @@
+"""
+desispec.tsnr
+=============
+
+Please add module-level documentation.
+"""
 import os
 import numpy as np
 import time
@@ -36,7 +42,7 @@ class Config(object):
             setattr(self, key, d[key])
 
 class gfa_template_ensemble(object):
-    '''
+    '''Please add class-level documentation.
     '''
     def __init__(self):
         log = get_logger()

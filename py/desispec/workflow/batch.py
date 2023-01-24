@@ -1,5 +1,8 @@
 """
-desispec.workflow.batch: utilities for working with slurm batch queues
+desispec.workflow.batch
+=======================
+
+Utilities for working with slurm batch queues.
 """
 
 import os

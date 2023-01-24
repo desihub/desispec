@@ -1,6 +1,6 @@
 """
-desispec.io.sky
-===============
+desispec.io.skycorr
+===================
 
 IO routines for sky.
 """

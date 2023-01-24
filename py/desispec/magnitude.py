@@ -1,8 +1,8 @@
 """
 desispec.magnitude
-========================
+==================
 
-Broadband flux and magnitudes
+Broadband flux and magnitudes.
 """
 
 import numpy as np

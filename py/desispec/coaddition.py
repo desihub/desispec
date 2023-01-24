@@ -1,5 +1,8 @@
 """
-Coadd spectra
+desispec.coaddition
+===================
+
+Coadd spectra.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -244,7 +247,7 @@ def coadd_fibermap(fibermap, onetile=False):
             tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj][good_coadds]))
         if 'TILEID' in fibermap.colnames:
             tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj][good_coadds]))
-        
+
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in mean_cols:
@@ -262,7 +265,7 @@ def coadd_fibermap(fibermap, onetile=False):
         if 'FIBER_RA' in fibermap.colnames:
             dec = fibermap['TARGET_DEC'][jj][0]
             vals = fibermap['FIBER_RA'][jj]
-            std = np.std(vals+360.0) * 3600 / np.cos(np.radians(dec)) 
+            std = np.std(vals+360.0) * 3600 / np.cos(np.radians(dec))
             tfmap['STD_FIBER_RA'][i] = std
 
         if 'FIBER_DEC' in fibermap.colnames:

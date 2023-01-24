@@ -1,3 +1,10 @@
+"""
+desispec.ccdcalib
+=================
+
+Please add module-level documentation.
+"""
+
 import os, sys, glob, json
 import traceback
 import datetime
@@ -32,7 +39,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     Compute classic dark model from input dark images
 
     Args:
-        rawfiles (list of str): list of input raw data files (desi-*.fits.fz)
+        rawfiles (list of str): list of input raw data files (``desi-*.fits.fz``)
         outfile (str): output file with dark model to write
         camera (str): camera to process, e.g. b0, r1, z9
 
@@ -354,7 +361,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
         nskip (int): number of initial zeros to skip
 
     Returns:
-         calib_expdict (dict): dictionary of expids (values) for each camera (keys) 
+         calib_expdict (dict): dictionary of expids (values) for each camera (keys)
                                for calibration zeros
          noncalib_expdict (dict): dictionary of expids (values) for each camera (keys)
                                   for non calibration zeros.
@@ -379,7 +386,7 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
         #- CALIB ZEROs or non-calib ZEROs for dark sequence
         #- while being robust to missing OBSTYPE or PROGRAM
-        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r): 
+        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r):
             if r['PROGRAM'].startswith('CALIB ZEROs'):
                 calib_expids.append(int(os.path.basename(os.path.dirname(filename))))
             elif r['PROGRAM'].startswith('ZEROs for dark sequence'):
@@ -837,7 +844,7 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
     #- calculate differences per-amp, thus //2
     ny_groups = ny//2
     nx_groups = nx//2
-    
+
     median_diff1 = list()
     median_diff2 = list()
 
@@ -1044,7 +1051,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
             exptable_all=table_vstack(exptables)
             select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
             exptable_select=exptable_all[select]
-        
+
         log.info(f'Scanning {len(nightlist)} night directories')
         speclog = io.util.get_speclog(nightlist)
         select_speclog = ((speclog['OBSTYPE']=='ZERO')|(speclog['OBSTYPE']=='DARK'))
@@ -1085,7 +1092,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     t = Time(speclog['MJD']-7/24, format='mjd')
     speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
     speclogfile = os.path.join(tempdir, 'speclog.csv')
-    
+
     tmpfile = speclogfile + '.tmp-' + str(os.getpid())
     speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclogfile)
@@ -1161,7 +1168,7 @@ cd {outdir}
 
             with open(batchfile, 'a') as fx:
                 fx.write(f"time {cmd} > {logfile2} 2> {logfile2} &\n")
-        
+
         with open(batchfile, 'a') as fx:
             fx.write("wait\n")
             for darkfile,biasfile in zip(darkfile_list,biasfile_list):
@@ -1258,7 +1265,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
                     if useval[key]!=newval[key]:
                         usenew = False
                         break
-                
+
                 if not usenew:
                     change_dates[speckey].append(int(useval['DATE-OBS-BEGIN']))
                     useval = newval

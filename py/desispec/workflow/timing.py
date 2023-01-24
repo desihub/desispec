@@ -1,3 +1,9 @@
+"""
+desispec.workflow.timing
+========================
+
+Please add module-level documentation.
+"""
 import os
 import numpy as np
 

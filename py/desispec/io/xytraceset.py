@@ -2,7 +2,7 @@
 desispec.io.xytraceset
 ======================
 
-I/O routines for XYTraceSet objects
+I/O routines for XYTraceSet objects.
 """
 
 import os.path
@@ -37,14 +37,14 @@ def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
         log.debug("read {} from hdu {}".format(label,extname))
     else :
         log.debug("read coefficients from hdu {}".format(label,extname))
-                
-    return hdu.data,wavemin,wavemax 
+
+    return hdu.data,wavemin,wavemax
 
 def _traceset_from_table(wavemin,wavemax,hdu,pname) :
     log=get_logger()
     head=hdu.header
     table=hdu.data
-    
+
     extname=head["EXTNAME"]
     i=np.where(table["PARAM"]==pname)[0][0]
 
@@ -57,7 +57,7 @@ def _traceset_from_table(wavemin,wavemax,hdu,pname) :
                 raise ValueError(mess)
         else :
             wavemin=twavemin
-    
+
     if "WAVEMAX" in table.dtype.names :
         twavemax=table["WAVEMAX"][i]
         if wavemax is not None :
@@ -67,26 +67,26 @@ def _traceset_from_table(wavemin,wavemax,hdu,pname) :
                 raise ValueError(mess)
         else :
             wavemax=twavemax
-    
+
     log.debug("read {} from hdu {}".format(pname,extname))
-    return table["COEFF"][i],wavemin,wavemax 
+    return table["COEFF"][i],wavemin,wavemax
 
 def read_xytraceset(filename) :
     """
     Reads traces in PSF fits file
-    
+
     Args:
         filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
     Returns:
          XYTraceSet object
-    
+
     """
     #- specter import isolated within function so specter only loaded if
     #- really needed
     from specter.util.traceset import TraceSet,fit_traces
 
     log=get_logger()
-    
+
     xcoef=None
     ycoef=None
     xsigcoef=None
@@ -94,29 +94,29 @@ def read_xytraceset(filename) :
     wsigmacoef=None
     wavemin=None
     wavemax=None
-     
+
     log.info("reading traces in '%s'"%filename)
 
     t0 = time.time()
     fits_file = fits.open(filename)
-    
+
     # npix_y, needed for boxcar extractions
     npix_y=0
     for hdu in [0,"XTRACE","PSF"] :
         if npix_y > 0 : break
-        if hdu in fits_file : 
+        if hdu in fits_file :
             head = fits_file[hdu].header
             if "NPIX_Y" in head :
                 npix_y=int(head["NPIX_Y"])
     if npix_y == 0 :
         raise KeyError("Didn't find head entry NPIX_Y in hdu 0, XTRACE or PSF")
     log.debug("npix_y={}".format(npix_y))
-    
+
     try :
         psftype=fits_file[0].header["PSFTYPE"]
     except KeyError :
         psftype=""
-    
+
     # now read trace coefficients
     log.debug("psf is a '%s'"%psftype)
     if psftype == "bootcalib" :
@@ -137,26 +137,26 @@ def read_xytraceset(filename) :
                 ysigcoef,wavemin,wavemax =_traceset_from_image(wavemin,wavemax,fits_file[k],"ysigcoef")
         if "WSIGMA" in fits_file :
             wsigmacoef = fits_file["WSIGMA"].data
-                
+
     if psftype == "GAUSS-HERMITE" : # older version where XTRACE and YTRACE are not saved in separate HDUs
         hdu=fits_file["PSF"]
         if xcoef is None    : xcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"X")
         if ycoef is None    : ycoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"Y")
         if xsigcoef is None : xsigcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"GHSIGX")
         if ysigcoef is None : ysigcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"GHSIGY")
-    
+
     log.debug("wavemin={} wavemax={}".format(wavemin,wavemax))
-    
+
     if xcoef is None or ycoef is None :
         raise ValueError("could not find xcoef and ycoef in psf file %s"%filename)
-    
+
     if xcoef.shape[0] != ycoef.shape[0] :
         raise ValueError("XCOEF and YCOEF don't have same number of fibers %d %d"%(xcoef.shape[0],ycoef.shape[0]))
-    
+
     fits_file.close()
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
-    
+
     if wsigmacoef is not None :
         log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
         nfiber    = wsigmacoef.shape[0]
@@ -172,20 +172,20 @@ def read_xytraceset(filename) :
             wsig_vals[f]=wsig_set.eval(f,wave)*dydw
         tset = fit_traces(wave, wsig_vals, deg=ncoef-1, domain=(wavemin,wavemax))
         ysigcoef = tset._coeff
-        
+
     return XYTraceSet(xcoef,ycoef,wavemin,wavemax,npix_y,xsigcoef=xsigcoef,ysigcoef=ysigcoef)
 
 
 def write_xytraceset(outfile,xytraceset) :
     """
     Write a traceset fits file and returns path to file written.
-    
+
     Args:
         outfile: full path to output file
         xytraceset:  desispec.xytraceset.XYTraceSet object
-    
+
     Returns:
-         full filepath of output file that was written    
+         full filepath of output file that was written
     """
 
     log=get_logger()
@@ -217,5 +217,5 @@ def write_xytraceset(outfile,xytraceset) :
 
     return outfile
 
-   
-   
+
+

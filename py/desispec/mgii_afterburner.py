@@ -1,4 +1,7 @@
 """
+desispec.mgii_afterburner
+=========================
+
 Authors: Edmond CHAUSSIDON (CEA Saclay), Corentin RAVOUX (CEA Saclay)
 Contact: edmond.chaussidon@cea.fr, corentin.ravoux@cea.fr
 

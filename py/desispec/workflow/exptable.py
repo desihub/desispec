@@ -1,6 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.workflow.exptable
+==========================
 
+Please add module-level documentation.
+"""
 import os
 import glob
 import numpy as np

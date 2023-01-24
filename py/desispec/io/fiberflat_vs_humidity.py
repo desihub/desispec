@@ -1,3 +1,9 @@
+"""
+desispec.io.fiberflat_vs_humidity
+=================================
+
+Please add module-level documentation.
+"""
 import numpy as np
 import fitsio
 import astropy.io.fits as fits

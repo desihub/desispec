@@ -1,6 +1,11 @@
-"""This module implements a model for how the throughput of a fiber varies.
+"""
+desispec.tpcorrparam
+====================
+
+This module implements a model for how the throughput of a fiber varies.
 
 It has the following components:
+
 1. We find that the fibers don't follow the nighly flat field exactly, and
    apply a fixed mean correction from the nightly flat field.  This is thought
    to reflect the different range of angles entering the fiber from the flat

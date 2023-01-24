@@ -1,8 +1,8 @@
 """
 desispec.pixflat
-========================
+================
 
-Routines for pixel flat fielding
+Routines for pixel flat fielding.
 """
 
 import numpy as np

@@ -1,5 +1,8 @@
 """
-Tools to regroup spectra in individual exposures by healpix on the sky
+desispec.pixgroup
+=================
+
+Tools to regroup spectra in individual exposures by healpix on the sky.
 """
 
 import glob, os, sys, time, json
@@ -278,7 +281,7 @@ class SpectraLite(object):
         self.meta = None
         self.extra = None
         self.extra_catalog = None
-        
+
     def target_ids(self):
         """
         Return list of unique target IDs.
@@ -589,7 +592,7 @@ def frames2spectra(frames, pix=None, nside=64):
     #- Setup data structures to fill
     wave, flux, ivar, mask = dict(), dict(), dict(), dict()
     resolution_data, scores, fmaps = dict(), dict(), dict()
-    
+
     #- Get the bands that exist in the input data
     #- identify all of the exposures for each band
     #- and instantiate some variables for the next loop
@@ -629,7 +632,7 @@ def frames2spectra(frames, pix=None, nside=64):
                 ii = (allpix == pix) & ok
             else:
                 ii = np.ones(bandframe.flux.shape[0]).astype(bool)
-                
+
             #- Careful: very similar code below for non-filtered appending
             flux[band].append(bandframe.flux[ii])
             ivar[band].append(bandframe.ivar[ii])
@@ -646,7 +649,7 @@ def frames2spectra(frames, pix=None, nside=64):
         ivar[band] = np.vstack(ivar[band])
         mask[band] = np.vstack(mask[band])
         resolution_data[band] = np.vstack(resolution_data[band])
-        
+
         if len(scores[band]) > 0:
             scores[band] = np.hstack(scores[band])
 

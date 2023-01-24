@@ -1,5 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.night_qa
+=================
 
+Please add module-level documentation.
+"""
 # AR general
 import sys
 import os
@@ -1177,7 +1181,7 @@ def plot_newlya(
     # AR - based on main dark tiles (from daily) up to May 26th 2022
     # AR - the ntilecov in expect_1sig() is the *average* pass coverage (i.e. mean_ntilecovs)
     # AR - blue, green, red: approximative 1-sigma, 2-sigma, 3-sigma
-    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on 
+    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on
     # AR    the parent qso density)
     def expect_1sig(ntilecovs):
         vals = np.exp( (ntilecovs - 7.5) / 2.35)

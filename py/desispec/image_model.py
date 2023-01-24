@@ -1,4 +1,7 @@
 '''
+desispec.image_model
+====================
+
 Function to provide rapidly a model of a preprocessed image
 in order to have a pixel variance estimation that is
 almost not correlated with pixel value.

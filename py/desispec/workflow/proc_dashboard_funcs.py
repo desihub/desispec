@@ -1,3 +1,9 @@
+"""
+desispec.workflow.proc_dashboard_funcs
+======================================
+
+Please add module-level documentation.
+"""
 import os,glob
 import json
 import sys
@@ -492,7 +498,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
      }
 
     #obstypelist {
-        
+
           background-position: 10px 10px;
           background-repeat: no-repeat;
           width: 10%;
@@ -502,7 +508,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
           margin-bottom: 12px;
     }
     #exptimelist {
-        
+
           background-position: 10px 10px;
           background-repeat: no-repeat;
           width: 10%;
@@ -661,7 +667,7 @@ def _write_js_script(output_path):
                    content.style.maxHeight = null;
                 } else {
                   content.style.maxHeight = '0px';
-                        } 
+                        }
                 });
          };
          var b1 = document.getElementById('b1');
@@ -679,10 +685,10 @@ def _write_js_script(output_path):
         outjs.write(s)
 
 def js_str(): # Used
-    """                                                                                                                  
-        Return the javascript script to be added to the html file                                                                 
     """
-    s="""                                                                                                                    
+        Return the javascript script to be added to the html file
+    """
+    s="""
         <script >
             var coll = document.getElementsByClassName('collapsible');
             var i;
@@ -695,7 +701,7 @@ def js_str(): # Used
                        content.style.maxHeight = null;
                     } else {
                       content.style.maxHeight = '0px';
-                            } 
+                            }
                     });
              };
              var b1 = document.getElementById('b1');
@@ -725,7 +731,7 @@ def js_str(): # Used
                        } else {
                           tr[i].style.display = "none";
                               }
-                       }       
+                       }
                                                                             }
                              }}
 
@@ -745,7 +751,7 @@ def js_str(): # Used
                        } else {
                           tr[i].style.display = "none";
                               }
-                       }       
+                       }
                                                                             }
                              }}
 
@@ -772,6 +778,6 @@ def js_str(): # Used
                              }}
 
 
-       </script>                                                                                                 
+       </script>
         """
     return s

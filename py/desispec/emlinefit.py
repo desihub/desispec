@@ -1,6 +1,6 @@
 """
-desispec.io.emlinefit
-=====================
+desispec.emlinefit
+==================
 
 Routines for desi_emlinefit_afterburner.
 """

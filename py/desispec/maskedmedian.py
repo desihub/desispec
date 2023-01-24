@@ -1,5 +1,8 @@
 '''
-Utility function to perform a median of images with masks
+desispec.maskedmedian
+=====================
+
+Utility function to perform a median of images with masks.
 '''
 
 from desiutil.log import get_logger

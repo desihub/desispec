@@ -2,7 +2,7 @@
 desispec.workflow.procfuncs
 ===========================
 
-Please document this module.
+Please add module-level documentation.
 """
 import sys, os, glob
 import json

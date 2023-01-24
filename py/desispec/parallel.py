@@ -1,6 +1,6 @@
 """
 desispec.parallel
-==================
+=================
 
 Helper functions and classes for dealing with parallelization
 and related topics.

@@ -1,6 +1,6 @@
 """
 desispec.heliocentric
-========================
+=====================
 
 heliocentric correction routine
 """

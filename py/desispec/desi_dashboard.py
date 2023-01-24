@@ -1,3 +1,9 @@
+"""
+desispec.desi_dashboard
+=======================
+
+Please add module-level documentation.
+"""
 import argparse
 import os
 import fitsio
@@ -9,8 +15,10 @@ import numpy as np
 import psycopg2
 import hashlib
 import pdb
+
+
 class DESI_DASHBOARD(object):
-    """ Code to generate the statistic of desi_pipe production status   
+    """ Code to generate the statistic of desi_pipe production status
     Usage:
     python3 desi_dashboard.py --prod realtime10 --prod_dir /global/cscratch1/sd/zhangkai/desi/ --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_dashboard/
     """
@@ -23,7 +31,7 @@ class DESI_DASHBOARD(object):
         parser = self._init_parser(parser)
         args = parser.parse_args()
 
-        prod=args.prod #product name  
+        prod=args.prod #product name
         prod_dir=args.prod_dir # base directory of product
         self.output_dir=args.output_dir+prod+"/" # Portal directory for output html files
         self.output_url=args.output_url+prod+"/" # corresponding URL
@@ -45,7 +53,7 @@ class DESI_DASHBOARD(object):
         self.tasktype_arr=['preproc','psf','psfnight','traceshift','extract','fiberflat','fiberflatnight','sky','starfit','fluxcalib','cframe','spectra','redshift']
         self.tasktype_arr_nonight=['spectra','redshift']
         ############
-        # Load data 
+        # Load data
         ############
         self.file_count=self.count_files()
         for tasktype in self.tasktype_arr:
@@ -65,10 +73,10 @@ class DESI_DASHBOARD(object):
         #### Table for individual night ####
         ####################################
         for night in nights:
-            # Create Statistic table for each night 
+            # Create Statistic table for each night
             table=self._compute_night_statistic(night)
             strTable=strTable+self._add_html_table(table,str(night))
-            
+
         timestamp=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
         print(timestamp)
         strTable=strTable+"<div style='color:#00FF00'>"+timestamp+"</div>"
@@ -129,7 +137,7 @@ class DESI_DASHBOARD(object):
         border: 1px solid #888;
         width: 80%;
         }
-        
+
 
        /* The Close Button */
        .close {
@@ -189,7 +197,7 @@ class DESI_DASHBOARD(object):
             except:
                 color="red"
 
-            if table[i][4]==0:   
+            if table[i][4]==0:
                 str_row="<tr><td>"+self.tasktype_arr[i]+"</td><td>"+str(table[i][0])+"</td><td>"+str(table[i][1])+"</td><td>"+str(table[i][2])+"</td><td>"+str(table[i][3])+"&#x0002F;"+str(n_expected)+"&nbsp;<font color='"+color+"'>&#x00028;"+str(fraction)[0:5]+"&#x00029;</font>"+"</td><td>"+str(table[i][4])+"</td><td>"+str(table[i][5])+"</td></tr>"
             else:     # Add href link here:
                 str_row="<tr><td>"+self.tasktype_arr[i]+"</td><td>"+str(table[i][0])+"</td><td>"+str(table[i][1])+"</td><td>"+str(table[i][2])+"</td><td>"+str(table[i][3])+"&#x0002F;"+str(n_expected)+"&nbsp;<font color='"+color+"'>&#x00028;"+str(fraction)[0:5]+"&#x00029;</font>"+"</td><td><a href='"+self.output_url+"failed_"+tasktype+"_list.html'><font color='red'>"+str(table[i][4])+"</font></a></td><td>"+str(table[i][5])+"</td></tr>"
@@ -199,11 +207,11 @@ class DESI_DASHBOARD(object):
                 df=loc['df']
                 ind=np.where(df['state'] ==4)[0]
                 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                # Create new html pages to list failed exposures. 
+                # Create new html pages to list failed exposures.
                 # Add Modal 20191007
                 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 strFailed=self._initialize_page()
-                # Add failed exposure tables 
+                # Add failed exposure tables
                 strFailed=strFailed+"<h2>Failed "+tasktype+"</h2><table id='c'><tr><th>Name</th></tr>"
                 for j in range(len(ind)):
                     name=str(df['name'][ind[j]])
@@ -259,7 +267,7 @@ class DESI_DASHBOARD(object):
                        content.style.maxHeight = null;
                     } else {
                       content.style.maxHeight = '0px';
-                            } 
+                            }
                     });
              };
              var b1 = document.getElementById('b1');
@@ -362,7 +370,7 @@ class DESI_DASHBOARD(object):
 
     def _compute_night_statistic(self,night):
         n_tasktype=len(self.tasktype_arr)
-        n_states=5 # waiting, ready, running, done, failed, submit 
+        n_states=5 # waiting, ready, running, done, failed, submit
         a=[0]*n_states
         output=[a]*n_tasktype
         if night=="all":
@@ -436,6 +444,6 @@ class DESI_DASHBOARD(object):
         conn.autocommit=True
         return conn
 
-        
+
 if __name__=="__main__":
     process=DESI_DASHBOARD()

@@ -1,3 +1,9 @@
+"""
+desispec.desi_proc_time_distribution
+====================================
+
+Please add module-level documentation.
+"""
 import argparse
 import os,glob
 import astropy
@@ -14,11 +20,11 @@ import matplotlib.pyplot as plt
 
 
 class DESI_PROC_TIME_DISTRIBUTION(object):
-    """ Code to generate a webpage for monitoring of desi_dailyproc production status   
+    """ Code to generate a webpage for monitoring of desi_dailyproc production status
     Usage:
     Normal Mode:
     desi_proc_time_distribution -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
-    python3 desi_proc_time_distribution.py -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ 
+    python3 desi_proc_time_distribution.py -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
     Cron job script:
 */30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/workflow/proc_dashboard_funcs.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
 
@@ -120,7 +126,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
 
     def _init_parser(self,parser):
         """
-        Initialize the parser to read input 
+        Initialize the parser to read input
         """
         parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor")
         parser.add_argument('--n_night', type=str, default = None, required = False, help="all:all nights. ifdigit: the last n nights.")
@@ -165,7 +171,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
             time_this=float(time[0])*60.+float(time[1])+float(time[2])/60.
             table_output.add_row([night,'arc',jobid_this,expid_this,time_this])
             #output_arc[jobid_this]={'expid':expid_this,'time':time_this}
-        
+
         for file_this in file_flat:
             jobid_this=file_this.split('.')[0].split('-')[-1]
             expid_this=file_this.split('-')[2]
@@ -187,7 +193,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
 
     def _initialize_page(self):
         """
-        Initialize the html file for showing the statistics, giving all the headers and CSS setups. 
+        Initialize the html file for showing the statistics, giving all the headers and CSS setups.
         """
         #strTable="<html><style> table {font-family: arial, sans-serif;border-collapse: collapse;width: 100%;}"
         #strTable=strTable+"td, th {border: 1px solid #dddddd;text-align: left;padding: 8px;}"
@@ -226,7 +232,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         border: 1px solid #888;
         width: 80%;
         }
-        
+
 
        /* The Close Button */
        .close {
@@ -300,7 +306,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
                        content.style.maxHeight = null;
                     } else {
                       content.style.maxHeight = '0px';
-                            } 
+                            }
                     });
              };
              var b1 = document.getElementById('b1');
@@ -361,7 +367,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         return set(newexp)
 
     def check_running(self):
-        """ 
+        """
         Check if the desi_dailyproc process is running
         """
         import psutil
@@ -372,6 +378,6 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
                 running='Yes'
         return running
 
-        
+
 if __name__=="__main__":
     process=DESI_PROC_TIME_DISTRIBUTION()

@@ -1,6 +1,8 @@
 """
 desispec.trace_shifts
 =====================
+
+Please add module-level documentation.
 """
 
 from __future__ import absolute_import, division

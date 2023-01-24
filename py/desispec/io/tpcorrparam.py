@@ -1,3 +1,9 @@
+"""
+desispec.io.tpcorrparam
+=======================
+
+Please add module-level documentation.
+"""
 from astropy.io import fits
 import desispec.tpcorrparam
 

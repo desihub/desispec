@@ -2,7 +2,7 @@
 desispec.workflow.tableio
 =========================
 
-Please document this module.
+Please add module-level documentation.
 """
 import os
 import numpy as np

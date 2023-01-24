@@ -1,9 +1,8 @@
 """
 desispec.efftime
-========================
+================
 
-Effective exposure time formulae
-
+Effective exposure time formulae.
 """
 
 import numpy as np

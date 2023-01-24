@@ -2,7 +2,7 @@
 desispec.skygradpca
 ===================
 
-Class with sky model gradient templates
+Class with sky model gradient templates.
 """
 
 import os

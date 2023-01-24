@@ -1,8 +1,8 @@
 """
 desispec.io.qa
-===============
+==============
 
-IO routines for QA
+IO routines for QA.
 """
 from __future__ import print_function, absolute_import, division
 
@@ -284,11 +284,11 @@ def write_qa_ql(outfile, qaresult):
     #f=open(outfile,"w")
     #f.write(yaml.dump(qadict))
     #f.close()
-    
+
     g=open(outfile,"w")
     json.dump(qadict, g, sort_keys=True, indent=4)
-    g.close()    
-    
+    g.close()
+
     return outfile
 
 

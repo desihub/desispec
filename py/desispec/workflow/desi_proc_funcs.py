@@ -1,4 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.workflow.desi_proc_funcs
+=================================
+
+Please add module-level documentation.
+"""
 import json
 import time
 
