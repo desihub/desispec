@@ -1,4 +1,8 @@
-""" Module for QA plots
+"""
+desispec.qa.qa_plots
+====================
+
+Module for QA plots.
 """
 from __future__ import print_function, absolute_import, division
 

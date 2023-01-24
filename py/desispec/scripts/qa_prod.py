@@ -1,4 +1,9 @@
-# Script for generating QA from a Production run
+"""
+desispec.scripts.qa_prod
+========================
+
+Script for generating QA from a Production run
+"""
 from __future__ import absolute_import, division
 
 import argparse
@@ -83,7 +88,7 @@ def main(args) :
 
     # Slurp and write?
     if args.slurp:
-        qa_prod.qaexp_outroot = qaprod_dir 
+        qa_prod.qaexp_outroot = qaprod_dir
         qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True,
                              restrict_nights=restrict_nights)
 

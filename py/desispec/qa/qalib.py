@@ -1,5 +1,8 @@
 """
-simple low level library functions for offline and online qas
+desispec.qa.qalib
+=================
+
+Simple low level library functions for offline and online QAs.
 """
 
 import os
@@ -208,12 +211,12 @@ def integrate_spec(wave,flux):
 
 
 def sky_continuum(frame, wrange1, wrange2):
-    """ 
+    """
     QA Algorithm for sky continuum.
 
     To be called from desispec.sky.qa_skysub and
     desispec.qa.qa_quicklook.Sky_Continuum.run_qa
-    
+
     Args:
         frame:
         wrange1:
@@ -282,7 +285,7 @@ def sky_peaks(param, frame, dw=2, amps=False):
 
         # Sky?
         if frame.fibermap['OBJTYPE'][i]=='SKY':
-            
+
             skyfibers.append(i)
             sky_counts.append(sum_counts)
             '''
@@ -391,7 +394,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         qadict["WAVG_RES_WAVE"]=np.zeros(res.shape[1])
         sw=np.sum(res_ivar,axis=0)
         qadict["WAVG_RES_WAVE"][sw>0] = np.sum(res*res_ivar,axis=0)[sw>0] / sw[sw>0]
-        
+
     #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
     if quick_look:
         binsz = param['BIN_SZ']
@@ -691,7 +694,7 @@ def orig_SNRFit(frame,night,camera,expid,params,fidboundary=None,
     Take flux and inverse variance arrays and calculate S/N for individual
     targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
     then fit the log(snr)=a+b*mag or log(snr)=poly(mag)
-    
+
     see http://arXiv.org/abs/0706.1062v2 for proper fitting of power-law distributions
     it is not implemented here!
 
@@ -796,9 +799,9 @@ def orig_SNRFit(frame,night,camera,expid,params,fidboundary=None,
         var.append(1/np.median(ivar[i]))
 
     neg_snr_tot=[]
-    #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
-    #- not happen for non-sky fibers with actual flux in them.  However, it does happen rarely 
-    #- in sims.  To avoid this, we omit such fibers in the fit, but keep count for diagnostic 
+    #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should
+    #- not happen for non-sky fibers with actual flux in them.  However, it does happen rarely
+    #- in sims.  To avoid this, we omit such fibers in the fit, but keep count for diagnostic
     #- purposes.
 
     #- Loop over each target type, and associate SNR and image magnitudes for each type.

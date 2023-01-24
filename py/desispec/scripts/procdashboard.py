@@ -1,3 +1,9 @@
+"""
+desispec.scripts.procdashboard
+==============================
+
+Please add module-level documentation.
+"""
 import argparse
 import os, glob
 import sys
@@ -94,7 +100,7 @@ def main(args=None):
     output_dir, prod_dir = get_output_dir(args.redux_dir, args.specprod,
                                           args.output_dir, makedir=True)
     os.makedirs(os.path.join(output_dir, 'expjsons'), exist_ok=True)
-    
+
     ############
     ## Input ###
     ############

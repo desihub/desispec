@@ -1,8 +1,13 @@
-#!/usr/bin/env python
 #
 # See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
+"""
+desispec.scripts.exposure_qa
+============================
+
+Please add module-level documentation.
+"""
 
 """
 This script computes QA scores per exposure, after the cframe are done

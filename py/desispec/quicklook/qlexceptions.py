@@ -1,3 +1,9 @@
+"""
+desispec.quicklook.qlexceptions
+===============================
+
+Exception classes for Quicklook.
+"""
 
 class ParameterException(Exception):
     def __init__(self,value):

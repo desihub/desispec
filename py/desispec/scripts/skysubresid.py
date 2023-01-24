@@ -1,4 +1,9 @@
-# Script for generating plots on SkySub residuals
+"""
+desispec.scripts.skysubresid
+============================
+
+Script for generating plots on SkySub residuals
+"""
 from __future__ import absolute_import, division
 
 from desiutil.log import get_logger

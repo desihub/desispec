@@ -1,10 +1,11 @@
-#!/usr/bin/env python
 #
 # See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
-
 """
+desispec.scripts.pipe
+=====================
+
 Interactive control of the pipeline
 """
 

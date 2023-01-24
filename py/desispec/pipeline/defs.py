@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.defs
-=========================
+======================
 
 Common definitions needed by pipeline modules.
 """

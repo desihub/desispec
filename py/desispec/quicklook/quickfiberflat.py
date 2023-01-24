@@ -1,5 +1,6 @@
 """
-desispec.quickfiberflat
+desispec.quicklook.quickfiberflat
+=================================
 
 Here will be the fiberflat routines specific to quicklook.
 
@@ -28,9 +29,9 @@ def apply_fiberflat(frame,fiberflat):
     # input frame. Unfortunately it is not possible to extract all the
     # information from the input either. Possibly correct action would
     # be the directly modify the input frame object
-    
+
     #- update ivar (like in offline case)
-    
+
     log = get_logger()
 
     if frame.flux.shape[0] != fiberflat.fiberflat.shape[0] :
@@ -48,17 +49,17 @@ def apply_fiberflat(frame,fiberflat):
     else :
         flat = fiberflat.fiberflat
         flativar= fiberflat.ivar
-    
+
     frame.ivar=(frame.ivar>0)*(flativar>0)*(flat>0)/( 1./((frame.ivar+(frame.ivar==0))*(flat**2+(flat==0))) + frame.flux**2/(flativar*flat**4+(flativar*flat==0)) )
 
     #- flattened flux
     ok=np.where(flat > 0)
     fflux=frame.flux
     fflux[ok]=frame.flux[ok]/flat[ok]
-    
-    #- return a frame object 
-    
+
+    #- return a frame object
+
     #fframe=fr.Frame(frame.wave,fflux,fivar,frame.mask,frame.resolution_data,meta=frame.meta,fibermap=frame.fibermap)
-    
+
     return frame
-    
+

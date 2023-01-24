@@ -1,6 +1,8 @@
 """
 desispec.qproc.qextract
 =======================
+
+Please add module-level documentation.
 """
 import time
 import numpy as np

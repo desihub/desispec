@@ -1,4 +1,7 @@
 """
+desispec.scripts.nightly_bias
+=============================
+
 functions for bin/desi_compute_nightly_bias script
 """
 

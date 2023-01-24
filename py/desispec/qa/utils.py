@@ -1,4 +1,8 @@
-""" Module for QA support
+"""
+desispec.qa.utils
+=================
+
+Module for QA support.
 """
 from __future__ import print_function, absolute_import, division
 

@@ -1,5 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.assemble_fibermap
+==================================
 
+Please add module-level documentation.
+"""
 import os, sys, json
 import argparse
 
@@ -7,9 +11,9 @@ from desiutil.log import get_logger
 from desispec.io.fibermap import assemble_fibermap
 from desispec.io.util import get_tempfilename
 from desispec.pixgroup import fibermap2tilepix
-    
+
 def parse(options=None):
-        
+
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("-n", "--night", type=int, required=True,help="input night")
     parser.add_argument("-e", "--expid", type=int, required=True,help="spectroscopic exposure ID")

@@ -1,4 +1,9 @@
+"""
+desispec.scripts.tile_redshifts_bash
+====================================
 
+Please add module-level documentation.
+"""
 import sys, os, glob
 import re
 import subprocess
@@ -479,7 +484,7 @@ for SPECTRO in {spectro_string}; do
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
     qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
     emfitlog={logdir}/emline-$SPECTRO-{suffix}.log
-    
+
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner

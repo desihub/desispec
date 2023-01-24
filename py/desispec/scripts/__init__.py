@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.scripts
-====================
+================
 
 Main functions and commandline parsing.
 """

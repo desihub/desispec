@@ -1,5 +1,8 @@
 """
-Classes to organize and execute QA for a DESI exposure
+desispec.qa.qa_frame
+====================
+
+Classes to organize and execute QA for a DESI exposure.
 """
 
 from __future__ import print_function, absolute_import, division

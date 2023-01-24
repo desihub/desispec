@@ -1,4 +1,9 @@
-# Script for analyzing QA from a Night
+"""
+desispec.scripts.qa_night
+=========================
+
+Script for analyzing QA from a Night
+"""
 from __future__ import absolute_import, division
 
 import argparse

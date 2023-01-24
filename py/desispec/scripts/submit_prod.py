@@ -1,3 +1,9 @@
+"""
+desispec.scripts.submit_prod
+============================
+
+Please add module-level documentation.
+"""
 import yaml
 import numpy as np
 import os
@@ -85,7 +91,7 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
         print(f'Using reservation: {reservation}')
     if overwrite_existing:
         print("Ignoring the fact that files exists and submitting those nights anyway")
-        
+
     all_nights = get_all_nights()
     non_survey_nights = []
     for night in all_nights:

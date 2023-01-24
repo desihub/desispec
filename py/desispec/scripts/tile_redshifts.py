@@ -1,4 +1,9 @@
+"""
+desispec.scripts.tile_redshifts
+===============================
 
+Please add module-level documentation.
+"""
 import sys, os, glob
 import re
 import subprocess

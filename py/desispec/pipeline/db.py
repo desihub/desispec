@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.db
-===========================
+====================
 
 Pipeline processing database
 """

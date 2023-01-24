@@ -1,5 +1,7 @@
-#!/usr/bin/env python
 """
+desispec.scripts.repair_mask
+============================
+
 Patch holes in spectrograph 2D cosmic-ray masks using morphological binary
 image analysis.
 """

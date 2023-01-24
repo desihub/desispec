@@ -1,4 +1,9 @@
-# Script for generating QA for a single Frame
+"""
+desispec.scripts.qa_frame
+=========================
+
+Script for generating QA for a single Frame
+"""
 from __future__ import absolute_import, division
 
 from desiutil.log import get_logger

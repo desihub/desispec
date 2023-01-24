@@ -1,3 +1,9 @@
+"""
+desispec.scripts.proc_joint_fit
+===============================
+
+Please add module-level documentation.
+"""
 import time
 start_imports = time.time()
 
@@ -119,7 +125,7 @@ def main(args=None, comm=None):
         #- So let's not broadcast them to all the ranks
         if args.obstype != 'SCIENCE':
             hdr, camhdr = None, None
-        
+
     if comm is not None:
         args = comm.bcast(args, root=0)
         hdr = comm.bcast(hdr, root=0)
@@ -358,7 +364,7 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-        timer.stop('fiberflatnight')  
+        timer.stop('fiberflatnight')
         num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
         if comm is not None:
             comm.barrier()
@@ -378,7 +384,7 @@ def main(args=None, comm=None):
                 log.critical('All fiberflat commands failed')
             sys.exit(1)
 
-                        
+
     ##################### Note #############################
     ### Still for single exposure. Needs to be re-factored #
     ########################################################
@@ -387,18 +393,18 @@ def main(args=None, comm=None):
         #inputfile = findfile('raw', night=args.night, expid=args.expids[0])
         #if not os.path.isfile(inputfile):
         #    raise IOError('Missing input file: {}'.format(inputfile))
-        ## - Fill in values from raw data header if not overridden by command line                
+        ## - Fill in values from raw data header if not overridden by command line
         #fx = fitsio.FITS(inputfile)
-        #if 'SPEC' in fx:  # - 20200225 onwards                                            
-        #    # hdr = fits.getheader(args.input, 'SPEC')                                         
+        #if 'SPEC' in fx:  # - 20200225 onwards
+        #    # hdr = fits.getheader(args.input, 'SPEC')
         #    hdr = fx['SPEC'].read_header()
-        #elif 'SPS' in fx:  # - 20200224 and before                                                  
-        #    # hdr = fits.getheader(args.input, 'SPS')                                                  
+        #elif 'SPS' in fx:  # - 20200224 and before
+        #    # hdr = fits.getheader(args.input, 'SPS')
         #    hdr = fx['SPS'].read_header()
         #else:
-        #    # hdr = fits.getheader(args.input, 0)                                                                   
+        #    # hdr = fits.getheader(args.input, 0)
         #    hdr = fx[0].read_header()
-        #    
+        #
         #camhdr = dict()
         #for cam in args.cameras:
         #    camhdr[cam] = fx[cam].read_header()
@@ -409,7 +415,7 @@ def main(args=None, comm=None):
         num_err = num_cmd = 0
         if rank == 0:
             log.info('Starting stdstar fitting at {}'.format(time.asctime()))
-            
+
         # -------------------------------------------------------------------------
         # - Get input fiberflat
         input_fiberflat = dict()
@@ -536,7 +542,7 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            num_cmd +=1 
+            num_cmd +=1
             if subcomm is None:
                 #- Using multiprocessing
                 result, success = runcmd(cmd, inputs=inputs, outputs=[stdfile])
@@ -544,7 +550,7 @@ def main(args=None, comm=None):
                 #- Using MPI, disable multiprocessing
                 cmd += " --ncpu 1"
                 cmdargs = cmd.split()[1:]
-                result, success = runcmd(desispec.scripts.stdstars.main, 
+                result, success = runcmd(desispec.scripts.stdstars.main,
                     args=cmdargs, inputs=inputs, outputs=[stdfile], comm=subcomm
                 )
 

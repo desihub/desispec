@@ -1,6 +1,9 @@
 """
-script for running healpix-based coadds+redshifts, assuming that the
-spectral regrouping into healpix has already happened
+desispec.scripts.healpix_redshifts
+==================================
+
+Script for running healpix-based coadds+redshifts, assuming that the
+spectral regrouping into healpix has already happened.
 """
 
 import os, sys, time

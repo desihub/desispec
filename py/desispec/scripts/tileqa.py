@@ -1,10 +1,11 @@
-#!/usr/bin/env python
 #
 # See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
-
 """
+desispec.scripts.tileqa
+=======================
+
 This script computes QA scores per exposure, after the cframe are done
 """
 
@@ -111,7 +112,7 @@ def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
     #    log.error("make_tile_qa_plot raised an exception:")
     #    print("".join(lines))
     figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
-    
+
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :

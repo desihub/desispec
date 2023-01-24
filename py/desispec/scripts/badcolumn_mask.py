@@ -1,4 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.badcolumn_mask
+===============================
+
+Please add module-level documentation.
+"""
 
 import os,sys
 import argparse
@@ -41,7 +46,7 @@ def main(args=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
-    
+
     frame   = read_frame(args.infile)
     xyset   = read_xytraceset(args.psf)
     badcols = Table.read(args.badcolumns)

@@ -1,5 +1,8 @@
 """
-Extract spectra from DESI pre-processed raw data
+desispec.scripts.extract
+========================
+
+Extract spectra from DESI pre-processed raw data.
 """
 
 from __future__ import absolute_import, division, print_function

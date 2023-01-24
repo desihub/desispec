@@ -1,4 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.inspect_dark
+=============================
+
+Please add module-level documentation.
+"""
 
 import os,sys
 import numpy as np
@@ -39,7 +44,7 @@ def main(args=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
-    
+
     log.info("Reading "+args.infile)
     with fitsio.FITS(args.infile) as fx:
         pix  = fx['IMAGE'].read()

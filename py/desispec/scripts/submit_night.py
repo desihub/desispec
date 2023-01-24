@@ -1,3 +1,9 @@
+"""
+desispec.scripts.submit_night
+=============================
+
+Please add module-level documentation.
+"""
 from desiutil.log import get_logger
 import numpy as np
 import os

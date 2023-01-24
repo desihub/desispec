@@ -1,3 +1,9 @@
+"""
+desispec.qproc.flavor
+=====================
+
+Please add module-level documentation.
+"""
 import numpy as np
 
 from desiutil.log import get_logger
@@ -7,11 +13,11 @@ from desiutil.log import get_logger
 def check_qframe_flavor(qframe,input_flavor=None):
     """
     Tool to check the flavor of a qframe
-    
+
     Args:
       qframe : DESI QFrame object
-    
-    Optional: 
+
+    Optional:
          input_flavor
 
     Return:
@@ -20,7 +26,7 @@ def check_qframe_flavor(qframe,input_flavor=None):
     log = get_logger()
 
     log.debug("Checking qframe flavor...")
-    
+
     # resample
     mwave=np.mean(qframe.wave,axis=0)
     rflux=np.zeros(qframe.flux.shape)

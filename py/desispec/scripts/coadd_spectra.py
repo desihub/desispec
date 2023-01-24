@@ -1,4 +1,7 @@
 """
+desispec.scripts.coadd_spectra
+==============================
+
 Coadd spectra
 """
 
@@ -139,7 +142,7 @@ def main(args=None):
                         for cam in camlist:
                             frames.pop((night,expid,cam+spec))
                             log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
-                            
+
         spectra = frames2spectra(frames)
 
         #- hacks to make SpectraLite like a Spectra

@@ -1,3 +1,9 @@
+"""
+desispec.scripts.zprocdashboard
+===============================
+
+Please add module-level documentation.
+"""
 import argparse
 import os, glob
 import sys
@@ -389,7 +395,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 true_terminal_step = 'qso_qn'
             elif terminal_step == 'em':
                 true_terminal_step = 'emline'
-        
+
         if true_terminal_step is None:
             row_color = 'NULL'
         elif expected[terminal_step] == 0:

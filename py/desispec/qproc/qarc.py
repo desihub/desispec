@@ -1,3 +1,9 @@
+"""
+desispec.qproc.qarc
+===================
+
+Please add module-level documentation.
+"""
 import numpy as np
 import scipy.optimize
 
@@ -49,7 +55,7 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
     sigmas=sigmas[k]
     meanwaves=meanwaves[k]
     esigmas=esigmas[k]
-    
+
     return meanwaves,emeanwaves,sigmas,esigmas
 
 def _gauss_pix(x,mean,sigma):
@@ -60,7 +66,7 @@ def _gauss_pix(x,mean,sigma):
     return (y[1:]-y[:-1])/2
 
 def process_arc(qframe,xytraceset,linelist=None,npoly=2,nbins=2):
-    
+
     """
     qframe: desispec.qframe.QFrame object
     xytraceset : desispec.xytraceset.XYTraceSet object
@@ -69,7 +75,7 @@ def process_arc(qframe,xytraceset,linelist=None,npoly=2,nbins=2):
     nbins: no of bins for the half of the fitting window
     return: xytraceset (with ysig vs wave)
     """
-    
+
     log = get_logger()
 
     if linelist is None:
@@ -85,13 +91,13 @@ def process_arc(qframe,xytraceset,linelist=None,npoly=2,nbins=2):
         dlamb,gd_lines=load_gdarc_lines(camera,llist)
         linelist=gd_lines
         log.info("No line list configured. Fitting for lines {}".format(linelist))
-    
+
     tset=xytraceset
 
     assert(qframe.nspec == tset.nspec)
 
     tset.ysig_vs_wave_traceset = TraceSet(np.zeros((tset.nspec,npoly+1)),[tset.wavemin,tset.wavemax])
-    
+
     for spec in range(tset.nspec):
         spec_wave     = qframe.wave[spec]
         spec_linelist = linelist[(linelist>spec_wave[0])&(linelist<spec_wave[-1])]
@@ -102,9 +108,9 @@ def process_arc(qframe,xytraceset,linelist=None,npoly=2,nbins=2):
         dydw = np.interp(meanwaves,spec_wave,np.gradient(y)/np.gradient(spec_wave))
         sigmas *= dydw # A -> pixels
         esigmas *= dydw # A -> pixels
-        
+
         ok=(sigmas>0)&(esigmas>0)
-        
+
         try:
             thislegfit = Legendre.fit(meanwaves[ok], sigmas[ok], npoly, domain=[tset.wavemin,tset.wavemax],w=1./esigmas[ok]**2)
             tset.ysig_vs_wave_traceset._coeff[spec] = thislegfit.coef
@@ -113,6 +119,6 @@ def process_arc(qframe,xytraceset,linelist=None,npoly=2,nbins=2):
 
         wave=np.linspace(tset.wavemin,tset.wavemax,20)
         #plt.plot(wave,tset.ysig_vs_wave(spec,wave))
-        
+
     #plt.show()
     return xytraceset

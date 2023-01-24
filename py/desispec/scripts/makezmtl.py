@@ -1,5 +1,9 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.makezmtl
+=========================
 
+Please add module-level documentation.
+"""
 import os
 import sys
 import traceback

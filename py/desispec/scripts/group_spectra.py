@@ -1,5 +1,8 @@
 """
-Regroup spectra by healpix
+desispec.scripts.group_spectra
+==============================
+
+Regroup spectra by healpix.
 """
 
 from __future__ import absolute_import, division, print_function

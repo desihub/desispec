@@ -1,3 +1,9 @@
+"""
+desispec.quicklook.qlheartbeat
+==============================
+
+Please add module-level documentation.
+"""
 from threading import Thread
 import time
 
@@ -15,7 +21,7 @@ class QLHeartbeat:
     def __del__(self):
         if self.__running__:
             self.stop()
-            
+
     def start(self,message,bint=None,timeout=None):
         self.__message__=message
         tnow=time.time()

@@ -1,5 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.scripts.qsoqn
+======================
+
+Please add module-level documentation.
+"""
 
 import os
 import sys

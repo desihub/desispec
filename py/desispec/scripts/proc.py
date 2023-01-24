@@ -1,22 +1,25 @@
 """
+desispec.scripts.proc
+=====================
+
 One stop shopping for processing a DESI exposure
 
-Examples at NERSC:
+Examples at NERSC::
 
-# ARC: 18 min on 2 nodes
-time srun -N 2 -n 60 -C haswell -t 25:00 --qos realtime desi_proc --mpi -n 20191029 -e 22486
+    # ARC: 18 min on 2 nodes
+    time srun -N 2 -n 60 -C haswell -t 25:00 --qos realtime desi_proc --mpi -n 20191029 -e 22486
 
-# FLAT: 13 min
-time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22487
+    # FLAT: 13 min
+    time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22487
 
-# TWILIGHT: 8min
-time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22497
+    # TWILIGHT: 8min
+    time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22497
 
-# SKY: 11 min
-time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22536
+    # SKY: 11 min
+    time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22536
 
-# ZERO: 2 min
-time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22561
+    # ZERO: 2 min
+    time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22561
 """
 
 import time, datetime

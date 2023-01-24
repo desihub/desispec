@@ -1,5 +1,7 @@
-
 """
+desispec.scripts.mergebundles
+=============================
+
 exspec extracts individual bundles of spectra with one bundle per output file.
 This script merges them back together into a single file combining all
 bundles.

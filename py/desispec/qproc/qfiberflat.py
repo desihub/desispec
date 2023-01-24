@@ -1,3 +1,9 @@
+"""
+desispec.qproc.qfiberflat
+=========================
+
+Please add module-level documentation.
+"""
 import time
 import numpy as np
 import scipy.ndimage

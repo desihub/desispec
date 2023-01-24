@@ -1,4 +1,7 @@
 """
+desispec.scripts.specex
+=======================
+
 Run PSF estimation.
 """
 
@@ -250,60 +253,60 @@ def main(args=None, comm=None):
 
 def run(comm,cmds,cameras):
     """
-    Run PSF fits with specex on a set of ccd images in parallel using the run method 
+    Run PSF fits with specex on a set of ccd images in parallel using the run method
     of the desispec.workflow.schedule.Schedule (Schedule) class.
 
     Args:
-        comm:    MPI communicator containing all processes available for work and 
-                 scheduling (usually MPI_COMM_WORLD); at least 21 processes should 
-                 be available, one for scheduling and (group_size=) 20 to fit all 
-                 bundles for a given ccd image. Otherwise there is no constraint on 
-                 the number of ranks available, but (comm.Get_size()-1)%group_size 
-                 will be unused, since every job is assigned exactly group_size=20 
-                 ranks. The variable group_size is set at the number of bundles on 
-                 a ccd, and there is currently no support for any other number, due 
-                 to the way merging of bundles is currently done. 
-        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with 
-                 values being the 'desi_compute_psf ...' string that one would run 
+        comm:    MPI communicator containing all processes available for work and
+                 scheduling (usually MPI_COMM_WORLD); at least 21 processes should
+                 be available, one for scheduling and (group_size=) 20 to fit all
+                 bundles for a given ccd image. Otherwise there is no constraint on
+                 the number of ranks available, but (comm.Get_size()-1)%group_size
+                 will be unused, since every job is assigned exactly group_size=20
+                 ranks. The variable group_size is set at the number of bundles on
+                 a ccd, and there is currently no support for any other number, due
+                 to the way merging of bundles is currently done.
+        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with
+                 values being the 'desi_compute_psf ...' string that one would run
                  on the command line.
-        cameras: list of camera strings identifying the entries in cmds to be run 
-                 as jobs in parallel jobs, one entry per ccd image to be fit; entries 
-                 not in the dictionary will be logged as an error while still 
+        cameras: list of camera strings identifying the entries in cmds to be run
+                 as jobs in parallel jobs, one entry per ccd image to be fit; entries
+                 not in the dictionary will be logged as an error while still
                  continuing with the others and not crashing.
-                 
-    The function first defines the procedure to call specex for a given ccd image 
+
+    The function first defines the procedure to call specex for a given ccd image
     with the "fitframe" inline function, passes the fitframe function
-    to the Schedule initialization method, and then calls the run method of the 
+    to the Schedule initialization method, and then calls the run method of the
     Schedule class to call fitframe len(cameras) times, each with group_size = 20
     processes.
     """
 
     from desispec.workflow.schedule import Schedule
     from desiutil.log import get_logger, DEBUG, INFO
-       
+
     log = get_logger()
-    
+
     group_size = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
     def fitframe(groupcomm,worldcomm,job):
         '''
-        Run PSF fit with specex on all bundles for a single ccd image 
+        Run PSF fit with specex on all bundles for a single ccd image
 
         Args:
             groupcomm: job-specific MPI communicator
             worldcomm: world MPI communicator
             job:       job index corresponding to position in list of cmds entries
-            
-        This is an inline function for use by desispec.workflow.schedule.Schedule, 
+
+        This is an inline function for use by desispec.workflow.schedule.Schedule,
         i.e. via the lines
             sc = Schedule(fitframe,comm=comm,njobs=len(cameras),group_size=group_size)
             sc.run()
-        immediately after this inline function definition. 
-        
-        This function uses the external variables group_size, cmds, and cameras. In 
+        immediately after this inline function definition.
+
+        This function uses the external variables group_size, cmds, and cameras. In
         particular, the list of camera strings (cameras) provides the mapping of the
-        job index (job) to the commands (cmds) that specify the arguments 
+        job index (job) to the commands (cmds) that specify the arguments
         to the specex.parse method, i.e.
             camera = cameras[job]
             ...
@@ -311,8 +314,8 @@ def run(comm,cmds,cameras):
             cmdargs = parse(cmdargs)
             ...
         From the point of view of the Schedule.run method, it is running fitframe
-        njobs = len(cameras) times, each time using group_size processes with a new 
-        value of job in the range 0 to len(cameras)-1.  
+        njobs = len(cameras) times, each time using group_size processes with a new
+        value of job in the range 0 to len(cameras)-1.
         '''
 
         error_count = 0

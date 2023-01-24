@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.prod
-==========================
+======================
 
 Functions for updating and loading a production.
 """
