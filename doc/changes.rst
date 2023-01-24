@@ -2,16 +2,21 @@
 desispec Change Log
 ===================
 
-0.56.3 (unreleased)
+0.56.4 (unreleased)
 -------------------
 
-* Minor fixes to io.photo (PR `#1971`_).
+* No changes yet.
+
+0.56.3 (2023-01-24)
+-------------------
+
+* Minor fixes to io.photo (followup to PR `#1971`_).
 * Remove imports from deprecated scipy.ndimage.filters namespace (PR `#1977`_).
 
 .. _`#1971`: https://github.com/desihub/desispec/pull/1971
 .. _`#1977`: https://github.com/desihub/desispec/pull/1977
 
-0.56.2 (2023-01-23)
+0.56.2 (2023-01-13)
 -------------------
 
 * Minor fixes to io.photo (PR `#1971`_).
