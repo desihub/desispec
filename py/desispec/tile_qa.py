@@ -1,8 +1,8 @@
 """
-desispec.exposure_qa
-============
+desispec.tile_qa
+================
 
-Utility functions to compute an exposure QA scores.
+Utility functions to compute an exposure QA scores (or is it tile?).
 """
 
 import os,sys

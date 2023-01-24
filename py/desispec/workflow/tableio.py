@@ -1,3 +1,9 @@
+"""
+desispec.workflow.tableio
+=========================
+
+Please document this module.
+"""
 import os
 import numpy as np
 from astropy.table import Table
@@ -14,17 +20,23 @@ def ensure_scalar(val, joinsymb='|',comma_replacement=';'):
     Ensures that the object in val is a scalar that can be save to a Table cell (i.e. row of a column or
     column of a row). If the it is an array or list, it uses joinsymb to turn them into a single string.
 
-    Args:
-        val, a scalar datatype, list, or array. The value to be converted to a scalar quantity (returning the val if
-                                                it is already a scalar).
-        joinsymb, str. A string symbol *other than comma* that will be used to join the multiple values of a list
-                       or array.
-        comma_replacement, str. A string symbol that should be used to replace any existing commas in the data, such
-                                that the value can be saved in a csv format.
+    Parameters
+    ----------
+        val : a scalar datatype, list, or array
+            The value to be converted to a scalar quantity
+            (returning the val if it is already a scalar).
+        joinsymb : str
+            A string symbol *other than comma* that will be used to
+            join the multiple values of a list or array.
+        comma_replacement : str
+            A string symbol that should be used to replace any existing
+            commas in the data, such that the value can be saved in a csv format.
 
-    Returns:
-        val or outstr, any scalar type or string. The output string which is a scalar quantity capable of being
-                                                  written to a single table cell (in a csv or fits file, for example).
+    Returns
+    -------
+        val or outstr, any scalar type or string
+            The output string which is a scalar quantity capable of being
+            written to a single table cell (in a csv or fits file, for example).
     """
     if type(val) in [str, np.str, np.str_]:
         if ',' in val:
@@ -45,16 +57,21 @@ def split_str(val, joinsymb='|',comma_replacement=';'):
     objects that was joined to be a single string using joinsymb. If it identifies that, it will split that into the
     original list/array. Otherwise it will return the val as-is.
 
-    Args:
-        val, any datatype. The input to be checked to see if it is in fact a list/array that was joined into a string
-                           for saving in a Table.
-        joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
-        comma_replacement, str. Replace instances of this symbol with commas when loading ONLY scalar columns in a table,
-                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
-                                on the command line. Comment arrays do not need to be converted back and forth.
+    Parameters
+    ----------
+    val : any datatype
+        The input to be checked to see if it is in fact a list/array that was joined into a string
+        for saving in a Table.
+    joinsymb : str
+        The symbol used to join values in a list/array when saving. Should not be a comma.
+    comma_replacement : str
+        Replace instances of this symbol with commas when loading ONLY scalar columns in a table,
+        as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+        on the command line. Comment arrays do not need to be converted back and forth.
 
-    Returns:
-        val or split_list, any datatype or np.array.
+    Returns
+    -------
+    val or split_list, any datatype or np.array.
     """
     if type(val) in [str, np.str, np.str_]:
         if val.isnumeric():
@@ -95,23 +112,31 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     reduced to strings using the joinsymb. It writes to a temp file before moving the fully written file to the
     name given by tablename (or the default for table of type tabletype).
 
-    Args:
-        origtable, Table. Either exposure table or processing table.
-        tablename, str. Full pathname of where the table should be saved, including the extension. Originally save to
-                        *.temp.{ext} and then moved to *.{ext}. If None, it looks up the default for typetable.
-        tabletype, str. Used if tablename is None to get the default name for the type of table.
-        joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
-        overwrite, bool. Whether to overwrite the file on disk if it already exists. Default is currently True.
-        verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
-        write_empty, bool. Whether to write an empty table to disk. The default is False. Warning: code is less robust
-                           to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
-        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
-                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
-                                on the command line.
-        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
-                            table in the SPECPROD rather than the exptab repository. Default is True.
-    Returns:
-        Nothing.
+    Parameters
+    ----------
+    origtable : Table
+        Either exposure table or processing table.
+    tablename : str
+        Full pathname of where the table should be saved, including the extension. Originally save to
+        ``*.temp.{ext}`` and then moved to ``*.{ext}``. If ``None``, it looks up the default for typetable.
+    tabletype : str
+        Used if tablename is None to get the default name for the type of table.
+    joinsymb : str
+        The symbol used to join values in a list/array when saving. Should not be a comma.
+    overwrite : bool
+        Whether to overwrite the file on disk if it already exists. Default is currently True.
+    verbose : bool
+        Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
+    write_empty : bool
+        Whether to write an empty table to disk. The default is False. Warning: code is less robust
+        to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
+    comma_replacement : str
+        Replace instances of this symbol with commas when loading scalar columns in a table,
+        as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+        on the command line.
+    use_specprod : bool
+        If True and tablename not specified and tabletype is exposure table, this looks for the
+        table in the SPECPROD rather than the exptab repository. Default is True.
     """
     log = get_logger()
     if tablename is None and tabletype is None:
@@ -127,7 +152,7 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     if not write_empty and len(origtable) == 0:
         log.warning(f'NOT writing zero length table to {tablename}')
         return
-        
+
     if verbose:
         log.info("In write table", tablename,'\n', tabletype)
         log.info(origtable[0:2])
@@ -183,12 +208,16 @@ def standardize_tabletype(tabletype):
     """
     Given the user defined type of table it returns the proper 'tabletype' expected by the pipeline
 
-    Args:
-        tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
-                         'processing', or 'unprocessed' table types.
+    Parameters
+    ----------
+    tabletype : str
+        Allows for a flexible number of input options, but should refer to either the 'exposure',
+        'processing', or 'unprocessed' table types.
 
-    Returns:
-         tabletype, str. Standardized tabletype values. Either "exptable", "proctable", "unproctable".
+    Returns
+    -------
+    tabletype : str
+        Standardized tabletype values. Either "exptable", "proctable", "unproctable".
     """
     if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab', 'exposuretable', 'exposure_table']:
         tabletype = 'exptable'
@@ -202,15 +231,20 @@ def translate_type_to_pathname(tabletype, use_specprod=True):
     """
     Given the type of table it returns the proper file pathname
 
-    Args:
-        tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
-                         'processing', or 'unprocessed' table types.
-        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
-                            table in the SPECPROD rather than the exptab repository. Default is True.
+    Parameters
+    ----------
+    tabletype : str
+        Allows for a flexible number of input options, but should refer to either the 'exposure',
+        'processing', or 'unprocessed' table types.
+    use_specprod : bool
+        If True and tablename not specified and tabletype is exposure table, this looks for the
+        table in the SPECPROD rather than the exptab repository. Default is True.
 
-    Returns:
-         tablename, str. Full pathname including extension of the table type. Uses environment variables to determine
-                         the location.
+    Returns
+    -------
+    tablename : str
+        Full pathname including extension of the table type. Uses environment variables to determine
+        the location.
     """
     from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
     from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
@@ -232,28 +266,38 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False,
     generated from strings using the joinsymb. It reads from the file given by tablename (or the default for table of
     type tabletype).
 
-    Args:
-        tablename, str. Full pathname of where the table should be saved, including the extension. Originally save to
-                        *.temp.{ext} and then moved to *.{ext}. If None, it looks up the default for typetable. If
-                        tabletype is None it uses this to try and identify the tabletype and uses that to get the
-                        default column names and types.
-        tabletype, str. 'exptable', 'proctable', or 'unproctable'. Used if tablename is None to get the default name
-                        for the type of table. Also used to get the column datatypes and defaults.
-        joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
-        verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
-        process_mixins, bool. Whether to look for and try to split strings into lists/arrays. The default is True.
-                              Warning: The exposure and processing tables have default data types which are multi-value.
-                              If this is set to False, the default data types will be incorrect and issues are likely
-                              to arise.
-        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
-                            table in the SPECPROD rather than the exptab repository. Default is True.
-        suppress_logging, bool. If True, the log.info() messages are skipped. This
-                           is useful in scripts looping over many tables to reduce the
-                           amount of things printed to the screen.
+    Parameters
+    ----------
+    tablename : str
+        Full pathname of where the table should be saved, including the extension. Originally save to
+        ``*.temp.{ext}`` and then moved to ``*.{ext}``. If None, it looks up the default for typetable. If
+        tabletype is None it uses this to try and identify the tabletype and uses that to get the
+        default column names and types.
+    tabletype : str
+        'exptable', 'proctable', or 'unproctable'. Used if tablename is None to get the default name
+        for the type of table. Also used to get the column datatypes and defaults.
+    joinsymb : str
+        The symbol used to join values in a list/array when saving. Should not be a comma.
+    verbose : bool
+        Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
+    process_mixins : bool
+        Whether to look for and try to split strings into lists/arrays. The default is True.
+        Warning: The exposure and processing tables have default data types which are multi-value.
+        If this is set to False, the default data types will be incorrect and issues are likely
+        to arise.
+    use_specprod : bool
+        If True and tablename not specified and tabletype is exposure table, this looks for the
+        table in the SPECPROD rather than the exptab repository. Default is True.
+    suppress_logging : bool
+        If True, the log.info() messages are skipped. This
+        is useful in scripts looping over many tables to reduce the
+        amount of things printed to the screen.
 
-    Returns:
-        table, Table. Either exposure table or processing table that was loaded from tablename (or from default name
-                      based on tabletype). Returns None if the file doesn't exist.
+    Returns
+    -------
+    table : Table
+        Either exposure table or processing table that was loaded from tablename (or from default name
+        based on tabletype). Returns None if the file doesn't exist.
     """
     from desispec.workflow.exptable import instantiate_exposure_table, get_exposure_table_column_defs
     from desispec.workflow.proctable import instantiate_processing_table, get_processing_table_column_defs
@@ -362,10 +406,14 @@ def guess_default_by_dtype(typ):
     """
     Returns a default value given a data type. To be used in filling a table if no default is given.
 
-    Args:
-        typ, DataType. The datatype of the element you want a default value for.
+    Parameters
+    ----------
+    typ : DataType
+        The datatype of the element you want a default value for.
 
-    Returns:
+    Returns
+    -------
+    number
         default value for that type. Can be int, float, str, list, or array. If it can't guess, it returns the
         integer -99 .
     """
@@ -389,30 +437,41 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
     and identifies and splits mixin columns (columns that should be a list/array) back into their list/array from
     their string representation.
 
-    Args:
-        data, Table.Column or Table.MaskedColumn. Column of data to be checked for masked rows (to be filled with
-                                                  default) and string-ed versions of lists/arrays that need to be
-                                                  expanded out.
-        typ, DataType. The expected datatype of the data in data. May differ from the type of the input data, in which
-                       case the data will be transformed.
-        mask, np.array. A mask array with True in row elements of the input data array that are masked and False in
-                        row elements that are not masked.
-        default, any type. The default value to be used for masked rows.
-        joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
-        process_mixins, bool. Whether to look for and try to split strings into lists/arrays. The default is True.
-                              Warning: The exposure and processing tables have default data types which are multi-value.
-                              If this is set to False, the default data types will be incorrect and issues are likely
-                              to arise.
-        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
-                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
-                                on the command line.
-        verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
+    Parameters
+    ----------
+    data : Table.Column or Table.MaskedColumn
+        Column of data to be checked for masked rows (to be filled with
+        default) and string-ed versions of lists/arrays that need to be
+        expanded out.
+    typ : DataType
+        The expected datatype of the data in data. May differ from the type of the input data, in which
+        case the data will be transformed.
+    mask : np.array
+        A mask array with True in row elements of the input data array that are masked and False in
+        row elements that are not masked.
+    default : any type
+        The default value to be used for masked rows.
+    joinsymb : str
+        The symbol used to join values in a list/array when saving. Should not be a comma.
+    process_mixins : bool
+        Whether to look for and try to split strings into lists/arrays. The default is True.
+        Warning: The exposure and processing tables have default data types which are multi-value.
+        If this is set to False, the default data types will be incorrect and issues are likely
+        to arise.
+    comma_replacement : str
+        Replace instances of this symbol with commas when loading scalar columns in a table,
+        as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+        on the command line.
+    verbose : bool
+        Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
 
-
-    Returns:
-        col, list or np.array. A new data vector similar to input 'data' except with masked values filled in and
-                               mixin strings expanded back into np.array's.
-        dtyp, DataType. The data type of a row element in the return col.
+    Returns
+    -------
+    col, list or np.array
+        A new data vector similar to input 'data' except with masked values filled in and
+        mixin strings expanded back into np.array's.
+    DataType
+        The data type of a row element in the return col.
     """
     log = get_logger()
 
@@ -470,19 +529,23 @@ def write_tables(tables, tablenames=None, tabletypes=None, write_empty=False, ve
     table cells, which are reduced to strings. It writes to a temp file before moving the fully
     written file to the name given by tablenames (or the default for table of types tabletypes).
 
-    Args:
-        tables, list/array of Table's. List or array of exposure tables, unprocessed tables, and/or processing table.
-        tablenames, list/array of str's. List or array of the full pathnames to where the tables should be saved,
-                                         including the extension. If None, it looks up the default for each of tabletypes.
-        tabletype, list/array of str's. List or array of table types to be used if tablenames is None to get the
-                                        default name for each type of table.
-        write_empty, bool. Whether to write an empty table to disk. The default is False. Warning: code is less robust
-                           to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
-        overwrite, bool. Whether to overwrite the file on disk if it already exists. Default is currently True.
-        verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
-
-    Returns:
-        Nothing.
+    Parameters
+    ----------
+    tables : list/array of Table
+        List or array of exposure tables, unprocessed tables, and/or processing table.
+    tablenames : list/array of str
+        List or array of the full pathnames to where the tables should be saved,
+        including the extension. If None, it looks up the default for each of tabletypes.
+    tabletype : list/array of str
+        List or array of table types to be used if tablenames is None to get the
+        default name for each type of table.
+    write_empty : bool
+        Whether to write an empty table to disk. The default is False. Warning: code is less robust
+        to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
+    overwrite : bool
+        Whether to overwrite the file on disk if it already exists. Default is currently True.
+    verbose : bool
+        Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
     """
     log = get_logger()
     if tablenames is None and tabletypes is None:
@@ -503,17 +566,23 @@ def load_tables(tablenames=None, tabletypes=None, verbose=False):
     table cells, which are generated from strings using the joinsymb. It reads from the files given by
     tablenames (or the default for tables of types in tabletypes).
 
-    Args:
-        tablename, list/array of str's. List or array of the full pathnames of where the tables should be saved,
-                                        including the extension.
-        tabletype, list/array of str's. List or array of the table types, which are used if tablenames is None to get
-                                        the default name for the type of table. They are also used to get the
-                                        column datatypes and defaults.
-        verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
+    Parameters
+    ----------
+    tablename : list/array of str
+        List or array of the full pathnames of where the tables should be saved,
+        including the extension.
+    tabletype : list/array of str
+        List or array of the table types, which are used if tablenames is None to get
+        the default name for the type of table. They are also used to get the
+        column datatypes and defaults.
+    verbose : bool
+        Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
 
-    Returns:
-        tabs, list of Table's. Either exposure table or processing table that was loaded from tablename (or from default name
-                      based on tabletype). Returns None if the file doesn't exist.
+    Returns
+    -------
+    tabs : list of Table
+        Either exposure table or processing table that was loaded from tablename (or from default name
+        based on tabletype). Returns None if the file doesn't exist.
     """
     tabs = []
     if tablenames is None and tabletypes is None:

@@ -1,6 +1,6 @@
 """
-desispec.cosmics-joiner
-================
+desispec.joincosmics
+====================
 
 Utility functions to join detected cosmic rays
 """
@@ -265,7 +265,7 @@ class RepairMask:
                         transform=ax.transAxes)
                 ax.text(0.02,0.96, '{}, {}'.format(i,j), color='yellow', fontsize=8,
                         transform=ax.transAxes)
-                
+
                 ax = axes[1]
                 im = ax.imshow(submask, cmap='gray', origin='lower', interpolation='nearest')
                 ax.set(xticks=[], yticks=[], title='{}: MASK'.format(prefix))

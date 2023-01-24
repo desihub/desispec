@@ -1,6 +1,6 @@
 """
 desispec.skymag
-============
+===============
 
 Utility function to compute the sky magnitude per arcmin2 based from the measured sky model
 of an exposure and a static model of the instrument throughput.

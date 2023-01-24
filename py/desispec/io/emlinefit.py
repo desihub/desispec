@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-
 """
 desispec.io.emlinefit
-====================
+=====================
+
 IO routines for desi_emlinefit_afterburner.
 """
 

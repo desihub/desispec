@@ -1,6 +1,6 @@
 """
 desispec.exposure_qa
-============
+====================
 
 Utility functions to compute an exposure QA scores.
 """

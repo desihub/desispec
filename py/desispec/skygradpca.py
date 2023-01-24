@@ -1,6 +1,6 @@
 """
 desispec.skygradpca
-============
+===================
 
 Class with sky model gradient templates
 """

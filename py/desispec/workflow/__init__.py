@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.workflow
-===========
+=================
 
 Tools for workflow management and running the pipeline
 """

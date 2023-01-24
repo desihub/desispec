@@ -54,10 +54,11 @@ extensions = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
-    'matplotlib': ('https://matplotlib.org/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
+    'matplotlib': ('https://matplotlib.org/stable/', None),
     'astropy': ('https://docs.astropy.org/en/stable/', None),
-    'h5py': ('https://docs.h5py.org/en/latest/', None)
+    'h5py': ('https://docs.h5py.org/en/latest/', None),
+    'desiutil': ('https://desiutil.readthedocs.io/en/latest/', None)
     }
 
 # Add any paths that contain templates here, relative to this directory.
@@ -135,7 +136,7 @@ napoleon_include_private_with_doc = True
 autodoc_mock_imports = []
 for missing in ('astropy', 'astropy.modeling', 'desimodel', 'desitarget',
                 'desiutil', 'fitsio', 'healpy',
-                'matplotlib', 'numba', 'numpy', 'redrock', 'requests',
+                'matplotlib', 'numba', 'numpy', 'quasarnp', 'redrock', 'requests',
                 'scipy', 'speclite', 'specter', 'sqlalchemy', 'yaml', 'specex'):
     try:
         foo = import_module(missing)

@@ -1,6 +1,6 @@
 """
 desispec.skycorr
-============
+================
 
 Class with sky model corrections
 """

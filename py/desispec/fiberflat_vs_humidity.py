@@ -1,6 +1,6 @@
 """
 desispec.fiberflat_vs_humidity
-==================
+==============================
 
 Utility functions to compute a fiber flat corrected for variations with humidity in the shack
 """

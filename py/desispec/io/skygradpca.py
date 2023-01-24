@@ -1,6 +1,6 @@
 """
 desispec.io.skygradpca
-===============
+======================
 
 IO routines for sky gradient pca.
 """

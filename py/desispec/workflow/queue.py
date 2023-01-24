@@ -1,5 +1,9 @@
+"""
+desispec.workflow.queue
+=======================
 
-
+Please document this module.
+"""
 import os
 import numpy as np
 from astropy.table import Table
@@ -12,7 +16,8 @@ def get_resubmission_states():
     """
     Defines what Slurm job failure modes should be resubmitted in the hopes of the job succeeding the next time.
 
-    Possible values that Slurm returns are:
+    Possible values that Slurm returns are::
+
         CA or ca or CANCELLED for cancelled jobs will only show currently running jobs in queue unless times are explicitly given
         BF BOOT_FAIL   Job terminated due to launch failure
         CA CANCELLED Job was explicitly cancelled by the user or system administrator. The job may or may not have been initiated.
@@ -40,7 +45,8 @@ def get_termination_states():
     """
     Defines what Slurm job states that are final and aren't in question about needing resubmission.
 
-    Possible values that Slurm returns are:
+    Possible values that Slurm returns are::
+
         CA or ca or CANCELLED for cancelled jobs will only show currently running jobs in queue unless times are explicitly given
         BF BOOT_FAIL   Job terminated due to launch failure
         CA CANCELLED Job was explicitly cancelled by the user or system administrator. The job may or may not have been initiated.
@@ -73,23 +79,31 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
     Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
     window of all jobs submitted or executed during that time.
 
-    Args:
-        start_time, str. String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the earliest hour you
-                         want to see queue information about.
-        end_time, str. String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the latest hour you
-                         want to see queue information about.
-        user, str. The username at NERSC that you want job information about. The default is an the environment name if
-                   if exists, otherwise 'desi'.
-        columns, str. Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
-                      it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
-                      in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
-                      Other options include: suspended,derivedexitcode,reason,priority,jobname.
-        dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-                       table that doesn't query the Slurm scheduler.
+    Parameters
+    ----------
+    start_time : str
+        String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the earliest hour you
+        want to see queue information about.
+    end_time : str
+        String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the latest hour you
+        want to see queue information about.
+    user : str
+        The username at NERSC that you want job information about. The default is an the environment name if
+        if exists, otherwise 'desi'.
+    columns : str
+        Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
+        it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
+        in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
+        Other options include: suspended,derivedexitcode,reason,priority,jobname.
+    dry_run : int
+        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
+        table that doesn't query the Slurm scheduler.
 
-    Returns:
-        queue_info_table, Table. Table with the columns defined by the input variable 'columns' and information relating
-                                 to all jobs submitted by the specified user in the specified time frame.
+    Returns
+    -------
+    Table
+        Table with the columns defined by the input variable 'columns' and information relating
+        to all jobs submitted by the specified user in the specified time frame.
     """
     # global queue_info_table
     if dry_run:
@@ -142,19 +156,24 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
     window of all jobs submitted or executed during that time.
 
-    Args:
-        jobids, list or array of ints. Slurm QID's at NERSC that you want to
-                      return information about.
-        columns, str. Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
-                      it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
-                      in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
-                      Other options include: suspended,derivedexitcode,reason,priority,jobname.
-        dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-                       table that doesn't query the Slurm scheduler.
+    Parameters
+    ----------
+    jobids : list or array of ints
+        Slurm QID's at NERSC that you want to return information about.
+    columns : str
+        Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
+        it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
+        in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
+        Other options include: suspended,derivedexitcode,reason,priority,jobname.
+    dry_run : int
+        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
+        table that doesn't query the Slurm scheduler.
 
-    Returns:
-        queue_info_table, Table. Table with the columns defined by the input variable 'columns' and information relating
-                                 to all jobs submitted by the specified user in the specified time frame.
+    Returns
+    -------
+    Table
+        Table with the columns defined by the input variable 'columns' and information relating
+        to all jobs submitted by the specified user in the specified time frame.
     """
     log = get_logger()
     ## Turn the queue id's into a list
