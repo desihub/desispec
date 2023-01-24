@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.tasks.base
-===============================
+============================
 
 Common operations for pipeline tasks.
 """
