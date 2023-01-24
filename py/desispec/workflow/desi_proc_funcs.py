@@ -257,7 +257,7 @@ def update_args_with_headers(args):
     Returns:
         args: modified version of the input args where values have been updated if None using information from
                   appropriate headers using either night+expid or an input file.
-        hdr: fitsio header object obtained using *.read_header() on input file or file determined from args information.
+        hdr: fitsio header object obtained using ``read_header()`` on input file or file determined from args information.
         camhdr: dict, dictionary of fitsio header objects for each camera in the input files.
 
     Note:

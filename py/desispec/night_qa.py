@@ -88,7 +88,7 @@ def get_surveys_night_expids(
     Notes:
         Based on:
         - parsing the OBSTYPE keywords from the SPEC extension header of the desi-{EXPID}.fits.fz files;
-        - for OBSTYPE="SCIENCE", parsing the fiberassign-TILEID.fits* header
+        - for OBSTYPE="SCIENCE", parsing the ``fiberassign-TILEID.fits*`` header
     """
     if datadir is None:
         datadir = os.getenv("DESI_SPECTRO_DATA")
@@ -1262,7 +1262,7 @@ def create_petalnz_pdf(
         For the Lya, work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
         The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
             so ok to simply use the bit mask values from the main.
-        TBD : we query the FAPRGRM of the tile-qa-*fits header, not sure that properly works for
+        TBD : we query the FAPRGRM of the ``tile-qa-*.fits`` header, not sure that properly works for
             surveys other than main..
     """
     petals = np.arange(10, dtype=int)

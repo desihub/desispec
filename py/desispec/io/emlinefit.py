@@ -24,7 +24,7 @@ def get_targetids(d, bitnames, log=None):
     Args:
         d: structured array, typically a FIBERMAP catalog,
             with TARGETID and the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET column.
-        bitnames: comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        bitnames: comma-separated list of target bitnames to fit from the ``*DESI_TARGET`` mask (string)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
@@ -32,7 +32,7 @@ def get_targetids(d, bitnames, log=None):
 
     Notes:
         If several bitnames are provided, selects the union of those.
-        Safer if d is already trimmed on unique TARGETIDs (see FIBERMAP format with zbest-*fits files)
+        Safer if d is already trimmed on unique TARGETIDs (see FIBERMAP format with ``zbest-*.fits`` files)
     """
     # AR log
     if log is None:
@@ -80,7 +80,7 @@ def read_emlines_inputs(
         coadd: full path to a coadd file (everest-format)
         mwext_corr (optional, defaults to True): correct flux for foreground MW extinction? (boolean)
         rv (optional, defaults to 3.1): value of R_V, used if mwext_corr=True (float)
-        bitnames (optional, defaults to "ALL", meaning fitting all fibers): comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        bitnames (optional, defaults to "ALL", meaning fitting all fibers): comma-separated list of target bitnames to fit from the ``*DESI_TARGET`` mask (string)
         targetids (optional, defaults to None): list of TARGETIDs to restrict to (int, list, or numpy array)
         rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
         fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)

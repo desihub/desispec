@@ -12,8 +12,8 @@ import numpy as np
 from astropy.table import Table, vstack
 
 from desispec.workflow.redshifts import read_minimal_exptables_columns, \
-    get_tile_redshift_script_pathname, get_tile_redshift_relpath, \
-    get_tile_redshift_script_suffix
+    get_ztile_script_pathname, get_ztile_relpath, \
+    get_ztile_script_suffix
 from desiutil.log import get_logger
 
 from desispec.workflow import batch

@@ -842,7 +842,7 @@ def get_expids_efftimes(tileqafits, prod):
             EXPID, NIGHT, EFFTIME_SPEC, QA_EFFTIME_SPEC
 
     Notes:
-        We work from the spectra-*fits files; if not present in the same folder
+        We work from the ``spectra-*.fits`` files; if not present in the same folder
             as tileqafits, we look into the expected path using prod.
         As this is run *before* desi_tsnr_afterburner, we compute here the
             EFFTIME_SPEC values.

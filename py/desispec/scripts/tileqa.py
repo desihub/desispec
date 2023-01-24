@@ -88,7 +88,7 @@ def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
     Utility wrapper to make qa plot with try/except/log wrappers
 
     Args:
-        qafitsfile (str): full path to tile-qa-*.fits data
+        qafitsfile (str): full path to ``tile-qa-*.fits`` data
 
     Options:
         specprod_dir (str): full path to production directory

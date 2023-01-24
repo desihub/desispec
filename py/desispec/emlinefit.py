@@ -15,6 +15,7 @@ allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
 def get_rf_em_waves(emname):
     """
     Returns the rest-frame, vacuum, wavelengths.
+
     Args:
         emname, from: "OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA" (string)
 
@@ -85,7 +86,8 @@ def emlines_gaussfit(
 
     Returns:
         emdict: a dictionary with various quantities, noticely "FLUX" and "FLUX_IVAR" (dictionary of floats)
-            list of all keys:
+            list of all keys::
+
                 CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                 CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s
@@ -96,6 +98,7 @@ def emlines_gaussfit(
                 fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
                 ivars: ivar values used for the fitting (numpy array of floats)
                 models: model flux values (in 1e-17 * erg/cm2/s/A) from the fit (numpy array of floats)
+
         succeed: did the fit succeed? (boolean)
 
     Notes:
