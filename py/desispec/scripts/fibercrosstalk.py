@@ -161,7 +161,7 @@ def main(args) :
             if use_median_filter :
                 good=(skyfiberivar>0)
                 skyfiberflux=np.interp(out_wave,out_wave[good],skyfiberflux[good])
-                skyfiberflux=scipy.ndimage.filters.median_filter(skyfiberflux,median_filter_width,mode='constant')
+                skyfiberflux=scipy.ndimage.median_filter(skyfiberflux,median_filter_width,mode='constant')
 
 
             for i,df in enumerate(dfiber) :
@@ -199,7 +199,7 @@ def main(args) :
                     flux *= medflat[otherfiber] # apply relative transmission of fiber, i.e. undo the fiberflat correction
 
                 if use_median_filter :
-                    flux = scipy.ndimage.filters.median_filter(flux,median_filter_width,mode='constant')
+                    flux = scipy.ndimage.median_filter(flux,median_filter_width,mode='constant')
                 kern=kernels[np.abs(df)]
                 tmp = fftconvolve(flux,kern,mode="same")
                 cflux[i] = resample_flux(out_wave,frame.wave,tmp)

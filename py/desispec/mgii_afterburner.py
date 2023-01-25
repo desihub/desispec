@@ -21,7 +21,7 @@ import sys
 import numpy as np
 from astropy.table import Table
 from scipy.optimize import curve_fit
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 
 import redrock.templates
 

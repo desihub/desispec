@@ -114,7 +114,7 @@ def applySmoothingFilter(flux,width=200) :
         # move smoothed flux array by to host and return
         return cupy.asnumpy(device_smoothed)
     else:
-        return scipy.ndimage.filters.median_filter(flux, width, mode='constant')
+        return scipy.ndimage.median_filter(flux, width, mode='constant')
 #
 # Import some global constants.
 #

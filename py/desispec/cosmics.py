@@ -38,7 +38,7 @@ def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
     log.info("subtract continuum to flux")
     tflux=np.zeros(frame.flux.shape)
     for fiber in range(frame.nspec) :
-        tflux[fiber]=frame.flux[fiber]-scipy.ndimage.filters.median_filter(frame.flux[fiber],200,mode='constant')
+        tflux[fiber]=frame.flux[fiber]-scipy.ndimage.median_filter(frame.flux[fiber],200,mode='constant')
     log.info("done")
 
     # we do not use the mask here because we want to re-detect cosmics
