@@ -2,7 +2,6 @@
 desispec.scripts.inspect_dark
 =============================
 
-Please add module-level documentation.
 """
 
 import os,sys

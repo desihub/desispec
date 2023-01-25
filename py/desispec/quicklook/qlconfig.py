@@ -2,7 +2,6 @@
 desispec.quicklook.qlconfig
 ===========================
 
-Please add module-level documentation.
 """
 import numpy as np
 import json

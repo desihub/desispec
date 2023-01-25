@@ -104,8 +104,10 @@ def get_tracer_zminmax(tracer):
         tracer: tracer name (see get_tracer_names()) (string)
 
     Returns:
-        zmin: minimum redshift (float)
-        zmax: minimum redshift (float)
+        tuple: A tuple containing:
+
+        * zmin: minimum redshift (float)
+        * zmax: minimum redshift (float)
     """
     assert_tracer(tracer)
     config = get_qa_config()
@@ -199,14 +201,16 @@ def get_zhists(
         tileid_key (optional, defaults to None): column name for TILEID (string)
 
     Returns:
-        bins: the redshift bin grid (float array)
-        zhists: fractional, per tileid, n(z) (numpy array of shape
-                (nbin) if tileids is int or has length=1
-                (nbin, len(tileids)) else.
+        tuple: A tuple containing:
+
+        * bins: the redshift bin grid (float array)
+        * zhists: fractional, per tileid, n(z) (numpy array of shape
+          (nbin) if tileids is int or has length=1
+          (nbin, len(tileids)) else.
 
     Notes:
-        If tileid_key is not provided, assumes all spectra are from the same tile.
-        If tileid_key is provided, will identify the tileids with np.unique(d[tileid_key]).
+        * If tileid_key is not provided, assumes all spectra are from the same tile.
+        * If tileid_key is provided, will identify the tileids with np.unique(d[tileid_key]).
     """
     assert_tracer(tracer)
 
@@ -264,8 +268,8 @@ def get_viewer_cutout(
         img: output of mpimg.imread() reading of the cutout (np.array of floats)
 
     Notes:
-        Duplicating fiberassign.fba_launch_io.get_viewer_cutout()
-        20220109 : adding a check on img dimension..
+        * Duplicating fiberassign.fba_launch_io.get_viewer_cutout()
+        * 20220109 : adding a check on img dimension..
     """
     # AR cutout
     tmpfn = "{}tmp-{}.jpeg".format(tmpoutdir, tileid)
@@ -325,12 +329,14 @@ def deg2pix(dras, ddecs, width_deg, width_pix):
         width_pix: width of the cutout in pixels (np.array of floats)
 
     Returns:
-        dxs: distance (pixels) along x to the center of the cutout (np.array of floats)
-        dys: distance (pixels) along y to the center of the cutout (np.array of floats)
+        tuple: A tuple containing:
+
+        * dxs: distance (pixels) along x to the center of the cutout (np.array of floats)
+        * dys: distance (pixels) along y to the center of the cutout (np.array of floats)
 
     Notes:
-        not sure at the <1 pixel level...
-        Duplicated from fiberassign.fba_launch_io.deg2pix()
+        * not sure at the <1 pixel level...
+        * Duplicated from fiberassign.fba_launch_io.deg2pix()
     """
     dxs = width_pix * (0.5 - dras / width_deg)
     dys = width_pix * (0.5 + ddecs / width_deg)
@@ -448,11 +454,13 @@ def get_petalqa_props(key):
         key: column name present in the PETALQA extension of qa-tile-TILEID-NIGHT.fits (string)
 
     Returns:
-        short: shortname of the key (string)
-        precision: number of digits to report (int)
-        okmin: minimum value to be considered as ok (float)
-        okmax: maximum value to be considered as ok (float)
-        combine: None, "sum", "mean", i.e. how to combine the stats for all petals (string)
+        tuple: A tuple containing:
+
+        * short: shortname of the key (string)
+        * precision: number of digits to report (int)
+        * okmin: minimum value to be considered as ok (float)
+        * okmax: maximum value to be considered as ok (float)
+        * combine: None, "sum", "mean", i.e. how to combine the stats for all petals (string)
     """
     config = get_qa_config()
     # AR set to None by default
@@ -738,7 +746,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
 
     Note:
         If survey is not "main" and program is not "bright" or "dark",
-            will color-code EBV, not the target density.
+        will color-code EBV, not the target density.
     """
     # AR reading the pixweight file
     pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
@@ -838,24 +846,25 @@ def get_expids_efftimes(tileqafits, prod):
         prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
 
     Returns:
-        structured array with the following keys:
+        structured array: An array with the following keys::
+
             EXPID, NIGHT, EFFTIME_SPEC, QA_EFFTIME_SPEC
 
     Notes:
-        We work from the ``spectra-*.fits`` files; if not present in the same folder
-            as tileqafits, we look into the expected path using prod.
-        As this is run *before* desi_tsnr_afterburner, we compute here the
-            EFFTIME_SPEC values.
-        If no GOALTYPE in tileqafits header, we default to dark.
-        TBD: we purposely do not use TSNR2 keys from qa-params.yaml,
-            as those do not handle the TSNR2_ELG->TSNR2_LRG change from
-            2021 shutdown.
-            We use:
+        * We work from the ``spectra-*.fits`` files; if not present in the same folder
+          as tileqafits, we look into the expected path using prod.
+        * As this is run *before* desi_tsnr_afterburner, we compute here the
+          EFFTIME_SPEC values.
+        * If no GOALTYPE in tileqafits header, we default to dark.
+        * TBD: we purposely do not use TSNR2 keys from qa-params.yaml,
+          as those do not handle the TSNR2_ELG->TSNR2_LRG change from
+          2021 shutdown. We use:
+
             - dark before 20210901: TSNR2_ELG
             - dark after 20210901: TSNR2_LRG
             - bright: TSNR2_BGS
             - backup: TSNR2_BGS
-            Method assessed against all Main exposures until 20211013 in daily tsnr-exposures.fits.
+            - Method assessed against all Main exposures until 20211013 in daily tsnr-exposures.fits.
     """
     # AR GOALTYPE (defaulting to dark) + TSNR2 key
     goaltype = "dark"
@@ -998,7 +1007,7 @@ def get_tilecov(
     Computes the average number of observed tiles covering a given tile.
 
     Args:
-        tileid: tileid (int)
+        tileid (int): tileid
         surveys (optional, defaults to "main"): comma-separated list of surveys to consider (reads the tiles-SURVEY.ecsv file) (str)
         programs (optional, defaults to None): comma-separated list of programs (case-sensitive) to consider in the tiles-SURVEY.ecsv file (str)
         lastnight (optional, defaults to today): only consider tiles observed up to lastnight (int)
@@ -1010,18 +1019,22 @@ def get_tilecov(
         verbose (optional, defaults to False): print log.info() (bool)
 
     Returns:
-        pixs: list of the healpix pixels covering the tile (np.array(float))
-        pix_ntiles: list of the nb of tiles covering each pixel from pixs (np.array(float))
-        nside: healpix pixel nside (int)
-        nest: healpix NESTED? (boolean)
-        outdict: a dictionary, with an entry for each observed, overlapping tile, containing the list of observed overlapping tiles (dict)
+        tuple: A tuple containing:
+
+        * pixs: list of the healpix pixels covering the tile (np.array(float))
+        * pix_ntiles: list of the nb of tiles covering each pixel from pixs (np.array(float))
+        * nside: healpix pixel nside (int)
+        * nest: healpix NESTED? (boolean)
+        * outdict: a dictionary, with an entry for each observed, overlapping tile, containing the list of observed overlapping tiles (dict)
 
     Notes:
-        The "regular" use is to provide a single PROGRAM in programs (e.g., programs="DARK").
-        This function relies on the following files:
-            $DESI_SURVEYOPS/ops/tiles-{SURVEY}.ecsv for SURVEY in surveys (to get the tiles to consider)
-            $DESI_ROOT/spectro/redux/daily/exposures-daily.fits (to get the existing observations up to lastnight)
-        If one wants to consider the latest observations, one should wait the 10am pacific update of exposures-daily.fits.
+        * The "regular" use is to provide a single PROGRAM in programs (e.g., programs="DARK").
+        * This function relies on the following files:
+
+          - $DESI_SURVEYOPS/ops/tiles-{SURVEY}.ecsv for SURVEY in surveys (to get the tiles to consider)
+          - $DESI_ROOT/spectro/redux/daily/exposures-daily.fits (to get the existing observations up to lastnight)
+
+        * If one wants to consider the latest observations, one should wait the 10am pacific update of exposures-daily.fits.
     """
     # AR healpix
     nest = True # desitarget routines use nest = True
@@ -1213,17 +1226,15 @@ def make_tile_qa_plot(
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
         prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
-
-    Options:
-        pngoutfile: output filename; default to tileqafits .fits -> .png
+        pngoutfile (optional): output filename; default to tileqafits .fits -> .png
         dchi2_min (optional, defaults to value in qa-params.yaml): minimum DELTACHI2 for a valid zspec (float)
         tsnr2_key (optional, defaults to value in qa-params.yaml): TSNR2 key used for plot (string)
         refdir (optional, defaults to "desispec","data/qa"): path to folder with reference measurements for the n(z) and the TSNR2 (string)
 
     Note:
-        If hdr["SURVEY"] is not "main", will not plot the n(z).
-        If hdr["FAPRGRM"].lower() is not "bright" or "dark", will not plot the TSNR2 plot nor the skymap.
-        20220109 : add safety around plot_cutout() call.
+        * If hdr["SURVEY"] is not "main", will not plot the n(z).
+        * If hdr["FAPRGRM"].lower() is not "bright" or "dark", will not plot the TSNR2 plot nor the skymap.
+        * 20220109 : add safety around plot_cutout() call.
     """
     # AR config
     config = get_qa_config()

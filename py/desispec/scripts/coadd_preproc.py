@@ -2,7 +2,6 @@
 desispec.scripts.coadd_preproc
 ==============================
 
-Please add module-level documentation.
 """
 import os,sys
 import numpy as np

@@ -2,7 +2,6 @@
 desispec.validredshifts
 =======================
 
-Please add module-level documentation.
 """
 # Example usage:
 # redrock_path = '/global/cfs/cdirs/desi/spectro/redux/guadalupe/tiles/cumulative/1392/20210517/redrock-5-1392-thru20210517.fits'

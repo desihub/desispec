@@ -2,7 +2,6 @@
 desispec.scripts.proc_joint_fit
 ===============================
 
-Please add module-level documentation.
 """
 import time
 start_imports = time.time()

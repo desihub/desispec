@@ -843,23 +843,25 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
     of blocks or roughly equal size.
 
     Args:
-        nblocks, int: the number of blocks to split the ranks into
-        rank, int: the MPI world rank
-        size, int: the number of world MPI ranks
-        comm: MPI communicator
-        log: logger
-        split_comm, bool: whether to split the world communicator into blocks and return
-                          the block communicator
+        nblocks (int): the number of blocks to split the ranks into
+        rank (int): the MPI world rank
+        size (int): the number of world MPI ranks
+        comm (object): MPI communicator
+        log (object): logger
+        split_comm (bool): whether to split the world communicator into blocks and return
+            the block communicator
 
     Returns:
-        nblocks, int: the achievable number of block based on size
-        block_size, int: the number of ranks in the assigned block of current rank
-        block_rank. int: the rank in the assigned block of the current rank
-        block_num, int: the block number (of nblocks blocks) in which the rank
-                        was assigned
-        block_comm (optional): if split_comm is true, returns a communicator of
-                               only the ranks in the current block. Splits from
-                               the world communicator
+        tuple: A tuple containing:
+
+        * nblocks, int: the achievable number of block based on size
+        * block_size, int: the number of ranks in the assigned block of current rank
+        * block_rank. int: the rank in the assigned block of the current rank
+        * block_num, int: the block number (of nblocks blocks) in which the rank
+          was assigned
+        * block_comm (optional): if split_comm is true, returns a communicator of
+          only the ranks in the current block. Splits from
+          the world communicator
     """
     if rank is None or size is None:
         if comm is not None:

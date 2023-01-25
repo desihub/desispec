@@ -2,7 +2,6 @@
 desispec.qproc.qarc
 ===================
 
-Please add module-level documentation.
 """
 import numpy as np
 import scipy.optimize

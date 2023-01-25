@@ -2,7 +2,6 @@
 desispec.workflow.proctable
 ===========================
 
-Please add module-level documentation.
 """
 
 import numpy as np

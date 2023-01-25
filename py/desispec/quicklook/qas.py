@@ -2,7 +2,6 @@
 desispec.quicklook.qas
 ======================
 
-Please add module-level documentation.
 """
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlexceptions

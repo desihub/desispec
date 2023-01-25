@@ -2,7 +2,6 @@
 desispec.scripts.submit_night
 =============================
 
-Please add module-level documentation.
 """
 from desiutil.log import get_logger
 import numpy as np
@@ -42,55 +41,53 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     jobs for processing (unless dry_run is set).
 
     Args:
-        night, int. The night of data to be processed. Exposure table must exist.
-        proc_obstypes, list or np.array. Optional. A list of exposure OBSTYPE's that should be processed (and therefore
-                                              added to the processing table).
-        z_submit_types: list of str's or comma separated list of string. The "group" types of redshifts that should be
-                                       submitted with each exposure. If not specified, default for daily processing is
-                                       ['cumulative', 'pernight-v0']. If false, 'false', or [], then no redshifts are submitted.
-        exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
-        proc_table_path: str. Full path to where to processing tables to be written.
-        queue: str. The name of the queue to submit the jobs to. Default is "realtime".
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
-        dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written but not submitted.
-                      If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
-                      for testing as though scripts are being submitted. Default is 0 (false).
-        dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
-                       this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
-                       generated or run). Default for dry_run is False.
-        no_redshifts, bool. Whether to submit redshifts or not. If True, redshifts are not submitted.
-        tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
-        error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
-                                      otherwise prints an error and returns.
-        append_to_proc_table: bool. True if you want to submit jobs even if a processing table already exists.
-                                         Otherwise jobs will be appended to it. Default is False
-        ignore_proc_table_failures: bool. True if you want to submit other jobs even the loaded
-                                        processing table has incomplete jobs in it. Use with caution. Default is False.
-        dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
-                                 data products for the script being submitted. If all files exist and this is False,
-                                 then the script will not be submitted. If some files exist and this is False, only the
-                                 subset of the cameras without the final data products will be generated and submitted.
-        dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
-                                          False, jobs with some prior data are pruned using PROCCAMWORD to only process the
-                                          remaining cameras not found to exist.
-        tiles, array-like, optional. Only submit jobs for these TILEIDs.
-        surveys, array-like, optional. Only submit science jobs for these surveys (lowercase)
-        laststeps, array-like, optional. Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
-        use_tilenight, bool, optional. Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
-                             and poststdstar steps for science exposures.
-        all_tiles, bool, optional. Default is False. Set to NOT restrict to completed tiles as defined by
-                                              the table pointed to by specstatus_path.
-        specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
-                                        Location of the surveyops specstatus table.
-        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
-        do_cte_flat, bool, optional. Default is False. If True, one second flat exposures are processed for cte identification.
-        complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
-                                                on or before the supplied YYYYMMDD are considered
-                                                completed and will be processed. All complete
-                                                tiles are submitted if None or all_tiles is True.
-    Returns:
-        None.
+        night (int): The night of data to be processed. Exposure table must exist.
+        proc_obstypes (list or np.array, optional): A list of exposure OBSTYPE's that should be processed (and therefore
+            added to the processing table).
+        z_submit_types (list of str or comma-separated list of str, optional): The "group" types of redshifts that should be
+            submitted with each exposure. If not specified, default for daily processing is
+            ['cumulative', 'pernight-v0']. If false, 'false', or [], then no redshifts are submitted.
+        queue (str, optional): The name of the queue to submit the jobs to. Default is "realtime".
+        reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        system_name (str): batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
+        exp_table_path (str): Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
+        proc_table_path (str): Full path to where to processing tables to be written.
+        tab_filetype (str, optional): The file extension (without the '.') of the exposure and processing tables.
+        dry_run_level (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written but not submitted.
+            If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
+            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (bool, optional): When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
+            this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
+            generated or run). Default for dry_run is False.
+        no_redshifts (bool, optional): Whether to submit redshifts or not. If True, redshifts are not submitted.
+        error_if_not_available (bool, optional): Default is True. Raise as error if the required exposure table doesn't exist,
+            otherwise prints an error and returns.
+        append_to_proc_table (bool, optional): True if you want to submit jobs even if a processing table already exists.
+            Otherwise jobs will be appended to it. Default is False
+        ignore_proc_table_failures (bool, optional): True if you want to submit other jobs even the loaded
+            processing table has incomplete jobs in it. Use with caution. Default is False.
+        dont_check_job_outputs (bool, optional): Default is False. If False, the code checks for the existence of the expected final
+            data products for the script being submitted. If all files exist and this is False,
+            then the script will not be submitted. If some files exist and this is False, only the
+            subset of the cameras without the final data products will be generated and submitted.
+        dont_resubmit_partial_jobs (bool, optional): Default is False. Must be used with dont_check_job_outputs=False. If this flag is
+            False, jobs with some prior data are pruned using PROCCAMWORD to only process the
+            remaining cameras not found to exist.
+        tiles (array-like, optional): Only submit jobs for these TILEIDs.
+        surveys (array-like, optional): Only submit science jobs for these surveys (lowercase)
+        laststeps (array-like, optional): Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
+        use_tilenight (bool, optional): Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
+            and poststdstar steps for science exposures.
+        all_tiles (bool, optional): Default is False. Set to NOT restrict to completed tiles as defined by
+            the table pointed to by specstatus_path.
+        specstatus_path (str, optional): Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
+            Location of the surveyops specstatus table.
+        use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
+        do_cte_flat (bool, optional): Default is False. If True, one second flat exposures are processed for cte identification.
+        complete_tiles_thrunight (int, optional): Default is None. Only tiles completed
+            on or before the supplied YYYYMMDD are considered
+            completed and will be processed. All complete
+            tiles are submitted if None or all_tiles is True.
     """
     log = get_logger()
 
@@ -530,17 +527,18 @@ def get_completed_tiles(specstatus_path=None, complete_tiles_thrunight=None):
     Uses a tiles-specstatus.ecsv file and selection criteria to determine
     what tiles have beeen completed. Takes an optional argument to point
     to a custom specstatus file. Returns an array of TILEID's.
+
     Args:
         specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
-                                        Location of the surveyops specstatus table.
+            Location of the surveyops specstatus table.
         complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
-                                                on or before the supplied YYYYMMDD are considered
-                                                completed and will be processed. All complete
-                                                tiles are submitted if None.
+            on or before the supplied YYYYMMDD are considered
+            completed and will be processed. All complete
+            tiles are submitted if None.
 
     Returns:
         array-like. The tiles from the specstatus file determined by the
-                    selection criteria to be completed.
+        selection criteria to be completed.
     """
     log = get_logger()
     if specstatus_path is None:

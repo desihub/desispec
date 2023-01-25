@@ -2,7 +2,6 @@
 desispec.tsnr
 =============
 
-Please add module-level documentation.
 """
 import os
 import numpy as np
@@ -42,7 +41,7 @@ class Config(object):
             setattr(self, key, d[key])
 
 class gfa_template_ensemble(object):
-    '''Please add class-level documentation.
+    '''
     '''
     def __init__(self):
         log = get_logger()
@@ -273,7 +272,7 @@ class template_ensemble(object):
         """
         Compute a template ensemble for template S/N measurements (tSNR)
 
-        Options:
+        Args:
             nmodel: number of template models to generate
             smooth: smoothing scale for dF=<F - smooth(F)>
             nz_table_filename: path to ASCII file with columns zmin,zmax,n
@@ -414,10 +413,8 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
 
     Args:
         dirpath: path to the dir. with ensemble dflux files. default is $DESIMODEL/data/tsnr
-        bands:  bands to expect, typically [BRZ] - case ignored.
-
-    Options:
-        smooth:  Further convolve the residual ensemble flux.
+        bands (list, optional):  bands to expect, typically [BRZ] - case ignored.
+        smooth (int, optional):  Further convolve the residual ensemble flux.
 
     Returns:
         Dictionary with keys labelling each tracer (bgs, lrg, etc.) for which each value
@@ -475,13 +472,15 @@ def read_nea(path):
     '''
     Read a master noise equivalent area [sq. pixel] file.
 
-    input:
+    Args:
         path: path to a master nea file for a given camera, e.g. b0.
 
-    returns:
-        nea: 2D split object to be evaluated at (fiber, wavelength)
-        angperpix:  2D split object to be evaluated at (fiber, wavelength),
-                    yielding angstrom per pixel.
+    Returns:
+        tuple: A tuple containing:
+
+        * nea: 2D split object to be evaluated at (fiber, wavelength)
+        * angperpix:  2D split object to be evaluated at (fiber, wavelength),
+          yielding angstrom per pixel.
     '''
 
     with fits.open(path, memmap=False) as fx:
@@ -501,14 +500,14 @@ def fb_rdnoise(fibers, frame, tset):
     Approximate the readnoise for a given fiber (on a given camera) for the
     wavelengths present in frame. wave.
 
-    input:
+    Args:
         fibers: e.g. np.arange(500) to index fiber.
         frame:  frame instance for the given camera.
         tset: xytraceset object with fiber traces coordinates.
 
-    returns:
+    Returns:
         rdnoise: (nfiber x nwave) array with the estimated readnosie.  Same
-                 units as OBSRDNA, e.g. ang per pix.
+        units as OBSRDNA, e.g. ang per pix.
     '''
 
     ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(float)
@@ -607,7 +606,7 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     '''
     Evaluate a model for the 1D spectral flux variance, e.g. quadrature sum of readnoise and sky components.
 
-    input:
+    Args:
         rdnoise_sigma:
         npix_1d:  equivalent to (1D) nea.
         angperpix:  Angstroms per pixel.
@@ -617,7 +616,7 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
         alpha: empirical weighting of the rdnoise term to e.g. better fit sky fibers per exp. cam.
         components:  if True, return tuple of individual contributions to the variance.  Else return variance.
 
-    returns:
+    Returns:
         nfiber x nwave array of the expected variance.
     '''
 
@@ -645,11 +644,14 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
 def gen_mask(frame, skymodel, hw=5.):
     """
     Generate a mask for the alpha computation, masking out bright sky lines.
+
     Args:
         frame : uncalibrated Frame object for one camera
         skymodel : SkyModel object
         hw : (optional) float, half width of mask around sky lines in A
-    Returns an array of same shape as frame, here mask=1 is good, 0 is bad
+
+    Returns:
+        An array of same shape as frame, here mask=1 is good, 0 is bad
     """
     log = get_logger()
 
@@ -699,7 +701,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     Calculate the best-fit alpha using the sky fibers
     available to the frame.
 
-    input:
+    Args:
         frame: desispec frame instance (should be uncalibrated, i.e. e/A).
         fibermap: desispec fibermap instance.
         rdnoise_sigma:  e.g. RDNOISE value per Quadrant (float).
@@ -710,9 +712,9 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
         alpha:  nuisanve parameter to reweight rdnoise vs sky contribution to variance (float).
         components:  if True, return individual contributions to variance, else return total variance.
 
-    returns:
-       alpha:  nuisance parameter to reweight rdnoise vs sky contribution to variance (float), obtained
-               as the best fit to the uncalibrated sky fibers VAR.
+    Returns:
+        alpha:  nuisance parameter to reweight rdnoise vs sky contribution to variance (float), obtained
+        as the best fit to the uncalibrated sky fibers VAR.
     '''
     log = get_logger()
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
@@ -752,11 +754,13 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     '''
     Nominal fiberfracs for effective depths. See:
     https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+
     Args:
-       fibermap: desispec instance.
-       etc_fiberfracs: propragated etc fiberfracs per tracer, json or fits
-                       header derived (dictionary).
-       no_offsets: ignore throughput loss due to fiber offsets.
+        fibermap: desispec instance.
+        etc_fiberfracs: propragated etc fiberfracs per tracer, json or fits
+            header derived (dictionary).
+        no_offsets: ignore throughput loss due to fiber offsets.
+
     Returns:
        dict of the nominal fiberloss of given type and seeing.
     '''
@@ -923,7 +927,8 @@ def calc_tsnr2_cframe(cframe):
     Args:
         cframe: input cframe Frame object
 
-    Returns (results, alpha) from calc_tsnr2
+    Returns:
+        tuple: (results, alpha) from calc_tsnr2
     """
     log = get_logger()
     dirname, filename = os.path.split(cframe.filename)
@@ -963,12 +968,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         sky : SkyModel object
         fluxcalib : FluxCalib object
 
-    returns (tsnr2, alpha):
-        `tsnr2` dictionary, with keys labeling tracer (bgs,elg,etc.), of values
+    Returns
+        (tsnr2, alpha): `tsnr2` dictionary, with keys labeling tracer (bgs,elg,etc.), of values
         holding nfiber length array of the tsnr^2 values for this camera, and
         `alpha`, the relative weighting btwn rdnoise & sky terms to model var.
 
-    Note:  Assumes DESIMODEL is set and up to date.
+    Note:
+        Assumes DESIMODEL is set and up to date.
     '''
     global _camera_nea_angperpix
     global _band_ensemble
@@ -1145,11 +1151,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
 
 def tsnr2_to_efftime(tsnr2,target_type) :
     """ Converts TSNR2 values to effective exposure time.
+
     Args:
       tsnr2: TSNR**2 values, float or numpy array
       target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
 
-    Returns: exptime in seconds, same type and shape if applicable as input tsnr2
+    Returns:
+        Exptime in seconds, same type and shape if applicable as input tsnr2
     """
 
     tracer=target_type.lower()

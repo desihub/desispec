@@ -2,7 +2,6 @@
 desispec.ccdcalib
 =================
 
-Please add module-level documentation.
 """
 
 import os, sys, glob, json

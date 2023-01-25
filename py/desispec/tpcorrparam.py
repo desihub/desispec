@@ -192,16 +192,21 @@ def pca_tpcorr(tpcorr):
         tpcorr (ndarray): result of gather_tpcorr
 
     Returns:
-        dict[filter] of (tpcorrmed, pc_info, exp_info), describing the results
-        of the fit.
-        tpcorrmed: the median TPCORR of the whole sample; i.e., how
-            different the nightly flat usually is from the sky.
-        pc_info: ndarray with:
-            pca: the principal components
-            amplitude: their corresponding singular values
-        exp_info: ndarray with:
-            expid: exposure id
-            coeff: pc component coefficients for this exposure
+        dict: A dictionary containing:
+
+        * dict[filter] of (tpcorrmed, pc_info, exp_info), describing the results
+          of the fit.
+        * tpcorrmed: the median TPCORR of the whole sample; i.e., how
+          different the nightly flat usually is from the sky.
+        * pc_info: ndarray with:
+
+          - pca: the principal components
+          - amplitude: their corresponding singular values
+
+        * exp_info: ndarray with:
+
+          - expid: exposure id
+          - coeff: pc component coefficients for this exposure
     """
     from astropy.stats import mad_std
     out = dict()

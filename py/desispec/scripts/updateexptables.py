@@ -2,7 +2,6 @@
 desispec.scripts.updateexptables
 ================================
 
-Please add module-level documentation.
 """
 import os
 import sys

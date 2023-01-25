@@ -2,7 +2,6 @@
 desispec.scripts.emlinefit
 ==========================
 
-Please add module-level documentation.
 """
 from time import time
 from astropy.time import Time

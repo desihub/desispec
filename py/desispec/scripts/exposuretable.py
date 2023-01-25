@@ -2,7 +2,6 @@
 desispec.scripts.exposuretable
 ==============================
 
-Please add module-level documentation.
 """
 import os
 import sys

@@ -4,7 +4,6 @@
 desispec.qproc
 ==============
 
-Please add subpackage-level documentation.
 """
 from __future__ import absolute_import
 

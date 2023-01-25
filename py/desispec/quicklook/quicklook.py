@@ -2,7 +2,6 @@
 desispec.quicklook.quicklook
 ============================
 
-Please add module-level documentation.
 """
 from __future__ import absolute_import, division, print_function
 

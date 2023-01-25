@@ -2,7 +2,6 @@
 desispec.quicklook.qlheartbeat
 ==============================
 
-Please add module-level documentation.
 """
 from threading import Thread
 import time

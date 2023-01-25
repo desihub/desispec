@@ -2,7 +2,6 @@
 desispec.workflow.proc_dashboard_funcs
 ======================================
 
-Please add module-level documentation.
 """
 import os,glob
 import json

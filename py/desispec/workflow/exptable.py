@@ -2,7 +2,6 @@
 desispec.workflow.exptable
 ==========================
 
-Please add module-level documentation.
 """
 import os
 import glob
@@ -52,11 +51,8 @@ def exposure_table_column_defs():
     Contains the column names, data types, and default row values for a DESI Exposure table. It returns
     the names, datatypes, and defaults as a list of 3-tuples.
 
-    Args:
-        None.
-
     Returns:
-        columns, list. List of tuples (name, type, default).
+        list: List of tuples (name, type, default).
     """
     columns = [
                 ('EXPID', int, -99),
@@ -95,7 +91,7 @@ def default_obstypes_for_exptable():
     Defines the exposure types to be recognized by the workflow and saved in the exposure table by default.
 
     Returns:
-        list. A list of default obstypes to be included in an exposure table.
+        list: A list of default obstypes to be included in an exposure table.
     """
     ## Define the science types to be included in the exposure table (case insensitive)
     return ['arc','flat','twilight','science','dark','zero']
@@ -105,7 +101,7 @@ def get_exposure_flags():
     Defines the exposure flags that can be saved in the exposure table.
 
     Returns:
-        list. A list of exposure flags that can be included in an exposure table.
+        list: A list of exposure flags that can be included in an exposure table.
     """
     return [
             'good',
@@ -144,7 +140,7 @@ def get_last_step_options():
     Defines the LASTSTEP options that can be saved in the exposure table that will be understood by the pipeline.
 
     Returns:
-        list. A list of LASTSTEP's that can be included in an exposure table.
+        list: A list of LASTSTEP's that can be included in an exposure table.
     """
     return ['ignore', 'skysub', 'stdstarfit', 'fluxcal', 'all']
 
@@ -154,13 +150,15 @@ def get_exposure_table_column_defs(return_default_values=False):
     the names and datatypes with the defaults being given with an optional flag. Returned as 2 (or 3) lists.
 
     Args:
-        return_default_values, bool. True if you want the default values returned.
+        return_default_values (bool, optional): ``True`` if you want the default values returned.
 
     Returns:
-        colnames, list. List of column names for an exposure table.
-        coltypes, list. List of column datatypes for the names in colnames.
-        coldeflts, list. Optionally returned if return_default_values is True. List of default values for the
-                         corresponding colnames.
+        tuple: A tuple containing:
+
+        * colnames, list. List of column names for an exposure table.
+        * coltypes, list. List of column datatypes for the names in colnames.
+        * coldeflts, list. Optionally returned if return_default_values is True. List of default values for the
+          corresponding colnames.
     """
     columns = exposure_table_column_defs()
 
@@ -180,11 +178,8 @@ def get_exposure_table_column_names():
     Contains the column names, data types, and default row values for a DESI Exposure table. It returns
     the names as a list.
 
-    Args:
-        None
-
     Returns:
-        colnames, list. List of column names for an exposure table.
+        list: List of column names for an exposure table.
     """
     columns  = exposure_table_column_defs()
 
@@ -201,13 +196,13 @@ def get_exposure_table_column_types(asdict=True):
     are returned as a list (in the same order as the names returned by get_exposure_table_column_names().
 
     Args:
-        asdict, bool. True if you want the types as values in a dictionary with keys as the names of the
-                      columns. If False, an ordered list is returned. Default is True.
+        asdict (bool, optional): ``True`` if you want the types as values in a dictionary with keys as the names of the
+            columns. If False, an ordered list is returned. Default is True.
 
     Returns:
-        coltypes, dict or list. If asdict, a dict is returned with column datatypes as the values and columns
-                                names as the keys. If False, a list of datatypes in the same order as the names
-                                returned from get_exposure_table_column_names().
+        dict or list: If asdict, a dict is returned with column datatypes as the values and columns
+        names as the keys. If False, a list of datatypes in the same order as the names
+        returned from get_exposure_table_column_names().
     """
     columns = exposure_table_column_defs()
 
@@ -229,13 +224,13 @@ def get_exposure_table_column_defaults(asdict=True):
     are returned as a list (in the same order as the names returned by get_exposure_table_column_names().
 
     Args:
-        asdict, bool. Default is True. If you want the defaults as values in a dictionary with keys as the names of the
-                      columns. If False, an ordered list is returned.
+        asdict (bool, optional): Default is True. If you want the defaults as values in a dictionary with keys as the names of the
+            columns. If False, an ordered list is returned.
 
     Returns:
-        coldefs, dict or list. If asdict, a dict is returned with column defaults as the values and columns
-                                names as the keys. If False, a list of defaults in the same order as the names
-                                returned from get_exposure_table_column_names().
+        dict or list: If asdict, a dict is returned with column defaults as the values and columns
+        names as the keys. If False, a list of defaults in the same order as the names
+        returned from get_exposure_table_column_names().
     """
     columns = exposure_table_column_defs()
 
@@ -255,10 +250,10 @@ def night_to_month(night):
     Trivial function that returns the month portion of a night. Can be given a string or int.
 
     Args:
-        night, int or str. The night you want the month of.
+        night (int or str): The night you want the month of.
 
     Returns:
-        str. The zero-padded (length two) string representation of the month corresponding to the input month.
+        str: The zero-padded (length two) string representation of the month corresponding to the input month.
     """
     return str(night)[:-2]
 
@@ -267,12 +262,12 @@ def get_exposure_table_name(night, extension='csv'):
     Defines the default exposure name given the night of the observations and the optional extension.
 
     Args:
-        night, int or str. The night of the observations going into the exposure table.
-        extension, str. The extension (and therefore data format) without a leading period of the saved table.
-                        Default is 'csv'.
+        night (int or str): The night of the observations going into the exposure table.
+        extension (str, optional): The extension (and therefore data format) without a leading period of the saved table.
+            Default is 'csv'.
 
     Returns:
-        str. The exposure table name given the input night and extension.
+        str: The exposure table name given the input night and extension.
     """
     # if night is None and 'PROD_NIGHT' in os.environ:
     #     night = os.environp['PROD_NIGHT']
@@ -284,12 +279,12 @@ def get_exposure_table_path(night=None, usespecprod=True):
     to reduce the number of files in a large production directory.
 
     Args:
-        night, int or str or None. The night corresponding to the exposure table. If None, no monthly subdirectory is used.
-        usespecprod, bool. Whether to use the master version in the exposure table repo or the version in a specprod.
+        night (int or str, optional): The night corresponding to the exposure table. If None, no monthly subdirectory is used.
+        usespecprod (bool, optional): Whether to use the master version in the exposure table repo or the version in a specprod.
 
     Returns:
-         str. The full path to the directory where the exposure table should be written (or is already written). This
-              does not including the filename.
+        str: The full path to the directory where the exposure table should be written (or is already written). This
+        does not including the filename.
     """
     # if night is None and 'PROD_NIGHT' in os.environ:
     #     night = os.environp['PROD_NIGHT']
@@ -314,12 +309,12 @@ def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_
     Defines the default pathname to save an exposure table.
 
     Args:
-        night, int or str or None. The night corresponding to the exposure table.
-        usespecprod, bool. Whether to use the master version or the version in a specprod.
+        night (int or str, optional): The night corresponding to the exposure table.
+        usespecprod (bool, optional): Whether to use the master version or the version in a specprod.
 
     Returns:
-         str. The full pathname where the exposure table should be written (or is already written). This
-              includes the filename.
+        str: The full pathname where the exposure table should be written (or is already written). This
+        includes the filename.
     """
     path = get_exposure_table_path(night, usespecprod=usespecprod)
     table_name = get_exposure_table_name(night, extension)
@@ -331,15 +326,15 @@ def instantiate_exposure_table(colnames=None, coldtypes=None, rows=None):
     into the table, otherwise it returns a table with no rows.
 
     Args:
-        colnames, list. List of column names for an exposure table.
-        coldtypes, list. List of column datatypes for the names in colnames.
-        rows, list or np.array of Table.Rows or dicts. An iterable set of Table.Row's or dicts with keys/colnames and value
-                                                       pairs that match the default column names and data types of the
-                                                       default exposure table.
+        colnames (list): List of column names for an exposure table.
+        coldtypes (list): List of column datatypes for the names in colnames.
+        rows (list or np.array of Table.Row or dict): An iterable set of Table.Row or dict with keys/colnames and value
+            pairs that match the default column names and data types of the
+            default exposure table.
 
     Returns:
-          exposure_table, Table. An astropy Table with the column names and data types for a DESI workflow exposure
-                                 table. If the input rows was not None, it contains those rows, otherwise it has no rows.
+        Table: An astropy Table with the column names and data types for a DESI workflow exposure
+        table. If the input rows was not None, it contains those rows, otherwise it has no rows.
     """
     if colnames is None or coldtypes is None:
        colnames, coldtypes = get_exposure_table_column_defs()
@@ -361,7 +356,7 @@ def keyval_change_reporting(keyword, original_val, replacement_val):
         replacement_val, str. The value that was saved instead in that keyword column.
 
     Returns:
-        str. Of the format ' keyword:original->replacement '
+        str: Of the format ' keyword:original->replacement '
     """
     if original_val is None:
         original_val = "None"
@@ -369,16 +364,18 @@ def keyval_change_reporting(keyword, original_val, replacement_val):
 
 def deconstruct_keyval_reporting(entry):
     """
-    Takes a reporting of the form '{colname}:{oldval}->{newval}' and returns colname, oldval, newval.
+    Takes a reporting of the form ``{colname}:{oldval}->{newval}`` and returns colname, oldval, newval.
 
     Args:
-        entry, str. A string of the form '{colname}:{oldval}->{newval}'. colname should be an all upper case column name.
-                    oldval and newval can include any string characters except the specific combination "->".
+        entry (str): A string of the form ``{colname}:{oldval}->{newval}``. colname should be an all upper case column name.
+            oldval and newval can include any string characters except the specific combination "->".
 
     Returns:
-        key, str. The string that precedes the initial colon. The name of the column being reported.
-        val1, str. The string after the initial colon and preceding the '->'. The original value of the column.
-        val2, str. The string after the '->'. The value that the original was changed to.
+        tuple: A tuple containing:
+
+        * key, str. The string that precedes the initial colon. The name of the column being reported.
+        * val1, str. The string after the initial colon and preceding the '->'. The original value of the column.
+        * val2, str. The string after the '->'. The value that the original was changed to.
     """
     ## Ensure that the rudimentary characteristics are there
     if ':' not in entry or '->' not in entry:
@@ -402,28 +399,28 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     Args:
         raw_data_dir, str. The path to where the raw data is stored. It should be the upper level directory where the
-                           nightly subdirectories reside.
+            nightly subdirectories reside.
         night, str or int. Used to know what nightly subdirectory to look for the given exposure in.
         exp, str or int or float. The exposure number of interest.
         obstypes, list or np.array of str's. The list of 'OBSTYPE' keywords to match to. If a match is found, the
-                                             information about that exposure is taken and returned for the exposure
-                                             table. Otherwise None is returned (or str if it is an end-of-cal manifest).
-                                             If None, the default list in default_obstypes_for_exptable() is used.
+            information about that exposure is taken and returned for the exposure
+            table. Otherwise None is returned (or str if it is an end-of-cal manifest).
+            If None, the default list in default_obstypes_for_exptable() is used.
         colnames, list or np.array. List of column names for an exposure table. If None, the defaults are taken from
-                                    get_exposure_table_column_defs().
+            get_exposure_table_column_defs().
         coldefaults, list or np.array. List of default values for the corresponding colnames. If None, the defaults
-                                       are taken from get_exposure_table_column_defs().
+            are taken from get_exposure_table_column_defs().
         verbosely, bool. Whether to print more detailed output (True) or more succinct output (False).
 
     Returns:
-        outdict, dict. Dictionary with keys corresponding to the column names of an exposure table. Values are
-                       taken from the data when found, otherwise the values are the corresponding default given in
-                       coldefaults.
-        OR
-        str. If the exposures signifies the end of a calibration sequence, it returns a string describing the type of
-             sequence that ended. Either "(short|long|arc) calib complete".
-        OR
-        NoneType. If the exposure obstype was not in the requested types (obstypes).
+        object: A variety of types which could be:
+
+        * dict: Dictionary with keys corresponding to the column names of an exposure table. Values are
+          taken from the data when found, otherwise the values are the corresponding default given in
+          coldefaults OR;
+        * str: If the exposures signifies the end of a calibration sequence, it returns a string describing the type of
+             sequence that ended. Either "(short|long|arc) calib complete" OR;
+        * NoneType: If the exposure obstype was not in the requested types (obstypes).
     """
     log = get_logger()
 

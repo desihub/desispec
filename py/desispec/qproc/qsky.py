@@ -2,7 +2,6 @@
 desispec.qproc.qsky
 ===================
 
-Please add module-level documentation.
 """
 import time
 import numpy as np

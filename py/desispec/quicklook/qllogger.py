@@ -2,7 +2,6 @@
 desispec.quicklook.qllogger
 ===========================
 
-Please add module-level documentation.
 """
 import logging
 #from datetime import datetime

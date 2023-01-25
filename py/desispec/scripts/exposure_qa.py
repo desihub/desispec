@@ -6,10 +6,6 @@
 desispec.scripts.exposure_qa
 ============================
 
-Please add module-level documentation.
-"""
-
-"""
 This script computes QA scores per exposure, after the cframe are done
 """
 

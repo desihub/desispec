@@ -2,7 +2,6 @@
 desispec.scripts.interpolate_fiber_psf
 ======================================
 
-Please add module-level documentation.
 """
 import argparse
 import numpy as np

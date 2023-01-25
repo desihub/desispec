@@ -2,7 +2,6 @@
 desispec.io.filters
 ===================
 
-Please add module-level documentation.
 """
 import numpy as np
 import speclite.filters

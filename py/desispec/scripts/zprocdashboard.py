@@ -2,7 +2,6 @@
 desispec.scripts.zprocdashboard
 ===============================
 
-Please add module-level documentation.
 """
 import argparse
 import os, glob

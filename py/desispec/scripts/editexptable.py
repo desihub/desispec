@@ -2,7 +2,6 @@
 desispec.scripts.editexptable
 =============================
 
-Please add module-level documentation.
 """
 from desispec.workflow.exptable import get_exposure_table_name,get_exposure_table_path, \
                                        get_exposure_flags, get_last_step_options, get_exposure_table_column_defs, \

@@ -2,7 +2,6 @@
 desispec.scripts.assemble_fibermap
 ==================================
 
-Please add module-level documentation.
 """
 import os, sys, json
 import argparse

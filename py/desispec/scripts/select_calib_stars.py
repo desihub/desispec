@@ -2,7 +2,6 @@
 desispec.scripts.select_calib_stars
 ===================================
 
-Please add module-level documentation.
 """
 import os,sys
 import numpy as np

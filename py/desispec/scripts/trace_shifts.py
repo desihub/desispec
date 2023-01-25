@@ -2,7 +2,6 @@
 desispec.scripts.trace_shifts
 =============================
 
-Please add module-level documentation.
 """
 
 import os, sys

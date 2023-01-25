@@ -2,7 +2,6 @@
 desispec.scripts.submit_prod
 ============================
 
-Please add module-level documentation.
 """
 import yaml
 import numpy as np
@@ -22,8 +21,8 @@ def assign_survey(night, conf):
     dictionary, if psosible. Otherwise returns None.
 
     Args:
-        night, int. The night you want to know the survey it corresponds to.
-        conf, dict. Dictionary that returned when the configuration yaml file was read in.
+        night (int): The night you want to know the survey it corresponds to.
+        conf (dict): Dictionary that returned when the configuration yaml file was read in.
 
     Returns:
         survey, str. The survey the night was taken under, according to the conf file.
@@ -57,11 +56,12 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
     within the defined production.
 
     Args:
-        production_yaml, str. Pathname of the yaml file that defines the production.
-        dry_run, bool. Default is False. Should the jobs written to the processing table actually be submitted
-                                             for processing.
-        error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
-                                      otherwise prints an error and returns.
+        production_yaml (str): Pathname of the yaml file that defines the production.
+        dry_run (bool, optional): Default is False. Should the jobs written to the processing table actually be submitted
+            for processing.
+        error_if_not_available (bool, optional): Default is True. Raise as error if the required exposure table doesn't exist,
+            otherwise prints an error and returns.
+
     Returns:
         None.
     """

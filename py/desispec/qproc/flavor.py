@@ -2,7 +2,6 @@
 desispec.qproc.flavor
 =====================
 
-Please add module-level documentation.
 """
 import numpy as np
 

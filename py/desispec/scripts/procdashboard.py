@@ -2,7 +2,6 @@
 desispec.scripts.procdashboard
 ==============================
 
-Please add module-level documentation.
 """
 import argparse
 import os, glob

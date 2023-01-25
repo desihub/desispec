@@ -2,7 +2,6 @@
 desispec.desi_proc_time_distribution
 ====================================
 
-Please add module-level documentation.
 """
 import argparse
 import os,glob

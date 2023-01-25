@@ -2,7 +2,6 @@
 desispec.scripts.badcolumn_mask
 ===============================
 
-Please add module-level documentation.
 """
 
 import os,sys

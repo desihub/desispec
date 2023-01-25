@@ -2,7 +2,6 @@
 desispec.desi_dashboard
 =======================
 
-Please add module-level documentation.
 """
 import argparse
 import os

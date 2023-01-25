@@ -2,7 +2,6 @@
 desispec.scripts.daily_processing
 =================================
 
-Please add module-level documentation.
 """
 import numpy as np
 import os

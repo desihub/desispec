@@ -2,7 +2,6 @@
 desispec.scripts.humidity_corrected_fiberflat
 =============================================
 
-Please add module-level documentation.
 """
 
 from __future__ import absolute_import, division

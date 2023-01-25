@@ -2,7 +2,6 @@
 desispec.scripts.tile_redshifts_bash
 ====================================
 
-Please add module-level documentation.
 """
 import sys, os, glob
 import re

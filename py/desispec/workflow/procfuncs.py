@@ -2,7 +2,6 @@
 desispec.workflow.procfuncs
 ===========================
 
-Please add module-level documentation.
 """
 import sys, os, glob
 import json
@@ -45,11 +44,11 @@ def night_to_starting_iid(night=None):
     and are incremented for up to 1000 unique job ID's for a given night.
 
     Args:
-        night, str or int. YYYYMMDD of the night to get the starting internal ID for.
+        night (str or int): YYYYMMDD of the night to get the starting internal ID for.
 
     Returns:
-        internal_id, int. 9 digit number consisting of YYMMDD000. YY is years after 2000, MMDD is month and day.
-            000 being the starting job number (0).
+        int: 9 digit number consisting of YYMMDD000. YY is years after 2000, MMDD is month and day.
+        000 being the starting job number (0).
     """
     if night is None:
         night = what_night_is_it()
@@ -68,10 +67,10 @@ def batch_script_name(prow):
     and determines the script file pathname as defined by desi_proc's helper functions.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
+        prow (Table.Row or dict): Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
 
     Returns:
-        scriptfile, str. The complete pathname to the script file, as it is defined within the desi_proc ecosystem.
+        str: The complete pathname to the script file, as it is defined within the desi_proc ecosystem.
     """
     expids = prow['EXPID']
     if len(expids) == 0:
@@ -87,15 +86,15 @@ def batch_script_name(prow):
 def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     """
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
+        prow (Table.Row or dict): Must include keyword accessible definitions for processing_table columns found in
             desispect.workflow.proctable.get_processing_table_column_defs()
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
-            the change in job status after creating and submitting the job for processing.
+        Table.Row or dict: The same prow type and keywords as input except with modified values updated to reflect
+        the change in job status after creating and submitting the job for processing.
     """
     prow['STATUS'] = 'UNKNOWN'
     log = get_logger()
@@ -203,31 +202,31 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
+        prow (Table.Row or dict): Must include keyword accessible definitions for processing_table columns found in
             desispect.workflow.proctable.get_processing_table_column_defs()
-        queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
+        queue (str, optional): The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
+        joint (bool, optional): Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
             run with desi_proc_joint_fit. Default is False.
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
             data products for the script being submitted. If all files exist and this is True,
             then the script will not be submitted. If some files exist and this is True, only the
             subset of the cameras without the final data products will be generated and submitted.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
-            the change in job status after creating and submitting the job for processing.
+        Table.Row or dict: The same prow type and keywords as input except with modified values updated to reflect
+        the change in job status after creating and submitting the job for processing.
 
     Note:
         This modifies the input. Though Table.Row objects are generally copied on modification, so the change to the
@@ -255,13 +254,13 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
     and determines the proper command line call to process the data defined by the input row/dict.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
-        queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
-        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
-        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        prow (Table.Row or dict): Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
+        system_name (str): batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
+        queue (str, optional): The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
+        use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
-        cmd, str. The proper command to be submitted to desi_proc to process the job defined by the prow values.
+        str: The proper command to be submitted to desi_proc to process the job defined by the prow values.
     """
     cmd = 'desi_proc'
     cmd += ' --batch'
@@ -295,11 +294,11 @@ def desi_proc_joint_fit_command(prow, queue=None):
     and determines the proper command line call to process the data defined by the input row/dict.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
-        queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
+        prow (Table.Row or dict): Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
+        queue (str): The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
 
     Returns:
-        cmd, str. The proper command to be submitted to desi_proc_joint_fit to process the job defined by the prow values.
+        str: The proper command to be submitted to desi_proc_joint_fit to process the job defined by the prow values.
     """
     cmd = 'desi_proc_joint_fit'
     cmd += ' --batch'
@@ -337,8 +336,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
-            scriptname.
+        Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
+        scriptname.
 
     Note:
         This modifies the input. Though Table.Row objects are generally copied on modification, so the change to the
@@ -430,8 +429,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
             than failing completely from failed calibrations. Default is False.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
-            scriptname.
+        Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
+        scriptname.
 
     Note:
         This modifies the input. Though Table.Row objects are generally copied on modification, so the change to the
@@ -546,9 +545,8 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
             science exposures.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except
-            with modified values updated values for
-            'JOBDESC', 'INT_DEP_IDS'. and 'LATEST_DEP_ID'.
+        Table.Row or dict: The same prow type and keywords as input except
+        with modified values updated values for 'JOBDESC', 'INT_DEP_IDS'. and 'LATEST_DEP_ID'.
 
     Note:
         This modifies the input. Though Table.Row objects are generally copied
@@ -608,8 +606,8 @@ def assign_dependency(prow, dependency):
             and no dependency is assigned.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
-            'JOBDESC', 'INT_DEP_IDS'. and 'LATEST_DEP_ID'.
+        Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
+        'JOBDESC', 'INT_DEP_IDS'. and 'LATEST_DEP_ID'.
 
     Note:
         This modifies the input. Though Table.Row objects are generally copied on modification, so the change to the
@@ -641,9 +639,9 @@ def still_a_dependency(dependency):
             This must contain keyword accessible values for 'STATUS', and 'LATEST_QID'.
 
     Returns:
-        bool. False if the criteria indicate that the dependency is completed and no longer a blocking factor (ie no longer
-            a genuine dependency). Returns True if the dependency is still a blocking factor such that the slurm
-            scheduler needs to be aware of the pending job.
+        bool: False if the criteria indicate that the dependency is completed and no longer a blocking factor (ie no longer
+        a genuine dependency). Returns True if the dependency is still a blocking factor such that the slurm
+        scheduler needs to be aware of the pending job.
 
     """
     return dependency['LATEST_QID'] > 0 and dependency['STATUS'] != 'COMPLETED'
@@ -680,23 +678,25 @@ def parse_previous_tables(etable, ptable, night):
         night, str or int, the night the data was taken.
 
     Returns:
-        arcs, list of dicts, list of the individual arc jobs used for the psfnight (NOT all
-            the arcs, if multiple sets existed)
-        flats, list of dicts, list of the individual flat jobs used for the nightlyflat (NOT
-            all the flats, if multiple sets existed)
-        sciences, list of dicts, list of the most recent individual prestdstar science exposures
-            (if currently processing that tile)
-        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'badcol', 'psfnight'
-            and 'nightlyflat'. Each key corresponds to a Table.Row or
-            None. The table.Row() values are for the corresponding
-            calibration job.
-        curtype, None, the obstype of the current job being run. Always None as first new job will define this.
-        lasttype, str or None, the obstype of the last individual exposure row to be processed.
-        curtile, None, the tileid of the current job (if science). Otherwise None. Always None as first
-            new job will define this.
-        lasttile, str or None, the tileid of the last job (if science). Otherwise None.
-        internal_id, int, an internal identifier unique to each job. Increments with each new job. This
-            is the latest unassigned value.
+        tuple: A tuple containing:
+
+        * arcs, list of dicts, list of the individual arc jobs used for the psfnight (NOT all
+          the arcs, if multiple sets existed)
+        * flats, list of dicts, list of the individual flat jobs used for the nightlyflat (NOT
+          all the flats, if multiple sets existed)
+        * sciences, list of dicts, list of the most recent individual prestdstar science exposures
+          (if currently processing that tile)
+        * calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'badcol', 'psfnight'
+          and 'nightlyflat'. Each key corresponds to a Table.Row or
+          None. The table.Row() values are for the corresponding
+          calibration job.
+        * curtype, None, the obstype of the current job being run. Always None as first new job will define this.
+        * lasttype, str or None, the obstype of the last individual exposure row to be processed.
+        * curtile, None, the tileid of the current job (if science). Otherwise None. Always None as first
+          new job will define this.
+        * lasttile, str or None, the tileid of the last job (if science). Otherwise None.
+        * internal_id, int, an internal identifier unique to each job. Increments with each new job. This
+          is the latest unassigned value.
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
@@ -786,10 +786,12 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
 
     Returns:
-        proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
-            been updated for those jobs that needed to be resubmitted.
-        submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
-            the number of submissions made from this function call plus the input submits value.
+        tuple: A tuple containing:
+
+        * proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
+          been updated for those jobs that needed to be resubmitted.
+        * submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
+          the number of submissions made from this function call plus the input submits value.
 
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
@@ -839,10 +841,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             for testing as though scripts are being submitted. Default is 0 (false).
 
     Returns:
-        proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
-            been updated for those jobs that needed to be resubmitted.
-        submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
-            the number of submissions made from this function call plus the input submits value.
+        tuple: A tuple containing:
+
+        * proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
+          been updated for those jobs that needed to be resubmitted.
+        * submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
+          the number of submissions made from this function call plus the input submits value.
 
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
@@ -920,36 +924,38 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     table given as input.
 
     Args:
-        ptable, Table. The processing table where each row is a processed job.
-        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
+        ptable (Table): The processing table where each row is a processed job.
+        prows (list or array of dict): The rows corresponding to the individual exposure jobs that are
             inputs to the joint fit.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
-        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        descriptor, str. Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
+        internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        descriptor (str): Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
             or 'flat' or 'nightlyflat'.
-        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+        z_submit_types (list of str, optional): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
             data products for the script being submitted. If all files exist and this is True,
             then the script will not be submitted. If some files exist and this is True, only the
             subset of the cameras without the final data products will be generated and submitted.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
-        ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
-            of a stdstarfit, the poststdstar science exposure jobs.
-        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        tuple: A tuple containing:
+
+        * ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
+          of a stdstarfit, the poststdstar science exposure jobs.
+        * joint_prow, dict. Row of a processing table corresponding to the joint fit job.
+        * internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     log = get_logger()
     if len(prows) < 1:
@@ -1067,32 +1073,34 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
     table given as input.
 
     Args:
-        ptable, Table. The processing table where each row is a processed job.
-        prows list or array of dicts. Unsubmitted prestdstar jobs that are first steps in tilenight.
-        tnight, Table.Row. The processing table row of the tilenight job on which the redshifts depend.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
-        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        ptable (Table): The processing table where each row is a processed job.
+        prows (list or array of dict): Unsubmitted prestdstar jobs that are first steps in tilenight.
+        tnight (Table.Row): The processing table row of the tilenight job on which the redshifts depend.
+        internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
             data products for the script being submitted. If all files exist and this is True,
             then the script will not be submitted. If some files exist and this is True, only the
             subset of the cameras without the final data products will be generated and submitted.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
-        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+        z_submit_types (list of str): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
-        ptable, Table. The same processing table as input except with added rows for the joint fit job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        tuple: A tuple containing:
+
+        * ptable, Table. The same processing table as input except with added rows for the joint fit job.
+        * internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     log = get_logger()
     if len(prows) < 1 or z_submit_types == None:
@@ -1145,31 +1153,33 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
     table given as input.
 
     Args:
-        ptable, Table. The processing table where each row is a processed job.
-        prows list or array of dicts. Unsubmitted prestdstar jobs that are first steps in tilenight.
-        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+        ptable (Table): The processing table where each row is a processed job.
+        prows (list or array of dict): Unsubmitted prestdstar jobs that are first steps in tilenight.
+        calibjobs (dict): Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
             and 'nightlyflat'. Each key corresponds to a Table.Row or
             None. The table.Row() values are for the corresponding
             calibration job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
-        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
-        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
-        ptable, Table. The same processing table as input except with added rows for the joint fit job.
-        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        tuple: A tuple containing:
+
+        * ptable, Table. The same processing table as input except with added rows for the joint fit job.
+        * tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+        * internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     log = get_logger()
     if len(prows) < 1:
@@ -1256,7 +1266,7 @@ def make_joint_prow(prows, descriptor, internal_id):
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
+        dict: Row of a processing table corresponding to the joint fit job.
     """
     first_row = prows[0]
     joint_prow = first_row.copy()
@@ -1291,7 +1301,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+        dict: Row of a processing table corresponding to the tilenight job.
     """
     first_row = prows[0]
     joint_prow = first_row.copy()
@@ -1322,7 +1332,7 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        tnight_prow, dict. Row of a processing table corresponding to the tilenight job.
+        dict: Row of a processing table corresponding to the tilenight job.
     """
     first_row = prows[0]
     redshift_prow = first_row.copy()
@@ -1352,50 +1362,52 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
     elsewhere and doesn't interact with this.
 
     Args:
-        ptable, Table, Processing table of all exposures that have been processed.
-        arcs, list of dicts, list of the individual arc jobs to be used for the psfnight (NOT all
+        ptable (Table): Processing table of all exposures that have been processed.
+        arcs (list of dict): list of the individual arc jobs to be used for the psfnight (NOT all
             the arcs, if multiple sets existed). May be empty if none identified yet.
-        flats, list of dicts, list of the individual flat jobs to be used for the nightlyflat (NOT
+        flats (list of dict): list of the individual flat jobs to be used for the nightlyflat (NOT
             all the flats, if multiple sets existed). May be empty if none identified yet.
-        sciences, list of dicts, list of the most recent individual prestdstar science exposures
+        sciences (list of dict): list of the most recent individual prestdstar science exposures
             (if currently processing that tile). May be empty if none identified yet.
-        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+        calibjobs (dict): Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
             and 'nightlyflat'. Each key corresponds to a Table.Row or
             None. The table.Row() values are for the corresponding
             calibration job.
-        lasttype, str or None, the obstype of the last individual exposure row to be processed.
-        internal_id, int, an internal identifier unique to each job. Increments with each new job. This
+        lasttype (str or None): the obstype of the last individual exposure row to be processed.
+        internal_id (int): an internal identifier unique to each job. Increments with each new job. This
             is the smallest unassigned value.
-        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+        z_submit_types (list of str): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
             data products for the script being submitted. If all files exist and this is True,
             then the script will not be submitted. If some files exist and this is True, only the
             subset of the cameras without the final data products will be generated and submitted.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
 
     Returns:
-        ptable, Table, Processing table of all exposures that have been processed.
-        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
-            and 'nightlyflat'. Each key corresponds to a Table.Row or
-            None. The table.Row() values are for the corresponding
-            calibration job.
-        sciences, list of dicts, list of the most recent individual prestdstar science exposures
-            (if currently processing that tile). May be empty if none identified yet or
-            we just submitted them for processing.
-        internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
-            from the input such that it represents the smallest unused ID.
+        tuple: A tuple containing:
+
+        * ptable, Table, Processing table of all exposures that have been processed.
+        * calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+          and 'nightlyflat'. Each key corresponds to a Table.Row or
+          None. The table.Row() values are for the corresponding
+          calibration job.
+        * sciences, list of dicts, list of the most recent individual prestdstar science exposures
+          (if currently processing that tile). May be empty if none identified yet or
+          we just submitted them for processing.
+        * internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
+          from the input such that it represents the smallest unused ID.
     """
     if lasttype == 'science' and len(sciences) > 0:
         log = get_logger()
@@ -1473,39 +1485,41 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
     Takes all the state-ful data from daily processing and determines whether a tilenight job needs to be submitted.
 
     Args:
-        ptable, Table, Processing table of all exposures that have been processed.
-        sciences, list of dicts, list of the most recent individual prestdstar science exposures
+        ptable (Table): Processing table of all exposures that have been processed.
+        sciences (list of dict): list of the most recent individual prestdstar science exposures
             (if currently processing that tile). May be empty if none identified yet.
-        lasttype, str or None, the obstype of the last individual exposure row to be processed.
-        internal_id, int, an internal identifier unique to each job. Increments with each new job. This
+        lasttype (str or None): the obstype of the last individual exposure row to be processed.
+        internal_id (int): an internal identifier unique to each job. Increments with each new job. This
             is the smallest unassigned value.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
             for testing as though scripts are being submitted. Default is 0 (false).
-        queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
-        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
+        queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
-        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
             data products for the script being submitted. If all files exist and this is True,
             then the script will not be submitted. If some files exist and this is True, only the
             subset of the cameras without the final data products will be generated and submitted.
-        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
-        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+        z_submit_types (list of str, optional): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
-        use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
 
     Returns:
-        ptable, Table, Processing table of all exposures that have been processed.
-        sciences, list of dicts, list of the most recent individual prestdstar science exposures
-            (if currently processing that tile). May be empty if none identified yet or
-            we just submitted them for processing.
-        internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
-            from the input such that it represents the smallest unused ID.
+        tuple: A tuple containing:
+
+        * ptable, Table, Processing table of all exposures that have been processed.
+        * sciences, list of dicts, list of the most recent individual prestdstar science exposures
+          (if currently processing that tile). May be empty if none identified yet or
+          we just submitted them for processing.
+        * internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
+          from the input such that it represents the smallest unused ID.
     """
     ptable, tnight, internal_id = submit_tilenight(ptable, sciences, calibjobs, internal_id,
                                              queue=queue, reservation=reservation,
@@ -1539,8 +1553,8 @@ def set_calibrator_flag(prows, ptable):
         ptable, Table. The processing table where each row is a processed job.
 
     Returns:
-        ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
-            of a stdstarfit, the poststdstar science exposure jobs.
+        Table: The same processing table as input except with added rows for the joint fit job and, in the case
+        of a stdstarfit, the poststdstar science exposure jobs.
     """
     for prow in prows:
         ptable['CALIBRATOR'][ptable['INTID'] == prow['INTID']] = 1

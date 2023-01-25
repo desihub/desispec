@@ -44,11 +44,11 @@ desispec API
 .. automodule:: desispec.database.util
     :members:
 
-.. .. automodule:: desispec.desi_bias_dark_1d_model
-..     :members:
+.. automodule:: desispec.desi_bias_dark_1d_model
+    :members:
 
-.. .. automodule:: desispec.desi_create_bias_dark
-..     :members:
+.. automodule:: desispec.desi_create_bias_dark
+    :members:
 
 .. automodule:: desispec.desi_dashboard
     :members:
