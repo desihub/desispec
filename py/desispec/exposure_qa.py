@@ -34,13 +34,16 @@ def get_qa_params() :
 def compute_exposure_qa(night, expid, specprod_dir):
     """
     Computes the exposure_qa
+
     Args:
-       night: int, YYYYMMDD
-       expid: int, exposure id
-       specprod_dir: str, optional, specify the production directory.
-                     default is $DESI_SPECTRO_REDUX/$SPECPROD
-    returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
-            and petalqa (with one row per petal and at least a PETAL_LOC column)
+        night: int, YYYYMMDD
+        expid: int, exposure id
+        specprod_dir: str, optional, specify the production directory.
+            default is $DESI_SPECTRO_REDUX/$SPECPROD
+
+    Returns:
+        two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
+        and petalqa (with one row per petal and at least a PETAL_LOC column)
     """
 
     log=get_logger()

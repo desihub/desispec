@@ -19,8 +19,10 @@ def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
     Wrapper script of get_fiberbitmasked_frame_arrays that will
     return a modified version of the frame instead of just the
     flux and ivar
-    NOTE: The input "frame" variable itself is modified and returned,
-          not a copy.
+
+    Note:
+        The input "frame" variable itself is modified and returned,
+        not a copy.
     """
     ivar,mask = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask,return_mask=True)
     frame.mask = mask
@@ -34,27 +36,29 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
     offending bits in fibermap['FIBERSTATUS'] set to
     0 in ivar and optionally flips a bit in mask.
 
-    input:
+    Args:
         frame: frame object
         bitmask: int32 or list/array of int32's derived from desispec.maskbits.fibermask
-                 OR string indicating a keyword for get_fiberbitmask_comparison_value()
+            OR string indicating a keyword for get_fiberbitmask_comparison_value()
         ivar_framemask: bool (default=True), tells code whether to multiply the output
-                 variance by (frame.mask==0)
+            variance by (frame.mask==0)
         return_mask: bool, (default=False). Returns the frame.mask with the logic of
-                 FIBERSTATUS applied.
+            FIBERSTATUS applied.
 
-    output:
+    Returns:
         ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0
-              set to zero ivar
+            set to zero ivar
         mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with
-              a bad FIBERSTATUS
+            a bad FIBERSTATUS
 
-    example bitmask list:
-        bitmask = [fmsk.BROKENFIBER,fmsk.UNASSIGNED,fmsk.BADFIBER,\
-                    fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
-        bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib', band='brz')
-        bitmask = 'fluxcalib'
-        bitmask = 4128780
+    Examples:
+        Example bitmask list::
+
+            bitmask = [fmsk.BROKENFIBER,fmsk.UNASSIGNED,fmsk.BADFIBER,\
+                        fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
+            bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib', band='brz')
+            bitmask = 'fluxcalib'
+            bitmask = 4128780
     """
     ivar = frame.ivar.copy()
     mask = frame.mask.copy()
@@ -105,20 +109,19 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
 
 
 def get_fiberbitmask_comparison_value(kind,band):
-    """
-        Takes a string argument and returns a 32-bit integer representing the logical OR of all
-        relevant fibermask bits for that given reduction step
+    """Takes a string argument and returns a 32-bit integer representing the logical OR of all
+    relevant fibermask bits for that given reduction step
 
-        input:
-             kind: str : string designating which combination of bits to use based on the operation.
-                         Possible values are "all", "sky" (or "skysub"), "flat",
-                         "flux" (or "fluxcalib"), "star" (or "stdstars")
-             band: str : BADAMP band bits to set. Values include 'b', 'r', 'z', or
-                         combinations thereof such as 'brz'
+    Args:
+        kind: str : string designating which combination of bits to use based on the operation.
+            Possible values are "all", "sky" (or "skysub"), "flat",
+            "flux" (or "fluxcalib"), "star" (or "stdstars")
+        band: str : BADAMP band bits to set. Values include 'b', 'r', 'z', or
+            combinations thereof such as 'brz'
 
-        output:
-             bitmask : 32 bit bitmask corresponding to the fiberbitmask of the desired kind
-                       in the desired cameras (bands).
+    Returns:
+        bitmask : 32 bit bitmask corresponding to the fiberbitmask of the desired kind
+            in the desired cameras (bands).
     """
     if kind.lower() == 'all':
         return get_all_fiberbitmask_with_amp(band)
@@ -153,10 +156,11 @@ def get_stdstars_fiberbitmask_val(band):
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
 
-    Note: does not include STUCKPOSITIONER or RESTRICTED, which could still
-    be on a valid sky location, or even a target for RESTRICTED.
-    Also does not include POORPOSITION which is bad for stdstars
-    but not necessarily fatal for otherwise processing a normal fiber.
+    Note:
+        Does not include STUCKPOSITIONER or RESTRICTED, which could still
+        be on a valid sky location, or even a target for RESTRICTED.
+        Also does not include POORPOSITION which is bad for stdstars
+        but not necessarily fatal for otherwise processing a normal fiber.
     """
     return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
             fmsk.BADPOSITION | \

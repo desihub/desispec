@@ -29,7 +29,7 @@ def numba_proj(image,x,sigma,flux) :
     '''
     Add a spectrum to a model of the pixel values in a CCD image assuming a Gaussian cross-dispersion profile.
 
-    Inputs:
+    Args:
        image: 2D numpy array , this array will be modified
        x: 1D numpy array of size image.shape[0], coordinate of center of cross-dispersion profile of spectral trace, in pixel units, for each CCD row
        sigma : 1D numpy array of size image.shape[0], sigma of cross-dispersion profile of spectral trace, in pixel units, for each CCD row
@@ -58,20 +58,19 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     spectra with a common sky model and a smoothing, followed by a reprojection
     on the CCD image.
 
-    Inputs:
-       image: a preprocessed image in the form of a desispec.image.Image object
-       xytraceset: a desispec.xytraceset.XYTraceSet object with trace coordinates
+    Args:
+        image: a preprocessed image in the form of a desispec.image.Image object
+        xytraceset: a desispec.xytraceset.XYTraceSet object with trace coordinates
+        fiberflat, optional: a desispec.fiberflat.FiberFlat object
+        with_spectral_smoothing, optional: try and smooth the spectra to reduce noise (and eventualy reduce variance correlation)
+        with_sky_model, optional: use a sky model as part of the spectral modeling to reduce the noise (requires a fiberflat)
+        spectral_smoothing_sigma_length, optional: sigma of Gaussian smoothing along wavelength in A
+        spectral_smoothing_nsig, optional: number of sigma rejection threshold to fall back to the original extracted spectrum instead of the smooth one
+        psf, optional specter.psf.GaussHermitePSF object to be used for the 1D projection (slow, by default=None, in which case a Gaussian profile is used)
+        fit_x_shift, optional: fit for an offset of the spectral traces.
 
-    Optional:
-       fiberflat: a desispec.fiberflat.FiberFlat object
-       with_spectral_smoothing: try and smooth the spectra to reduce noise (and eventualy reduce variance correlation)
-       with_sky_model: use a sky model as part of the spectral modeling to reduce the noise (requires a fiberflat)
-       spectral_smoothing_sigma_length: sigma of Gaussian smoothing along wavelength in A
-       spectral_smoothing_nsig: number of sigma rejection threshold to fall back to the original extracted spectrum instead of the smooth one
-       psf: specter.psf.GaussHermitePSF object to be used for the 1D projection (slow, by default=None, in which case a Gaussian profile is used)
-       fit_x_shift: fit for an offset of the spectral traces.
-    returns:
-       a 2D np.array of same shape as image.pix
+    Returns:
+        a 2D np.array of same shape as image.pix
     '''
 
     log=get_logger()

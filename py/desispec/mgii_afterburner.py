@@ -135,31 +135,36 @@ def get_spectra(spectra_name, redrock_name, lambda_width, index_to_fit,
 
     Args:
         spectra_name (str): The name of the spectra file.
-        redrock_name (str): The name of the redrock file associated to the spectra
-                          file.
+        redrock_name (str): The name of the redrock file associated to the spectra file.
         lambda_width (float): The width in wavelength (in Angstrom) considered
-                              for the fitting arount the MgII peak
+            for the fitting arount the MgII peak
         index_to_fit (boolean numpy array): boolean array of size 500 specifing which spectra have to be used
         add_linear_term (boolean): Add a linear term to the Gaussian peak term
-                                   to fit the continuum.
+            to fit the continuum.
         template_dir (str): If the redrock template variable is not loaded by
-                            the desi environment, specify the template path
+            the desi environment, specify the template path
         archetypes_dir (str): If not None, use the archetypes templates in the
-                              path specified
+            path specified
 
     Returns:
-        target_id (numpy array): Array containing target id of the the object
-                                 to fit
+        target_id (numpy array): Array containing target id of the the object to fit
+
         redshift_redrock (numpy array): Array containing the redshift of the the
-                                        object to fit
+        object to fit
+
         flux (numpy array): Array containing the full flux arrays of every
-                            object to fit
+        object to fit
+
         ivar_flux (numpy array): Array containing the inverse variance arrays
-                                 of every object to fit
+        of every object to fit
+
         model_flux (numpy array): Array containing the best fit redrock model
-                                  for every object to fit
+        for every object to fit
+
         wavelength (numpy array): Array containing the wavelength
-        index_with_fit (boolean numpy array): boolean array of index_to_fit size masking index where mgII fitter is not apply
+
+        index_with_fit (boolean numpy array): boolean array of index_to_fit
+        size masking index where mgII fitter is not apply
     """
     spectra = read_spectra(spectra_name)
     spectra = spectra.select(targets=spectra.fibermap["TARGETID"][index_to_fit])
@@ -212,25 +217,24 @@ def fit_mgii_line(target_id, redshift_redrock, flux, ivar_flux, model_flux, wave
     main parameters of the fit including parameter errors.
 
     Args:
-        target_id (numpy array): Array containing target id of the the object
-                                 to fit
+        target_id (numpy array): Array containing target id of the the object to fit
         redshift_redrock (numpy array): Array containing the redshift of the the
-                                        object to fit
+            object to fit
         flux (numpy array): Array containing the full flux arrays of every
-                            object to fit
+            object to fit
         ivar_flux (numpy array): Array containing the inverse variance arrays
-                                 of every object to fit
+            of every object to fit
         model_flux (numpy array): Array containing the best fit redrock model
-                                  for every object to fit
+            for every object to fit
         wavelength (numpy array): Array containing the wavelength
         lambda_width (float): The width in wavelength (in Angstrom) considered
-                              for the fitting arount the MgII peak
+            for the fitting arount the MgII peak
         add_linear_term (boolean): Add a linear term to the Gaussian peak term
-                                   to fit the continuum.
+            to fit the continuum.
         gaussian_smoothing_fit (float): If not None, the spectra is smoothed by
-                                        the given value before the fit
+            the given value before the fit
         mask_mgii (float): If not None, mask a region of near the MgII peak with
-                           the given witdh to fit double MgII peak (in progress)
+            the given witdh to fit double MgII peak (in progress)
 
     Returns:
         fit_results (numpy array): Array containing the parameters of the fit
@@ -311,22 +315,22 @@ def create_mask_fit(fit_results, max_sigma=None, min_sigma=None, min_deltachi2=N
     Args:
         fit_results (numpy array): Array containing the parameters of the fit
         max_sigma (float): Maximal value for the standard deviation of the
-                           fitted Gaussian peak
+            fitted Gaussian peak
         min_sigma (float): Minimal value for the standard deviation of the
-                           fitted Gaussian peak
+            fitted Gaussian peak
         min_deltachi2 (float): Minimal value for the difference of chi2 between
-                               redrock fit and MgII fitter over the lambda_width
-                               interval considered
+            redrock fit and MgII fitter over the lambda_width
+            interval considered
         min_A (float): Minimal value for the amplitude of the fitted Gaussian peak
         min_signifiance_A (float): Minimal signifiance for the amplitude of the
-                                   fitted Gaussian peak. The signifiance is here
-                                   define as the ratio between peak amplitude
-                                   and error on the peak amplitude.
+            fitted Gaussian peak. The signifiance is here
+            define as the ratio between peak amplitude
+            and error on the peak amplitude.
 
     Returns:
         mask (boolean numpy array): mask with the same length than
-                                    fit_results which indicates the objects
-                                    validating parameter constraints
+            fit_results which indicates the objects
+            validating parameter constraints
     """
     mask = np.full(fit_results.shape[0], True)
     if (max_sigma is not None):
@@ -356,34 +360,35 @@ def mgii_fitter(spectra_name, redrock_name, index_to_fit, lambda_width,
     Args:
         spectra_name (str): The name of the spectra file.
         redrock_name (str): The name of the redrock file associated to the spectra
-                          file.
+            file.
         lambda_width (float): The width in wavelength (in Angstrom) considered
-                              for the fitting arount the MgII peak
+            for the fitting arount the MgII peak
         index_to_fit (boolean numpy array): boolean array of size 500 specifing which spectra have to be used
         add_linear_term (boolean): Add a linear term to the Gaussian peak term
-                                   to fit the continuum.
+            to fit the continuum.
         template_dir (str): If the redrock template variable is not loaded by
-                            the desi environment, specify the template path
+            the desi environment, specify the template path
         archetypes_dir (str): If not None, use the archetypes templates in the
-                              path specified
+            path specified
         max_sigma (float): Maximal value for the standard deviation of the
-                           fitted Gaussian peak
+            fitted Gaussian peak
         min_sigma (float): Minimal value for the standard deviation of the
-                           fitted Gaussian peak
+            fitted Gaussian peak
         min_deltachi2 (float): Minimal value for the difference of chi2 between
-                               redrock fit and MgII fitter over the lambda_width
-                               interval considered
+            redrock fit and MgII fitter over the lambda_width
+            interval considered
         min_A (float): Minimal value for the amplitude of the fitted Gaussian peak
         min_signifiance_A (float): Minimal signifiance for the amplitude of the
-                                   fitted Gaussian peak. The signifiance is here
-                                   define as the ratio between peak amplitude
-                                   and error on the peak amplitude.
+            fitted Gaussian peak. The signifiance is here
+            define as the ratio between peak amplitude
+            and error on the peak amplitude.
 
     Returns:
         mask_fit (boolean numpy array): mask with the same length than
-                                        index_with_fit which indicates object
-                                        considered by MgII fitter as QSO
+        index_with_fit which indicates object considered by MgII fitter as QSO
+
         fit_results (numpy array): Array containing the parameters of the fit to save them
+
         index_with_fit (boolean numpy array): boolean array of index_to_fit size masking index where mgII fitter is not apply
     """
 
