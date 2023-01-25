@@ -18,7 +18,8 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
     get_terminal_steps, get_tables
-from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.proctable import get_processing_table_pathname, \
+    table_row_to_dict
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
@@ -210,7 +211,7 @@ def populate_night_info(night, check_on_disk=False,
                 expids = jobrow['EXPID']
                 firstexpid = expids[-1]
                 if np.sum(exptab['EXPID']==firstexpid) > 0:
-                    erow = exptab[exptab['EXPID']==firstexpid][0].copy()
+                    erow = table_row_to_dict(exptab[exptab['EXPID']==firstexpid][0])
                     erow['OBSTYPE'] = jobdesc
                     erow['ORDER'] = erow['ORDER']+1
                     exptab.add_row(erow)
