@@ -162,19 +162,23 @@ def populate_night_info(night, check_on_disk=False,
     ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
     ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
+    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['arc'] =      {'psf': 1,    'frame': 0, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['cteflat'] =  {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['flat'] =     {'psf': 1,    'frame': 1, 'ff': 1,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['nightlyflat'] = {'psf': 0,    'frame': 0, 'ff': 1,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['science'] =  {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 1, 'std': 1,   'cframe': 1}
     expected_by_type['twilight'] = {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['dark'] = expected_by_type['zero']
+    expected_by_type['ccdcalib'] = expected_by_type['zero']
+    expected_by_type['psfnight'] = expected_by_type['arc']
     expected_by_type['sky'] = expected_by_type['science']
     expected_by_type['null'] = expected_by_type['zero']
 
@@ -195,19 +199,33 @@ def populate_night_info(night, check_on_disk=False,
     expid_processing = set(
         [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
+    ## Add a new indexing column to include calibnight rows in correct location
+    exptab.add_column(Table.Column(data=2*np.arange(1,len(exptab)+1),name="ORDER"))
     if proctab is not None and len(proctab) > 0:
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
+        for jobdesc in ['ccdcalib', 'psfnight', 'nightlyflat']:
+            if jobdesc in proctab['JOBDESC']:
+                jobrow = proctab[proctab['JOBDESC']==jobdesc][0]
+                expids = jobrow['EXPID']
+                firstexpid = expids[-1]
+                if np.sum(exptab['EXPID']==firstexpid) > 0:
+                    erow = exptab[exptab['EXPID']==firstexpid][0].copy()
+                    erow['OBSTYPE'] = jobdesc
+                    erow['ORDER'] = erow['ORDER']+1
+                    exptab.add_row(erow)
 
     del proctab
+    exptab.sort(['ORDER'])
 
     logfiletemplate = os.path.join(logpath,
                                    '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
     fileglob_template = os.path.join(specproddir, 'exposures', str(night),
-                                     '{zexpid}',
-                                     '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
+                                     '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
+    fileglob_calib_template = os.path.join(specproddir, 'calibnight', str(night),
+                                           '{ftype}-{cam}[0-9]-{night}.{ext}')
 
-    def count_num_files(ftype, expid):
+    def count_num_files(ftype, expid=None):
         zfild_expid = str(expid).zfill(8)
         if ftype == 'stdstars':
             cam = ''
@@ -219,8 +237,12 @@ def populate_night_info(night, check_on_disk=False,
             ext = 'fits.gz'
         else:
             ext = 'fits*'  # - .fits or .fits.gz
-        fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
-                                            cam=cam, ext=ext)
+        if expid is None:
+            fileglob = fileglob_calib_template.format(ftype=ftype, cam=cam,
+                                                      ext=ext)
+        else:
+            fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
+                                                cam=cam, ext=ext)
         return len(glob.glob(fileglob))
 
     output = dict()
@@ -230,14 +252,15 @@ def populate_night_info(night, check_on_disk=False,
         expid = int(row['EXPID'])
         if expid in skipd_expids:
             continue
+        obstype = str(row['OBSTYPE']).lower().strip()
+        key = f'{obstype}_{expid}'
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
-        if night_json_info is not None and str(expid) in night_json_info \
-                and night_json_info[str(expid)]["COLOR"] in ['GOOD', 'NULL']:
-            output[str(expid)] = night_json_info[str(expid)]
+        if night_json_info is not None and key in night_json_info \
+                and night_json_info[key]["COLOR"] in ['GOOD', 'NULL']:
+            output[key] = night_json_info[key]
             continue
 
         zfild_expid = str(expid).zfill(8)
-        obstype = str(row['OBSTYPE']).lower().strip()
         tileid = str(row['TILEID'])
         if obstype == 'science':
             zfild_tid = tileid.zfill(6)
@@ -256,8 +279,7 @@ def populate_night_info(night, check_on_disk=False,
         proccamword = row['CAMWORD']
         if 'BADCAMWORD' in exptab.colnames:
             proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
-        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row[
-            'BADAMPS'] != '':
+        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row['BADAMPS'] != '':
             badcams = []
             for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
                 badcams.append(f'{camera}{petal}')
@@ -324,10 +346,15 @@ def populate_night_info(night, check_on_disk=False,
         nfiles = dict()
         if obstype == 'arc':
             nfiles['psf'] = count_num_files(ftype='fit-psf', expid=expid)
+        elif obstype == 'psfnight':
+            nfiles['psf'] = count_num_files(ftype='psfnight')
         else:
             nfiles['psf'] = count_num_files(ftype='psf', expid=expid)
         nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
-        nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
+        if obstype == 'nightlyflat':
+            nfiles['ff'] = count_num_files(ftype='fiberflatnight')
+        else:
+            nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
         nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
         nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
         nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
@@ -449,7 +476,7 @@ def populate_night_info(night, check_on_disk=False,
         rd["LOG FILE"] = log_hlink
         rd["COMMENTS"] = comments
         rd["STATUS"] = status
-        output[str(expid)] = rd.copy()
+        output[key] = rd.copy()
     return output
 
 
