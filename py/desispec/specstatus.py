@@ -19,12 +19,16 @@ def update_specstatus(specstatus, tiles, update_only=False,
 
     Returns: updated specstatus table, sorted by TILEID
 
-    New TILEID found in tiles are added to specstatus, and any entries
-    where tiles['LASTNIGHT'] > specstatus['LASTNIGHT'] (i.e. new data)
-    have their non-QA columns updated.
+    New TILEID found in tiles are added to specstatus, and any TILEID
+    already in specstatus have their non-QA columns updated from the
+    entries in tiles.
 
-    if update_only==True, update only non-QA related columns for tiles
-    where LASTNIGHT is updated (i.e., don't include reprocessed tiles).
+    If update_only==True, add any new tiles and update non-QA columns
+    for tiles with new data (tiles['LASTNIGHT'] > specstatus['LASTNIGHT'])
+    but don't change entries for reprocessed tiles that have no new data.
+
+    The QA-related columns that are not changed here are
+    USER, QA, OVERRIDE, ZDONE, QANIGHT, and ARCHIVEDATE.
 
     This does not modify either of the input tables.
     """
