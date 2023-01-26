@@ -17,12 +17,12 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: ['3.9']  # fuji+guadalupe, not ready for 3.10 yet
+                python-version: ['3.9', '3.10']  # fuji+guadalupe, not ready for 3.10 yet
                 astropy-version: ['==5.0', '<5.1']  # fuji+guadalupe, latest
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.5
+            DESIUTIL_VERSION: 3.2.6
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -60,7 +60,7 @@ jobs:
                 fitsio-version: ['==1.1.6']  # fuji+guadalupe version
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.5
+            DESIUTIL_VERSION: 3.2.6
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
