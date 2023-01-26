@@ -209,9 +209,9 @@ def populate_night_info(night, check_on_disk=False,
             if jobdesc in proctab['JOBDESC']:
                 jobrow = proctab[proctab['JOBDESC']==jobdesc][0]
                 expids = jobrow['EXPID']
-                firstexpid = expids[-1]
-                if np.sum(exptab['EXPID']==firstexpid) > 0:
-                    erow = table_row_to_dict(exptab[exptab['EXPID']==firstexpid][0])
+                lastexpid = expids[-1]
+                if lastexpid in exptab['EXPID']:
+                    erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
                     erow['OBSTYPE'] = jobdesc
                     erow['ORDER'] = erow['ORDER']+1
                     exptab.add_row(erow)
@@ -227,7 +227,6 @@ def populate_night_info(night, check_on_disk=False,
                                            '{ftype}-{cam}[0-9]-{night}.{ext}')
 
     def count_num_files(ftype, expid=None):
-        zfild_expid = str(expid).zfill(8)
         if ftype == 'stdstars':
             cam = ''
         else:
@@ -240,14 +239,14 @@ def populate_night_info(night, check_on_disk=False,
             ext = 'fits*'  # - .fits or .fits.gz
         if expid is None:
             fileglob = fileglob_calib_template.format(ftype=ftype, cam=cam,
-                                                      ext=ext)
+                                                      night=night, ext=ext)
         else:
+            zfild_expid = str(expid).zfill(8)
             fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
                                                 cam=cam, ext=ext)
         return len(glob.glob(fileglob))
 
     output = dict()
-    exptab.sort('EXPID')
     lasttile, first_exp_of_tile = None, None
     for row in exptab:
         expid = int(row['EXPID'])
@@ -344,22 +343,25 @@ def populate_night_info(night, check_on_disk=False,
             print(
                 f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
 
-        nfiles = dict()
+        nfiles = {step:0 for step in ['psf','frame','ff','sky','sframe','std','cframe']}
         if obstype == 'arc':
             nfiles['psf'] = count_num_files(ftype='fit-psf', expid=expid)
         elif obstype == 'psfnight':
             nfiles['psf'] = count_num_files(ftype='psfnight')
-        else:
+        elif obstype != 'nightlyflat':
             nfiles['psf'] = count_num_files(ftype='psf', expid=expid)
-        nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
-        if obstype == 'nightlyflat':
+
+        if obstype in ['ccdcalib', 'psfnight']:
+            pass
+        elif obstype == 'nightlyflat':
             nfiles['ff'] = count_num_files(ftype='fiberflatnight')
         else:
+            nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
             nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
-        nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
-        nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
-        nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
-        nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
+            nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
+            nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
+            nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
+            nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
 
         if terminal_step == 'std':
             nexpected = nspecs
