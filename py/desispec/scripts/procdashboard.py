@@ -23,7 +23,7 @@ from desispec.workflow.proctable import get_processing_table_pathname, \
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword
+    difference_camwords, parse_badamps, create_camword, camword_intersection
 
 
 def parse(options):
@@ -211,10 +211,54 @@ def populate_night_info(night, check_on_disk=False,
                 expids = jobrow['EXPID']
                 lastexpid = expids[-1]
                 if lastexpid in exptab['EXPID']:
-                    erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
-                    erow['OBSTYPE'] = jobdesc
-                    erow['ORDER'] = erow['ORDER']+1
-                    exptab.add_row(erow)
+                    joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
+                    joint_erow['OBSTYPE'] = jobdesc
+                    joint_erow['ORDER'] = erow['ORDER']+1
+
+                ## Derive the appropriate PROCCAMWORD from the exposure table
+                pcamwords = []
+                for expid in expids:
+                    if expid in exptab['EXPID']:
+                        erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+                        if 'BADCAMWORD' in erow:
+                            pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+                        else:
+                            pcamword = erow['CAMWORD']
+                        if len(erow['BADAMPS']) > 0:
+                            badcams = []
+                            for (camera, petal, amplifier) in parse_badamps(erow['BADAMPS']):
+                                badcams.append(f'{camera}{petal}')
+                            badampcamword = create_camword(list(set(badcams)))
+                            pcamword = difference_camwords(pcamword, badampcamword)
+                        pcamwords.append(pcamword)
+
+                if len(pcamwords) == 0:
+                    print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
+                    continue
+                ## For flats we want any camera that exists in all 12 exposures
+                ## For arcs we want any camera that exists in at least 3 exposures
+                if jobdesc == 'nightlyflat':
+                    joint_erow['CAMWORD'] = camword_intersection(pcamwords,
+                                                       full_spectros_only=False)
+                elif jobdesc == 'psfnight':
+                    ## Count number of exposures each camera is present for
+                    camcheck = {}
+                    for camword in pcamwords:
+                        for cam in decode_camword(camword):
+                            if cam in camcheck:
+                                camcheck[cam] += 1
+                            else:
+                                camcheck[cam] = 1
+                    ## if exists in 3 or more exposures, then include it
+                    goodcams = []
+                    for cam, camcount in camcheck.items():
+                        if camcount >= 3:
+                            goodcams.append(cam)
+                    joint_erow['CAMWORD'] = create_camword(goodcams)
+
+                joint_erow['BADCAMWORD'] = ''
+                joint_erow['BADAMPS'] = ''
+                exptab.add_row(joint_erow)
 
     del proctab
     exptab.sort(['ORDER'])
