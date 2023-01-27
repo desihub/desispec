@@ -213,10 +213,13 @@ def populate_night_info(night, check_on_disk=False,
                 if lastexpid in exptab['EXPID']:
                     joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
                     joint_erow['OBSTYPE'] = jobdesc
-                    joint_erow['ORDER'] = erow['ORDER']+1
-
+                    joint_erow['ORDER'] = joint_erow['ORDER']+1
+                    if len(expids) == 1:
+                        joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
+                    else:
+                        joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
                 ## Derive the appropriate PROCCAMWORD from the exposure table
-                pcamwords = []
+                pcamwords = []                
                 for expid in expids:
                     if expid in exptab['EXPID']:
                         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
