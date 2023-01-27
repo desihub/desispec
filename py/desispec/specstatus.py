@@ -10,22 +10,28 @@ from astropy.table import Table, vstack
 
 from desiutil.log import get_logger
 
-def update_specstatus(specstatus, tiles, update_all=False):
+def update_specstatus(specstatus, tiles, update_only=False,
+                      clear_qa=False):
     """
     return new specstatus table, updated with tiles table
 
     Args:
         specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
         tiles: astropy Table from spectro/redux/daily/tiles.csv
+        clear_qa: bool indicating whether QA data should be cleared
 
     Returns: updated specstatus table, sorted by TILEID
 
-    New TILEID found in tiles are added to specstatus, and any entries
-    where tiles['LASTNIGHT'] > specstatus['LASTNIGHT'] (i.e. new data)
-    have their non-QA columns updated.
+    New TILEID found in tiles are added to specstatus, and any TILEID
+    already in specstatus have their non-QA columns updated from the
+    entries in tiles.
 
-    if update_all==True, update all non-QA related columns even if LASTNIGHT
-    is the same (e.g. due to a reprocessing)
+    If update_only==True, add any new tiles and update non-QA columns
+    for tiles with new data (tiles['LASTNIGHT'] > specstatus['LASTNIGHT'])
+    but don't change entries for reprocessed tiles that have no new data.
+
+    The QA-related columns that are not changed here are
+    USER, QA, OVERRIDE, ZDONE, QANIGHT, and ARCHIVEDATE.
 
     This does not modify either of the input tables.
     """
@@ -78,7 +84,14 @@ def update_specstatus(specstatus, tiles, update_all=False):
     num_updatedtiles = 0
     for i, tileid in enumerate(tiles['TILEID']):
         j = np.where(specstatus['TILEID'] == tileid)[0][0]
-        if update_all or tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
+        if not update_only or tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
+            different = False
+            for col in specstatus.colnames:
+                if col not in qacols:
+                    if tiles[col][i] != specstatus[col][j]:
+                        different = True
+            if not different and not clear_qa:
+                continue
             log.info('Updating TILEID {} LASTNIGHT {} (orig LASTNIGHT {})'.format(
                 tileid, tiles['LASTNIGHT'][i], specstatus['LASTNIGHT'][j]))
 
@@ -86,10 +99,11 @@ def update_specstatus(specstatus, tiles, update_all=False):
             for col in specstatus.colnames:
                 if col not in qacols:
                     specstatus[col][j] = tiles[col][i]
+            if clear_qa:
+                specstatus['QA'][j] = 'none'
 
     log.info(f'Added {num_newtiles} and updated {num_updatedtiles} tiles')
 
     specstatus.sort('TILEID')
 
     return specstatus
-

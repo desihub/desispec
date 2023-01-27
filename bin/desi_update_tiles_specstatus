@@ -33,8 +33,10 @@ p.add_argument('--dry-run', action='store_true',
         help="Determine updates but don't write any files")
 p.add_argument('--force', action='store_true',
         help="run even if input specstatus is svn out-of-date")
-p.add_argument('--all', action='store_true',
-        help="update tiles even if LASTNIGHT isn't updated")
+p.add_argument('--only', action='store_true',
+        help="update tiles only if LASTNIGHT is updated")
+p.add_argument('--clear-qa', action='store_true',
+        help='Clear QA status.')
 
 args = p.parse_args()
 log = get_logger()
@@ -96,10 +98,16 @@ if args.tileids is not None:
         log.critical(f'TILEIDs {tileids} not found in {args.tilesfile}')
         sys.exit(1)
 
-if args.all:
-    log.info("Updating tiles even if LASTNIGHT isn't new")
+if args.only:
+    log.info("Updating only tiles with new LASTNIGHT")
 
-specstatus = update_specstatus(specstatus, tiles, update_all=args.all)
+if args.clear_qa and args.tileids is None:
+    log.critical('--clear-qa may only be set in conjunction with '
+                 'a specific list of tiles.')
+    sys.exit(1)
+
+specstatus = update_specstatus(specstatus, tiles, update_only=args.only,
+                               clear_qa=args.clear_qa)
 
 if not args.dry_run:
     tmpfile = get_tempfilename(args.outfile)

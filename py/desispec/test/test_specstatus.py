@@ -66,7 +66,7 @@ class TestSpecStatus(unittest.TestCase):
         orig_lastnight = specstatus['LASTNIGHT'][0]
         orig_efftime = specstatus['EFFTIME_SPEC'][0]
 
-        newstatus = update_specstatus(specstatus, tiles)
+        newstatus = update_specstatus(specstatus, tiles, update_only=True)
         #- new status has updated EFFTIME_SPEC because LASTNIGHT was new
         self.assertEqual(newstatus['LASTNIGHT'][0], tiles['LASTNIGHT'][0])
         self.assertEqual(newstatus['EFFTIME_SPEC'][0], tiles['EFFTIME_SPEC'][0])
@@ -99,7 +99,7 @@ class TestSpecStatus(unittest.TestCase):
 
         tiles['EFFTIME_SPEC'] += 1  #- should be updated
         tiles['QA'] = 'good'        #- should be skipped
-        newstatus = update_specstatus(specstatus, tiles, update_all=True)
+        newstatus = update_specstatus(specstatus, tiles)
 
         #- LASTNIGHT didn't change
         self.assertTrue(np.all(newstatus['LASTNIGHT'] == specstatus['LASTNIGHT']))
@@ -135,11 +135,11 @@ class TestSpecStatus(unittest.TestCase):
         tiles = self._create_tiles(3)
         tiles['LASTNIGHT'] -= 1
 
-        newstatus = update_specstatus(specstatus, tiles, update_all=False)
+        newstatus = update_specstatus(specstatus, tiles, update_only=True)
         self.assertTrue(np.all(newstatus['LASTNIGHT'] == specstatus['LASTNIGHT']))
         self.assertTrue(np.all(newstatus['LASTNIGHT'] != tiles['LASTNIGHT']))
 
-        newstatus = update_specstatus(specstatus, tiles, update_all=True)
+        newstatus = update_specstatus(specstatus, tiles, update_only=False)
         self.assertTrue(np.all(newstatus['LASTNIGHT'] != specstatus['LASTNIGHT']))
         self.assertTrue(np.all(newstatus['LASTNIGHT'] == tiles['LASTNIGHT']))
 
@@ -153,4 +153,3 @@ def test_suite():
 #- run all unit tests in this file
 if __name__ == '__main__':
     unittest.main()
-
