@@ -1,8 +1,8 @@
 """
-desispec.exposure_qa
-============
+desispec.tile_qa
+================
 
-Utility functions to compute an exposure QA scores.
+Utility functions to compute an exposure QA scores (or is it tile?).
 """
 
 import os,sys
@@ -31,15 +31,20 @@ def _rm_meta_keywords(table) :
 def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cumulative'):
     """
     Computes the exposure_qa
+
     Args:
-       night: int, YYYYMMDD
-       tileid: int, tile id
-       specprod_dir: str, specify the production directory.
-                     default is $DESI_SPECTRO_REDUX/$SPECPROD
-       exposure_qa_dir: str, optional, directory where the exposure qa are saved
-       group: str, "cumulative" or "pernight" tile group
-    returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
-            and petalqa (with one row per petal and at least a PETAL_LOC column)
+        night (int): YYYYMMDD
+        tileid (int): tile id
+        specprod_dir (str): specify the production directory.
+            default is $DESI_SPECTRO_REDUX/$SPECPROD
+        exposure_qa_dir: str, optional, directory where the exposure qa are saved
+        group: str, "cumulative" or "pernight" tile group
+
+    Returns:
+        tuple: A tuple of astropy.table.Table:
+
+        * fiberqa (with one row per target and at least a TARGETID column)
+        * petalqa (with one row per petal and at least a PETAL_LOC column)
     """
 
     log=get_logger()

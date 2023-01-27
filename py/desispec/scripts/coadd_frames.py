@@ -1,5 +1,8 @@
 """
-Coadd spectra
+desispec.spectra.coadd_frames
+=============================
+
+Coadd spectra.
 """
 
 from __future__ import absolute_import, division, print_function

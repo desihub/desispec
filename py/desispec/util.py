@@ -1,5 +1,8 @@
 """
-Utility functions for desispec
+desispec.util
+=============
+
+Utility functions for desispec.
 """
 from __future__ import absolute_import, division, print_function
 import argparse
@@ -146,7 +149,7 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
             success = (result == 0)
 
     except (BaseException, Exception) as e:
-        frame,filename,line_number,function_name,lines,index = inspect.stack()[1] 
+        frame,filename,line_number,function_name,lines,index = inspect.stack()[1]
         log.critical(f'FAILED rank {rank} exception while running {cmdstr} called from line {line_number} in {filename}')
         result = e
         success = False

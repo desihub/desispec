@@ -1,4 +1,7 @@
 """
+desispec.scripts.proc_tilenight
+===============================
+
 Script for science processing of a given DESI tile and night
 """
 import sys
@@ -103,7 +106,7 @@ def main(args=None, comm=None):
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
 
-    joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True) 
+    joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True)
 
     poststd_camwords = dict()
     for expid, camword in prestd_camwords.items():
@@ -139,7 +142,7 @@ def main(args=None, comm=None):
             args.tileid, args.night, prestdstar_expids))
         log.info('Output root {}'.format(specprod_root()))
         log.info('----------')
-    
+
     #- common arguments
     common_args = f'--night {args.night}'
     if args.no_gpu:

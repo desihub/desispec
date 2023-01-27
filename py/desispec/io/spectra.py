@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.io.spectra
-=====================
+===================
 
 I/O routines for working with spectral grouping files.
 

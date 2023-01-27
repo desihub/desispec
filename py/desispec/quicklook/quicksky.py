@@ -1,7 +1,8 @@
 """
 desispec.quicklook.quicksky
+===========================
 
-Here will be the sky computing and sky subtraction routines for QL
+Here will be the sky computing and sky subtraction routines for QL.
 """
 import sys
 import numpy as np
@@ -40,14 +41,14 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
     skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     skyfluxes=fframe.flux[skyfibers]
     skyivars=fframe.ivar[skyfibers]
-    
-   
+
+
     nfibers=len(skyfibers)
 
     if apply_resolution:
         max_iterations=100
         current_ivar=skyivars.copy()
-        Rsky = fframe.R[skyfibers] 
+        Rsky = fframe.R[skyfibers]
         sqrtw=np.sqrt(skyivars)
         sqrtwflux=sqrtw*skyfluxes
 
@@ -75,7 +76,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
                 B += sqrtwR.T*sqrtwflux[fiber]
 
             print("iter %d solving"%iteration)
-    
+
             w = A.diagonal()>0
             A_pos_def = A.todense()[w,:]
             A_pos_def = A_pos_def[:,w]
@@ -160,7 +161,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
         # need to do better here
         mask = (finalskyivar==0).astype(np.uint32)
 
-    else: #- compute weighted average sky ignoring the fiber/wavelength resolution 
+    else: #- compute weighted average sky ignoring the fiber/wavelength resolution
         if skyfibers.shape[0] > 1:
 
             weights=skyivars
@@ -174,18 +175,18 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
             meanskyflux=skyfluxes
             meanskyivar=skyivars
 
-        #- Create a 2d- sky model replicating this  
+        #- Create a 2d- sky model replicating this
         finalskyflux=np.tile(meanskyflux,nspec).reshape(nspec,nwave)
         finalskyivar=np.tile(meanskyivar,nspec).reshape(nspec,nwave)
         mask=fframe.mask
-        
+
     skymodel=SkyModel(fframe.wave,finalskyflux,finalskyivar,mask)
     return skymodel
-    
-  
+
+
 def subtract_sky(fframe,skymodel):
     """
-    skymodel: skymodel object. 
+    skymodel: skymodel object.
     fframe: frame object to do the sky subtraction, should be already fiber flat fielded
     need same number of fibers and same wavelength grid
     """
@@ -207,4 +208,4 @@ def subtract_sky(fframe,skymodel):
     #- create a frame object now
     #sframe=fr.Frame(fframe.wave,sflux,sivar,smask,fframe.resolution_data,meta=fframe.meta,fibermap=fframe.fibermap)
     return fframe
-    
+

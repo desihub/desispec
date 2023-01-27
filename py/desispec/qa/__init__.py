@@ -1,3 +1,8 @@
+"""
+desispec.qa
+===========
+
+"""
 from __future__ import absolute_import, division, print_function
 
 from .qa_exposure import QA_Exposure

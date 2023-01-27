@@ -38,9 +38,9 @@ def main(args=None) :
             if args.program != inflat.header["PROGRAM"] :
                 log.info("skip {}".format(filename))
                 continue
-                
+
         inputs.append(read_fiberflat(filename))
     fiberflat = average_fiberflat(inputs)
     write_fiberflat(args.outfile,fiberflat)
     log.info("successfully wrote %s"%args.outfile)
-    
+

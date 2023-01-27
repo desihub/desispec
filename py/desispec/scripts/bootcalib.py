@@ -4,10 +4,10 @@ desispec.scripts.bootcalib
 
 Utility functions to perform a quick calibration of DESI data
 
-TODO:
-1. Expand to r, i cameras
-2. QA plots
-3. Test with CR data
+Todo:
+    1. Expand to r, i cameras
+    2. QA plots
+    3. Test with CR data
 """
 from __future__ import print_function, absolute_import, division
 
@@ -45,7 +45,7 @@ def parse(options=None):
     parser.add_argument('--good-lines', type = str, default = None, required=False,
                         help = 'ascii files with good lines (default is data/arc_lines/goodlines_vacuum.ascii)')
     parser.add_argument('--threshold', type = float, default = None, required=False, help = 'use this threshold to detect traces (default is automatic)')
-    
+
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
@@ -85,7 +85,7 @@ def main(args):
     if args.fiberflat is not None and args.contfile is None :
         args.contfile=args.fiberflat
         log.warning("Please use --contfile instead of --fiberflat")
-    
+
 
     if (args.psffile is None) and (args.contfile is None):
         raise IOError("Must provide either a PSF file or a contfile")

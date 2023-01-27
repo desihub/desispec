@@ -1,6 +1,7 @@
 """
-desispec.scripts.trace_shifts
-=============================
+desispec.scripts.fibercrosstalk
+===============================
+
 """
 from __future__ import absolute_import, division
 

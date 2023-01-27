@@ -1,5 +1,7 @@
-
 """
+desispec.scripts.rejectcosmics
+==============================
+
 This script finds cosmics in a pre-processed image and write the result in the mask extension of an output image
 (output can be same as input).
 """

@@ -1,5 +1,9 @@
-""" Class to organize QA for multiple exposures
-Likely to only be used as parent of QA_Night or QA_Prod
+"""
+desispec.qa.qa_multiexp
+=======================
+
+Class to organize QA for multiple exposures.
+Likely to only be used as parent of QA_Night or QA_Prod.
 """
 
 from __future__ import print_function, absolute_import, division

@@ -5,7 +5,10 @@ desispec Change Log
 0.56.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Update API documentation (PR `#1981`_).
+
+.. _`#1981`: https://github.com/desihub/desispec/pull/1981
+
 
 0.56.3 (2023-01-24)
 -------------------

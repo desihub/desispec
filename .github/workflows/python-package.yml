@@ -17,12 +17,12 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: ['3.9']  # fuji+guadalupe, not ready for 3.10 yet
+                python-version: ['3.9', '3.10']  # fuji+guadalupe, not ready for 3.10 yet
                 astropy-version: ['==5.0', '<5.1']  # fuji+guadalupe, latest
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.5
+            DESIUTIL_VERSION: 3.2.6
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -60,7 +60,7 @@ jobs:
                 fitsio-version: ['==1.1.6']  # fuji+guadalupe version
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.5
+            DESIUTIL_VERSION: 3.2.6
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -114,6 +114,35 @@ jobs:
               # run: python -m pip install --upgrade pip wheel docutils\<0.18 Sphinx==3.1.2
             - name: Test the documentation
               run: sphinx-build -W --keep-going -b html doc doc/_build/html
+
+    api:
+        name: API doc completeness test
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest]
+                python-version: ['3.9']
+        env:
+            DESIUTIL_VERSION: module-script
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                fetch-depth: 0
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v2
+              with:
+                python-version: ${{ matrix.python-version }}
+            - name: Install Python dependencies
+              run: |
+                python -m pip install --upgrade pip setuptools wheel
+                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
+            - name: Generate api.rst
+              run: desi_api_file --api ./api.rst desispec
+            - name: Compare generated api.rst to checked-in version
+              run: diff --ignore-space-change --ignore-blank-lines ./api.rst ./doc/api.rst
 
     style:
         name: Style check

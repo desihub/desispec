@@ -1,4 +1,8 @@
+"""
+desispec.workflow.redshifts
+===========================
 
+"""
 import sys, os, glob
 import re
 import subprocess
@@ -134,30 +138,28 @@ def create_desi_zproc_batch_script(group,
     Args:
         group (str): Description of the job to be performed. zproc options include:
                      'perexp', 'pernight', 'cumulative'.
-
-    Options:
-        tileid (int): The tile id for the data.
-        cameras (str or list of str): List of cameras to include in the processing
+        tileid (int), optional: The tile id for the data.
+        cameras (str or list of str), optional: List of cameras to include in the processing
                                       or a camword.
-        thrunight (int). For group=cumulative, include exposures through this night
-        nights (list of int). The nights the data was acquired.
-        expids (list of int): The exposure id(s) for the data.
-        healpix (list of int): healpixels to process (group='healpix')
-        queue (str): Queue to be used.
-        batch_opts (str): Other options to give to the slurm batch scheduler (written into the script).
-        runtime (str): Timeout wall clock time in minutes.
-        timingfile (str): Specify the name of the timing file.
-        batchdir (str): can define an alternative location to write the file. The default
+        thrunight (int), optional: For group=cumulative, include exposures through this night
+        nights (list of int), optional: The nights the data was acquired.
+        expids (list of int), optional: The exposure id(s) for the data.
+        healpix (list of int), optional: healpixels to process (group='healpix')
+        queue (str), optional: Queue to be used.
+        batch_opts (str), optional: Other options to give to the slurm batch scheduler (written into the script).
+        runtime (str), optional: Timeout wall clock time in minutes.
+        timingfile (str), optional: Specify the name of the timing file.
+        batchdir (str), optional: can define an alternative location to write the file. The default
                   is to SPECPROD under run/scripts/tiles/GROUP/TILE/NIGHT
-        jobname (str): name to save this batch script file as and the name of the eventual log file. Script is save  within
+        jobname (str), optional: name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
-        cmdline (str or list of str): Complete command as would be given in terminal to run the desi_zproc,
+        cmdline (str or list of str), optional: Complete command as would be given in terminal to run the desi_zproc,
                  or list of args.  Can be used instead of reading from argv.
-        system_name (str): name of batch system, e.g. cori-haswell, cori-knl
-        max_gpuprocs (int): Number of gpu processes
-        no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
-        run_zmtl (bool): Default false. If true it runs zmtl.
-        no_afterburners (bool): Default false. If true it doesn't run afterburners.
+        system_name (str), optional: name of batch system, e.g. cori-haswell, cori-knl
+        max_gpuprocs (int), optional: Number of gpu processes
+        no_gpu (bool), optional: Default false. If true it doesn't use GPU's even if available.
+        run_zmtl (bool), optional: Default false. If true it runs zmtl.
+        no_afterburners (bool), optional: Default false. If true it doesn't run afterburners.
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -422,6 +424,3 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
         exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
 
     return vstack(exptables)
-
-
-

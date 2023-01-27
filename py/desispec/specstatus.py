@@ -1,5 +1,8 @@
 """
-Update surveyops/ops/tile-specstatus.ecsv with spectro pipeline tiles.csv
+desispec.specstatus
+===================
+
+Update surveyops/ops/tile-specstatus.ecsv with spectro pipeline tiles.csv.
 """
 
 import numpy as np

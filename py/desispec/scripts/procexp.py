@@ -1,4 +1,7 @@
 """
+desispec.scripts.procexp
+========================
+
 This script processes an exposure by applying fiberflat, sky subtraction,
 spectro-photometric calibration depending on input.  Optionally, includes
 tsnr in the scores hdu.

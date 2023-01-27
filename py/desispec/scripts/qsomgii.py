@@ -1,5 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.scripts.qsomgii
+========================
+
+"""
 
 import os
 import sys
@@ -75,15 +78,17 @@ def select_targets_with_mgii_fitter(redrock, fibermap, sel_to_mgii, spectra_name
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
+
     Args:
         redrock: fitsio hdu 'REDSHIFTS' from redrock file
         fibermap:  fitsio hdu 'FIBERMAP' from redrock file
         sel_to_mgii (bool array): size 500. Select on which objects mgii will be apply (index based on redrock table)
         spectra_name / redrock_name (str): The name of the spectra / associated redrock file
         param_mgii_fitter (dict): contains info for the MgII fitter as lambda_width, max_sigma
-                                  min_sigma, min_deltachi2, min_signifiance_A, min_A
+            min_sigma, min_deltachi2, min_signifiance_A, min_A
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
         save_target (str) : restricted (save only IS_QSO_MGII==true targets) / all (save all the sample)
+
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
@@ -167,11 +172,13 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     """
     Save info from pandas dataframe in a fits file. Need to write the dtype array
     because of the list in the pandas dataframe (no other solution found)
+
     Args:
         dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
         filename (str):  name of the fits file
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
         clobber (bool): overwrite the fits file defined by filename ?
+
     Returns:
         None
     """

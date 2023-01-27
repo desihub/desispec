@@ -1,3 +1,8 @@
+"""
+desispec.desi_proc_time_distribution
+====================================
+
+"""
 import argparse
 import os,glob
 import astropy
@@ -14,15 +19,16 @@ import matplotlib.pyplot as plt
 
 
 class DESI_PROC_TIME_DISTRIBUTION(object):
-    """ Code to generate a webpage for monitoring of desi_dailyproc production status   
-    Usage:
-    Normal Mode:
-    desi_proc_time_distribution -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
-    python3 desi_proc_time_distribution.py -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ 
-    Cron job script:
-*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/workflow/proc_dashboard_funcs.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
+    """ Code to generate a webpage for monitoring of desi_dailyproc production status
 
+    Normal Mode::
 
+        desi_proc_time_distribution -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+        python3 desi_proc_time_distribution.py -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+
+    Cron job script::
+
+        */30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/workflow/proc_dashboard_funcs.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
     """
 
     def __init__(self):
@@ -120,7 +126,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
 
     def _init_parser(self,parser):
         """
-        Initialize the parser to read input 
+        Initialize the parser to read input
         """
         parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor")
         parser.add_argument('--n_night', type=str, default = None, required = False, help="all:all nights. ifdigit: the last n nights.")
@@ -132,19 +138,24 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
     def calculate_one_night(self,night):
         """
         For a given night, return the file counts and other other information for each exposure taken on that night
-        input: night
-        output: a dictionary containing the statistics with expid as key name
-        FLAVOR: FLAVOR of this exposure
-        OBSTYPE: OBSTYPE of this exposure
-        EXPTIME: Exposure time
-        SPECTROGRAPHS: a list of spectrographs used
-        n_spectrographs: number of spectrographs
-        n_psf: number of PSF files
-        n_ff:  number of fiberflat files
-        n_frame: number of frame files
-        n_sframe: number of sframe files
-        n_cframe: number of cframe files
-        n_sky: number of sky files
+
+        Args:
+            night
+
+        Returns:
+            A dictionary containing the statistics with expid as key name::
+
+                FLAVOR: FLAVOR of this exposure
+                OBSTYPE: OBSTYPE of this exposure
+                EXPTIME: Exposure time
+                SPECTROGRAPHS: a list of spectrographs used
+                n_spectrographs: number of spectrographs
+                n_psf: number of PSF files
+                n_ff:  number of fiberflat files
+                n_frame: number of frame files
+                n_sframe: number of sframe files
+                n_cframe: number of cframe files
+                n_sky: number of sky files
         """
         output_arc={}
         output_flat={}
@@ -165,7 +176,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
             time_this=float(time[0])*60.+float(time[1])+float(time[2])/60.
             table_output.add_row([night,'arc',jobid_this,expid_this,time_this])
             #output_arc[jobid_this]={'expid':expid_this,'time':time_this}
-        
+
         for file_this in file_flat:
             jobid_this=file_this.split('.')[0].split('-')[-1]
             expid_this=file_this.split('-')[2]
@@ -187,7 +198,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
 
     def _initialize_page(self):
         """
-        Initialize the html file for showing the statistics, giving all the headers and CSS setups. 
+        Initialize the html file for showing the statistics, giving all the headers and CSS setups.
         """
         #strTable="<html><style> table {font-family: arial, sans-serif;border-collapse: collapse;width: 100%;}"
         #strTable=strTable+"td, th {border: 1px solid #dddddd;text-align: left;padding: 8px;}"
@@ -226,7 +237,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         border: 1px solid #888;
         width: 80%;
         }
-        
+
 
        /* The Close Button */
        .close {
@@ -249,10 +260,13 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
     def _add_html_table(self,table,night):
         """
         Add a collapsible and extendable table to the html file for one specific night
-        Input
-        table: the table generated by 'calculate_one_night'
-        night: like 20200131
-        output: The string to be added to the html file
+
+        Args:
+            table: the table generated by 'calculate_one_night'
+            night: like 20200131
+
+        Returns:
+            The string to be added to the html file
         """
         heading="Night "+night
         strTable="<button class='collapsible'>"+heading+"</button><div class='content' style='display:inline-block;min-height:0%;'>"
@@ -300,7 +314,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
                        content.style.maxHeight = null;
                     } else {
                       content.style.maxHeight = '0px';
-                            } 
+                            }
                     });
              };
              var b1 = document.getElementById('b1');
@@ -361,7 +375,7 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
         return set(newexp)
 
     def check_running(self):
-        """ 
+        """
         Check if the desi_dailyproc process is running
         """
         import psutil
@@ -372,6 +386,6 @@ class DESI_PROC_TIME_DISTRIBUTION(object):
                 running='Yes'
         return running
 
-        
+
 if __name__=="__main__":
     process=DESI_PROC_TIME_DISTRIBUTION()

@@ -1,6 +1,7 @@
-#!/usr/bin/env python
-
 '''
+desispec.scripts.update_spectra
+===============================
+
 Update healpix-grouped spectra from a set of input cframe files
 '''
 
@@ -23,7 +24,7 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def main(args) :    
+def main(args) :
 
     #- Get output file location if not provided
     if args.outfile is None:

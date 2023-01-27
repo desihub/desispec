@@ -1,4 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.workflow.desi_proc_funcs
+=================================
+
+"""
 import json
 import time
 
@@ -149,9 +153,11 @@ def assign_mpi(do_mpi, do_batch, log):
         log: desi log object for reporting
 
     Returns:
-        comm: MPI communicator object
-        rank: int, the numeric number assigned to the currenct MPI rank
-        size: int, the total number of MPI ranks
+        tuple: A tuple containing:
+
+        * comm: MPI communicator object
+        * rank: int, the numeric number assigned to the currenct MPI rank
+        * size: int, the total number of MPI ranks
     """
     if do_mpi and not do_batch:
         from mpi4py import MPI
@@ -190,10 +196,13 @@ def load_raw_data_header(pathname, return_filehandle=False):
     Args:
         pathname: str, the full path to the raw data file
         return_filehandle: bool, whether to return the open file handle or to close
-                                 it and only return the header. Default is False.
+            it and only return the header. Default is False.
+
     Returns:
-        hdr: fitsio header object from the file at pathname
-        fx:  optional, fitsio file object returned only if return_filehandle is True
+        tuple: A tuple containing:
+
+        * hdr: fitsio header object from the file at pathname
+        * fx:  optional, fitsio file object returned only if return_filehandle is True
     """
     # - Fill in values from raw data header if not overridden by command line
     fx = fitsio.FITS(pathname)
@@ -220,9 +229,10 @@ def cameras_from_raw_data(rawdata):
 
     Args:
         rawdata, str or fitsio.FITS object. The input raw desi data file. str must be a full file path. Otherwise
-                                            it must be a fitsio.FITS object.
+            it must be a fitsio.FITS object.
+
     Returns:
-        cameras, str. The list of cameras that have data in the given file.
+        str: The list of cameras that have data in the given file.
     """
     ## Be flexible on whether input is filepath or a filehandle
     if type(rawdata) is str:
@@ -250,10 +260,12 @@ def update_args_with_headers(args):
                   by the function get_desi_proc_parser().
 
     Returns:
-        args: modified version of the input args where values have been updated if None using information from
-                  appropriate headers using either night+expid or an input file.
-        hdr: fitsio header object obtained using *.read_header() on input file or file determined from args information.
-        camhdr: dict, dictionary of fitsio header objects for each camera in the input files.
+        tuple: A tuple containing:
+
+        * args: modified version of the input args where values have been updated if None using information from
+          appropriate headers using either night+expid or an input file.
+        * hdr: fitsio header object obtained using ``read_header()`` on input file or file determined from args information.
+        * camhdr: dict, dictionary of fitsio header objects for each camera in the input files.
 
     Note:
         The input args is modified and returned here.
@@ -316,13 +328,12 @@ def log_timer(timer, timingfile=None, comm=None):
 
     Args:
         timer: desiutil.timer.Timer object
-
-    Options:
         timingfile (str): write json output to this file
         comm: MPI communicator
 
-    If comm is not None, collect timers across ranks.
-    If timingfile already exists, read and append timing then re-write.
+    Notes:
+        * If comm is not None, collect timers across ranks.
+        * If timingfile already exists, read and append timing then re-write.
     """
 
     log = get_logger()
@@ -364,21 +375,21 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     desi_proc needs for the given input information.
 
     Args:
-        ncameras: int, number of cameras to be processed
-        jobdesc: str, type of data being processed
-        queue: str, the queue at NERSC to be submitted to. 'realtime' will force
-                    restrictions on number of nodes.
-
-    Options:
-        nexps: int, the number of exposures processed in this step
-        force_runtime: int, the amount of runtime in minutes to allow for the script. Should be left
-                            to default heuristics unless needed for some reason.
-        system_name: str, batch compute system, e.g. cori-haswell or perlmutter-gpu
+        ncameras (int): number of cameras to be processed
+        jobdesc (str): type of data being processed
+        queue (str): the queue at NERSC to be submitted to. 'realtime' will force
+            restrictions on number of nodes.
+        nexps (int, optional): the number of exposures processed in this step
+        force_runtime (int, optional): the amount of runtime in minutes to allow for the script. Should be left
+            to default heuristics unless needed for some reason.
+        system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
-        ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
-        nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // cores_per_node + 1
-        runtime: int, the max time requested for the script in minutes for the processing.
+        tuple: A tuple containing:
+
+        * ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
+        * nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // cores_per_node + 1
+        * runtime: int, the max time requested for the script in minutes for the processing.
     """
     if system_name is None:
         system_name = batch.default_system(jobdesc=jobdesc)
@@ -498,11 +509,11 @@ def get_desi_proc_batch_file_path(night,reduxdir=None):
     Returns the default directory location to store a batch script file given a night
 
     Args:
-        night: str or int, defines the night (should be 8 digits)
-        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live.
+        night (str or int): defines the night (should be 8 digits)
+        reduxdir (str, optional): define the base directory where the /run/scripts directory should or does live.
 
     Returns:
-        batchdir: str, the default location where a batch script file should be written
+        str: the default location where a batch script file should be written
     """
     if reduxdir is None:
         reduxdir = desispec.io.specprod_root()
@@ -590,45 +601,39 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     name = get_desi_proc_tilenight_batch_file_name(night,tileid)
     return os.path.join(path, name)
 
-def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
+def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
                                   use_specter=False, no_gpu=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
     Args:
-        night: str or int. The night the data was acquired
-        exp: str, int, or list of ints. The exposure id(s) for the data.
-        cameras: str or list of str. List of cameras to include in the processing.
-        jobdesc: str. Description of the job to be performed. Used to determine requested resources
-                      and whether to operate in a more mpi parallelism (all except poststdstar) or less (only poststdstar).
-                      Directly relate to the obstype, with science exposures being split into two (pre, post)-stdstar,
-                         and adding joint fit categories stdstarfit, psfnight, and nightlyflat.
-                      Options include:
-                     'prestdstar', 'poststdstar', 'stdstarfit', 'arc', 'flat', 'psfnight', 'nightlyflat'
-        queue: str. Queue to be used.
-
-    Options:
-        runtime: str. Timeout wall clock time.
-        batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
-        timingfile: str. Specify the name of the timing file.
-        batchdir: str. Specify where the batch file will be written.
-        jobname: str. Specify the name of the slurm script written.
-        cmdline: str. Complete command as would be given in terminal to run the desi_proc. Can be used instead
-                      of reading from argv.
-        batchdir: can define an alternative location to write the file. The default is to SPECPROD under run/scripts/night/NIGHT
-        jobname: name to save this batch script file as and the name of the eventual log file. Script is save  within
-                 the batchdir directory.
-        system_name: name of batch system, e.g. cori-haswell, cori-knl
-        use_specter: bool. Use classic specter instead of gpu_specter for extractions
-        no_gpu: bool. Do not use GPU even if available
+        night (str or int): The night the data was acquired
+        exp (str, int, or list of int): The exposure id(s) for the data.
+        cameras (str or list of str): List of cameras to include in the processing.
+        jobdesc (str): Description of the job to be performed. Used to determine requested resources
+            and whether to operate in a more mpi parallelism (all except poststdstar) or less (only poststdstar).
+            Directly relate to the obstype, with science exposures being split into two (pre, post)-stdstar,
+            and adding joint fit categories stdstarfit, psfnight, and nightlyflat.
+            Options include: 'prestdstar', 'poststdstar', 'stdstarfit', 'arc', 'flat', 'psfnight', 'nightlyflat'
+        queue (str): Queue to be used.
+        runtime (str, optional): Timeout wall clock time.
+        batch_opts (str, optional): Other options to give to the slurm batch scheduler (written into the script).
+        timingfile (str, optional): Specify the name of the timing file.
+        batchdir (str, optional): Specify where the batch file will be written.
+        jobname (str, optional): Specify the name of the slurm script written.
+        cmdline (str, optional): Complete command as would be given in terminal to run the desi_proc. Can be used instead
+            of reading from argv.
+        system_name (str, optional): name of batch system, e.g. cori-haswell, cori-knl
+        use_specter (bool, optional): Use classic specter instead of gpu_specter for extractions
+        no_gpu (bool, optional): Do not use GPU even if available
 
     Returns:
         scriptfile: the full path name for the script written.
 
     Note:
         batchdir and jobname can be used to define an alternative pathname, but may not work with assumptions in desi_proc.
-            These optional arguments should be used with caution and primarily for debugging.
+        These optional arguments should be used with caution and primarily for debugging.
     """
     if np.isscalar(cameras):
         camword = cameras
@@ -999,19 +1004,19 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
 
 def find_most_recent(night, file_type='psfnight', cam='r', n_nights=30):
     '''
-       Searches back in time for either psfnight or fiberflatnight (or anything supported by
-       desispec.calibfinder.findcalibfile. This only works on nightly-based files, so exposure id
-       information is not used.
+    Searches back in time for either psfnight or fiberflatnight (or anything supported by
+    desispec.calibfinder.findcalibfile. This only works on nightly-based files, so exposure id
+    information is not used.
 
-       Inputs:
-         night : str. YYYYMMDD   night to look back from
-         file_type : str. psfnight or fiberflatnight
-         cam : str. camera (b, r, or z).
-         n_nights : int.  number of nights to step back before giving up
+    Args:
+        night : str. YYYYMMDD   night to look back from
+        file_type : str. psfnight or fiberflatnight
+        cam : str. camera (b, r, or z).
+        n_nights : int.  number of nights to step back before giving up
 
-      returns:
-         nightfile : str. Full pathname to calibration file of interest.
-                     If none found, None is returned.
+    Returns:
+        str: Full pathname to calibration file of interest.
+        If none found, None is returned.
 
     '''
     # Set the time as Noon on the day in question

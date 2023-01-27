@@ -1,6 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.workflow.proctable
+===========================
 
+"""
 
 import numpy as np
 import os
@@ -63,8 +65,7 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     Returns:
         colnames, list. List of column names for an processing table.
         coldtypes, list. List of column datatypes for the names in colnames.
-        coldeflts, list. Optionally returned if return_default_values is True. List of default values for the
-                         corresponding colnames.
+        coldeflts, list. Optionally returned if return_default_values is True. List of default values for the corresponding colnames.
     """
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
@@ -125,9 +126,9 @@ def get_processing_table_name(specprod=None, prodmod=None, extension='csv'):
     Args:
         specprod, str or None. The name of the production. If None, it will be taken from the environment variable.
         prodmod, str. Additional str that can be added to the production table name to further differentiate it.
-                      Used in daily workflow to add the night to the name and make it unique from other nightly tables.
+            Used in daily workflow to add the night to the name and make it unique from other nightly tables.
         extension, str. The extension (and therefore data format) without a leading period of the saved table.
-                        Default is 'csv'.
+            Default is 'csv'.
 
     Returns:
         str. The processing table name given the input night and extension.
@@ -175,9 +176,9 @@ def get_processing_table_pathname(specprod=None, prodmod=None, extension='csv'):
     Args:
         specprod, str or None. The name of the production. If None, it will be taken from the environment variable.
         prodmod, str. Additional str that can be added to the production table name to further differentiate it.
-                      Used in daily workflow to add the night to the name and make it unique from other nightly tables.
+            Used in daily workflow to add the night to the name and make it unique from other nightly tables.
         extension, str. The extension (and therefore data format) without a leading period of the saved table.
-                        Default is 'csv'.
+            Default is 'csv'.
 
     Returns:
          str. The full pathname where the processing table should be written (or is already written). This
@@ -200,12 +201,12 @@ def instantiate_processing_table(colnames=None, coldtypes=None, rows=None):
         colnames, list. List of column names for a procesing table.
         coldtypes, list. List of column datatypes for the names in colnames.
         rows, list or np.array of Table.Rows or dicts. An iterable set of Table.Row's or dicts with keys/colnames and value
-                                                       pairs that match the default column names and data types of the
-                                                       default exposure table.
+            pairs that match the default column names and data types of the
+            default exposure table.
 
     Returns:
-          processing_table, Table. An astropy Table with the column names and data types for a DESI workflow processing
-                                   table. If the input rows was not None, it contains those rows, otherwise it has no rows.
+        processing_table, Table. An astropy Table with the column names and data types for a DESI workflow processing
+            table. If the input rows was not None, it contains those rows, otherwise it has no rows.
     """
     ## Define the column names for the exposure table and their respective datatypes
     if colnames is None or coldtypes is None:
@@ -225,15 +226,15 @@ def exptable_to_proctable(input_exptable, obstypes=None):
 
     Args:
         input_exptable, Table. An exposure table. Each row will be converted to a row of an processing table. If
-                               comments are made in COMMENTS or HEADERERR, those will be adjusted in the values
-                               stored in the processing table.
+            comments are made in COMMENTS or HEADERERR, those will be adjusted in the values
+            stored in the processing table.
         obstypes, list or np.array. Optional. A list of exposure OBSTYPE's that should be processed (and therefore
-                                              added to the processing table).
+            added to the processing table).
 
     Returns:
-        processing_table, Table. The output processing table. Each row corresponds with an exposure that should be
-                                 processed.
+        processing_table, Table. The output processing table. Each row corresponds with an exposure that should be processed.
         unprocessed_table, Table. The output unprocessed table. Each row is an exposure that should not be processed.
+
     """
     log = get_logger()
     exptable = input_exptable.copy()
@@ -292,7 +293,7 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
 
     Args:
         erow, Table.Row or dict. An exposure table row. The row will be converted to a row of an processing table.
-                                 If comments are made in COMMENTS or HEADERERR, those are ignored.
+            If comments are made in COMMENTS or HEADERERR, those are ignored.
 
     Returns:
         prow, dict. The output processing table row.
@@ -375,7 +376,7 @@ def table_row_to_dict(table_row):
 
     Args:
         table_row, Table.Row or dict. The row of an astropy table that you want to convert into a dictionary where
-                                      each key is a column name and the values are the column entry.
+            each key is a column name and the values are the column entry.
 
     Returns:
         out, dict. Dictionary where each key is a column name and the values are the column entry.

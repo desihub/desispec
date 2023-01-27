@@ -1,5 +1,8 @@
 """
-boxcar extraction for Spectra from Desi Image
+desispec.quicklook.qlboxcar
+===========================
+
+Boxcar extraction for Spectra from Desi Image.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
@@ -14,7 +17,7 @@ def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=F
         tset: desispec.xytraceset like object
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
-        usesigma: if True, use sigma from psf file (ysigma) to calculate resolution data. 
+        usesigma: if True, use sigma from psf file (ysigma) to calculate resolution data.
         quick_resolution:  whether to calculate the resolution matrix or use QuickResolution object
     Returns flux, ivar, resolution
     """
@@ -129,7 +132,7 @@ def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=F
         ivar[:,spec]*=dwave**2
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
-    #- Get resolution from the psf  
+    #- Get resolution from the psf
     resolution=get_resolution(wtarget,nspec,tset,usesigma=usesigma)
 
     return fflux,iivar,resolution

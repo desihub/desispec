@@ -1,4 +1,8 @@
+"""
+desispec.scripts.tile_redshifts
+===============================
 
+"""
 import sys, os, glob
 import re
 import subprocess

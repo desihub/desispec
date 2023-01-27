@@ -1,6 +1,7 @@
-
-
 """
+desispec.scripts.stdstars
+=========================
+
 Get the normalized best template to do flux calibration.
 """
 

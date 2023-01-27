@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.emlinefit
+==========================
 
+"""
 from time import time
 from astropy.time import Time
 from desiutil.log import get_logger
@@ -203,4 +206,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-    
+

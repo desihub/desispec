@@ -2,6 +2,11 @@
 # See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
+"""
+desispec.pipeline.tasks.preproc
+===============================
+
+"""
 
 from __future__ import absolute_import, division, print_function
 

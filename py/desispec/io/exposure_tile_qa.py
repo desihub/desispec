@@ -1,6 +1,6 @@
 """
-desispec.io.exposure_qa
-=================
+desispec.io.exposure_tile_qa
+============================
 
 I/O routines for exposure and tile qa
 """

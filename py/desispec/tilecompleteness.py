@@ -1,6 +1,6 @@
 """
-desispec.tilecompleteness.py
-========================
+desispec.tilecompleteness
+=========================
 
 Routines to determine the survey progress
 and tiles completion.
@@ -310,7 +310,7 @@ def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
         if not exists:
             if warn: log.warning("missing {}".format(coadd_filename))
             continue
-            
+
         # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         redrock_filename, exists = findfile('redrock', night=night, tile=tileid,
                 spectrograph=spectro, groupname='cumulative',

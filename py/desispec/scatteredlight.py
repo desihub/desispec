@@ -1,5 +1,8 @@
 '''
-Try to model and remove the scattered light
+desispec.scatteredlight
+=======================
+
+Try to model and remove the scattered light.
 '''
 import time
 import numpy as np
@@ -18,33 +21,33 @@ def model_scattered_light(image,xyset) :
     image (image * mask along spectral traces) and
     calibrating this convolved image using the data
     between the fiber bundles.
-    
+
     Args:
-      
+
       image: desispec.image.Image object
       xyset: desispec.xytraceset.XYTraceSet object
 
     Returns:
 
       model: np.array of same shape as image.pix
-    """  
+    """
 
     log = get_logger()
 
     log.info("compute mask")
     mask_in  = np.zeros(image.pix.shape,dtype=int)
-    
+
     yy = np.arange(image.pix.shape[0],dtype=int)
     for fiber in range(xyset.nspec) :
         xx = xyset.x_vs_y(fiber,yy).astype(int)
         for x,y in zip(xx,yy) :
             mask_in[y,x-2:x+3] = 1
     mask_in *= (image.mask==0)*(image.ivar>0)
-              
-    log.info("convolving mask*image")
-    
 
-    # convolution kernel shape found by fitting 
+    log.info("convolving mask*image")
+
+
+    # convolution kernel shape found by fitting
     # one arc lamp image, preproc-z0-00043688.fits
     # with the code desi_fit_scattered_light_kernel
     ##################################################################
@@ -53,7 +56,7 @@ def model_scattered_light(image,xyset) :
     x1d = np.linspace(-hw,hw,2*hw+1)
     x2d = np.tile(x1d,(2*hw+1,1))
     r   = np.sqrt(x2d**2+x2d.T**2)
-    
+
     params=dict()
     params['b0']=np.array([1.0000,0.5112,1.1413,0.6052,0.3623,0.3427,0.2278,0.0841,0.0352,0.0431,0.0000,])
     params['b1']=np.array([1.0000,0.5314,1.3406,0.6678,0.2432,0.1110,0.0370,0.0202,0.0254,0.0284,0.0000,])
@@ -85,34 +88,34 @@ def model_scattered_light(image,xyset) :
     params['z7']=np.array([1.0000,0.5858,0.8845,0.4246,0.1513,0.1859,0.1553,0.0152,0.0197,-0.0000,0.0000,])
     params['z8']=np.array([1.0000,0.9139,1.0364,0.7501,0.5155,0.3914,0.1731,0.0134,0.0307,-0.0000,0.0000,])
     params['z9']=np.array([1.0000,0.8205,1.0013,0.7501,0.4873,0.3066,0.1290,0.0576,0.0158,-0.0000,0.0000,])
-    
+
     camera = image.meta["CAMERA"].strip().lower()
 
-    
+
     log.info("camera= '{}'".format(camera))
     par=params[camera]
-    
+
     kern = np.interp(r,nodes,par)
     kern /= np.sum(kern)
-    
+
     ##################################################################
 
     model  = fftconvolve(image.pix*mask_in,kern,mode="same")
     model *= (model>0)
-    
+
     log.info("calibrating scattered light model between fiber bundles")
-    ny=image.pix.shape[0]    
+    ny=image.pix.shape[0]
     yy=np.arange(ny)
     xinter = np.zeros((21,ny))
     mod_scale = np.zeros((21,ny))
-        
+
     nbins=ny//100
     # compute median ratio in bins of y
     bins=np.linspace(0,ny,nbins+1).astype(int)
     meas_bins=np.zeros(nbins)
     mod_bins=np.zeros(nbins)
     y_bins=(bins[:-1]+bins[1:])/2.
-    
+
     ivar=image.ivar*(image.mask==0)
     for i in range(21) :
         if i==0 : xinter[i] =  xyset.x_vs_y(0,yy)-7.5
@@ -139,7 +142,7 @@ def model_scattered_light(image,xyset) :
 
     log.info("interpolating over bundles, using fitted calibration")
     xx = np.arange(image.pix.shape[1])
-    
+
     for j in range(ny) :
         func = interp1d(xinter[:,j],mod_scale[:,j], kind='linear', bounds_error = False, fill_value=0.)
         model[j] *= func(xx)
@@ -148,5 +151,5 @@ def model_scattered_light(image,xyset) :
     if camera == 'r2' :
         log.warning("do not try to remove scattered light for this one on the left hand side of the image")
         model[:,:model.shape[1]//2] = 0.
-    
+
     return model

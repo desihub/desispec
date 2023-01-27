@@ -1,6 +1,6 @@
 """
 desispec.skymag
-============
+===============
 
 Utility function to compute the sky magnitude per arcmin2 based from the measured sky model
 of an exposure and a static model of the instrument throughput.
@@ -49,12 +49,15 @@ def compute_skymag(night, expid, specprod_dir=None):
     Computes the sky magnitude for a given exposure. Uses the sky model
     and apply a fixed calibration for which the fiber aperture loss
     is well understood.
+
     Args:
        night: int, YYYYMMDD
        expid: int, exposure id
        specprod_dir: str, optional, specify the production directory.
-                     default is $DESI_SPECTRO_REDUX/$SPECPROD
-    returns (gmag,rmag,zmag) AB magnitudes per arcsec2, tuple with 3 float values
+            default is $DESI_SPECTRO_REDUX/$SPECPROD
+
+    Returns:
+        (gmag,rmag,zmag) AB magnitudes per arcsec2, tuple with 3 float values
     """
 
     log=get_logger()

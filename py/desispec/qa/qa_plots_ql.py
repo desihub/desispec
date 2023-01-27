@@ -1,4 +1,7 @@
 """
+desispec.qa.qa_plots_ql
+=======================
+
 This includes routines to make pdf plots on the qa outputs from quicklook.
 
 For information on QA dictionaries used here as input, visit wiki page:
@@ -22,11 +25,11 @@ def plot_countspectralbins(qa_dict,outfile,plotconf=None,hardplots=False):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
-    #SE: this has become a useless plot for showing a constant number now---> prevented creating it for now until there is an actual plan for what to plot 
+    #SE: this has become a useless plot for showing a constant number now---> prevented creating it for now until there is an actual plan for what to plot
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
-    
+
     thrcut=qa_dict["PARAMS"]["CUTBINS"]
 
     fig=plt.figure()
@@ -49,21 +52,21 @@ def plot_countspectralbins(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1=fig.add_subplot(gs[:,:2])
         ax2=fig.add_subplot(gs[:,2:4])
         ax3=fig.add_subplot(gs[:,4:])
-    
+
         hist_med=ax1.bar(index,binslo,color='b',align='center')
         ax1.set_xlabel('Fiber #',fontsize=10)
         ax1.set_ylabel('Photon Counts > {:d}'.format(cutlo),fontsize=10)
         ax1.tick_params(axis='x',labelsize=10)
         ax1.tick_params(axis='y',labelsize=10)
         ax1.set_xlim(0)
-    
+
         hist_med=ax2.bar(index,binsmed,color='r',align='center')
         ax2.set_xlabel('Fiber #',fontsize=10)
         ax2.set_ylabel('Photon Counts > {:d}'.format(cutmed),fontsize=10)
         ax2.tick_params(axis='x',labelsize=10)
         ax2.tick_params(axis='y',labelsize=10)
         ax2.set_xlim(0)
-    
+
         hist_med=ax3.bar(index,binshi,color='g',align='center')
         ax3.set_xlabel('Fiber #',fontsize=10)
         ax3.set_ylabel('Photon Counts > {:d}'.format(cuthi),fontsize=10)
@@ -75,10 +78,10 @@ def plot_countspectralbins(qa_dict,outfile,plotconf=None,hardplots=False):
         fig.savefig(outfile)
 
 def plot_countpix(qa_dict,outfile,plotconf=None,hardplots=False):
-    
+
     """
     Plot pixel counts above some threshold
-    
+
     Args:
         qa_dict: qa dictionary from countpix qa
         outfile: pdf file of the plot
@@ -86,7 +89,7 @@ def plot_countpix(qa_dict,outfile,plotconf=None,hardplots=False):
     from desispec.util import set_backend
     _matplotlib_backend = None
     set_backend()
-    
+
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -151,10 +154,10 @@ def plot_countpix(qa_dict,outfile,plotconf=None,hardplots=False):
         fig.savefig(outfile)
 
 def plot_bias_overscan(qa_dict,outfile,plotconf=None,hardplots=False):
-    
+
     """
     Map of bias from overscan from 4 regions of CCD
-    
+
     Args:
         qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
@@ -206,11 +209,11 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
 
     """
     Plot XWSigma
-    
+
     Args:
         qa_dict: qa dictionary from countpix qa
         outfile : file of the plot
-    """    
+    """
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
@@ -230,7 +233,7 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
         pass
     else:
         plt.suptitle("X & W Sigma over sky peaks, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
-    
+
         ax1=fig.add_subplot(221)
         hist_x=ax1.bar(xfiber,xsigma,align='center')
         ax1.set_xlabel("Fiber #",fontsize=10)
@@ -238,7 +241,7 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1.tick_params(axis='x',labelsize=10)
         ax1.tick_params(axis='y',labelsize=10)
         plt.xlim(0,len(xfiber))
-    
+
         ax2=fig.add_subplot(222)
         hist_w=ax2.bar(wfiber,wsigma,align='center')
         ax2.set_xlabel("Fiber #",fontsize=10)
@@ -246,7 +249,7 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
         ax2.tick_params(axis='x',labelsize=10)
         ax2.tick_params(axis='y',labelsize=10)
         plt.xlim(0,len(wfiber))
-    
+
         if "XWSIGMA_AMP" in qa_dict["METRICS"]:
             xsigma_amp=qa_dict["METRICS"]["XWSIGMA_AMP"][0]
             wsigma_amp=qa_dict["METRICS"]["XWSIGMA_AMP"][1]
@@ -272,7 +275,7 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
                      xy=(1.4,1.4),
                      fontsize=10
                      )
-    
+
             ax4=fig.add_subplot(224)
             heatmap4=ax4.pcolor(wsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
             plt.title('W Sigma = {:.4f}'.format(wsigma_med), fontsize=10)
@@ -295,14 +298,14 @@ def plot_XWSigma(qa_dict,outfile,plotconf=None,hardplots=False):
                      xy=(1.4,1.4),
                      fontsize=10
                      )
-    
+
         plt.tight_layout()
         fig.savefig(outfile)
-    
+
 def plot_RMS(qa_dict,outfile,plotconf=None,hardplots=False):
     """
     Plot RMS
-    
+
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
@@ -324,7 +327,7 @@ def plot_RMS(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1=fig.add_subplot(211)
 
         rms_over_amp=qa_dict["METRICS"]["NOISE_OVERSCAN_AMP"]
-    
+
         plt.suptitle(title,fontsize=10,y=0.99)
         heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
     #    ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
@@ -401,16 +404,16 @@ def plot_integral(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1.tick_params(axis='y',labelsize=10)
         ax1.xaxis.set_major_locator(ticker.AutoLocator())
         #ax1.set_xticklabels(std_fiberid)
-        
+
         plt.tight_layout()
         fig.savefig(outfile)
 
 def plot_sky_continuum(qa_dict,outfile,plotconf=None,hardplots=False):
 
     """
-    Plot mean sky continuum from lower and higher wavelength range for each 
+    Plot mean sky continuum from lower and higher wavelength range for each
     fiber and accross amps.
-    
+
     Args:
         qa_dict: dictionary from sky continuum QA
         outfile: pdf file to save the plot
@@ -444,21 +447,21 @@ def plot_sky_continuum(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1.set_xticks(index)
         ax1.set_xticklabels(fiberid)
         ax1.set_xlim(0)
-    
+
         plt.tight_layout()
         fig.savefig(outfile)
 
 def plot_sky_peaks(qa_dict,outfile,plotconf=None,hardplots=False):
-    
+
     """
     Plot rms of sky peaks for smy fibers across amps
-       
+
     Args:
         qa_dict: dictionary from sky peaks QA
         outfile: pdf file to save the plot
     """
 
-    
+
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -475,7 +478,7 @@ def plot_sky_peaks(qa_dict,outfile,plotconf=None,hardplots=False):
         pass
     else:
         plt.suptitle("Counts for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    
+
         ax1=fig.add_subplot(111)
         hist_x=ax1.bar(fiber,sumcount,align='center')
         ax1.set_xlabel("Fiber #",fontsize=10)
@@ -483,7 +486,7 @@ def plot_sky_peaks(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1.tick_params(axis='x',labelsize=10)
         ax1.tick_params(axis='y',labelsize=10)
         plt.xlim(0,len(fiber))
-    
+
         plt.tight_layout()
         fig.savefig(outfile)
 
@@ -517,23 +520,23 @@ def plot_residuals(frame,qa_dict,outfile,plotconf=None,hardplots=False):
         pass
     else:
         plt.suptitle('Randomly selected sky subtracted, fiber flattenend spectra\ncamera {}, exposure, {}'.format(camera,expid),fontsize=10)
-    
+
         for i in range(len(objtypes)):
             ax=fig.add_subplot('23{}'.format(i+1))
-    
+
             objs=np.where(objects==objtypes[i])[0]
             obj=random.choice(objs)
             objflux=flux[obj]
-    
+
             ax.set_xlabel('Wavelength (Angstroms)',fontsize=8)
             ax.set_ylabel('{} Flux (counts)'.format(objtypes[i]),fontsize=8)
             ax.tick_params(axis='x',labelsize=8)
             ax.tick_params(axis='y',labelsize=8)
             ax.plot(wavelength,objflux)
-    
+
         plt.tight_layout()
         plt.subplots_adjust(top=0.9)
-    
+
     #    gs=GridSpec(6,4)
     #    plt.suptitle("Sky Residuals after {}, Camera: {}, ExpID: {}".format(paname,camera,expid))
     #
@@ -570,7 +573,7 @@ def plot_residuals(frame,qa_dict,outfile,plotconf=None,hardplots=False):
     #    ax2.set_xticklabels(skyfiberid)
     #    ax2.set_xlim(0)
     #    #plt.tight_layout()
-    
+
         fig.savefig(outfile)
 
 
@@ -630,19 +633,19 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
                     resids[ii] = range_min
                 elif resids[ii] >= range_max:
                     resids[ii] = range_max
-    
+
         if camera[0] == 'b':
             thisfilter='DECAM_G'
         elif camera[0] == 'r':
             thisfilter='DECAM_R'
         else:
             thisfilter='DECAM_Z'
-    
+
         plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    
+
         rmneg=med_snr[med_snr>=0.]
         rmind=index[med_snr>=0.]
-    
+
         ax1=fig.add_subplot(221)
         hist_med=ax1.semilogy(rmind,rmneg,linewidth=1)
         ax1.set_xlabel('Fiber #',fontsize=6)
@@ -650,7 +653,7 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
         ax1.tick_params(axis='x',labelsize=6)
         ax1.tick_params(axis='y',labelsize=6)
         ax1.set_xlim(0)
-    
+
         ax2=fig.add_subplot(222)
         ax2.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR',fontsize=8)
         ax2.set_xlabel('RA',fontsize=6)
@@ -663,10 +666,10 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
         else:
             resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
             fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
-    
+
         for i,otype in enumerate(objlist):
             ax=fig.add_subplot('24{}'.format(i+5))
-    
+
             objtype=objlist[i]
             objid=np.where(np.array(objlist)==objtype)[0][0]
             obj_mag=mags[objid]
@@ -675,13 +678,13 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
             #plot_fit=np.array(fitsnr[objid])**2
             snr2=np.array(obj_snr)**2
             fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
-    
+
             # Calculate the model
             flux = 10 ** (-0.4 * (np.array(plot_mag) - 22.5))
             funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'])
             fitfunc = funcMap['astro']
             plot_fit = fitfunc(flux, *fitval)
-    
+
             # Plot
             if i == 0:
                 ax.set_ylabel('Median S/N**2',fontsize=8)
@@ -698,7 +701,7 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
             ax.tick_params(axis='y',labelsize=6)
             ax.semilogy(obj_mag,snr2,'b.',markersize=1)
             ax.semilogy(plot_mag,plot_fit**2,'y',linewidth=1)
-    
+
         fig.savefig(outfile)
 
 def plot_lpolyhist(qa_dict,outfile,plotconf=None,hardplots=False):
@@ -723,7 +726,7 @@ def plot_lpolyhist(qa_dict,outfile,plotconf=None,hardplots=False):
         pass
     else:
         plt.suptitle("{} QA Legendre Polynomial Coefficient Histograms".format(paname))
-    
+
         # Creating subplots
         ax1 = fig.add_subplot(311)
         n1, bins1, patches1 = ax1.hist(p0, bins=20, ec='black')
@@ -731,23 +734,23 @@ def plot_lpolyhist(qa_dict,outfile,plotconf=None,hardplots=False):
         ax1.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
         ax1.set_xlabel('Zeroth Legendre Polynomial Coefficient (p0)')
         ax1.set_ylabel('Frequency')
-    
+
         ax2 = fig.add_subplot(312)
         n2, bins2, patches2 = ax2.hist(p1, bins=20, ec='black')
         ax2.set_xticks(bins2[::3])
         ax2.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
         ax2.set_xlabel('First Legendre Polynomial Coefficient (p1)')
         ax2.set_ylabel('Frequency')
-    
+
         ax3 = fig.add_subplot(313)
         n3, bins3, patches3 = ax3.hist(p2, bins=20, ec='black')
         ax3.set_xticks(bins3[::3])
         ax3.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
         ax3.set_xlabel('Second Legendre Polynomial Coefficient (p2)')
         ax3.set_ylabel('Frequency')
-    
+
         plt.tight_layout()
         plt.subplots_adjust(top=0.92)
-    
+
         fig.savefig(outfile)
 

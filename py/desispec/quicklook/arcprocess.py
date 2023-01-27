@@ -1,3 +1,8 @@
+"""
+desispec.quicklook.arcprocess
+=============================
+
+"""
 import numpy as np
 import scipy.optimize
 from numpy.polynomial.legendre import Legendre, legval, legfit
@@ -75,10 +80,10 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
     return: coefficients of the polynomial expansion
 
     """
-    
+
     if domain is None :
         raise ValueError("domain must be given in process_arc")
-    
+
     nspec=frame.flux.shape[0]
     if linelist is None:
         camera=frame.meta["CAMERA"]
@@ -135,21 +140,21 @@ def write_psffile(infile,wcoeffs,wcoeffs_wavemin,wcoeffs_wavemax,outfile,waveste
     """
 
     tset = read_xytraceset(infile)
-    
+
     # convert wsigma to ysig ...
     nfiber    = wcoeffs.shape[0]
     ncoef     = wcoeffs.shape[1]
     nw        = 100 # need a larger number than ncoef to get an accurate dydw from the gradients
-    
+
     # wcoeffs and tset do not necessarily have the same wavelength range
     wave      = np.linspace(tset.wavemin,tset.wavemax,nw)
-    wsig_set  = TraceSet(wcoeffs,[wcoeffs_wavemin,wcoeffs_wavemax]) 
+    wsig_set  = TraceSet(wcoeffs,[wcoeffs_wavemin,wcoeffs_wavemax])
     wsig_vals = np.zeros((nfiber,nw))
     for f in range(nfiber) :
         y_vals = tset.y_vs_wave(f,wave)
         dydw   = np.gradient(y_vals)/np.gradient(wave)
         wsig_vals[f]=wsig_set.eval(f,wave)*dydw
     tset.ysig_vs_wave_traceset = fit_traces(wave, wsig_vals, deg=ncoef-1, domain=(tset.wavemin,tset.wavemax))
-        
+
     write_xytraceset(outfile,tset)
-    
+

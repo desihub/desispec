@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.tasks
-=========================
+=======================
 
 Classes that describe pipeline tasks.
 """

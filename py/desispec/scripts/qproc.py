@@ -1,6 +1,6 @@
 """
 desispec.scripts.qproc
-========================
+======================
 
 Run DESI qproc on a given exposure
 """
@@ -75,14 +75,14 @@ def parse(options=None):
     parser.add_argument('--auto-output-dir', type = str, default = '.', required = False,
                         help = 'Output directory when running the script in auto mode')
     parser.add_argument('--auto', action = 'store_true', help = 'auto-decide the list of processes to run based on the input. Output files are saved in an output directory which is by default the current working directory but can be modified with the option --auto-output-dir')
-    
+
     args = parser.parse_args(options)
 
     return args
 
 
 def main(args=None):
-    
+
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
@@ -96,7 +96,7 @@ def main(args=None):
     input_has_fibermap = ("FIBERMAP" in hdulist)
     hdulist.close()
 
-    
+
     if is_input_preprocessed :
         image   = read_image(args.image)
     else :
@@ -106,7 +106,7 @@ def main(args=None):
             sys.exit(12)
         image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,])
 
-    
+
     if args.auto :
         log.debug("AUTOMATIC MODE")
         try :
@@ -116,11 +116,11 @@ def main(args=None):
                     log.warning('using EXPNUM {} for EXPID'.format(image.meta['EXPNUM']))
                     image.meta['EXPID'] = image.meta['EXPNUM']
             expid = image.meta['EXPID']
-        except KeyError as e : 
+        except KeyError as e :
             log.error("Need at least NIGHT and EXPID (or EXPNUM) to run in auto mode. Retry without the --auto option.")
             log.error(str(e))
             sys.exit(12)
-            
+
         indir = os.path.dirname(args.image)
         if args.fibermap is None :
             #- first check if input image has a fibermap
@@ -134,7 +134,7 @@ def main(args=None):
                     args.fibermap = filename
 
         if args.output_preproc is None :
-            if not is_input_preprocessed : 
+            if not is_input_preprocessed :
                 args.output_preproc = '{}/preproc-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera.lower(), expid)
                 log.debug("auto-mode: will write preproc in "+args.output_preproc)
             else :
@@ -147,7 +147,7 @@ def main(args=None):
 
     if args.output_preproc is not None :
         write_image(args.output_preproc, image)
-    
+
     cfinder = None
 
     if args.psf is None :
@@ -196,14 +196,14 @@ def main(args=None):
         if "FLAVOR" in image.meta : input_flavor = image.meta["FLAVOR"]
         obstype = check_qframe_flavor(qframe,input_flavor=input_flavor).upper()
         image.meta["OBSTYPE"]=obstype
-    
+
     log.info("OBSTYPE = '{}'".format(obstype))
-    
+
     if args.auto  :
-        
+
         # now set the things to do
         if obstype == "SKY" or obstype == "TWILIGHT" or obstype == "SCIENCE" :
-            
+
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
@@ -212,20 +212,20 @@ def main(args=None):
             args.output_skyframe = '{}/qsky-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.fluxcalib       = True
             args.outframe        = '{}/qcframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
-            
+
         elif obstype == "ARC" or obstype == "TESTARC" :
 
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_lsf_sigma = True
-            
+
         elif obstype == "FLAT" or obstype == "TESTFLAT" :
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_fiberflat = '{}/qfiberflat-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
-            
+
     if args.shift_psf :
 
         # using the trace shift script
@@ -237,14 +237,14 @@ def main(args=None):
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
-    
+
     if tset.meta is not None :
         # add traceshift info in the qframe, this will be saved in the qframe header
         if qframe.meta is None :
             qframe.meta = dict()
         for k in tset.meta.keys() :
             qframe.meta[k] = tset.meta[k]
-    
+
     if args.output_rawframe is not None :
         write_qframe(args.output_rawframe,qframe)
         log.info("wrote raw extracted frame in {}".format(args.output_rawframe))
@@ -252,7 +252,7 @@ def main(args=None):
 
     if args.compute_lsf_sigma :
         tset = process_arc(qframe,tset,linelist=None,npoly=2,nbins=2)
-    
+
     if args.output_psf is not None :
         for k in qframe.meta :
             if k not in tset.meta :
@@ -292,7 +292,7 @@ def main(args=None):
     if args.fluxcalib :
         if cfinder is None :
             cfinder = CalibFinder([image.meta,primary_header])
-        # check for flux calib 
+        # check for flux calib
         if cfinder.haskey("FLUXCALIB") :
             fluxcalib_filename = cfinder.findfile("FLUXCALIB")
             fluxcalib = read_average_flux_calibration(fluxcalib_filename)

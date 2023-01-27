@@ -1,5 +1,8 @@
 """
-Generic plotting algorithms for QuickLook QAs
+desispec.quicklook.ql_plotlib
+=============================
+
+Generic plotting algorithms for QuickLook QAs.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -164,7 +167,7 @@ def ql_3dplot(ax,xvals,yvals,zvals,plottitle,xtitle,ytitle,zlim=None,heatmap=Non
         ax: matplotlib subplot
         xvals: QA metric to be plotted along the xaxis
         yvals: QA metric to be plotted along the yaxis
-        zvals: QA metric to be plotted 
+        zvals: QA metric to be plotted
         plottitle: plot title from configuration file
         xtitle: x axis label
         ytitle: y axis label

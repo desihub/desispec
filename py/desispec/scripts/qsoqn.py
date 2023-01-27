@@ -1,5 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.scripts.qsoqn
+======================
+
+"""
 
 import os
 import sys
@@ -84,35 +87,46 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
     """
     Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
     with z_prior using the template contained in template_file
-    Args:
-        spectra_name (str): The name of the spectra file.
-        targetid (int array): array of the targetid (contained in the spectra_name_file)
-                              on which RR will be rerun with prior and qso template.
-        z_prior (float array): array of the same size than targetid with the
-                               redshift estimated by QN for the associated targetid
-        param_RR (dict): contains info to re-run RR as the template_filename,
-                        filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
 
-    Options:
-        comm: MPI communicator to pass to redrock; must be size=1
+    Parameters
+    ----------
+    spectra_name : str
+        The name of the spectra file.
+    targetid : int array
+        Array of the targetid (contained in the spectra_name_file)
+        on which RR will be rerun with prior and qso template.
+    z_prior : float array
+        Array of the same size than targetid with the
+        redshift estimated by QN for the associated targetid
+    param_RR : dict
+        Contains info to re-run RR as the template_filename,
+        filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
+    comm : object, optional
+        MPI communicator to pass to redrock; must be size=1
 
-    Returns:
-        redshift (numpy array): Array containing best redshift estimation by the new run of RR
-        err_redshift (numpy array): Array containing the associated error for the redshift
-        coeffs (numpy array): array containing the coefficient for the best fit given by RR
-                       even we work only with QSO template, it has a "shape" of redshift.size x 10
-                        WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
+    Returns
+    -------
+    tuple
+        A tuple containing:
+
+        * redshift (numpy array): Array containing best redshift estimation by the new run of RR
+        * err_redshift (numpy array): Array containing the associated error for the redshift
+        * coeffs (numpy array): array containing the coefficient for the best fit given by RR
+          even we work only with QSO template, it has a "shape" of redshift.size x 10; *warning*:
+          they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
+
     """
     log = get_logger()
     def write_prior_for_RR(targetid, z_prior, filename_priors):
         """
         Write the prior file for RR associated to the targetid list
+
         Args:
-           targetid (int array): array of the targetid
-                                 on which RR will be rerun with prior and qso template.
-           z_prior (float array): array of the same size than targetid with the
-                                  redshift estimated by QN for the associated targetid
-           filename_priors (str): name under which the file will be saved
+            targetid (int array): array of the targetid
+                on which RR will be rerun with prior and qso template.
+            z_prior (float array): array of the same size than targetid with the
+                redshift estimated by QN for the associated targetid
+            filename_priors (str): name under which the file will be saved
         """
         function = np.array(['tophat'] * z_prior.size)  # need to be the same for every one
         sigma = 0.1 * np.ones(z_prior.size)
@@ -127,16 +141,18 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
     def extract_redshift_info_from_RR(filename_redrock, targetid):
         """
         extract information of the redrock file from the new RR run
+
         Args:
            filename_redrock (str): Name of the redrock file from the new run of RR
            targetid (int array): array of the targetid (contained in the spectra_name_file)
-                                 on which RR will be rerun with prior and qso template.
+                on which RR will be rerun with prior and qso template.
+
         Returns:
-           redshift (numpy array): Array containing best redshift estimation by the new run of RR
-           err_redshift (numpy array): Array containing the associated error for the redshift
-           coeffs (numpy array): array containing the coefficient for the best fit given by RR
-                          even we work only with QSO template, it has a "shape" of redshift.size x 10
-                           WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
+           * redshift (numpy array): Array containing best redshift estimation by the new run of RR
+           * err_redshift (numpy array): Array containing the associated error for the redshift
+           * coeffs (numpy array): array containing the coefficient for the best fit given by RR
+             even we work only with QSO template, it has a "shape" of redshift.size x 10; *warning*:
+             they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
         """
         with fitsio.FITS(filename_redrock) as redrock:
             # 9 July 2021:
@@ -224,6 +240,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
+
     Args:
         redrock: fitsio hdu 'REDSHIFTS' from redrock file
         fibermap:  fitsio hdu 'FIBERMAP' from redrock file
@@ -232,11 +249,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         spectra_name (str): The name of the spectra file
         param_QN (dict): contains info for QN as n_thresh and c_thresh
         param_RR (dict): contains info to re-run RR as the template_filename,
-                         filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
+            filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
         save_target (str) : restricted (save only IS_QSO_QN_NEW_RR==true targets) / all (save all the sample)
-
-    Options:
-        comm: MPI communicator to pass to redrock; must be size=1
+        comm, optional: MPI communicator to pass to redrock; must be size=1
 
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat

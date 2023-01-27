@@ -1,8 +1,8 @@
 """
 desispec.pixflat
-========================
+================
 
-Routines for pixel flat fielding
+Routines for pixel flat fielding.
 """
 
 import numpy as np
@@ -15,8 +15,8 @@ def convolve2d(image,k,weight=None) :
     Args:
         image : 2D np.array image
         k : 2D np.array kernel, each dimension must be odd and greater than 1
-    Options:
-        weight : 2D np.array of same shape as image
+        weight, optional : 2D np.array of same shape as image
+
     Returns:
         cimage : 2D np.array convolved image of same shape as input image
     """

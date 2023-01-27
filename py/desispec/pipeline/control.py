@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.control
-===========================
+=========================
 
 Tools for controling pipeline production.
 """

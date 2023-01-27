@@ -1,4 +1,7 @@
 '''
+desispec.scripts.calibrate_tsnr_ensemble
+========================================
+
 Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this
 instance, ensemble avg. of flux is written, in order to efficiently generate
 tile depths.

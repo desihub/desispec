@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.quicklook.quicklook
+============================
 
+"""
 from __future__ import absolute_import, division, print_function
 
 import sys,os,time,signal
@@ -37,7 +40,7 @@ def get_chan_spec_exp(inpname,camera=None):
         print("can't parse input file name")
         sys.exit("can't parse input file name {}".format(inpname))
     brk=string.split(inpname,'-')
-    if len(brk)!=3: #- for raw files 
+    if len(brk)!=3: #- for raw files
         if camera is None:
             raise IOError("Must give camera for raw file")
         else:
@@ -57,7 +60,7 @@ def getobject(conf,log):
     try:
         mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
         klass=getattr(mod,conf["ClassName"])
-        if "Name" in conf.keys():            
+        if "Name" in conf.keys():
             return klass(conf["Name"],conf)
         else:
             return klass(conf["ClassName"],conf)
@@ -82,7 +85,7 @@ def mapkeywords(kw,kwmap):
             else:
                 log.warning("Can't find key {} in conversion map. Skipping".format(v[2:]))
         if k in kwmap: #- for configs generated via desispec.quicklook.qlconfig
-            newmap[k]=kwmap[k]          
+            newmap[k]=kwmap[k]
         else:
             newmap[k]=v
     return newmap
@@ -112,7 +115,7 @@ def runpipeline(pl,convdict,conf):
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'],conf['Program'],convdict)
-    QAresults=[] 
+    QAresults=[]
     if singqa is None:
         for s,step in enumerate(pl):
             log.info("Starting to run step {}".format(paconf[s]["StepName"]))
@@ -134,7 +137,7 @@ def runpipeline(pl,convdict,conf):
                     qargs=mapkeywords(qa.config["kwargs"],convdict)
                     hb.start("Running {}".format(qa.name))
                     qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
-    
+
                     if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
                         res=qa(inp[0],inp[1],**qargs)
                     else:
@@ -142,8 +145,8 @@ def runpipeline(pl,convdict,conf):
                             res=qa(inp[0],**qargs)
                         else:
                             res=qa(inp,**qargs)
-    
-                    if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         
+
+                    if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":
                         passqadict=res
                     if "qafile" in qargs:
                         qawriter.write_qa_ql(qargs["qafile"],res)
@@ -301,7 +304,7 @@ def setup_pipeline(config):
     if "PSFFile" in config:
         psf_filename=config["PSFFile"]
         #import desispec.psf
-        #psf=desispec.psf.PSF(config["PSFFile"]) 
+        #psf=desispec.psf.PSF(config["PSFFile"])
 
     if "basePath" in config:
         basePath=config["basePath"]
@@ -347,7 +350,7 @@ def setup_pipeline(config):
 
     if dumpintermediates:
         convdict["DumpIntermediates"]=dumpintermediates
-   
+
     hbeat.stop("Finished reading all static files")
 
     img=inp

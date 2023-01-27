@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-
 """
 desispec.io.emlinefit
-====================
+=====================
+
 IO routines for desi_emlinefit_afterburner.
 """
 
@@ -25,15 +24,15 @@ def get_targetids(d, bitnames, log=None):
     Args:
         d: structured array, typically a FIBERMAP catalog,
             with TARGETID and the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET column.
-        bitnames: comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        bitnames: comma-separated list of target bitnames to fit from the ``*DESI_TARGET`` mask (string)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
         targetids: list of TARGETIDs passing the {CMX,*DESI}_TARGET mask (np.array)
 
-    Notes:
-        If several bitnames are provided, selects the union of those.
-        Safer if d is already trimmed on unique TARGETIDs (see FIBERMAP format with zbest-*fits files)
+    Note:
+        * If several bitnames are provided, selects the union of those.
+        * Safer if d is already trimmed on unique TARGETIDs (see FIBERMAP format with ``zbest-*.fits`` files)
     """
     # AR log
     if log is None:
@@ -81,7 +80,7 @@ def read_emlines_inputs(
         coadd: full path to a coadd file (everest-format)
         mwext_corr (optional, defaults to True): correct flux for foreground MW extinction? (boolean)
         rv (optional, defaults to 3.1): value of R_V, used if mwext_corr=True (float)
-        bitnames (optional, defaults to "ALL", meaning fitting all fibers): comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        bitnames (optional, defaults to "ALL", meaning fitting all fibers): comma-separated list of target bitnames to fit from the ``*DESI_TARGET`` mask (string)
         targetids (optional, defaults to None): list of TARGETIDs to restrict to (int, list, or numpy array)
         rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
         fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)
@@ -94,10 +93,10 @@ def read_emlines_inputs(
         fluxes: Galactic-extinction-corrected fluxes (numpy array of shape (Nspec, Nwave))
         ivars: inverse variances (numpy array of shape (Nspec, Nwave))
 
-    Notes:
-        We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
-        If keys in rr_keys or fm_keys are not present in the redrock, those will be ignored.
-        If both bitnames and targetids are provided, we take the overlap of the two.
+    Note:
+        * We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
+        * If keys in rr_keys or fm_keys are not present in the redrock, those will be ignored.
+        * If both bitnames and targetids are provided, we take the overlap of the two.
     """
     # AR log
     if log is None:
@@ -366,13 +365,6 @@ def plot_emlines(
         outpdf: output pdf filename (string)
         zspecs: list of redrock redshifts (numpy array)
         emdict: a dictionary with various quantities, output by get_lines().
-            used content:
-            - each emission line has its own subdictionary.
-            list of used keys:
-                subdictionaries for each emname in emnames, with:
-                    CONT : continuum in 1e-17 * erg/cm2/s/A
-                    FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
-                    waves, fluxes, ivars, models: data used for fitting + fitted model
         emnames (optional, defaults to ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]): list of plotted lines (list of string)
         targetids (optional, defaults to None): list of TARGETIDs (numpy array)
         objtypes (optional, defaults to None): list of fibermap OBJTYPEs (numpy array)
@@ -382,10 +374,19 @@ def plot_emlines(
         nrow (optional, defaults to 10): number of rows, i.e. galaxy, per pdf page (int)
         rowsort_byz (optional, defaults to True): the spectra are displayed by increasing redshifts (boolean)
 
-    Notes:
-        If some emname is not present in emdict, it will be discarded.
-        Each spectra will be one row of plot, each emission line corresponds to a column.
-        If rowsort_byz=False, then the spectra will be displayed by order of appearance.
+    Note:
+        * For `emdict`:
+
+            - Each emission line has its own subdictionary.
+            - Each emission line dictionary should contain these keys:
+
+                * CONT : continuum in ``1e-17 * erg/cm2/s/A``
+                * FLUX, FLUX_IVAR: flux in ``1e-17 * erg/cm2/s/A``
+                * waves, fluxes, ivars, models: data used for fitting + fitted model
+
+        * If some emname is not present in emdict, it will be discarded.
+        * Each spectra will be one row of plot, each emission line corresponds to a column.
+        * If rowsort_byz=False, then the spectra will be displayed by order of appearance.
     """
     # AR plot imports
     from matplotlib.backends.backend_pdf import PdfPages

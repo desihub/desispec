@@ -1,7 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+desispec.scripts.daily_processing
+=================================
 
-
+"""
 import numpy as np
 import os
 import sys

@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.scriptgen
-=============================
+===========================
 
 Tools for generating shell and slurm scripts.
 """

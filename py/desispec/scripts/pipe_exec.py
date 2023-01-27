@@ -1,10 +1,12 @@
-#!/usr/bin/env python
 #
 # See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
+"""
+desispec.scripts.pipe_exec
+==========================
 
-"""Run one or more pipeline tasks.
+Run one or more pipeline tasks.
 """
 
 from __future__ import absolute_import, division, print_function

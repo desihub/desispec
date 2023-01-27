@@ -1,6 +1,6 @@
 """
 desispec.fiberfluxcorr
-========================
+======================
 
 Routines to compute fiber flux corrections
 based on the fiber location, the exposure seeing,

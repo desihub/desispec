@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.coadd_preproc
+==============================
 
+"""
 import os,sys
 import numpy as np
 import fitsio

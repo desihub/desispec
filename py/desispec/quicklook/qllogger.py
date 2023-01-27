@@ -1,3 +1,8 @@
+"""
+desispec.quicklook.qllogger
+===========================
+
+"""
 import logging
 #from datetime import datetime
 

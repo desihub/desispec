@@ -1,4 +1,8 @@
-""" Module for generating QA HTML
+"""
+desispec.qa.html
+================
+
+Module for generating QA HTML.
 """
 from __future__ import print_function, absolute_import, division
 

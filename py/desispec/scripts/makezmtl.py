@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.makezmtl
+=========================
 
+"""
 import os
 import sys
 import traceback

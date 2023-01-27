@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.scripts.select_calib_stars
+===================================
 
+"""
 import os,sys
 import numpy as np
 import argparse

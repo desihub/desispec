@@ -1,3 +1,8 @@
+"""
+desispec.qproc.qfiberflat
+=========================
+
+"""
 import time
 import numpy as np
 import scipy.ndimage

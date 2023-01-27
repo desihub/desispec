@@ -1,5 +1,8 @@
+"""
+desispec.scripts.processingtable
+================================
 
-
+"""
 import os
 import sys
 import numpy as np

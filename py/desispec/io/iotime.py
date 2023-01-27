@@ -1,5 +1,8 @@
 """
-iotime: Utilities for parsing and plotting I/O timing from logfiles
+desispec.io.iotime
+==================
+
+Utilities for parsing and plotting I/O timing from logfiles.
 """
 
 import os
@@ -31,11 +34,11 @@ _log_regex = re.compile(r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL):(\w+\.py):(\d+):(
 
 def parse(line):
     """Parse a line for an iotime message produced by `format`
-    
+
     Args:
         line (str): the line to parse
 
-    Returns None if no match, or dict with keys function,duration,readwrite,filename,timestamp    
+    Returns None if no match, or dict with keys function,duration,readwrite,filename,timestamp
     """
     m = _iotime_regex.match(line)
     if m is not None:
@@ -46,7 +49,7 @@ def parse(line):
             function = 'unknown'
         else:
             function = logmatch.group(4)
-            
+
         return dict(
             function=function, duration=duration, readwrite=readwrite,
             filename=filename, timestamp=timestamp)
@@ -78,7 +81,7 @@ def parse_logfile(logfile):
 
 def _ordered_unique_names(names):
     """Return unique list of names, ordered by first appearance in list
-   
+
     Doesn't scale well; intended for inputs <10000 long
     """
     unique = list()

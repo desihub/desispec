@@ -1,4 +1,9 @@
-# Script for generating QA for a full exposure
+"""
+desispec.scripts.qa_exposure
+============================
+
+Script for generating QA for a full exposure
+"""
 from __future__ import absolute_import, division
 
 from desiutil.log import get_logger

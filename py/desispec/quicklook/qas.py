@@ -1,4 +1,9 @@
-from desispec.quicklook import qllogger 
+"""
+desispec.quicklook.qas
+======================
+
+"""
+from desispec.quicklook import qllogger
 from desispec.quicklook import qlexceptions
 import collections
 import numpy as np
@@ -46,32 +51,32 @@ class MonitoringAlg:
         norm_range_val = [0,0]
         warn_range_val = [0,0]
 
-        if "QASTATUSKEY" in cargs: 
+        if "QASTATUSKEY" in cargs:
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
 
         if cargs["RESULTKEY"] == 'CHECKHDUS':
-             stats=[]    
+             stats=[]
              stats.append(metrics['CHECKHDUS_STATUS'])
              stats.append(metrics['EXPNUM_STATUS'])
              if  np.isin(stats,'NORMAL').all():
                     metrics[QARESULTKEY]='NORMAL'
-             elif np.isin(stats,'ALARM').any():  
+             elif np.isin(stats,'ALARM').any():
                     metrics[QARESULTKEY] = 'ALARM'
 
-             self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
+             self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
 
         if reskey in metrics:
             current = metrics[reskey]
 
- #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------            
+ #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------
             #if "REFERENCE" in cargs:
-                            
+
                 #refval=cargs["REFERENCE"]
-                
+
 ##                print(refval,"MA inside if")
- 
+
             #else: #- For absolute value checks
                 #self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
                 ##- check the data type
@@ -81,7 +86,7 @@ class MonitoringAlg:
                     #refval=np.zeros(len(current)) #- 1D list or array
             ##- Update PARAMS ref key
             #res["PARAMS"][reskey+'_REF']=refval
-            
+
             #currlist=isinstance(current,(np.ndarray,collections.Sequence))
             #reflist=isinstance(refval,(np.ndarray,collections.Sequence))
             #if currlist != reflist: # different types
@@ -93,7 +98,7 @@ class MonitoringAlg:
                     #self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             #else: # both are scalars
                 #self.__deviation=sorted(current)-sorted(refval)
-                
+
         ## check RANGES given in config and set QA_STATUS keyword
         ## it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
         ## for multiple results, thresholds should be a list of lists as given above (one range list per result)
@@ -101,7 +106,7 @@ class MonitoringAlg:
         ## lower bound is inclusive upper bound is exclusive
         ## first matching interval will be used
         ## if no interval contains the deviation, it will be set to QASeverity.ALARM
-        ## if RANGES or REFERENCE are not given in config, QA_STATUS will be set to UNKNOWN 
+        ## if RANGES or REFERENCE are not given in config, QA_STATUS will be set to UNKNOWN
         #def findThr(d,t):
             #val=QASeverity.ALARM
             #for l in list(t):
@@ -109,8 +114,8 @@ class MonitoringAlg:
                     #val=l[1]
             #return val
 
-        #metrics[QARESULTKEY]='NORMAL' 
-       
+        #metrics[QARESULTKEY]='NORMAL'
+
         #if self.__deviation is not None and "RANGES" in cargs:
             #self.m_log.info("QL Reference checking for QA {}".format(self.name))
             #thr=cargs["RANGES"]
@@ -123,9 +128,9 @@ class MonitoringAlg:
             ##    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
             ##    return res
             ##else: #they are of the same type
-        
- 
-        
+
+
+
             #if devlist:  # if results are a list
                 #if len(thr)==2: # check all results against same thresholds
                     ##- maximum deviation
@@ -145,8 +150,8 @@ class MonitoringAlg:
                 #metrics[QARESULTKEY]='ALARM'
         #else:
             #self.m_log.warning("No Reference checking for QA {}".format(self.name))
-            
-        #self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+
+        #self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
         #return res
     #def run(self,*argv,**kwargs):
         #pass
@@ -180,13 +185,13 @@ class MonitoringAlg:
 
                 if (ind.shape[0] > 0 and refval.shape[0] == current.shape[0]):
                    self.m_log.critical("QL {} : elements({}) of the result are returned as NaN! STATUS is determined for the real values".format(self.name,str(ind)))
-                   
+
                    ind = list(np.hstack(ind))
                    for index in sorted(ind, reverse=True):
                        del current[index]
                        del refval[index]
- 
-            else: 
+
+            else:
                 self.m_log.warning("No reference given. Update the configuration file to include reference value for QA: {}".format(self.name))
 
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
@@ -194,7 +199,7 @@ class MonitoringAlg:
 
             if currlist != reflist:
                 self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different types!".format(self.name,type(refval),type(current)))
-            elif currlist: 
+            elif currlist:
 
                 if refval.size == current.size and current.size >1:
 
@@ -204,13 +209,13 @@ class MonitoringAlg:
                 elif np.size(current) == 0 or np.size(refval) == 0:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
                     metrics[QARESULTKEY]='UNKNOWN'
-                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
                 elif refval.size != current.size:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
                     metrics[QARESULTKEY]='UNKNOWN'
-                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
 
-            else: 
+            else:
                 #SE "sorting" eliminate the chance of randomly shuffling items in the list that we observed in the past
                 self.__deviation=(np.sort(current)-np.sort(refval))/np.sort(current)
 
@@ -271,7 +276,7 @@ class MonitoringAlg:
                         d=[]
                         d.append(devlist)
                         devlist = d
-                    stats = []   
+                    stats = []
                     for val in devlist:
                       if thr[0] <= val <= thr[1]:
                         stats.append('NORMAL')
@@ -286,9 +291,9 @@ class MonitoringAlg:
                         metrics[QARESULTKEY] = 'ALARM'
                     elif np.isin(stats,'ALARM').any():
                         metrics[QARESULTKEY] = 'ALARM'
-                    elif np.isin(stats,'WARNING').any():  
+                    elif np.isin(stats,'WARNING').any():
                         metrics[QARESULTKEY] = 'WARNING'
-                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
 
         return res
 

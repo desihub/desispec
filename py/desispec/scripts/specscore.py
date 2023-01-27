@@ -1,10 +1,9 @@
-
-
 """
+desispec.scripts.specscore
+==========================
+
 Compute some information scores on spectra in frames
 """
-
-
 import argparse
 
 import numpy as np
@@ -28,7 +27,7 @@ def parse(options=None):
                         help = "the fluxes are not calibrated")
     parser.add_argument('--suffix', type = str, default = None, required=False,
                         help = 'suffix added to the column name in the SCORES table to describe the level of processing of the spectra in the frame. For instance "RAW","FFLAT","SKYSUB","CALIB"')
-                       
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -41,7 +40,7 @@ def main(args) :
     log = get_logger()
 
     for filename in args.infile :
-        
+
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
 
@@ -52,8 +51,8 @@ def main(args) :
             flux_per_angstrom=False
         else :
             flux_per_angstrom=None
-        
+
         scores,comments=compute_and_append_frame_scores(frame,suffix=args.suffix,flux_per_angstrom=flux_per_angstrom,overwrite=args.overwrite)
         log.info("Adding or replacing SCORES extention with {} in {}".format(scores.keys(),filename))
-        write_bintable(filename,data=scores,comments=comments,extname="SCORES",clobber=True)        
-        #write_frame(filename,frame) # an alternative 
+        write_bintable(filename,data=scores,comments=comments,extname="SCORES",clobber=True)
+        #write_frame(filename,frame) # an alternative

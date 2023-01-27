@@ -1,6 +1,7 @@
 """
 desispec.scripts.trace_shifts
 =============================
+
 """
 
 import os, sys
@@ -232,7 +233,7 @@ def fit_trace_shifts(image,args) :
         degxy=0
         degyx=0
         degyy=0
-    
+
     n = 0
     nloops = max(degxx, degyx) + max(degxy, degyy)
     while True: # loop because polynomial degrees could be reduced

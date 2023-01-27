@@ -1,8 +1,9 @@
-#!/usr/bin/env python
-
 """
-Given a psf output file eg. output from bootcalib.write_psf or desimodel/data/specpsf/PSF* files
-this defines an interface that other codes can use the trace and wavelength solutions
+desispec.quicklook.qlpsf
+========================
+
+Given a psf output file e.g. output from bootcalib.write_psf or desimodel/data/specpsf/PSF files
+this defines an interface that other codes can use the trace and wavelength solutions.
 
 Mostly making parallel to specter.psf.PSF baseclass and inheriting as needed, but only xtrace,
 ytrace and wavelength solution available for this case. No resolution information yet.
@@ -25,9 +26,9 @@ class PSF(object):
 
 
         print("desispec.psf is DEPRECATED, PLEASE USE desispec.xytraceset")
-        
+
         self.traceset = read_xytraceset(filename)
-        
+
         # all in traceset now.
         # psf kept to ease transition
         self.npix_y=self.traceset.npix_y
@@ -36,37 +37,37 @@ class PSF(object):
         self.wmin=self.traceset.wavemin # in traceset
         self.wmax=self.traceset.wavemax # in traceset
         self.nspec=self.traceset.nspec  # in traceset
-        self.ncoeff=self.traceset.x_vs_wave_traceset._coeff.shape[1] # 
+        self.ncoeff=self.traceset.x_vs_wave_traceset._coeff.shape[1] #
         self.traceset.wave_vs_y(0,100.) # call wave_vs_y  for creation of wave_vs_y_traceset and consistent inversion
         self.icoeff=self.traceset.wave_vs_y_traceset._coeff  # in traceset
         self.ymin=self.traceset.wave_vs_y_traceset._xmin # in traceset
         self.ymax=self.traceset.wave_vs_y_traceset._xmax # in traceset
-        
-        
+
+
     def x(self,ispec=None,wavelength=None):
         """
         returns CCD x centroids for the spectra
         ispec can be None, scalar or a vector
         wavelength can be None or a vector
         """
-        if ispec is None : 
+        if ispec is None :
             ispec = np.arange(self.traceset.nspec)
         else :
             ispec = np.atleast_1d(ispec)
-        
+
         if wavelength is None :
             wavelength = self.wavelength(ispec)
         else :
             wavelength = np.atleast_1d(wavelength)
-        
+
         if len(wavelength.shape)==2 :
             res=np.zeros(wavelength.shape)
-            for j,i in enumerate(ispec): 
+            for j,i in enumerate(ispec):
                 res[j]=self.traceset.x_vs_wave(i,wavelength[i])
         else :
             ### print("ispec.size=",ispec.size,"wavelength.size=",wavelength.size)
             res=np.zeros((ispec.size,wavelength.size))
-            for j,i in enumerate(ispec): 
+            for j,i in enumerate(ispec):
                 res[j]=self.traceset.x_vs_wave(i,wavelength)
         return res
 
@@ -76,27 +77,27 @@ class PSF(object):
         ispec can be None, scalar or a vector
         wavelength can be a vector but not allowing None #- similar as in specter.psf.PSF.y
         """
-        if ispec is None : 
+        if ispec is None :
             ispec = np.arange(self.traceset.nspec)
         else :
             ispec = np.atleast_1d(ispec)
-        
+
         if wavelength is None :
             wavelength = self.wavelength(ispec)
         else :
             wavelength = np.atleast_1d(wavelength)
-        
+
         if len(wavelength.shape)==2 :
             res=np.zeros(wavelength.shape)
-            for j,i in enumerate(ispec): 
+            for j,i in enumerate(ispec):
                 res[j]=self.traceset.y_vs_wave(ii,wavelength[i])
         else :
             res=np.zeros((ispec.size,wavelength.size))
-            for j,i in enumerate(ispec): 
+            for j,i in enumerate(ispec):
                 res[j]=self.traceset.y_vs_wave(i,wavelength)
         return res
-    
-    
+
+
     def wavelength(self,ispec=None,y=None):
         """
         returns wavelength evaluated at y
@@ -114,21 +115,21 @@ class PSF(object):
         else :
             if np.size(y)==1 :
                 res=np.zeros((ispec.size))
-                for j,i in enumerate(ispec): 
-                    res[j]=self.traceset.wave_vs_y(i,y)
-                return res  
-            else :
-                res=np.zeros((ispec.size,y.size))
-                for j,i in enumerate(ispec): 
+                for j,i in enumerate(ispec):
                     res[j]=self.traceset.wave_vs_y(i,y)
                 return res
-        
+            else :
+                res=np.zeros((ispec.size,y.size))
+                for j,i in enumerate(ispec):
+                    res[j]=self.traceset.wave_vs_y(i,y)
+                return res
+
     def xsigma(self,ispec,wave):
         return self.traceset.xsig_vs_wave(ispec,wave)
-        
+
     def ysigma(self,ispec,wave):
         return self.traceset.ysig_vs_wave(ispec,wave)
-    
+
     def angstroms_per_pixel(self, ispec, wavelength):
         """
         Return CCD pixel width in Angstroms for spectrum ispec at given

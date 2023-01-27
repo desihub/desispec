@@ -1,3 +1,8 @@
+"""
+desispec.scripts.humidity_corrected_fiberflat
+=============================================
+
+"""
 
 from __future__ import absolute_import, division
 

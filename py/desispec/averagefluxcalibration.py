@@ -1,3 +1,8 @@
+"""
+desispec.averagefluxcalibration
+===============================
+
+"""
 import numpy as np
 import scipy.constants
 from desimodel.io import load_desiparams

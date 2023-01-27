@@ -1,3 +1,8 @@
+"""
+desispec.workflow.timing
+========================
+
+"""
 import os
 import numpy as np
 

@@ -1,4 +1,8 @@
-""" Class to organize QA for one night of DESI exposures
+"""
+desispec.qa.qa_night
+====================
+
+Class to organize QA for one night of DESI exposures.
 """
 
 from __future__ import print_function, absolute_import, division

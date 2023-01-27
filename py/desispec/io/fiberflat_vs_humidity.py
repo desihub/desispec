@@ -1,3 +1,8 @@
+"""
+desispec.io.fiberflat_vs_humidity
+=================================
+
+"""
 import numpy as np
 import fitsio
 import astropy.io.fits as fits

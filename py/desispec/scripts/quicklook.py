@@ -1,35 +1,36 @@
 """
 desispec.scripts.quicklook
-===========================
+==========================
+
 Command line wrapper for running a QL pipeline
 
 QuickLook team @Southern Methodist University (SMU)
 First version Spring 2016
 Latest revision July 2018
 
-Running QuickLook:
+Running QuickLook::
 
     desi_quicklook -i qlconfig_science.yaml -n 20191001 -c r0 -e 3577
 
-This requires having necessary input files and setting the following environment variables:
+This requires having necessary input files and setting the following environment variables::
 
     QL_SPEC_DATA: directory containing raw/fibermap files (full path: $QL_SPEC_DATA/night/expid)
     QL_SPEC_REDUX: directory for QL output (full path: $QL_SPEC_REDUX/exposures/night/expid)
     DESI_CALIBRATION_DATA: directory containing calibration files
 
-Necessary Quicklook command line arguments:
+Necessary Quicklook command line arguments::
 
     -i,--config_file : path to QL configuration file
     -n,--night : night to be processed
     -c,--camera : camera to be processed
     -e,--expid : exposure ID to be processed
 
-Optional QuickLook arguments:
+Optional QuickLook arguments::
 
     --rawdata_dir : directory containing raw/fibermap files (overrides $QL_SPEC_DATA)
     --specprod_dir : directory for QL output (overrides $QL_SPEC_REDUX)
-    
-  Plotting options:
+
+Plotting options::
 
     -p (including path to plotting configuration file) : generate configured plots
     -p (only using -p with no configuration file) : generate QL hardcoded plots

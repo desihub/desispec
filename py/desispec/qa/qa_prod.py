@@ -1,4 +1,8 @@
-""" Class to organize QA for a full DESI production run
+"""
+desispec.qa.qa_prod
+===================
+
+Class to organize QA for a full DESI production run.
 """
 
 from __future__ import print_function, absolute_import, division

@@ -1,5 +1,8 @@
 '''
-Preprocess raw DESI exposures
+desispec.preproc
+================
+
+Preprocess raw DESI exposures.
 '''
 
 import re
@@ -859,7 +862,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- Load dark
     if cfinder and cfinder.haskey("DARK") and (dark is not False):
-        
+
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
@@ -869,7 +872,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
-    
+
         if isinstance(dark,str):
             dark_filename=dark
             if not os.path.exists(dark_filename):
@@ -989,7 +992,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.info("Perform a dark trail correction before fitting the overscan region")
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
-                # region is BIASSEC+DATASEC
+                # Region is BIASSEC+DATASEC
                 ii    = parse_sec_keyword(header["BIASSEC"+amp])
                 jj    = parse_sec_keyword(header["DATASEC"+amp])
                 start = min(ii[1].start,jj[1].start)
@@ -1303,11 +1306,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             else :
                 cosmics_c2fudge_in_calib = cfinder.value("COSMICS_C2")
                 log.warning(f"Cosmics C2 parameter from calibration ({cosmics_c2fudge_in_calib}) overridden by function arg = {cosmics_c2fudge}")
-        
+
         if cosmics_c2fudge is None :
             cosmics_c2fudge = 0.5
             log.debug(f"Using default cosmics C2 parameter = {cosmics_c2fudge}")
-            
+
 
         cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
         mask = img.mask

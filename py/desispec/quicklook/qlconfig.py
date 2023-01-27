@@ -1,3 +1,8 @@
+"""
+desispec.quicklook.qlconfig
+===========================
+
+"""
 import numpy as np
 import json
 import yaml
@@ -9,8 +14,8 @@ import os,sys
 from desispec.quicklook import qlexceptions,qllogger
 
 class Config(object):
-    """ 
-    A class to generate Quicklook configurations for a given desi exposure. 
+    """
+    A class to generate Quicklook configurations for a given desi exposure.
     expand_config will expand out to full format as needed by quicklook.setup
     """
     def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,qlplots=False,store_res=None):
@@ -18,10 +23,10 @@ class Config(object):
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
         camera: which camera to process eg 'r0'
-        expid: exposure id for the image to be processed 
+        expid: exposure id for the image to be processed
         amps: for outputing amps level QA
         Note:
-        rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
+        rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention
         """
         with open(configfile, 'r') as f:
             self.conf = yaml.safe_load(f)
@@ -35,7 +40,7 @@ class Config(object):
         self.camera = camera
         self.singqa = singqa
         self.amps = amps
-        self.rawdata_dir = rawdata_dir 
+        self.rawdata_dir = rawdata_dir
         self.specprod_dir = specprod_dir
         self.outdir = outdir
         self.flavor = self.conf["Flavor"]
@@ -67,12 +72,12 @@ class Config(object):
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
         self.qamodule = self._palist.qamodule
-        
+
         algokeys = self.algorithms.keys()
 
         # Extract mapping of scalar/refence key names for each QA
         qaRefKeys = {}
-        for i in algokeys: 
+        for i in algokeys:
             for k in self.algorithms[i]["QA"].keys():
                 if k == "Check_HDUs":
                     qaRefKeys[k] = "CHECKHDUS"
@@ -82,20 +87,20 @@ class Config(object):
                         scalar = par.replace("_NORMAL_RANGE","")
                         qaRefKeys[k] = scalar
 
-        # Special additional parameters to read in.  
+        # Special additional parameters to read in.
         self.wavelength = None
         for key in ["BoxcarExtract","Extract_QP"] :
             if key in self.algorithms.keys():
                 if "wavelength" in self.algorithms[key].keys():
                     self.wavelength = self.algorithms[key]["wavelength"][self.camera[0]]
-        
+
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
         self._qaRefKeys = qaRefKeys
 
     @property
-    def palist(self): 
+    def palist(self):
         """ palist for this config
             see :class: `Palist` for details.
         """
@@ -136,7 +141,7 @@ class Config(object):
 
         if self.writepreprocfile:
             preprocfile=self.dump_pa("Preproc")
-        else: 
+        else:
             preprocfile = None
         paopt_preproc={'camera': self.camera,'dumpfile': preprocfile}
 
@@ -168,7 +173,7 @@ class Config(object):
         paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': self.calibpsf, 'outputPSFFile': self.psf_filename}
 
         paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.calibpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
-        
+
         paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': qframefile}
 
         paopt_resfit={'PSFinputfile': self.psf_filename, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
@@ -223,21 +228,21 @@ class Config(object):
 
         for PA in self.palist:
             paopts[PA]=getPAConfigFromFile(PA,self.algorithms)
-        #- Ignore intermediate dumping and write explicitly the outputfile for 
-        self.outputfile=self.dump_pa(self.palist[-1]) 
+        #- Ignore intermediate dumping and write explicitly the outputfile for
+        self.outputfile=self.dump_pa(self.palist[-1])
 
-        return paopts 
-        
+        return paopts
+
     def dump_pa(self,paname):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
         pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ComputeFiberflat_QP': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe', 'ApplyFluxCalibration': 'cframe'}
-        
+
         if paname in pafilemap:
             filetype=pafilemap[paname]
         else:
-            raise IOError("PA name does not match any file type. Check PA name in config") 
+            raise IOError("PA name does not match any file type. Check PA name in config")
 
         pafile=None
         if filetype is not None:
@@ -245,8 +250,8 @@ class Config(object):
 
         return pafile
 
-    def dump_qa(self): 
-        """ 
+    def dump_qa(self):
+        """
         yaml outputfile for the set of qas for a given pa
         Name and default locations of files are handled by desispec.io.meta.findfile
         """
@@ -257,7 +262,7 @@ class Config(object):
             for QA in self.qalist[PA]:
                 #qa_outfile[QA] = self.io_qa(QA)[0]
                 qa_outfig[QA] = self.io_qa(QA)[1]
-                
+
                 #- make path if needed
                 path = os.path.normpath(os.path.dirname(qa_outfig[QA]))
                 if not os.path.exists(path):
@@ -269,7 +274,7 @@ class Config(object):
     @property
     def qaargs(self):
         qaopts = {}
-        referencemetrics=[]        
+        referencemetrics=[]
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 pa_yaml = PA.upper()
@@ -391,7 +396,7 @@ class Config(object):
         self.fibermap=None
         if self.flavor != 'bias' and self.flavor != 'dark':
             self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        
+
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
         camera_header =hdulist[self.camera].header
@@ -399,7 +404,7 @@ class Config(object):
         self.program=primary_header['PROGRAM']
 
         hdulist.close()
-        
+
         cfinder = CalibFinder([camera_header,primary_header])
         if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
             self.calibpsf=None
@@ -410,7 +415,7 @@ class Config(object):
             self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        
+
         if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
             self.fiberflat=None
         elif self.flatid is None and self.flavor != 'flat':
@@ -420,7 +425,7 @@ class Config(object):
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        #SE: QL no longer get references from a template or merged json 
+        #SE: QL no longer get references from a template or merged json
         #- Get reference metrics from template json file
         self.reference=None
 
@@ -481,7 +486,7 @@ def check_config(outconfig,singqa):
                     log.info("File check: Okay: {}".format(thisfile))
         log.info("All necessary files exist for {} configuration.".format(outconfig["Flavor"]))
 
-    return 
+    return
 
 class Palist(object):
     """
@@ -502,7 +507,7 @@ class Palist(object):
     def _palist(self):
         palist=self.thislist
         self.pamodule='desispec.quicklook.procalgs'
-        return palist       
+        return palist
 
     def _qalist(self):
         qalist={}

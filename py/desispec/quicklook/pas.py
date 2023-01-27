@@ -1,3 +1,8 @@
+"""
+desispec.quicklook.pas
+======================
+
+"""
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlexceptions
 

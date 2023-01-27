@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-
 """
-desispec.io.emlinefit
-====================
+desispec.emlinefit
+==================
+
 Routines for desi_emlinefit_afterburner.
 """
 
@@ -16,6 +15,7 @@ allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
 def get_rf_em_waves(emname):
     """
     Returns the rest-frame, vacuum, wavelengths.
+
     Args:
         emname, from: "OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA" (string)
 
@@ -86,7 +86,8 @@ def emlines_gaussfit(
 
     Returns:
         emdict: a dictionary with various quantities, noticely "FLUX" and "FLUX_IVAR" (dictionary of floats)
-            list of all keys:
+        list of all keys::
+
                 CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                 CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s
@@ -97,16 +98,17 @@ def emlines_gaussfit(
                 fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
                 ivars: ivar values used for the fitting (numpy array of floats)
                 models: model flux values (in 1e-17 * erg/cm2/s/A) from the fit (numpy array of floats)
+
         succeed: did the fit succeed? (boolean)
 
-    Notes:
-        Adapted/simplified from elgredshiftflag from J. Comparat (used for eBOSS/ELG):
-            https://svn.sdss.org/repo/eboss/elgredshiftflag/
-        Returns np.nan in emdict (and NDOF=-99) if not enough pixels to fit or if fit fails.
-        Default settings designed for ELGs (e.g. max_sigma); need to re-assess if run on other targets.
-        For "OII", let the doublet line ratio free during the fit.
-        For "OIII", fits the 4960 and 5007 lines with a fixed line ratio.
-        For the Balmer lines, SHARE is not fitted and set to np.nan.
+    Note:
+        * Adapted/simplified from elgredshiftflag from J. Comparat (used for eBOSS/ELG):
+          https://svn.sdss.org/repo/eboss/elgredshiftflag/
+        * Returns np.nan in emdict (and NDOF=-99) if not enough pixels to fit or if fit fails.
+        * Default settings designed for ELGs (e.g. max_sigma); need to re-assess if run on other targets.
+        * For "OII", let the doublet line ratio free during the fit.
+        * For "OIII", fits the 4960 and 5007 lines with a fixed line ratio.
+        * For the Balmer lines, SHARE is not fitted and set to np.nan.
     """
     # AR log
     if log is None:

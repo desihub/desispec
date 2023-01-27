@@ -1,6 +1,6 @@
 """
 desispec.badcolumn
-========================
+==================
 
 Utility functions to treat bad CCD columns
 """

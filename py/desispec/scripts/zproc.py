@@ -1,4 +1,7 @@
 """
+desispec.scripts.zproc
+======================
+
 One stop shopping for redshifting  DESI spectra
 """
 
@@ -258,7 +261,7 @@ def main(args=None, comm=None):
         log.info("Froze iers for all ranks")
     timer.stop('freeze_iers')
 
-    
+
     timer.start('preflight')
 
     ## Derive the available cameras
@@ -462,7 +465,7 @@ def main(args=None, comm=None):
         else:
             splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
             os.makedirs(os.path.dirname(splog), exist_ok=True)
-        
+
     if comm is not None:
         comm.barrier()
 
@@ -585,7 +588,7 @@ def main(args=None, comm=None):
 
     if comm is not None:
         comm.barrier()
-        
+
     timer.stop('redrock')
 
     if rank == 0:
@@ -616,14 +619,14 @@ def main(args=None, comm=None):
             with stdouterr_redirected(qalog):
                 result, success = runcmd(tileqa.main, args=cmdargs,
                                          inputs=infiles, outputs=[qafile, qapng])
-                    
+
             ## count failure/success
             if not success:
                 log.error(f'tileqa failed; see {qalog}')
                 error_count += 1
-                
+
         log.info("Done with tileqa")
-                
+
     timer.stop('tileqa')
 
     if comm is not None:
@@ -703,7 +706,7 @@ def main(args=None, comm=None):
             monocomm = comm.Split(color=comm.rank)
         else:
             monocomm = None
-            
+
         if block_rank == 0:
             ## If running mutiple afterburners at once, wait some time so
             ## I/O isn't hit all at once
@@ -840,23 +843,25 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
     of blocks or roughly equal size.
 
     Args:
-        nblocks, int: the number of blocks to split the ranks into
-        rank, int: the MPI world rank
-        size, int: the number of world MPI ranks
-        comm: MPI communicator
-        log: logger
-        split_comm, bool: whether to split the world communicator into blocks and return
-                          the block communicator
+        nblocks (int): the number of blocks to split the ranks into
+        rank (int): the MPI world rank
+        size (int): the number of world MPI ranks
+        comm (object): MPI communicator
+        log (object): logger
+        split_comm (bool): whether to split the world communicator into blocks and return
+            the block communicator
 
     Returns:
-        nblocks, int: the achievable number of block based on size
-        block_size, int: the number of ranks in the assigned block of current rank
-        block_rank. int: the rank in the assigned block of the current rank
-        block_num, int: the block number (of nblocks blocks) in which the rank
-                        was assigned
-        block_comm (optional): if split_comm is true, returns a communicator of
-                               only the ranks in the current block. Splits from
-                               the world communicator
+        tuple: A tuple containing:
+
+        * nblocks, int: the achievable number of block based on size
+        * block_size, int: the number of ranks in the assigned block of current rank
+        * block_rank. int: the rank in the assigned block of the current rank
+        * block_num, int: the block number (of nblocks blocks) in which the rank
+          was assigned
+        * block_comm (optional): if split_comm is true, returns a communicator of
+          only the ranks in the current block. Splits from
+          the world communicator
     """
     if rank is None or size is None:
         if comm is not None:
@@ -900,7 +905,7 @@ def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
                 block_comm = comm.Split(block_num, block_rank)
                 assert block_rank == block_comm.Get_rank()
             else:
-                block_comm = comm            
+                block_comm = comm
 
     if log is not None:
         log.info(f"World rank/size: {rank}/{size} mapped to: Block #{block_num}, " +

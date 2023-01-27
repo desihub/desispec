@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+"""
+desispec.night_qa
+=================
 
+"""
 # AR general
 import sys
 import os
@@ -81,10 +84,10 @@ def get_surveys_night_expids(
         tileids: list of the TILEIDs (np.array())
         surveys: list of the SURVEYs (np.array())
 
-    Notes:
+    Note:
         Based on:
         - parsing the OBSTYPE keywords from the SPEC extension header of the desi-{EXPID}.fits.fz files;
-        - for OBSTYPE="SCIENCE", parsing the fiberassign-TILEID.fits* header
+        - for OBSTYPE="SCIENCE", parsing the ``fiberassign-TILEID.fits*`` header
     """
     if datadir is None:
         datadir = os.getenv("DESI_SPECTRO_DATA")
@@ -144,9 +147,9 @@ def get_dark_night_expid(night, prod):
     Returns:
         expid: EXPID (int)
 
-    Notes:
-        If nothing found, returns None.
-        20220110 : new method, relying on processing_tables
+    Note:
+        * If nothing found, returns None.
+        * 20220110 : new method, relying on processing_tables
     """
     #
     expid = None
@@ -193,11 +196,11 @@ def get_morning_dark_night_expid(night, prod, exptime=1200):
     Returns:
         expid: EXPID (int)
 
-    Notes:
-        If nothing found, returns None.
-        As of now (20221220), those morning darks are not processed by the daily
-            pipeline; hence we do not use the processing_tables, but the
-            exposure_tables.
+    Note:
+        * If nothing found, returns None.
+        * As of now (20221220), those morning darks are not processed by the daily
+          pipeline; hence we do not use the processing_tables, but the
+          exposure_tables.
     """
     #
     expid = None
@@ -245,11 +248,11 @@ def get_ctedet_night_expid(night, prod):
     Returns:
         expid: EXPID (int)
 
-    Notes:
-        If nothing found, returns None.
-        We look for preproc files.
-        As we are looking for a faint signal, we want the image with the less electrons,
-            thus it could be picking a BRIGHT short exposure against a longer DARK exposure.
+    Note:
+        * If nothing found, returns None.
+        * We look for preproc files.
+        * As we are looking for a faint signal, we want the image with the less electrons,
+          thus it could be picking a BRIGHT short exposure against a longer DARK exposure.
     """
     expids = np.array(
         [
@@ -344,10 +347,10 @@ def create_mp4(fns, outmp4, duration=15):
         outmp4: output .mp4 filename
         duration (optional, defaults to 15): video duration in seconds (float)
 
-    Notes:
-        Requires ffmpeg to be installed.
-        At NERSC, run in the bash command line: "module load ffmpeg".
-        The movie uses fns in the provided order.
+    Note:
+        * Requires ffmpeg to be installed.
+        * At NERSC, run in the bash command line: "module load ffmpeg".
+        * The movie uses fns in the provided order.
     """
     # AR is ffmpeg installed
     if os.system("which ffmpeg") != 0:
@@ -390,10 +393,8 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
 
     Returns:
-        If the preproc file is here:
-            mydict: a dictionary with the binned+masked image, plus various infos
-        Else:
-            None
+        mydict: a dictionary with the binned+masked image, plus various infos,
+        assuming a preproc file is available. Otherwise ``None``.
     """
     if os.path.isfile(fn):
         mydict = {}
@@ -448,9 +449,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
         nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
 
-    Notes:
+    Note:
         If the identified dark image is not processed and if the raw data is there,
-            we do process it (in a temporary folder), so that we can generate the plots.
+        we do process it (in a temporary folder), so that we can generate the plots.
     """
     # AR first check if we need to process this dark image
     proctable_fn = os.path.join(
@@ -667,10 +668,7 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
         camera: "b", "r", or "z" (string)
 
     Returns:
-        If the preproc file is here:
-            mydict: a dictionary with the IMAGE data, plus various infos
-        Else:
-            None
+        mydict: a dictionary with the IMAGE data, plus various infos, assuming a preproc file is available, otherwise ``None``.
     """
     #
     fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
@@ -718,9 +716,9 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         yoffcols (optional, defaults to {"A" : -2.5, "B" : -3.5, "C" : -2.5, "D" : -3.5}):
             y-values to report the per-amplifier OFFCOLS info, if any (dictionnary of floats)
 
-    Notes:
-        Credits to S. Bailey.
-        Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
+    Note:
+        * Credits to S. Bailey.
+        * Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
     myargs = []
     for petal in petals:
@@ -816,10 +814,7 @@ def _read_sframesky(night, prod, expid):
         expid: expid to display (int)
 
     Returns:
-        If some sframe files:
-            mydict, dictionary with per-camera wave, flux, and various infos
-        Else:
-            None
+        mydict, dictionary with per-camera wave, flux, and various infos, assuming sframe files were available, otherwise ``None``.
     """
     #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
@@ -968,9 +963,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         expids: expids of the tiles to display (list or np.array)
         tileids: tiles to display (list or np.array)
-
-    Options:
-        group (str): tile group "cumulative" or "pernight"
+        group (str, optional): tile group "cumulative" or "pernight"
     """
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
@@ -1012,12 +1005,10 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         tileids: list of tileids to consider (list or numpy array)
         dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
+        group (str, optional): tile group "cumulative" or "pernight"
 
-    Options:
-        group (str): tile group "cumulative" or "pernight"
-
-    Notes:
-        Work from the redrock*fits files.
+    Note:
+        Work from the ``redrock-*.fits`` files.
     """
     # AR safe
     tileids = np.unique(tileids)
@@ -1143,11 +1134,11 @@ def plot_newlya(
         ylim (optional, defaults to (-2.5, 2.5): plot ylim (tuple)
         nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
 
-    Notes:
-        ntilecovs[:, 0] lists the fractions of the tiles covered by 1 tile, etc.
-        The plotted y-values are: (N_newlya_observed / N_newlya_expected) - 1.
-        The expected numbers are based on all main dark tiles (from daily) up to May 26th 2022.
-        The 1-2-3-sigma regions reflect the approximate scatter of those data.
+    Note:
+        * ntilecovs[:, 0] lists the fractions of the tiles covered by 1 tile, etc.
+        * The plotted y-values are: (N_newlya_observed / N_newlya_expected) - 1.
+        * The expected numbers are based on all main dark tiles (from daily) up to May 26th 2022.
+        * The 1-2-3-sigma regions reflect the approximate scatter of those data.
     """
     #
     n_dark_passids = 7
@@ -1177,7 +1168,7 @@ def plot_newlya(
     # AR - based on main dark tiles (from daily) up to May 26th 2022
     # AR - the ntilecov in expect_1sig() is the *average* pass coverage (i.e. mean_ntilecovs)
     # AR - blue, green, red: approximative 1-sigma, 2-sigma, 3-sigma
-    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on 
+    # AR - special case for ntilecov=1 (a bit more scatter there, as this is more dependent on
     # AR    the parent qso density)
     def expect_1sig(ntilecovs):
         vals = np.exp( (ntilecovs - 7.5) / 2.35)
@@ -1242,24 +1233,24 @@ def create_petalnz_pdf(
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         tileids: list of tileids to consider (list or numpy array)
         surveys: list of the surveys for each tileid of tileids (list or numpy array)
-
-    Options:
         dchi2_threshold (optional, defaults to 25): DELTACHI2 value to split the sample (float)
-        group (str): tile group "cumulative" or "pernight"
-        newlya_ecsv (defaults to None): if set, table saving the per-tile number of newly identified
+        group (optional, str): tile group "cumulative" or "pernight"
+        newlya_ecsv (optional, defaults to None): if set, table saving the per-tile number of newly identified
             Ly-a and the tile coverage (if no dark tiles, no file will be saved).
 
-    Notes:
-        Only displays:
-            - sv1, sv2, sv3, main, as otherwise the plotted tracers are not relevant;
-            - FAPRGRM="bright" or "dark" tileids;
-            - for the main survey, tiles with EFFTIME > MINTFRAC * GOALTIME.
-        If the tile-qa-TILEID-thruNIGHT.fits file is missing, that tileid is skipped.
-        For the Lya, work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
-        The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
-            so ok to simply use the bit mask values from the main.
-        TBD : we query the FAPRGRM of the tile-qa-*fits header, not sure that properly works for
-            surveys other than main..
+    Note:
+        * Only displays:
+
+          - sv1, sv2, sv3, main, as otherwise the plotted tracers are not relevant;
+          - FAPRGRM="bright" or "dark" tileids;
+          - for the main survey, tiles with EFFTIME > MINTFRAC * GOALTIME.
+
+        * If the tile-qa-TILEID-thruNIGHT.fits file is missing, that tileid is skipped.
+        * For the Lya, work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
+        * The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
+          so ok to simply use the bit mask values from the main.
+        * TBD : we query the FAPRGRM of the ``tile-qa-*.fits`` header, not sure that properly works for
+          surveys other than main..
     """
     petals = np.arange(10, dtype=int)
     n_dark_passids = 7
@@ -1653,7 +1644,7 @@ def _javastring():
     """
     Return a string that embeds a date in a webpage.
 
-    Notes:
+    Note:
         Credits to ADM (desitarget/QA.py).
     """
     js = textwrap.dedent(

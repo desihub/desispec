@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.plan
-=============================
+======================
 
 Tools for planning pipeline runs.
 """
@@ -148,18 +148,16 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         tfactor (float):  Additional runtime scaling factor.
         nworker (int):  The number of workers.
         workersize (int):  The number of processes in each worker.
-
-    Options:
-        startup (float):  Startup overhead in minutes for each worker.
-        db (DataBase): the database to pass to the task runtime
+        startup (float, optional):  Startup overhead in minutes for each worker.
+        db (DataBase, optional): the database to pass to the task runtime
             calculation.
-        num_nodes (int): number of nodes over which the workers are distributed
+        num_nodes (int, optional): number of nodes over which the workers are distributed
 
     Returns:
         (tuple):  The (sorted tasks, sorted runtime weights, dist) results
-            where dist is the a list of tuples (one per worker) indicating
-            the indices of tasks for that worker in the
-            returned sorted list of tasks.
+        where dist is the a list of tuples (one per worker) indicating
+        the indices of tasks for that worker in the
+        returned sorted list of tasks.
 
     """
     from .tasks.base import task_classes, task_type
