@@ -31,8 +31,10 @@ from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
-from desispec.io.util import decode_camword, create_camword, difference_camwords, \
-                             camword_to_spectros, camword_union, camword_intersection
+from desispec.io.util import decode_camword, create_camword, \
+    difference_camwords, \
+    camword_to_spectros, camword_union, camword_intersection, parse_badamps
+
 
 #################################################
 ############## Misc Functions ###################
@@ -1279,9 +1281,47 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['STATUS'] = 'U'
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+
+    ## Assign the PROCCAMWORD based on the descriptor and the input exposures
     if descriptor == 'stdstarfit':
         pcamwords = [prow['PROCCAMWORD'] for prow in prows]
-        joint_prow['PROCCAMWORD'] = camword_union(pcamwords, full_spectros_only=True)
+        joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
+                                                  full_spectros_only=True)
+    else:
+        ## For arcs and flats, a BADAMP takes out the camera, so remove those
+        ## cameras from the proccamword
+        pcamwords = []
+        for prow in prows:
+            if len(prow['BADAMPS']) > 0:
+                badcams = []
+                for (camera, petal, amplifier) in parse_badamps(prow['BADAMPS']):
+                    badcams.append(f'{camera}{petal}')
+                badampcamword = create_camword(list(set(badcams)))
+                pcamword = difference_camwords(prow['PROCCAMWORD'], badampcamword)
+            else:
+                pcamword = prow['PROCCAMWORD']
+            pcamwords.append(pcamword)
+
+        ## For flats we want any camera that exists in all 12 exposures
+        ## For arcs we want any camera that exists in at least 3 exposures
+        if descriptor == 'nightlyflat':
+            joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
+                                                             full_spectros_only=False)
+        elif descriptor == 'psfnight':
+            ## Count number of exposures each camera is present for
+            camcheck = {}
+            for camword in pcamwords:
+                for cam in decode_camword(camword):
+                    if cam in camcheck:
+                        camcheck[cam] += 1
+                    else:
+                        camcheck[cam] = 1
+            ## if exists in 3 or more exposures, then include it
+            goodcams = []
+            for cam,camcount in camcheck.items():
+                if camcount >= 3:
+                    goodcams.append(cam)
+            joint_prow['PROCCAMWORD'] = create_camword(goodcams)
 
     joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow

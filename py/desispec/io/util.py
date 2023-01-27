@@ -753,7 +753,14 @@ def parse_badamps(badamps,joinsymb=','):
     cam_petal_amps = []
     if badamps is None:
         return cam_petal_amps
-
+    elif not isinstance(badamps, str):
+        log = get_logger()
+        err = f"Badamps should be NoneType or str, not {type(badamps)}"
+        log.error(err)
+        raise TypeError(err)
+    elif badamps == '':
+        return cam_petal_amps
+    
     for cpa in badamps.split(joinsymb):
         cpa = cpa.strip()
         if len(cpa) != 3:
