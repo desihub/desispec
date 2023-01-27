@@ -71,6 +71,8 @@ for line in pastjobs:
         continue
 
     jobid, jobname, state, endtime = line.split()
+
+    #- Exclude scron jobs (nightwatch, svn and dashboard updates, etc)
     if jobname.startswith('scron') or state in ('PENDING', 'RUNNING'):
         continue
 
