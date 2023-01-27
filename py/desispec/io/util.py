@@ -751,7 +751,7 @@ def parse_badamps(badamps,joinsymb=','):
 
     """
     cam_petal_amps = []
-    if badamps is None:
+    if badamps is None or not isinstance(badamps, str) or badamps == '':
         return cam_petal_amps
 
     for cpa in badamps.split(joinsymb):
