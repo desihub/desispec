@@ -23,11 +23,12 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
     get_terminal_steps, get_tables
-from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.proctable import get_processing_table_pathname, \
+    table_row_to_dict
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword
+    difference_camwords, parse_badamps, create_camword, camword_intersection
 
 
 def parse(options):
@@ -167,19 +168,23 @@ def populate_night_info(night, check_on_disk=False,
     ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
     ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
+    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['arc'] =      {'psf': 1,    'frame': 0, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['cteflat'] =  {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['flat'] =     {'psf': 1,    'frame': 1, 'ff': 1,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
+    expected_by_type['nightlyflat'] = {'psf': 0,    'frame': 0, 'ff': 1,
+                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['science'] =  {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 1, 'std': 1,   'cframe': 1}
     expected_by_type['twilight'] = {'psf': 1,    'frame': 1, 'ff': 0,
                                     'sframe': 0, 'std': 0,   'cframe': 0}
-    expected_by_type['zero'] =     {'psf': 0,    'frame': 0, 'ff': 0,
-                                    'sframe': 0, 'std': 0,   'cframe': 0}
     expected_by_type['dark'] = expected_by_type['zero']
+    expected_by_type['ccdcalib'] = expected_by_type['zero']
+    expected_by_type['psfnight'] = expected_by_type['arc']
     expected_by_type['sky'] = expected_by_type['science']
     expected_by_type['null'] = expected_by_type['zero']
 
@@ -200,20 +205,80 @@ def populate_night_info(night, check_on_disk=False,
     expid_processing = set(
         [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
+    ## Add a new indexing column to include calibnight rows in correct location
+    exptab.add_column(Table.Column(data=2*np.arange(1,len(exptab)+1),name="ORDER"))
     if proctab is not None and len(proctab) > 0:
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
+        for jobdesc in ['ccdcalib', 'psfnight', 'nightlyflat']:
+            if jobdesc in proctab['JOBDESC']:
+                jobrow = proctab[proctab['JOBDESC']==jobdesc][0]
+                expids = jobrow['EXPID']
+                lastexpid = expids[-1]
+                if lastexpid in exptab['EXPID']:
+                    joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
+                    joint_erow['OBSTYPE'] = jobdesc
+                    joint_erow['ORDER'] = joint_erow['ORDER']+1
+                    if len(expids) == 1:
+                        joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
+                    else:
+                        joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
+                ## Derive the appropriate PROCCAMWORD from the exposure table
+                pcamwords = []                
+                for expid in expids:
+                    if expid in exptab['EXPID']:
+                        erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+                        if 'BADCAMWORD' in erow:
+                            pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+                        else:
+                            pcamword = erow['CAMWORD']
+                        if len(erow['BADAMPS']) > 0:
+                            badcams = []
+                            for (camera, petal, amplifier) in parse_badamps(erow['BADAMPS']):
+                                badcams.append(f'{camera}{petal}')
+                            badampcamword = create_camword(list(set(badcams)))
+                            pcamword = difference_camwords(pcamword, badampcamword)
+                        pcamwords.append(pcamword)
+
+                if len(pcamwords) == 0:
+                    print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
+                    continue
+                ## For flats we want any camera that exists in all 12 exposures
+                ## For arcs we want any camera that exists in at least 3 exposures
+                if jobdesc == 'nightlyflat':
+                    joint_erow['CAMWORD'] = camword_intersection(pcamwords,
+                                                       full_spectros_only=False)
+                elif jobdesc == 'psfnight':
+                    ## Count number of exposures each camera is present for
+                    camcheck = {}
+                    for camword in pcamwords:
+                        for cam in decode_camword(camword):
+                            if cam in camcheck:
+                                camcheck[cam] += 1
+                            else:
+                                camcheck[cam] = 1
+                    ## if exists in 3 or more exposures, then include it
+                    goodcams = []
+                    for cam, camcount in camcheck.items():
+                        if camcount >= 3:
+                            goodcams.append(cam)
+                    joint_erow['CAMWORD'] = create_camword(goodcams)
+
+                joint_erow['BADCAMWORD'] = ''
+                joint_erow['BADAMPS'] = ''
+                exptab.add_row(joint_erow)
 
     del proctab
+    exptab.sort(['ORDER'])
 
     logfiletemplate = os.path.join(logpath,
                                    '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
     fileglob_template = os.path.join(specproddir, 'exposures', str(night),
-                                     '{zexpid}',
-                                     '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
+                                     '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
+    fileglob_calib_template = os.path.join(specproddir, 'calibnight', str(night),
+                                           '{ftype}-{cam}[0-9]-{night}.{ext}')
 
-    def count_num_files(ftype, expid):
-        zfild_expid = str(expid).zfill(8)
+    def count_num_files(ftype, expid=None):
         if ftype == 'stdstars':
             cam = ''
         else:
@@ -224,25 +289,30 @@ def populate_night_info(night, check_on_disk=False,
             ext = 'fits.gz'
         else:
             ext = 'fits*'  # - .fits or .fits.gz
-        fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
-                                            cam=cam, ext=ext)
+        if expid is None:
+            fileglob = fileglob_calib_template.format(ftype=ftype, cam=cam,
+                                                      night=night, ext=ext)
+        else:
+            zfild_expid = str(expid).zfill(8)
+            fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
+                                                cam=cam, ext=ext)
         return len(glob.glob(fileglob))
 
     output = dict()
-    exptab.sort('EXPID')
     lasttile, first_exp_of_tile = None, None
     for row in exptab:
         expid = int(row['EXPID'])
         if expid in skipd_expids:
             continue
+        obstype = str(row['OBSTYPE']).lower().strip()
+        key = f'{obstype}_{expid}'
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
-        if night_json_info is not None and str(expid) in night_json_info \
-                and night_json_info[str(expid)]["COLOR"] in ['GOOD', 'NULL']:
-            output[str(expid)] = night_json_info[str(expid)]
+        if night_json_info is not None and key in night_json_info \
+                and night_json_info[key]["COLOR"] in ['GOOD', 'NULL']:
+            output[key] = night_json_info[key]
             continue
 
         zfild_expid = str(expid).zfill(8)
-        obstype = str(row['OBSTYPE']).lower().strip()
         tileid = str(row['TILEID'])
         if obstype == 'science':
             zfild_tid = tileid.zfill(6)
@@ -261,8 +331,7 @@ def populate_night_info(night, check_on_disk=False,
         proccamword = row['CAMWORD']
         if 'BADCAMWORD' in exptab.colnames:
             proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
-        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row[
-            'BADAMPS'] != '':
+        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row['BADAMPS'] != '':
             badcams = []
             for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
                 badcams.append(f'{camera}{petal}')
@@ -326,17 +395,25 @@ def populate_night_info(night, check_on_disk=False,
             print(
                 f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
 
-        nfiles = dict()
+        nfiles = {step:0 for step in ['psf','frame','ff','sky','sframe','std','cframe']}
         if obstype == 'arc':
             nfiles['psf'] = count_num_files(ftype='fit-psf', expid=expid)
-        else:
+        elif obstype == 'psfnight':
+            nfiles['psf'] = count_num_files(ftype='psfnight')
+        elif obstype != 'nightlyflat':
             nfiles['psf'] = count_num_files(ftype='psf', expid=expid)
-        nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
-        nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
-        nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
-        nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
-        nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
-        nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
+
+        if obstype in ['ccdcalib', 'psfnight']:
+            pass
+        elif obstype == 'nightlyflat':
+            nfiles['ff'] = count_num_files(ftype='fiberflatnight')
+        else:
+            nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
+            nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
+            nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
+            nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
+            nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
+            nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
 
         if terminal_step == 'std':
             nexpected = nspecs
@@ -454,7 +531,7 @@ def populate_night_info(night, check_on_disk=False,
         rd["LOG FILE"] = log_hlink
         rd["COMMENTS"] = comments
         rd["STATUS"] = status
-        output[str(expid)] = rd.copy()
+        output[key] = rd.copy()
     return output
 
 
