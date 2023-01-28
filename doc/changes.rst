@@ -2,13 +2,30 @@
 desispec Change Log
 ===================
 
-0.56.4 (unreleased)
+0.56.5 (unreleased)
 -------------------
 
-* Update API documentation (PR `#1981`_).
+* No changes yet.
 
+0.56.4 (2023-01-27)
+-------------------
+
+Bugfix update for Iron re-processing.
+
+* Completely sync daily -> tiles-specstatus, not just new data (PR `#1976`_).
+* Cleanup API documentation, changing many files (PR `#1981`_).
+* Add calibnight jobs to exposure dashboard (PR `#1982`_).
+* BUGFIX: define psfnight and nightlyflat cameras based upon all
+  input arcs/flats instead of just the first one (PR `#1984`_).
+* Add new desi_queue_status script (PR `#1986`_).
+* Don't hardcode $DESI_ROOT_READONLY in batch scripts (PR `#1987`_).
+
+.. _`#1976`: https://github.com/desihub/desispec/pull/1976
 .. _`#1981`: https://github.com/desihub/desispec/pull/1981
-
+.. _`#1982`: https://github.com/desihub/desispec/pull/1982
+.. _`#1984`: https://github.com/desihub/desispec/pull/1984
+.. _`#1986`: https://github.com/desihub/desispec/pull/1986
+.. _`#1987`: https://github.com/desihub/desispec/pull/1987
 
 0.56.3 (2023-01-24)
 -------------------
