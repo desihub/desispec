@@ -319,16 +319,18 @@ def create_desi_zproc_batch_script(group,
         fx.write("export OMP_NUM_THREADS=1\n")
 
         #- Special case CFS readonly mount at NERSC
-        if 'DESI_ROOT_READONLY' in os.environ:
-            readonlydir = os.environ['DESI_ROOT_READONLY']
-        elif os.environ['DESI_ROOT'].startswith('/global/cfs/cdirs'):
-            readonlydir = os.environ['DESI_ROOT'].replace(
-                    '/global/cfs/cdirs', '/dvs_ro/cfs/cdirs', 1)
-        else:
-            readonlydir = None
-
-        if readonlydir is not None:
-            fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
+        #- SB 2023-01-27: disable this since Perlmutter might deprecate /dvs_ro;
+        #- inherit it from the environment but don't hardcode into script itself
+        # if 'DESI_ROOT_READONLY' in os.environ:
+        #     readonlydir = os.environ['DESI_ROOT_READONLY']
+        # elif os.environ['DESI_ROOT'].startswith('/global/cfs/cdirs'):
+        #     readonlydir = os.environ['DESI_ROOT'].replace(
+        #             '/global/cfs/cdirs', '/dvs_ro/cfs/cdirs', 1)
+        # else:
+        #     readonlydir = None
+        #
+        # if readonlydir is not None:
+        #     fx.write(f'export DESI_ROOT_READONLY={readonlydir}\n\n')
 
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
