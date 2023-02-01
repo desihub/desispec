@@ -1,4 +1,5 @@
 import unittest, os, sys, shutil, tempfile
+from pkg_resources import resource_filename
 import numpy as np
 import numpy.testing as nt
 from astropy.io import fits
@@ -7,14 +8,15 @@ from copy import deepcopy
 
 if __name__ == '__main__':
     print('Run this instead:')
-    print('python setup.py test -m desispec.test.test_pixgroup')
+    thisfile = __file__.removeprefix(os.getcwd()+'/')
+    print(f'pytest {thisfile}')
     sys.exit(1)
 
 from ..test.util import get_frame_data
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
 from ..scripts import group_spectra
-from ..pixgroup import SpectraLite
+from ..pixgroup import SpectraLite, get_exp2healpix_map
 from desispec.maskbits import fibermask
 from desiutil.io import encode_table
 
@@ -305,6 +307,33 @@ class TestPixGroup(unittest.TestCase):
 
         compgz = read_spectra(self.fileiogz)
         self.verify_spectralite(compgz, self.fmap1)
+
+    def test_exp2healpix_map(self):
+        """Test get_exp2healpix_map"""
+        os.environ['DESI_SPECTRO_REDUX'] = resource_filename('desispec', 'test/data')
+        os.environ['SPECPROD'] = 'miniprod'
+        expfile = findfile('exposures')
+
+        #- Try a few combinations that shouldn't crash
+        exp2hpix = get_exp2healpix_map(expfile)
+        self.assertGreater(len(exp2hpix), 0)
+        exp2hpix = get_exp2healpix_map(expfile, survey='sv1', program='other')
+        self.assertGreater(len(exp2hpix), 0)
+        exp2hpix = get_exp2healpix_map(expfile, survey='sv2', program='dark')
+        self.assertGreater(len(exp2hpix), 0)
+
+        #- filter by expids
+        exp2hpix = get_exp2healpix_map(expfile, expids=[88056,88057])
+        self.assertEqual(list(np.unique(exp2hpix['EXPID'])), [88056,88057])
+
+        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't
+        #- appear in map (but e.g. petal 1 should)
+        exp2hpix = get_exp2healpix_map(expfile, survey='sv3', program='bright')
+        n1 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1))
+        n6 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6))
+        self.assertGreater(n1, 0)
+        self.assertEqual(n6, 0)
+
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+
+"""
+Resubmit failed healpix-based redshift jobs (zpix) by comparing slurm
+scripts to outputs on disk.  Optionally skip over output directories
+that are completely missing (purposefully removed).
+"""
+
+import os, sys, glob, argparse, subprocess
+import numpy as np
+
+import desispec.io
+
+def check_zpix_output(survey, program, healpix, allfiles=False, missing_dir_ok=False):
+    """
+    Check if healpix-based redshift outputs exist
+
+    Args:
+        survey (str): main, sv1, sv2, sv3, ...
+        program (str): dark, bright, backup, other
+        healpix (int): healpix number (typically nested nside=64 matching prod)
+
+    Options:
+        allfiles (bool): if True, check all files, not just redrock
+        missing_dir_ok (bool): if True, ok if output directory is completely missing,
+            i.e. only check for files if directory exists
+
+    Returns True/False whether output files exist
+    """
+    if missing_dir_ok:
+      hpixdir = os.path.dirname(desispec.io.findfile('redrock', survey=survey,
+                                     faprogram=program, healpix=healpix))
+      if not os.path.isdir(hpixdir):
+          print(f'WARNING: missing {hpixdir}')
+          return True
+
+    if allfiles:
+        filetypes = ['spectra', 'coadd', 'redrock', 'rrdetails',
+                     'emline', 'qso_qn', 'qso_mgii']
+    else:
+        filetypes = ['redrock',]
+
+    ok = True
+    for filetype in filetypes:
+      outfile = desispec.io.findfile(filetype, survey=survey,
+                                     faprogram=program, healpix=healpix)
+      ok &= os.path.exists(outfile)
+      if not ok:
+          print(f"ERROR: missing {outfile}")
+          break
+
+    return ok
+
+#--------------------------------------------------------------------
+p = argparse.ArgumentParser(description='resubmit zpix jobs with missing outputs')
+p.add_argument('-s', '--survey', default='*',
+            help='DESI survey (main, sv1, sv3, ...)')
+p.add_argument('-p', '--program', default='*',
+            help='DESI program (dark, bright, backup, other)')
+p.add_argument('--dry-run', action='store_true',
+            help="print what to do instead of actually resubmitting jobs")
+p.add_argument('--allfiles', action='store_true',
+            help="Full check of all files including afterburners")
+p.add_argument('--missing-dir-ok', action='store_true',
+            help="Skip over completely missing output directories")
+p.add_argument('--quiet', action='store_true',
+            help="Don't report healpix for which no action is needed")
+
+args = p.parse_args()
+
+specprod_dir = desispec.io.specprod_root()
+survey = args.survey
+program = args.program
+
+#- Parse the slurm scripts to know which healpix they intended to create
+slurm_scripts = glob.glob(f'{specprod_dir}/run/scripts/healpix/{survey}/{program}/*/zpix-{survey}-{program}-*.slurm')
+
+num_resubmit = 0
+for filename in slurm_scripts:
+    basename = os.path.basename(filename)
+
+    healpix = list()
+    with open(filename) as fx:
+        for line in fx.readlines():
+            if line.startswith('srun ') and line.count(' --healpix ')>0:
+                tmp = line.split()
+                i = tmp.index('--healpix')+1
+                healpix = list()
+                while tmp[i] != '--expfiles':
+                    healpix.append(int(tmp[i]))
+                    i += 1
+
+                break
+
+    if len(healpix) == 0:
+        print('ERROR: no healpix found in {basename}')
+        continue
+
+    missing_hpix = list()
+    for hpix in healpix:
+        if not check_zpix_output(survey, program, hpix,
+                                 allfiles=args.allfiles,
+                                 missing_dir_ok=args.missing_dir_ok):
+            missing_hpix.append(hpix)
+
+    if len(missing_hpix) > 0:
+        num_resubmit += 1
+        print(f'{basename} missing healpix {missing_hpix}')
+        cmd = f'sbatch {filename}'
+        if args.dry_run:
+            print(f"TODO: {cmd}")
+        else:
+            err = subprocess.call(cmd.split())
+            if err == 0:
+                print(f'--> resubmitted {basename}')
+            else:
+                print(f'ERROR: resubmitting {basename}')
+
+    else:
+        if not args.quiet:
+            print(os.path.basename(filename), '- OK')
+
+if args.dry_run:
+    print(f'{num_resubmit} zpix jobs to resubmit')
+else:
+    print(f'Resubmitted {num_resubmit} zpix jobs')
+
+

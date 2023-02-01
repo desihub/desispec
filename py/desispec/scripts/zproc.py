@@ -474,6 +474,7 @@ def main(args=None, comm=None):
             result, success = 0, True
             if groupname == 'healpix':
                 healpix = all_subgroups[i]
+                log.info(f'Coadding spectra for healpix {healpix}')
                 findfileopts['healpix'] = healpix
 
                 cframes = []
@@ -494,6 +495,7 @@ def main(args=None, comm=None):
 
             else:
                 spectro = all_subgroups[i]
+                log.info(f'Coadding spectra for spectrograph {spectro}')
                 findfileopts['spectrograph'] = spectro
 
                 # generate list of cframes from dict of exposures, nights, and cameras

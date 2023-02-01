@@ -54,7 +54,7 @@ def get_exp2healpix_map(expfile, survey=None, program=None,
     Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
     Args:
-        expfile (str): filepath to exposure with NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR
+        expfile (str): filepath to production exposure file with EXPOSURES and FRAMES HDUs
 
     Options:
         survey (str): filter by this survey (main, sv3, sv1, ...)
@@ -70,24 +70,30 @@ def get_exp2healpix_map(expfile, survey=None, program=None,
         specprod_dir = io.specprod_root()
 
     log.info(f'Reading exposures list from {expfile}')
-    if expfile.endswith( (".fits", ".fits.gz") ):
-        t = Table.read(expfile, 1)
-    else:
-        t = Table.read(expfile)
+    exps = Table.read(expfile, 'EXPOSURES')
+    frames = Table.read(expfile, 'FRAMES')
 
     #- override FAPRGRM with what we would set it to now
-    t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
-    keep = t['TILEID'] > 0
+    exps['FAPRGRM'] = io.meta.faflavor2program(exps['FAFLAVOR'])
+    keep = exps['TILEID'] > 0
     if survey is not None:
-        keep &= (t['SURVEY'] == survey)
+        keep &= (exps['SURVEY'] == survey)
     if program is not None:
-        keep &= (t['FAPRGRM'] == program)
+        keep &= (exps['FAPRGRM'] == program)
     if expids is not None:
-        keep &= np.isin(t['EXPID'], expids)
+        keep &= np.isin(exps['EXPID'], expids)
     if nights is not None:
-        keep &= np.isin(t['NIGHT'], nights)
+        keep &= np.isin(exps['NIGHT'], nights)
 
-    exptab = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+    exptab = exps['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+
+    #- From FRAMES, determine which petals actually have data
+    tilepetals_with_data = dict()
+    for tileid, camera in frames['TILEID', 'CAMERA']:
+        if tileid not in tilepetals_with_data:
+            tilepetals_with_data[tileid] = set()
+        petal = int(camera[1])
+        tilepetals_with_data[tileid].add(petal)
 
     #- read one tilepix file per TILEID to get healpix mapping
     tilepix = dict()
@@ -105,8 +111,10 @@ def get_exp2healpix_map(expfile, survey=None, program=None,
     #- Add entries for each exposure
     for night, expid, tileid, survey, program in exptab['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM']:
         for petal_str in tilepix[str(tileid)]:
-            for healpix in tilepix[str(tileid)][petal_str]:
-                rows.append( (night, expid, tileid, survey, program, int(petal_str), healpix) )
+            petal = int(petal_str)
+            if petal in tilepetals_with_data[tileid]:
+                for healpix in tilepix[str(tileid)][petal_str]:
+                    rows.append( (night, expid, tileid, survey, program, petal, healpix) )
 
     if len(rows) == 0:
         raise RuntimeError('No matching tilepix found')
