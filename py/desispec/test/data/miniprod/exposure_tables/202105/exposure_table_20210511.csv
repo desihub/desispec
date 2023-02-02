@@ -1,0 +1,64 @@
+EXPID,OBSTYPE,TILEID,LASTSTEP,CAMWORD,BADCAMWORD,BADAMPS,EXPTIME,EFFTIME_ETC,SURVEY,FA_SURV,FAPRGRM,GOALTIME,GOALTYPE,EBVFAC,AIRMASS,SPEED,TARGTRA,TARGTDEC,SEQNUM,SEQTOT,PROGRAM,PURPOSE,MJD-OBS,NIGHT,HEADERERR,EXPFLAG,COMMENTS
+87961,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,1,25,calib zeros for nightly bias,commissioning,59345.938093428,20210511,|,|,|
+87962,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417573,31.9633,2,25,calib zeros for nightly bias,commissioning,59345.938864408,20210511,|,|,|
+87963,zero,-99,ignore,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,3,25,calib zeros for nightly bias,commissioning,59345.939634979,20210511,|,|,|
+87964,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,4,25,calib zeros for nightly bias,commissioning,59345.940410764,20210511,|,|,|
+87965,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417573,31.9633,5,25,calib zeros for nightly bias,commissioning,59345.941189805,20210511,|,|,|
+87966,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417573,31.9633,6,25,calib zeros for nightly bias,commissioning,59345.941964442,20210511,|,|,|
+87967,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417573,31.9633,7,25,calib zeros for nightly bias,commissioning,59345.942738441,20210511,|,|,|
+87968,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,8,25,calib zeros for nightly bias,commissioning,59345.943508941,20210511,|,|,|
+87969,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,9,25,calib zeros for nightly bias,commissioning,59345.944284017,20210511,|,|,|
+87970,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.9633,10,25,calib zeros for nightly bias,commissioning,59345.945057906,20210511,|,|,|
+87971,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.9633,11,25,calib zeros for nightly bias,commissioning,59345.945828741,20210511,|,|,|
+87972,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,12,25,calib zeros for nightly bias,commissioning,59345.946599237,20210511,|,|,|
+87973,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.9633,13,25,calib zeros for nightly bias,commissioning,59345.9473732,20210511,|,|,|
+87974,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.9633,14,25,calib zeros for nightly bias,commissioning,59345.948143915,20210511,|,|,|
+87975,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,15,25,calib zeros for nightly bias,commissioning,59345.948918535,20210511,|,|,|
+87976,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,16,25,calib zeros for nightly bias,commissioning,59345.949693514,20210511,|,|,|
+87977,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,17,25,calib zeros for nightly bias,commissioning,59345.95046774,20210511,|,|,|
+87978,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,18,25,calib zeros for nightly bias,commissioning,59345.951242459,20210511,|,|,|
+87979,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,19,25,calib zeros for nightly bias,commissioning,59345.952019811,20210511,|,|,|
+87980,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.963301,20,25,calib zeros for nightly bias,commissioning,59345.952790105,20210511,|,|,|
+87981,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417572,31.963301,21,25,calib zeros for nightly bias,commissioning,59345.95356446,20210511,|,|,|
+87982,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417571,31.963301,22,25,calib zeros for nightly bias,commissioning,59345.954338705,20210511,|,|,|
+87983,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417571,31.963301,23,25,calib zeros for nightly bias,commissioning,59345.955114986,20210511,|,|,|
+87984,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,24,25,calib zeros for nightly bias,commissioning,59345.955885617,20210511,|,|,|
+87985,zero,-99,all,a0123456789,,,0.0,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417571,31.963301,25,25,calib zeros for nightly bias,commissioning,59345.956660647,20210511,|,|,|
+87987,dark,-99,all,a0123456789,,,300.0433,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.0,-99.0,291.417602,31.9633,1,1,calib dark 5min,commissioning,59345.95743489,20210511,|,|,|
+87992,arc,-99,all,a0123456789,z3,,5.0102,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,1,5,calib short arcs all,commissioning,59346.016536792,20210511,|,|,|
+87993,arc,-99,all,a0123456789,,z2A,5.0098,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,2,5,calib short arcs all,commissioning,59346.017373013,20210511,|,|,|
+87994,arc,-99,all,a0123456789,,,5.01,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,3,5,calib short arcs all,commissioning,59346.018208857,20210511,|,|,|
+87995,arc,-99,all,a0123456789,,,5.0099,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,4,5,calib short arcs all,commissioning,59346.019048714,20210511,|,|,|
+87996,arc,-99,all,a0123456789,,,5.0098,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,5,5,calib short arcs all,commissioning,59346.019888518,20210511,|,|,|
+87999,arc,-99,all,a0123456789,,,30.0587,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,1,5,calib long arcs cd+xe,commissioning,59346.021103157,20210511,|,|,|
+88000,arc,-99,all,a0123456789,,,30.0579,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,2,5,calib long arcs cd+xe,commissioning,59346.022233272,20210511,|,|,|
+88001,arc,-99,all,a0123456789,,,30.0594,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,3,5,calib long arcs cd+xe,commissioning,59346.023359565,20210511,|,|,|
+88002,arc,-99,all,a0123456789,,,30.0602,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,4,5,calib long arcs cd+xe,commissioning,59346.024494626,20210511,|,|,|
+88003,arc,-99,all,a0123456789,,,30.0595,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,5,5,calib long arcs cd+xe,commissioning,59346.025624512,20210511,|,|,|
+88008,flat,-99,all,a0123456789,,,120.0369,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,1,3,calib desi-calib-00 leds only,commissioning,59346.027510204,20210511,|,|,|
+88009,flat,-99,all,a0123456789,,,120.0401,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,2,3,calib desi-calib-00 leds only,commissioning,59346.029683261,20210511,|,|,|
+88010,flat,-99,all,a0123456789,,,120.0396,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,3,3,calib desi-calib-00 leds only,commissioning,59346.031850871,20210511,|,|,|
+88013,flat,-99,all,a0123456789,,,120.038,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,1,3,calib desi-calib-01 leds only,commissioning,59346.034327178,20210511,|,|,|
+88014,flat,-99,all,a0123456789,,,120.0375,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,2,3,calib desi-calib-01 leds only,commissioning,59346.036498558,20210511,|,|,|
+88015,flat,-99,all,a0123456789,,,120.0384,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,3,3,calib desi-calib-01 leds only,commissioning,59346.038673233,20210511,|,|,|
+88018,flat,-99,all,a0123456789,,,120.0377,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,1,3,calib desi-calib-02 leds only,commissioning,59346.041173771,20210511,|,|,|
+88019,flat,-99,all,a0123456789,,,120.0383,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007076,31.963305,2,3,calib desi-calib-02 leds only,commissioning,59346.043345334,20210511,|,|,|
+88020,flat,-99,all,a0123456789,,,120.0375,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007076,31.963305,3,3,calib desi-calib-02 leds only,commissioning,59346.045521287,20210511,|,|,|
+88023,flat,-99,all,a0123456789,,,120.0413,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007076,31.963304,1,3,calib desi-calib-03 leds only,commissioning,59346.048008142,20210511,|,|,|
+88024,flat,-99,all,a0123456789,,,120.0358,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007076,31.963304,2,3,calib desi-calib-03 leds only,commissioning,59346.050179525,20210511,|,|,|
+88025,flat,-99,all,a0123456789,,,120.04,-99.0,unknown,unknown,unknown,-99.0,unknown,1.0,1.521278,-99.0,60.007077,31.963305,3,3,calib desi-calib-03 leds only,commissioning,59346.052350859,20210511,|,|,|
+88033,science,75,ignore,a0123456789,,,431.3859,223.425446,sv3,sv3,bright,220.0,bright,1.04634691659,1.219317,-99.0,182.983121,-0.018109,1,1,bright,commissioning,59346.137720258,20210511,|,|,|
+88034,science,501,all,a0123456789,,,286.3843,221.869217,sv3,sv3,bright,220.0,bright,1.02788283511155,1.077533,-99.0,194.68345,24.7992,1,1,bright,commissioning,59346.146048705,20210511,|,|,|
+88038,science,81099,all,a0123456789,,,260.0268,-99.0,sv2,sv2,dark,1000.0,dark,1.02541127272065,1.030662,-99.0,184.998842,45.00238,1,1,fibertest,commissioning,59346.20291362,20210511,|,aborted|,For EXPTIME: req=240.0 but hdu=260.0268|
+88041,science,516,all,a0123456789,,,1158.6578,1206.025024,sv3,sv3,dark,1200.0,dark,1.0930763749007,1.208878,-99.0,212.867421,-0.506099,1,1,dark,commissioning,59346.23000414,20210511,|,|,|
+88042,science,489,all,a0123456789,,,870.2259,1205.332886,sv3,sv3,dark,1200.0,dark,1.02845581356078,1.026322,-99.0,194.868071,24.74861,1,1,dark,commissioning,59346.245973592,20210511,|,|,|
+88044,science,80972,all,a0123456789,r3,,1820.0468,-99.0,sv1,sv1,dc3r2,1000.0,dark,1.08162326941544,1.179527,-99.0,217.499642,-0.00671,1,1,gama-cr,commissioning,59346.281592995,20210511,|,aborted|,For EXPTIME: req=1800.0 but hdu=1820.0468|
+88045,science,80972,all,a0123456789,a3,,1820.0301,-99.0,sv1,sv1,dc3r2,1000.0,dark,1.08162326941544,1.19958,-99.0,217.498042,-0.006848,1,1,gama-cr,commissioning,59346.304480692,20210511,|,aborted|,For EXPTIME: req=1800.0 but hdu=1820.0301|
+88046,science,80972,all,a0123456789,,,1820.039,-99.0,sv1,sv1,dc3r2,1000.0,dark,1.08162326941544,1.246594,-99.0,217.496321,-0.00722,1,1,gama-cr,commissioning,59346.327369325,20210511,|,aborted|,For EXPTIME: req=1800.0 but hdu=1820.039|
+88047,science,579,all,a0123456789,,,885.1701,1206.115967,sv3,sv3,dark,1200.0,dark,1.04108144211569,1.029397,-99.0,236.248259,43.502081,1,1,dark,commissioning,59346.352687578,20210511,|,|,|
+88048,science,593,all,a0123456789,,,289.7807,229.336075,sv3,sv3,bright,220.0,bright,1.04204696591179,1.039168,-99.0,236.247242,43.502,1,1,bright,commissioning,59346.364461209,20210511,|,|,|
+88049,science,562,all,a0123456789,a6,,279.7591,226.360428,sv3,sv3,bright,220.0,bright,1.06908221296189,1.184448,-99.0,269.664608,62.41097,1,1,bright,commissioning,59346.37056178,20210511,|,|,|
+88050,science,546,all,a0123456789,,,920.801,1206.397705,sv3,sv3,dark,1200.0,dark,1.06853906219242,1.182658,-99.0,269.877871,62.62709,1,1,dark,commissioning,59346.375597165,20210511,|,|,|
+88055,science,562,all,a0123456789,a6,,280.4174,232.465149,sv3,sv3,bright,220.0,bright,1.06908221296189,1.179,-99.0,269.651379,62.41112,1,1,bright,commissioning,59346.461862376,20210511,|,|,|
+88056,science,562,all,a0123456789,a6,,296.6418,228.725586,sv3,sv3,bright,220.0,bright,1.06908221296189,1.183686,-99.0,269.65051,62.411061,1,1,bright,commissioning,59346.466694305,20210511,|,|,|
+88057,science,562,all,a0123456789,a6,,312.5077,230.663055,sv3,sv3,bright,220.0,bright,1.06908221296189,1.189222,-99.0,269.649752,62.411011,1,1,bright,commissioning,59346.471806462,20210511,|,|,|

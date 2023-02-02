@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+"""
+The following is a mini python script used to filter some Iron
+input files into a mini production for unit tests.  This is
+disguised as a README so that one would not normally be tempted
+to run it, parse it for docstring APIs, etc.  The rest of the
+files in this directory were generated at NERSC with:
+
+python README
+"""
+
+import sys, os, glob, shutil
+import numpy as np
+import fitsio
+from astropy.table import Table
+from desispec.workflow.tableio import load_table, write_table
+
+specprod = 'iron'
+reduxdir = f'/global/cfs/cdirs/desi/spectro/redux/{specprod}'
+expfile = f'{reduxdir}/exposures-{specprod}.fits'
+tilefile = f'{reduxdir}/tiles-{specprod}.fits'
+night = 20210511
+exptable_file = f'{reduxdir}/exposure_tables/{night//100}/exposure_table_{night}.csv'
+
+#- 20210511 happens to have an interesting mix of surveys and programs;
+#- filter to tiles observed only on that night to use for testing
+
+with fitsio.FITS(expfile) as fx:
+    columns = ('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'PROGRAM',
+               'FAPRGRM', 'FAFLAVOR', 'EXPTIME')
+    exp = fx['EXPOSURES'].read(columns=columns)
+    hdr = fx['EXPOSURES'].read_header()
+
+    tiles = np.unique(exp['TILEID'][exp['NIGHT'] == night])
+    keep = np.ones(len(tiles), dtype=bool)
+    for i, tileid in enumerate(tiles):
+        if len(np.unique(exp['NIGHT'][exp['TILEID'] == tileid])) != 1:
+            keep[i] = False
+
+    tiles = tiles[keep]
+    exp = exp[np.isin(exp['TILEID'], tiles)]
+
+    columns = ('NIGHT', 'EXPID', 'TILEID', 'SURVEY',  #- NOTE: no "PROGRAM" in FRAMES
+               'FAPRGRM', 'FAFLAVOR', 'EXPTIME', 'CAMERA')
+    frames = fx['FRAMES'].read(columns=columns)
+    framehdr = fx['FRAMES'].read_header()
+    frames = frames[np.isin(frames['TILEID'], tiles)]
+
+#- Also filter tiles file
+with fitsio.FITS(tilefile) as fx:
+    tiletable = fx['TILE_COMPLETENESS'].read()
+    hdr = fx['TILE_COMPLETENESS'].read_header()
+    keep = np.isin(tiletable['TILEID'], tiles)
+    tiletable = tiletable[keep]
+
+    assert np.all(tiletable['LASTNIGHT'] == night)
+
+#- load and filter exposures_table to these tiles (plus calibs TILEID==-99)
+exptab = load_table(exptable_file, tabletype='exptable')
+keep = np.isin(exptab['TILEID'], tiles) | (exptab['TILEID'] == -99)
+exptab = exptab[keep]
+
+#- Flag one exposure as bad for testing
+badexp = 88033
+exptab['LASTSTEP'][exptab['EXPID'] == badexp] = 'ignore'
+exp = exp[exp['EXPID'] != badexp]
+frames = frames[frames['EXPID'] != badexp]
+
+#- Flag petal 6 as bad for all exposures of tile 562
+#- Reason: this should prevent stdstar fitting for petal 6 for this tile
+t = 562
+exptab['BADCAMWORD'][exptab['TILEID'] == t] = 'a6'
+
+drop = (frames['TILEID'] == t) & np.isin(frames['CAMERA'], ('b6', 'r6', 'z6'))
+frames = frames[~drop]
+
+#- Flag r3 as bad for first exposure of tile 80972
+#- and  b3,r3,z3=a3 as bad for second exposure
+#- Reason: Should still be able to calibrate remaining cameras using
+#-         stdstar fit from other exposures
+#- This is also an interesting tile observed on one exposure, then a different
+#- tile, than back to this one for 3 more exposures.
+t = 80972
+idx = np.where(exptab['TILEID'] == t)[0]
+tmp_expids = exptab['EXPID'][idx]
+exptab['BADCAMWORD'][idx[0]] = 'r3'
+exptab['BADCAMWORD'][idx[1]] = 'a3'
+drop = (frames['EXPID'] == tmp_expids[0]) & (frames['CAMERA'] == 'r3')
+drop |= (frames['EXPID'] == tmp_expids[1]) & np.isin(frames['CAMERA'], ('b3', 'r3', 'z3'))
+frames = frames[~drop]
+
+#- Flag one of the zeros as bad
+#- Reason: should still be able to make nightly bias
+idx = np.where(exptab['OBSTYPE'] == 'zero')[0]
+exptab['LASTSTEP'][idx[2]] = 'ignore'
+
+#- Flag z3 of the first arc as bad
+#- and z2A of the second arc as a bad amp
+#- Reason: can't create individual PSFs for these, but can still create psfnight
+idx = np.where(exptab['OBSTYPE'] == 'arc')[0]
+exptab['BADCAMWORD'][idx[0]] = 'z3'
+exptab['BADAMPS'][idx[1]] = 'z2A'
+
+#- Write outputs
+print(f'Kept {len(frames)} frames of {len(exp)} exposures of {len(tiles)} tiles')
+fitsio.write('exposures-miniprod.fits', exp, header=hdr, extname='EXPOSURES', clobber=True)
+fitsio.write('exposures-miniprod.fits', frames, header=framehdr, extname='FRAMES')
+print('Wrote exposures-miniprod.fits')
+
+fitsio.write('tiles-miniprod.fits', tiletable, header=hdr, extname='TILE_COMPLETENESS', clobber=True)
+print('Wrote tiles-miniprod.fits')
+
+os.makedirs(f'exposure_tables/{night//100}', exist_ok=True)
+out_expfile = f'exposure_tables/{night//100}/exposure_table_{night}.csv' 
+write_table(exptab, out_expfile, overwrite=True)
+print(f'Wrote {out_expfile}')
+
+for expid, tileid in zip(exp['EXPID'], exp['TILEID']):
+    outtilepix = f'preproc/{night}/{expid:08d}/tilepix-{tileid}.json'
+    intilepix = f'{reduxdir}/{outtilepix}'
+    os.makedirs(os.path.dirname(outtilepix), exist_ok=True)
+    shutil.copyfile(intilepix, outtilepix)
+    print(f'Copied {intilepix} to {outtilepix}')
+
+    
+
+

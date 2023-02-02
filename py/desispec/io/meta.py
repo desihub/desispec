@@ -184,6 +184,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
         qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_qn-{survey}-{faprogram}-{healpix}.fits',
         emline_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/emline-{survey}-{faprogram}-{healpix}.fits',
+        hpixexp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/hpixexp-{survey}-{faprogram}-{healpix}.csv',
         #
         # spectra- tile based
         #
