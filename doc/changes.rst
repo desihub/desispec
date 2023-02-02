@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.56.5 (unreleased)
+0.56.6 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.56.5 (2023-02-01)
+_------------------
+
+* Fix healpix redshift (zpix) bookkeeping of bad data (PR `#1991`_).
+
+.. _`#1991`: https://github.com/desihub/desispec/pull/1991
 
 0.56.4 (2023-01-27)
 -------------------
