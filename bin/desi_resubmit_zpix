@@ -86,7 +86,7 @@ for filename in slurm_scripts:
                 tmp = line.split()
                 i = tmp.index('--healpix')+1
                 healpix = list()
-                while tmp[i] != '--expfiles':
+                while i<len(tmp) and not tmp[i].startswith('--'):
                     healpix.append(int(tmp[i]))
                     i += 1
 
