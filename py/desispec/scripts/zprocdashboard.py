@@ -25,10 +25,13 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     get_terminal_steps, get_tables
 from desispec.workflow.proctable import get_processing_table_pathname, \
     erow_to_prow, instantiate_processing_table
+from desispec.workflow.redshifts import read_minimal_exptables_columns
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root, findfile
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_union
+    difference_camwords, parse_badamps, create_camword, camword_union, \
+    erow_to_goodcamword, spectros_to_camword
+
 
 def parse(options):
     """
@@ -122,6 +125,15 @@ def main(args=None):
 
     print(f'Searching {prod_dir} for: {nights}')
 
+    ## Get all the exposure tables for cross-night dependencies
+    all_exptabs = read_minimal_exptables_columns(nights=None)
+    ## We don't want future days mixing in
+    all_exptabs = all_exptabs[all_exptabs['NIGHT'] <= np.max(nights)]
+    ## Restrict to only the exptabs relevant to the current dashboard
+    night_selection = np.isin(all_exptabs['NIGHT'],nights)
+    tiles = all_exptabs['TILEID'][night_selection]
+    subset_exptabs = all_exptabs[np.isin(all_exptabs['TILEID'], tiles)]
+
     monthly_tables = {}
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month, nights_in_month))
@@ -135,11 +147,16 @@ def main(args=None):
             if not args.ignore_json_archive:
                 night_json_zinfo = read_json(filename_json=filename_json)
 
+            ## only send table for tiles on the given night
+            #tiles = all_exptabs['TILEID'][all_exptabs['NIGHT']==night]
+            #subset_exptabs = all_exptabs[np.isin(all_exptabs['TILEID'], tiles)]
+
             ## get the per exposure info for a night
             night_zinfo = populate_night_zinfo(night, doem, doqso,
                                                dotileqa, args.check_on_disk,
                                                night_json_zinfo=night_json_zinfo,
-                                               skipd_tileids=skipd_tileids)
+                                               skipd_tileids=skipd_tileids,
+                                               all_exptabs=subset_exptabs)
             if len(night_zinfo) == 0:
                 continue
 
@@ -157,8 +174,8 @@ def main(args=None):
 
 
 def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
-                         check_on_disk=False,
-                         night_json_zinfo=None, skipd_tileids=None):
+                         check_on_disk=False, night_json_zinfo=None,
+                         skipd_tileids=None, all_exptabs=None):
     """
     For a given night, return the file counts and other other information for each exposure taken on that night
     input: night
@@ -250,14 +267,20 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             for tileid in missing_tiles:
                 tilematches = exptab[exptab['TILEID']==tileid]
                 first_exp = tilematches[0]
+                ## perexp are dealt with separately
                 for ztype in set(ztypes).difference({'perexp'}):
                     prow = erow_to_prow(first_exp)
                     prow['JOBDESC'] = ztype
                     prow['EXPID'] = np.array(list(tilematches['EXPID']))
-                    proccamwords = []
-                    for camword, bcamword in zip(tilematches['CAMWORD'],tilematches['BADCAMWORD']):
-                        proccamwords = difference_camwords(camword, bcamword)
-                    prow['PROCCAMWORD'] = camword_union(proccamwords)
+                    ## cumulative proccamword will be determined in the main loop
+                    if ztype == 'pernight':
+                        proccamwords = []
+                        for camword, bcamword in zip(tilematches['CAMWORD'],tilematches['BADCAMWORD']):
+                            proccamwords = difference_camwords(camword, bcamword)
+                        proccamword = camword_union(proccamwords)
+                    else:
+                        proccamword = ''
+                    prow['PROCCAMWORD'] = proccamword
                     proctab.add_row(prow.copy())
 
     if 'perexp' in ztypes:
@@ -278,6 +301,26 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
 
         ztype = str(row['JOBDESC'])
         tileid = str(row['TILEID'])
+
+        ## Assign or derive proccamword and nspectros
+        proccamword = row['PROCCAMWORD']
+        spectros = set()
+        if ztype == 'cumulative':
+            tilerows = all_exptabs[all_exptabs['TILEID']==int(tileid)]
+            ## Each night needs to be able to calibrate petal, so treat separate
+            ## then combine complete petals across nights
+            for night in np.unique(tilerows['NIGHT']):
+                nightrows = tilerows[tilerows['NIGHT']==night]
+                proccamwords = []
+                for erow in nightrows:
+                    proccamwords.append(erow_to_goodcamword(erow, suppress_logging=True))
+                night_pcamword = camword_union(proccamwords)
+                spectros.union(set(camword_to_spectros(night_pcamword, full_spectros_only=True)))
+            proccamword = spectros_to_camword(spectros)
+        else:
+            spectros = camword_to_spectros(proccamword, full_spectros_only=True)
+        nspecs = len(spectros)
+
         zfild_expid = str(row['EXPID'][0]).zfill(8)
         ## files and dashboard are per night so these are unique without night
         ## in the key
@@ -328,8 +371,6 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             continue
         exptab_row = tilematches[0]
         #exptime = np.round(exptab_row['EXPTIME'], decimals=1)
-        proccamword = row['PROCCAMWORD']
-        nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
 
         # laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
