@@ -649,10 +649,14 @@ def erow_to_goodcamword(erow, suppress_logging=False):
         badamps = erow['BADAMPS']
     else:
         badamps = None
+    if 'OBSTYPE' in erow:
+        obstype = erow['OBSTYPE']
+    else:
+        obstype = None
     return columns_to_goodcamword(camword=erow['CAMWORD'],
                                   badcamword=erow['BADCAMWORD'],
                                   badamps=badamps,
-                                  obstype=erow['OBSTYPE'],
+                                  obstype=obstype,
                                   suppress_logging=suppress_logging)
 
 

@@ -292,7 +292,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 prow = erow_to_prow(erow)
                 prow['JOBDESC'] = 'perexp'
                 proctab.add_row(prow.copy())
-
+    
     output = dict()
     for row in proctab:
         int_tileid = int(row['TILEID'])
@@ -303,22 +303,32 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         tileid = str(row['TILEID'])
 
         ## Assign or derive proccamword and nspectros
-        proccamword = row['PROCCAMWORD']
-        spectros = set()
         if ztype == 'cumulative':
+            spectros = set()
             tilerows = all_exptabs[all_exptabs['TILEID']==int(tileid)]
             ## Each night needs to be able to calibrate petal, so treat separate
             ## then combine complete petals across nights
-            for night in np.unique(tilerows['NIGHT']):
-                nightrows = tilerows[tilerows['NIGHT']==night]
+            for nit in np.unique(tilerows['NIGHT']):
+                nightrows = tilerows[tilerows['NIGHT']==nit]
                 proccamwords = []
                 for erow in nightrows:
                     proccamwords.append(erow_to_goodcamword(erow, suppress_logging=True))
                 night_pcamword = camword_union(proccamwords)
-                spectros.union(set(camword_to_spectros(night_pcamword, full_spectros_only=True)))
+                spectros = spectros.union(set(camword_to_spectros(night_pcamword,
+                                                                  full_spectros_only=True)))
             proccamword = spectros_to_camword(spectros)
-        else:
+        elif ztype == 'pernight':
+            tilerows = all_exptabs[all_exptabs['TILEID']==int(tileid)]
+            nightrows = tilerows[tilerows['NIGHT']==night]
+            proccamwords = []
+            for erow in nightrows:
+                proccamwords.append(erow_to_goodcamword(erow, suppress_logging=True))
+            proccamword = camword_union(proccamwords)
             spectros = camword_to_spectros(proccamword, full_spectros_only=True)
+        else:
+            proccamword = row['PROCCAMWORD']
+            spectros = camword_to_spectros(proccamword, full_spectros_only=True)
+
         nspecs = len(spectros)
 
         zfild_expid = str(row['EXPID'][0]).zfill(8)
