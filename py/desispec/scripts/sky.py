@@ -62,7 +62,7 @@ def parse(options=None):
     parser.add_argument('--exclude-sky-targetids', type = str, default = None, required = False,
                         help = 'List of TARGETIDs to exclude from sky calculation')
     parser.add_argument('--override-sky-targetids', type = str, default = None, required = False,
-                        help = 'List of TARGETIDs to exclude from sky calculation')
+                        help = 'List of TARGETIDs to use as skies to completely override fibermap info')
 
     args = parser.parse_args(options)
 
