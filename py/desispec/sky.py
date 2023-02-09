@@ -898,7 +898,8 @@ class SkyModel(object):
     def __init__(self, wave, flux, ivar, mask, header=None, nrej=0,
                  stat_ivar=None, throughput_corrections=None,
                  throughput_corrections_model=None,
-                 dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None):
+                 dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None,
+                 skytargetid=None):
         """Create SkyModel object
 
         Args:
@@ -915,6 +916,7 @@ class SkyModel(object):
             dlsfcoeff : (optional) 1D[ncoeff] vector of PCA coefficients for LSF size changes
             skygradpcacoeff : (optional) 1D[ncoeff] vector of gradient amplitudes for
                 sky gradient spectra.
+            skygradtargetid : (optional) 1D[nsky] vector of TARGETIDs of fibers used for sky determination 
         All input arguments become attributes
         """
         assert wave.ndim == 1
@@ -937,6 +939,7 @@ class SkyModel(object):
         self.dwavecoeff = dwavecoeff
         self.dlsfcoeff = dlsfcoeff
         self.skygradpcacoeff = skygradpcacoeff
+        self.skytargetid = skytargetid
 
     def __getitem__(self, index):
         """
