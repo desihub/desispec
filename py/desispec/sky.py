@@ -461,7 +461,8 @@ def compute_sky(
     add_variance=True, adjust_wavelength=False, adjust_lsf=False,
     only_use_skyfibers_for_adjustments=True, pcacorr=None,
     fit_offsets=False, fiberflat=None, skygradpca=None,
-    min_iterations=5, tpcorrparam=None):
+        min_iterations=5, tpcorrparam=None,
+        exclude_sky_targetids=None, override_sky_targetids=None):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -498,7 +499,14 @@ def compute_sky(
     log.info("starting")
 
     # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    if override_sky_targetids is not None:
+        skyfibers = np.where(np.in1d(frame.fibermap['TARGETID'], override_sky_targetids))[0]
+    else:
+        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+        if exclude_sky_targetids is not None:
+            bads = np.in1d(frame.fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
+            skyfibers = skyfibers[~bads]
+
     assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     #- Hack: test tile 81097 (observed 20210430/00086750) had set
