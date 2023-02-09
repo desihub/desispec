@@ -880,7 +880,8 @@ def compute_sky(
                         nrej=nout_tot, stat_ivar = cskyivar,
                         dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff,
                         throughput_corrections_model=skytpcorr,
-                        skygradpcacoeff=skygradpcacoeff)
+                        skygradpcacoeff=skygradpcacoeff,
+                        skytargetid=frame.fibermap['TARGETID'][skyfibers])
     # keep a record of the statistical ivar for QA
     if adjust_wavelength :
         skymodel.dwave = interpolated_sky_dwave

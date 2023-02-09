@@ -68,6 +68,9 @@ def write_sky(outfile, skymodel, header=None):
     if skymodel.skygradpcacoeff is not None:
         hx.append(fits.ImageHDU(skymodel.skygradpcacoeff.astype('f4'),
                                 name='SKYGRADPCACOEFF'))
+    if skymodel.skytargetid is not None:
+        hx.append(fits.ImageHDU(skymodel.skytargetid,
+                                name='SKYTARGETID'))
 
 
     t0 = time.time()
