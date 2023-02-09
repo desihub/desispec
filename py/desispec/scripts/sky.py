@@ -59,6 +59,10 @@ def parse(options=None):
                         help = 'file name of sky gradient PCA file for fitting sky gradients')
     parser.add_argument('--tpcorrparam', type=str, default=None, required=False,
                         help = 'file name of tpcorr parameter file for fitting fiber throughputs')
+    parser.add_argument('--exclude-sky-targetids', type = str, default = None, required = False,
+                        help = 'List of TARGETIDs to exclude from sky calculation (comma separated)')
+    parser.add_argument('--override-sky-targetids', type = str, default = None, required = False,
+                        help='List of TARGETIDs to use as skies to completely override fibermap info (comma separated)')
 
     args = parser.parse_args(options)
 
@@ -76,6 +80,15 @@ def main(args=None) :
         mess="need both options --adjust-wavelength and --adjust-lsf to run with --save-adjustments"
         log.error(mess)
         raise Exception(mess)
+
+    if args.exclude_sky_targetids is not None:
+        exclude_sky_targetids=[int(_) for _ in args.exclude_sky_targetids.split(',')]
+    else:
+        exclude_sky_targetids = None
+    if args.override_sky_targetids is not None:
+        override_sky_targetids=[int(_) for _ in args.override_sky_targetids.split(',')]
+    else:
+        override_sky_targetids = None
 
     log.info("starting")
 
@@ -116,7 +129,9 @@ def main(args=None) :
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
                            pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat,
-                           skygradpca=skygradpca, tpcorrparam=tpcorrparam
+                           skygradpca=skygradpca, tpcorrparam=tpcorrparam,
+                           exclude_sky_targetids=exclude_sky_targetids,
+                           override_sky_targetids=override_sky_targetids
     )
 
     if args.save_adjustments is not None :

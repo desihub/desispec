@@ -165,6 +165,40 @@ def get_sector_masks(frame):
         masks.append(mask)
     return masks
 
+def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=None):
+    """
+    Retrieve the fiber indices of sky fibers
+
+    Args:
+        fibermap: Table from frame FIBERMAP HDU (frame.fibermap)
+
+    Options:
+        override_sky_targetids (array of int): TARGETIDs to use, overriding fibermap
+        exclude_sky_targetids (array of int): TARGETIDs to exclude
+
+    Returns:
+        array of indices of sky fibers to use
+
+    By default we rely on fibermap['OBJTYPE']=='SKY', but we can also exclude
+    some targetids by providing a list of them through exclude_sky_targetids
+    or by just providing all the sky targetids directly (in that case 
+    the OBJTYPE information is ignored)
+    """
+    log = get_logger()
+    # Grab sky fibers on this frame
+    if override_sky_targetids is not None:
+        log.info('Overriding default sky fiber list using override_sky_targetids')
+        skyfibers = np.where(np.in1d(fibermap['TARGETID'], override_sky_targetids))[0]
+        # we ignore OBJTYPEs 
+    else:
+        skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
+        if exclude_sky_targetids is not None:
+            log.info('Excluding default sky fibers using exclude_sky_targetids')
+            bads = np.in1d(fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
+            skyfibers = skyfibers[~bads]
+
+    assert np.max(skyfibers) < len(fibermap)  #- indices, not fiber numbers
+    return skyfibers
 
 def compute_sky_linear(
         flux, ivar, Rframe, sectors, skyfibers, skygradpca, fibermap,
@@ -461,7 +495,8 @@ def compute_sky(
     add_variance=True, adjust_wavelength=False, adjust_lsf=False,
     only_use_skyfibers_for_adjustments=True, pcacorr=None,
     fit_offsets=False, fiberflat=None, skygradpca=None,
-    min_iterations=5, tpcorrparam=None):
+        min_iterations=5, tpcorrparam=None,
+        exclude_sky_targetids=None, override_sky_targetids=None):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -497,9 +532,8 @@ def compute_sky(
     log=get_logger()
     log.info("starting")
 
-    # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
+    skyfibers = get_sky_fibers(frame.fibermap, override_sky_targetids=override_sky_targetids,
+                              exclude_sky_targetids=exclude_sky_targetids)
 
     #- Hack: test tile 81097 (observed 20210430/00086750) had set
     #- FIBERSTATUS bit UNASSIGNED for sky targets on stuck positioners.
@@ -860,7 +894,8 @@ def compute_sky(
                         nrej=nout_tot, stat_ivar = cskyivar,
                         dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff,
                         throughput_corrections_model=skytpcorr,
-                        skygradpcacoeff=skygradpcacoeff)
+                        skygradpcacoeff=skygradpcacoeff,
+                        skytargetid=frame.fibermap['TARGETID'][skyfibers])
     # keep a record of the statistical ivar for QA
     if adjust_wavelength :
         skymodel.dwave = interpolated_sky_dwave
@@ -877,7 +912,8 @@ class SkyModel(object):
     def __init__(self, wave, flux, ivar, mask, header=None, nrej=0,
                  stat_ivar=None, throughput_corrections=None,
                  throughput_corrections_model=None,
-                 dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None):
+                 dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None,
+                 skytargetid=None):
         """Create SkyModel object
 
         Args:
@@ -894,6 +930,7 @@ class SkyModel(object):
             dlsfcoeff : (optional) 1D[ncoeff] vector of PCA coefficients for LSF size changes
             skygradpcacoeff : (optional) 1D[ncoeff] vector of gradient amplitudes for
                 sky gradient spectra.
+            skytargetid : (optional) 1D[nsky] vector of TARGETIDs of fibers used for sky determination
         All input arguments become attributes
         """
         assert wave.ndim == 1
@@ -916,6 +953,7 @@ class SkyModel(object):
         self.dwavecoeff = dwavecoeff
         self.dlsfcoeff = dlsfcoeff
         self.skygradpcacoeff = skygradpcacoeff
+        self.skytargetid = skytargetid
 
     def __getitem__(self, index):
         """
