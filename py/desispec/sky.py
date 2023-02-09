@@ -165,6 +165,26 @@ def get_sector_masks(frame):
         masks.append(mask)
     return masks
 
+def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=None):
+    """
+    Retrieve the fiber number numbers of sky fibers
+    By default we rely on OBJTYPE, but we can also exclude some targetids 
+    by providing a list of them through exclude_sky_targetids
+    or by just providing all the sky targetids directly (in that case 
+    the OBJTYPE information is ignored)
+    """
+    # Grab sky fibers on this frame
+    if override_sky_targetids is not None:
+        skyfibers = np.where(np.in1d(fibermap['TARGETID'], override_sky_targetids))[0]
+        # we ignore OBJTYPEs 
+    else:
+        skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
+        if exclude_sky_targetids is not None:
+            bads = np.in1d(fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
+            skyfibers = skyfibers[~bads]
+
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
+    return skyfibers
 
 def compute_sky_linear(
         flux, ivar, Rframe, sectors, skyfibers, skygradpca, fibermap,
@@ -498,16 +518,8 @@ def compute_sky(
     log=get_logger()
     log.info("starting")
 
-    # Grab sky fibers on this frame
-    if override_sky_targetids is not None:
-        skyfibers = np.where(np.in1d(frame.fibermap['TARGETID'], override_sky_targetids))[0]
-    else:
-        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-        if exclude_sky_targetids is not None:
-            bads = np.in1d(frame.fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
-            skyfibers = skyfibers[~bads]
-
-    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
+    skyfibers = get_sky_fibers(frame.fibermap, override_sky_targetids=override_sky_targetids,
+                              exclude_sky_targetids=exclude_sky_targetids)
 
     #- Hack: test tile 81097 (observed 20210430/00086750) had set
     #- FIBERSTATUS bit UNASSIGNED for sky targets on stuck positioners.
