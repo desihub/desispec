@@ -53,15 +53,16 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
 
     # Gather the targeting directories.
     targetdirs = [fahdr['TARG']]
-    for moretarg in ['TARG2', 'TARG3', 'TARG4']:
+    for moretarg in ['TARG2', 'TARG3', 'TARG4', 'TARG5', 'TARG6']:
         if moretarg in fahdr:
             targetdirs += [fahdr[moretarg]]            
 
     # Any secondary targets or ToOs?
     if 'SCND' in fahdr:
-        if fahdr['SCND'].strip() != '-':
-            targetdirs += [fahdr['SCND']]
-
+        for morescnd in ['SCND', 'SCND2', 'SCND3', 'SCND4', 'SCND5', 'SCND6']:
+            if morescnd in fahdr and fahdr[morescnd].strip() != '-':
+                targetdirs += [fahdr[morescnd]]
+        
     if 'TOO' in fahdr:
         TOOfile = fahdr['TOO']
         # can be a KPNO directory!
@@ -399,7 +400,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
             if len(targetfiles) == 0:
                 continue
-    
+
             for targetfile in np.atleast_1d(targetfiles):
                 # If this is a secondary target catalog or ToO, use the photocache
                 # (if it exists). Also note that secondary target catalogs are
