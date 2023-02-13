@@ -2,10 +2,22 @@
 desispec Change Log
 ===================
 
-0.56.5 (unreleased)
+0.57.0 (unreleased)
 -------------------
 
-* No changes yet.
+* ``desi_compute_sky`` options to override sky TARGETIDs.
+  Adds new SKYTARGETIDS HDU to output sky files (PR `#2001`_).
+
+.. _`#2001`: https://github.com/desihub/desispec/pull/2001
+
+0.56.5 (2023-02-01)
+-------------------
+
+Last tag used for Iron run.
+
+* Fix healpix redshift (zpix) bookkeeping of bad data (PR `#1991`_).
+
+.. _`#1991`: https://github.com/desihub/desispec/pull/1991
 
 0.56.4 (2023-01-27)
 -------------------
