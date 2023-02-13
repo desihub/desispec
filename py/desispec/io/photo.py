@@ -809,29 +809,30 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
                 
         _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
         iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
-        _tractor = _tractor[iprimary] 
-        coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
+        if len(iprimary) == 0:
+            log.warning('No primary photometric targets on brick {}.'.format(brick))
+        else:
+            _tractor = _tractor[iprimary]
+            coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
+            # Some targets can appear twice (with different targetids), so
+            # to make sure we do it right, we have to loop. Example:
+            #
+            #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
+            #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
+            # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
+            # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
+            # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
 
-        # Some targets can appear twice (with different targetids), so
-        # to make sure we do it right, we have to loop. Example:
-        #
-        #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
-        #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
-        # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
-        # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
-        # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
-
-        for indx_cat, (ra, dec, targetid) in enumerate(zip(input_cat[racolumn][ipos],
-                                                           input_cat[deccolumn][ipos],
-                                                           input_cat['TARGETID'][ipos])):
-            
-            coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
-            indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
-            if d2d < rad:
-                _tractor = Table(fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True))
-                _tractor['LS_ID'] = np.int64(0) # will be filled in at the end
-                _tractor['TARGETID'] = targetid
-                out[ipos[indx_cat]] = _tractor[0]
+            for indx_cat, (ra, dec, targetid) in enumerate(zip(input_cat[racolumn][ipos],
+                                                               input_cat[deccolumn][ipos],
+                                                               input_cat['TARGETID'][ipos])):
+                coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+                indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
+                if d2d < rad:
+                    _tractor = Table(fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True))
+                    _tractor['LS_ID'] = np.int64(0) # will be filled in at the end
+                    _tractor['TARGETID'] = targetid
+                    out[ipos[indx_cat]] = _tractor[0]
 
     # Add a unique DR9 identifier.
     out['LS_ID'] = (out['RELEASE'].astype(np.int64) << 40) | (out['BRICKID'].astype(np.int64) << 16) | (out['OBJID'].astype(np.int64))
