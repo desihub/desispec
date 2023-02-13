@@ -131,6 +131,12 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
         if len(newtargetdirs) > 0:
             targetdirs = np.hstack((targetdirs, newtargetdirs))
 
+    # Special-case the specialbackup tiles.
+    if (tileid >= 82401) and (tileid <= 82409):
+        for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
+            if targetdir == '/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup/':
+                targetdirs[ii] = os.path.join(os.environ.get('TARG_DIR'), 'gaiadr2', '2.2.0', 'targets', 'main', 'resolve', 'backup')
+            
     targetdirs = np.sort(np.unique(targetdirs))
         
     return targetdirs
