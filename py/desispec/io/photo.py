@@ -52,29 +52,16 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     fahdr = fits.getheader(fiberfile, ext=0)
 
     # Gather the targeting directories.
-    targetdirs = [fahdr['TARG']]
-    for moretarg in ['TARG2', 'TARG3', 'TARG4', 'TARG5', 'TARG6']:
-        if moretarg in fahdr:
-            targetdirs += [fahdr[moretarg]]            
-
-    # Any secondary targets or ToOs?
-    if 'SCND' in fahdr:
-        for morescnd in ['SCND', 'SCND2', 'SCND3', 'SCND4', 'SCND5', 'SCND6']:
-            if morescnd in fahdr and fahdr[morescnd].strip() != '-':
-                targetdirs += [fahdr[morescnd]]
-        
-    if 'TOO' in fahdr:
-        TOOfile = fahdr['TOO']
-        # can be a KPNO directory!
-        if 'DESIROOT' in TOOfile:
-            TOOfile = os.path.join(desi_root, TOOfile.replace('DESIROOT/', ''))
-        if TOOfile[:6] == '/data/': # fragile
-            TOOfile = os.path.join(desi_root, TOOfile.replace('/data/', ''))
-        if 'afternoon_planning' in TOOfile:
-            TOOfile = TOOfile.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
-
-        if os.path.isfile(TOOfile):
-            targetdirs += [TOOfile]
+    targetdirs = []
+    for targetclass in ['TARG', 'SCND', 'TOO']:
+        if targetclass in fahdr:        
+            targetdirs += [fahdr[targetclass]]
+            for num in (np.arange(99)+2).astype(str):
+                moretarg = targetclass+num
+                if moretarg in fahdr and fahdr[moretarg].strip() != '-':
+                    targetdirs += [fahdr[moretarg]]
+                else:
+                    break
 
     cmxtargetdir = None
     for ii, targetdir in enumerate(targetdirs):
