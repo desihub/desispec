@@ -19,7 +19,7 @@ from desitarget.io import desitarget_resolve_dec
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
-def gather_targetdirs(tileid, fiberassign_dir=None):
+def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     """Gather all the targeting directories used to build a given fiberassign catalog.
 
     Args:
@@ -31,6 +31,13 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
     tile, return the TOO filename itself, not just the directory.
 
     """
+    from desiutil.log import get_logger, DEBUG
+    
+    if verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
+    
     from astropy.io import fits
 
     desi_root = os.environ.get('DESI_ROOT')
@@ -46,87 +53,115 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
             errmsg = 'Fiber assignment file {} not found!'.format(fiberfile)
             log.critical(errmsg)
             raise IOError(errmsg)
+
+    #from desiutil.log import DesiLogContext, WARNING
+    #from fiberassign.fba_patch_io import get_static_desitarget_fns
+    #
+    #targetdirs = []
+    #with DesiLogContext(log, WARNING):
+    #    for name in ['targ', 'scnd', 'too']:
+    #        targetdirs.append(get_static_desitarget_fns(fiberfile, name))
+    #targetdirs = np.unique(np.hstack(targetdirs))
+    #
+    #keep = np.where(targetdirs != '-')[0]
+    #if len(keep) > 0:
+    #    targetdirs = targetdirs[keep]
+    #
+    #if len(targetdirs) == 0:
+    #    errmsg = 'No targeting directories found for tile {}'.format(tileid)
+    #    log.critical(errmsg)
+    #    raise ValueError(errmsg)
+
     log.debug('Reading {} header.'.format(fiberfile))
     # old versions of fitsio can't handle CONTINUE header cards!
     #fahdr = fitsio.read_header(fiberfile, ext=0)
     fahdr = fits.getheader(fiberfile, ext=0)
 
     # Gather the targeting directories.
-    targetdirs = []
+    alltargetdirs = []
     for targetclass in ['TARG', 'SCND', 'TOO']:
-        if targetclass in fahdr:        
-            targetdirs += [fahdr[targetclass]]
+        if targetclass in fahdr:
+            alltargetdirs += [fahdr[targetclass]]
             for num in (np.arange(99)+2).astype(str):
                 moretarg = targetclass+num
                 if moretarg in fahdr and fahdr[moretarg].strip() != '-':
-                    targetdirs += [fahdr[moretarg]]
+                    alltargetdirs += [fahdr[moretarg]]
                 else:
                     break
 
-    cmxtargetdir = None
-    for ii, targetdir in enumerate(targetdirs):
-        # for secondary targets, targetdir can be a filename
-        if targetdir[-4:] == 'fits': # fragile...
-            targetdir = os.path.dirname(targetdir)
-        if not os.path.isdir(targetdir):
-            if 'DESIROOT' in targetdir:
-                targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
-            if targetdir[:6] == '/data/':
-                targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
-            if 'afternoon_planning' in targetdir:
-                targetdir = targetdir.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
+    # Checks taken from fiberassign.io.fba_patch_io.get_static_desitarget_fns
 
-        # special-case first-light / cmx targets
-        if 'catalogs/dr9/0.47.0/targets/cmx/resolve/no-obscon/' in targetdir:
-            cmxtargetdir = os.environ.get('DESI_ROOT')+'/target/catalogs/gaiadr2/0.47.0/targets/cmx/resolve/supp/'
-            
-        if os.path.isdir(targetdir) or os.path.isfile(targetdir):
-            log.debug('Found targets directory or file {}'.format(targetdir))
-            targetdirs[ii] = targetdir
-        else:
-            #log.warning('Targets directory or file {} not found.'.format(targetdir))
-            pass
+    # Special case 80615 and 80736.
+    if tileid == 80615:
+        alltargetdirs += [os.path.join(desi_root, 'target', 'catalogs', 'gaiadr2', '0.47.0', 'targets', 'cmx', 'resolve', 'supp')]
 
-    if cmxtargetdir is not None:
-        if os.path.isdir(cmxtargetdir):
-            log.debug('Found targets directory or file {}'.format(cmxtargetdir))
-            targetdirs = targetdirs + [cmxtargetdir]
-
-    # Special-case an early / first-light / commissioning tile where the
-    # fiberassign header is incomplete. From Adam Myers on 2022-Mar-22: "The SV1
-    # target (39633154205551487) appears to be from the dr9m release that we
-    # used for part of commissioning (and, maybe SV0, too?) I'm not sure how a
-    # target from early SV would only appear in dr9m . It's a strange one."
     if tileid == 80736:
         dr9mdir = os.environ.get('DESI_ROOT')+'/target/catalogs/dr9m/0.44.0/targets/sv1/resolve/dark/'
         if os.path.isdir(dr9mdir):
-            log.debug('Found targets directory or file {}'.format(dr9mdir))
-            targetdirs = targetdirs + [dr9mdir]
+            #log.debug('Found targets directory or file {}'.format(dr9mdir))
+            alltargetdirs += [dr9mdir]
 
-    targetdirs = np.unique(np.hstack(targetdirs))
-        
-    # Special-case SV1 tiles where the original targeting catalogs for secondary
-    # targets were missing the DR9 photometry but subsequent versions were not.
-    if (tileid > 80600) and (tileid < 81000):
-        newtargetdirs = []
-        for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
-            if 'targets/sv1/secondary/dark' in targetdir or 'targets/sv1/secondary/bright' in targetdir:
-                newtargetdir = sorted(glob(targetdir.replace(targetdir.split('/')[-5], '*')))[-1] # most recent one
-                #log.debug('Special-casing targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
-                #targetdirs[ii] = newtargetdir
-                log.debug('Appending targetdir for tile {}: {} --> {}'.format(tileid, targetdirs[ii], newtargetdir))
-                newtargetdirs.append(newtargetdir)
-        if len(newtargetdirs) > 0:
-            targetdirs = np.hstack((targetdirs, newtargetdirs))
+    # Fix paths (from AR, fiberassign.io.fba_patch_io.get_static_desitarget_fns)
+    targetdirs = []    
+    for ii, fn in enumerate(alltargetdirs):
+        fn = fn.replace(
+            "DESIROOT/target/catalogs/mtl/1.1.1/mtl/main/ToO/ToO.ecsv",
+            "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
+        )
+        fn = fn.replace(
+            "DESIROOT/survey/ops/staging/mtl/main/ToO/ToO.ecsv",
+            "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
+        )
+        ## AR case where the path is generically defined, but not used (no mtl for sv1)
+        #fn = fn.replace(
+        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv1/ToO/ToO.ecsv",
+        #    "-",
+        #)
+        ## AR case where the path is generically defined, but not used (no mtl for sv1)
+        #fn = fn.replace(
+        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv2/ToO/ToO.ecsv",
+        #    "-",
+        #)
+        fn = fn.replace(
+            "DESIROOT/target/catalogs/dr9/0.58.0/targets/main/secondary/dark/maintargets-dark-secondary.fits",
+            "DESIROOT/target/catalogs/dr9/0.58.0/targets/main/secondary/dark/targets-dark-secondary.fits",
+        )
+        ## AR case where the path is generically defined, but not used (81096-81099; no secondaries for sv2)
+        #fn = fn.replace(
+        #    "DESIROOT/target/catalogs/dr9/0.53.0/targets/sv2/secondary/dark/sv2targets-dark-secondary.fits",
+        #    "-",
+        #)
+        if 'secondary' in fn:#name == "scnd":
+            txt = os.path.sep.join(fn.split(os.path.sep)[-3:])
+            if txt in ["sv1/secondary/bright", "sv1/secondary/dark"]:
+                prog = fn.split(os.path.sep)[-1]
+                fn = os.path.join(fn, "sv1targets-{}-secondary.fits".format(prog))
+        fn = fn.replace("DESIROOT", os.getenv("DESI_ROOT"))
+        fn = fn.replace("/data/target", os.getenv("DESI_TARGET"))
+        fn = fn.replace(
+            "/data/afternoon_planning/surveyops/trunk", os.getenv("DESI_SURVEYOPS")
+        )
+        fn = fn.replace(
+            "/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup",
+            "{}/catalogs/gaiadr2/2.2.0/targets/main/resolve/backup".format(
+                os.getenv("DESI_TARGET")
+            ),
+        )
+        if fn != alltargetdirs[ii]:
+            log.debug('{:06d}: {} --> {}'.format(tileid, alltargetdirs[ii], fn))
 
-    # Special-case the specialbackup tiles.
-    if (tileid >= 82401) and (tileid <= 82409):
-        for ii, targetdir in enumerate(np.atleast_1d(targetdirs)):
-            if targetdir == '/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup/':
-                targetdirs[ii] = os.path.join(os.environ.get('TARG_DIR'), 'gaiadr2', '2.2.0', 'targets', 'main', 'resolve', 'backup')
+        if os.path.isdir(fn) or os.path.isfile(fn):
+            targetdirs.append(fn)
+        else:
+            log.debug('Missing {}!'.format(fn))
+
+    if len(targetdirs) == 0:
+        errmsg = 'No targeting directories found for tile {}!'.format(tileid)
+        log.critical(errmsg)
+        raise IOError(errmsg)
             
     targetdirs = np.sort(np.unique(targetdirs))
-        
+
     return targetdirs
 
 def targetphot_datamodel(from_file=False):
@@ -304,7 +339,8 @@ def targetphot_datamodel(from_file=False):
     return datamodel
 
 def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
-                      deccolumn='TARGET_DEC', columns=None, fiberassign_dir=None):
+                      deccolumn='TARGET_DEC', columns=None, fiberassign_dir=None,
+                      verbose=False):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
@@ -327,7 +363,13 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
     """
     import astropy
     from desimodel.footprint import radec2pix
-
+    from desiutil.log import get_logger, DEBUG
+    
+    if verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
+    
     if len(input_cat) == 0:
         log.warning('No objects in input catalog.')
         return Table()
@@ -359,13 +401,14 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
         for targetdir in targetdirs:
             # Handle secondary targets, which have a (very!) different data model.
             if 'secondary' in targetdir:
-                if 'sv1' in targetdir: # special case
-                    if 'dedicated' in targetdir:
-                        targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
-                    else:
-                        targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
-                else:
-                    targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+                targetfiles = targetdir
+                #if 'sv1' in targetdir: # special case
+                #    if 'dedicated' in targetdir:
+                #        targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
+                #    else:
+                #        targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
+                #else:
+                #    targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
             elif 'ToO' in targetdir:
                 targetfiles = targetdir
             else:
@@ -830,7 +873,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
     return out
 
 def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
-                       dr9dir=None, radius_match=1.0, columns=None):
+                       dr9dir=None, radius_match=1.0, columns=None, verbose=False):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick).
 
     Args:
@@ -848,6 +891,12 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     """
     from desitarget.targets import decode_targetid    
     from desiutil.brick import brickname
+    from desiutil.log import get_logger, DEBUG
+    
+    if verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
 
     if len(input_cat) == 0:
         log.warning('No objects in input catalog.')
