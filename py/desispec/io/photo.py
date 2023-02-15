@@ -95,12 +95,6 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     if tileid == 80615:
         alltargetdirs += [os.path.join(desi_root, 'target', 'catalogs', 'gaiadr2', '0.47.0', 'targets', 'cmx', 'resolve', 'supp')]
 
-    if tileid == 80736:
-        dr9mdir = os.environ.get('DESI_ROOT')+'/target/catalogs/dr9m/0.44.0/targets/sv1/resolve/dark/'
-        if os.path.isdir(dr9mdir):
-            #log.debug('Found targets directory or file {}'.format(dr9mdir))
-            alltargetdirs += [dr9mdir]
-
     # Fix paths (from AR, fiberassign.io.fba_patch_io.get_static_desitarget_fns)
     targetdirs = []    
     for ii, fn in enumerate(alltargetdirs):
