@@ -20,17 +20,19 @@ from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
 def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
-    """Gather all the targeting directories used to build a given fiberassign catalog.
+    """Gather all the targeting directories used to build a given fiberassign
+    catalog, including both primary and secondary targets and ToOs.
 
     Args:
         tileid (int): tile number
         fiberassign_dir (str, optional): directory to fiberassign tables
+        verbose (bool): print debugging as well as informational messages
 
-    Given a single tile, return a list of all the unique targeting directories
-    used to run fiberassign to generate that tile. If there are TOOs on the
-    tile, return the TOO filename itself, not just the directory.
+    Returns:
+        targetdirs (numpy.ndarray): list of targeting directories and files
 
     """
+    from astropy.io import fits
     from desiutil.log import get_logger, DEBUG
     
     if verbose:
@@ -38,8 +40,6 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     else:
         log = get_logger()
     
-    from astropy.io import fits
-
     desi_root = os.environ.get('DESI_ROOT')
 
     if fiberassign_dir is None:
@@ -54,30 +54,12 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
             log.critical(errmsg)
             raise IOError(errmsg)
 
-    #from desiutil.log import DesiLogContext, WARNING
-    #from fiberassign.fba_patch_io import get_static_desitarget_fns
-    #
-    #targetdirs = []
-    #with DesiLogContext(log, WARNING):
-    #    for name in ['targ', 'scnd', 'too']:
-    #        targetdirs.append(get_static_desitarget_fns(fiberfile, name))
-    #targetdirs = np.unique(np.hstack(targetdirs))
-    #
-    #keep = np.where(targetdirs != '-')[0]
-    #if len(keep) > 0:
-    #    targetdirs = targetdirs[keep]
-    #
-    #if len(targetdirs) == 0:
-    #    errmsg = 'No targeting directories found for tile {}'.format(tileid)
-    #    log.critical(errmsg)
-    #    raise ValueError(errmsg)
-
     log.debug('Reading {} header.'.format(fiberfile))
-    # old versions of fitsio can't handle CONTINUE header cards!
-    #fahdr = fitsio.read_header(fiberfile, ext=0)
     fahdr = fits.getheader(fiberfile, ext=0)
 
-    # Gather the targeting directories.
+    # Gather the targeting directories. Looks for all header cards up to TARG[N]
+    # where N can reach as high as 100 (but stop after finding the last
+    # directory recorded).
     alltargetdirs = []
     for targetclass in ['TARG', 'SCND', 'TOO']:
         if targetclass in fahdr:
@@ -89,15 +71,17 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
                 else:
                     break
 
-    # Checks taken from fiberassign.io.fba_patch_io.get_static_desitarget_fns
+    # Filename customizations written by Anand and taken from
+    # fiberassign.io.fba_patch_io.get_static_desitarget_fns.
 
-    # Special case 80615 and 80736.
+    # Special case cmx tile 80615, for which the provenance of the targeting
+    # catalog was not recorded in the fiberassign header.
     if tileid == 80615:
         alltargetdirs += [os.path.join(desi_root, 'target', 'catalogs', 'gaiadr2', '0.47.0', 'targets', 'cmx', 'resolve', 'supp')]
 
-    # Fix paths (from AR, fiberassign.io.fba_patch_io.get_static_desitarget_fns)
     targetdirs = []    
     for ii, fn in enumerate(alltargetdirs):
+        # Update generic DESIROOT to DESI_SURVEYOPS env.
         fn = fn.replace(
             "DESIROOT/target/catalogs/mtl/1.1.1/mtl/main/ToO/ToO.ecsv",
             "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
@@ -106,26 +90,21 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
             "DESIROOT/survey/ops/staging/mtl/main/ToO/ToO.ecsv",
             "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
         )
-        ## AR case where the path is generically defined, but not used (no mtl for sv1)
-        #fn = fn.replace(
-        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv1/ToO/ToO.ecsv",
-        #    "-",
-        #)
-        ## AR case where the path is generically defined, but not used (no mtl for sv1)
-        #fn = fn.replace(
-        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv2/ToO/ToO.ecsv",
-        #    "-",
-        #)
+        # Filename change for main-survey secondary targets.
         fn = fn.replace(
             "DESIROOT/target/catalogs/dr9/0.58.0/targets/main/secondary/dark/maintargets-dark-secondary.fits",
             "DESIROOT/target/catalogs/dr9/0.58.0/targets/main/secondary/dark/targets-dark-secondary.fits",
         )
-        ## AR case where the path is generically defined, but not used (81096-81099; no secondaries for sv2)
-        #fn = fn.replace(
-        #    "DESIROOT/target/catalogs/dr9/0.53.0/targets/sv2/secondary/dark/sv2targets-dark-secondary.fits",
-        #    "-",
-        #)
-        if 'secondary' in fn:#name == "scnd":
+        # Experimental tiles 82401-82409 for developing the backup program used
+        # gaiadr2/1.3.0.dev5218 inputs that no longer exist but are equivalent
+        # to gaiadr2/2.2.0.
+        fn = fn.replace(
+            "/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup",
+            "{}/catalogs/gaiadr2/2.2.0/targets/main/resolve/backup".format(os.getenv("DESI_TARGET")),
+        )
+        # The data model for secondary targets is different; figure out the
+        # filename and append it to the targetdir recorded in the header.
+        if 'secondary' in fn:
             txt = os.path.sep.join(fn.split(os.path.sep)[-3:])
             if txt in ["sv1/secondary/bright", "sv1/secondary/dark"]:
                 prog = fn.split(os.path.sep)[-1]
@@ -135,12 +114,20 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         fn = fn.replace(
             "/data/afternoon_planning/surveyops/trunk", os.getenv("DESI_SURVEYOPS")
         )
-        fn = fn.replace(
-            "/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup",
-            "{}/catalogs/gaiadr2/2.2.0/targets/main/resolve/backup".format(
-                os.getenv("DESI_TARGET")
-            ),
-        )
+        ## AR case where the path is generically defined, but not used (no mtl for sv1 or sv2)
+        #fn = fn.replace(
+        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv1/ToO/ToO.ecsv",
+        #    "-",
+        #)
+        #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv2/ToO/ToO.ecsv",
+        #    "-",
+        #)
+        ## AR case where the path is generically defined, but not used (tiles
+        ## 81096-81099; no secondaries for sv2)
+        #fn = fn.replace(
+        #    "DESIROOT/target/catalogs/dr9/0.53.0/targets/sv2/secondary/dark/sv2targets-dark-secondary.fits",
+        #    "-",
+        #)
         if fn != alltargetdirs[ii]:
             log.debug('{:06d}: {} --> {}'.format(tileid, alltargetdirs[ii], fn))
 
