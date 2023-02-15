@@ -7,8 +7,10 @@ desispec Change Log
 
 * ``desi_compute_sky`` options to override sky TARGETIDs.
   Adds new SKYTARGETIDS HDU to output sky files (PR `#2001`_).
+* Update functionality of ``io.photo`` to support Iron release (PR `#2008`_).
 
 .. _`#2001`: https://github.com/desihub/desispec/pull/2001
+.. _`#2008`: https://github.com/desihub/desispec/pull/2008
 
 0.56.5 (2023-02-01)
 -------------------
