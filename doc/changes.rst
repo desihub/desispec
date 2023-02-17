@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.57.0 (unreleased)
+0.57.1 (unreleased)
+-------------------
+
+No changes yet.
+
+0.57.0 (2023-02-17)
 -------------------
 
 * ``desi_compute_sky`` options to override sky TARGETIDs.
