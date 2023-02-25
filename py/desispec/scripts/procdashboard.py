@@ -482,7 +482,7 @@ def populate_night_info(night, check_on_disk=False,
             spectrographs = ''
 
             for log in lognames:
-                jobid = log[-12:-4]
+                jobid = log.split('-')[-1].split('.')[0]
                 if int(jobid) > int(newest_jobid):
                     newest_jobid = jobid
                     spectrographs = log.split('-')[-2]
