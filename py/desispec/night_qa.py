@@ -1808,7 +1808,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
-    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it does not date from the corresponding night (likely done in the morning, in which case the pipeline uses some default files).</p>\n")
+    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it does not date from the corresponding night (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
     html.write("\t</br>\n")
     html.write("<table>\n")
     for petal in petals:
