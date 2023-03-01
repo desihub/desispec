@@ -11,6 +11,7 @@ import tempfile
 import textwrap
 from desiutil.log import get_logger
 import multiprocessing
+from datetime import datetime
 # AR scientifical
 import numpy as np
 import fitsio
@@ -1807,6 +1808,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
+    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it does not date from the corresponding night (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
     html.write("\t</br>\n")
     html.write("<table>\n")
     for petal in petals:
@@ -1820,7 +1822,13 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                     if os.path.islink(fn):
                         fnshort, color = os.path.basename(os.readlink(fn)), "blue"
                     else:
-                        color = "green"
+                        # AR check the timestamp "night" vs. the night
+                        # AR if cals are done before observations, those should match
+                        m_time = os.path.getmtime(fn)
+                        if int(datetime.fromtimestamp(m_time).strftime("%Y%m%d")) != night:
+                            color = "orange"
+                        else:
+                            color = "green"
                 html.write("\t\t<td> <span style='color:{};'>{}</span> </td>\n".format(color, fnshort))
                 if camera != cameras[-1]:
                     html.write("\t\t<td> &emsp; </td>\n")
