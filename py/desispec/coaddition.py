@@ -221,18 +221,28 @@ def coadd_fibermap(fibermap, onetile=False):
     #             xx = Column(np.arange(ntarget, dtype=np.int16))
     #             tfmap.add_column(xx,name='NUM_'+k)
 
-    tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
+    if 'FIBERSTATUS' in tfmap.dtype.names :
+        tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
+    if not  'COADD_FIBERSTATUS' in tfmap.dtype.names :
+        raise KeyError("no COADD_FIBERSTATUS column in tfmap")
+
+    if  'FIBERSTATUS' in fibermap.dtype.names :
+        fiberstatus_key='FIBERSTATUS'
+    elif  'COADD_FIBERSTATUS' in fibermap.dtype.names :
+         fiberstatus_key='COADD_FIBERSTATUS'
+    else :
+         raise KeyError("no FIBERSTATUS nor COADD_FIBERSTATUS column in fibermap")
 
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
 
         #- coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
-        tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
+        tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap[fiberstatus_key][jj])
 
         #- Only FIBERSTATUS=0 were included in the coadd
         fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
         fiberstatus_amp_bits = get_justamps_fiberbitmask()
-        targ_fibstatuses = fibermap['FIBERSTATUS'][jj]
+        targ_fibstatuses = fibermap[fiberstatus_key][jj]
         nonamp_fiberstatus_flagged = ( (targ_fibstatuses & fiberstatus_nonamp_bits) > 0 )
         allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
@@ -244,7 +254,7 @@ def coadd_fibermap(fibermap, onetile=False):
             tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj][good_coadds]))
         if 'TILEID' in fibermap.colnames:
             tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj][good_coadds]))
-        
+
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in mean_cols:
@@ -262,7 +272,7 @@ def coadd_fibermap(fibermap, onetile=False):
         if 'FIBER_RA' in fibermap.colnames:
             dec = fibermap['TARGET_DEC'][jj][0]
             vals = fibermap['FIBER_RA'][jj]
-            std = np.std(vals+360.0) * 3600 / np.cos(np.radians(dec)) 
+            std = np.std(vals+360.0) * 3600 / np.cos(np.radians(dec))
             tfmap['STD_FIBER_RA'][i] = std
 
         if 'FIBER_DEC' in fibermap.colnames:
