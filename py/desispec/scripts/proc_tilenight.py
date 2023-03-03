@@ -98,6 +98,7 @@ def main(args=None, comm=None):
             prestd_camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
             prestd_camwords[expids[i]] = camword
+        prestd_camwords[expids[i]] = camword_intersection([prestd_camwords[expids[i]],args.cameras])
 
         laststep = str(exptable['LASTSTEP'][i]).lower()
         if laststep in ('all', 'fluxcalib', 'skysub'):
@@ -107,10 +108,11 @@ def main(args=None, comm=None):
             poststdstar_expids.append(expid)
 
     joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True)
+    joint_camwords = camword_intersection([joint_camwords, args.cameras])
 
     poststd_camwords = dict()
     for expid, camword in prestd_camwords.items():
-        poststd_camwords[expid] = camword_intersection([joint_camwords, camword])
+        poststd_camwords[expid] = camword_intersection([joint_camwords, camword, args.cameras])
 
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
