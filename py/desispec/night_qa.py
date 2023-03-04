@@ -478,8 +478,19 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
             specprod_dir = tempfile.mkdtemp()
             outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
             os.makedirs(outdir, exist_ok=True)
-            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {}".format(
-                night, dark_expid, outdir, nproc,
+            # AR get existing cameras
+            h = fits.open(rawfn)
+            extnames = [h[_].header['extname'] for _ in range(1, len(h))]
+            h.close()
+            campets = []
+            for petal in petals:
+                for camera in cameras:
+                    campet = "{}{}".format(camera, petal)
+                    if campet.upper() in extnames:
+                        campets.append(campet)
+            campets = ",".join(campets)
+            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {}".format(
+                night, dark_expid, outdir, nproc, campets,
             )
             log.info("run: {}".format(cmd))
 
