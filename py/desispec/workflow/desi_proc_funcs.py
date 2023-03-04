@@ -134,10 +134,17 @@ def add_desi_proc_tilenight_terms(parser):
     """
     parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
     parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
-    parser.add_argument("--laststeps", type=str, default='all',
-                        help="Comma separated list of LASTSTEP's to process "
+    parser.add_argument("--laststeps", type=str, default=None,
+                        help="Comma separated list of LASTSTEP values "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
-                             + "by default we only process 'all'.")
+                             + "by default, exposures with LASTSTEP "
+                             + "'all' and 'fluxcalib' will be processed "
+                             + "to the poststdstar step, and those with "
+                             + "LASTSTEP 'skysub' to the prestdstar step. "
+                             + "If specified, exposures with LASTSTEP "
+                             + "values in the list will be processed to the "
+                             + "poststdstar step, and all others will not "
+                             + "be processed at all.")
 
     return parser
 
@@ -873,7 +880,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
                                   system_name=None, mpistdstars=True, use_specter=False,
-                                  no_gpu=False,
+                                  no_gpu=False, laststeps=None
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -884,6 +891,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         tileid: str or int. The tile id for the data.
         ncameras: int. The number of cameras used for joint fitting.
         queue: str. Queue to be used.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Options:
         runtime: str. Timeout wall clock time.
@@ -975,6 +983,9 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
             cmd += f' --no-gpu'
         elif use_specter:
             cmd += f' --use-specter'
+
+        if laststeps is not None:
+            cmd += f' --laststeps="{",".join(laststeps)}"'
 
         cmd += f' --timingfile {timingfile}'
 
