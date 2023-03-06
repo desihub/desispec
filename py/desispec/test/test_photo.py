@@ -53,10 +53,11 @@ class TestFibermap(unittest.TestCase):
             # sv3 including ToOs
             '19': ['/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/sv3/ToO/ToO.ecsv',
                    '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
-                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright'],
+                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits'],
             # main
-            '2070': ['/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
-                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark']
+            '2070': ['/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/main/ToO/ToO.ecsv',
+                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
+                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']
                    }
 
         for tileid in truedirs.keys():
