@@ -47,15 +47,19 @@ class TestFibermap(unittest.TestCase):
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
+        if 'DESI_SURVEYOPS' in os.environ:
+            surveyops_dir = os.environ['DESI_SURVEYOPS']
+        else:
+            surveyops_dir = '/global/cfs/cdirs/desi/survey/ops/surveyops/trunk'
         truedirs = {
             # sv1
             '80613': ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/'],
             # sv3 including ToOs
-            '19': ['/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/sv3/ToO/ToO.ecsv',
+            '19': [surveyops_dir+'/mtl/sv3/ToO/ToO.ecsv',
                    '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
                    '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits'],
             # main
-            '2070': ['/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/main/ToO/ToO.ecsv',
+            '2070': [surveyops_dir+'/mtl/main/ToO/ToO.ecsv',
                      '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
                      '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']
                    }
