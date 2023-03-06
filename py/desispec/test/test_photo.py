@@ -21,27 +21,27 @@ class TestFibermap(unittest.TestCase):
 
         # for testing gather_targetphot and gather_tractorphot
         
-        # sv3-dark (secondary), sv1-bright (primary), main-dark (secondary), main-dark (primary, south), main-dark (primary, north)
+        # sv3-dark (secondary), sv1-bright (primary), main-dark (secondary), main-dark (primary, south), main-dark (primary, north), sv3-bright (TOO)
         input_cat = Table()
-        input_cat['TARGETID'] = [929413348720641, 39627061832191195, 2253225356951552, 39627565329026280, 39633086782113662]
-        input_cat['TARGET_RA'] = [216.615157366494, 59.237567466068484, 217.118753472706, 195.3373716438542, 230.3357972402121]
-        input_cat['TARGET_DEC'] = [1.61111164514945, -31.46536118661697, 1.40073953879623, -9.135959353230087, 40.614361185571525]
+        input_cat['TARGETID'] = [929413348720641, 39627061832191195, 2253225356951552, 39627565329026280, 39633086782113662, 43977491483722156]
+        input_cat['TARGET_RA'] = [216.615157366494, 59.237567466068484, 217.118753472706, 195.3373716438542, 230.3357972402121, 150.1306899]
+        input_cat['TARGET_DEC'] = [1.61111164514945, -31.46536118661697, 1.40073953879623, -9.135959353230087, 40.614361185571525, 1.505752]
+        input_cat['TILEID'] = [280, 80638, 1086, 1573, 1766, 19]
         self.input_cat = input_cat
-        self.tileids = [280, 80638, 1086, 1573, 1766]
 
         # targetphot results
         targetphot = Table() 
-        targetphot['FLUX_R'] = np.array([0.0, 22.768417, 0.0, 2.0220177, 0.3754208]).astype('f4')
-        targetphot['FLUX_W1'] = np.array([0.0, 38.42719, 0.0, 8.39509, 1.7937177]).astype('f4')
-        targetphot['FLUX_IVAR_W2'] = np.array([0.0, 0.72876793, 0.0, 0.53684264, 1.5837417]).astype('f4')
-        targetphot['NUMOBS_INIT'] = np.array([1,1,1,4,9]).astype(np.int64)
+        targetphot['FLUX_R'] = np.array([0.0, 22.768417, 0.0, 2.0220177, 0.3754208, 0.0]).astype('f4')
+        targetphot['FLUX_W1'] = np.array([0.0, 38.42719, 0.0, 8.39509, 1.7937177, 0.0]).astype('f4')
+        targetphot['FLUX_IVAR_W2'] = np.array([0.0, 0.72876793, 0.0, 0.53684264, 1.5837417, 0.0]).astype('f4')
+        targetphot['NUMOBS_INIT'] = np.array([1,1,1,4,9, 1]).astype(np.int64)
         self.targetphot = targetphot
 
         # tractorphot results
         tractorphot = Table() 
-        tractorphot['FLUX_R'] = np.array([0.0, 22.768417, 0.4996462, 2.0220177, 0.3754208]).astype('f4')
-        tractorphot['FLUX_IVAR_W1'] = np.array([0.0, 2.6306653, 2.2135038, 2.3442872, 6.2124352]).astype('f4')
-        tractorphot['LS_ID'] = np.array([0, 9906610122001627, 9906622040377206, 9906617989139688, 9907735053993854]).astype(np.int64)
+        tractorphot['FLUX_R'] = np.array([0.0, 22.768417, 0.4996462, 2.0220177, 0.3754208, 4.8209643]).astype('f4')
+        tractorphot['FLUX_IVAR_W1'] = np.array([0.0, 2.6306653, 2.2135038, 2.3442872, 6.2124352, 2.5682714]).astype('f4')
+        tractorphot['LS_ID'] = np.array([0, 9906610122001627, 9906622040377206, 9906617989139688, 9907735053993854, 9906622022814265]).astype(np.int64)
         self.tractorphot = tractorphot
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
@@ -73,7 +73,7 @@ class TestFibermap(unittest.TestCase):
     def test_gather_targetphot(self):
         """Test that we get the correct targeting photometry for an input set of objects."""
 
-        targetphot = gather_targetphot(self.input_cat, tileids=self.tileids)
+        targetphot = gather_targetphot(self.input_cat)
         for col in self.targetphot.colnames:
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
