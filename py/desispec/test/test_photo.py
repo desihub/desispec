@@ -47,10 +47,7 @@ class TestFibermap(unittest.TestCase):
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
-        if 'DESI_SURVEYOPS' in os.environ:
-            surveyops_dir = os.environ['DESI_SURVEYOPS']
-        else:
-            surveyops_dir = '/global/cfs/cdirs/desi/survey/ops/surveyops/trunk'
+        surveyops_dir = os.environ['DESI_SURVEYOPS']
         truedirs = {
             # sv1
             '80613': ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/'],
