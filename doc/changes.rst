@@ -5,7 +5,9 @@ desispec Change Log
 0.57.1 (unreleased)
 -------------------
 
-No changes yet.
+* Fix failing ``io.photo`` unit tests (PR `#2017`_).
+
+.. _`#2017`: https://github.com/desihub/desispec/pull/2017
 
 0.57.0 (2023-02-17)
 -------------------
