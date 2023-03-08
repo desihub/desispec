@@ -133,7 +133,7 @@ for tid in targetids :
     something_to_show = False
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
-        if np.sum(jj)==0 :
+        if len(jj)==0 :
             log.warning("TARGETID {} not in spectra".format(tid))
             continue
         something_to_show = True
