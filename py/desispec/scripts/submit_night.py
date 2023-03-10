@@ -149,9 +149,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         dry_run = True
 
     ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
+    tilenight_laststeps = laststeps
     if laststeps is None:
-        if not use_tilenight:
-            laststeps = ['all',]
+        laststeps = ['all',]
     else:
         laststep_options = get_last_step_options()
         for laststep in laststeps:
@@ -401,7 +401,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                     resubmit_partial_complete=resubmit_partial_complete,
                                                     z_submit_types=cur_z_submit_types,
                                                     system_name=system_name,use_specter=use_specter,
-                                                    laststeps=laststeps)
+                                                    laststeps=tilenight_laststeps)
             else:
                 ## If running redshifts and there is a future exposure of the same tile
                 ## then only run per exposure redshifts until then
