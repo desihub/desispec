@@ -970,17 +970,17 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         cmd += f' -n {night}'
         cmd += f' -t {tileid}'
         cmd += f' --mpi'
+        if cameras is not None:
+            cmd += f' --cameras {cameras}'
+        else:
+            cmd += f' --cameras a0123456789'
         if mpistdstars:
             cmd += f' --mpistdstars'
         if no_gpu:
             cmd += f' --no-gpu'
         elif use_specter:
             cmd += f' --use-specter'
-
         cmd += f' --timingfile {timingfile}'
-
-        if cameras is not None:
-            cmd += f' --cameras {cameras}'
 
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
