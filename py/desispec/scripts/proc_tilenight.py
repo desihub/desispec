@@ -128,6 +128,7 @@ def main(args=None, comm=None):
                                                    mpistdstars=args.mpistdstars,
                                                    use_specter=args.use_specter,
                                                    no_gpu=args.no_gpu,
+                                                   cameras=args.cameras
                                                    )
         err = 0
         if not args.nosubmit:

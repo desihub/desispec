@@ -873,7 +873,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
                                   system_name=None, mpistdstars=True, use_specter=False,
-                                  no_gpu=False,
+                                  no_gpu=False, cameras=None
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -892,6 +892,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
         use_specter: bool. Use classic specter instead of gpu_specter for extractions
         no_gpu: bool. Do not use GPU even if available
+        cameras: str, must be camword.
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -977,6 +978,9 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
             cmd += f' --use-specter'
 
         cmd += f' --timingfile {timingfile}'
+
+        if cameras is not None:
+            cmd += f' --cameras {cameras}'
 
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
