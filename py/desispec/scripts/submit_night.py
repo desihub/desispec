@@ -239,9 +239,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         tiles_this_night = tiles_this_night[tiles_this_night>0]  # science tiles, not calibs
         allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
         for tileid in tiles_this_night:
-            ii = (allexp['TILEID'] == tileid)
-            lastnight = np.max(allexp['NIGHT'][ii])
-            if lastnight == night:
+            nights_with_tile = allexp['NIGHT'][allexp['TILEID'] == tileid]
+            if len(nights_with_tile) > 0 and night == np.max(nights_with_tile):
                 tiles_cumulative.append(tileid)
 
         log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}/{len(tiles_this_night)} tiles '

@@ -880,7 +880,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
 def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue, runtime=None, batch_opts=None,
                                   system_name=None, mpistdstars=True, use_specter=False,
-                                  no_gpu=False, laststeps=None
+                                  no_gpu=False, laststeps=None, cameras=None
                                   ):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -891,7 +891,6 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         tileid: str or int. The tile id for the data.
         ncameras: int. The number of cameras used for joint fitting.
         queue: str. Queue to be used.
-        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Options:
         runtime: str. Timeout wall clock time.
@@ -900,6 +899,8 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
         use_specter: bool. Use classic specter instead of gpu_specter for extractions
         no_gpu: bool. Do not use GPU even if available
+        laststeps: list of str. A list of laststeps to pass as the laststeps argument to tilenight
+        cameras: str, must be camword.
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -977,13 +978,16 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         cmd += f' -n {night}'
         cmd += f' -t {tileid}'
         cmd += f' --mpi'
+        if cameras is not None:
+            cmd += f' --cameras {cameras}'
+        else:
+            cmd += f' --cameras a0123456789'
         if mpistdstars:
             cmd += f' --mpistdstars'
         if no_gpu:
             cmd += f' --no-gpu'
         elif use_specter:
             cmd += f' --use-specter'
-
         if laststeps is not None:
             cmd += f' --laststeps="{",".join(laststeps)}"'
 

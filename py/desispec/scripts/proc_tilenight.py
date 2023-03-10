@@ -83,6 +83,11 @@ def main(args=None, comm=None):
     if args.laststeps is not None:
         keep &= np.isin(exptable['LASTSTEP'].astype(str), args.laststeps)
 
+    #- Camera superset from args.cameras; if None default to all
+    camera_superset = 'a0123456789'
+    if args.cameras is not None:
+        camera_superset = args.cameras
+
     exptable = exptable[keep]
 
     if len(exptable) == 0:
@@ -105,6 +110,7 @@ def main(args=None, comm=None):
             prestd_camwords[expids[i]] = difference_camwords(camword,badcamword,suppress_logging=True)
         else:
             prestd_camwords[expids[i]] = camword
+        prestd_camwords[expids[i]] = camword_intersection([prestd_camwords[expids[i]],camera_superset])
 
         laststep = str(exptable['LASTSTEP'][i]).lower()
         if laststep in prestd_laststeps:
@@ -114,10 +120,11 @@ def main(args=None, comm=None):
             poststdstar_expids.append(expid)
 
     joint_camwords = camword_union(list(prestd_camwords.values()), full_spectros_only=True)
+    joint_camwords = camword_intersection([joint_camwords, camera_superset])
 
     poststd_camwords = dict()
     for expid, camword in prestd_camwords.items():
-        poststd_camwords[expid] = camword_intersection([joint_camwords, camword])
+        poststd_camwords[expid] = camword_intersection([joint_camwords, camword, camera_superset])
 
     #-------------------------------------------------------------------------
     #- Create and submit a batch job if requested
@@ -133,6 +140,7 @@ def main(args=None, comm=None):
                                                    mpistdstars=args.mpistdstars,
                                                    use_specter=args.use_specter,
                                                    no_gpu=args.no_gpu,
+                                                   cameras=camera_superset
                                                    )
         err = 0
         if not args.nosubmit:
