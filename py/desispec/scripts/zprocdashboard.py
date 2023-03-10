@@ -223,13 +223,13 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'tiles')
 
-    exptab, proctab, \
+    orig_exptab, proctab, \
     unaccounted_for_expids,\
     unaccounted_for_tileids = get_tables(night, check_on_disk=check_on_disk,
                                                 exptab_colnames=None)
 
-    exptab = exptab[((exptab['OBSTYPE'] == 'science')
-                    & (exptab['LASTSTEP'] == 'all'))]
+    exptab = orig_exptab[((orig_exptab['OBSTYPE'] == 'science')
+                    & (orig_exptab['LASTSTEP'] == 'all'))]
 
     if proctab is None:
         if len(exptab) == 0:
@@ -302,6 +302,33 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         ztype = str(row['JOBDESC'])
         tileid = str(row['TILEID'])
 
+        zfild_expid = str(row['EXPID'][0]).zfill(8)
+        ## files and dashboard are per night so these are unique without night
+        ## in the key
+        if ztype == 'perexp':
+            unique_key = f'{zfild_expid}_{ztype}'
+        else:
+            unique_key = f'{tileid}_{ztype}'
+
+        ## For those already marked as GOOD or NULL in cached rows, take that and move on
+        if night_json_zinfo is not None and unique_key in night_json_zinfo \
+                and night_json_zinfo[unique_key]["COLOR"] in ['GOOD', 'NULL']:
+            output[unique_key] = night_json_zinfo[unique_key]
+            continue
+
+        tilematches = exptab[exptab['TILEID'] == int(tileid)]
+        if len(tilematches) == 0:
+            if int(tileid) not in orig_exptab['TILEID']:
+                print(f"ERROR: Tile {tileid} found in processing table not present "
+                      + f"in exposure table.")
+                print(f"\texptab tileids: {np.unique(orig_exptab['TILEID'].data)}!")
+                print(f"\tproctab tileids: {np.unique(proctab['TILEID'].data)}!")
+            else:
+                print(f"WARNING: Tile {tileid} found in processing table no valid "
+                      + f"exposures still exist in the exposure table. Skipping this tile.")
+            continue
+        exptab_row = tilematches[0]
+
         ## Assign or derive proccamword and nspectros
         if ztype == 'cumulative':
             spectros = set()
@@ -328,18 +355,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         else:
             proccamword = row['PROCCAMWORD']
             spectros = camword_to_spectros(proccamword, full_spectros_only=True)
-
+                
         nspecs = len(spectros)
 
-        zfild_expid = str(row['EXPID'][0]).zfill(8)
         ## files and dashboard are per night so these are unique without night
         ## in the key
         if ztype == 'perexp':
-            unique_key = f'{zfild_expid}_{ztype}'
             logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
                                            'ztile-{tileid}-{zexpid}{jobid}.{ext}')
         else:
-            unique_key = f'{tileid}_{ztype}'
             if ztype =='cumulative':
                 logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
                                            'ztile-{tileid}-thru{night}{jobid}.{ext}')
@@ -347,12 +371,6 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 # pernight
                 logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
                                                'ztile-{tileid}-{night}{jobid}.{ext}')
-
-        ## For those already marked as GOOD or NULL in cached rows, take that and move on
-        if night_json_zinfo is not None and unique_key in night_json_zinfo \
-                and night_json_zinfo[unique_key]["COLOR"] in ['GOOD', 'NULL']:
-            output[unique_key] = night_json_zinfo[unique_key]
-            continue
 
         succinct_expid = ''
         if len(row['EXPID']) == 1:
@@ -377,7 +395,9 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         tilematches = exptab[exptab['TILEID'] == int(tileid)]
         if len(tilematches) == 0:
             print(f"ERROR: Tile {tileid} found in processing table not present "
-                  + f"in exposure table: {np.unique(exptab['TILEID'])}!")
+                  + f"in exposure table.")
+            print(f"\texptab tileids: {np.unique(exptab['TILEID'].data)}!")
+            print(f"\tproctab tileids: {np.unique(proctab['TILEID'].data)}!")
             continue
         exptab_row = tilematches[0]
         #exptime = np.round(exptab_row['EXPTIME'], decimals=1)

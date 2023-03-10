@@ -431,7 +431,7 @@ def write_json(output_data, filename_json):
     ## write out the night_info to json file
     with open(filename_json, 'w') as json_file:
         try:
-            json.dump(output_data, json_file)
+            json.dump(output_data, json_file, indent='\t')
         except:
             print(f"Error trying to dump {filename_json}, "
                   + "not saving that information.")
