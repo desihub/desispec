@@ -139,12 +139,8 @@ def add_desi_proc_tilenight_terms(parser):
                              + "(e.g. all, skysub, fluxcalib, ignore); "
                              + "by default, exposures with LASTSTEP "
                              + "'all' and 'fluxcalib' will be processed "
-                             + "to the poststdstar step, and those with "
-                             + "LASTSTEP 'skysub' to the prestdstar step. "
-                             + "If specified, exposures with LASTSTEP "
-                             + "values in the list will be processed to the "
-                             + "poststdstar step, and all others will not "
-                             + "be processed at all.")
+                             + "to the poststdstar step, and all others "
+                             + "will not be processed at all.")
 
     return parser
 

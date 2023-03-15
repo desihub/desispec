@@ -72,10 +72,10 @@ def main(args=None, comm=None):
 
     #- Set the eligible laststep values for different processing steps
     if args.laststeps is None:
-        prestd_laststeps = ['all', 'fluxcalib', 'skysub']
-        jntpst_laststeps = ['all', 'fluxcalib']
+        prestd_laststeps = jntpst_laststeps = ['all', 'fluxcalib']
     else:
-        prestd_laststeps = jntpst_laststeps = args.laststeps
+        prestd_laststeps = args.laststeps
+        jntpst_laststeps = list(set(['all', 'fluxcalib']) & set(args.laststeps))
 
     #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
