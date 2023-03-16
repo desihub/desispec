@@ -70,6 +70,13 @@ def main(args=None, comm=None):
     if comm is not None:
         exptable = comm.bcast(exptable, root=0)
 
+    #- Set the eligible laststep values for different processing steps
+    if args.laststeps is None:
+        prestd_laststeps = jntpst_laststeps = ['all', 'fluxcalib']
+    else:
+        prestd_laststeps = args.laststeps
+        jntpst_laststeps = list(set(['all', 'fluxcalib']) & set(args.laststeps))
+
     #- Determine expids and cameras for a tile night
     keep  = exptable['OBSTYPE'] == 'science'
     keep &= exptable['TILEID']  == int(args.tileid)
@@ -106,9 +113,9 @@ def main(args=None, comm=None):
         prestd_camwords[expids[i]] = camword_intersection([prestd_camwords[expids[i]],camera_superset])
 
         laststep = str(exptable['LASTSTEP'][i]).lower()
-        if laststep in ('all', 'fluxcalib', 'skysub'):
+        if laststep in prestd_laststeps:
             prestdstar_expids.append(expid)
-        if laststep in ('all', 'fluxcalib'):
+        if laststep in jntpst_laststeps:
             stdstar_expids.append(expid)
             poststdstar_expids.append(expid)
 

@@ -198,7 +198,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
 
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
-                      system_name=None,use_specter=False):
+                      system_name=None,use_specter=False,laststeps=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -225,6 +225,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated to reflect
@@ -241,7 +242,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         if prow['STATUS'].upper() == 'COMPLETED':
             return prow
 
-    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name, use_specter=use_specter)
+    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name, use_specter=use_specter,laststeps=laststeps)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond to the pruned values. But we want to
     ## retain the full job's value, so get those from the old job.
@@ -320,7 +321,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
         cmd += f' -e {expid_str}'
     return cmd
 
-def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None, use_specter=False):
+def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None, use_specter=False, laststeps=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -336,6 +337,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
@@ -399,7 +401,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                                                                queue=queue,
                                                                mpistdstars=True,
                                                                use_specter=use_specter,
-                                                               system_name=system_name)
+                                                               system_name=system_name,
+                                                               laststeps=laststeps)
             else:
                 log.info("Running: {}".format(cmd.split()))
                 scriptpathname = create_desi_proc_batch_script(
@@ -1148,7 +1151,7 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
 #########################################
 def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
               dry_run=0, strictly_successful=False, resubmit_partial_complete=True,
-              system_name=None,use_specter=False):
+              system_name=None,use_specter=False,laststeps=None):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     tilenight job given by descriptor. The returned ptable has all of these rows added to the
@@ -1175,6 +1178,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         tuple: A tuple containing:
@@ -1195,7 +1199,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
     tnight_prow = create_and_submit(tnight_prow, queue=queue, reservation=reservation, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=False,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name,
-                                   use_specter=use_specter)
+                                   use_specter=use_specter,laststeps=laststeps)
     ptable.add_row(tnight_prow)
 
     return ptable, tnight_prow, internal_id
@@ -1520,7 +1524,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
 def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
-                                  z_submit_types=None, system_name=None,use_specter=False):
+                                  z_submit_types=None, system_name=None,use_specter=False,
+                                  laststeps=None):
     """
     Takes all the state-ful data from daily processing and determines whether a tilenight job needs to be submitted.
 
@@ -1550,7 +1555,7 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
             exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
     Returns:
         tuple: A tuple containing:
 
@@ -1565,7 +1570,8 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
                                              queue=queue, reservation=reservation,
                                              dry_run=dry_run, strictly_successful=strictly_successful,
                                              resubmit_partial_complete=resubmit_partial_complete,
-                                             system_name=system_name,use_specter=use_specter
+                                             system_name=system_name,use_specter=use_specter,
+                                             laststeps=laststeps
                                              )
 
     ptable, internal_id = submit_redshifts(ptable, sciences, tnight, internal_id,
