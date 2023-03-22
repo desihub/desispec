@@ -110,7 +110,8 @@ def applySmoothingFilter(flux,width=200) :
         # move flux array to device
         device_flux = cupy.asarray(flux)
         # smooth flux array using median filter
-        device_smoothed = cupyx.scipy.ndimage.median_filter(device_flux, width, mode='constant')
+        #device_smoothed = cupyx.scipy.ndimage.median_filter(device_flux, width, mode='constant')
+        return scipy.ndimage.median_filter(flux, width, mode='constant')
         # move smoothed flux array by to host and return
         return cupy.asnumpy(device_smoothed)
     else:
