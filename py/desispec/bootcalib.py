@@ -563,16 +563,12 @@ def parse_nist(ion, vacuum=True):
     # Read, while working around non-ASCII characters in NIST line lists
     nist_file = resource_filename('desispec', srch_file)
     log.info("reading NIST file {:s}".format(nist_file))
-    # default_locale = locale.getlocale(locale.LC_CTYPE)
-    # locale.setlocale(locale.LC_CTYPE, 'en_US.UTF-8')
-    # Ensure that the locale is set correctly and (more important) that
-    # it is set correctly for Astropy. The data files contain the
-    # non-ASCII character 'Å'. cupy is known to unexpectedly alter
-    # the default encoding, so we need this for both of those reasons.
-    if locale.getpreferredencoding() != 'UTF-8':
-        locale.setlocale(locale.LC_ALL, '')  # Restore to default, which uses LANG.
-    nist_tbl = Table.read(nist_file, format='ascii.fixed_width')
-    # locale.setlocale(locale.LC_CTYPE, default_locale)
+    # The data files contain the non-ASCII character 'Å', so explicitly set the
+    # encoding when reading the table.
+    #
+    # cupy is known to unexpectedly alter the default encoding,
+    # so we need this for both of those reasons.
+    nist_tbl = Table.read(nist_file, format='ascii.fixed_width', encoding='UTF-8')
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
     nist_tbl = nist_tbl[gdrow]
     # Now unique values only (no duplicates)
