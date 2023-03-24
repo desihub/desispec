@@ -98,6 +98,9 @@ def parse_args():#options=None):
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     parser.add_argument("--use-specter", action="store_true",
                         help="Use specter. Default is to use gpu_specter")
+    parser.add_argument("--use-tilenight", action=argparse.BooleanOptionalAction,
+                        help="Use desi_proc_tilenight (or not) for prestdstar, stdstar, and poststdstar steps. "+
+                             "Default False for NERSC Cori, True otherwise")
     # parser.add_argument("--force-specprod", action="store_true",
     #                     help="Force the files to be written to custom SPECPROD " +
     #                          "even if user is desi.")
@@ -113,7 +116,15 @@ def parse_args():#options=None):
     # else:
     #     args = parser.parse_args(options)
     args = parser.parse_args()
-    
+
+    if args.use_tilenight is None:
+        if 'NERSC_HOST' in os.environ and os.environ['NERSC_HOST'] == 'cori':
+            args.use_tilenight = False
+        else:
+            args.use_tilenight = True
+    elif args.use_tilenight and os.environ['NERSC_HOST'] == 'cori':
+        print('Tilenight is not supported on Cori. Exiting.')
+        sys.exit(1)
     return args
 
 
@@ -161,4 +172,5 @@ if __name__ == '__main__':
                              data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,
                              dont_check_job_outputs=args.dont_check_job_outputs,
                              dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs,
-                             use_specter=args.use_specter)
+                             use_specter=args.use_specter,
+                             use_tilenight=args.use_tilenight)
