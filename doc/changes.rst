@@ -5,9 +5,25 @@ desispec Change Log
 0.57.1 (unreleased)
 -------------------
 
+* Flag calibration files performed on a different day (PR `#2011`_).
+* Coadd spectra files with ``COADD_FIBERMAP`` instead of ``FIBERMAP`` (PR `#2013`_).
+* Fix documentation test failures due to missing ``pytz`` (PR `#2019`_).
 * Fix failing ``io.photo`` unit tests (PR `#2017`_).
+* Fix indexing error in targetid seelction for :command:`plot_spectra` (PR `#2020`_).
+* Fix crash in :command:`desi_run_night` when processing ``LASTSTEP=skysub`` exposures (PR `#2022`_).
+* Fix bug in :command:`desi_proc_tilenight` which was causing it to ignore ``--cameras`` (PR `#2014`_).
+* Propagate the ``--laststeps`` option to :command:`desi_proc_tilenight` (PR `#2015`_).
+* Fix failing ``bootcalib`` unit tests (PR `#2029`_).
 
+.. _`#2011`: https://github.com/desihub/desispec/pull/2011
+.. _`#2013`: https://github.com/desihub/desispec/pull/2013
+.. _`#2014`: https://github.com/desihub/desispec/pull/2014
+.. _`#2015`: https://github.com/desihub/desispec/pull/2015
 .. _`#2017`: https://github.com/desihub/desispec/pull/2017
+.. _`#2019`: https://github.com/desihub/desispec/pull/2019
+.. _`#2020`: https://github.com/desihub/desispec/pull/2020
+.. _`#2022`: https://github.com/desihub/desispec/pull/2022
+.. _`#2029`: https://github.com/desihub/desispec/pull/2029
 
 0.57.0 (2023-02-17)
 -------------------
