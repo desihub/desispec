@@ -541,9 +541,14 @@ def parse_nist(ion, vacuum=True):
     Parameters
     ----------
     ion : str
-      Name of ion
-    vaccuum : bool, optional
-      Use vacuum wavelengths
+        Name of ion.
+    vacuum : bool, optional
+        Use vacuum wavelengths.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        A Table obtained from the data file with some columns added or renamed.
     """
     log=get_logger()
     # Find file
@@ -558,10 +563,12 @@ def parse_nist(ion, vacuum=True):
     # Read, while working around non-ASCII characters in NIST line lists
     nist_file = resource_filename('desispec', srch_file)
     log.info("reading NIST file {:s}".format(nist_file))
-    default_locale = locale.getlocale(locale.LC_CTYPE)
-    locale.setlocale(locale.LC_CTYPE, 'en_US.UTF-8')
-    nist_tbl = Table.read(nist_file, format='ascii.fixed_width')
-    locale.setlocale(locale.LC_CTYPE, default_locale)
+    # The data files contain the non-ASCII character 'Å', so explicitly set the
+    # encoding when reading the table.
+    #
+    # cupy is known to unexpectedly alter the default encoding,
+    # so we need this for both of those reasons.
+    nist_tbl = Table.read(nist_file, format='ascii.fixed_width', encoding='UTF-8')
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
     nist_tbl = nist_tbl[gdrow]
     # Now unique values only (no duplicates)
@@ -1272,7 +1279,7 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
                 mask[iy,ix] = 1
             except IndexError :
                 pass
-        
+
         # Sub-image (for speed, not convenience)
         gdp = np.where(mask == 1)
         if len(gdp[1])<2: continue

@@ -5,7 +5,6 @@ tests bootcalib code
 import unittest
 from uuid import uuid1
 import os
-import sys
 import numpy as np
 import glob
 import locale
@@ -16,8 +15,6 @@ from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 
 from desispec.scripts import bootcalib as bootscript
-
-PY3 = sys.version_info.major > 2
 
 
 class TestBoot(unittest.TestCase):
@@ -99,24 +96,11 @@ class TestBoot(unittest.TestCase):
         #pdb.set_trace()
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
-    @unittest.skipUnless(PY3, "Skipping arc line test that is only relevant to Python 3.")
     def test_parse_nist(self):
         """Test parsing of NIST arc line files.
         """
-        old_loc = locale.getlocale()
-        old_lc_env = dict()
-        for e in ('LANG', 'LC_ALL'):
-            if e in os.environ:
-                old_lc_env[e] = os.environ[e]
-                del os.environ[e]
-            else:
-                old_lc_env[e] = None
         tbl = desiboot.parse_nist('CdI')
         self.assertEqual(tbl['Ion'][0], 'CdI')
-        for e in old_lc_env:
-            if old_lc_env[e] is not None:
-                os.environ[e] = old_lc_env[e]
-        locale.setlocale(locale.LC_ALL, old_loc)
 
     def test_load_gdarc_lines(self):
 
@@ -216,7 +200,7 @@ class TestBoot(unittest.TestCase):
         #- While we're at it, test some PSF accessor functions
         indices = np.array([0,1])
         waves = np.array([psf.wmin, psf.wmin+1])
-        
+
         w = psf.wavelength()
         w = psf.wavelength(ispec=0)
         w = psf.wavelength(ispec=indices)
@@ -235,8 +219,8 @@ class TestBoot(unittest.TestCase):
         y = psf.y(ispec=0, wavelength=psf.wmin)
         y = psf.y(ispec=indices, wavelength=psf.wmin)
         y = psf.y(ispec=indices, wavelength=waves)
-        
-        
+
+
 def test_suite():
     """Allows testing of only this module with the command::
 
