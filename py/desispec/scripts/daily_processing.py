@@ -362,7 +362,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                                         check_for_outputs=check_for_outputs,
                                                         resubmit_partial_complete=resubmit_partial_complete,
                                                         z_submit_types=z_submit_types,
-                                                        use_specter=use_specter)
+                                                        use_specter=use_specter,
+                                                        laststeps = ['all','fluxcalib','skysub'])
                 else:
                     ptable, calibjobs, sciences, internal_id \
                         = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
@@ -410,7 +411,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 flats.append(prow)
             elif curtype == 'arc' and calibjobs['psfnight'] is None:
                 arcs.append(prow)
-            elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
+            elif curtype == 'science':
                 sciences.append(prow)
 
             lasttile = curtile
@@ -455,7 +456,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
                                             z_submit_types=z_submit_types,
-                                            use_specter=use_specter)
+                                            use_specter=use_specter,
+                                            laststeps = ['all','fluxcalib','skysub'])
     else:
         ptable, calibjobs, sciences, internal_id \
             = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
