@@ -20,6 +20,7 @@ Introduction
 ------------
 
 This package contains scripts and packages for building and running DESI spectroscopic analyses.
+Details about the algorithms are documented in `Guy et al 2023 AJ 165 144G <https://ui.adsabs.harvard.edu/abs/2023AJ....165..144G/abstract>`_.
 
 
 Installation
