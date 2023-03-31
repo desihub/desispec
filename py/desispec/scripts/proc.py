@@ -296,7 +296,8 @@ def main(args=None, comm=None):
         preprocdir = os.path.dirname(findfile('preproc', args.night, args.expid, 'b0'))
         expdir = os.path.dirname(findfile('frame', args.night, args.expid, 'b0'))
         os.makedirs(preprocdir, exist_ok=True)
-        os.makedirs(expdir, exist_ok=True)
+        if args.obstype not in ('DARK', 'ZERO'):
+            os.makedirs(expdir, exist_ok=True)
 
     #- Wait for rank 0 to make directories before proceeding
     if comm is not None:
