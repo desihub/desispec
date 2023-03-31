@@ -159,6 +159,9 @@ def main(args=None, comm=None):
         hdr = comm.bcast(hdr, root=0)
         camhdr = comm.bcast(camhdr, root=0)
 
+    if args.obstype is not None:
+        args.obstype = args.obstype.upper()
+
     known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
         'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
     only_nightlybias = args.nightlybias and args.expid is None
@@ -193,7 +196,7 @@ def main(args=None, comm=None):
             log.critical('No --obstype, but also not just nightlybias ?!?')
             sys.exit(1)
 
-        if args.obstype == 'dark' and args.nightlybias:
+        if args.obstype == 'DARK' and args.nightlybias:
             jobdesc = 'ccdcalib'
 
         if args.obstype == 'SCIENCE':
@@ -296,7 +299,8 @@ def main(args=None, comm=None):
         preprocdir = os.path.dirname(findfile('preproc', args.night, args.expid, 'b0'))
         expdir = os.path.dirname(findfile('frame', args.night, args.expid, 'b0'))
         os.makedirs(preprocdir, exist_ok=True)
-        os.makedirs(expdir, exist_ok=True)
+        if args.obstype not in ('DARK', 'ZERO'):
+            os.makedirs(expdir, exist_ok=True)
 
     #- Wait for rank 0 to make directories before proceeding
     if comm is not None:
