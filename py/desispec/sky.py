@@ -142,7 +142,7 @@ def get_sector_masks(frame):
                     amp,sector))
 
     if len(sectors) == 0:
-        return []
+        return [], [[]]
 
     psf_filename = findfile('psf', meta["NIGHT"], meta["EXPID"],
                             meta["CAMERA"])
@@ -232,7 +232,8 @@ def compute_sky_linear(
         skytpcorrfixed = skytpcorrfixed[skyfibers]
 
     skytpcorr = skytpcorrfixed.copy()
-    sectors, sectemplates = sectors
+    if sectors is not None:
+        sectors, sectemplates = sectors
 
     for iteration in range(max_iterations) :
         # the matrix A is 1/2 of the second derivative of the chi2 with respect to the parameters
@@ -354,6 +355,10 @@ def compute_sky_linear(
             param[w]=np.linalg.lstsq(A_pos_def,B[w], rcond=None)[0]
         deconvolved_sky = param[:nwave]
         modeled_sky = design.dot(param).reshape(flux.shape)
+        modeled_secoffs = (
+            design[:, nwave:nwave + nsectemplate].dot(
+                param[nwave:nwave + nsectemplate]))
+        modeled_secoffs = modeled_secoffs.reshape(flux.shape)
 
         log.info("iter %d compute chi2"%iteration)
 
@@ -410,13 +415,17 @@ def compute_sky_linear(
             # the _current_ pca-tracked bit of the tpcorr we are using is
             # in tppca0.  This is the current total skytpcorr, divided by the fixed
             # bit that comes from the mean and the spatial within-patrol-radius model.
+
             tppca0 = skytpcorr[:, None]/skytpcorrfixed[:, None]
             tppcam = tpcorrparam.pca[:, skyfibers]
             # in the design matrix and flux residuals, we divide out tppca0 from
             # modeled_sky so that we have only the pre-PCA skies
-            aa = np.array([(modeled_sky*tppcam0[:, None]/tppca0).reshape(-1)
+            # we use the modeled_sky without the offsets since this is a throughput
+            # effect and not an instrumental effect.
+            sky_no_offsets = modeled_sky - modeled_secoffs
+            aa = np.array([(sky_no_offsets*tppcam0[:, None]/tppca0).reshape(-1)
                            for tppcam0 in tppcam]).T
-            fluxresid = flux - modeled_sky / tppca0
+            fluxresid = flux - modeled_secoffs - sky_no_offsets / tppca0
             # then we solve for the PCA coefficients that best take the
             # pre-PCA skies to the pre-PCA sky residuals (fluxresid).
             skytpcorrcoeff = np.linalg.lstsq(
@@ -427,17 +436,6 @@ def compute_sky_linear(
             for coeff, vec in zip(skytpcorrcoeff,
                                   tpcorrparam.pca[:, skyfibers]):
                 skytpcorr += coeff*vec
-
-            # there's a modest issue here that we're not removing the
-            # sector offsets when computing the tpcorr.  we probably
-            # want to replace modeled_sky with
-            # modeled_sky - sector_offsets above, and flux with
-            # flux - sector_offsets.
-            # This is pretty perturbative and I am
-            # ignoring for the moment.  (sector offsets already mostly
-            # cancel out of fluxresid, since the tpcorr are close to
-            # 1; and the sector offsets are a small part of the
-            # overall sky).
 
         nout_tot += nout_iter
 
@@ -480,7 +478,8 @@ def compute_sky_linear(
                                 skytpcorrcoeff)
 
     unconvflux = param[:nwave].copy()
-    skygradpcacoeff = param[nwave + nsector:nwave+nsector+nskygradpc*2]
+    skygradpcacoeff = param[
+        nwave + nsectemplate:nwave+nsectemplate+nskygradpc*2]
     if skygradpca is not None:
         modeled_sky = desispec.skygradpca.evaluate_model(
             skygradpca, Rframe, skygradpcacoeff, mean=unconvflux)
