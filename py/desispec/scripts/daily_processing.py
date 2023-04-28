@@ -33,7 +33,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
                              exps_to_ignore=None, data_cadence_time=300, queue_cadence_time=1800,
                              dry_run_level=0, dry_run=False, no_redshifts=False, continue_looping_debug=False, dont_check_job_outputs=False,
-                             dont_resubmit_partial_jobs=False, verbose=False, use_specter=False):
+                             dont_resubmit_partial_jobs=False, verbose=False, use_specter=False, run_only_once=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -408,7 +408,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         print("\nReached the end of current iteration of new exposures.")
         if override_night is not None and (not continue_looping_debug):
             print("\nOverride_night set, not waiting for new data before exiting.\n")
-        else:
+        elif not run_only_once:
             sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
                             dry_run=(dry_run and ()))
 
@@ -422,6 +422,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 write_table(ptable, tablename=proc_table_pathname)
             if override_night is None or continue_looping_debug:
                 sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
+        if run_only_once:
+            print("Exiting after running only once")
+            ## Flush the outputs
+            sys.stdout.flush()
+            sys.stderr.flush()
+            return None
 
     ## Flush the outputs
     sys.stdout.flush()
