@@ -498,18 +498,19 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         time.sleep(1)
     else:
         #- sbatch sometimes fails; try several times before giving up
-        max_attempts = 3
+        max_attempts = 120
         for attempt in range(max_attempts):
             try:
                 current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
                 current_qid = int(current_qid.strip(' \t\n'))
                 break
             except subprocess.CalledProcessError as err:
-                log.error(f'{jobname} submission failed: {batch_params}')
-                log.error(f'{jobname} {err.output=}')
+                log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
+                log.error(f'{jobname}   {batch_params}')
+                log.error(f'{jobname}   {err.output=}')
                 if attempt < max_attempts - 1:
-                    log.info('Sleeping 60 seconds then retrying')
-                    time.sleep(60)
+                    log.info('Sleeping 30 seconds then retrying')
+                    time.sleep(30)
         else:  #- for/else happens if loop doesn't succeed
             msg = f'{jobname} submission failed {max_attempts} times; exiting'
             log.critical(msg)
