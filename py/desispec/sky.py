@@ -142,7 +142,7 @@ def get_sector_masks(frame):
                     amp,sector))
 
     if len(sectors) == 0:
-        return []
+        return [], [[]]
 
     psf_filename = findfile('psf', meta["NIGHT"], meta["EXPID"],
                             meta["CAMERA"])
@@ -159,11 +159,21 @@ def get_sector_masks(frame):
         tmp_y[fiber] = tset.y_vs_wave(fiber=fiber, wavelength=frame.wave)
 
     masks = []
+    templates = []
     for ymin, ymax, xmin, xmax in sectors:
         mask = ((tmp_y >= ymin) & (tmp_y < ymax) &
                 (tmp_x >= xmin) & (tmp_x < xmax))
         masks.append(mask)
-    return masks
+        constant_template = 1.0 * mask
+        linear_template = (
+            np.ones(frame.flux.shape[0])[:, None] *
+            np.arange(frame.flux.shape[1])[None, :])
+        linear_template -= np.min(linear_template*mask, axis=1, keepdims=True)
+        tempmax = np.max(linear_template*mask, axis=1, keepdims=True)
+        linear_template /= (tempmax + (tempmax == 0))
+        linear_template *= mask
+        templates.append([constant_template, linear_template])
+    return masks, templates
 
 def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=None):
     """
@@ -181,7 +191,7 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
 
     By default we rely on fibermap['OBJTYPE']=='SKY', but we can also exclude
     some targetids by providing a list of them through exclude_sky_targetids
-    or by just providing all the sky targetids directly (in that case 
+    or by just providing all the sky targetids directly (in that case
     the OBJTYPE information is ignored)
     """
     log = get_logger()
@@ -189,7 +199,7 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
     if override_sky_targetids is not None:
         log.info('Overriding default sky fiber list using override_sky_targetids')
         skyfibers = np.where(np.in1d(fibermap['TARGETID'], override_sky_targetids))[0]
-        # we ignore OBJTYPEs 
+        # we ignore OBJTYPEs
     else:
         skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
         if exclude_sky_targetids is not None:
@@ -222,6 +232,8 @@ def compute_sky_linear(
         skytpcorrfixed = skytpcorrfixed[skyfibers]
 
     skytpcorr = skytpcorrfixed.copy()
+    if sectors is not None:
+        sectors, sectemplates = sectors
 
     for iteration in range(max_iterations) :
         # the matrix A is 1/2 of the second derivative of the chi2 with respect to the parameters
@@ -266,7 +278,8 @@ def compute_sky_linear(
         # R(sky + amplitudes * skygradpc * dx)*tpcorr + sector
 
         nsector = len(sectors)
-        npar = nwave + nsector + nskygradpc*2
+        nsectemplate = sum([len(x) for x in sectemplates])
+        npar = nwave + nsectemplate + nskygradpc*2
 
         yy = np.zeros((nwave*nfibers))
 
@@ -292,30 +305,33 @@ def compute_sky_linear(
                 for skygradpcind in range(nskygradpc):
                     convskygradpc = R.dot(skygradpca.deconvflux[skygradpcind])
                     allrows.append(np.arange(nwave)+fiber*nwave)
-                    allcols.append(nwave + nsector + skygradpcind*2 +
+                    allcols.append(nwave + nsectemplate + skygradpcind*2 +
                                    np.zeros(nwave, dtype='i4'))
                     allvals.append(convskygradpc * dx)
                     allrows.append(np.arange(nwave)+fiber*nwave)
-                    allcols.append(nwave + nsector + skygradpcind*2 + 1 +
+                    allcols.append(nwave + nsectemplate + skygradpcind*2 + 1 +
                                    np.zeros(nwave, dtype='i4'))
                     allvals.append(convskygradpc * dy)
         # boost model by throughput corrections
         for i in range(len(allvals)):
             allvals[i] *= skytpcorr[allrows[i] // nwave]
 
-        for i, secmask in enumerate(sectors):
-            rows = np.flatnonzero(secmask[skyfibers])
-            cols = np.full(len(rows), nwave+i)
-            if fiberflat is not None:
-                flat = (
-                    fiberflat.fiberflat[skyfibers][secmask[skyfibers]].ravel())
-            else:
-                flat = np.ones(rows.shape)
-            vals = 1/(flat + (flat == 0))
-            allrows.append(rows)
-            allcols.append(cols)
-            allvals.append(vals)
-
+        i = 0
+        for j, secmask in enumerate(sectors):
+            for template in sectemplates[j]:
+                rows = np.flatnonzero(secmask[skyfibers])
+                cols = np.full(len(rows), nwave+i)
+                if fiberflat is not None:
+                    flat = (
+                        fiberflat.fiberflat[skyfibers][secmask[skyfibers]].ravel())
+                else:
+                    flat = np.ones(rows.shape)
+                vals = (template[skyfibers][secmask[skyfibers]].ravel()/
+                        (flat + (flat == 0)))
+                allrows.append(rows)
+                allcols.append(cols)
+                allvals.append(vals)
+                i += 1
 
         design = scipy.sparse.coo_matrix(
             (np.concatenate(allvals),
@@ -339,6 +355,10 @@ def compute_sky_linear(
             param[w]=np.linalg.lstsq(A_pos_def,B[w], rcond=None)[0]
         deconvolved_sky = param[:nwave]
         modeled_sky = design.dot(param).reshape(flux.shape)
+        modeled_secoffs = (
+            design[:, nwave:nwave + nsectemplate].dot(
+                param[nwave:nwave + nsectemplate]))
+        modeled_secoffs = modeled_secoffs.reshape(flux.shape)
 
         log.info("iter %d compute chi2"%iteration)
 
@@ -395,13 +415,17 @@ def compute_sky_linear(
             # the _current_ pca-tracked bit of the tpcorr we are using is
             # in tppca0.  This is the current total skytpcorr, divided by the fixed
             # bit that comes from the mean and the spatial within-patrol-radius model.
+
             tppca0 = skytpcorr[:, None]/skytpcorrfixed[:, None]
             tppcam = tpcorrparam.pca[:, skyfibers]
             # in the design matrix and flux residuals, we divide out tppca0 from
             # modeled_sky so that we have only the pre-PCA skies
-            aa = np.array([(modeled_sky*tppcam0[:, None]/tppca0).reshape(-1)
+            # we use the modeled_sky without the offsets since this is a throughput
+            # effect and not an instrumental effect.
+            sky_no_offsets = modeled_sky - modeled_secoffs
+            aa = np.array([(sky_no_offsets*tppcam0[:, None]/tppca0).reshape(-1)
                            for tppcam0 in tppcam]).T
-            fluxresid = flux - modeled_sky / tppca0
+            fluxresid = flux - modeled_secoffs - sky_no_offsets / tppca0
             # then we solve for the PCA coefficients that best take the
             # pre-PCA skies to the pre-PCA sky residuals (fluxresid).
             skytpcorrcoeff = np.linalg.lstsq(
@@ -412,17 +436,6 @@ def compute_sky_linear(
             for coeff, vec in zip(skytpcorrcoeff,
                                   tpcorrparam.pca[:, skyfibers]):
                 skytpcorr += coeff*vec
-
-            # there's a modest issue here that we're not removing the
-            # sector offsets when computing the tpcorr.  we probably
-            # want to replace modeled_sky with
-            # modeled_sky - sector_offsets above, and flux with
-            # flux - sector_offsets.
-            # This is pretty perturbative and I am
-            # ignoring for the moment.  (sector offsets already mostly
-            # cancel out of fluxresid, since the tpcorr are close to
-            # 1; and the sector offsets are a small part of the
-            # overall sky).
 
         nout_tot += nout_iter
 
@@ -437,14 +450,14 @@ def compute_sky_linear(
         if (nout_iter == 0) & (iteration >= min_iterations - 1):
             break
 
-    if nsector > 0:
-        log.info('sectors: %d sectors fit, offsets %s' %
+    if nsectemplate > 0:
+        log.info('sectors: %d sectors fit, values %s' %
                  (nsector, ' '.join(
-                     [str(x) for x in param[nwave:nwave+nsector]])))
+                     [str(x) for x in param[nwave:nwave+nsectemplate]])))
 
     if nskygradpc > 0:
         log.info(('Fit with %d spatial PCs, amplitudes ' % nskygradpc) +
-                 ' '.join(['%.1f' % x for x in param[nwave+nsector:]]))
+                 ' '.join(['%.1f' % x for x in param[nwave+nsectemplate:]]))
 
     log.info("compute the parameter covariance")
     # we may have to use a different method to compute this
@@ -465,7 +478,8 @@ def compute_sky_linear(
                                 skytpcorrcoeff)
 
     unconvflux = param[:nwave].copy()
-    skygradpcacoeff = param[nwave + nsector:nwave+nsector+nskygradpc*2]
+    skygradpcacoeff = param[
+        nwave + nsectemplate:nwave+nsectemplate+nskygradpc*2]
     if skygradpca is not None:
         modeled_sky = desispec.skygradpca.evaluate_model(
             skygradpca, Rframe, skygradpcacoeff, mean=unconvflux)
@@ -475,11 +489,14 @@ def compute_sky_linear(
             modeled_sky[i] = Rframe[i].dot(unconvflux)
 
     sector_offsets = np.zeros((len(fibermap), flux.shape[1]), dtype='f4')
-    for i, secmask in enumerate(sectors):
-        sector_offsets[secmask] += param[nwave+i]
-        if fiberflat is not None:
-            flat = fiberflat.fiberflat + (fiberflat.fiberflat == 0)
-            sector_offsets[secmask] /= flat[secmask]
+    i = 0
+    for j, secmask in enumerate(sectors):
+        for sectemplate in sectemplates[j]:
+            sector_offsets[secmask] += param[nwave+i] * sectemplate[secmask]
+            i += 1
+    if len(sectors) > 0 and fiberflat is not None:
+        flat = fiberflat.fiberflat + (fiberflat.fiberflat == 0)
+        sector_offsets /= flat
 
     modeled_sky *= skytpcorr[:, None]
     bad_wavelengths = ~(w[:nwave])
@@ -587,7 +604,7 @@ def compute_sky(
     if fit_offsets:
         sectors = get_sector_masks(frame)
     else:
-        sectors = []
+        sectors = [], [[]]
 
     if skygradpca is not None:
         desispec.skygradpca.configure_for_xyr(
