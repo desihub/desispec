@@ -2,28 +2,51 @@
 desispec Change Log
 ===================
 
-0.57.1 (unreleased)
+0.58.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.58.0 (2023-05-02)
+-------------------
+
+Major:
+
+* Add tilenight support to :command:`desi_daily_proc_manager` (PR `#2028`_).
+* Change CTE fitting to be offset+ramp instead of just offset (PR `#2033`_).
+
+Smaller / bugfixes:
+
 * Flag calibration files performed on a different day (PR `#2011`_).
-* Coadd spectra files with ``COADD_FIBERMAP`` instead of ``FIBERMAP`` (PR `#2013`_).
-* Fix documentation test failures due to missing ``pytz`` (PR `#2019`_).
+* Coadd spectra files with ``COADD_FIBERMAP`` instead of ``FIBERMAP``
+  (PR `#2013`_).
+* Fix bug in :command:`desi_proc_tilenight` which was causing it to ignore
+  ``--cameras`` (PR `#2014`_).
+* Propagate the ``--laststeps`` option to :command:`desi_proc_tilenight`
+  (PR `#2015`_).
+* NightQA preproc dark bugfix when misisng cameras (PR `#2016`_).
 * Fix failing ``io.photo`` unit tests (PR `#2017`_).
-* Fix indexing error in targetid seelction for :command:`plot_spectra` (PR `#2020`_).
-* Fix crash in :command:`desi_run_night` when processing ``LASTSTEP=skysub`` exposures (PR `#2022`_).
-* Fix bug in :command:`desi_proc_tilenight` which was causing it to ignore ``--cameras`` (PR `#2014`_).
-* Propagate the ``--laststeps`` option to :command:`desi_proc_tilenight` (PR `#2015`_).
+* Fix documentation test failures due to missing ``pytz`` (PR `#2019`_).
+* Fix indexing error in targetid selection for :command:`plot_spectra`
+  (PR `#2020`_).
+* Fix crash in :command:`desi_run_night` when processing ``LASTSTEP=skysub``
+  exposures (PR `#2022`_).
 * Fix failing ``bootcalib`` unit tests (PR `#2029`_).
+* Don't create exposures outdir for darks with no output (PR `#2031`_).
 
 .. _`#2011`: https://github.com/desihub/desispec/pull/2011
 .. _`#2013`: https://github.com/desihub/desispec/pull/2013
 .. _`#2014`: https://github.com/desihub/desispec/pull/2014
 .. _`#2015`: https://github.com/desihub/desispec/pull/2015
+.. _`#2016`: https://github.com/desihub/desispec/pull/2016
 .. _`#2017`: https://github.com/desihub/desispec/pull/2017
 .. _`#2019`: https://github.com/desihub/desispec/pull/2019
 .. _`#2020`: https://github.com/desihub/desispec/pull/2020
 .. _`#2022`: https://github.com/desihub/desispec/pull/2022
+.. _`#2028`: https://github.com/desihub/desispec/pull/2028
 .. _`#2029`: https://github.com/desihub/desispec/pull/2029
+.. _`#2031`: https://github.com/desihub/desispec/pull/2031
+.. _`#2033`: https://github.com/desihub/desispec/pull/2033
 
 0.57.0 (2023-02-17)
 -------------------
