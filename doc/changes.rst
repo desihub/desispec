@@ -2,10 +2,18 @@
 desispec Change Log
 ===================
 
-0.58.1 (unreleased)
+0.58.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.58.1 (2023-05-02)
+-------------------
+
+* daily proc non-tilenight skybub exp fix
+  [PR `#2034`_, followup to PR `#2028`_]
+
+.. _`#2034`: https://github.com/desihub/desispec/pull/2034
 
 0.58.0 (2023-05-02)
 -------------------
