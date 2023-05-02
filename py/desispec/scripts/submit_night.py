@@ -504,7 +504,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
                                                 z_submit_types=cur_z_submit_types,
-                                                system_name=system_name,use_specter=use_specter)
+                                                system_name=system_name,use_specter=use_specter,
+                                                laststeps=tilenight_laststeps)
         else:
             ptable, calibjobs, sciences, internal_id \
                 = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,

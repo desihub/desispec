@@ -505,8 +505,9 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                 current_qid = int(current_qid.strip(' \t\n'))
                 break
             except subprocess.CalledProcessError as err:
-                log.error(f'{jobname} submission failed: {batch_params}')
-                log.error(f'{jobname} {err.output=}')
+                log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
+                log.error(f'{jobname}   {batch_params}')
+                log.error(f'{jobname}   {err.output=}')
                 if attempt < max_attempts - 1:
                     log.info('Sleeping 60 seconds then retrying')
                     time.sleep(60)

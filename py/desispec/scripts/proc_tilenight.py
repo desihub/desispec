@@ -153,8 +153,8 @@ def main(args=None, comm=None):
     #- What are we going to do?
     if rank == 0:
         log.info('----------')
-        log.info('Tile {} night {} exposures {}'.format(
-            args.tileid, args.night, prestdstar_expids))
+        log.info('Tile {} night {} prestdstar expids {} stdstar_expids {} poststdstar_expids {}'.format(
+            args.tileid, args.night, prestdstar_expids, stdstar_expids, poststdstar_expids))
         log.info('Output root {}'.format(specprod_root()))
         log.info('----------')
 
@@ -211,7 +211,7 @@ def main(args=None, comm=None):
     #- Cleanup GPU memory and rank assignments before continuing
     desispec.gpu.redistribute_gpu_ranks(comm)
 
-    if continue_tilenight:
+    if continue_tilenight and len(stdstar_expids) > 0:
         #- run joint stdstar fit using all exp for this tile night
         stdstar_args  = common_args + mpi_args
         stdstar_args += f' --obstype science --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
