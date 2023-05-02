@@ -28,7 +28,6 @@ from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, a
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import difference_camwords, parse_badamps, validate_badamps
 
-
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
@@ -350,6 +349,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             # if this is a new tile/obstype, proceed with submitting all of the jobs for the previous tile
             if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+                print("Now done with previous tile or obstype. "
+                      + f"{curtype=}, {lasttype=}, {curtile=}, {lasttile=}\n")
                 old_iid = internal_id
                 # If done with science exposures for a tile and use_tilenight==True, use
                 # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
