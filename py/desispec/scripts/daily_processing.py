@@ -411,7 +411,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 flats.append(prow)
             elif curtype == 'arc' and calibjobs['psfnight'] is None:
                 arcs.append(prow)
-            elif curtype == 'science':
+            elif curtype == 'science' and (use_tilenight or prow['LASTSTEP'] != 'skysub'):
                 sciences.append(prow)
 
             lasttile = curtile
