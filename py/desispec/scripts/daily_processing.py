@@ -349,7 +349,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             # if this is a new tile/obstype, proceed with submitting all of the jobs for the previous tile
             if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-                print("Now done with previous tile or obstype. "
+                print("\nNow done with previous tile or obstype. "
                       + f"{curtype=}, {lasttype=}, {curtile=}, {lasttile=}\n")
                 old_iid = internal_id
                 # If done with science exposures for a tile and use_tilenight==True, use
