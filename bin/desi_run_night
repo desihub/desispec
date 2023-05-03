@@ -81,6 +81,9 @@ def parse_args():  # options=None):
                              "Default False for NERSC Cori, True otherwise")
     parser.add_argument("--all-tiles", action="store_true",
                         help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
+    parser.add_argument("--all-cumulatives", action="store_true",
+                        help="Set to run cumulative redshifts for all tiles"
+                             + "even if the tile has observations on a later night.")
     parser.add_argument("--specstatus-path", type=str, required=False, default=None,
                         help="Location of the surveyops specstatus table. Default is "+
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")

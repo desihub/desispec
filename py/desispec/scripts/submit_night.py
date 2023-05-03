@@ -35,7 +35,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None, surveys=None, laststeps=None, use_tilenight=False,
                  all_tiles=False, specstatus_path=None, use_specter=False,
-                 do_cte_flat=False, complete_tiles_thrunight=None):
+                 do_cte_flat=False, complete_tiles_thrunight=None,
+                 all_cumulatives=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -88,6 +89,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             on or before the supplied YYYYMMDD are considered
             completed and will be processed. All complete
             tiles are submitted if None or all_tiles is True.
+        all_cumulatives (bool, optional): Default is False. Set to run cumulative redshifts for all tiles
+            even if the tile has observations on a later night.
     """
     log = get_logger()
 
@@ -236,15 +239,18 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     tiles_cumulative = list()
     if z_submit_types is not None and 'cumulative' in z_submit_types:
         tiles_this_night = np.unique(np.asarray(etable['TILEID']))
-        tiles_this_night = tiles_this_night[tiles_this_night>0]  # science tiles, not calibs
-        allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
-        for tileid in tiles_this_night:
-            nights_with_tile = allexp['NIGHT'][allexp['TILEID'] == tileid]
-            if len(nights_with_tile) > 0 and night == np.max(nights_with_tile):
-                tiles_cumulative.append(tileid)
-
-        log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}/{len(tiles_this_night)} tiles '
-                 f'for which {night} is the last night: {tiles_cumulative}')
+        tiles_this_night = tiles_this_night[tiles_this_night > 0]  # science tiles, not calibs
+        if all_cumulatives:
+            tiles_cumulative = list(tiles_this_night)
+            log.info(f'Submitting cumulative redshifts for all tiles: {tiles_cumulative}')
+        else:
+            allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
+            for tileid in tiles_this_night:
+                nights_with_tile = allexp['NIGHT'][allexp['TILEID'] == tileid]
+                if len(nights_with_tile) > 0 and night == np.max(nights_with_tile):
+                    tiles_cumulative.append(tileid)
+            log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}/{len(tiles_this_night)} tiles '
+                     f'for which {night} is the last night: {tiles_cumulative}')
 
     ## Count zeros before trimming by OBSTYPE since they are used for
     ## nightly bias even if they aren't processed individually
