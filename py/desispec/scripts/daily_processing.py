@@ -315,7 +315,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             etable.add_row(erow)
             if unproc:
                 unproc_table.add_row(erow)
-                sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+                sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run) # CHANGE BACK TO 2 AFTER SBATCH TESTING
                 if dry_run_level < 3:
                     write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
                 continue
@@ -424,7 +424,11 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             if dry_run_level < 3:
                 write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
-            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+            # next 3 lines added for sbatch-patch testing only -- CHANGE BACK BEFORE MERGING
+            # if curtype == 'dark':
+            #     print(f"\n SBATCH TESTING: waiting 4 minutes to allow ccdcalib job to complete for testing\n")
+            #     time.sleep(240)
+            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run) # CHANGE BACK TO 2 BEFORE MERGING
 
         print("\nReached the end of current iteration of new exposures.")
         if override_night is not None and (not continue_looping_debug):
