@@ -446,7 +446,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    # workaround for sbatch bug see NERSC TICKET INC0203024
+    # workaround for sbatch --dependency bug not tracking completed jobs correctly
+    # see NERSC TICKET INC0203024
     if len(dep_qids) > 0:
         dep_table = queue_info_from_qids(np.asarray(dep_qids), columns='jobid,state')
         for row in dep_table:
