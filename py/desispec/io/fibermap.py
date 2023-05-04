@@ -211,6 +211,9 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
         An empty Table.
     """
 
+    #- import desimodel only if needed
+    from desimodel.io import load_focalplane
+
     assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
     columns = _set_fibermap_columns(survey)
     #
@@ -530,6 +533,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     :class:`astropy.io.fits.HDUList`
         A representation of a fibermap FITS file.
     """
+
+    #- import desimodel only if needed
+    from desimodel.focalplane import get_tile_radius_deg
 
     log = get_logger()
 
