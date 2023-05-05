@@ -22,7 +22,7 @@ jobs:
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.3.0
+            DESIUTIL_VERSION: 3.2.6
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -124,7 +124,7 @@ jobs:
                 os: [ubuntu-latest]
                 python-version: ['3.9']
         env:
-            DESIUTIL_VERSION: module-script
+            DESIUTIL_VERSION: 3.3.0
 
         steps:
             - name: Checkout code
