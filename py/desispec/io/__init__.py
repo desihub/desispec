@@ -52,6 +52,3 @@ try:
     from .filters import load_filter,load_legacy_survey_filter
 except ModuleNotFoundError:
     pass
-
-# Commented out by JXP as this causes a circular import on Python 3.7
-#from desispec.preproc import read_bias, read_pixflat, read_mask
