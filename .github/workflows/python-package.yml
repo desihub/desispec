@@ -124,7 +124,7 @@ jobs:
                 os: [ubuntu-latest]
                 python-version: ['3.9']
         env:
-            DESIUTIL_VERSION: module-script
+            DESIUTIL_VERSION: 3.3.0
 
         steps:
             - name: Checkout code

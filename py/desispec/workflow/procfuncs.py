@@ -18,7 +18,7 @@ from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
                                         get_ztile_relpath, \
                                         get_ztile_script_suffix
-from desispec.workflow.queue import get_resubmission_states, update_from_queue
+from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
                                               create_desi_proc_batch_script, \
@@ -445,6 +445,15 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     log = get_logger()
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
+
+    # workaround for sbatch --dependency bug not tracking completed jobs correctly
+    # see NERSC TICKET INC0203024
+    if len(dep_qids) > 0:
+        dep_table = queue_info_from_qids(np.asarray(dep_qids), columns='jobid,state')
+        for row in dep_table:
+            if row['STATE'] == 'COMPLETED':
+                log.info(f"removing completed jobid {row['JOBID']}")
+                dep_qids = np.delete(dep_qids, np.argwhere(dep_qids==row['JOBID']))
 
     if len(dep_qids) > 0:
         jobtype = prow['JOBDESC']
