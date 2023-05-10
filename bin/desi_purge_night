@@ -78,5 +78,5 @@ if __name__ == '__main__':
 
     log.info(f"Done purging {specprod} night {night}")
 
-    if not args.not_dry_run:
+    if dry_run:
         log.warning('That was a dry run with no files removed; rerun with --not-dry-run to actually remove files')
