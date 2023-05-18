@@ -8,7 +8,7 @@ import numpy as np
 from astropy.table import Table
 import subprocess
 from desiutil.log import get_logger
-import time
+import time, datetime
 
 
 def get_resubmission_states():
@@ -201,11 +201,27 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
                   +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
                   +'19:24:49,COMPLETED,0:0'
         cmd_as_list = ['echo', string]
+        table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                      stderr=subprocess.STDOUT)
     else:
         log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
 
-    table_as_string = subprocess.check_output(cmd_as_list, text=True,
+        #- sacct sometimes fails; try several times before giving up
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                table_as_string = subprocess.check_output(cmd_as_list, text=True,
                                               stderr=subprocess.STDOUT)
+                break
+            except subprocess.CalledProcessError as err:
+                log.error(f'{qid_str} job query via sacct failure at {datetime.datetime.now()}')
+                log.error(f'{qid_str} {cmd_as_list}')
+                log.error(f'{qid_str} {err.output=}')
+        else:  #- for/else happens if loop doesn't succeed
+            msg = f'{qid_str} job query via sacct failed {max_attempts} times; exiting'
+            log.critical(msg)
+            raise RuntimeError(msg)
+
     queue_info_table = Table.read(table_as_string, format='ascii.csv')
 
     for col in queue_info_table.colnames:
