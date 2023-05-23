@@ -61,6 +61,8 @@ Must specify --infile OR --night and --expid.
                         help = 'no pixflat correction')
     parser.add_argument('--nomask', action = 'store_true',
                         help = 'no prior masking of pixels')
+    parser.add_argument('--noregionmask', action = 'store_true',
+                        help = 'disable ccd region mask')
     parser.add_argument('--nocrosstalk', action = 'store_true',
                         help = 'no cross-talk correction')
     parser.add_argument('--nocosmic', action='store_true',
@@ -181,6 +183,7 @@ def main(args=None):
                 bkgsub_dark=args.bkgsub_for_dark,
                 bkgsub_science=args.bkgsub_for_science,
                 nocosmic=args.nocosmic,
+                no_ccd_region_mask=args.noregionmask,
                 cosmics_nsig=args.cosmics_nsig,
                 cosmics_cfudge=args.cosmics_cfudge,
                 cosmics_c2fudge=args.cosmics_c2fudge,
