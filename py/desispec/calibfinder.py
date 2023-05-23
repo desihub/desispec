@@ -112,6 +112,18 @@ def findcalibfile(headers,key,yaml_file=None) :
         return None
 
 def ccdregionmask(headers) :
+    """
+    Looks for regions of CCD to mask for a given NIGHT EXPID CAMERA and returns a list of dictionnaries.
+    NIGHT EXPID CAMERA are retrieved from the input image headers and compared to corresponding columns
+    in the cvs table $DESI_SPECTRO_CALIB/ccd/ccd-region-mask.csv
+
+    Args:
+        headers: list of fits headers, or list of dictionnaries
+
+    Returns list of dictionnaries with keys XMIN, XMAX, YMIN,YMAX
+    """
+    log = get_logger()
+
     ccd_region_mask_filename = os.path.join(os.getenv('DESI_SPECTRO_CALIB'),"ccd/ccd-region-mask.csv")
     if not os.path.isfile(ccd_region_mask_filename) :
         log.warning(f"No file {ccd_region_mask_filename}")
