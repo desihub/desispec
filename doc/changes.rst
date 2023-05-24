@@ -5,7 +5,16 @@ desispec Change Log
 0.58.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Add option to process cumulative redshifts for all tiles in desi_run_night
+  (PR `#2036`_).
+* Warn that purge_night was a dry run (PR `#2040`_).
+* Restore desi_daily_proc_manager dry run and add sacct retries (PR `#2044`_).
+* Add optional masking of specific CCD regions per exposure (PR `#2050`_).
+
+.. _`#2036`: https://github.com/desihub/desispec/pull/2036
+.. _`#2040`: https://github.com/desihub/desispec/pull/2040
+.. _`#2044`: https://github.com/desihub/desispec/pull/2044
+.. _`#2050`: https://github.com/desihub/desispec/pull/2050
 
 0.58.1 (2023-05-02)
 -------------------
