@@ -480,3 +480,130 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         return (spectra, redshifts)
     else:
         return spectra
+
+def read_single_spectrum(
+    infile,
+    targetid,
+    single=False,
+    read_hdu={
+        "FIBERMAP": False,
+        "EXP_FIBERMAP": False,
+        "SCORES": False,
+        "EXTRA_CATALOG": False,
+        "MASK": False,
+        "RESOLUTION": False,
+        },
+    ):    
+    """
+    Read single spectrum as Spectra object from FITS file.
+
+    This reads data written by the write_spectra function.  A new Spectra
+    object is instantiated and returned.
+
+    Args:
+        infile (str): path to read
+        targetid (int): targetid of the spectrum to read
+        single (bool): if True, keep spectra as single precision in memory.
+        read_hdu (dict): Dict with hdu names as keys to skip or read hdu.
+
+    Returns (Spectra):
+        The object containing the data read from disk.
+
+    """
+    log = get_logger()
+    infile = checkgzip(infile)
+    ftype = np.float64
+    if single:
+        ftype = np.float32
+
+    infile = os.path.abspath(infile)
+    if not os.path.isfile(infile):
+        raise IOError("{} is not a file".format(infile))
+
+    t0 = time.time()
+    hdus = fitsio.FITS(infile, mode='r')
+
+    targetrow = np.argwhere(hdus["FIBERMAP"].read(columns="TARGETID")==targetid)
+    nhdu = len(hdus)
+
+    # load the metadata.
+
+    meta = dict(hdus[0].read_header())
+
+    # initialize data objects
+
+    bands = []
+    fmap = None
+    expfmap = None
+    wave = None
+    flux = None
+    ivar = None
+    mask = None
+    res = None
+    extra = None
+    extra_catalog = None
+    scores = None
+
+    # For efficiency, go through the HDUs in disk-order.  Use the
+    # extension name to determine where to put the data.  We don't
+    # explicitly copy the data, since that will be done when constructing
+    # the Spectra object.
+            
+    for h in range(1, nhdu):
+        name = hdus[h].read_header()["EXTNAME"]
+        if name == "FIBERMAP":
+            if read_hdu["FIBERMAP"]:
+                fmap = encode_table(Table(hdus[h].read(rows=targetrow), copy=True).as_array())
+        elif name == "EXP_FIBERMAP":
+            if read_hdu["EXP_FIBERMAP"]:
+                expfmap = encode_table(Table(hdus[h].read(rows=targetrow), copy=True).as_array())
+        elif name == "SCORES":
+            if read_hdu["SCORES"]:
+                scores = encode_table(Table(hdus[h].read(rows=targetrow), copy=True).as_array())
+        elif name == "EXTRA_CATALOG":
+            if read_hdu["EXTRA_CATALOG"]:
+                extra_catalog = encode_table(Table(hdus[h].read(rows=targetrow), copy=True).as_array())
+        else:
+            # Find the band based on the name
+            mat = re.match(r"(.*)_(.*)", name)
+            if mat is None:
+                raise RuntimeError("FITS extension name {} does not contain the band".format(name))
+            band = mat.group(1).lower()
+            type = mat.group(2)
+            if band not in bands:
+                bands.append(band)
+            if type == "WAVELENGTH":
+                if wave is None:
+                    wave = {}
+                #- Note: keep original float64 resolution for wavelength
+                wave[band] = native_endian(hdus[h].read())
+            elif type == "FLUX":
+                if flux is None:
+                    flux = {}
+                flux[band] = native_endian(hdus[h][targetrow:targetrow+1, :].astype(ftype))
+            elif type == "IVAR":
+                if ivar is None:
+                    ivar = {}
+                ivar[band] = native_endian(hdus[h][targetrow:targetrow+1, :].astype(ftype))
+            elif type == "MASK" and read_hdu["MASK"]:
+                if mask is None:
+                    mask = {}
+                mask[band] = native_endian(hdus[h][targetrow:targetrow+1, :].astype(np.uint32))
+            elif type == "RESOLUTION" and read_hdu["RESOLUTION"]:
+                if res is None:
+                    res = {}
+                res[band] = native_endian(hdus[h][targetrow:targetrow+1, :, :].astype(ftype))
+            else:
+                pass
+    hdus.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', infile, duration))
+
+    # Construct the Spectra object from the data.  If there are any
+    # inconsistencies in the sizes of the arrays read from the file,
+    # they will be caught by the constructor.
+    spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
+        fibermap=fmap, exp_fibermap=expfmap,
+        meta=meta, extra=extra, extra_catalog=extra_catalog,
+        single=single, scores=scores)
+    return spec
