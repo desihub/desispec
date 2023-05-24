@@ -111,6 +111,44 @@ def findcalibfile(headers,key,yaml_file=None) :
     else :
         return None
 
+def ccdregionmask(headers) :
+    """
+    Looks for regions of CCD to mask for a given NIGHT EXPID CAMERA and returns a list of dictionnaries.
+    NIGHT EXPID CAMERA are retrieved from the input image headers and compared to corresponding columns
+    in the cvs table $DESI_SPECTRO_CALIB/ccd/ccd-region-mask.csv
+
+    Args:
+        headers: list of fits headers, or list of dictionnaries
+
+    Returns list of dictionnaries with keys XMIN, XMAX, YMIN,YMAX
+    """
+    log = get_logger()
+
+    ccd_region_mask_filename = os.path.join(os.getenv('DESI_SPECTRO_CALIB'),"ccd/ccd-region-mask.csv")
+    if not os.path.isfile(ccd_region_mask_filename) :
+        log.warning(f"No file {ccd_region_mask_filename}")
+        return list() # empty list
+    mask_table = Table.read(ccd_region_mask_filename)
+    head=dict()
+    keys=["NIGHT","EXPID","CAMERA"]
+    for k in keys :
+        for header in headers :
+            if k in header :
+                head[k]=header[k]
+                break
+        if not k in head.keys() :
+            log.error(f"Missing key {k} in input headers")
+            return list() # empty list
+    entries=np.where((mask_table["NIGHT"]==head["NIGHT"])&(mask_table["EXPID"]==head["EXPID"])&(mask_table["CAMERA"]==head["CAMERA"]))[0]
+    masks=list()
+    for entry in entries :
+        mask=dict()
+        for k in ["XMIN","XMAX","YMIN","YMAX"] :
+            mask[k]=int(mask_table[k][entry])
+        masks.append(mask)
+    return masks
+
+
 def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"],yaml_file=None) :
     """
     find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
@@ -384,7 +422,7 @@ class CalibFinder() :
             msg = '$DESI_SPECTRO_DARK not set'
             log.critical(msg)
             raise ValueError(msg)
-        
+
         self.dark_directory = f'{os.getenv("DESI_SPECTRO_DARK")}/'
         if not os.path.isdir(self.dark_directory):
             msg = "Dark directory {} not found".format(self.dark_directory)
@@ -399,7 +437,7 @@ class CalibFinder() :
             specid=None
 
         dateobs = header2night(header)
-        
+
         cameraid    = "sm{}-{}".format(specid,camera[0].lower())
 
         dark_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv'
@@ -410,7 +448,7 @@ class CalibFinder() :
 
             dark_table_select = np.array([cameraid in fn for fn in dark_table["FILENAME"]])
             bias_table_select = np.array([cameraid in fn for fn in bias_table["FILENAME"]])
-            
+
             dark_table=dark_table[dark_table_select]
             bias_table=bias_table[bias_table_select]
             dark_table.sort('FILENAME')
@@ -477,15 +515,14 @@ class CalibFinder() :
                 bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
                 if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
                     log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
-                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")        
+                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
             log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
             raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
-                
-        if found:      
+
+        if found:
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
             log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
-

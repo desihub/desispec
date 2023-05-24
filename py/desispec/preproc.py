@@ -22,7 +22,7 @@ from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
 from desiutil import depend
-from desispec.calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder,ccdregionmask
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
@@ -688,7 +688,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False,no_overscan_per_row=False):
+            keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False):
     '''
     preprocess image using metadata in header
 
@@ -927,6 +927,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+    if not no_ccd_region_mask :
+        regionmasks = ccdregionmask([header, primary_header])
+        for regionmask in regionmasks :
+            log.info(f"masking region {regionmask}")
+            mask[regionmask["YMIN"]:regionmask["YMAX"],regionmask["XMIN"]:regionmask["XMAX"]] |= ccdmask.BAD
 
     if no_overscan_per_row :
         log.debug("Option no_overscan_per_row is set")
