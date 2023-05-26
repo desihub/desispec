@@ -31,7 +31,7 @@ def get_qa_params() :
             _qa_params = yaml.safe_load(f)
     return _qa_params
 
-def compute_exposure_qa(night, expid, specprod_dir):
+def compute_exposure_qa(night, expid, specprod_dir=None):
     """
     Computes the exposure_qa
 
@@ -47,6 +47,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
     """
 
     log=get_logger()
+
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
 
     ##################################################################
     qa_params=get_qa_params()["exposure_qa"]
@@ -331,6 +334,14 @@ def compute_exposure_qa(night, expid, specprod_dir):
              tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
         efftime = tsnr2_to_efftime(tsnr2_for_efftime_vals,target_type)
+
+        #- Be robust to NaN and Inf; treat as efftime=0
+        bad = ~np.isfinite(efftime)
+        if np.any(bad):
+            nbad = np.sum(bad)
+            log.error(f'Petal {petal} has {nbad} NaN/Inf efftime values; setting to 0')
+            efftime[bad] = 0.0
+
         fiberqa_table['EFFTIME_SPEC'][entries]=efftime
         petalqa_table['EFFTIME_SPEC'][petal]=np.median(efftime)
 
