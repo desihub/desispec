@@ -515,7 +515,8 @@ def fb_rdnoise(fibers, frame, tset):
     xtrans = ccdsizes[0] / 2.
     ytrans = ccdsizes[1] / 2.
 
-    rdnoise = np.zeros_like(frame.flux)
+    #- default to a huge readnoise for traces off of amps
+    rdnoise = np.zeros_like(frame.flux) + 1000
 
     amp_ids = desispec.preproc.get_amp_ids(frame.meta)
     amp_sec     = { amp : desispec.preproc.parse_sec_keyword(frame.meta['CCDSEC'+amp]) for amp in amp_ids }
