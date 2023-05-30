@@ -490,7 +490,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         sys.stdout.flush()
         sys.stderr.flush()
 
-    if tableng > 0:
+    if tableng >= 0:
         ## No more data coming in, so do bottleneck steps if any apply
 
         # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
