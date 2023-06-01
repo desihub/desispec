@@ -7,11 +7,9 @@ desispec Change Log
 
 * No changes yet.
 
-0.58.2 (2023-06-01)
+0.58.3 (2023-06-01)
 -------------------
 
-* Add option to process cumulative redshifts for all tiles in desi_run_night
-  (PR `#2036`_).
 * Warn that purge_night was a dry run (PR `#2040`_).
 * Restore desi_daily_proc_manager dry run and add sacct retries (PR `#2044`_).
 * Add optional masking of specific CCD regions per exposure (PR `#2050`_).
@@ -19,12 +17,19 @@ desispec Change Log
 * desispec.photo handle release 9010 vs. 9012 burst buffer bug, needed
   for lsdr9 photometry VAC (PR `#2057`_).
 
-.. _`#2036`: https://github.com/desihub/desispec/pull/2036
 .. _`#2040`: https://github.com/desihub/desispec/pull/2040
 .. _`#2044`: https://github.com/desihub/desispec/pull/2044
 .. _`#2050`: https://github.com/desihub/desispec/pull/2050
 .. _`#2053`: https://github.com/desihub/desispec/pull/2053
 .. _`#2057`: https://github.com/desihub/desispec/pull/2057
+
+0.58.2 (2023-05-03)
+-------------------
+
+* Add option to process cumulative redshifts for all tiles in desi_run_night
+  (PR `#2036`_).
+
+.. _`#2036`: https://github.com/desihub/desispec/pull/2036
 
 0.58.1 (2023-05-02)
 -------------------
