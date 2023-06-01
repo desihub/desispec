@@ -744,7 +744,7 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match, racolumn, decc
 
     out = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
     out['TARGETID'] = input_cat['TARGETID']
-    
+
     # DR9 targeting photometry exists
     if len(idr9) > 0:
         assert(np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0]))
@@ -930,10 +930,24 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     bricknames = input_cat['BRICKNAME']
 
     out = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(np.atleast_1d(input_cat)))))
-    for brickname in set(bricknames):
-        I = np.where(brickname == bricknames)[0]
+    for onebrickname in set(bricknames):
+        I = np.where(onebrickname == bricknames)[0]
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match, racolumn, deccolumn)
 
+    if 'RELEASE' in input_cat.colnames:
+        _, _, check_release, _, _, _ = decode_targetid(input_cat['TARGETID'])
+        bug = np.where(out['RELEASE'] != check_release)[0]
+        if len(bug) > 0:
+            input_cat['BRICKNAME'][bug] = brickname(input_cat[racolumn][bug], input_cat[deccolumn][bug])
+            input_cat['RELEASE'][bug] = 0
+            input_cat['BRICKID'][bug] = 0
+            input_cat['BRICK_OBJID'][bug] = 0
+            input_cat['PHOTSYS'][bug] = ''
+
+            bugout = _gather_tractorphot_onebrick(input_cat[bug], dr9dir, radius_match, racolumn, deccolumn)
+            for col in bugout.colnames:
+                out[col][bug] = bugout[col]
+            
     if columns is not None:
         if type(columns) is not list:
             columns = columns.tolist()
