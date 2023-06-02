@@ -2,10 +2,18 @@
 desispec Change Log
 ===================
 
-0.58.3 (unreleased)
+0.58.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.58.4 (2023-06-02)
+-------------------
+
+* desispec.photo handle non-unique bricknames when patching 9010
+  tractor photometry (PR `#2062`_, followup to `#2057`_).
+
+.. _`#2062`: https://github.com/desihub/desispec/pull/2062
 
 0.58.3 (2023-06-01)
 -------------------
