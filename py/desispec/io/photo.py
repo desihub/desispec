@@ -944,9 +944,10 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
             input_cat['BRICK_OBJID'][bug] = 0
             input_cat['PHOTSYS'][bug] = ''
 
-            bugout = _gather_tractorphot_onebrick(input_cat[bug], dr9dir, radius_match, racolumn, deccolumn)
-            for col in bugout.colnames:
-                out[col][bug] = bugout[col]
+            bugout = Table(np.hstack(np.repeat(tractorphot_datamodel(), len(bug))))
+            for onebrickname in set(input_cat['BRICKNAME'][bug]):
+                I = np.where(onebrickname == input_cat['BRICKNAME'][bug])[0]
+                bugout[I] = _gather_tractorphot_onebrick(input_cat[bug][I], dr9dir, radius_match, racolumn, deccolumn)
             
     if columns is not None:
         if type(columns) is not list:
