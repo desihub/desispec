@@ -116,7 +116,10 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         )
         # use the last / latest version of the catalogs
         if 'secondary' in fn:
-            fn = sorted(glob(fn.replace(fn.split(os.path.sep)[-6], '*')))[-1]
+            _fn = glob(fn.replace(fn.split(os.path.sep)[-6], '*'))
+            if len(_fn) > 0:
+                fn = sorted(_fn)[-1]
+                
         ## AR case where the path is generically defined, but not used (no mtl for sv1 or sv2)
         #fn = fn.replace(
         #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv1/ToO/ToO.ecsv",
