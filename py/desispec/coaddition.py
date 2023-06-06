@@ -259,6 +259,12 @@ def coadd_fibermap(fibermap, onetile=False):
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
         if 'FIBER_RA' in fibermap.colnames:
             good_coords = (fibermap['FIBER_RA'][jj]!=0)|(fibermap['FIBER_DEC'][jj]!=0)
+            
+            # Check whether entries with good coordinates exist (if not use all coordinates)
+            if np.count_nonzero(good_coords)>0:
+                compute_coords = good_coords
+            else:
+                compute_coords = ~good_coords
                         
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
@@ -282,7 +288,7 @@ def coadd_fibermap(fibermap, onetile=False):
         for k in mean_cols:
             if k in fibermap.colnames :
                 if k.endswith('_RA') or k.endswith('_DEC'):
-                    vals=fibermap[k][jj][compute_coadds&good_coords]
+                    vals=fibermap[k][jj][compute_coadds&compute_coords]
                 else:
                     vals=fibermap[k][jj][compute_coadds]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
@@ -296,13 +302,14 @@ def coadd_fibermap(fibermap, onetile=False):
         #SJ: Check STD_FIBER_MAP with +360 value; doesn't do the wrap-around correctly
         #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
         if 'FIBER_RA' in fibermap.colnames:
-            dec = fibermap['TARGET_DEC'][jj][compute_coadds&good_coords][0]
-            vals = fibermap['FIBER_RA'][jj][compute_coadds&good_coords]
+            
+            dec = fibermap['TARGET_DEC'][jj][compute_coadds&compute_coords][0]
+            vals = fibermap['FIBER_RA'][jj][compute_coadds&compute_coords]
             std = np.std(vals+360.0) * 3600 * np.cos(np.radians(dec))
             tfmap['STD_FIBER_RA'][i] = std
 
         if 'FIBER_DEC' in fibermap.colnames:
-            vals = fibermap['FIBER_DEC'][jj][compute_coadds&good_coords]
+            vals = fibermap['FIBER_DEC'][jj][compute_coadds&compute_coords]
             tfmap['STD_FIBER_DEC'][i] = np.std(vals) * 3600
 
         #- future proofing possibility of other STD cols
