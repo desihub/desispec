@@ -239,9 +239,6 @@ def coadd_fibermap(fibermap, onetile=False):
     else :
          raise KeyError("no FIBERSTATUS nor COADD_FIBERSTATUS column in fibermap")
 
-    # SJ: for verbose testing (commenting out)
-    #print(f"Will loop over N={len(targets)} targets")
-
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
 
@@ -261,11 +258,8 @@ def coadd_fibermap(fibermap, onetile=False):
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
         if 'FIBER_RA' in fibermap.colnames:
-            good_coords = (fibermap['FIBER_RA'][jj]!=0)|(fibermap['FIBER_RA'][jj]!=0)
-        
-        #SJ: for verbose testing (commenting out)
-        # print(f"Target {tid} has N={tfmap['COADD_NUMEXP'][i]} good coadds out of {len(fibermap[jj])}")
-                
+            good_coords = (fibermap['FIBER_RA'][jj]!=0)|(fibermap['FIBER_DEC'][jj]!=0)
+                        
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
         if 'NIGHT' in fibermap.colnames:
@@ -326,13 +320,13 @@ def coadd_fibermap(fibermap, onetile=False):
         #         tfmap['LAST_'+k][i] = np.max(vals)
         #         tfmap['NUM_'+k][i] = np.unique(vals).size
 
-        #SJ: Not the correct formula for IVAR (should be inverse of sum of variances)
-        # because these are not for inverse variance weighted quantities.
-        # Those values are not used right now but should be fixed if used later
+        # Error propagation of IVAR values when taking an unweighted MEAN 
+        #- (Note 1: IVAR will be 0.0 if any of ivar[compute_coadds]=0)
+        #- (Note 2: these columns are place-holder for possible future use)    
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR',
                   'DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
             if k in fibermap.colnames :
-                tfmap[k][i]=np.sum(fibermap[k][jj][compute_coadds])
+                tfmap[k][i]=1./np.mean(1./fibermap[k][jj][compute_coadds])
 
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
