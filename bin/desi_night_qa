@@ -68,7 +68,7 @@ def parse(options=None):
     else:
         args = parser.parse_args(options)
     # AR handle None...
-    if args.dark_bkgsub_science_cameras == "None":
+    if args.dark_bkgsub_science_cameras.lower() == "none":
         args.dark_bkgsub_science_cameras = None
     return args
 
