@@ -438,7 +438,7 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         return None
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_preproc = None):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -460,17 +460,21 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4):
         "processing_tables",
         "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
     )
-    run_preproc = False
-    if not os.path.isfile(proctable_fn):
-        run_preproc = True
-    else:
-        d = Table.read(proctable_fn)
-        sel = d["OBSTYPE"] == "dark"
-        d = d[sel]
-        proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
-        if dark_expid not in proc_expids:
+    # if set to None will judge necessity for preprocessing according to proctable
+    # but allows manual override e.g. for cases where no proctable should be there
+    if run_preproc is None:
+        if not os.path.isfile(proctable_fn):
             run_preproc = True
-    # AR run preproc?
+        else:
+            d = Table.read(proctable_fn)
+            sel = d["OBSTYPE"] == "dark"
+            d = d[sel]
+            proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+            if dark_expid not in proc_expids:
+                run_preproc = True
+            else:
+                run_preproc = False
+        # AR run preproc?
     if run_preproc:
         # AR does the raw exposure exist?
         rawfn = findfile("raw", night, dark_expid)
