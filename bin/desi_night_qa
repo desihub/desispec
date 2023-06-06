@@ -59,12 +59,17 @@ def parse(options=None):
                         help = "comma-separated list of steps to execute (default={})".format(",".join(steps_all)))
     parser.add_argument("--nproc", type = int, default = 1, required = False,
                         help="number of parallel processes for create_dark_pdf(), create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
+    parser.add_argument("--dark-bkgsub-science-cameras", type = str, default = "b", required = False,
+                        help="for the dark/morningdark, comma-separated list of the cameras to be additionally processed with the --bkgsub-for-science argument (default=b)")
 
     args = None
     if options is None:
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
+    # AR handle None...
+    if args.dark_bkgsub_science_cameras.lower() == "none":
+        args.dark_bkgsub_science_cameras = None
     return args
 
 
@@ -148,12 +153,12 @@ def main():
     # AR dark
     if "dark" in steps_tbd:
         if dark_expid is not None:
-            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc)
+            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc, bkgsub_science_cameras=args.dark_bkgsub_science_cameras)
 
     # AR morning dark expid
     if "morningdark" in steps_tbd:
         if morningdark_expid is not None:
-            create_dark_pdf(outfns["morningdark"], args.night, args.prod, morningdark_expid, args.nproc)
+            create_dark_pdf(outfns["morningdark"], args.night, args.prod, morningdark_expid, args.nproc, bkgsub_science_cameras=args.dark_bkgsub_science_cameras)
 
     # AR badcolumn
     if "badcol" in steps_tbd:
