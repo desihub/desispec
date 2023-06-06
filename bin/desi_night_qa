@@ -59,7 +59,7 @@ def parse(options=None):
                         help = "comma-separated list of steps to execute (default={})".format(",".join(steps_all)))
     parser.add_argument("--nproc", type = int, default = 1, required = False,
                         help="number of parallel processes for create_dark_pdf(), create_ctedet_pdf() and create_sframesky_pdf() (default=1)")
-    parser.add_argument("--dark_bkgsub_science_cameras", type = str, default = "b", required = False,
+    parser.add_argument("--dark-bkgsub-science-cameras", type = str, default = "b", required = False,
                         help="for the dark/morningdark, comma-separated list of the cameras to be additionally processed with the --bkgsub-for-science argument (default=b)")
 
     args = None
