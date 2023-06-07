@@ -1,6 +1,6 @@
 """
 desispec.focus
-============
+==============
 
 Utility functions for spectrographs focus.
 """
