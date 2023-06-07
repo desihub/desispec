@@ -179,7 +179,7 @@ def coadd_fibermap(fibermap, onetile=False):
     mean_cols = [
         'DELTA_X', 'DELTA_Y',
         'FIBER_RA', 'FIBER_DEC',
-        'PSF_TO_FIBER_SPECFLUX',
+        'PSF_TO_FIBER_SPECFLUX', 'MJD'
         ]
     # Note: treat the fiber coordinates separately because of missing coordinate problem
     # that require an additional "good_coords" condition relative to other mean cols
@@ -193,7 +193,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
     for k in mean_cols:
         if k in fibermap.colnames :
-            if k.endswith('_RA') or k.endswith('_DEC'):
+            if k.endswith('_RA') or k.endswith('_DEC') or k=='MJD':
                 dtype = np.float64
             else:
                 dtype = np.float32
@@ -208,24 +208,26 @@ def coadd_fibermap(fibermap, onetile=False):
                 tfmap.add_column(xx,name='STD_'+k)
 
             tfmap.remove_column(k)
-
-    #- TODO: should any of these be retained?
-    # first_last_cols = ['NIGHT','EXPID','TILEID','SPECTROID','FIBER','MJD']
-    # for k in first_last_cols:
-    #     if k in fibermap.colnames :
-    #         if k in ['MJD']:
-    #             dtype = np.float32
-    #         else:
-    #             dtype = np.int32
-    #         if not 'FIRST_'+k in tfmap.dtype.names :
-    #             xx = Column(np.arange(ntarget, dtype=dtype))
-    #             tfmap.add_column(xx,name='FIRST_'+k)
-    #         if not 'LAST_'+k in tfmap.dtype.names :
-    #             xx = Column(np.arange(ntarget, dtype=dtype))
-    #             tfmap.add_column(xx,name='LAST_'+k)
-    #         if not 'NUM_'+k in tfmap.dtype.names :
-    #             xx = Column(np.arange(ntarget, dtype=np.int16))
-    #             tfmap.add_column(xx,name='NUM_'+k)
+            
+    #- MIN_, MAX_MJD
+    if 'MJD' in fibermap.colnames :
+        dtype = np.float64
+        if not 'MIN_MJD' in tfmap.dtype.names :
+            xx = Column(np.arange(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='MIN_MJD')
+        if not 'MAX_MJD' in tfmap.dtype.names :
+            xx = Column(np.arange(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='MAX_MJD')
+    
+    #- FIRSTNIGHT, LASTNIGHT
+    if 'NIGHT' in fibermap.colnames :
+        dtype = np.int32
+        if not 'FIRSTNIGHT' in tfmap.dtype.names :
+            xx = Column(np.arange(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='FIRSTNIGHT')
+        if not 'LASTNIGHT' in tfmap.dtype.names :
+            xx = Column(np.arange(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='LASTNIGHT')
 
     if 'FIBERSTATUS' in tfmap.dtype.names :
         tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
@@ -318,15 +320,19 @@ def coadd_fibermap(fibermap, onetile=False):
                 vals=fibermap[k][jj][compute_coadds]
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
+                        
+        # MIN_, MAX_MJD
+        if 'MJD' in fibermap.colnames :
+            vals=fibermap['MJD'][jj][compute_coadds]
+            tfmap['MIN_MJD'][i] = np.min(vals)
+            tfmap['MAX_MJD'][i] = np.max(vals)
 
-        #- TODO: see above, should any of these be retained?
-        # for k in first_last_cols:
-        #     if k in fibermap.colnames :
-        #         vals=fibermap[k][jj]
-        #         tfmap['FIRST_'+k][i] = np.min(vals)
-        #         tfmap['LAST_'+k][i] = np.max(vals)
-        #         tfmap['NUM_'+k][i] = np.unique(vals).size
-
+        # FIRST, LASTNIGHT 
+        if 'NIGHT' in fibermap.colnames :
+            vals=fibermap['NIGHT'][jj][compute_coadds]
+            tfmap['FIRSTNIGHT'][i] = np.min(vals)
+            tfmap['LASTNIGHT'][i] = np.max(vals)
+       
         # Error propagation of IVAR values when taking an unweighted MEAN 
         #- (Note 1: IVAR will be 0.0 if any of ivar[compute_coadds]=0)
         #- (Note 2: these columns are place-holder for possible future use)    
