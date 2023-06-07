@@ -209,7 +209,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
             tfmap.remove_column(k)
             
-    #- MIN_, MAX_MJD
+    #- MIN_, MAX_MJD over exposures used in coadd
     if 'MJD' in fibermap.colnames :
         dtype = np.float64
         if not 'MIN_MJD' in tfmap.dtype.names :
@@ -219,7 +219,7 @@ def coadd_fibermap(fibermap, onetile=False):
             xx = Column(np.arange(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MAX_MJD')
     
-    #- FIRSTNIGHT, LASTNIGHT
+    #- FIRSTNIGHT, LASTNIGHT over all exposures (not just good_coadds)
     if 'NIGHT' in fibermap.colnames :
         dtype = np.int32
         if not 'FIRSTNIGHT' in tfmap.dtype.names :
@@ -303,9 +303,8 @@ def coadd_fibermap(fibermap, onetile=False):
 
         #SJ: Check STD_FIBER_MAP with +360 value; doesn't do the wrap-around correctly
         #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
-        if 'FIBER_RA' in fibermap.colnames:
-            
-            dec = fibermap['TARGET_DEC'][jj][compute_coadds&compute_coords][0]
+        if 'FIBER_RA' in fibermap.colnames:            
+            dec = fibermap['FIBER_DEC'][jj][compute_coadds&compute_coords][0]
             vals = fibermap['FIBER_RA'][jj][compute_coadds&compute_coords]
             std = np.std(vals+360.0) * 3600 * np.cos(np.radians(dec))
             tfmap['STD_FIBER_RA'][i] = std
@@ -321,15 +320,15 @@ def coadd_fibermap(fibermap, onetile=False):
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
                         
-        # MIN_, MAX_MJD
+        # MIN_, MAX_MJD over exposures used in the coadd
         if 'MJD' in fibermap.colnames :
             vals=fibermap['MJD'][jj][compute_coadds]
             tfmap['MIN_MJD'][i] = np.min(vals)
             tfmap['MAX_MJD'][i] = np.max(vals)
 
-        # FIRST, LASTNIGHT 
+        # FIRST, LASTNIGHT over all exposures (not just compute_coadds)
         if 'NIGHT' in fibermap.colnames :
-            vals=fibermap['NIGHT'][jj][compute_coadds]
+            vals=fibermap['NIGHT'][jj]
             tfmap['FIRSTNIGHT'][i] = np.min(vals)
             tfmap['LASTNIGHT'][i] = np.max(vals)
        
