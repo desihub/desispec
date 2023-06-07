@@ -700,3 +700,6 @@ desispec API
 
 .. automodule:: desispec.zmtl
     :members:
+
+.. automodule:: desispec.focus
+    :members:
