@@ -209,7 +209,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
             tfmap.remove_column(k)
             
-    #- MIN_, MAX_MJD
+    #- MIN_, MAX_MJD over exposures used in coadd
     if 'MJD' in fibermap.colnames :
         dtype = np.float64
         if not 'MIN_MJD' in tfmap.dtype.names :
@@ -219,7 +219,7 @@ def coadd_fibermap(fibermap, onetile=False):
             xx = Column(np.arange(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MAX_MJD')
     
-    #- FIRSTNIGHT, LASTNIGHT
+    #- FIRSTNIGHT, LASTNIGHT over all exposures (not just good_coadds)
     if 'NIGHT' in fibermap.colnames :
         dtype = np.int32
         if not 'FIRSTNIGHT' in tfmap.dtype.names :
@@ -256,17 +256,33 @@ def coadd_fibermap(fibermap, onetile=False):
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
 
-        #- For FIBER_RA/DEC quantities, only average over good coordinates
+        # Check if there are some good coadds to compute aggregate quantities;
+        # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
+        if np.count_nonzero(good_coadds)>0:
+            compute_coadds = good_coadds
+        else:
+            compute_coadds = ~good_coadds
+        
+        #- For FIBER_RA/DEC quantities, only average over good coordinates.
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
         if 'FIBER_RA' in fibermap.colnames:
             good_coords = (fibermap['FIBER_RA'][jj]!=0)|(fibermap['FIBER_DEC'][jj]!=0)
             
-            # Check whether entries with good coordinates exist (if not use all coordinates)
+            #- Check whether entries with good coordinates exist (if not use all coordinates)
             if np.count_nonzero(good_coords)>0:
                 compute_coords = good_coords
             else:
                 compute_coords = ~good_coords
+                
+            #- Check for edge case where good_coadds and good_coords do not overlap:
+            #  if they overlap, use both conditions; otherwise compute coordinates over good_coords
+            if np.count_nonzero(compute_coadds&compute_coords)>0:
+                compute_coadds_coords = compute_coadds&compute_coords
+            else:
+                #TODO - decide if it's worth adding the following Warning message to the log
+                #print(f"Warning: TARGETID lacks overlap between good_coadds and good_coords: {tid}")
+                compute_coadds_coords = compute_coords
                         
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
@@ -277,20 +293,13 @@ def coadd_fibermap(fibermap, onetile=False):
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
 
-        # Check here if there are some good coadds to compute aggregate quantities;
-        # Otherwise just use all the (bad) exposures
-        if np.count_nonzero(good_coadds)>0:
-            compute_coadds = good_coadds
-        else:
-            compute_coadds = ~good_coadds
-        
         #SJ: The RA needs something for the 0-360 deg wrap around probably in two steps
         # with a first step grouping values close to the wrap around and the second step 
         # using modulo (% 360)
         for k in mean_cols:
             if k in fibermap.colnames :
                 if k.endswith('_RA') or k.endswith('_DEC'):
-                    vals=fibermap[k][jj][compute_coadds&compute_coords]
+                    vals=fibermap[k][jj][compute_coadds_coords]
                 else:
                     vals=fibermap[k][jj][compute_coadds]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
@@ -304,14 +313,13 @@ def coadd_fibermap(fibermap, onetile=False):
         #SJ: Check STD_FIBER_MAP with +360 value; doesn't do the wrap-around correctly
         #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
         if 'FIBER_RA' in fibermap.colnames:
-            
-            dec = fibermap['TARGET_DEC'][jj][compute_coadds&compute_coords][0]
-            vals = fibermap['FIBER_RA'][jj][compute_coadds&compute_coords]
+            dec = fibermap['FIBER_DEC'][jj][compute_coadds_coords][0]
+            vals = fibermap['FIBER_RA'][jj][compute_coadds_coords]
             std = np.std(vals+360.0) * 3600 * np.cos(np.radians(dec))
             tfmap['STD_FIBER_RA'][i] = std
 
         if 'FIBER_DEC' in fibermap.colnames:
-            vals = fibermap['FIBER_DEC'][jj][compute_coadds&compute_coords]
+            vals = fibermap['FIBER_DEC'][jj][compute_coadds_coords]
             tfmap['STD_FIBER_DEC'][i] = np.std(vals) * 3600
 
         #- future proofing possibility of other STD cols
@@ -321,15 +329,15 @@ def coadd_fibermap(fibermap, onetile=False):
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
                         
-        # MIN_, MAX_MJD
+        # MIN_, MAX_MJD over exposures used in the coadd
         if 'MJD' in fibermap.colnames :
             vals=fibermap['MJD'][jj][compute_coadds]
             tfmap['MIN_MJD'][i] = np.min(vals)
             tfmap['MAX_MJD'][i] = np.max(vals)
 
-        # FIRST, LASTNIGHT 
+        # FIRST, LASTNIGHT over all exposures (not just compute_coadds)
         if 'NIGHT' in fibermap.colnames :
-            vals=fibermap['NIGHT'][jj][compute_coadds]
+            vals=fibermap['NIGHT'][jj]
             tfmap['FIRSTNIGHT'][i] = np.min(vals)
             tfmap['LASTNIGHT'][i] = np.max(vals)
        
