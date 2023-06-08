@@ -379,15 +379,17 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(cofm['MAX_MJD'][0], np.max(fm['MJD']))
         self.assertEqual(cofm['MEAN_MJD'][0], np.mean(fm['MJD']))
 
-        #- with some fibers masked
+        #- with some fibers masked:
+        #- FIRSTNIGHT/LASTNIGHT still based on all exp,
+        #- while MIN/MAX/MEAN_MJD based only upon good ones
         fm['FIBERSTATUS'][0] = fibermask.BADFIBER     #- bad
         fm['FIBERSTATUS'][1] = fibermask.RESTRICTED   #- ok
         fm['FIBERSTATUS'][2] = fibermask.BADAMPR      #- ok for fibermap
         ok = np.ones(nspec, dtype=bool)
         ok[0] = False
         cofm, expfm = coadd_fibermap(fm, onetile=True)
-        self.assertEqual(cofm['FIRSTNIGHT'][0], np.min(fm['NIGHT'][ok]))
-        self.assertEqual(cofm['LASTNIGHT'][0], np.max(fm['NIGHT'][ok]))
+        self.assertEqual(cofm['FIRSTNIGHT'][0], np.min(fm['NIGHT']))
+        self.assertEqual(cofm['LASTNIGHT'][0], np.max(fm['NIGHT']))
         self.assertEqual(cofm['MIN_MJD'][0], np.min(fm['MJD'][ok]))
         self.assertEqual(cofm['MAX_MJD'][0], np.max(fm['MJD'][ok]))
         self.assertEqual(cofm['MEAN_MJD'][0], np.mean(fm['MJD'][ok]))
