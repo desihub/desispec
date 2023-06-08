@@ -10,8 +10,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import fitsio
 
+from desiutil.log import get_logger
 from desispec.io import read_xytraceset
 from desispec.calibfinder import sp2sm
+from desispec.focus import piston_and_tilt_to_gauge_offsets,test_gauge_offsets,RPIXSCALE
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Hartmann doors analysis",
@@ -44,19 +46,24 @@ parser.add_argument('--left-closed-psf', type = str, required=True, nargs="*",
 parser.add_argument('--right-closed-psf', type = str, required=True, nargs="*",
                     help = 'path to psf with trace coordinates for arc lamp obs with closed right hartmann door')
 parser.add_argument('--plot', action = 'store_true')
+parser.add_argument('--camera', type = str, required = True, help="b r or z")
 
 args        = parser.parse_args()
 
+log = get_logger()
+
 camera=None
+x_vals=[]
+y_vals=[]
 dy_vals=[]
 nmeas=len(args.left_closed_psf)
 for i in range(nmeas) :
 
     if not os.path.isfile(args.left_closed_psf[i]) :
-        print("missing",args.left_closed_psf[i])
+        log.warning("missing "+args.left_closed_psf[i])
         continue
     if not os.path.isfile(args.right_closed_psf[i]) :
-        print("missing",args.right_closed_psf[i])
+        log.warning("missing "+args.right_closed_psf[i])
         continue
 
     head=fitsio.read_header(args.left_closed_psf[i],"PSF")
@@ -71,28 +78,36 @@ for i in range(nmeas) :
     right = read_xytraceset(args.right_closed_psf[i])
 
     wave=np.linspace(left.wavemin+200,left.wavemax-200,10)
-    fibers=np.arange(left.nspec)
+    fibers=np.arange(0,51)*10
+    fibers[-1]=499
+    log.debug(f"use wavelength = {wave}")
+    log.debug(f"use fibers           = {fibers}")
 
     x=np.zeros((fibers.size,wave.size))
     y=np.zeros((fibers.size,wave.size))
     dx=np.zeros((fibers.size,wave.size))
     dy=np.zeros((fibers.size,wave.size))
-    for fiber in range(fibers.size) :
+    for f,fiber in enumerate(fibers) :
         xleft  = left.x_vs_wave(fiber,wave)
         xright = right.x_vs_wave(fiber,wave)
-        x[fiber]=(xleft+xright)/2
-        dx[fiber]=(xleft-xright)
+        x[f]=(xleft+xright)/2
+        dx[f]=(xleft-xright)
         yleft  = left.y_vs_wave(fiber,wave)
         yright = right.y_vs_wave(fiber,wave)
-        y[fiber]=(yleft+yright)/2
-        dy[fiber]=(yleft-yright)
+        y[f]=(yleft+yright)/2
+        dy[f]=(yleft-yright)
 
+    x_vals.append(x.ravel())
+    y_vals.append(y.ravel())
+    dy_vals.append(dy.ravel())
 
     meandy=np.mean(dy)
     rmsdy=np.std(dy)
-    print("LEFT = {} RIGHT= {} dy = {:.3f} +- {:.3f} pixels".format(args.left_closed_psf[i],args.right_closed_psf[i],meandy,rmsdy))
-    dy_vals.append(meandy)
+    log.info("LEFT = {} RIGHT= {} dy = {:.3f} +- {:.3f} pixels".format(args.left_closed_psf[i],args.right_closed_psf[i],meandy,rmsdy))
 
+
+
+dy_vals = np.hstack(dy_vals)
 nmeas=len(dy_vals)
 
 meandy=np.median(dy_vals)
@@ -110,7 +125,7 @@ elif camera[0] == "r" :
 elif camera[0] == "z" :
     focus_pixels2mm = -1/20.389 # mm/pixel
 else :
-    print("error camera name '{}' does not start with b,r or z: I don't know what to do".format(camera))
+    log.error("camera name '{}' does not start with b,r or z: I don't know what to do".format(camera))
     sys.exit(12)
 
 defocus=focus_pixels2mm*meandy
@@ -119,15 +134,43 @@ err=errdy*np.abs(focus_pixels2mm)
 camera=str(camera).replace("'","").strip(" ")
 spectro=int(camera[1])
 sm=sp2sm(spectro)
-print("SM{}-{} LEFT-RIGHT(closed) DELTA = {:+.3f} +- {:.4f} pix (N={})".format(sm,camera,meandy,errdy,nmeas))
-print("SM{}-{} DEFOCUS = {:+.3f} +- {:.4f} mm (N={}) (the correction to apply is of opposite sign)".format(sm,camera,defocus,err,nmeas))
+log.info("SM{}-{} LEFT-RIGHT(closed) DELTA = {:+.3f} +- {:.4f} pix (N={})".format(sm,camera,meandy,errdy,nmeas))
+log.info("SM{}-{} DEFOCUS = {:+.3f} +- {:.4f} mm (N={}) (the correction to apply is of opposite sign)".format(sm,camera,defocus,err,nmeas))
+
+# fit for best focus plane
+x = np.hstack(x_vals)
+y = np.hstack(y_vals)
+focus = - focus_pixels2mm*np.hstack(dy_vals)
+rx = x/RPIXSCALE -1
+ry = y/RPIXSCALE -1
+h=np.vstack([np.ones(rx.size),rx,ry])
+a=h.dot(h.T)
+b=h.dot(focus)
+ai=np.linalg.inv(a)
+focus_plane_coefficients=ai.dot(b)
+log.debug(focus_plane_coefficients)
+best_focus_gauge_offsets = piston_and_tilt_to_gauge_offsets(args.camera,focus_plane_coefficients*1000.) # conversion from mm to microns
+names=["TOP","LEFT","RIGHT"]
+best_focus_gauges = np.array([best_focus_gauge_offsets[k] for k in names])
+log.info("best focus gauges offsets to add ({},{},{}) = {:5.3f} {:5.3f} {:5.3f} mm".format(names[0],names[1],names[2],best_focus_gauges[0],best_focus_gauges[1],best_focus_gauges[2]))
+
+focus_fit = focus_plane_coefficients.T.dot(h)
 
 if args.plot :
+    plt.figure("focus")
+    a1= plt.subplot(121)
     for fiber in range(fibers.size) :
-        plt.plot(x,dy)
-
+        a1.plot(x,focus,"o",label="meas")
+        a1.plot(x,focus_fit,".",label="best fit plane")
     plt.grid()
+    a1.set_xlabel("x ccd (fiber direction)")
+    a1.set_ylabel("focus correction to apply (mm)")
+    a2= plt.subplot(122)
+    for fiber in range(fibers.size) :
+        a2.plot(y,focus,"o",label="meas")
+        a2.plot(y,focus_fit,".",label="best fit plane")
+    plt.grid()
+    a2.set_xlabel("y ccd (wavelength direction)")
+    #a2.set_ylabel("focus correction to apply (mm)")
 
-    plt.xlabel("x ccd (fiber direction)")
-    plt.ylabel("dy ccd (wavelength direction)")
     plt.show()

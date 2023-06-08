@@ -83,6 +83,9 @@ desispec API
 .. automodule:: desispec.fluxcalibration
     :members:
 
+.. automodule:: desispec.focus
+    :members:
+
 .. automodule:: desispec.frame
     :members:
 
