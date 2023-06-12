@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.58.5 (unreleased)
+0.59.1 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.59.0 (2023-06-12)
+-------------------
+
+* ``desispec.coaddition.coadd_fiberstatus`` bugfixes and add columns
+  FIRSTNIGHT, LASTNIGHT, MIN_MJD, MEAN_MJD, MAX_MJD.  Used for EDR zcat VAC.
+  (PRs `#2065`_, `#2067`_, `#2070`_)
+
+.. _`#2065`: https://github.com/desihub/desispec/pull/2065
+.. _`#2067`: https://github.com/desihub/desispec/pull/2067
+.. _`#2070`: https://github.com/desihub/desispec/pull/2070
 
 0.58.4 (2023-06-02)
 -------------------
