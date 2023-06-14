@@ -438,7 +438,7 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         return None
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_preproc = None):
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None, run_preproc = None):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -449,11 +449,40 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_prepr
         dark_expid: EXPID of the 300s or 1200s DARK exposure to display (int)
         nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
+        bkgsub_science_cameras (optional, defaults to None): comma-separated list of the
+            cameras to be additionally processed with the --bkgsub-for-science argument
+            (e.g. "b") (string)
 
     Note:
         If the identified dark image is not processed and if the raw data is there,
         we do process it (in a temporary folder), so that we can generate the plots.
     """
+
+    # AR raw exposure
+    rawfn = findfile("raw", night, dark_expid)
+    if not os.path.isfile(rawfn):
+        msg = "no raw image {} -> skipping".format(rawfn)
+        log.error(msg)
+        raise ValueError(msg)
+
+    # AR sanity check
+    if bkgsub_science_cameras is not None:
+        if not np.all(np.in1d(bkgsub_science_cameras.split(","), cameras)):
+            raise ValueError("cameras_bkgsub_science={} not in b,r,z".format(bkgsub_science_cameras))
+
+    # AR get existing campets
+    h = fits.open(rawfn)
+    extnames = [h[_].header['extname'] for _ in range(1, len(h))]
+    h.close()
+    campets = []
+    for petal in petals:
+        for camera in cameras:
+            campet = "{}{}".format(camera, petal)
+            if campet.upper() in extnames:
+                campets.append(campet)
+    campets = ",".join(campets)
+    log.info("existing campets: {}".format(campets))
+
     # AR first check if we need to process this dark image
     proctable_fn = os.path.join(
         prod,
@@ -475,40 +504,22 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_prepr
             else:
                 run_preproc = False
         # AR run preproc?
+
     if run_preproc:
-        # AR does the raw exposure exist?
-        rawfn = findfile("raw", night, dark_expid)
-        if os.path.isfile(rawfn):
-            specprod_dir = tempfile.mkdtemp()
-            outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
-            os.makedirs(outdir, exist_ok=True)
-            # AR get existing cameras
-            h = fits.open(rawfn)
-            extnames = [h[_].header['extname'] for _ in range(1, len(h))]
-            h.close()
-            campets = []
-            for petal in petals:
-                for camera in cameras:
-                    campet = "{}{}".format(camera, petal)
-                    if campet.upper() in extnames:
-                        campets.append(campet)
-            campets = ",".join(campets)
-            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {}".format(
-                night, dark_expid, outdir, nproc, campets,
-            )
-            log.info("run: {}".format(cmd))
+        specprod_dir = tempfile.mkdtemp()
+        outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+        os.makedirs(outdir, exist_ok=True)
+        cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {}".format(
+            night, dark_expid, outdir, nproc, campets,
+        )
+        log.info("run: {}".format(cmd))
 
-            # like os.system(cmd), but avoids system call for MPI compatibility
-            preproc.main(cmd.split()[1:])
-
-        # AR if we reached this stage, we expect the raw data to be there
-        else:
-            msg = "no raw image {} -> skipping".format(rawfn)
-            log.error(msg)
-            raise ValueError(msg)
+        # like os.system(cmd), but avoids system call for MPI compatibility
+        preproc.main(cmd.split()[1:])
     else:
         specprod_dir = prod
-    #
+
+    # AR read the dark
     myargs = []
     for petal in petals:
         for camera in cameras:
@@ -527,6 +538,63 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_prepr
     pool = multiprocessing.Pool(processes=nproc)
     with pool:
         mydicts = pool.starmap(_read_dark, myargs)
+
+    # AR campets to be additionally processed with --bkgsub-for-science
+    # AR besides, check the very unlikely case where a camera is missing
+    # AR    for all petals
+    print(repr(bkgsub_science_cameras))
+    if bkgsub_science_cameras is not None:
+        missing_cameras = []
+        for camera in bkgsub_science_cameras.split(","):
+            _ = [campet for campet in campets.split(",") if campet[0] == camera]
+            if len(_) == 0:
+                missing_cameras.append(camera)
+        if len(missing_cameras) > 0:
+            log.warning(
+                "the following cameras are not present, so cannot be processed with --bkgsub-for-science : {}".format(
+                    missing_cameras
+                )
+            )
+        bkgsub_science_cameras = ",".join([camera for camera in bkgsub_science_cameras.split(",") if camera not in missing_cameras])
+        bkgsub_science_campets = ",".join(
+            [
+                campet for campet in campets.split(",")
+                if campet[0] in bkgsub_science_cameras.split(",")
+            ]
+        )
+        log.info("campets to be additionally processed with --bkgsub-for-science: {}".format(bkgsub_science_campets))
+        #
+        if len(bkgsub_science_campets) > 0:
+            bkgsub_specprod_dir = tempfile.mkdtemp()
+            outdir = os.path.join(bkgsub_specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+            os.makedirs(outdir, exist_ok=True)
+            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {} --bkgsub-for-science".format(
+                night, dark_expid, outdir, nproc, bkgsub_science_campets,
+            )
+            log.info("run: {}".format(cmd))
+            # like os.system(cmd), but avoids system call for MPI compatibility
+            preproc.main(cmd.split()[1:])
+
+        # AR read the bkgsub dark
+        bkgsub_myargs = []
+        for petal in petals:
+            for camera in bkgsub_science_cameras.split(","):
+                bkgsub_myargs.append(
+                    [
+                        findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=bkgsub_specprod_dir),
+                        night,
+                        prod,
+                        dark_expid,
+                        petal,
+                        camera,
+                        binning,
+                    ]
+                )
+        # AR launching pool
+        pool = multiprocessing.Pool(processes=nproc)
+        with pool:
+            bkgsub_mydicts = pool.starmap(_read_dark, bkgsub_myargs)
+
     # AR plotting
     # AR remarks:
     # AR - the (x,y) conversions for the side panels
@@ -537,66 +605,84 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, run_prepr
     clim = (-5, 5)
     cmap = matplotlib.cm.Greys_r
     cmap.set_bad(color="r")
-    width_ratios = 0.1 + np.zeros(2 * len(cameras))
+    # AR
+    ncol = 2 * len(cameras)
+    if bkgsub_science_cameras is not None:
+        ncol += 2 * len(bkgsub_science_cameras)
+    width_ratios = 0.1 + np.zeros(ncol)
     width_ratios[::2] = 1
     tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     with PdfPages(outpdf) as pdf:
         for petal in petals:
-            fig = plt.figure(figsize=(20, 10))
-            gs = gridspec.GridSpec(2, 2 * len(cameras), wspace=0.1, width_ratios = width_ratios, hspace=0.0, height_ratios = [0.05, 1])
-            for ic, camera in enumerate(cameras):
-                ax = fig.add_subplot(gs[1, 2 * ic])
-                ax_y = fig.add_subplot(gs[0, 2 * ic])
-                ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
+            fig = plt.figure(figsize=(20 * ncol / 6, 10))
+            gs = gridspec.GridSpec(2, ncol, wspace=0.1, width_ratios = width_ratios, hspace=0.0, height_ratios = [0.05, 1])
+            ic = 0
+            for camera in cameras:
+                title = "EXPID={} {}{}".format(dark_expid, camera, petal)
+                # AR "regular case
                 ii = [i for i in range(len(myargs)) if myargs[i][4] == petal and myargs[i][5] == camera]
                 assert(len(ii) == 1)
-                mydict = mydicts[ii[0]]
-                if mydict is not None:
-                    assert(mydict["petal"] == petal)
-                    assert(mydict["camera"] == camera)
-                    img = mydict["image"]
-                    im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
-                    pos = ax.get_position().bounds
-                    # AR median profile along x, for each pair of amps
-                    tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
-                    tmpys = np.arange(len(tmpxs))
-                    ax_x.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
-                    tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
-                    tmpys = np.arange(len(tmpxs))
-                    ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
-                    ax_x.set_ylim(ax.get_xlim()[::-1])
-                    ax_x.set_xlim(-0.5, 0.5)
-                    ax_x.set_yticklabels([])
-                    ax_x.grid()
-                    pos_x =  list(ax_x.get_position().bounds)
-                    pos_x[0], pos_x[1], pos_x[3] = pos[0] + pos[2], pos[1], pos[3]
-                    ax_x.set_position(pos_x)
-                    # AR median profile along y, for each pair of amps
-                    tmpys = np.nanmedian(img[: img.shape[0] // 2, :], axis=0)
-                    tmpxs = np.arange(len(tmpys))
-                    ax_y.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
-                    tmpys = np.nanmedian(img[img.shape[0] // 2 :, :], axis=0)
-                    tmpxs = np.arange(len(tmpys))
-                    ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
-                    ax_y.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-                    ax_y.set_xlim(ax.get_ylim()[::-1])
-                    ax_y.set_ylim(-0.5, 0.5)
-                    ax_y.set_xticklabels([])
-                    ax_y.grid()
-                    pos_y =  list(ax_y.get_position().bounds)
-                    pos_y[0], pos_y[1], pos_y[2] = pos[0], pos[1] + pos[3], pos[2]
-                    ax_y.set_position(pos_y)
-                    if camera == cameras[-1]:
-                        p = ax_x.get_position().get_points().flatten()
-                        cax = fig.add_axes([
-                            p[0] + 1.5 * (p[2] - p[0]),
-                            p[1],
-                            0.5 * (p[2] - p[0]),
-                            1.0 * (p[3] - p[1])
-                        ])
-                        cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                        cbar.set_label("Units : ?")
-                        cbar.mappable.set_clim(clim)
+                campet_mydicts = [mydicts[ii[0]]]
+                campet_titles = [title]
+                # AR bkgsub-for-science case
+                if bkgsub_science_cameras is not None:
+                    if camera in bkgsub_science_cameras.split(","):
+                        bkgsub_ii = [i for i in range(len(bkgsub_myargs)) if bkgsub_myargs[i][4] == petal and bkgsub_myargs[i][5] == camera]
+                        assert(len(bkgsub_ii) == 1)
+                        campet_mydicts.append(bkgsub_mydicts[bkgsub_ii[0]])
+                        campet_titles.append("{} bkgsub-for-science".format(title))
+                # AR plot
+                for mydict, title in zip(campet_mydicts, campet_titles):
+                    ax = fig.add_subplot(gs[1, 2 * ic])
+                    ax_y = fig.add_subplot(gs[0, 2 * ic])
+                    ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
+                    if mydict is not None:
+                        assert(mydict["petal"] == petal)
+                        assert(mydict["camera"] == camera)
+                        img = mydict["image"]
+                        im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                        pos = ax.get_position().bounds
+                        # AR median profile along x, for each pair of amps
+                        tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
+                        tmpys = np.arange(len(tmpxs))
+                        ax_x.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                        tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
+                        tmpys = np.arange(len(tmpxs))
+                        ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                        ax_x.set_ylim(ax.get_xlim()[::-1])
+                        ax_x.set_xlim(-0.5, 0.5)
+                        ax_x.set_yticklabels([])
+                        ax_x.grid()
+                        pos_x =  list(ax_x.get_position().bounds)
+                        pos_x[0], pos_x[1], pos_x[3] = pos[0] + pos[2], pos[1], pos[3]
+                        ax_x.set_position(pos_x)
+                        # AR median profile along y, for each pair of amps
+                        tmpys = np.nanmedian(img[: img.shape[0] // 2, :], axis=0)
+                        tmpxs = np.arange(len(tmpys))
+                        ax_y.plot(tmpxs, tmpys, color=tmpcols[0], alpha=0.5, zorder=1)
+                        tmpys = np.nanmedian(img[img.shape[0] // 2 :, :], axis=0)
+                        tmpxs = np.arange(len(tmpys))
+                        ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
+                        ax_y.set_title(title)
+                        ax_y.set_xlim(ax.get_ylim()[::-1])
+                        ax_y.set_ylim(-0.5, 0.5)
+                        ax_y.set_xticklabels([])
+                        ax_y.grid()
+                        pos_y =  list(ax_y.get_position().bounds)
+                        pos_y[0], pos_y[1], pos_y[2] = pos[0], pos[1] + pos[3], pos[2]
+                        ax_y.set_position(pos_y)
+                        if (camera == cameras[-1]) & (ic == ncol - 1):
+                            p = ax_x.get_position().get_points().flatten()
+                            cax = fig.add_axes([
+                                p[0] + 1.5 * (p[2] - p[0]),
+                                p[1],
+                                0.5 * (p[2] - p[0]),
+                                1.0 * (p[3] - p[1])
+                            ])
+                            cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
+                            cbar.set_label("Units : ?")
+                            cbar.mappable.set_clim(clim)
+                    ic += 1
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
 
