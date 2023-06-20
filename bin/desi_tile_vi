@@ -44,10 +44,10 @@ def parse(options=None):
                         help = 'your name or initials')
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
-    parser.add_argument('--new', action = 'store_true', required=False,
-                        help = 'only inspect new tiles (equivalent to --qastatus none)')
-    parser.add_argument('--qastatus', type=str, default=None, required=False,
-                        help = 'only inspect tiles with this QA status (e.g. "unsure")')
+    parser.add_argument('--qastatus', type=str, default='none', required=False,
+                        help = ('only inspect tiles with this QA status '
+                                '(e.g. "unsure").  Default of none shows only new '
+                                'tiles.'))
     parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
     parser.add_argument('--program', type=str, nargs='+', required=False,
@@ -142,10 +142,6 @@ def main():
 
     args=parse()
 
-    if args.new and args.qastatus is not None:
-        log.error('Specify --new or --qastatus QA but not both')
-        sys.exit(1)
-
     if args.prod is None:
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
@@ -190,15 +186,13 @@ def main():
         selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
         selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
                       (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
-    if args.new :
-        selection &= (tiles_table["QA"]=="none")
-    if args.survey is not None :
-        selection &= (tiles_table["SURVEY"]==args.survey)
-    if args.program is not None:
-        selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
-                             [x.lower() for x in args.program])
-    if args.qastatus is not None:
-        selection &= (tiles_table["QA"]==args.qastatus)
+        if args.survey is not None:
+            selection &= (tiles_table["SURVEY"]==args.survey)
+        if args.program is not None:
+            selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
+                                 [x.lower() for x in args.program])
+        if args.qastatus is not None:
+            selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
@@ -263,6 +257,10 @@ def main():
                 print("skip: skip this one; just show the image and move on.")
                 print("unsure: mark this one as unsure.")
             elif res=="yes" :
+                row = tiles_table[index]
+                if row['QA'] != 'none':
+                    print(f'Overwriting old QA of {row["QA"]} by {row["USER"]} on '
+                          f'{row["QANIGHT"]}!')
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
