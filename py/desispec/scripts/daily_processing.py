@@ -312,8 +312,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 unproc = True
 
             print(f"\nFound: {erow}")
-            etable.add_row(erow)
             if unproc:
+                etable.add_row(erow)
                 unproc_table.add_row(erow)
                 sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
                 if dry_run_level < 3:
@@ -355,6 +355,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 # If done with science exposures for a tile and use_tilenight==True, use
                 # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
                 if use_tilenight and lasttype == 'science' and len(sciences)>0:
+                    if dry_run_level < 3:
+                        write_tables([etable], tablenames=[exp_table_pathname])                    
                     ptable, sciences, internal_id \
                         = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
                                                         dry_run=dry_run_level,
@@ -383,6 +385,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     sleep_and_report(2, message_suffix=f"after joint fit", dry_run=dry_run)
                 del old_iid
 
+            etable.add_row(erow)
             prow = erow_to_prow(erow)
             prow['INTID'] = internal_id
             internal_id += 1
@@ -422,7 +425,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stdout.flush()
             sys.stderr.flush()
 
-            if dry_run_level < 3:
+            if dry_run_level < 3 and not (use_tilenight and curtype == 'science'):
                 write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
             sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
 
