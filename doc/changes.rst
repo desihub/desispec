@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.59.1 (unreleased)
+0.59.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.59.1 (2023-06-23)
+-------------------
+
+* Add desi_daily_proc_manager --exp-cadence-time option (PR `#2076`_)
+
+.. _`#2076`: https://github.com/desihub/desispec/pull/2076
 
 0.59.0 (2023-06-12)
 -------------------
