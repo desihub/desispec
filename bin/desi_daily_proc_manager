@@ -69,8 +69,9 @@ def parse_args():#options=None):
                         help="Wait time between loops in checking queue statuses and resubmitting failures.")
     parser.add_argument("--override-night", type=str,default=None,
                         help="Specify the night to run on. Overrides the current day.")
-    parser.add_argument("--run-only-once", action="store_true",
-                        help="Run only once. Suitable for running repeateadly in a scron job.")
+    parser.add_argument("--loop-only-once", action="store_true",
+                        help="Loop over new exposures only once and does not process the tile corresponding to the last "+
+                             "science exposure before exiting. Suitable for running repeateadly as a scron job.")
     parser.add_argument("--ignore-expid-list", type=str,default=None,
                         help="Specify the expid's to ignore in a comma separated list given as a string.")
     parser.add_argument("--ignore-expid-file", type=str,default=None,
@@ -175,4 +176,4 @@ if __name__ == '__main__':
                              dont_check_job_outputs=args.dont_check_job_outputs,
                              dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs,
                              use_specter=args.use_specter,
-                             use_tilenight=args.use_tilenight,run_only_once=args.run_only_once)
+                             use_tilenight=args.use_tilenight,loop_only_once=args.loop_only_once)
