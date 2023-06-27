@@ -5,7 +5,9 @@ desispec Change Log
 0.59.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
+
+.. _`#2059`: https://github.com/desihub/desispec/pull/2059
 
 0.59.1 (2023-06-23)
 -------------------
