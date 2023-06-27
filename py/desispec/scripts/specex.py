@@ -270,9 +270,9 @@ def run(comm,cmds,cameras):
                  values being the 'desi_compute_psf ...' string that one would run
                  on the command line.
         cameras: list of camera strings identifying the entries in cmds to be run
-                 as jobs in parallel jobs, one entry per ccd image to be fit; entries
-                 not in the dictionary will be logged as an error while still
-                 continuing with the others and not crashing.
+                 as jobs in parallel jobs, one entry per ccd image to be fit.
+                 Processes assigned to cameras not present as keys in cmds will
+                 write a message to the log instead of running a PSF fit.
 
     The function first defines the procedure to call specex for a given ccd image
     with the "fitframe" inline function, passes the fitframe function
@@ -323,9 +323,8 @@ def run(comm,cmds,cameras):
         worldrank = worldcomm.Get_rank()
         camera = cameras[job]
         if not camera in cmds:
-            log.error(f'FAILED: commands for camera {camera} not found for'+
-                      f' MPI group rank {grouprank} and world rank {worldrank}')
-            error_count += 1
+            log.info(f'nothing to do for camera {camera} on MPI group rank '+
+                      f'{grouprank} and world rank {worldrank}')
         else:
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
