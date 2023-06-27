@@ -438,7 +438,7 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         return None
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None, run_preproc = None):
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None, run_preproc=None):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -452,6 +452,8 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         bkgsub_science_cameras (optional, defaults to None): comma-separated list of the
             cameras to be additionally processed with the --bkgsub-for-science argument
             (e.g. "b") (string)
+        run_preproc (optional, defaults to None): if None, autoderive if preproc should be run, otherwise
+            override if it should be run or not (None or bool)
 
     Note:
         If the identified dark image is not processed and if the raw data is there,
