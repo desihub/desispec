@@ -263,7 +263,7 @@ def main(args=None, comm=None):
                 except (BaseException, Exception) as e:
                     import traceback
                     lines = traceback.format_exception(*sys.exc_info())
-                    log.error(f"joint fit step using desi_proc_joint_fit with args {poststdstar_args} raised an exception:")
+                    log.error(f"poststdstar step using proc.main with args {poststdstar_args} raised an exception:")
                     print("".join(lines))
                     error_count += 1
 
