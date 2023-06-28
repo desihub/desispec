@@ -654,4 +654,7 @@ def main(args=None, comm=None):
     if rank == 0:
         log.info('All done at {}'.format(time.asctime()))
 
-    return num_err
+    if num_err > 0:
+        sys.exit(int(num_err))
+    else:
+        return 0
