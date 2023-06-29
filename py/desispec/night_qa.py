@@ -438,7 +438,7 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         return None
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None):
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None, run_preproc=None):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -452,6 +452,8 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         bkgsub_science_cameras (optional, defaults to None): comma-separated list of the
             cameras to be additionally processed with the --bkgsub-for-science argument
             (e.g. "b") (string)
+        run_preproc (optional, defaults to None): if None, autoderive if preproc should be run, otherwise
+            override if it should be run or not (None or bool)
 
     Note:
         If the identified dark image is not processed and if the raw data is there,
@@ -489,18 +491,22 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         "processing_tables",
         "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
     )
-    run_preproc = False
-    if not os.path.isfile(proctable_fn):
-        run_preproc = True
-    else:
-        d = Table.read(proctable_fn)
-        sel = d["OBSTYPE"] == "dark"
-        d = d[sel]
-        proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
-        if dark_expid not in proc_expids:
+    # if set to None will judge necessity for preprocessing according to proctable
+    # but allows manual override e.g. for cases where no proctable should be there
+    if run_preproc is None:
+        if not os.path.isfile(proctable_fn):
             run_preproc = True
+        else:
+            d = Table.read(proctable_fn)
+            sel = d["OBSTYPE"] == "dark"
+            d = d[sel]
+            proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+            if dark_expid not in proc_expids:
+                run_preproc = True
+            else:
+                run_preproc = False
+        # AR run preproc?
 
-    # AR run preproc?
     if run_preproc:
         specprod_dir = tempfile.mkdtemp()
         outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
