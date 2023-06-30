@@ -46,8 +46,8 @@ def parse(options=None):
                         help = 'image viewer (default is eog)')
     parser.add_argument('--qastatus', type=str, default='none', required=False,
                         help = ('only inspect tiles with this QA status '
-                                '(e.g. "unsure").  Default of none shows only new '
-                                'tiles.'))
+                                '(e.g. none, unsure, good, bad, all).  '
+                                'Default of none shows only new tiles.'))
     parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
     parser.add_argument('--program', type=str, nargs='+', required=False,
@@ -184,14 +184,16 @@ def main():
         # if the user has specifically requested some tileids, show them
         # to them!  Only filter if requested_tileids is not None
         selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
-        selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
-                      (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
         if args.survey is not None:
             selection &= (tiles_table["SURVEY"]==args.survey)
         if args.program is not None:
             selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
                                  [x.lower() for x in args.program])
-        if args.qastatus is not None:
+        if args.qastatus != 'all':
+            if np.sum(tiles_table['QA'] == args.qastatus) == 0:
+                print('No tiles matching qastatus, possible options are ',
+                      np.unique(tiles_table['QA']))
+                return
             selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
@@ -244,11 +246,15 @@ def main():
             print("The code thinks it's a valid tile")
         else :
             print("The code thinks it's NOT a valid tile")
+        index=np.where(tiles_table["TILEID"]==tileid)[0][0]
+        row = tiles_table[index]
+        if row['QA'] != 'none':
+            print(f'Note existing QA for this tile of {row["QA"]} by '
+                  f'{row["USER"]} on {row["QANIGHT"]}!')
 
         if viewer is not None : viewer.kill()
         viewer = subprocess.Popen([args.viewer,qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-        index=np.where(tiles_table["TILEID"]==tileid)[0][0]
         while True :
             res=yesnohelp("Is tile {} a valid tile?".format(tileid))
             if res=="help" :
@@ -257,7 +263,6 @@ def main():
                 print("skip: skip this one; just show the image and move on.")
                 print("unsure: mark this one as unsure.")
             elif res=="yes" :
-                row = tiles_table[index]
                 if row['QA'] != 'none':
                     print(f'Overwriting old QA of {row["QA"]} by {row["USER"]} on '
                           f'{row["QANIGHT"]}!')
