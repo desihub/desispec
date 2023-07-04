@@ -239,14 +239,12 @@ def read_spectra(
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
         rows = np.where(np.isin(file_targetids, targetids))[0]
+        if len(rows) == 0:
+            return Spectra()
     else:
         rows = None
 
-    if len(rows) == 0:
-        return Spectra()
-
     # load the metadata.
-
     meta = dict(hdus[0].read_header())
 
     # initialize data objects
