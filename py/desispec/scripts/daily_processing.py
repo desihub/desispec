@@ -32,6 +32,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
                              exps_to_ignore=None, data_cadence_time=300, queue_cadence_time=1800,
+                             exp_cadence_time=2,
                              dry_run_level=0, dry_run=False, no_redshifts=False, continue_looping_debug=False, dont_check_job_outputs=False,
                              dont_resubmit_partial_jobs=False, verbose=False, use_specter=False, use_tilenight=False):
     """
@@ -59,6 +60,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore: list. A list of exposure id's that should not be processed. Each should be an integer.
         data_cadence_time: int. Wait time in seconds between loops in looking for new data. Default is 30 seconds.
         queue_cadence_time: int. Wait time in seconds between loops in checking queue statuses and resubmitting failures. Default is 1800s.
+        exp_cadence_time: int. Wait time in seconds between loops over each science exposure. Default 2.
         dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
@@ -424,7 +426,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             if dry_run_level < 3:
                 write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
-            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+            sleep_and_report(exp_cadence_time, message_suffix=f"after exposure", dry_run=dry_run)
 
         print("\nReached the end of current iteration of new exposures.")
         if override_night is not None and (not continue_looping_debug):

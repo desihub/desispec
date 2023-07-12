@@ -67,6 +67,8 @@ def parse_args():#options=None):
                         help="Wait time between loops in looking for new data.")
     parser.add_argument("--queue-cadence-time", type=int, required=False, default=1800,
                         help="Wait time between loops in checking queue statuses and resubmitting failures.")
+    parser.add_argument("--exp-cadence-time", type=int, required=False, default=2,
+                        help="Wait time between processing science exposures.")
     parser.add_argument("--override-night", type=str,default=None,
                         help="Specify the night to run on. Overrides the current day.")
     parser.add_argument("--ignore-expid-list", type=str,default=None,
@@ -170,6 +172,7 @@ if __name__ == '__main__':
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,
                              continue_looping_debug=args.continue_looping_debug,
                              data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,
+                             exp_cadence_time=args.exp_cadence_time,
                              dont_check_job_outputs=args.dont_check_job_outputs,
                              dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs,
                              use_specter=args.use_specter,

@@ -44,10 +44,10 @@ def parse(options=None):
                         help = 'your name or initials')
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
-    parser.add_argument('--new', action = 'store_true', required=False,
-                        help = 'only inspect new tiles (equivalent to --qastatus none)')
-    parser.add_argument('--qastatus', type=str, default=None, required=False,
-                        help = 'only inspect tiles with this QA status (e.g. "unsure")')
+    parser.add_argument('--qastatus', type=str, default='none', required=False,
+                        help = ('only inspect tiles with this QA status '
+                                '(e.g. none, unsure, good, bad, all).  '
+                                'Default of none shows only new tiles.'))
     parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
     parser.add_argument('--program', type=str, nargs='+', required=False,
@@ -142,10 +142,6 @@ def main():
 
     args=parse()
 
-    if args.new and args.qastatus is not None:
-        log.error('Specify --new or --qastatus QA but not both')
-        sys.exit(1)
-
     if args.prod is None:
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
@@ -180,6 +176,7 @@ def main():
         tiles_table["USER"]=np.array(np.repeat("none",len(tiles_table)),dtype='<U20')
     if not "OVERRIDE" in tiles_table.dtype.names :
         tiles_table["OVERRIDE"]=np.zeros(len(tiles_table),dtype=int)
+    tiles_table['QA'] = tiles_table['QA'].astype('<U20')
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
     selection = (tiles_table["ZDONE"]=="false")
@@ -187,17 +184,17 @@ def main():
         # if the user has specifically requested some tileids, show them
         # to them!  Only filter if requested_tileids is not None
         selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
-        selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
-                      (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
-    if args.new :
-        selection &= (tiles_table["QA"]=="none")
-    if args.survey is not None :
-        selection &= (tiles_table["SURVEY"]==args.survey)
-    if args.program is not None:
-        selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
-                             [x.lower() for x in args.program])
-    if args.qastatus is not None:
-        selection &= (tiles_table["QA"]==args.qastatus)
+        if args.survey is not None:
+            selection &= (tiles_table["SURVEY"]==args.survey)
+        if args.program is not None:
+            selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
+                                 [x.lower() for x in args.program])
+        if args.qastatus != 'all':
+            if np.sum(tiles_table['QA'] == args.qastatus) == 0:
+                print('No tiles matching qastatus, possible options are ',
+                      np.unique(tiles_table['QA']))
+                return
+            selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
@@ -249,11 +246,15 @@ def main():
             print("The code thinks it's a valid tile")
         else :
             print("The code thinks it's NOT a valid tile")
+        index=np.where(tiles_table["TILEID"]==tileid)[0][0]
+        row = tiles_table[index]
+        if row['QA'] != 'none':
+            print(f'Note existing QA for this tile of {row["QA"]} by '
+                  f'{row["USER"]} on {row["QANIGHT"]}!')
 
         if viewer is not None : viewer.kill()
         viewer = subprocess.Popen([args.viewer,qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-        index=np.where(tiles_table["TILEID"]==tileid)[0][0]
         while True :
             res=yesnohelp("Is tile {} a valid tile?".format(tileid))
             if res=="help" :
@@ -262,6 +263,9 @@ def main():
                 print("skip: skip this one; just show the image and move on.")
                 print("unsure: mark this one as unsure.")
             elif res=="yes" :
+                if row['QA'] != 'none':
+                    print(f'Overwriting old QA of {row["QA"]} by {row["USER"]} on '
+                          f'{row["QANIGHT"]}!')
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]

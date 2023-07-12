@@ -2,10 +2,42 @@
 desispec Change Log
 ===================
 
-0.58.3 (unreleased)
+0.59.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
+* night_qa optional override of reprocessing darks (PR `#2066`_).
+* desi_vi_tile defaults to only new tiles (PR `#2073`_).
+
+.. _`#2059`: https://github.com/desihub/desispec/pull/2059
+.. _`#2066`: https://github.com/desihub/desispec/pull/2066
+.. _`#2073`: https://github.com/desihub/desispec/pull/2073
+
+0.59.1 (2023-06-23)
+-------------------
+
+* Add desi_daily_proc_manager --exp-cadence-time option (PR `#2076`_)
+
+.. _`#2076`: https://github.com/desihub/desispec/pull/2076
+
+0.59.0 (2023-06-12)
+-------------------
+
+* ``desispec.coaddition.coadd_fiberstatus`` bugfixes and add columns
+  FIRSTNIGHT, LASTNIGHT, MIN_MJD, MEAN_MJD, MAX_MJD.  Used for EDR zcat VAC.
+  (PRs `#2065`_, `#2067`_, `#2070`_)
+
+.. _`#2065`: https://github.com/desihub/desispec/pull/2065
+.. _`#2067`: https://github.com/desihub/desispec/pull/2067
+.. _`#2070`: https://github.com/desihub/desispec/pull/2070
+
+0.58.4 (2023-06-02)
+-------------------
+
+* desispec.photo handle non-unique bricknames when patching 9010
+  tractor photometry (PR `#2062`_, followup to `#2057`_).
+
+.. _`#2062`: https://github.com/desihub/desispec/pull/2062
 
 0.58.3 (2023-06-01)
 -------------------
