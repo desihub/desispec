@@ -1138,9 +1138,9 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     elif 'dr10' in legacysurveydir:
         datarelease = 'dr10'
     else:
-        errmsg = f'Unable to determine data release from {legacysurveydir}; only DR9 and DR10 currently supported.'
-        log.critical(errmsg)
-        raise IOError(errmsg)
+        errmsg = f'Unable to determine data release from {legacysurveydir}; falling back to DR9.'
+        log.warning(errmsg)
+        datarelease = 'dr9'
 
     ## Some secondary programs (e.g., 39632961435338613, 39632966921487347)
     ## have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Unpack those here
