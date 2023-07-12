@@ -419,6 +419,9 @@ desispec API
 .. automodule:: desispec.scripts
     :members:
 
+.. automodule:: desispec.scripts.archive_tilenight
+    :members:
+
 .. automodule:: desispec.scripts.assemble_fibermap
     :members:
 
