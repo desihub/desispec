@@ -8,10 +8,12 @@ desispec Change Log
 * Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
 * night_qa optional override of reprocessing darks (PR `#2066`_).
 * desi_vi_tile defaults to only new tiles (PR `#2073`_).
+* Optionally match to DR10 photometry (PR `#2079`_).
 
 .. _`#2059`: https://github.com/desihub/desispec/pull/2059
 .. _`#2066`: https://github.com/desihub/desispec/pull/2066
 .. _`#2073`: https://github.com/desihub/desispec/pull/2073
+.. _`#2079`: https://github.com/desihub/desispec/pull/2079
 
 0.59.1 (2023-06-23)
 -------------------

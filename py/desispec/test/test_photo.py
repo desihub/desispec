@@ -34,15 +34,30 @@ class TestFibermap(unittest.TestCase):
         targetphot['FLUX_R'] = np.array([0.0, 22.768417, 0.0, 2.0220177, 0.3754208, 0.0]).astype('f4')
         targetphot['FLUX_W1'] = np.array([0.0, 38.42719, 0.0, 8.39509, 1.7937177, 0.0]).astype('f4')
         targetphot['FLUX_IVAR_W2'] = np.array([0.0, 0.72876793, 0.0, 0.53684264, 1.5837417, 0.0]).astype('f4')
-        targetphot['NUMOBS_INIT'] = np.array([1,1,1,4,9, 1]).astype(np.int64)
+        targetphot['NUMOBS_INIT'] = np.array([1, 1, 1, 4, 2, 1]).astype(np.int64)
         self.targetphot = targetphot
 
-        # tractorphot results
+        # tractorphot DR9 results
         tractorphot = Table() 
         tractorphot['FLUX_R'] = np.array([0.0, 22.768417, 0.4996462, 2.0220177, 0.3754208, 4.8209643]).astype('f4')
         tractorphot['FLUX_IVAR_W1'] = np.array([0.0, 2.6306653, 2.2135038, 2.3442872, 6.2124352, 2.5682714]).astype('f4')
         tractorphot['LS_ID'] = np.array([0, 9906610122001627, 9906622040377206, 9906617989139688, 9907735053993854, 9906622022814265]).astype(np.int64)
         self.tractorphot = tractorphot
+
+        # tractorphot DR10 results
+        input_cat = Table()
+        input_cat['TARGETID'] = [39089837533316505, 39089837533316947, 39089837533316811]
+        input_cat['TARGET_RA'] = [196.85695554, 196.89418677, 196.78531078]
+        input_cat['TARGET_DEC'] = [-25.37735882, -25.26812684, -25.2172812]
+        input_cat['TILEID'] = [83390, 83390, 83390] # NGC4993 tile with no DR9 photometry
+        self.input_cat_dr10 = input_cat
+        
+        tractorphot = Table() 
+        tractorphot['FLUX_G'] = np.array([3.1981304, 11.26542, 19.937193]).astype('f4')
+        tractorphot['FLUX_I'] = np.array([9.856144, 56.05153 , 33.03303]).astype('f4')
+        tractorphot['FLUX_IVAR_W3'] = np.array([0.0014487484, 0.0010963874, 0.001165816]).astype('f4')
+        tractorphot['LS_ID'] = np.array([10995128657712508, 10995128743167117, 10995128743105186]).astype(np.int64)
+        self.tractorphot_dr10 = tractorphot
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
@@ -50,15 +65,15 @@ class TestFibermap(unittest.TestCase):
         surveyops_dir = os.environ['DESI_SURVEYOPS']
         truedirs = {
             # sv1
-            '80613': ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/'],
+            '80613': np.array(['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
             # sv3 including ToOs
-            '19': [surveyops_dir+'/mtl/sv3/ToO/ToO.ecsv',
-                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
-                   '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits'],
+            '19': np.array([surveyops_dir+'/mtl/sv3/ToO/ToO.ecsv',
+                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
+                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits']),
             # main
-            '2070': [surveyops_dir+'/mtl/main/ToO/ToO.ecsv',
-                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
-                     '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']
+            '2070': np.array([surveyops_dir+'/mtl/main/ToO/ToO.ecsv',
+                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
+                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
                    }
 
         for tileid in truedirs.keys():
@@ -75,12 +90,21 @@ class TestFibermap(unittest.TestCase):
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
-    def test_gather_targetphot(self):
+    def test_gather_tractorphot(self):
         """Test that we get the correct Tractor photometry for an input set of objects."""
 
         tractorphot = gather_tractorphot(self.input_cat)
         for col in self.tractorphot.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
+
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    def test_gather_tractorphot_dr10(self):
+        """Like test_gather_tractorphot but for DR10 photometry."""
+
+        legacysurveydir = os.path.join(os.getenv('DESI_ROOT'), 'external', 'legacysurvey', 'dr10')
+        tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
+        for col in self.tractorphot_dr10.colnames:
+            self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
 
 def test_suite():
     """Allows testing of only this module with the command::
