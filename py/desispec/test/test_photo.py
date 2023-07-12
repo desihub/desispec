@@ -34,7 +34,7 @@ class TestFibermap(unittest.TestCase):
         targetphot['FLUX_R'] = np.array([0.0, 22.768417, 0.0, 2.0220177, 0.3754208, 0.0]).astype('f4')
         targetphot['FLUX_W1'] = np.array([0.0, 38.42719, 0.0, 8.39509, 1.7937177, 0.0]).astype('f4')
         targetphot['FLUX_IVAR_W2'] = np.array([0.0, 0.72876793, 0.0, 0.53684264, 1.5837417, 0.0]).astype('f4')
-        targetphot['NUMOBS_INIT'] = np.array([1,1,1,4,9, 1]).astype(np.int64)
+        targetphot['NUMOBS_INIT'] = np.array([1, 1, 1, 4, 2, 1]).astype(np.int64)
         self.targetphot = targetphot
 
         # tractorphot DR9 results
@@ -53,10 +53,10 @@ class TestFibermap(unittest.TestCase):
         self.input_cat_dr10 = input_cat
         
         tractorphot = Table() 
-        tractorphot['FLUX_G'] = [3.1981304, 11.26542, 19.937193]
-        tractorphot['FLUX_I'] = [9.856144, 56.05153 , 33.03303]
-        tractorphot['FLUX_IVAR_W3'] = [0.00144875, 0.00109639, 0.00116582]
-        tractorphot['LS_ID'] = [10995128657712508, 10995128743167117, 10995128743105186]
+        tractorphot['FLUX_G'] = np.array([3.1981304, 11.26542, 19.937193]).astype('f4')
+        tractorphot['FLUX_I'] = np.array([9.856144, 56.05153 , 33.03303]).astype('f4')
+        tractorphot['FLUX_IVAR_W3'] = np.array([0.0014487484, 0.0010963874, 0.001165816]).astype('f4')
+        tractorphot['LS_ID'] = np.array([10995128657712508, 10995128743167117, 10995128743105186]).astype(np.int64)
         self.tractorphot_dr10 = tractorphot
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
@@ -88,7 +88,6 @@ class TestFibermap(unittest.TestCase):
         targetphot = gather_targetphot(self.input_cat)
         for col in self.targetphot.colnames:
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
-        import pdb ; pdb.set_trace()
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_tractorphot(self):
@@ -97,17 +96,15 @@ class TestFibermap(unittest.TestCase):
         tractorphot = gather_tractorphot(self.input_cat)
         for col in self.tractorphot.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
-        import pdb ; pdb.set_trace()
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_tractorphot_dr10(self):
         """Like test_gather_tractorphot but for DR10 photometry."""
 
         legacysurveydir = os.path.join(os.getenv('DESI_ROOT'), 'external', 'legacysurvey', 'dr10')
-        tractorphot = gather_tractorphot(self.input_cat, legacysurveydir=legacysurveydir)
+        tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
-        import pdb ; pdb.set_trace()
 
 def test_suite():
     """Allows testing of only this module with the command::
