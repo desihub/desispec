@@ -229,8 +229,6 @@ def parse(options=None):
                    '/global/cfs/cdirs/desi/spectro/redux/daily, '
                    'or simply prod version, like daily. '
                    'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
-    parser.add_argument('--archiveroot', type=str,
-            help = 'Output archive root directory; default (inputspecprod)/tiles/archive/')
     parser.add_argument('--badpetals', type=str,
             help = 'Comma separated list of known bad petals not in production but archived from earlier prod')
     parser.add_argument('--specstatus', type=str,
@@ -258,9 +256,6 @@ def main(options=None):
     else:
         reduxdir = args.prod
 
-    if args.archiveroot is None:
-        args.archiveroot = f'{reduxdir}/tiles/archive'
-
     if args.badpetals is None:
         args.badpetals = list()
     else:
@@ -287,7 +282,6 @@ def main(options=None):
 
     #- before changing directories, convert paths to absolute
     args.specstatus = os.path.abspath(args.specstatus)
-    args.archiveroot = os.path.abspath(args.archiveroot)
 
     log.info(f'Archiving tiles in {reduxdir}')
     os.chdir(reduxdir)
@@ -347,7 +341,7 @@ def main(options=None):
 
         #- Archive tile
         tiledir = f'tiles/cumulative/{tileid}/{lastnight}'
-        archivedir = f'{args.archiveroot}/{tileid}/{archivedate}'
+        archivedir = f'tiles/archive/{tileid}/{archivedate}'
         tile_err = archivetile(tiledir, archivedir, badpetals=args.badpetals, dryrun=args.dry_run)
 
         #- Remove write access from any input preproc and exposures
