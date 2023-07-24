@@ -215,6 +215,8 @@ def read_spectra(
         infile (str): path to read
         single (bool): if True, keep spectra as single precision in memory.
         targetids (list): Optional, list of targetids to read from file, if present.
+        skip_hdu (dict): Optional, dictionary with boolean flags to skip hdus. Default, no hdus are skipped.
+        select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
         The object containing the data read from disk.
@@ -350,7 +352,7 @@ def read_spectra(
                     res[band] = native_endian(
                         ahdus[h].section[rows, :, :].astype(ftype)
                     )
-            else:
+            elif type != "MASK" and type != "RESOLUTION":
                 # this must be an "extra" HDU
                 if extra is None:
                     extra = {}
