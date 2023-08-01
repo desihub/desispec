@@ -22,7 +22,6 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat
-from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 
 @numba.jit
 def numba_proj(image,x,sigma,flux) :
@@ -74,6 +73,9 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     '''
 
     log=get_logger()
+
+    # this is done here to avoid circular import
+    from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 
     if fit_x_shift :
         t0=time.time()
