@@ -2,18 +2,29 @@
 desispec Change Log
 ===================
 
-0.59.2 (unreleased)
+0.59.3 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.59.2 (2023-08-04)
 -------------------
 
 * Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
 * night_qa optional override of reprocessing darks (PR `#2066`_).
 * desi_vi_tile defaults to only new tiles (PR `#2073`_).
 * Optionally match to DR10 photometry (PR `#2079`_).
+* Move desi_archive_tilenight contents into callable funcs (PR `#2081`_).
+* Add (re-)archive options when missing petals (PR `#2082`_).
+* Fix circular imports with trace_shifts (PR `#2084`_).
 
 .. _`#2059`: https://github.com/desihub/desispec/pull/2059
 .. _`#2066`: https://github.com/desihub/desispec/pull/2066
 .. _`#2073`: https://github.com/desihub/desispec/pull/2073
 .. _`#2079`: https://github.com/desihub/desispec/pull/2079
+.. _`#2081`: https://github.com/desihub/desispec/pull/2081
+.. _`#2082`: https://github.com/desihub/desispec/pull/2082
+.. _`#2084`: https://github.com/desihub/desispec/pull/2084
 
 0.59.1 (2023-06-23)
 -------------------
