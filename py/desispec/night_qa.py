@@ -1919,12 +1919,12 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
-    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it has been generated after the earliest file of the processed science exposures (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
+    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it has been generated after the earliest frame file of the processed science exposures (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
     html.write("\t</br>\n")
     html.write("<table>\n")
     # AR science exposure earliest timestamps per campet
     earliest_sci_fns, earliest_sci_m_times = {}, {}
-    log.info("earliest science exposure timestamp per campet:")
+    log.info("earliest science exposure frame file timestamp per campet:")
     for petal in petals:
         for camera in cameras:
             campet = "{}{}".format(camera, petal)
@@ -1932,13 +1932,13 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
             fns = []
             for expid in expids:
                 fn = findfile("frame", night, expid=expid, camera=camera+str(petal), specprod_dir=prod)
-                expdir = os.path.dirname(fn)
-                fns += sorted(glob(os.path.join(expdir, "*-{}-*".format(campet))))
+                if os.path.isfile(fn):
+                    fns.append(fn)
             # AR protect against case where a campet has no processed files
             if len(fns) == 0:
                 earliest_sci_fns[campet] = None
                 earliest_sci_m_times[campet] = -99
-                log.warning("{}\tdid not find any science exposure files".format(campet))
+                log.warning("{}\tdid not find any science exposure frame files".format(campet))
             # AR grab the earliest file
             else:
                 m_times = [os.path.getmtime(fn) for fn in fns]
