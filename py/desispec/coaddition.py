@@ -130,6 +130,38 @@ fibermap_perexp_cols = \
     fibermap_fiberassign_cols + \
     fibermap_coords_cols + fibermap_cframe_cols
 
+def calc_mean_std_ra_dec(ras, decs):
+    """
+    Calculate mean/std of ras, decs accounting for RA wraparound and cos(dec)
+
+    Args:
+        ras (array): input RA values in degrees
+        decs (array): input declination values in degrees
+
+    Returns: mean_ra, std_ra, mean_dec, std_dec
+
+    where the means are in degrees and the standard deviations are in arcsec,
+    including cos(dec) correction.
+
+    For efficiency, does not try to handle dec= +/-90 poles correctly
+    """
+    ras = np.asarray(ras)
+    decs = np.asarray(decs)
+    if np.max(ras) > np.min(ras)+180:
+        offset = 180.0
+        ras = (ras + offset) % 360
+    else:
+        offset = 0.0
+
+    mean_dec = np.mean(decs)
+    std_dec = np.std(decs) * 3600
+
+    mean_ra = (np.mean(ras) - offset + 360) % 360
+    std_ra = np.std(ras) * np.cos(np.radians(mean_dec)) * 3600
+
+    return mean_ra, std_ra, mean_dec, std_dec
+
+
 def coadd_fibermap(fibermap, onetile=False):
     """
     Coadds fibermap
@@ -178,7 +210,6 @@ def coadd_fibermap(fibermap, onetile=False):
     # some cols get combined into mean or rms
     mean_cols = [
         'DELTA_X', 'DELTA_Y',
-        'FIBER_RA', 'FIBER_DEC',
         'PSF_TO_FIBER_SPECFLUX', 'MJD'
         ]
     # Note: treat the fiber coordinates separately because of missing coordinate problem
@@ -189,8 +220,9 @@ def coadd_fibermap(fibermap, onetile=False):
 
     #- rms_cols and std_cols must also be in mean_cols
     rms_cols = ['DELTA_X', 'DELTA_Y']
-    std_cols = ['FIBER_RA', 'FIBER_DEC']
+    std_cols = []  # currently none; RA/dec handled separately
 
+    #- Add other MEAN/RMS/STD columns
     for k in mean_cols:
         if k in fibermap.colnames :
             if k.endswith('_RA') or k.endswith('_DEC') or k=='MJD':
@@ -208,7 +240,16 @@ def coadd_fibermap(fibermap, onetile=False):
                 tfmap.add_column(xx,name='STD_'+k)
 
             tfmap.remove_column(k)
-            
+
+    #- FIBER_RA/DEC handled differently due to RA wraparound and cos(dec)
+    if 'FIBER_RA' in fibermap.colnames and 'FIBER_DEC' in fibermap.colnames:
+        tfmap.add_column(Column(np.zeros(ntarget, dtype=np.float64)), name='MEAN_FIBER_RA')
+        tfmap.add_column(Column(np.zeros(ntarget, dtype=np.float32)), name='STD_FIBER_RA')
+        tfmap.add_column(Column(np.zeros(ntarget, dtype=np.float64)), name='MEAN_FIBER_DEC')
+        tfmap.add_column(Column(np.zeros(ntarget, dtype=np.float32)), name='STD_FIBER_DEC')
+        tfmap.remove_column('FIBER_RA')
+        tfmap.remove_column('FIBER_DEC')
+
     #- MIN_, MAX_MJD over exposures used in coadd
     if 'MJD' in fibermap.colnames :
         dtype = np.float64
@@ -266,7 +307,7 @@ def coadd_fibermap(fibermap, onetile=False):
         #- For FIBER_RA/DEC quantities, only average over good coordinates.
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
-        if 'FIBER_RA' in fibermap.colnames:
+        if 'FIBER_RA' in fibermap.colnames and 'FIBER_DEC' in fibermap.colnames:
             good_coords = (fibermap['FIBER_RA'][jj]!=0)|(fibermap['FIBER_DEC'][jj]!=0)
             
             #- Check whether entries with good coordinates exist (if not use all coordinates)
@@ -302,6 +343,7 @@ def coadd_fibermap(fibermap, onetile=False):
                     vals=fibermap[k][jj][compute_coadds_coords]
                 else:
                     vals=fibermap[k][jj][compute_coadds]
+
                 tfmap['MEAN_'+k][i] = np.mean(vals)
 
         for k in rms_cols:
@@ -312,19 +354,18 @@ def coadd_fibermap(fibermap, onetile=False):
 
         #SJ: Check STD_FIBER_MAP with +360 value; doesn't do the wrap-around correctly
         #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
-        if 'FIBER_RA' in fibermap.colnames:
-            dec = fibermap['FIBER_DEC'][jj][compute_coadds_coords][0]
-            vals = fibermap['FIBER_RA'][jj][compute_coadds_coords]
-            std = np.std(vals+360.0) * 3600 * np.cos(np.radians(dec))
-            tfmap['STD_FIBER_RA'][i] = std
-
-        if 'FIBER_DEC' in fibermap.colnames:
-            vals = fibermap['FIBER_DEC'][jj][compute_coadds_coords]
-            tfmap['STD_FIBER_DEC'][i] = np.std(vals) * 3600
+        if 'FIBER_RA' in fibermap.colnames and 'FIBER_DEC' in fibermap.colnames:
+            decs = fibermap['FIBER_DEC'][jj][compute_coadds_coords]
+            ras = fibermap['FIBER_RA'][jj][compute_coadds_coords]
+            mean_ra, std_ra, mean_dec, std_dec = calc_mean_std_ra_dec(ras, decs)
+            tfmap['MEAN_FIBER_RA'][i] = mean_ra
+            tfmap['STD_FIBER_RA'][i] = np.float32(std_ra)
+            tfmap['MEAN_FIBER_DEC'][i] = mean_dec
+            tfmap['STD_FIBER_DEC'][i] = np.float32(std_dec)
 
         #- future proofing possibility of other STD cols
         for k in std_cols:
-            if k in fibermap.colnames and k not in ('FIBER_RA', 'FIBER_DEC') :
+            if k in fibermap.colnames:
                 vals=fibermap[k][jj][compute_coadds]
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
