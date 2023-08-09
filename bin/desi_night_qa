@@ -196,8 +196,8 @@ def main():
         os.system("cp {} {}".format(args.css, args.outdir))
         write_nightqa_html(
             outfns, args.night, args.prod, os.path.basename(args.css),
-            surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
-
+            expids, tileids, surveys,
+        )
     duration_seconds = time.time() - start_time
     minutes = int(duration_seconds // 60)
     seconds = int(duration_seconds % 60)
