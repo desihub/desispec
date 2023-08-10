@@ -190,14 +190,7 @@ def read_spectra(
     infile,
     single=False,
     targetids=None,
-    skip_hdu={
-        "FIBERMAP": False,
-        "EXP_FIBERMAP": False,
-        "SCORES": False,
-        "EXTRA_CATALOG": False,
-        "MASK": False,
-        "RESOLUTION": False,
-    },
+    skip_hdus=None,
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -215,12 +208,17 @@ def read_spectra(
         infile (str): path to read
         single (bool): if True, keep spectra as single precision in memory.
         targetids (list): Optional, list of targetids to read from file, if present.
-        skip_hdu (dict): Optional, dictionary with boolean flags to skip hdus. Default, no hdus are skipped.
+        skip_hdus (list): Optional, list/set/tuple of HDUs to skip
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
         The object containing the data read from disk.
 
+    `skip_hdus` options are FIBERMAP, EXP_FIBERMAP, SCORES, EXTRA_CATALOG, MASK, RESOLUTION;
+    where MASK and RESOLUTION mean to skip those for all cameras.
+    Note that WAVE, FLUX, and IVAR are always required.
+
+    If a table HDU is not listed in `select_columns`, all of its columns will be read
     """
     log = get_logger()
     infile = checkgzip(infile)
@@ -232,6 +230,9 @@ def read_spectra(
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
 
+    # fitsio supports subselecting tables but not images, so also open
+    # file with astropy.io.fits to subselecting image/array HDUs like FLUX.
+    # Use fitsio (hdus) when possible for greater efficiency.
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
     nhdu = len(hdus)
@@ -245,6 +246,16 @@ def read_spectra(
             return Spectra()
     else:
         rows = None
+
+    if skip_hdus is None:
+        skip_hdus = set()  #- empty set, include everything
+
+    if select_columns is None:
+        select_columns = dict()
+
+    for extname in ("FIBERMAP", "EXP_FIBERMAP", "SCORES", "EXTRA_CATALOG"):
+        if extname not in select_columns:
+            select_columns[extname] = None
 
     # load the metadata.
     meta = dict(hdus[0].read_header())
@@ -270,40 +281,36 @@ def read_spectra(
 
     for h in range(1, nhdu):
         name = hdus[h].read_header()["EXTNAME"]
-        if name == "FIBERMAP":
-            if not skip_hdu["FIBERMAP"]:
-                fmap = encode_table(
-                    Table(
-                        hdus[h].read(rows=rows, columns=select_columns["FIBERMAP"]),
-                        copy=True,
-                    ).as_array()
-                )
-        elif name == "EXP_FIBERMAP":
-            if not skip_hdu["EXP_FIBERMAP"]:
-                expfmap = encode_table(
-                    Table(
-                        hdus[h].read(rows=rows, columns=select_columns["EXP_FIBERMAP"]),
-                        copy=True,
-                    ).as_array()
-                )
-        elif name == "SCORES":
-            if not skip_hdu["SCORES"]:
-                scores = encode_table(
-                    Table(
-                        hdus[h].read(rows=rows, columns=select_columns["SCORES"]),
-                        copy=True,
-                    ).as_array()
-                )
-        elif name == "EXTRA_CATALOG":
-            if not skip_hdu["EXTRA_CATALOG"]:
-                extra_catalog = encode_table(
-                    Table(
-                        hdus[h].read(
-                            rows=rows, columns=select_columns["EXTRA_CATALOG"]
-                        ),
-                        copy=True,
-                    ).as_array()
-                )
+        if name == "FIBERMAP" and name not in skip_hdus:
+            fmap = encode_table(
+                Table(
+                    hdus[h].read(rows=rows, columns=select_columns["FIBERMAP"]),
+                    copy=True,
+                ).as_array()
+            )
+        elif name == "EXP_FIBERMAP" and name not in skip_hdus:
+            expfmap = encode_table(
+                Table(
+                    hdus[h].read(rows=rows, columns=select_columns["EXP_FIBERMAP"]),
+                    copy=True,
+                ).as_array()
+            )
+        elif name == "SCORES" and name not in skip_hdus:
+            scores = encode_table(
+                Table(
+                    hdus[h].read(rows=rows, columns=select_columns["SCORES"]),
+                    copy=True,
+                ).as_array()
+            )
+        elif name == "EXTRA_CATALOG" and name not in skip_hdus:
+            extra_catalog = encode_table(
+                Table(
+                    hdus[h].read(
+                        rows=rows, columns=select_columns["EXTRA_CATALOG"]
+                    ),
+                    copy=True,
+                ).as_array()
+            )
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -323,49 +330,50 @@ def read_spectra(
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
-                if np.any(rows == None):
-                    flux[band] = native_endian(ahdus[h].data.astype(ftype))
+                if rows is None:
+                    flux[band] = native_endian(hdus[h].read().astype(ftype))
                 else:
                     flux[band] = native_endian(ahdus[h].section[rows, :].astype(ftype))
             elif type == "IVAR":
                 if ivar is None:
                     ivar = {}
-                if np.any(rows == None):
-                    ivar[band] = native_endian(ahdus[h].data.astype(ftype))
+                if rows is None:
+                    ivar[band] = native_endian(hdus[h].read().astype(ftype))
                 else:
                     ivar[band] = native_endian(ahdus[h].section[rows, :].astype(ftype))
-            elif type == "MASK" and not skip_hdu["MASK"]:
+            elif type == "MASK" and type not in skip_hdus:
                 if mask is None:
                     mask = {}
-                if np.any(rows == None):
-                    mask[band] = native_endian(ahdus[h].data.astype(np.uint32))
+                if rows is None:
+                    mask[band] = native_endian(hdus[h].read().astype(np.uint32))
                 else:
                     mask[band] = native_endian(
                         ahdus[h].section[rows, :].astype(np.uint32)
                     )
-            elif type == "RESOLUTION" and not skip_hdu["RESOLUTION"]:
+            elif type == "RESOLUTION" and type not in skip_hdus:
                 if res is None:
                     res = {}
-                if np.any(rows == None):
-                    res[band] = native_endian(ahdus[h].data.astype(ftype))
+                if rows is None:
+                    res[band] = native_endian(hdus[h].read().astype(ftype))
                 else:
                     res[band] = native_endian(
                         ahdus[h].section[rows, :, :].astype(ftype)
                     )
-            elif type != "MASK" and type != "RESOLUTION":
+            elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
                 # this must be an "extra" HDU
                 if extra is None:
                     extra = {}
                 if band not in extra:
                     extra[band] = {}
-                if np.any(rows == None):
-                    extra[band][type] = native_endian(ahdus[h].data.astype(ftype))
+                if rows is None:
+                    extra[band][type] = native_endian(hdus[h].read().astype(ftype))
                 else:
                     extra[band][type] = native_endian(
                         ahdus[h].section[rows, :].astype(ftype)
                     )
 
     hdus.close()
+    ahdus.close()
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
 
@@ -388,6 +396,26 @@ def read_spectra(
         single=single,
         scores=scores,
     )
+
+    # if needed, sort spectra to match order of targetids, which could be
+    # different than the order they appear in the file
+    if targetids is not None:
+        from desispec.util import ordered_unique
+        #- Input targetids that we found in the file, in the order they appear in targetids
+        ii = np.isin(targetids, spec.fibermap['TARGETID'])
+        found_targetids = ordered_unique(targetids[ii])
+        log.debug('found_targetids=%s', found_targetids)
+
+        #- Unique targetids of input file in the order they first appear
+        input_targetids = ordered_unique(spec.fibermap['TARGETID'])
+        log.debug('input_targetids=%s', np.asarray(input_targetids))
+
+        #- Only reorder if needed
+        if not np.all(input_targetids == found_targetids):
+            rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
+            log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
+            log.debug("rows for subselection=%s", rows)
+            spec = spec[rows]
 
     return spec
 
