@@ -143,11 +143,14 @@ def calc_mean_std_ra_dec(ras, decs):
     where the means are in degrees and the standard deviations are in arcsec,
     including cos(dec) correction.
 
-    For efficiency, does not try to handle dec= +/-90 poles correctly
+    For efficiency, this does not try to handle dec= +/-90 poles correctly,
+    nor arbitrarily large spreads of angles.  i.e. this is ok for a mean
+    of fiber positions scattered about a single target, but not for e.g.
+    a science analysis of the central location of a cluster of galaxies.
     """
     ras = np.asarray(ras)
     decs = np.asarray(decs)
-    if np.max(ras) > np.min(ras)+180:
+    if np.max(ras) - np.min(ras) > 180:
         offset = 180.0
         ras = (ras + offset) % 360
     else:
