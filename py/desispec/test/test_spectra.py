@@ -182,6 +182,78 @@ class TestSpectra(unittest.TestCase):
         else:
             raise ValueError(f'Unrecognized extension for {self.fileio=}')
 
+    def test_read_targetids(self):
+        """Test reading while filtering by targetid"""
+
+        # manually create the spectra and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
+
+        write_spectra(self.fileio, spec)
+
+        # read subset in same order as file
+        ii = [2,3]
+        spec_subset = spec[ii]
+        targetids = spec_subset.fibermap['TARGETID']
+        comp_subset = read_spectra(self.fileio, targetids=targetids)
+        self.assertTrue(np.all(spec_subset.fibermap['TARGETID'] == comp_subset.fibermap['TARGETID']))
+        self.assertTrue(np.allclose(spec_subset.flux['b'], comp_subset.flux['b']))
+        self.assertTrue(np.allclose(spec_subset.ivar['r'], comp_subset.ivar['r']))
+        self.assertTrue(np.all(spec_subset.mask['z'] == comp_subset.mask['z']))
+
+        # read subset in different order than original file
+        ii = [3, 1]
+        spec_subset = spec[ii]
+        targetids = spec_subset.fibermap['TARGETID']
+        comp_subset = read_spectra(self.fileio, targetids=targetids)
+        self.assertTrue(np.all(spec_subset.fibermap['TARGETID'] == comp_subset.fibermap['TARGETID']))
+        self.assertTrue(np.allclose(spec_subset.flux['b'], comp_subset.flux['b']))
+        self.assertTrue(np.allclose(spec_subset.ivar['r'], comp_subset.ivar['r']))
+        self.assertTrue(np.all(spec_subset.mask['z'] == comp_subset.mask['z']))
+
+        # read subset in different order than original file, with repeats and missing targetids
+        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0,0,2,2,4] for nspec=5
+        write_spectra(self.fileio, spec)
+        targetids = [2,10,4,4,4,0,0]
+        comp_subset = read_spectra(self.fileio, targetids=targetids)
+
+        # targetid 2 appears 2x because it is in the input file twice
+        # targetid 4 appears 3x because it was requested 3 times
+        # targetid 0 appears 4x because it was in the input file twice and requested twice
+        # and targetid 0 is at the end of comp_subset, not the beginning like the file
+        # targetid 10 doesn't appear because it wasn't in the input file, ok
+        self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == np.array([2,2,4,4,4,0,0,0,0])))
+
+    def test_read_columns(self):
+        """test reading while subselecting columns"""
+        # manually create the spectra and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta)
+
+        write_spectra(self.fileio, spec)
+
+        test = read_spectra(self.fileio, select_columns=dict(FIBERMAP=('TARGETID', 'FIBER')))
+        self.assertIn('TARGETID', test.fibermap.colnames)
+        self.assertIn('FIBER', test.fibermap.colnames)
+        self.assertIn('FLUX_R', spec.fibermap.colnames)
+        self.assertNotIn('FLUX_R', test.fibermap.colnames)
+
+    def test_read_skip_hdus(self):
+        """test reading while skipping some HDUs"""
+        # manually create the spectra and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta)
+
+        write_spectra(self.fileio, spec)
+
+        test = read_spectra(self.fileio, skip_hdus=('MASK', 'RESOLUTION'))
+        self.assertIsNone(test.mask)
+        self.assertIsNone(test.R)
+        self.assertIsNotNone(test.fibermap) #- fibermap not skipped
+
 
     def test_empty(self):
 
