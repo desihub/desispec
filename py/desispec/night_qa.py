@@ -1827,7 +1827,7 @@ def write_html_collapse_script(html, classname):
 
 
 
-def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=None):
+def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     """
     Write the nightqa-{NIGHT}.html page.
 
@@ -1836,9 +1836,12 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         css: path to the nightqa.css file
-        surveys (optional, defaults to None): considered surveys (string)
-        nexp (optional, defaults to None): number of considered exposures (int)
-        ntile (optional, defaults to None): number of considered tiles (int)
+        expids: EXPIDs for the considered science exposures (np.array() of ints)
+        tileids: TILEIDs for the considered science exposures (np.array() of ints)
+        surveys: SURVEYs for the considered science exposures (np.array() of strings)
+
+    Notes:
+        expids, tileids, surveys: fiducial use is that those are the outputs of get_surveys_night_expids()
     """
     # ADM html preamble.
     html = open(outfns["html"], "w")
@@ -1859,7 +1862,11 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("<body>\n")
     html.write("\n")
     #
-    html.write("\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(night, nexp, ntile, surveys))
+    html.write(
+        "\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(
+            night, expids.size, np.unique(tileids).size, "/".join(np.unique(surveys))
+        )
+    )
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log
@@ -1899,6 +1906,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR color-coding:
     # AR - red : file does not exist
     # AR - blue : file exists, but is a symlink
+    # AR - orange: file exists, but has been generated *after* processed science exposures
     # AR - green : file exists
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} calibnight</strong>\n</button>\n".format(
@@ -1911,24 +1919,63 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
-    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it does not date from the corresponding night (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
+    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it has been generated after the earliest frame file of the processed science exposures (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
     html.write("\t</br>\n")
     html.write("<table>\n")
+    # AR science exposure earliest timestamps per campet
+    earliest_sci_fns, earliest_sci_m_times = {}, {}
+    log.info("earliest science exposure frame file timestamp per campet:")
+    for petal in petals:
+        for camera in cameras:
+            campet = "{}{}".format(camera, petal)
+            # AR list all science exposure files for that campet
+            fns = []
+            for expid in expids:
+                fn = findfile("frame", night, expid=expid, camera=camera+str(petal), specprod_dir=prod)
+                if os.path.isfile(fn):
+                    fns.append(fn)
+            # AR protect against case where a campet has no processed files
+            if len(fns) == 0:
+                earliest_sci_fns[campet] = None
+                earliest_sci_m_times[campet] = -99
+                log.warning("{}\tdid not find any science exposure frame files".format(campet))
+            # AR grab the earliest file
+            else:
+                m_times = [os.path.getmtime(fn) for fn in fns]
+                earliest_sci_fns[campet] = fns[np.argmin(m_times)]
+                earliest_sci_m_times[campet] = np.min(m_times)
+                log.info(
+                    "\t{}\t{}\t{}".format(
+                        campet,
+                        datetime.fromtimestamp(earliest_sci_m_times[campet]).strftime("%Y-%m-%dT%H:%M:%S"),
+                        os.path.basename(earliest_sci_fns[campet])
+                    )
+                )
+
+    #
+    log.info("calibration files timestamps per campet:")
     for petal in petals:
         html.write("\t<tr>\n")
         for case in ["psfnight", "fiberflatnight", "biasnight"]:
             for camera in cameras:
-                fn = findfile(case, night, camera=camera+str(petal),
-                        specprod_dir=prod)
+                campet = "{}{}".format(camera, petal)
+                fn = findfile(case, night, camera=campet, specprod_dir=prod)
                 fnshort, color = os.path.basename(fn).replace("-{}".format(night), ""), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):
                         fnshort, color = os.path.basename(os.readlink(fn)), "blue"
                     else:
-                        # AR check the timestamp "night" vs. the night
-                        # AR if cals are done before observations, those should match
-                        m_time = os.path.getmtime(fn)
-                        if int(datetime.fromtimestamp(m_time).strftime("%Y%m%d")) != night:
+                        # AR check the timestamp against the earliest processed exposure file
+                        calib_m_time = os.path.getmtime(fn)
+                        calib_m_time_str = datetime.fromtimestamp(calib_m_time).strftime("%Y-%m-%dT%H:%M:%S")
+                        log.info("\t{}\t{}\t{}".format(campet, calib_m_time_str, os.path.basename(fn)))
+                        # science earliest m_time
+                        earliest_sci_fn, earliest_sci_m_time = earliest_sci_fns[campet], earliest_sci_m_times[campet]
+                        if earliest_sci_m_time == -99:
+                            earliest_sci_m_time_str = str(None)
+                        else:
+                            earliest_sci_m_time_str = datetime.fromtimestamp(earliest_sci_m_time).strftime("%Y-%m-%dT%H:%M:%S")
+                        if (calib_m_time > earliest_sci_m_time) & (earliest_sci_m_time != -99):
                             color = "orange"
                         else:
                             color = "green"
