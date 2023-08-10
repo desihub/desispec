@@ -163,13 +163,18 @@ class TestCoadd(unittest.TestCase):
         fm['DESI_TARGET'] = [4,4,8,8,16,16]
         fm['TILEID'] = [1,1,1,1,1,1]
         fm['NIGHT'] = [20201220,20201221]*3
+        fm['MJD'] = 55555.0 + np.arange(6)
         fm['EXPID'] = [10,20,11,21,12,22]
         fm['FIBER'] = [5,6,]*3
         fm['FIBERSTATUS'] = [0,0,0,0,0,0]
         fm['FIBER_X'] = [1.1, 2.1]*3
         fm['FIBER_Y'] = [10.2, 5.3]*3
+        fm['DELTA_X'] = [1.1, 2.1]*3
+        fm['DELTA_Y'] = [10.2, 5.3]*3
+        fm['FIBER_RA'] = [5.5, 6.6]*3
+        fm['FIBER_DEC'] = [7.7, 8.8]*3
         fm['FLUX_R'] = np.ones(6)
-
+        fm['PSF_TO_FIBER_SPECFLUX'] = np.ones(6)
         cofm, expfm = coadd_fibermap(fm, onetile=True)
 
         #- Single tile coadds include these in the coadded fibermap
@@ -179,7 +184,9 @@ class TestCoadd(unittest.TestCase):
             self.assertIn(col, cofm.colnames)
 
         #- but these columns should not be in the coadd
-        for col in ['NIGHT', 'EXPID', 'FIBERSTATUS', 'FIBER_X', 'FIBER_Y']:
+        for col in ['NIGHT', 'EXPID', 'FIBERSTATUS', 'FIBER_X', 'FIBER_Y',
+                    'FIBER_RA', 'FIBER_DEC', 'DELTA_X', 'DELTA_Y',
+                    'PSF_TO_FIBER_SPECFLUX']:
             self.assertNotIn(col, cofm.colnames)
 
         #- the exposure-level fibermap has columns specific to individual
@@ -353,6 +360,67 @@ class TestCoadd(unittest.TestCase):
 
         self.assertTrue(np.allclose(cofm['MEAN_FIBER_RA'], 0.0))
         self.assertTrue(np.allclose(cofm['MEAN_FIBER_DEC'], 0.0))
+
+    def test_coadd_fibermap_ra_wrap(self):
+        """Test coadding fibermap near RA=0 boundary"""
+        #- differences for (FIBER_RA - TARGET_RA)
+        delta_ra = np.array([-0.2, 0.0, 0.2])
+        ref_std_ra = np.float32(np.std(delta_ra) * 3600)
+        n = len(delta_ra)
+        dec = 60.0
+
+        #- one tile, 1 target
+        fm = Table()
+        fm['TARGETID'] = [111,] * n
+        fm['DESI_TARGET'] = [4,] * n
+        fm['TILEID'] = [1,] * n
+        fm['NIGHT'] = [20201220,] * n
+        fm['EXPID'] = 10 + np.arange(n)
+        fm['FIBER'] = [5,] * n
+        fm['FIBERSTATUS'] = [0,] * n
+        fm['TARGET_DEC'] = [dec,]*n
+        fm['FIBER_DEC'] = [dec,]*n
+
+        for ra in (359.9, 0, 0.1, 10):
+            fm['TARGET_RA'] = [ra,] * n
+            fm['FIBER_RA'] = ra + delta_ra / np.cos(np.radians(dec))
+
+            cofm, expfm = coadd_fibermap(fm, onetile=True)
+            self.assertAlmostEqual(cofm['MEAN_FIBER_RA'][0], ra, msg=f'mean(RA) at {ra=} {dec=}')
+            self.assertAlmostEqual(cofm['STD_FIBER_RA'][0], ref_std_ra, msg=f'std(RA) at {ra=} {dec=}')
+
+    def test_mean_std_ra_dec(self):
+        """Test calc_mean_std_ra"""
+        from desispec.coaddition import calc_mean_std_ra_dec
+        delta = np.array([-0.2, 0.0, 0.2])
+        std_delta = np.std(delta) * 3600
+
+        for ra in (0.0, 0.1, 1.0, 179.9, 180.0, 180.1, 359.0, 359.9):
+            for dec in (-60, 0, 60):
+                ras = (ra + delta/np.cos(np.radians(dec)) + 360) % 360
+                decs = dec * np.ones(len(ras))
+                mean_ra, std_ra, mean_dec, std_dec = calc_mean_std_ra_dec(ras, decs)
+                self.assertAlmostEqual(mean_ra, ra,
+                                       msg=f'mean RA at {ra=} {dec=}')
+                self.assertAlmostEqual(std_ra, std_delta,
+                                       msg=f'std RA at {ra=} {dec=}')
+                self.assertAlmostEqual(mean_dec, dec,
+                                       msg=f'mean dec at {ra=} {dec=}')
+                self.assertAlmostEqual(std_dec, 0.0,
+                                       msg=f'std dec at {ra=} {dec=}')
+
+        #- Also check that std_dec doesn't depend upon RA
+        mean_ra, std_ra, mean_dec, std_dec = calc_mean_std_ra_dec(delta, delta)
+        self.assertAlmostEqual(std_dec, std_delta)
+        mean_ra, std_ra, mean_dec, std_dec = calc_mean_std_ra_dec(180+delta, delta)
+        self.assertAlmostEqual(std_dec, std_delta)
+
+        #- Confirm that 0 <= RA < 360
+        ras = [359.8, 0.1]  # should average to 359.95, not -0.05
+        decs = [0, 0]
+        mean_ra, std_ra, mean_dec, std_dec = calc_mean_std_ra_dec(ras, decs)
+        self.assertAlmostEqual(mean_ra, 359.95)  # not -0.05
+
 
     def test_coadd_fibermap_mjd_night(self):
         """Test adding MIN/MAX/MEAN_MJD and FIRST/LASTNIGHT columns"""
