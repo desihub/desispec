@@ -636,6 +636,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 # AR plot
                 for mydict, title in zip(campet_mydicts, campet_titles):
                     ax = fig.add_subplot(gs[1, 2 * ic])
+                    ax.set_xlabel(r"Fiber direction $\Longrightarrow$")
+                    if ic == 0:
+                        ax.set_ylabel(r"Wavelength direction $\Longrightarrow$")
                     ax_y = fig.add_subplot(gs[0, 2 * ic])
                     ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
                     if mydict is not None:
@@ -643,6 +646,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         assert(mydict["camera"] == camera)
                         img = mydict["image"]
                         im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                        # AR flip the y-axis to have y coords increasing towars up
+                        # AR    (e.g. see Guy+2023 Fig.4)
+                        ax.set_ylim(ax.get_ylim()[::-1])
                         pos = ax.get_position().bounds
                         # AR median profile along x, for each pair of amps
                         tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
@@ -651,7 +657,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
                         tmpys = np.arange(len(tmpxs))
                         ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
-                        ax_x.set_ylim(ax.get_xlim()[::-1])
+                        ax_x.set_ylim(ax.get_xlim())
                         ax_x.set_xlim(-0.5, 0.5)
                         ax_x.set_yticklabels([])
                         ax_x.grid()
@@ -666,7 +672,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.arange(len(tmpys))
                         ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
                         ax_y.set_title(title)
-                        ax_y.set_xlim(ax.get_ylim()[::-1])
+                        ax_y.set_xlim(ax.get_ylim())
                         ax_y.set_ylim(-0.5, 0.5)
                         ax_y.set_xticklabels([])
                         ax_y.grid()
