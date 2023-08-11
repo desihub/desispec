@@ -543,6 +543,16 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.flux['b'] == 0.0))
         self.assertTrue(np.all(s1.ivar['b'] == 0.0))
 
+        #- All spectra masked but for different reasons
+        nspec, nwave = 3,10
+        s1 = _makespec(nspec, nwave)
+        s1.fibermap['FIBERSTATUS'][0] = fibermask.BROKENFIBER
+        s1.fibermap['FIBERSTATUS'][1] = fibermask.BADPOSITION
+        s1.fibermap['FIBERSTATUS'][2] = fibermask.BADFLAT
+        coadd(s1)
+        self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], 0)
+        self.assertEqual(s1.fibermap['COADD_FIBERSTATUS'][0],
+                         fibermask.mask('BROKENFIBER|BADPOSITION|BADFLAT'))
 
     def test_coadd_cameras(self):
         """Test coaddition across cameras in a single spectrum"""

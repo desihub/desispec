@@ -288,9 +288,6 @@ def coadd_fibermap(fibermap, onetile=False):
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
 
-        #- coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
-        tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap[fiberstatus_key][jj])
-
         #- Only a subset of "good" FIBERSTATUS flags are included in the coadd
         fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
         fiberstatus_amp_bits = get_justamps_fiberbitmask()
@@ -298,14 +295,19 @@ def coadd_fibermap(fibermap, onetile=False):
         nonamp_fiberstatus_flagged = ( (targ_fibstatuses & fiberstatus_nonamp_bits) > 0 )
         allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
-        tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
+        coadd_numexp = np.count_nonzero(good_coadds)
+        tfmap['COADD_NUMEXP'][i] = coadd_numexp
 
         # Check if there are some good coadds to compute aggregate quantities;
         # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
-        if np.count_nonzero(good_coadds)>0:
+        if coadd_numexp>0:
             compute_coadds = good_coadds
+            # coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
+            tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap[fiberstatus_key][jj])
         else:
             compute_coadds = ~good_coadds
+            # if all inputs were bad, COADD_FIBERSTATUS is OR of inputs instead of AND
+            tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_or.reduce(fibermap[fiberstatus_key][jj])
         
         #- For FIBER_RA/DEC quantities, only average over good coordinates.
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
