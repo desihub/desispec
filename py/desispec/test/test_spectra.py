@@ -227,6 +227,25 @@ class TestSpectra(unittest.TestCase):
         # targetid 10 doesn't appear because it wasn't in the input file, ok
         self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == np.array([2,2,4,4,4,0,0,0,0])))
 
+    def test_read_rows(self):
+        """Test reading specific rows"""
+
+        # manually create the spectra and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
+
+        write_spectra(self.fileio, spec)
+
+        rows = [1,3]
+        subset = read_spectra(self.fileio, rows=rows)
+        self.assertTrue(np.all(spec.fibermap[rows] == subset.fibermap))
+
+        with self.assertRaises(ValueError):
+            subset = read_spectra(self.fileio, rows=rows, targetids=[1,2])
+
+
+
     def test_read_columns(self):
         """test reading while subselecting columns"""
         # manually create the spectra and write

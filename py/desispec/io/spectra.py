@@ -201,6 +201,7 @@ def read_spectra(
     infile,
     single=False,
     targetids=None,
+    rows=None,
     skip_hdus=None,
     select_columns={
         "FIBERMAP": None,
@@ -219,6 +220,7 @@ def read_spectra(
         infile (str): path to read
         single (bool): if True, keep spectra as single precision in memory.
         targetids (list): Optional, list of targetids to read from file, if present.
+        rows (list): Optional, list of rows to read from file
         skip_hdus (list): Optional, list/set/tuple of HDUs to skip
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
@@ -230,6 +232,8 @@ def read_spectra(
     Note that WAVE, FLUX, and IVAR are always required.
 
     If a table HDU is not listed in `select_columns`, all of its columns will be read
+
+    User can optionally specify targetids OR rows, but not both
     """
     log = get_logger()
     infile = checkgzip(infile)
@@ -245,14 +249,17 @@ def read_spectra(
     hdus = fitsio.FITS(infile, mode="r")
     nhdu = len(hdus)
 
+    if targetids is not None and rows is not None:
+        raise ValueError('Set rows or targetids but not both')
+
     if targetids is not None:
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
         rows = np.where(np.isin(file_targetids, targetids))[0]
         if len(rows) == 0:
             return Spectra()
-    else:
-        rows = None
+    elif rows is not None:
+        rows = np.asarray(rows)
 
     if skip_hdus is None:
         skip_hdus = set()  #- empty set, include everything
