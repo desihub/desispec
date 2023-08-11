@@ -185,6 +185,17 @@ def write_spectra(outfile, spec, units=None):
 
     return outfile
 
+def _read_image(hdus, extname, dtype, rows=None):
+    """
+    Helper function to read extname from fitsio.FITS hdus, filter by rows,
+    convert to native endian, and cast to dtype.  Returns image.
+    """
+    data = hdus[extname].read()
+    if rows is not None:
+        data = data[rows]
+
+    return native_endian(data).astype(dtype)
+
 
 def read_spectra(
     infile,
@@ -230,13 +241,9 @@ def read_spectra(
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
 
-    # fitsio supports subselecting tables but not images, so also open
-    # file with astropy.io.fits to subselecting image/array HDUs like FLUX.
-    # Use fitsio (hdus) when possible for greater efficiency.
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
     nhdu = len(hdus)
-    ahdus = fits.open(infile)
 
     if targetids is not None:
         targetids = np.atleast_1d(targetids)
@@ -281,6 +288,7 @@ def read_spectra(
 
     for h in range(1, nhdu):
         name = hdus[h].read_header()["EXTNAME"]
+        log.debug('Reading %s', name)
         if name == "FIBERMAP" and name not in skip_hdus:
             fmap = encode_table(
                 Table(
@@ -330,50 +338,29 @@ def read_spectra(
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
-                if rows is None:
-                    flux[band] = native_endian(hdus[h].read().astype(ftype))
-                else:
-                    flux[band] = native_endian(ahdus[h].section[rows, :].astype(ftype))
+                flux[band] = _read_image(hdus, h, ftype, rows=rows)
             elif type == "IVAR":
                 if ivar is None:
                     ivar = {}
-                if rows is None:
-                    ivar[band] = native_endian(hdus[h].read().astype(ftype))
-                else:
-                    ivar[band] = native_endian(ahdus[h].section[rows, :].astype(ftype))
+                ivar[band] = _read_image(hdus, h, ftype, rows=rows)
             elif type == "MASK" and type not in skip_hdus:
                 if mask is None:
                     mask = {}
-                if rows is None:
-                    mask[band] = native_endian(hdus[h].read().astype(np.uint32))
-                else:
-                    mask[band] = native_endian(
-                        ahdus[h].section[rows, :].astype(np.uint32)
-                    )
+                mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
             elif type == "RESOLUTION" and type not in skip_hdus:
                 if res is None:
                     res = {}
-                if rows is None:
-                    res[band] = native_endian(hdus[h].read().astype(ftype))
-                else:
-                    res[band] = native_endian(
-                        ahdus[h].section[rows, :, :].astype(ftype)
-                    )
+                res[band] = _read_image(hdus, h, ftype, rows=rows)
             elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
                 # this must be an "extra" HDU
                 if extra is None:
                     extra = {}
                 if band not in extra:
                     extra[band] = {}
-                if rows is None:
-                    extra[band][type] = native_endian(hdus[h].read().astype(ftype))
-                else:
-                    extra[band][type] = native_endian(
-                        ahdus[h].section[rows, :].astype(ftype)
-                    )
+
+                extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
 
     hdus.close()
-    ahdus.close()
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
 

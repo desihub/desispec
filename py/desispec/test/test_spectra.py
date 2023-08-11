@@ -201,6 +201,8 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.allclose(spec_subset.flux['b'], comp_subset.flux['b']))
         self.assertTrue(np.allclose(spec_subset.ivar['r'], comp_subset.ivar['r']))
         self.assertTrue(np.all(spec_subset.mask['z'] == comp_subset.mask['z']))
+        self.assertEqual(len(comp_subset.R['b']), len(ii))
+        self.assertEqual(comp_subset.R['b'][0].shape, (self.nwave, self.nwave))
 
         # read subset in different order than original file
         ii = [3, 1]
