@@ -5,7 +5,9 @@ desispec Change Log
 0.59.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Add read_spectra options to read subsets by targetids or rows (PR `#2052`_).
+
+.. _`#2052`: https://github.com/desihub/desispec/pull/2052
 
 0.59.2 (2023-08-04)
 -------------------
