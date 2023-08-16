@@ -405,12 +405,19 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         log.info("reading {}".format(fn))
         with fitsio.FITS(fn) as h:
             image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
+            image_hdr = h["IMAGE"].read_header()
+        h.close()
         # AR setting to np.nan pixels with ivar = 0 or mask > 0
         # AR hence, when binning, any binned pixel with a masked pixel
         # AR will appear as np.nan (easy way to go)
         d = image.copy()
         sel = (ivar == 0) | (mask > 0)
         d[sel] = np.nan
+        # AR amps locations (only to display A,B,C,D in the dark image
+        # AR    so it s ok if it s only approximate to few pixels
+        # AR    after the trimming
+        for amp in ["a", "b", "c", "d"]:
+            mydict["ampsec{}".format(amp)] = image_hdr["AMPSEC{}".format(amp.upper())]
         # AR trimming
         shape_orig = d.shape
         if shape_orig[0] % binning != 0:
@@ -636,6 +643,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 # AR plot
                 for mydict, title in zip(campet_mydicts, campet_titles):
                     ax = fig.add_subplot(gs[1, 2 * ic])
+                    ax.set_xlabel(r"Fiber direction $\Longrightarrow$")
+                    if ic == 0:
+                        ax.set_ylabel(r"Wavelength direction $\Longrightarrow$")
                     ax_y = fig.add_subplot(gs[0, 2 * ic])
                     ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
                     if mydict is not None:
@@ -643,6 +653,16 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         assert(mydict["camera"] == camera)
                         img = mydict["image"]
                         im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                        # AR amp labels
+                        for amp in ["a", "b", "c", "d"]:
+                            ampsec = mydict["ampsec{}".format(amp)]
+                            ampsecx, ampsecy = ampsec.replace("[", "").replace("]", "").split(",")
+                            ampsecx = np.mean([int(_) for _ in ampsecx.split(":")]) / binning
+                            ampsecy = np.mean([int(_) for _ in ampsecy.split(":")]) / binning
+                            ax.text(ampsecx, ampsecy, amp.upper(), fontweight="bold", ha="center", va="center")
+                        # AR flip the y-axis to have y coords increasing towars up
+                        # AR    (e.g. see Guy+2023 Fig.4)
+                        ax.set_ylim(ax.get_ylim()[::-1])
                         pos = ax.get_position().bounds
                         # AR median profile along x, for each pair of amps
                         tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
@@ -651,7 +671,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
                         tmpys = np.arange(len(tmpxs))
                         ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
-                        ax_x.set_ylim(ax.get_xlim()[::-1])
+                        ax_x.set_ylim(ax.get_xlim())
                         ax_x.set_xlim(-0.5, 0.5)
                         ax_x.set_yticklabels([])
                         ax_x.grid()
@@ -666,7 +686,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.arange(len(tmpys))
                         ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
                         ax_y.set_title(title)
-                        ax_y.set_xlim(ax.get_ylim()[::-1])
+                        ax_y.set_xlim(ax.get_ylim())
                         ax_y.set_ylim(-0.5, 0.5)
                         ax_y.set_xticklabels([])
                         ax_y.grid()
