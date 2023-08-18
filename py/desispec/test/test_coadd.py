@@ -69,6 +69,13 @@ class TestCoadd(unittest.TestCase):
         fmap["TARGET_DEC"] = 0
         fmap["FIBER_RA"] = np.random.normal(loc=10, scale=0.1, size=ns)
         fmap["FIBER_DEC"] = np.random.normal(loc=0, scale=0.1, size=ns)
+
+        #- dummy scores
+        scores = dict()
+        scores['BLAT'] = np.zeros(ns)
+        scores['FOO'] = np.ones(ns)
+        scores['BAR'] = np.arange(ns)
+
         return Spectra(
                 bands=["b"],
                 wave={"b":wave},
@@ -76,7 +83,8 @@ class TestCoadd(unittest.TestCase):
                 ivar={"b":ivar},
                 mask=None,
                 resolution_data={"b":rdat},
-                fibermap=fmap
+                fibermap=fmap,
+                scores=scores,
                 )
         
     def test_coadd(self):
@@ -84,11 +92,13 @@ class TestCoadd(unittest.TestCase):
         nspec, nwave = 3, 10
         s1 = self._random_spectra(nspec, nwave)
         self.assertEqual(s1.flux['b'].shape[0], nspec)
+        self.assertIsInstance(s1.scores, Table)
 
         #- All the same targets, coadded in place
         s1.fibermap['TARGETID'] = 10
         coadd(s1)
         self.assertEqual(s1.flux['b'].shape[0], 1)
+        self.assertIsInstance(s1.scores, Table)
         
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
@@ -133,15 +143,37 @@ class TestCoadd(unittest.TestCase):
         """Test coaddition"""
         nspec, nwave = 10, 20
         s1 = self._random_spectra(nspec, nwave)
+        self.assertIsInstance(s1.scores, Table)
         s1.fibermap['TARGETID'] = np.arange(nspec) // 3
         coadd(s1)
         ntargets = len(np.unique(s1.fibermap['TARGETID']))
         self.assertEqual(s1.flux['b'].shape[0], ntargets)
+        self.assertIsInstance(s1.scores, Table)
 
         scores, comments = compute_coadd_scores(s1)
 
         self.assertEqual(len(scores['TARGETID']), ntargets)
         self.assertIn('MEDIAN_COADD_FLUX_B', scores.keys())
+
+    def test_coadd_slice(self):
+        """Test slices of coaddition"""
+        from desispec.coaddition import coadd, coadd_cameras
+        nspec, nwave = 6, 10
+        s1 = self._random_spectra(nspec, nwave)
+        s1.fibermap['TARGETID'] = [1,1,2,2,3,3]
+        ntarget = len(set(s1.fibermap['TARGETID']))
+
+        coadd(s1) #- in place coaddition
+        self.assertEqual(len(s1.fibermap), ntarget)
+
+        s2 = s1[0:2]
+        self.assertEqual(len(s2.fibermap), 2)
+        self.assertTrue(np.all(s2.fibermap['TARGETID'] == s1.fibermap['TARGETID'][0:2]))
+
+        s3 = coadd_cameras(s1)
+        self.assertTrue(np.all(s3.fibermap['TARGETID'] == s1.fibermap['TARGETID']))
+        s4 = coadd_cameras(s2)
+        self.assertTrue(np.all(s4.fibermap['TARGETID'] == s2.fibermap['TARGETID']))
 
     def test_spectroperf_resample(self):
         """Test spectroperf_resample"""
