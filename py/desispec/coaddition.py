@@ -303,7 +303,7 @@ def coadd_fibermap(fibermap, onetile=False):
         if coadd_numexp>0:
             compute_coadds = good_coadds
             # coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
-            tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap[fiberstatus_key][jj])
+            tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap[fiberstatus_key][jj][good_coadds])
         else:
             compute_coadds = ~good_coadds
             # if all inputs were bad, COADD_FIBERSTATUS is OR of inputs instead of AND
