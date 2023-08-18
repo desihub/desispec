@@ -87,7 +87,7 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
                 coadd.scores[key] = scores[key]
                 coadd.scores_comments[key] = comments[key]
         else:
-            coadd.scores = scores
+            coadd.scores = astropy.table.Table(scores)
             coadd.scores_comments = comments
 
     return scores, comments
