@@ -650,6 +650,12 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)
+        self.assertEqual(expfm['IN_COADD_B'].dtype, bool)
+        self.assertEqual(expfm['IN_COADD_R'].dtype, bool)
+        self.assertEqual(expfm['IN_COADD_Z'].dtype, bool)
+        self.assertTrue(np.all(expfm['IN_COADD_B'] == True))
+        self.assertTrue(np.all(expfm['IN_COADD_R'] == True))
+        self.assertTrue(np.all(expfm['IN_COADD_Z'] == True))
 
         #- One spectrum with FIBERSTATUS=BROKENFIBER
         fm = _make_mini_fibermap(nspec)

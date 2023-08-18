@@ -128,7 +128,8 @@ fibermap_perexp_cols = \
     fibermap_mtl_cols + \
     fibermap_exp_cols + \
     fibermap_fiberassign_cols + \
-    fibermap_coords_cols + fibermap_cframe_cols
+    fibermap_coords_cols + fibermap_cframe_cols + \
+    ('IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z')
 
 def calc_mean_std_ra_dec(ras, decs):
     """
@@ -190,6 +191,12 @@ def coadd_fibermap(fibermap, onetile=False):
 
     log = get_logger()
     log.debug("'coadding' fibermap")
+
+    #- make a copy of input fibermap that we can modify with new columns
+    fibermap = Table(fibermap, copy=True)
+    fibermap['IN_COADD_B'] = np.zeros(len(fibermap), dtype=bool)
+    fibermap['IN_COADD_R'] = np.zeros(len(fibermap), dtype=bool)
+    fibermap['IN_COADD_Z'] = np.zeros(len(fibermap), dtype=bool)
 
     if onetile:
         ntile = len(np.unique(fibermap['TILEID']))
@@ -425,10 +432,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- keep exposure-specific columns that are present in the input fibermap
     ii = np.isin(fibermap_perexp_cols, fibermap.dtype.names)
     keepcols = tuple(np.array(fibermap_perexp_cols)[ii])
-    if isinstance(fibermap, Table):
-        exp_fibermap = fibermap[keepcols].copy()
-    else:
-        exp_fibermap = Table(fibermap, copy=False)[keepcols].copy()
+    exp_fibermap = fibermap[keepcols]
 
     return tfmap, exp_fibermap
 
