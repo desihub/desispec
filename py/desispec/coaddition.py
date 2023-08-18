@@ -305,6 +305,12 @@ def coadd_fibermap(fibermap, onetile=False):
         coadd_numexp = np.count_nonzero(good_coadds)
         tfmap['COADD_NUMEXP'][i] = coadd_numexp
 
+        #- which exposures contributed to the coadd?
+        #- get_all_fiberbitmask_with_amp(X) = all fatal FIBERSTATUS bits for camera X
+        fibermap['IN_COADD_B'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('b')) == 0
+        fibermap['IN_COADD_R'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('r')) == 0
+        fibermap['IN_COADD_Z'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('z')) == 0
+
         # Check if there are some good coadds to compute aggregate quantities;
         # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
         if coadd_numexp>0:
