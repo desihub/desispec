@@ -230,6 +230,10 @@ class TestCoadd(unittest.TestCase):
         for col in ['DESI_TARGET', 'FLUX_R']:
             self.assertNotIn(col, expfm.colnames)
 
+        #- IN_COADD_B/R/Z should be only new columns in expfm
+        newcols = set(expfm.colnames) - set(fm.colnames)
+        self.assertEqual(newcols, set(['IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z']))
+
         #- onetile coadds should fail if input has multiple tiles
         fm['TILEID'][0] += 1
         with self.assertRaises(ValueError):
@@ -650,6 +654,8 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)
+        self.assertIn('IN_COADD_B', expfm.colnames)
+        self.assertNotIn('IN_COADD_B', cofm.colnames)
         self.assertEqual(expfm['IN_COADD_B'].dtype, bool)
         self.assertEqual(expfm['IN_COADD_R'].dtype, bool)
         self.assertEqual(expfm['IN_COADD_Z'].dtype, bool)

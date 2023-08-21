@@ -192,12 +192,6 @@ def coadd_fibermap(fibermap, onetile=False):
     log = get_logger()
     log.debug("'coadding' fibermap")
 
-    #- make a copy of input fibermap that we can modify with new columns
-    fibermap = Table(fibermap, copy=True)
-    fibermap['IN_COADD_B'] = np.zeros(len(fibermap), dtype=bool)
-    fibermap['IN_COADD_R'] = np.zeros(len(fibermap), dtype=bool)
-    fibermap['IN_COADD_Z'] = np.zeros(len(fibermap), dtype=bool)
-
     if onetile:
         ntile = len(np.unique(fibermap['TILEID']))
         if ntile != 1:
@@ -205,11 +199,19 @@ def coadd_fibermap(fibermap, onetile=False):
             log.error(msg)
             raise ValueError(msg)
 
+    #- make a copy of input fibermap that we can modify with new columns
+    fibermap = Table(fibermap, copy=True)
+
     #- Get TARGETIDs, preserving order in which they first appear
     targets, ii = ordered_unique(fibermap["TARGETID"], return_index=True)
     tfmap = fibermap[ii]
     assert np.all(targets == tfmap['TARGETID'])
     ntarget = targets.size
+
+    #- New columns to fill in for whether exposure was used in coadd
+    fibermap['IN_COADD_B'] = np.zeros(len(fibermap), dtype=bool)
+    fibermap['IN_COADD_R'] = np.zeros(len(fibermap), dtype=bool)
+    fibermap['IN_COADD_Z'] = np.zeros(len(fibermap), dtype=bool)
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
