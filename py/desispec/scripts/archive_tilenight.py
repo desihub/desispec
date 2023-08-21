@@ -172,15 +172,15 @@ def archivetile(tiledir, archivedir, badpetals=list(), dryrun=False):
             outzmtl = os.path.join(archivedir, os.path.basename(inzmtl))
             create_badpetal_zmtl(inzmtl, outzmtl)
 
-        #- Remove write access
-        err = freezedir(archivedir, dryrun=dryrun)
+        #- Remove write access; force=True needed for re-re-archiving
+        err = freezedir(archivedir, dryrun=dryrun, force=True)
         if err != 0:
             log.error(f'problem removing write access from {archivedir}')
 
     return err
 
 
-def freezedir(path, dryrun=False):
+def freezedir(path, dryrun=False, force=False):
     """
     Remove write permission from path unless dryrun
 
@@ -189,15 +189,18 @@ def freezedir(path, dryrun=False):
 
     Options:
         dryrun: if True, print info but don't actually remove write access
+        force: if True, rerun chmod even if directory already appears frozen
 
     Returns non-zero error code upon failure (not an exception)
+
+    Note: dryrun overrides force
     """
     log = get_logger()
     err = 0
     if not os.path.isdir(path):
         log.error(f'Not a directory; skipping {path}')
         err = 1
-    elif not os.access(path, os.W_OK):
+    elif not os.access(path, os.W_OK) and not force:
         log.info(f'{path} already frozen')
     else:
         if dryrun:
