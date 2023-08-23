@@ -165,6 +165,26 @@ def calc_mean_std_ra_dec(ras, decs):
 
     return mean_ra, std_ra, mean_dec, std_dec
 
+def use_for_coadd(fiberstatus, band):
+    """
+    Determine which exposures should be used for a per-camera coadd
+
+    Args:
+        fiberstatus (array): FIBERSTATUS bitmasks, one per exposure
+        band (str): camera band, 'b', 'r', or 'z'
+
+    Returns: boolean array of whether exposure should be used in coadd or not
+
+    This is factored into a separate function because it is used in
+    `coadd`, `coadd_cameras`, and `coadd_fibermap`
+    """
+    if band not in ('b', 'r', 'z'):
+        raise ValueError(f'band={band} should be b, r, or z')
+
+    fiberstatus_bits = get_all_fiberbitmask_with_amp(band)
+    good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
+    return good_fiberstatus
+
 
 def coadd_fibermap(fibermap, onetile=False):
     """
@@ -298,20 +318,16 @@ def coadd_fibermap(fibermap, onetile=False):
         jj = fibermap["TARGETID"]==tid
 
         #- Only a subset of "good" FIBERSTATUS flags are included in the coadd
-        fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
-        fiberstatus_amp_bits = get_justamps_fiberbitmask()
         targ_fibstatuses = fibermap[fiberstatus_key][jj]
-        nonamp_fiberstatus_flagged = ( (targ_fibstatuses & fiberstatus_nonamp_bits) > 0 )
-        allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
-        good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
+        in_coadd_b = use_for_coadd(targ_fibstatuses, 'b')
+        in_coadd_r = use_for_coadd(targ_fibstatuses, 'r')
+        in_coadd_z = use_for_coadd(targ_fibstatuses, 'z')
+        good_coadds = (in_coadd_b | in_coadd_r | in_coadd_z)
         coadd_numexp = np.count_nonzero(good_coadds)
         tfmap['COADD_NUMEXP'][i] = coadd_numexp
-
-        #- which exposures contributed to the coadd?
-        #- get_all_fiberbitmask_with_amp(X) = all fatal FIBERSTATUS bits for camera X
-        fibermap['IN_COADD_B'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('b')) == 0
-        fibermap['IN_COADD_R'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('r')) == 0
-        fibermap['IN_COADD_Z'][jj] = (targ_fibstatuses & get_all_fiberbitmask_with_amp('z')) == 0
+        fibermap['IN_COADD_B'][jj] = in_coadd_b
+        fibermap['IN_COADD_R'][jj] = in_coadd_r
+        fibermap['IN_COADD_Z'][jj] = in_coadd_z
 
         # Check if there are some good coadds to compute aggregate quantities;
         # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
@@ -487,13 +503,13 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             tmask=None
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
 
-        fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
         else:
             fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
 
-        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
+        good_fiberstatus = use_for_coadd(fiberstatus, b)
+
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
@@ -679,13 +695,13 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
 
         band_ndiag = spectra.resolution_data[b].shape[1]
 
-        fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
         else:
             fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
 
-        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
+        good_fiberstatus = use_for_coadd(fiberstatus, b)
+
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 

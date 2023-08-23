@@ -823,6 +823,18 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(list(expfm['IN_COADD_R']), [False, False, False])
         self.assertEqual(list(expfm['IN_COADD_Z']), [False, True, True])
 
+        #- all cameras flagged bad on one exposure
+        fm = _make_mini_fibermap(nspec)
+        fm['FIBERSTATUS'][0] = fibermask.mask('BADAMPB|BADAMPR|BADAMPZ')
+        fm['FIBERSTATUS'][1] = 0
+        fm['FIBERSTATUS'][2] = 0
+        cofm, expfm = coadd_fibermap(fm)
+        self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
+        self.assertEqual(cofm['COADD_NUMEXP'][0], 2)  #- not 3
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True, True])
+
 
     def test_coadd_cameras(self):
         """Test coaddition across cameras in a single spectrum"""
