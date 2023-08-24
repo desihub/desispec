@@ -37,7 +37,7 @@ Version: 2022, March 31st
 
 ####################################################################################################
 ####################################################################################################
-
+print('Test')
 import numpy as np
 import os
 from glob import glob
@@ -125,7 +125,7 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     tsel['SPECPRIMARY'][indices] = 1
 
     # Set the NSPEC for every target
-    tsel['NSPEC'] = num[return_indices]
+    tsel['NSPEC'] = num[return_indices].astype('>i2')
 
     # Note: SPECPRIMARY for negative TARGETIDs (stuck positioners on sky locations) is a bit
     # meaningless, but tile-based perexp and pernight catalogs can have repeats of those
@@ -193,7 +193,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     """
 
     ############################### Checking the inputs ##################################
-
+    
     ## Initial check 1
     ## Test whether the specprod exists or not
     ## Spectral Directory Path for a given internal release name
@@ -299,7 +299,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     if ('sv1' in survey_col)|('sv2' in survey_col)|('sv3' in survey_col):
         log.debug('Found SV inputs; adding SV_PRIMARY and SV_NSPEC columns')
         ## Add empty columns for SV NSPEC and PRIMARY
-        col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i4')
+        col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i2')
         col2 = Column(np.array([0]*len(tab)), name = 'SV_PRIMARY', dtype = 'bool')
         tab.add_columns([col1, col2])
 
@@ -315,7 +315,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     if ('main' in survey_col):
         log.debug('Found main survey inputs; adding MAIN_PRIMARY and MAIN_NSPEC columns')
         ## Add empty columns for Main NSPEC and PRIMARY
-        col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i4')
+        col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i2')
         col2 = Column(np.array([0]*len(tab)), name = 'MAIN_PRIMARY', dtype = 'bool')
         tab.add_columns([col1, col2])
 
