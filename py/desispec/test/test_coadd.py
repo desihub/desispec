@@ -236,6 +236,15 @@ class TestCoadd(unittest.TestCase):
         newcols = set(expfm.colnames) - set(fm.colnames)
         self.assertEqual(newcols, set(['IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z']))
 
+        #- The expfm should be in the same order as the input fm
+        self.assertTrue(np.all(fm['NIGHT'] == expfm['NIGHT']))
+        self.assertTrue(np.all(fm['EXPID'] == expfm['EXPID']))
+        self.assertTrue(np.all(fm['FIBER'] == expfm['FIBER']))
+
+        #- but expfm and fm are actually different at the column level
+        fm['NIGHT'][0] = 999
+        self.assertNotEqual(expfm['NIGHT'][0], 999)
+
         #- onetile coadds should fail if input has multiple tiles
         fm['TILEID'][0] += 1
         with self.assertRaises(ValueError):
