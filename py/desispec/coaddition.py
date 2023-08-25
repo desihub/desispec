@@ -395,6 +395,16 @@ def coadd_fibermap(fibermap, onetile=False):
             if k in fibermap.colnames :
                 tfmap[k][i]=1./np.mean(1./fibermap[k][jj][compute_coadds])
 
+        #- Targeting bits can evolve, so use bitwise OR of any input bits set
+        #- See Sec 5.1 of https://ui.adsabs.harvard.edu/abs/2023AJ....165...50M/abstract
+        for targetcol in ('CMX_TARGET',
+                          'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET',
+                          'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET',
+                          'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET',
+                          'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET'):
+            if targetcol in tfmap.colnames:
+                tfmap[targetcol][i] = np.bitwise_or.reduce(fibermap[targetcol][jj],axis=0)
+
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',

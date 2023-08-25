@@ -510,6 +510,55 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(cofm['MEAN_MJD'][1],  np.mean(fm['MJD'][2:]))
 
 
+    def test_coadd_targetmask(self):
+        """Test coadding SV1/SV3/DESI_TARGET with varying bits"""
+        nspec = 4
+        fm = Table()
+        fm['TARGETID'] = [111, 111, 222, 222]
+        fm['TILEID'] = 100 * np.ones(nspec, dtype=int)
+        fm['FIBERSTATUS'] = np.zeros(nspec, dtype=int)
+        fm['DESI_TARGET'] = 4 * np.ones(nspec, dtype=int)
+        fm['DESI_TARGET'][1] |= 8
+        fm['DESI_TARGET'][3] |= 16
+
+        fm['CMX_TARGET'] = fm['DESI_TARGET'].copy()
+        fm['SV1_DESI_TARGET'] = fm['DESI_TARGET'].copy()
+        fm['SV2_DESI_TARGET'] = fm['DESI_TARGET'].copy()
+        fm['SV3_DESI_TARGET'] = fm['DESI_TARGET'].copy()
+        fm['SV1_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV2_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV3_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV1_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
+        fm['SV2_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
+        fm['SV3_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
+
+        cofm, expfm = coadd_fibermap(fm, onetile=True)
+        # first target has bitmasks 4+8=12
+        self.assertEqual(cofm['DESI_TARGET'][0], 12)
+        self.assertEqual(cofm['CMX_TARGET'][0], 12)
+        self.assertEqual(cofm['SV1_DESI_TARGET'][0], 12)
+        self.assertEqual(cofm['SV2_DESI_TARGET'][0], 12)
+        self.assertEqual(cofm['SV3_DESI_TARGET'][0], 12)
+        self.assertEqual(cofm['SV1_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV2_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV3_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV1_BGS_TARGET'][0], 12+64)
+        self.assertEqual(cofm['SV2_BGS_TARGET'][0], 12+64)
+        self.assertEqual(cofm['SV3_BGS_TARGET'][0], 12+64)
+
+        # second target has bitmasks 4+16=20
+        self.assertEqual(cofm['DESI_TARGET'][1], 20)
+        self.assertEqual(cofm['CMX_TARGET'][1], 20)
+        self.assertEqual(cofm['SV1_DESI_TARGET'][1], 20)
+        self.assertEqual(cofm['SV2_DESI_TARGET'][1], 20)
+        self.assertEqual(cofm['SV3_DESI_TARGET'][1], 20)
+        self.assertEqual(cofm['SV1_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV2_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV3_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV1_BGS_TARGET'][1], 20+64)
+        self.assertEqual(cofm['SV2_BGS_TARGET'][1], 20+64)
+        self.assertEqual(cofm['SV3_BGS_TARGET'][1], 20+64)
+
     def test_fiberstatus(self):
         """Test that FIBERSTATUS != 0 isn't included in coadd"""
         def _makespec(nspec, nwave):
