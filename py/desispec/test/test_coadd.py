@@ -493,6 +493,12 @@ class TestCoadd(unittest.TestCase):
         fm['SV1_DESI_TARGET'] = fm['DESI_TARGET'].copy()
         fm['SV2_DESI_TARGET'] = fm['DESI_TARGET'].copy()
         fm['SV3_DESI_TARGET'] = fm['DESI_TARGET'].copy()
+        fm['SV1_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV2_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV3_MWS_TARGET'] = fm['DESI_TARGET'].copy() + 32
+        fm['SV1_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
+        fm['SV2_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
+        fm['SV3_BGS_TARGET'] = fm['DESI_TARGET'].copy() + 64
 
         cofm, expfm = coadd_fibermap(fm, onetile=True)
         # first target has bitmasks 4+8=12
@@ -501,6 +507,12 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(cofm['SV1_DESI_TARGET'][0], 12)
         self.assertEqual(cofm['SV2_DESI_TARGET'][0], 12)
         self.assertEqual(cofm['SV3_DESI_TARGET'][0], 12)
+        self.assertEqual(cofm['SV1_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV2_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV3_MWS_TARGET'][0], 12+32)
+        self.assertEqual(cofm['SV1_BGS_TARGET'][0], 12+64)
+        self.assertEqual(cofm['SV2_BGS_TARGET'][0], 12+64)
+        self.assertEqual(cofm['SV3_BGS_TARGET'][0], 12+64)
 
         # second target has bitmasks 4+16=20
         self.assertEqual(cofm['DESI_TARGET'][1], 20)
@@ -508,6 +520,12 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(cofm['SV1_DESI_TARGET'][1], 20)
         self.assertEqual(cofm['SV2_DESI_TARGET'][1], 20)
         self.assertEqual(cofm['SV3_DESI_TARGET'][1], 20)
+        self.assertEqual(cofm['SV1_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV2_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV3_MWS_TARGET'][1], 20+32)
+        self.assertEqual(cofm['SV1_BGS_TARGET'][1], 20+64)
+        self.assertEqual(cofm['SV2_BGS_TARGET'][1], 20+64)
+        self.assertEqual(cofm['SV3_BGS_TARGET'][1], 20+64)
 
     def test_fiberstatus(self):
         """Test that FIBERSTATUS != 0 isn't included in coadd"""
