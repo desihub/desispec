@@ -3,6 +3,8 @@ import unittest
 import numpy as np
 
 from astropy.table import Table
+from astropy.table.column import Column
+from astropy.units import Unit
 
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
@@ -230,6 +232,19 @@ class TestCoadd(unittest.TestCase):
         for col in ['DESI_TARGET', 'FLUX_R']:
             self.assertNotIn(col, expfm.colnames)
 
+        #- IN_COADD_B/R/Z should be only new columns in expfm
+        newcols = set(expfm.colnames) - set(fm.colnames)
+        self.assertEqual(newcols, set(['IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z']))
+
+        #- The expfm should be in the same order as the input fm
+        self.assertTrue(np.all(fm['NIGHT'] == expfm['NIGHT']))
+        self.assertTrue(np.all(fm['EXPID'] == expfm['EXPID']))
+        self.assertTrue(np.all(fm['FIBER'] == expfm['FIBER']))
+
+        #- but expfm and fm are actually different at the column level
+        fm['NIGHT'][0] = 999
+        self.assertNotEqual(expfm['NIGHT'][0], 999)
+
         #- onetile coadds should fail if input has multiple tiles
         fm['TILEID'][0] += 1
         with self.assertRaises(ValueError):
@@ -273,6 +288,17 @@ class TestCoadd(unittest.TestCase):
         for col in ['DESI_TARGET', 'FLUX_R']:
             self.assertNotIn(col, expfm.colnames)
 
+    def test_coadd_fibermap_units(self):
+        """Test that units aren't dropped during coaddition"""
+        fm = empty_fibermap(10)
+        fm['TARGET_RA'] = Column(fm['TARGET_RA'], unit='deg')
+        fm['FIBER_RA'] = Column(fm['FIBER_RA'], unit='deg')
+        self.assertEqual(fm['TARGET_RA'].unit, Unit('deg'))
+        self.assertEqual(fm['FIBER_RA'].unit, Unit('deg'))
+
+        cofm, expfm = coadd_fibermap(fm)
+        self.assertEqual(cofm['TARGET_RA'].unit, Unit('deg'))
+        self.assertEqual(expfm['FIBER_RA'].unit, Unit('deg'))
 
     def test_coadd_fibermap_badfibers(self):
         """Test coadding a fibermap of with some excluded fibers"""
@@ -650,6 +676,14 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)
+        self.assertIn('IN_COADD_B', expfm.colnames)
+        self.assertNotIn('IN_COADD_B', cofm.colnames)
+        self.assertEqual(expfm['IN_COADD_B'].dtype, bool)
+        self.assertEqual(expfm['IN_COADD_R'].dtype, bool)
+        self.assertEqual(expfm['IN_COADD_Z'].dtype, bool)
+        self.assertEqual(list(expfm['IN_COADD_B']), [True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True])
 
         #- One spectrum with FIBERSTATUS=BROKENFIBER
         fm = _make_mini_fibermap(nspec)
@@ -657,6 +691,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], nspec-1)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True])
 
         #- Both spectra with FIBERSTATUS=BROKENFIBER
         fm = _make_mini_fibermap(nspec)
@@ -664,13 +701,19 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BROKENFIBER)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 0)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, False])
 
         #- One spectrum with FIBERSTATUS=BADAMPB
         fm = _make_mini_fibermap(nspec)
         fm['FIBERSTATUS'][0] = fibermask.BADAMPB
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
-        self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)  ###
+        self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True])
 
         #- Both spectra with FIBERSTATUS=BADAMPB
         fm = _make_mini_fibermap(nspec)
@@ -678,6 +721,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BADAMPB)
         self.assertEqual(cofm['COADD_NUMEXP'][0], nspec)  #- note: nspec even though B is bad
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True])
 
         #- Both spectra bad for different reasons
         fm = _make_mini_fibermap(nspec)
@@ -686,6 +732,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.mask('BROKENFIBER|BADFLAT'))
         self.assertEqual(cofm['COADD_NUMEXP'][0], 0)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, False])
 
         #- Spectra with different bad cameras
         fm = _make_mini_fibermap(nspec)
@@ -694,6 +743,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 2)  #- Z got nspec=2
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True])
 
         #- Spectra with different bad cameras for all cameras
         fm = _make_mini_fibermap(nspec)
@@ -702,6 +754,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 2)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True])
 
         #- One spectrum with fiber-problem, another with camera-problem
         fm = _make_mini_fibermap(nspec)
@@ -710,6 +765,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BADAMPB)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 1)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True])
 
         #- Same spectrum with fiber and camera problem
         fm = _make_mini_fibermap(nspec)
@@ -717,6 +775,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 1)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True])
 
         #- One spec with fiber and cam problem; another with diff fiber problem
         fm = _make_mini_fibermap(nspec)
@@ -725,6 +786,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.mask('BROKENFIBER|BADFLAT|BADAMPB'))
         self.assertEqual(cofm['COADD_NUMEXP'][0], 0)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, False])
 
         #- 3 spectra cases
         nspec = 3
@@ -741,6 +805,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BADAMPB)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 1)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, False, False])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, False, True])
 
         #- 3 different camera-level problems
         fm = _make_mini_fibermap(nspec)
@@ -750,6 +817,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 3)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [True, False, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True, False])
 
         #- each camera has different count of problems (z all good)
         fm = _make_mini_fibermap(nspec)
@@ -759,6 +829,9 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BADAMPR)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 3)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [True, True, True])
 
         #- fiber problem on one spec; bad camera problem on others
         fm = _make_mini_fibermap(nspec)
@@ -768,6 +841,21 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm)
         self.assertEqual(cofm['COADD_FIBERSTATUS'][0], fibermask.BADAMPR)
         self.assertEqual(cofm['COADD_NUMEXP'][0], 2)
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, False, False])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True, True])
+
+        #- all cameras flagged bad on one exposure
+        fm = _make_mini_fibermap(nspec)
+        fm['FIBERSTATUS'][0] = fibermask.mask('BADAMPB|BADAMPR|BADAMPZ')
+        fm['FIBERSTATUS'][1] = 0
+        fm['FIBERSTATUS'][2] = 0
+        cofm, expfm = coadd_fibermap(fm)
+        self.assertEqual(cofm['COADD_FIBERSTATUS'][0], 0)
+        self.assertEqual(cofm['COADD_NUMEXP'][0], 2)  #- not 3
+        self.assertEqual(list(expfm['IN_COADD_B']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_R']), [False, True, True])
+        self.assertEqual(list(expfm['IN_COADD_Z']), [False, True, True])
 
 
     def test_coadd_cameras(self):
