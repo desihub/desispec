@@ -3,6 +3,8 @@ import unittest
 import numpy as np
 
 from astropy.table import Table
+from astropy.table.column import Column
+from astropy.units import Unit
 
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
@@ -277,6 +279,17 @@ class TestCoadd(unittest.TestCase):
         for col in ['DESI_TARGET', 'FLUX_R']:
             self.assertNotIn(col, expfm.colnames)
 
+    def test_coadd_fibermap_units(self):
+        """Test that units aren't dropped during coaddition"""
+        fm = empty_fibermap(10)
+        fm['TARGET_RA'] = Column(fm['TARGET_RA'], unit='deg')
+        fm['FIBER_RA'] = Column(fm['FIBER_RA'], unit='deg')
+        self.assertEqual(fm['TARGET_RA'].unit, Unit('deg'))
+        self.assertEqual(fm['FIBER_RA'].unit, Unit('deg'))
+
+        cofm, expfm = coadd_fibermap(fm)
+        self.assertEqual(cofm['TARGET_RA'].unit, Unit('deg'))
+        self.assertEqual(expfm['FIBER_RA'].unit, Unit('deg'))
 
     def test_coadd_fibermap_badfibers(self):
         """Test coadding a fibermap of with some excluded fibers"""
