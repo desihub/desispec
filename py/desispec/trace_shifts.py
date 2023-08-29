@@ -566,7 +566,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
                 break
 
             try :
-                c             = np.polyfit(fy,fdx,deg,w=1/fex**2)
+                c             = np.polyfit(fy, fdx, deg, w=1. / fex)
                 pol           = np.poly1d(c)
                 chi2          = (fdx-pol(fy))**2/fex**2
                 mchi2         = 2*np.median(chi2)
@@ -756,7 +756,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     log.info("polynomial fit of shifts and modification of PSF ycoef")
     # pol fit
-    coef = np.polyfit(wave_for_dy,dy,degyy,w=1./ey**2)
+    coef = np.polyfit(wave_for_dy, dy, degyy, w=1. / ey)
     pol  = np.poly1d(coef)
 
     for i in range(dy.size) :
