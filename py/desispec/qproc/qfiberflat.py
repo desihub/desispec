@@ -80,7 +80,8 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
             if iteration>0 :
                 for i in range(tflux.shape[0]) :
                     jj=(mflux>0)&(tivar[i]>0)
-                    c = np.polyfit(x[jj],tflux[i,jj]/mflux[jj],1,w=mflux[jj]**2*tivar[i,jj])
+                    c = np.polyfit(x[jj], tflux[i, jj] / mflux[jj], 1,
+                                   w=mflux[jj] * np.sqrt(tivar[i, jj]))
                     pol[i] = np.poly1d(c)(x)
             mflux=np.median(pol*tflux,axis=0)
 
