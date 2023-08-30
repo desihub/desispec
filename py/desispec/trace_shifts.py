@@ -14,7 +14,7 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, medfilt
 import numba
 
 from desispec.io import read_image
@@ -652,10 +652,21 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
 
-
+    continuum_win = 17
+    # we only keep emission lines and get rid of continuum
+    for ii in range(flux.shape[0]):
+        flux[ii] = flux[ii] - medfilt(flux[ii], continuum_win)
+    mflux = np.median(flux, axis=0)
     # median flux used as internal spectral reference
-    mflux=np.median(flux,axis=0)
-    mivar=np.median(ivar,axis=0)*flux.shape[0]*(2./np.pi) # very appoximate !
+
+    # we use data variance and MAD from different spectra
+    # to assign variance to a spectrum (1.48 is MAD factor,
+    # pi/2 is a factor from Stddev[median(N(0,1))]
+    mivar = np.minimum(
+        np.median(ivar, axis=0) ,
+        1.48**2 / np.median(np.abs(flux - mflux[None, :]),
+                            axis=0)**2) * flux.shape[0] * (2. / np.pi)
+    # very approximate !
 
 
     # trim ref_spectrum
