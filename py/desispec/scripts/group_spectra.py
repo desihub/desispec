@@ -155,6 +155,14 @@ def main(args=None):
     for i, filename in enumerate(foundframefiles):
         spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
 
+    #- Add healpix provenance keywords
+    if args.healpix:
+        spectra.meta['SPGRP'] = 'healpix'
+        spectra.meta['SPGRPVAL'] = args.healpix
+        spectra.meta['HPXPIXEL'] = args.healpix
+        spectra.meta['HPXNSIDE'] = args.nside
+        spectra.meta['HPXNEST'] = True
+
     #- Add optional header keywords if requested
     if args.header is not None:
         for keyval in args.header:
@@ -165,7 +173,12 @@ def main(args=None):
                 try:
                     spectra.meta[key] = float(value)
                 except ValueError:
-                    spectra.meta[key] = value
+                    if value.strip() == 'True':
+                        spectra.meta[key] = True
+                    elif value.strip() == 'False':
+                        spectra.meta[key] = False
+                    else:
+                        spectra.meta[key] = value
 
     if args.outfile is not None:
         log.info('Writing {}'.format(args.outfile))
