@@ -204,7 +204,9 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 # @numba.jit no real gain
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False) :
+def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
+                                               hw=3., calibrate=False,
+                                               prior_width_dy=None) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -218,6 +220,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     Optional:
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
+        prior_width_dy: applied sigma of the Gaussian prior on dy
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -241,22 +244,21 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             refflux *= scale
 
 
-
     error_floor=0.01 #A
 
     if ivar is None :
-        ivar=np.ones(flux.shape)
-    dwave=wave[1]-wave[0]
-    ihw=int(hw/dwave)+1
-    chi2=np.zeros((2*ihw+1))
-    ndata=np.sum(ivar[ihw:-ihw]>0)
-    for i in range(2*ihw+1) :
-        d=i-ihw
-        b=ihw+d
-        e=-ihw+d
-        if e==0 :
-            e=wave.size
-        chi2[i] = np.sum(ivar[ihw:-ihw]*(flux[ihw:-ihw]-refflux[b:e])**2)
+        ivar = np.ones(flux.shape)
+    dwave = wave[1] - wave[0]
+    ihw = int(hw / dwave)+1
+    chi2 = np.zeros((2 * ihw + 1))
+    for d in range(-ihw, ihw + 1) :
+        b = d + ihw
+        e = wave.size + d - ihw
+        chi2[ihw + d] = np.sum(ivar[ihw:-ihw] *
+                               (flux[ihw:-ihw] - refflux[b:e])**2)
+        if prior_width_dy is not None:
+            chi2[ihw + d] += (dwave * d / prior_width_dy)**2
+        
 
 
     i=np.argmin(chi2)
@@ -609,7 +611,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     return ox,oy,odx,oex,of,ol
 
 
-def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_filename,degyy=2,width=7) :
+def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
+                                        spectrum_filename, degyy=2, width=7,
+                                        prior_width_dy=0.05) :
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -626,6 +630,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     Optional:
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
+        prior_width_dy: float with of the Gaussian prior on dy
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficents for each fiber to convert wavelenght to YCCD
@@ -732,7 +737,9 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
         sw= np.sum(mflux[ok]*(mflux[ok]>0))
         if sw==0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=10.)
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
+                wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
+                prior_width_dy=prior_width_dy)
         bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
         x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
         eps=0.1
