@@ -613,7 +613,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
-                                        prior_width_dy=0.05) :
+                                        prior_width_dy=0.1):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
