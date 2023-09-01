@@ -27,7 +27,9 @@ from astropy.table import Table, hstack, vstack
 from desiutil.log import get_logger
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
-from desispec.io.util import get_tempfilename
+from desispec.io.util import get_tempfilename, checkgzip, replace_prefix
+from desispec.io.table import read_table
+from desispec.coaddition import coadd_fibermap
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -153,6 +155,11 @@ parser.add_argument("--header", type=str, nargs="*",
         help="KEYWORD=VALUE entries to add to the output header")
 parser.add_argument('--patch-missing-ivar-w12', action='store_true',
         help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
+parser.add_argument('--recoadd-fibermap', action='store_true',
+        help="Re-coadd FIBERMAP from spectra files")
+parser.add_argument('--ztile', action='store_true',
+        help="Used with --recoadd-fibermap, this is a tile-based recoadd "
+             "not a healpix-based recoadd")
 
 # parser.add_argument("--match", type=str, nargs="*",
 #         help="match other tables (targets,truth...)")
@@ -203,25 +210,20 @@ for ifile, rrfile in enumerate(redrockfiles):
                 rrfile, hdr['SPGRP'], args.group))
             continue
 
-        if 'ZBEST' in fx: #check if the older hdu name for REDSHIFT exist, in which case we read only the FIBERMAP and no TSNR2.
-            redshifts = fx['ZBEST'].read()
-            fibermap = fx['FIBERMAP'].read()
-            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
-            if ['EXP_FIBERMAP','TSNR2'] in fx:
-                expfibermap = fx['EXP_FIBERMAP'].read()
-                tsnr2 = fx['TSNR2'].read()
-                assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
-            else:
-                expfibermap = None
-                tsnr2 = None
+        redshifts = fx['REDSHIFTS'].read()
 
+        if args.recoadd_fibermap:
+            spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
+            log.info('Recoadding fibermap from %s', os.path.basename(spectra_filename))
+            fibermap_orig = read_table(spectra_filename)
+            fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=args.ztile)
         else:
-            redshifts = fx['REDSHIFTS'].read()
             fibermap = fx['FIBERMAP'].read()
             expfibermap = fx['EXP_FIBERMAP'].read()
-            tsnr2 = fx['TSNR2'].read()
-            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
-            assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+
+        tsnr2 = fx['TSNR2'].read()
+        assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+        assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
     if args.minimal:
         fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
