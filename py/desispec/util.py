@@ -461,6 +461,37 @@ def header2night(header):
 
     raise ValueError('Unable to derive YEARMMDD from header NIGHT,DATE-OBS,MJD')
 
+def parse_keyval(keyval):
+    """
+    Parse "key=val" string -> (key,val) tuple with int/float/str/bool val
+
+    Args:
+        keyval (str): "key=value" string
+
+    Returns (key, value) tuple where value has been promoted from string
+    into int/float/bool if possible.
+
+    value="True" or "False" becomes boolean True/False, but all other forms
+    like "T"/"F" or "true"/"false" remain strings.
+    0 and 1 become ints, not bool.
+    """
+    key, value_string = keyval.split('=', maxsplit=1)
+    try:
+        value = int(value_string)
+    except ValueError:
+        try:
+            value = float(value_string)
+        except ValueError:
+            if value_string.strip() == 'True':
+                value = True
+            elif value_string.strip() == 'False':
+                value = False
+            else:
+                value = value_string
+
+    return (key, value)
+
+
 def combine_ivar(ivar1, ivar2):
     """
     Returns the combined inverse variance of two inputs, making sure not to
