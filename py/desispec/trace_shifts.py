@@ -14,7 +14,8 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
-from scipy.signal import fftconvolve, medfilt
+from scipy.signal import fftconvolve
+from scipy.ndimage import median_filter
 import numba
 
 from desispec.io import read_image
@@ -657,21 +658,28 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
 
+    # here we get rid of continuum by applying a median filter 
     continuum_win = 17
+    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win))>continuum_win /2.
     # we only keep emission lines and get rid of continuum
     for ii in range(flux.shape[0]):
-        flux[ii] = flux[ii] - medfilt(flux[ii], continuum_win)
+        flux[ii] = flux[ii] - median_filter(flux[ii], footprint=continuum_foot)
     mflux = np.median(flux, axis=0)
     # median flux used as internal spectral reference
 
     # we use data variance and MAD from different spectra
     # to assign variance to a spectrum (1.48 is MAD factor,
     # pi/2 is a factor from Stddev[median(N(0,1))]
+    mad_factor = 1.48
     mivar = np.minimum(
         np.median(ivar, axis=0) ,
-        1.48**2 / np.median(np.abs(flux - mflux[None, :]),
+        1./mad_factor**2 / np.median(np.abs(flux - mflux[None, :]),
                             axis=0)**2) * flux.shape[0] * (2. / np.pi)
-    # very approximate !
+    # finally use use the MAD of the background subtracted spectra to
+    # assign further variance limit 
+    mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
+    # do not allow negatives
+    mflux[mflux <  0] = 0
 
 
     # trim ref_spectrum
@@ -712,14 +720,14 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
 
     log.info("absorb difference of calibration")
-    x=(wave-wave[wave.size//2])/50.
-    kernel=np.exp(-x**2/2)
-    f1=fftconvolve(mflux,kernel,mode='same')
-    f2=fftconvolve(ref_spectrum,kernel,mode='same')
-    if np.all(f2>0) :
-        scale=f1/f2
-        ref_spectrum *= scale
-
+    x = (wave - wave[wave.size//2]) / 50.
+    kernel = np.exp(- x**2/2)
+    f1 = fftconvolve(mflux, kernel, mode='same')
+    f2 = fftconvolve(ref_spectrum, kernel, mode='same')
+    # We scale by a constant factor
+    scale = (f1 * f2).sum() / (f2 * f2).sum()
+    ref_spectrum *= scale
+    
     log.info("fit shifts on wavelength bins")
     # define bins
     n_wavelength_bins = degyy+4
@@ -727,6 +735,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     dy=np.array([])
     ey=np.array([])
     wave_for_dy=np.array([])
+
     for b in range(n_wavelength_bins) :
         wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
         if b<n_wavelength_bins-1 :

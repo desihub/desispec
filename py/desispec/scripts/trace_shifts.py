@@ -93,7 +93,7 @@ def read_specter_psf(filename) :
     return psf
 
 
-def fit_trace_shifts(image,args) :
+def fit_trace_shifts(image, args):
 
     global psfs
 
@@ -383,7 +383,7 @@ def main(args=None) :
         log.critical(f"Entire {os.path.basename(args.image)} image is masked; can't fit traceshifts")
         sys.exit(1)
 
-    tset = fit_trace_shifts(image=image,args=args)
+    tset = fit_trace_shifts(image=image, args=args)
     tset.meta['IN_PSF'] = shorten_filename(args.psf)
     tset.meta['IN_IMAGE'] = shorten_filename(args.image)
 
