@@ -30,6 +30,7 @@ from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix
 from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
+from desispec.util import parse_keyval
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -375,13 +376,21 @@ for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXE
     if key in header:
         header.delete(key)
 
+#- Intercept previous incorrect boolean special cases
+if 'HPXNEST' in header:
+    if header['HPXNEST'] == 'True':
+        log.info("Correcting header HPXNEST='True' string to boolean True")
+        header['HPXNEST'] = True
+    elif header['HPXNEST'] == 'False':
+        # False is not expected for DESI, but cover it for completeness
+        log.info("Correcting header HPXNEST='False' string to boolean False")
+        header['HPXNEST'] = False
+
+#- Add extra keywords if requested
 if args.header is not None:
     for keyval in args.header:
-        key, value = keyval.split('=', maxsplit=1)
-        try:
-            header[key] = int(value)
-        except ValueError:
-            header[key] = value
+        key, value = parse_keyval(keyval)
+        header[key] = value
 
 log.info(f'Writing {args.outfile}')
 tmpfile = get_tempfilename(args.outfile)

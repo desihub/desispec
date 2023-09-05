@@ -365,6 +365,47 @@ class TestUtil(unittest.TestCase):
         r = util.itemindices([20,10,30,20,30,20])
         self.assertEqual(r, {20: [0,3,5], 10: [1], 30: [2,4]})
 
+    def test_parse_keyval(self):
+        key, value = util.parse_keyval("BLAT=0")
+        self.assertEqual(key, 'BLAT')
+        self.assertEqual(value, 0)
+
+        key, value = util.parse_keyval("BLAT=1")
+        self.assertEqual(value, 1)
+
+        key, value = util.parse_keyval("BLAT=1.0")
+        self.assertEqual(type(value), float)
+        self.assertEqual(value, 1.0)
+
+        key, value = util.parse_keyval("BLAT=True")
+        self.assertEqual(type(value), bool)
+        self.assertEqual(value, True)
+
+        key, value = util.parse_keyval("BLAT=False")
+        self.assertEqual(type(value), bool)
+        self.assertEqual(value, False)
+
+        key, value = util.parse_keyval("BLAT=true")
+        self.assertEqual(type(value), str)
+        self.assertEqual(value, 'true')
+
+        key, value = util.parse_keyval("BLAT=false")
+        self.assertEqual(type(value), str)
+        self.assertEqual(value, 'false')
+
+        # trailing space preserved
+        key, value = util.parse_keyval("biz=bat ")
+        self.assertEqual(key, 'biz')
+        self.assertEqual(value, 'bat ')
+
+        # trailing space ignored for bool
+        key, value = util.parse_keyval("biz=True ")
+        self.assertEqual(type(value), bool)
+        self.assertEqual(value, True)
+        key, value = util.parse_keyval("biz=False  ")
+        self.assertEqual(type(value), bool)
+        self.assertEqual(value, False)
+
 
 if __name__ == '__main__':
     unittest.main()

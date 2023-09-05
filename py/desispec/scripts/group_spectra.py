@@ -20,6 +20,7 @@ from ..io.util import checkgzip
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
+from ..util import parse_keyval
 
 
 def parse(options=None):
@@ -155,17 +156,19 @@ def main(args=None):
     for i, filename in enumerate(foundframefiles):
         spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
 
+    #- Add healpix provenance keywords
+    if args.healpix:
+        spectra.meta['SPGRP'] = 'healpix'
+        spectra.meta['SPGRPVAL'] = args.healpix
+        spectra.meta['HPXPIXEL'] = args.healpix
+        spectra.meta['HPXNSIDE'] = args.nside
+        spectra.meta['HPXNEST'] = True
+
     #- Add optional header keywords if requested
     if args.header is not None:
         for keyval in args.header:
-            key, value = keyval.split('=', maxsplit=1)
-            try:
-                spectra.meta[key] = int(value)
-            except ValueError:
-                try:
-                    spectra.meta[key] = float(value)
-                except ValueError:
-                    spectra.meta[key] = value
+            key, value = parse_keyval(keyval)
+            spectra.meta[key] = value
 
     if args.outfile is not None:
         log.info('Writing {}'.format(args.outfile))

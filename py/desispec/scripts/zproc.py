@@ -516,9 +516,7 @@ def main(args=None, comm=None):
 
             if groupname == 'healpix':
                 cmd += f"--healpix {healpix} "
-                cmd += (f"--header SPGRP={groupname} SPGRPVAL={healpix} "
-                        f"HPXPIXEL={healpix} HPXNSIDE=64 HPXNEST=True "
-                        f"SURVEY={args.survey} PROGRAM={args.program} ")
+                cmd += f"--header SURVEY={args.survey} PROGRAM={args.program} "
             else:
                 cmd += "--onetile "
                 cmd += (f"--header SPGRP={groupname} SPGRPVAL={thrunight} "
