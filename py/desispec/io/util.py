@@ -233,7 +233,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     #
     # Add comments and units to the *columns* of the table.
     #
-    for i in range(1, 999):
+    for i in range(1, 1000):
         key = 'TTYPE'+str(i)
         if key not in hdu.header:
             break
