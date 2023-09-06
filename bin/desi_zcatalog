@@ -17,6 +17,7 @@ from __future__ import absolute_import, division, print_function
 
 import sys, os, glob
 import argparse
+import importlib.resources
 
 import numpy as np
 from numpy.lib.recfunctions import append_fields
@@ -27,10 +28,11 @@ from astropy.table import Table, hstack, vstack
 from desiutil.log import get_logger
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
-from desispec.io.util import get_tempfilename, checkgzip, replace_prefix
+from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
 from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
 from desispec.util import parse_keyval
+from desiutil.annotate import load_csv_units
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -161,6 +163,9 @@ parser.add_argument('--recoadd-fibermap', action='store_true',
 parser.add_argument('--ztile', action='store_true',
         help="Used with --recoadd-fibermap, this is a tile-based recoadd "
              "not a healpix-based recoadd")
+parser.add_argument('--add-units', action='store_true',
+        help="Add units to output catalog from desidatamodel "
+             "column descriptions")
 
 # parser.add_argument("--match", type=str, nargs="*",
 #         help="match other tables (targets,truth...)")
@@ -175,6 +180,14 @@ if args.indir is None:
     
 if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
+
+#- If adding units, check dependencies before doing a lot of work
+if args.add_units:
+    try:
+        import desidatamodel
+    except ImportError:
+        log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
+        sys.exit(1)
 
 #- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
 
@@ -372,7 +385,8 @@ zcat = np.array(zcat)
 #- Inherit header from first input, but remove keywords that don't apply
 #- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
-for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL']:
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL',
+            'NAXIS', 'BITPIX', 'SIMPLE', 'EXTEND']:
     if key in header:
         header.delete(key)
 
@@ -392,12 +406,24 @@ if args.header is not None:
         key, value = parse_keyval(keyval)
         header[key] = value
 
+#- Add units if requested
+if args.add_units:
+    datamodeldir = str(importlib.resources.files('desidatamodel'))
+    unitsfile = os.path.join(datamodeldir, 'data', 'column_descriptions.csv')
+    log.info(f'Adding units from {unitsfile}')
+    units, comments = load_csv_units(unitsfile)
+else:
+    units = dict()
+    comments = dict()
+
 log.info(f'Writing {args.outfile}')
 tmpfile = get_tempfilename(args.outfile)
-fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
+
+write_bintable(tmpfile, zcat, header=header, extname='ZCATALOG',
+               units=units, clobber=True)
 
 if not args.minimal and expfm is not None:
-    fitsio.write(tmpfile, expfm, extname='EXP_FIBERMAP')
+    write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
 
 os.rename(tmpfile, args.outfile)
 
