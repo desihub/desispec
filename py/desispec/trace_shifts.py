@@ -671,12 +671,17 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     # to assign variance to a spectrum (1.48 is MAD factor,
     # pi/2 is a factor from Stddev[median(N(0,1))]
     mad_factor = 1.48
+    mad = np.maximum(np.median(np.abs(flux - mflux[None, :]),
+                               axis=0), 1e-100)
+    # I prevent it from being zero to avoid the warning below
+    # The exact value does not matter as we're comparing to actual
+    # median(ivar)
     mivar = np.minimum(
         np.median(ivar, axis=0) ,
-        1./mad_factor**2 / np.median(np.abs(flux - mflux[None, :]),
-                            axis=0)**2) * flux.shape[0] * (2. / np.pi)
+        1./mad_factor**2 / mad**2) * flux.shape[0] * (2. / np.pi)
     # finally use use the MAD of the background subtracted spectra to
-    # assign further variance limit 
+    # assign further variance limit
+    # this is sort of "effective" noise in the continuum subtracted spectrum
     mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
     # do not allow negatives
     mflux[mflux <  0] = 0
