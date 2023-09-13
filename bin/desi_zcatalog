@@ -11,6 +11,7 @@ context of this script.
 Stephen Bailey
 Lawrence Berkeley National Lab
 Fall 2015
+substantially updated Fal 2023
 """
 
 from __future__ import absolute_import, division, print_function
@@ -143,7 +144,7 @@ def _wrap_read_redrock(optdict):
 
 def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pertile=False, counter=None):
     """
-    Read a Redrock file
+    Read a Redrock file, combining REDSHIFTS, FIBERMAP, and TSNR2 HDUs
 
     Args:
         rrfile (str): full path to redrock filename
@@ -238,7 +239,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
         if 'LASTNIGHT' not in data.colnames:
             data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                     index=icol, name='LASTNIGHT')
-    elif args.group == 'healpix':
+    elif group == 'healpix':
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
 
@@ -264,19 +265,6 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
     return data, expfibermap
 
 #--------------------------------------------------------------------------
-
-"""
-# stack specprod healpix, optionally filtering by SURVEY and PROGRAM
-desi_zcatalog --group healpix --survey main --program dark -o zpix-main-dark.fits
-
-# stack specprod tiles, optionally filtering by SURVEY and PROGRAM
-desi_zcatalog --group cumulative --survey main --program dark -o ztile-main-dark.fits
-
-# load whatever it can find in a directory
-desi_zcatalog --indir testprod/tiles/cumulative/ -o zcat.fits
-desi_zcatalog --indir testprod/tiles/cumulative/ --tiles tiles.txt -o zcat-subset.fits
-
-"""
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -327,20 +315,24 @@ def main():
             log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
             sys.exit(1)
 
-    if args.group == 'healpix':
+    if args.indir:
+        indir = args.indir
+        redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
+        pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
+    elif args.group == 'healpix':
         pertile = False
         survey = args.survey if args.survey is not None else "*"
         program = args.program if args.program is not None else "*"
-        hpixdir = args.indir if args.indir is not None else os.path.join(io.specprod_root(), 'healpix')
+        indir = os.path.join(io.specprod_root(), 'healpix')
 
         #- specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
-        globstr = os.path.join(hpixdir, survey, program, '*', '*', 'redrock*.fits')
+        globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
         log.info(f'Looking for healpix redrock files in {globstr}')
         redrockfiles = sorted(glob.glob(globstr))
     else:
         pertile = True
         tilefile = args.tiles if args.tiles is not None else io.findfile('tiles')
-        indir = args.indir if args.indir is not None else os.path.join(io.specprod_root(), 'tiles', args.group)
+        indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
         log.info(f'Loading tiles from {tilefile}')
         tiles = Table.read(tilefile)
@@ -366,22 +358,24 @@ def main():
             if len(tmp) > 0:
                 redrockfiles.extend(tmp)
             else:
-                log.error(f'no redrock files found in {args.indir}/{tileid}')
+                log.error(f'no redrock files found in {indir}/{tileid}')
 
 
     nfiles = len(redrockfiles)
     if nfiles == 0:
-        msg = f'No redrock files found in {args.indir}'
+        msg = f'No redrock files found in {indir}'
         log.critical(msg)
         raise ValueError(msg)
     log.info(f'Reading {nfiles} redrock files')
 
+    #- build list of args to support multiprocessing parallelism
     read_args = list()
     for ifile, rrfile in enumerate(redrockfiles):
         read_args.append(dict(rrfile=rrfile, group=args.group, pertile=pertile,
                               recoadd_fibermap=args.recoadd_fibermap, minimal=args.minimal,
                               counter=(ifile+1, nfiles)))
 
+    #- Read individual Redrock files
     if args.nproc>1:
         from multiprocessing import Pool
         with Pool(args.nproc) as pool:
@@ -389,6 +383,7 @@ def main():
     else:
         results = [_wrap_read_redrock(a) for a in read_args]
 
+    #- Stack catalogs
     zcatdata = list()
     exp_fibermaps = list()
     for data, expfibermap in results:
@@ -415,6 +410,7 @@ def main():
     else:
         log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
 
+    #- Used for fuji, should not be needed for later prods
     if args.patch_missing_ivar_w12:
         from desimodel.footprint import radec2pix
         missing = (zcat['FLUX_IVAR_W1'] < 0) | (zcat['FLUX_IVAR_W2'] < 0)
