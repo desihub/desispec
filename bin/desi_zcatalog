@@ -138,11 +138,25 @@ def load_sv1_ivar_w12(hpix, targetids):
     return targets
 
 def _wrap_read_redrock(optdict):
+    """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
 
 def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pertile=False, counter=None):
     """
-    TODO: document
+    Read a Redrock file
+
+    Args:
+        rrfile (str): full path to redrock filename
+
+    Options:
+        group (str): add group-specific columns for cumulative, pernight, healpix
+        readcoadd_fibermap (bool): recoadd fibermap from spectra file in same dir
+        minimal (bool): only propagate minimal subet of columns
+        pertile (bool): input Redrock file is single tile (not healpix)
+        counter (tuple): (i,n) log loading ith file out of n
+
+    Returns (zcat, expfibermap) where zcat is a join of the redrock REDSHIFTS
+    catalog and the coadded FIBERMAP
     """
     log = get_logger()
     if counter is not None:
@@ -220,7 +234,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
     elif group == 'pernight':
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='NIGHT')
-    elif args.group == 'cumulative':
+    elif group == 'cumulative':
         if 'LASTNIGHT' not in data.colnames:
             data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                     index=icol, name='LASTNIGHT')
@@ -339,7 +353,7 @@ def main():
 
         if args.program is not None:
             keep = tiles['PROGRAM'] == args.program
-            tile = tiles[keep]
+            tiles = tiles[keep]
             if len(tiles) == 0:
                 log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')
                 sys.exit(1)
