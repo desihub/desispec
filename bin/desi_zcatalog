@@ -293,8 +293,9 @@ for ifile, rrfile in enumerate(redrockfiles):
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='NIGHT')
     elif args.group == 'cumulative':
-        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
-                index=icol, name='LASTNIGHT')
+        if 'LASTNIGHT' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                    index=icol, name='LASTNIGHT')
     elif args.group == 'healpix':
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
