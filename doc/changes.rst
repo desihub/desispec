@@ -2,12 +2,62 @@
 desispec Change Log
 ===================
 
-0.59.3 (unreleased)
+0.60.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.60.0 (2023-09-14)
+-------------------
+
+Updates for patching Iron/DR1 redshift catalogs
+
+* coadd_fibermap handle RA wraparound (PR `#2090`_).
+* Update COADD_FIBERSTATUS to bitwise OR when all inputs are bad (PR `#2093`_).
+* Coadd bitwise OR of input targeting bits, e.g. DESI_TARGET (PR `#2094`_).
+* Add IN_COADD/B/R/Z columns to EXP_FIBERMAP (PR `#2100`_).
+* Fix dtype of ``*_NSPEC`` columns to int16 (PR `#2103`_).
+* desi_zcatalog --recoadd-fibermap option (PR `#2109`_, `#2116`_).
+* fix HPXNEST header type (PR `#2110`_).
+* desi_zcatalog --add-units option for DR1 patching (PR `#2111`_).
+* Refactor desi_zcatalog options, add parallelism (PR `#2117`_).
+
+Algorithmic Updates
+
+* Fix incorrect weights in trace shift polyfit (PR `#2105`_).
+* Improve trace shifts for bright/backup data (PR `#2106`_, `#2115`_).
+
+Miscellaneous
+
 * Add read_spectra options to read subsets by targetids or rows (PR `#2052`_).
+* Night QA flab calibs later than first science rather than absolute
+  timestamp (PR `#2089`_).
+* Night QA orient images and display CCD amp names (PR `#2091`_).
+* Add desi_compute_fiberflat_vs_humidity --first-night option (PR `#2101`_).
+* Add desi_compute_gains exposure time flexibility (PR `#2107`_).
+* Update readthedocs configuration (PR `#2112`_).
 
 .. _`#2052`: https://github.com/desihub/desispec/pull/2052
+.. _`#2089`: https://github.com/desihub/desispec/pull/2089
+.. _`#2090`: https://github.com/desihub/desispec/pull/2090
+.. _`#2091`: https://github.com/desihub/desispec/pull/2091
+.. _`#2093`: https://github.com/desihub/desispec/pull/2093
+.. _`#2094`: https://github.com/desihub/desispec/pull/2094
+.. _`#2100`: https://github.com/desihub/desispec/pull/2100
+.. _`#2101`: https://github.com/desihub/desispec/pull/2101
+.. _`#2103`: https://github.com/desihub/desispec/pull/2103
+.. _`#2105`: https://github.com/desihub/desispec/pull/2105
+.. _`#2106`: https://github.com/desihub/desispec/pull/2106
+.. _`#2107`: https://github.com/desihub/desispec/pull/2107
+.. _`#2109`: https://github.com/desihub/desispec/pull/2109
+.. _`#2110`: https://github.com/desihub/desispec/pull/2110
+.. _`#2111`: https://github.com/desihub/desispec/pull/2111
+.. _`#2112`: https://github.com/desihub/desispec/pull/2112
+.. _`#2114`: https://github.com/desihub/desispec/pull/2114
+.. _`#2115`: https://github.com/desihub/desispec/pull/2115
+.. _`#2116`: https://github.com/desihub/desispec/pull/2116
+.. _`#2117`: https://github.com/desihub/desispec/pull/2117
+
 
 0.59.2 (2023-08-04)
 -------------------
