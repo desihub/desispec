@@ -70,7 +70,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     ############################ Load data ############################
 
     columns_redshifts = ['TARGETID', 'CHI2', 'Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'DELTACHI2']
-    columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESI_TARGET', 'BGS_TARGET']
+    columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC']
     columns_emline = ['TARGETID', 'OII_FLUX', 'OII_FLUX_IVAR']
     columns_qso_mgii = ['TARGETID', 'IS_QSO_MGII']
     columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
@@ -82,7 +82,17 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         emline_path = os.path.join(dir_path, os.path.basename(redrock_path).replace('redrock-', 'emline-'))
 
     tmp_redshifts = Table(fitsio.read(redrock_path, ext='REDSHIFTS', columns=columns_redshifts))
-    tmp_fibermap = Table(fitsio.read(redrock_path, ext='FIBERMAP', columns=columns_fibermap))
+
+    # read the full fibermap until we determine the targeting columns
+    from desitarget.targets import main_cmx_or_sv
+    tmp_fibermap = fitsio.read(redrock_path, ext='FIBERMAP')
+    surv_target, surv_mask, surv = main_cmx_or_sv(tmp_fibermap)
+    if surv.lower() == 'cmx':
+        raise NotImplementedError('Determining valid redshifts for commissioning targets is not supported.')
+
+    desi_target_col, bgs_target_col, _ = surv_target
+    desi_mask, bgs_mask, _ = surv_mask
+    tmp_fibermap = Table(tmp_fibermap[columns_fibermap + surv_target])
 
     tmp_qso_mgii = Table(fitsio.read(qso_mgii_path, columns=(columns_qso_mgii)))
     tmp_qso_qn = Table(fitsio.read(qso_qn_path, columns=(columns_qso_qn)))
@@ -111,12 +121,14 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         cat = hstack([tmp_redshifts, tmp_fibermap, tmp_qso_mgii, tmp_qso_qn], join_type='inner')
 
     if return_target_columns:
-        from desitarget.targetmask import desi_mask, bgs_mask
         for name in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
-                cat[name] = cat['BGS_TARGET'] & bgs_mask[name] > 0
+                cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
             else:
-                cat[name] = cat['DESI_TARGET'] & desi_mask[name] > 0
+                if name in desi_mask.names(): # not all bits were used in SV (e.g., ELG_LOP)
+                    cat[name] = cat[desi_target_col] & desi_mask[name] > 0
+                else:
+                    cat[name] = np.zeros(len(cat), bool)
         # # Bitmask definitions: https://github.com/desihub/desitarget/blob/master/py/desitarget/data/targetmask.yaml
         # cat['LRG'] = cat['DESI_TARGET'] & 2**0 > 0
         # cat['ELG'] = cat['DESI_TARGET'] & 2**1 > 0
