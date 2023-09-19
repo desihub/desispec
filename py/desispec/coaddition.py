@@ -245,10 +245,11 @@ def coadd_fibermap(fibermap, onetile=False):
     tfmap['COADD_NUMNIGHT'] = np.zeros(len(tfmap), dtype=np.int16) - 1
     tfmap['COADD_NUMTILE'] = np.zeros(len(tfmap), dtype=np.int16) - 1
 
-    # some cols get combined into mean or rms
+    # some cols get combined into mean or rms;
+    # MJD handled separately to get min/max/mean
     mean_cols = [
         'DELTA_X', 'DELTA_Y',
-        'PSF_TO_FIBER_SPECFLUX', 'MJD'
+        'PSF_TO_FIBER_SPECFLUX',
         ]
     # Note: treat the fiber coordinates separately because of missing coordinate problem
     # that require an additional "good_coords" condition relative to other mean cols
@@ -263,10 +264,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Add other MEAN/RMS/STD columns
     for k in mean_cols:
         if k in exp_fibermap.colnames :
-            if k.endswith('_RA') or k.endswith('_DEC') or k=='MJD':
-                dtype = np.float64
-            else:
-                dtype = np.float32
+            dtype = np.float32
             if k in mean_cols:
                 xx = Column(np.zeros(ntarget, dtype=dtype))
                 tfmap.add_column(xx,name='MEAN_'+k)
@@ -288,26 +286,19 @@ def coadd_fibermap(fibermap, onetile=False):
         tfmap.remove_column('FIBER_RA')
         tfmap.remove_column('FIBER_DEC')
 
-    #- MIN_, MAX_MJD over exposures used in coadd
+    #- MIN_, MAX_, MEAN_MJD over exposures used in coadd
     if 'MJD' in exp_fibermap.colnames :
         dtype = np.float64
         if not 'MIN_MJD' in tfmap.dtype.names :
-            xx = Column(np.arange(ntarget, dtype=dtype))
+            xx = Column(np.zeros(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MIN_MJD')
         if not 'MAX_MJD' in tfmap.dtype.names :
-            xx = Column(np.arange(ntarget, dtype=dtype))
+            xx = Column(np.zeros(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MAX_MJD')
+        if not 'MEAN_MJD' in tfmap.dtype.names :
+            xx = Column(np.zeros(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='MEAN_MJD')
     
-    #- FIRSTNIGHT, LASTNIGHT over all exposures (not just good_coadds)
-    if 'NIGHT' in exp_fibermap.colnames :
-        dtype = np.int32
-        if not 'FIRSTNIGHT' in tfmap.dtype.names :
-            xx = Column(np.arange(ntarget, dtype=dtype))
-            tfmap.add_column(xx,name='FIRSTNIGHT')
-        if not 'LASTNIGHT' in tfmap.dtype.names :
-            xx = Column(np.arange(ntarget, dtype=dtype))
-            tfmap.add_column(xx,name='LASTNIGHT')
-
     if 'FIBERSTATUS' in tfmap.dtype.names :
         tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
     if not  'COADD_FIBERSTATUS' in tfmap.dtype.names :
@@ -376,16 +367,11 @@ def coadd_fibermap(fibermap, onetile=False):
         if 'EXPTIME' in exp_fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(exp_fibermap['EXPTIME'][jj][good_coadds])
 
-        #SJ: The RA needs something for the 0-360 deg wrap around probably in two steps
-        # with a first step grouping values close to the wrap around and the second step 
-        # using modulo (% 360)
+        # Calc MEAN_* and RMS_* columns using the same exposures as the coadd
+        # Note RA/DEC/MJD are handled separately
         for k in mean_cols:
             if k in exp_fibermap.colnames :
-                if k.endswith('_RA') or k.endswith('_DEC'):
-                    vals=exp_fibermap[k][jj][compute_coadds_coords]
-                else:
-                    vals=exp_fibermap[k][jj][compute_coadds]
-
+                vals=exp_fibermap[k][jj][compute_coadds]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
 
         for k in rms_cols:
@@ -394,7 +380,6 @@ def coadd_fibermap(fibermap, onetile=False):
                 # RMS includes mean offset, not same as STD
                 tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)).astype(np.float32)
 
-        #SJ: Check STD_FIBER_MAP with +360 value; doesn't do the wrap-around correctly
         #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
         if 'FIBER_RA' in exp_fibermap.colnames and 'FIBER_DEC' in exp_fibermap.colnames:
             decs = exp_fibermap['FIBER_DEC'][jj][compute_coadds_coords]
@@ -417,13 +402,8 @@ def coadd_fibermap(fibermap, onetile=False):
             vals=exp_fibermap['MJD'][jj][compute_coadds]
             tfmap['MIN_MJD'][i] = np.min(vals)
             tfmap['MAX_MJD'][i] = np.max(vals)
+            tfmap['MEAN_MJD'][i] = np.mean(vals)
 
-        # FIRST, LASTNIGHT over all exposures (not just compute_coadds)
-        if 'NIGHT' in exp_fibermap.colnames :
-            vals=exp_fibermap['NIGHT'][jj]
-            tfmap['FIRSTNIGHT'][i] = np.min(vals)
-            tfmap['LASTNIGHT'][i] = np.max(vals)
-       
         # Error propagation of IVAR values when taking an unweighted MEAN 
         #- (Note 1: IVAR will be 0.0 if any of ivar[compute_coadds]=0)
         #- (Note 2: these columns are place-holder for possible future use)    
