@@ -35,6 +35,7 @@ from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
 from desispec.util import parse_keyval
 from desiutil.annotate import load_csv_units
+import desiutil.depend
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -264,6 +265,27 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
     return data, expfibermap
 
+def collect_dependencies(header, depdict):
+    """
+    Update depdict DEPNAMnn/DEPVERnn from header and remove from header
+
+    Args:
+        header (dict-like): header with DEPNAMnn/DEPVERnn keywords
+        depdict (dict-like): destination collect dependencies
+
+    Note: updates both header and depdict in place by adding
+    dependencies to depdict and removing them from header.
+    """
+    desiutil.depend.mergedep(header, depdict)
+    for i in range(100):
+        key1 = f'DEPNAM{i:02d}'
+        key2 = f'DEPVER{i:02d}'
+        if key1 in header and key2 in header:
+            del header[key1]
+            del header[key2]
+        else:
+            break
+
 #--------------------------------------------------------------------------
 
 def main():
@@ -386,8 +408,10 @@ def main():
     #- Stack catalogs
     zcatdata = list()
     exp_fibermaps = list()
+    dependencies = dict()
     for data, expfibermap in results:
         if data is not None:
+            collect_dependencies(data.meta, dependencies)
             zcatdata.append(data)
 
         if expfibermap is not None:
@@ -395,6 +419,7 @@ def main():
 
     log.info('Stacking zcat')
     zcat = vstack(zcatdata)
+    desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
         expfm = np.hstack(exp_fibermaps)
@@ -475,6 +500,12 @@ def main():
         for keyval in args.header:
             key, value = parse_keyval(keyval)
             header[key] = value
+
+    if args.survey is not None:
+        header['SURVEY'] = args.survey
+
+    if args.program is not None:
+        header['PROGRAM'] = args.program
 
     #- Add units if requested
     if args.add_units:
