@@ -46,7 +46,7 @@ from astropy.table import Table, Column, vstack, join
 
 ## DESI related functions
 from desispec.io import specprod_root
-from desispec.io.util import get_tempfilename
+from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
 import desiutil.depend
 
@@ -374,14 +374,12 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     final_table = update_table_columns(table = tab, specgroup = specgroup, \
                                        all_columns = all_columns, columns_list = columns_list)
 
-    final_table.meta['EXTNAME'] = 'ZCATALOG'
-
     ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
     desiutil.depend.mergedep(dependencies, final_table.meta)
 
     ## Write final output via a temporary filename
     tmpfile = get_tempfilename(output_filename)
-    final_table.write(tmpfile, overwrite = True)
+    write_bintable(tmpfile, final_table, extname='ZCATALOG', clobber=True)
     os.rename(tmpfile, output_filename)
     log.info(f'Wrote {output_filename}')
 
