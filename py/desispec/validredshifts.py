@@ -195,6 +195,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False):
     cat['QSO_MASKBITS'][cat['IS_QSO_MGII']] += 2**2
     cat['QSO_MASKBITS'][cat['IS_QSO_QN']] += 2**3
     cat['QSO_MASKBITS'][cat['IS_QSO_QN_NEW_RR']] += 2**4
+    cat['Z_RR'] = cat['Z']
     cat['Z'][cat['IS_QSO_QN_NEW_RR']] = cat['Z_NEW'][cat['IS_QSO_QN_NEW_RR']].copy()
     cat['ZERR'][cat['IS_QSO_QN_NEW_RR']] = cat['ZERR_NEW'][cat['IS_QSO_QN_NEW_RR']].copy()
     # Correct bump at z~3.7
