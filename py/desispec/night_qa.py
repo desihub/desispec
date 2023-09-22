@@ -105,6 +105,11 @@ def get_surveys_night_expids(
     expids, tileids, surveys = [], [], []
     for i in range(len(fns)):
         hdr = fitsio.read_header(fns[i], "SPEC")
+        # AR protect against corrupted exposures...
+        # AR see https://github.com/desihub/desispec/issues/2119
+        if "OBSTYPE" not in hdr:
+            log.warning("OBSTYPE keyword missing in {}; ignoring that exposure".format(fns[i]))
+            continue
         if hdr["OBSTYPE"] == "SCIENCE":
             survey = "unknown"
             # AR look for the fiberassign file
