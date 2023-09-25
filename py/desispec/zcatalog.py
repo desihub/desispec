@@ -46,7 +46,9 @@ from astropy.table import Table, Column, vstack, join
 
 ## DESI related functions
 from desispec.io import specprod_root
+from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
+import desiutil.depend
 
 ####################################################################################################
 ####################################################################################################
@@ -155,9 +157,9 @@ def _get_survey_program_from_filename(filename):
     program = arr[2]
     return survey, program
 
-def create_summary_catalog(specprod, specgroup = 'zpix', \
+def create_summary_catalog(specgroup, indir=None, specprod=None,
                            all_columns = True, columns_list = None,
-                           output_filename = './zcat-all.fits'):
+                           output_filename=None):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -166,13 +168,14 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
 
     Parameters
     ----------
-    specprod : str
-        Internal Release Name for the DESI Spectral Release
-        This is required to create the directory path for the redshift catalogs.
-        (fuji|guadalupe|other names in the future)
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
-        It can either be 'zpix' or 'ztile'. Default is 'zpix'
+        It can either be 'zpix' or 'ztile'
+    indir : str
+        Input directory to look for zpix/ztile files.
+    specprod : str
+        Internal Release Name for the DESI Spectral Release.
+        Used to derive input directory if indir is not provided.
     all_columns : bool
         Whether or not to include all the columns into the final table. Default is True.
     columns_list : list
@@ -183,7 +186,7 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     output_filename : str
         Path+Filename for the output summary redshift catalog.
         The output FITS file will be saved at this path.
-        If not specified, the output will be saved locally as ./zcat-all.fits
+        If not specified, the output filename will be derived from specgroup and $SPECPROD
 
     Returns
     -------
@@ -193,16 +196,8 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     """
 
     ############################### Checking the inputs ##################################
-    
-    ## Initial check 1
-    ## Test whether the specprod exists or not
-    ## Spectral Directory Path for a given internal release name
-    specred_dir = specprod_root(specprod)
-    if (os.path.isdir(specred_dir) == False):
-        log.error(f'"{specprod}" directory does not exist')
-        raise ValueError(f'"{specprod}" directory does not exist')
 
-    ## Initial check 2
+    ## Initial check 1
     ## If specgroup = something else by mistake
     valid_specgroups = ('zpix', 'ztile')
     if specgroup not in valid_specgroups:
@@ -210,18 +205,40 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
         log.error(errmsg)
         raise ValueError(errmsg)
 
-    ######################################################################################
+    ## set indir if needed
+    if indir is None:
+        indir = specprod_root(specprod) + '/zcatalog'
+        log.info(f'Using input directory {indir}')
 
-    ## Directory path to all the redshift catalogs
-    zcat_dir = f'{specred_dir}/zcatalog'
+    ## Initial check 2
+    ## Test whether the input directory exists
+    if not os.path.isdir(indir):
+        msg = f'"{indir}" directory does not exist'
+        log.error(msg)
+        raise ValueError(msg)
+
+    ## Set output_filename if needed
+    if output_filename is None:
+        specprod = os.environ['SPECPROD']
+        if specgroup == 'zpix':
+            output_filename = f'zall-pix-{specprod}.fits'
+        elif specgroup == 'ztile':
+            output_filename = f'zall-tilecumulative-{specprod}.fits'
+        else:
+            # not yet used; future-proofing
+            output_filename = f'zall-{specgroup}-{specprod}.fits'
+
+        log.info(f'Will write output to {output_filename}')
+
+    ######################################################################################
 
     ## Find all the filenames for a given specgroup
     if (specgroup == 'zpix'):
         ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{zcat_dir}/zpix-*.fits')
+        zcat = glob(f'{indir}/zpix-*.fits')
     elif (specgroup == 'ztile'):
         ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{zcat_dir}/ztile-*cumulative.fits')
+        zcat = glob(f'{indir}/ztile-*cumulative.fits')
 
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
@@ -232,13 +249,25 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
     ## Adding all the tables into a single list
     tables = []
 
+    ## Handle DEPNAMnn DEPVERnn keyword merging separately
+    dependencies = dict()
+
     ## Looping through the different zcatalogs and adding the survey and program columns
     for filename in zcat:
         basefile = os.path.basename(filename)
 
         ## Load the ZCATALOG table, along with the meta data
-        log.debug(f'Reading {filename}')
+        log.info(f'Reading {filename}')
         t = Table.read(filename, hdu = 'ZCATALOG')
+
+        ## Merge DEPNAMnn and DEPVERnn, then remove from header
+        desiutil.depend.mergedep(t.meta, dependencies)
+        desiutil.depend.remove_dependencies(t.meta)
+
+        ## Remove other keys that we don't want to propagate
+        for key in ('CHECKSUM', 'DATASUM'):
+            if key in t.meta:
+                del t.meta[key]
 
         ## Get SURVEY and PROGRAM from header, then remove from header
         ## because we are stacking catalogs from multiple surveys and programs
@@ -330,17 +359,22 @@ def create_summary_catalog(specprod, specgroup = 'zpix', \
 
     ## For convenience, sort by SURVEY, PROGRAM, and (HEALPIX or TILEID)
     if (specgroup == 'zpix'):
-        tab.sort(['SURVEY', 'PROGRAM', 'HEALPIX'])
+        tab.sort(['SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])
     elif (specgroup == 'ztile'):
-        tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT'])
+        tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER'])
 
     ## Convert the masked column table to normal astropy table and select required columns
     final_table = update_table_columns(table = tab, specgroup = specgroup, \
                                        all_columns = all_columns, columns_list = columns_list)
 
-    final_table.meta['EXTNAME'] = 'ZCATALOG'
-    final_table.write(output_filename, overwrite = True)
-    log.debug(f'Wrote {output_filename}')
+    ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
+    desiutil.depend.mergedep(dependencies, final_table.meta)
+
+    ## Write final output via a temporary filename
+    tmpfile = get_tempfilename(output_filename)
+    write_bintable(tmpfile, final_table, extname='ZCATALOG', clobber=True)
+    os.rename(tmpfile, output_filename)
+    log.info(f'Wrote {output_filename}')
 
 ####################################################################################################
 ####################################################################################################
