@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.60.1 (unreleased)
+0.60.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.60.1 (2023-09-25)
+-------------------
+
+* zcatalog FIRSTNIGHT/LASTNIGHT when missing petals (PR `#2118`_).
+* night_qa: protect against missing OBSTYPE keyword (PR `#2120`_).
+* zcatalog usage cleanup (PR `#2121`_).
+
+.. _`#2118`: https://github.com/desihub/desispec/pull/2118
+.. _`#2120`: https://github.com/desihub/desispec/pull/2120
+.. _`#2121`: https://github.com/desihub/desispec/pull/2121
 
 0.60.0 (2023-09-14)
 -------------------
