@@ -262,14 +262,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 
         ## Merge DEPNAMnn and DEPVERnn, then remove from header
         desiutil.depend.mergedep(t.meta, dependencies)
-        for i in range(100):
-            key1 = f'DEPNAM{i:02d}'
-            key2 = f'DEPVER{i:02d}'
-            if key1 in t.meta and key2 in t.meta:
-                del t.meta[key1]
-                del t.meta[key2]
-            else:
-                break
+        desiutil.depend.remove_dependencies(t.meta)
 
         ## Remove other keys that we don't want to propagate
         for key in ('CHECKSUM', 'DATASUM'):
