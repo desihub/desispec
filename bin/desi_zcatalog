@@ -401,6 +401,25 @@ def main():
     else:
         expfm = None
 
+    #- Add FIRSTNIGHT for tile-based cumulative catalogs
+    #- (LASTNIGHT was added while reading from NIGHT header keyword)
+    if args.group == 'cumulative' and expfm is not None and 'FIRSTNIGHT' not in zcat.colnames:
+        log.info('Adding FIRSTNIGHT per tile')
+        icol = zcat.colnames.index('LASTNIGHT')
+        zcat.add_column(np.zeros(len(zcat), dtype=np.int32),
+                    index=icol, name='FIRSTNIGHT')
+        for tilefm in Table(expfm[['TILEID', 'NIGHT']]).group_by('TILEID').groups:
+            tileid = tilefm['TILEID'][0]
+            iitile = zcat['TILEID'] == tileid
+            zcat['FIRSTNIGHT'][iitile] = np.min(tilefm['NIGHT'])
+
+        #- all FIRSTNIGHT entries should be filled (no more zeros)
+        bad = zcat['FIRSTNIGHT'] == 0
+        if np.any(bad):
+            badtiles = np.unique(zcat['TILEID'][bad])
+            raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
+
+
     #- if TARGETIDs appear more than once, which one is best within this catalog?
     if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
         log.info('Finding best spectrum for each target')
