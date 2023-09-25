@@ -265,26 +265,6 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
     return data, expfibermap
 
-def collect_dependencies(header, depdict):
-    """
-    Update depdict DEPNAMnn/DEPVERnn from header and remove from header
-
-    Args:
-        header (dict-like): header with DEPNAMnn/DEPVERnn keywords
-        depdict (dict-like): destination collect dependencies
-
-    Note: updates both header and depdict in place by adding
-    dependencies to depdict and removing them from header.
-    """
-    desiutil.depend.mergedep(header, depdict)
-    for i in range(100):
-        key1 = f'DEPNAM{i:02d}'
-        key2 = f'DEPVER{i:02d}'
-        if key1 in header and key2 in header:
-            del header[key1]
-            del header[key2]
-        else:
-            break
 
 #--------------------------------------------------------------------------
 
@@ -411,7 +391,8 @@ def main():
     dependencies = dict()
     for data, expfibermap in results:
         if data is not None:
-            collect_dependencies(data.meta, dependencies)
+            desiutil.depend.mergedpes(data.meta, dependencies)
+            desiutil.depend.remove_dependencies(data.meta)
             zcatdata.append(data)
 
         if expfibermap is not None:
