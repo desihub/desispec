@@ -608,6 +608,9 @@ desispec API
 .. automodule:: desispec.scripts.updateexptables
     :members:
 
+.. automodule:: desispec.scripts.zcatalog
+    :members:
+
 .. automodule:: desispec.scripts.zproc
     :members:
 
