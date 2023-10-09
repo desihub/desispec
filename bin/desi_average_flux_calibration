@@ -42,10 +42,10 @@ def get_ffracflux_wave(seeing, ffracflux, wave, fac_wave_power):
     Returns:
         Fiber acceptance for seeing, normalized to ffracflux at 6500A
 
-    
+
     Comment:
         GFA now provide ffrac for fiber_diameter=1.52", so no need to correct for different diameters
-        we do the normalization using fac_wave, and then to be interpolated to wave    
+        we do the normalization using fac_wave, and then to be interpolated to wave
     """
     #
     desi = desimodel.io.load_desiparams()
@@ -61,7 +61,7 @@ def get_ffracflux_wave(seeing, ffracflux, wave, fac_wave_power):
     ffracflux_wave /= ffracflux_wave[np.abs(fac_wave-6500).argmin()] # AR normalizing to 1 at 6500A
     ffracflux_wave *= ffracflux # AR normalising to ffracflux[i] at 6500A
     return np.interp(wave, fac_wave, ffracflux_wave) # AR interpolating on wave
-    
+
 
 
 if __name__ == '__main__':
@@ -78,6 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--seeing_key', type = str, default = 'RADPROF_FWHM_ASEC', choices = ['FWHM_ASEC', 'RADPROF_FWHM_ASEC'], help = 'key in GFA catalog for seeing (default=RADPROF_FWHM_ASEC)')
     parser.add_argument('--fac_wave_power', type = float, default = -0.25, help = 'wavelength dependence of fiber acceptance (default=-0.25)')
     parser.add_argument('--first_night', type = int, default = None, help = 'first night for which this calibration is usable (default=None)')
+    parser.add_argument('--unflat', action='store_true', help="undo flatfield correction to get the variation of thru from spectro to spectro")
 
     args = parser.parse_args()
     log=get_logger()
@@ -151,6 +152,15 @@ if __name__ == '__main__':
         if np.any(np.isnan(cal.calib)) :
             log.error("calib has nan")
             continue
+
+        if args.unflat :
+            ffilename=filename.replace("fluxcalib","fiberflatexp")
+            print("read",ffilename)
+            flat=fitsio.read(ffilename)
+            cal.calib *= flat
+
+
+
 
         mcalib = np.median(cal.calib,axis=0)
 
