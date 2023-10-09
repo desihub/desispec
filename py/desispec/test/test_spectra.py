@@ -17,6 +17,7 @@ from astropy.table import Table, vstack
 from desiutil.io import encode_table
 from desispec.io import empty_fibermap
 from desispec.io.util import add_columns
+import desispec.coaddition
 
 # Import all functions from the module we are testing.
 from desispec.spectra import *
@@ -86,8 +87,10 @@ class TestSpectra(unittest.TestCase):
         self.extra = {}
 
         for s in range(self.nspec):
+            self.wave['b'] = np.linspace(3600, 5800, self.nwave, dtype=float)
+            self.wave['r'] = np.linspace(5760, 7620, self.nwave, dtype=float)
+            self.wave['z'] = np.linspace(7520, 9824, self.nwave, dtype=float)
             for b in self.bands:
-                self.wave[b] = np.arange(self.nwave, dtype=float)
                 self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
@@ -226,6 +229,18 @@ class TestSpectra(unittest.TestCase):
         # and targetid 0 is at the end of comp_subset, not the beginning like the file
         # targetid 10 doesn't appear because it wasn't in the input file, ok
         self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == np.array([2,2,4,4,4,0,0,0,0])))
+
+        # make sure coadded spectra with FIBERMAP vs. EXP_FIBERMAP works
+        tid = 555666
+        spec.fibermap['TARGETID'][0:2] = tid
+        desispec.coaddition.coadd(spec)  #- in place-coadd
+        write_spectra(self.fileio, spec)
+
+        comp_subset = read_spectra(self.fileio, targetids=[tid,])
+        self.assertEqual(len(comp_subset.fibermap), 1)
+        self.assertEqual(len(comp_subset.exp_fibermap), 2)
+        self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == tid))
+        self.assertTrue(np.all(comp_subset.exp_fibermap['TARGETID'] == tid))
 
     def test_read_rows(self):
         """Test reading specific rows"""
