@@ -252,15 +252,22 @@ def read_spectra(
     if targetids is not None and rows is not None:
         raise ValueError('Set rows or targetids but not both')
 
+    exp_rows = None
     if targetids is not None:
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
+        exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
         rows = np.where(np.isin(file_targetids, targetids))[0]
+        exp_rows = np.where(np.isin(exp_targetids, targetids))[0]
         if len(rows) == 0:
             return Spectra()
     elif rows is not None:
         rows = np.asarray(rows)
-
+        # figure out exp_rows
+        file_targetids = hdus["FIBERMAP"].read(rows=rows, columns="TARGETID")
+        exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
+        exp_rows = np.where(np.isin(exp_targetids, file_targetids))[0]
+        
     if skip_hdus is None:
         skip_hdus = set()  #- empty set, include everything
 
@@ -306,7 +313,7 @@ def read_spectra(
         elif name == "EXP_FIBERMAP" and name not in skip_hdus:
             expfmap = encode_table(
                 Table(
-                    hdus[h].read(rows=rows, columns=select_columns["EXP_FIBERMAP"]),
+                    hdus[h].read(rows=exp_rows, columns=select_columns["EXP_FIBERMAP"]),
                     copy=True,
                 ).as_array()
             )
