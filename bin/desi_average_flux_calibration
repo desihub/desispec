@@ -11,6 +11,7 @@ This script averages the flux calibration for a DESI spectrograph camera.
 from desispec.io.fluxcalibration import read_flux_calibration,write_average_flux_calibration,read_average_flux_calibration
 from desispec.averagefluxcalibration import AverageFluxCalib
 from desiutil.log import get_logger
+from desispec.io.util import replace_prefix
 
 import argparse
 import os
@@ -154,13 +155,10 @@ if __name__ == '__main__':
             continue
 
         if args.unflat :
-            ffilename=filename.replace("fluxcalib","fiberflatexp")
-            print("read",ffilename)
+            ffilename=replace_prefix(filename, "fluxcalib", "fiberflatexp")
+            log.info(f"reading {ffilename}")
             flat=fitsio.read(ffilename)
             cal.calib *= flat
-
-
-
 
         mcalib = np.median(cal.calib,axis=0)
 
