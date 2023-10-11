@@ -20,20 +20,30 @@ from desiutil.log import get_logger
 from desispec.parallel import stdouterr_redirected
 import json
 
-p = argparse.ArgumentParser()
-p.add_argument('-e', '--expid', type=int, required=True,
-        help='Exposure ID to get information about')
-p.add_argument('-n', '--night', type=int, required=False,
-        help='night to get information about')
-#p.add_argument('-t', '--tileid', type=int, required=False,
-#        help='Tile ID to get information about')
-p.add_argument('-s', '--specprod', type=str, required=False,
-        help=('override $SPECPROD, or full path '
-              'to override $DESI_SPECTRO_REDUX/$SPECPROD'))
 
 
+## Create arg parser
+def get_parser():
+    p = argparse.ArgumentParser()
+    p.add_argument('-e', '--expid', type=int, required=True,
+                   help='Exposure ID to get information about')
+    p.add_argument('-n', '--night', type=int, required=False,
+                   help='night to get information about')
+    p.add_argument('-t', '--tileid', type=int, required=False,
+                   help='Tile ID to get information about')
+    p.add_argument('-s', '--specprod', type=str, required=False,
+                   help=('override $SPECPROD, or full path '
+                         'to override $DESI_SPECTRO_REDUX/$SPECPROD'))
+    return p
+
+## function to do a better job of printing a dictionary or
+## astropy table than the internal version
 def print_row(row):
-    nterminalwidth, nterminalheight = os. get_terminal_size()
+    """
+    Print key value pairs in a human readable way that accounts
+    for the size of the terminal
+    """
+    nterminalwidth, nterminalheight = os.get_terminal_size()
     if row is None:
         print('None')
         return
@@ -65,10 +75,11 @@ def print_row(row):
             bottomline = ""
     
 
-#if __name__ == '__main__':
-
+## Parser arguments
+p = get_parser()
 args = p.parse_args()
 
+## Unpack arguments
 night = args.night
 tileid = args.tileid
 expid = args.expid
@@ -85,26 +96,29 @@ else:
 ## Define specprod for environment 
 os.environ['DESI_SPECTRO_REDUX'] = os.path.dirname(specproddir)
 os.environ['SPECPROD'] = os.path.basename(specproddir)
+specprod = os.environ['SPECPROD']
 
-
+## Try to open the specprod exposures*.csv file
 print("\n")
 specprod_exposures_entry = None
-if 'DESI_SPECTRO_REDUX' in os.environ:
-    fname = os.path.join(specproddir,  f'exposures-{os.environ["SPECPROD"]}.csv')
-    log.debug(f"Looking for exposures-{os.environ['SPECPROD']}.csv at {fname}")
+if os.path.exists(specproddir):
+    fname = os.path.join(specproddir,  f'exposures-{specprod}.csv')
+    log.debug(f"Looking for exposures-{specprod}.csv at {fname}")
     if os.path.exists(fname):
         log.info(f"Reading {fname}")
         tab = Table.read(fname)
         try:
             specprod_exposures_entry = tab[tab['EXPID']==expid][0]
-            log.info(f'Identified specprod exposures-{os.environ["SPECPROD"]}.csv entry')
+            log.info(f'Identified specprod exposures-{specprod}.csv entry')
             if night is None:
                 night = int(specprod_exposures_entry['NIGHT'])
             if tileid is None:
                 tileid = int(specprod_exposures_entry['TILEID'])
         except:
-            log.warning(f'No specprod exposures-{os.environ["SPECPROD"]}.csv entry')
+            log.warning(f'No specprod exposures-{specprod}.csv entry')
 
+            
+## Try to open the surveops exposures file
 surveyops_exposures_entry = None
 if 'DESI_SURVEYOPS' in os.environ:
     fname = os.path.join(os.environ['DESI_SURVEYOPS'], 'ops', 'exposures.ecsv')
@@ -122,47 +136,74 @@ if 'DESI_SURVEYOPS' in os.environ:
         except:
             log.warning(f"No surveyops exposures.ecsv entry")
 
-
+            
+## Try to find the exposure_table entry. If night is known then only that file is
+## opened, otherwise all files are opened and searched
+etab = None
 if night is None:
-    etabs = []
-    globstr = get_exposure_table_pathname(night='123456789').replace('123456789', '*').replace('1234567', '202???')
+    globstr = get_exposure_table_pathname(night='123456789').replace('123456789', '202???').replace('1234567', '202???')
     log.debug(f"No night provided, so looking in all exposure_tables located in: {globstr}")
     warnings = list()
     with stdouterr_redirected():
-        for fil in sorted(glob.glob(globstr)):
+        ## Exploit monotonic nature of expids by using binary search
+        efiles = sorted(glob.glob(globstr))
+        for i in range(len(efiles)):
+            file_ind_to_search = len(efiles)//2
+            fil = efiles[file_ind_to_search]
             try:
                 etab = load_table(tablename=fil, tabletype='etable', suppress_logging=True)
             except:
                 warnings.append(f"{fil} failed to load")
                 continue        
             if len(etab) > 0:
-                etabs.append(etab)
+                expids = np.array(etab['EXPID'])
+                if expid in expids:
+                    break
+                elif expid < np.min(expids):
+                    efiles = efiles[:file_ind_to_search]
+                elif expid > np.max(expids):
+                    efiles = efiles[file_ind_to_search+1:]
+                else:
+                    log.warning(f"Expid {expid} not found in exposure tables")
+                    etab = None
+                    break
+            else:
+                efiles.pop(file_ind_to_search)
+        if len(efiles) == 0:
+            log.warning(f"Expid {expid} not found in exposure tables")
+            etab = None
+        else:
+            raise ValueError("Something went wrong with binary search over exposure tables")
     for warning in warnings:
         log.warning(warning)
-    etab = vstack(etabs)
 else:
-    etabname = get_exposure_table_pathname(night=str(night))
-    etab= load_table(tablename=etabname, tabletype='etable')
+    try:
+        etabname = get_exposure_table_pathname(night=str(night))
+        etab= load_table(tablename=etabname, tabletype='etable')
+    except:
+        log.warning(f"{etabname} couldn't be opened")
+        etab = None
 
 erow = None
-try:
-    erow = etab[etab['EXPID']==expid][0]
-    log.info(f"Identified specprod exposure_table entry")
-    if night is None:
-        night = int(erow['NIGHT'])
-    if tileid is None:
-        tileid = int(erow['TILEID'])
-    etab = etab[etab['NIGHT']==night]
-except:
-    log.warning(f"No specprod exposure_table entry")
+if etab is not None:
+    try:
+        erow = etab[etab['EXPID']==expid][0]
+        log.info(f"Identified specprod exposure_table entry")
+        if night is None:
+            night = int(erow['NIGHT'])
+        if tileid is None:
+            tileid = int(erow['TILEID'])
+        etab = etab[etab['NIGHT']==night]
+    except:
+        log.warning(f"No specprod exposure_table entry")
 
 
-
+## Find the raw data directory and use it to identify the night if still unknown
 if night is None:
     if 'DESI_SPECTRO_DATA' in os.environ:
         globstr = os.path.join(os.environ['DESI_SPECTRO_DATA'], '????????', zpadexpstr)
         try:
-            globs = glob.glob(globstr)[0]
+            globs = glob.glob(globstr)
             log.debug(f"Identified the following directories for expid {expid}: globs")
             rawexpdir = globs[0]
             rawnightdir = os.path.dirname(rawexpdir)
@@ -176,13 +217,8 @@ if night is None:
         raise(ValueError(f"Expid {expid} couldn't be identified. Please check that it is valid."))
     
 
-#specstatus_entry = None
-#if 'DESI_SURVEYOPS' not in os.environ:
-#    fname = os.path.join(os.environ['DESI_SURVEYOPS'], 'ops', 'tiles-specstatus.ecsv')
-#    if os.path.exists(fname):
-#        tab = Table.read(fname)
-#        specstatus_entry = tab[tab['TILEID']==tileid]
-
+## If night is known and a processing table exists, look for relevant rows
+## Also look for a dashboard json table
 prows = list()
 dashboard_row = None
 jsonentries = None
@@ -216,40 +252,66 @@ if night is not None:
     else:
          log.warning(f"No specprod dashboard data archive at {fname}")    
 
-#- Get the job state from rows that are actually slurm jobs
-#ii = proctable['LATEST_QID']>0
-#qinfo = queue_info_from_qids(proctable['LATEST_QID'][ii])
-#jobinfo = {row['JOBID']:row for row in qinfo}
+
+####################################
+## Do the printing of information ##
+####################################
+
+## print preamble
 print("\n")
 string = '# ' + f"Expid: {expid} was observed on {night=} for {tileid=}" + ' #'
 print("#"*len(string) + '\n' + string + '\n' + '#'*len(string) + '\n')
 
+## print relevant file rows
 print("\n#- Survey ops exposures entry:")
 print_row(surveyops_exposures_entry)
 print("\n\n#- Data ops exposure_table row:")
 print_row(erow)
-print("\n\n#- Data ops exposures table entry:")
+print("\n\n#- Data ops exposures file entry:")
 print_row(specprod_exposures_entry)
 print("\n\n#- Data ops processing table row:")
-for prow in prows:
+for i,prow in enumerate(prows):
+    print(f"Row {i}")
     print_row(prow)
 print("\n\n#- Data ops processing dashboard summary data for exposure:")
 print_row(dashboard_row)
 
-#os.system(f"ls -lt $DESI_SPECTRO_DATA/{night}/{zpadexpstr}")
-#print("\n")
-#os.system(f"ls -lt {specproddir}/preproc/{night}/{zpadexpstr}")
-#print("\n")
-#os.system(f"ls -lt {specproddir}/exposures/{night}/{zpadexpstr}")
-
+## Print contents of relevant data directories
 rawdataloc = os.path.join(os.environ['DESI_SPECTRO_DATA'], str(night), zpadexpstr)
 print(f"\n#- Raw data in {rawdataloc}:")
-os.system(f"ls $DESI_SPECTRO_DATA/{night}/{zpadexpstr}")
+os.system(f"ls {rawdataloc}")
 preprocloc = os.path.join(specproddir, 'preproc', str(night), zpadexpstr)
+if erow is not None:
+    expected = erow['LASTSTEP'] != 'ignore'
+else:
+    expected = False
 print(f"\n#- Preproc data in {preprocloc}:")
-os.system(f"ls {specproddir}/preproc/{night}/{zpadexpstr}")
-exposureloc = os.path.join(specproddir, 'exposures', str(night), zpadexpstr)
-print(f"\n#- Processed exposure data in {exposureloc}:")
-os.system(f"ls {specproddir}/exposures/{night}/{zpadexpstr}")
+print(f"-- Expected? {expected}")
+os.system(f"ls {preprocloc}")
 
-print("\n\n\n")
+
+exposureloc = os.path.join(specproddir, 'exposures', str(night), zpadexpstr)
+if erow	is not None:
+    expected = erow['LASTSTEP'] != 'ignore'
+else:
+    expected = False
+print(f"\n#- Processed exposure data in {exposureloc}:")
+print(f"-- Expected? {expected}")
+os.system(f"ls {exposureloc}")
+
+zpathloc = os.path.join(specproddir, 'tiles', 'cumulative', str(tileid))
+if erow	is not None and erow['LASTSTEP'] == 'all':
+    expected = True        
+else:
+    expected = "Unknown, this exposure shouldn't contribute but there may be others"
+print(f"\n#- Processed redshift data with nights >={night} in {zpathloc}:")
+print(f"-- Expected? {expected}")
+if os.path.exists(zpathloc):
+    for znight in sorted(os.listdir(zpathloc)):
+        if int(znight) >= int(night):
+            zloc = os.path.join(zpathloc, znight)
+            print(f"   {zloc}:")
+            os.system(f"ls {zloc}")
+            print()
+
+print("\n\n")
