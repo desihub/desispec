@@ -78,8 +78,16 @@ def print_row(row):
             topline = ""
             midline = ""
             bottomline = ""
-    
 
+## Define a function to print file content if it exists
+def print_dir(dir_path):
+    if os.path.exists(dir_path):
+        print(os.listdir(dir_path))
+    else:
+        print("Directory doesn't exist")
+
+
+        
 ## Parser arguments
 p = get_parser()
 args = p.parse_args()
@@ -115,12 +123,16 @@ if os.path.exists(specproddir):
         try:
             specprod_exposures_entry = tab[tab['EXPID']==expid][0]
             log.info(f'Identified specprod exposures-{specprod}.csv entry')
-            if night is None:
-                night = int(specprod_exposures_entry['NIGHT'])
-            if tileid is None:
-                tileid = int(specprod_exposures_entry['TILEID'])
         except:
             log.warning(f'No specprod exposures-{specprod}.csv entry')
+        if specprod_exposures_entry is not None:
+            tablenight = int(specprod_exposures_entry['NIGHT'])
+            if args.night is not None and args.night != tablenight:
+                raise ValueError(f"Input night {args.night} doesn't match record of {tablenight}")
+            elif night is None:
+                night = tablenight
+            if tileid is None:
+                tileid = int(specprod_exposures_entry['TILEID'])
 
             
 ## Try to open the surveops exposures file
@@ -134,12 +146,18 @@ if 'DESI_SURVEYOPS' in os.environ:
         try:
             surveyops_exposures_entry = tab[tab['EXPID']==expid][0]
             log.info(f"Identified surveyops exposures.ecsv entry")
-            if night is None:
-                night = int(surveyops_exposures_entry['NIGHT'])
-            if tileid is None:
-                tileid = int(surveyops_exposures_entry['TILEID'])
         except:
             log.warning(f"No surveyops exposures.ecsv entry")
+        if surveyops_exposures_entry is not None:
+            tablenight = int(surveyops_exposures_entry['NIGHT'])
+            if args.night is not None and args.night != tablenight:
+                raise ValueError(f"Input night {args.night} doesn't match record of {tablenight}")
+            elif night is None:
+                night = tablenight
+            elif night != tablenight:
+                raise ValueError(f"Derived night {night} doesn't match record of {tablenight}")
+            if tileid is None:
+                tileid = int(surveyops_exposures_entry['TILEID'])
 
             
 ## Try to find the exposure_table entry. If night is known then only that file is
@@ -194,13 +212,19 @@ if etab is not None:
     try:
         erow = etab[etab['EXPID']==expid][0]
         log.info(f"Identified specprod exposure_table entry")
-        if night is None:
-            night = int(erow['NIGHT'])
+    except:
+        log.warning(f"No specprod exposure_table entry")        
+
+    if erow is not None:
+        tablenight = int(erow['NIGHT'])
+        if args.night is not None and args.night != tablenight:
+            raise ValueError(f"Input night {args.night} doesn't match record of {tablenight}")
+        elif night is None:
+            night = tablenight
+        elif night != tablenight:
+            raise ValueError(f"Derived night {night} doesn't match record of {tablenight}")
         if tileid is None:
             tileid = int(erow['TILEID'])
-        etab = etab[etab['NIGHT']==night]
-    except:
-        log.warning(f"No specprod exposure_table entry")
 
 
 ## Find the raw data directory and use it to identify the night if still unknown
@@ -212,11 +236,17 @@ if night is None:
             log.debug(f"Identified the following directories for expid {expid}: globs")
             rawexpdir = globs[0]
             rawnightdir = os.path.dirname(rawexpdir)
-            night = int(os.path.basename(rawnightdir))
-            log.info(f"Based on raw directories, identified night {night} for expid {expid}")
+            dirnight = int(os.path.basename(rawnightdir))
         except:
             log.error(f"Expid {expid} couldn't be identified in any files or in the raw data. Please check that it is valid.")
-            raise(ValueError())
+            raise(ValueError(f"Expid {expid} couldn't be identified in any files or in the raw data. Please check that it is valid."))
+        if args.night is not None and args.night != dirnight:
+            raise ValueError(f"Input night {args.night} doesn't match record of {dirnight}")
+        elif night is None:
+            night = dirnight
+        elif night != dirnight:
+            raise ValueError(f"Night {night} doesn't match record of {dirnight}")
+        log.info(f"Based on raw directories, identified night {night} for expid {expid}")
     else:
         log.error("DESI_SPECTRO_DATA not defined so can't search for in raw data.")
         raise(ValueError(f"Expid {expid} couldn't be identified. Please check that it is valid."))
@@ -284,7 +314,8 @@ print_row(dashboard_row)
 ## Print contents of relevant data directories
 rawdataloc = os.path.join(os.environ['DESI_SPECTRO_DATA'], str(night), zpadexpstr)
 print(f"\n#- Raw data in {rawdataloc}:")
-os.system(f"ls {rawdataloc}")
+print_dir(rawdataloc)
+
 preprocloc = os.path.join(specproddir, 'preproc', str(night), zpadexpstr)
 if erow is not None:
     expected = erow['LASTSTEP'] != 'ignore'
@@ -292,8 +323,7 @@ else:
     expected = False
 print(f"\n#- Preproc data in {preprocloc}:")
 print(f"-- Expected? {expected}")
-os.system(f"ls {preprocloc}")
-
+print_dir(preprocloc)
 
 exposureloc = os.path.join(specproddir, 'exposures', str(night), zpadexpstr)
 if erow	is not None:
@@ -302,7 +332,7 @@ else:
     expected = False
 print(f"\n#- Processed exposure data in {exposureloc}:")
 print(f"-- Expected? {expected}")
-os.system(f"ls {exposureloc}")
+print_dir(exposureloc)
 
 zpathloc = os.path.join(specproddir, 'tiles', 'cumulative', str(tileid))
 if erow	is not None and erow['LASTSTEP'] == 'all':
@@ -316,7 +346,7 @@ if os.path.exists(zpathloc):
         if int(znight) >= int(night):
             zloc = os.path.join(zpathloc, znight)
             print(f"   {zloc}:")
-            os.system(f"ls {zloc}")
+            print_dir(zloc)
             print()
 
 print("\n\n")
