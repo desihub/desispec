@@ -32,9 +32,10 @@ def get_parser():
     p.add_argument('-e', '--expid', type=int, required=True,
                    help='Exposure ID to get information about')
     p.add_argument('-n', '--night', type=int, required=False,
-                   help='night to get information about')
-    p.add_argument('-t', '--tileid', type=int, required=False,
-                   help='Tile ID to get information about')
+                   help='night corresponding to the exposure to '
+                        + 'get information about')
+    #p.add_argument('-t', '--tileid', type=int, required=False,
+    #               help='Tile ID to get information about')
     p.add_argument('-s', '--specprod', type=str, required=False,
                    help=('override $SPECPROD, or full path '
                          'to override $DESI_SPECTRO_REDUX/$SPECPROD'))
@@ -85,7 +86,7 @@ args = p.parse_args()
 
 ## Unpack arguments
 night = args.night
-tileid = args.tileid
+tileid = None #args.tileid
 expid = args.expid
 expstr = str(expid)
 zpadexpstr = expstr.zfill(8)
