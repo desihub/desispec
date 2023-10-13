@@ -82,7 +82,7 @@ def print_row(row):
 ## Define a function to print file content if it exists
 def print_dir(dir_path):
     if os.path.exists(dir_path):
-        print(os.listdir(dir_path))
+        print(sorted(os.listdir(dir_path)))
     else:
         print("Directory doesn't exist")
 
