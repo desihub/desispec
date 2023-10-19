@@ -11,6 +11,7 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import re
+import requests
 import warnings
 import time
 import glob
@@ -236,14 +237,25 @@ def read_spectra(
     User can optionally specify targetids OR rows, but not both
     """
     log = get_logger()
-    infile = checkgzip(infile)
-    ftype = np.float64
-    if single:
-        ftype = np.float32
+    # code to check for file locally, and then recreate file structure and save if not local
 
-    infile = os.path.abspath(infile)
-    if not os.path.isfile(infile):
-        raise IOError("{} is not a file".format(infile))
+    # Check for remote file (AWS)
+    if 'http:' or 'https:' in infile:
+        # Save remote image to local file
+        img_data = requests.get(infile).content
+        file_name = infile.split('/')[-1] # Get file name from url
+        with open(file_name, 'wb') as handler:
+            handler.write(img_data)
+        infile = file_name
+    else:
+        infile = checkgzip(infile)
+        ftype = np.float64
+        if single:
+            ftype = np.float32
+
+        infile = os.path.abspath(infile)
+        if not os.path.isfile(infile):
+            raise IOError("{} is not a file".format(infile))
 
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
