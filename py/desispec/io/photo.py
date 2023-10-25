@@ -14,6 +14,7 @@ from astropy.table import Table, vstack
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
+from desispec.io.meta import get_desi_root_readonly
 from desitarget.io import desitarget_resolve_dec
 
 from desiutil.log import get_logger, DEBUG
@@ -40,21 +41,23 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     else:
         log = get_logger()
     
-    desi_root = os.environ.get('DESI_ROOT')
+    desi_root = get_desi_root_readonly()
+    desi_target = os.path.join(desi_root, 'target')
+    desi_surveyops = os.path.join(desi_root, 'survey', 'ops', 'surveyops', 'trunk')
 
     if fiberassign_dir is None:
         fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
     
-    stileid = '{:06d}'.format(tileid)
-    fiberfile = os.path.join(fiberassign_dir, stileid[:3], 'fiberassign-{}.fits.gz'.format(stileid))
+    stileid = f'{tileid:06d}'
+    fiberfile = os.path.join(fiberassign_dir, stileid[:3], f'fiberassign-{stileid}.fits.gz')
     if not os.path.isfile(fiberfile):
         fiberfile = fiberfile.replace('.gz', '')
         if not os.path.isfile(fiberfile):
-            errmsg = 'Fiber assignment file {} not found!'.format(fiberfile)
+            errmsg = f'Fiber assignment file {fiberfile} not found!'
             log.critical(errmsg)
             raise IOError(errmsg)
 
-    log.debug('Reading {} header.'.format(fiberfile))
+    log.debug(f'Reading {fiberfile} header.')
     fahdr = fits.getheader(fiberfile, ext=0)
 
     # Gather the targeting directories. Looks for all header cards up to TARG[N]
@@ -84,11 +87,11 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         # Update generic DESIROOT to DESI_SURVEYOPS env.
         fn = fn.replace(
             "DESIROOT/target/catalogs/mtl/1.1.1/mtl/main/ToO/ToO.ecsv",
-            "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
+            f"{desi_surveyops}/mtl/main/ToO/ToO.ecsv",
         )
         fn = fn.replace(
             "DESIROOT/survey/ops/staging/mtl/main/ToO/ToO.ecsv",
-            "{}/mtl/main/ToO/ToO.ecsv".format(os.getenv("DESI_SURVEYOPS")),
+            f"{desi_surveyops}/mtl/main/ToO/ToO.ecsv",
         )
         # Filename change for main-survey secondary targets.
         fn = fn.replace(
@@ -100,7 +103,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         # to gaiadr2/2.2.0.
         fn = fn.replace(
             "/global/cscratch1/sd/adamyers/gaiadr2/1.3.0.dev5218/targets/main/resolve/backup",
-            "{}/catalogs/gaiadr2/2.2.0/targets/main/resolve/backup".format(os.getenv("DESI_TARGET")),
+            f"{desi_target}/catalogs/gaiadr2/2.2.0/targets/main/resolve/backup",
         )
         # The data model for secondary targets is different; figure out the
         # filename and append it to the targetdir recorded in the header.
@@ -108,12 +111,10 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
             txt = os.path.sep.join(fn.split(os.path.sep)[-3:])
             if txt in ["sv1/secondary/bright", "sv1/secondary/dark"]:
                 prog = fn.split(os.path.sep)[-1]
-                fn = os.path.join(fn, "sv1targets-{}-secondary.fits".format(prog))
-        fn = fn.replace("DESIROOT", os.getenv("DESI_ROOT"))
-        fn = fn.replace("/data/target", os.getenv("DESI_TARGET"))
-        fn = fn.replace(
-            "/data/afternoon_planning/surveyops/trunk", os.getenv("DESI_SURVEYOPS")
-        )
+                fn = os.path.join(fn, f"sv1targets-{prog}-secondary.fits")
+        fn = fn.replace("DESIROOT", desi_root)
+        fn = fn.replace("/data/target", desi_target)
+        fn = fn.replace("/data/afternoon_planning/surveyops/trunk", desi_surveyops)
         ## AR case where the path is generically defined, but not used (no mtl for sv1 or sv2)
         #fn = fn.replace(
         #    "DESIROOT/survey/ops/surveyops/trunk/mtl/sv1/ToO/ToO.ecsv",
@@ -129,15 +130,15 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         #    "-",
         #)
         if fn != alltargetdirs[ii]:
-            log.debug('{:06d}: {} --> {}'.format(tileid, alltargetdirs[ii], fn))
+            log.debug(f'{tileid:06d}: {alltargetdirs[ii]} --> {fn}')
 
         if os.path.isdir(fn) or os.path.isfile(fn):
             targetdirs.append(fn)
         else:
-            log.debug('Missing {}!'.format(fn))
+            log.debug(f'Missing {fn}!')
 
     if len(targetdirs) == 0:
-        errmsg = 'No targeting directories found for tile {}!'.format(tileid)
+        errmsg = f'No targeting directories found for tile {tileid}!'
         log.critical(errmsg)
         raise IOError(errmsg)
             
@@ -155,6 +156,8 @@ def targetphot_datamodel(from_file=False):
     sv[1-2], and main-survey observations.
 
     """
+    desi_root = get_desi_root_readonly()
+    
     if from_file:
         TARGETINGBITCOLS = [
             'CMX_TARGET',
@@ -168,10 +171,10 @@ def targetphot_datamodel(from_file=False):
         
         from pkg_resources import resource_filename
         #datamodel_file = resource_filename('desitarget.test', 't/targets.fits')
-        datamodel_file = os.path.join(os.environ.get('DESI_ROOT'), 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
+        datamodel_file = os.path.join(desi_root, 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
                                       'main', 'resolve', 'dark', 'targets-dark-hp-0.fits')
         if not os.path.isfile(datamodel_file):
-            errmsg = 'Unable to establish the data model using {}'.format(datamodel_file)
+            errmsg = f'Unable to establish the data model using {datamodel_file}'
             log.critical(errmsg)
             raise IOError(errmsg)
         
@@ -357,7 +360,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
     for col in ['TARGETID', racolumn, deccolumn, 'TILEID']:
         if col not in input_cat.colnames:
-            errmsg = 'Missing required input column {}'.format(col)
+            errmsg = f'Missing required input column {col}'
             log.critical(errmsg)
             raise ValueError(errmsg)
 
@@ -368,7 +371,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
     tileids = input_cat['TILEID']
 
     for tileid in np.unique(tileids):
-        log.debug('Working on tile {}'.format(tileid))
+        log.debug(f'Working on tile {tileid}')
 
         M = np.where(tileid == tileids)[0]
         out1 = out[M]
@@ -377,7 +380,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
         photo, photofiles = [], []
 
         # Get the unique list of targetdirs
-        targetdirs = gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir)
+        targetdirs = gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir, verbose=verbose)
         
         for targetdir in targetdirs:
             # Handle secondary targets, which have a (very!) different data model.
@@ -397,13 +400,13 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                 filenside = fitsio.read_header(alltargetfiles[0], ext=1)['FILENSID']
                 # https://github.com/desihub/desispec/issues/1711
                 if np.any(np.isnan(input_cat1[racolumn])): # some SV1 targets have nan in RA,DEC
-                    log.warning('Some RA, DEC are NaN in target directory {}'.format(targetdir))
+                    log.warning(f'Some RA, DEC are NaN in target directory {targetdir}')
                 notnan = np.isfinite(input_cat1[racolumn])
                 targetfiles = []
                 if np.sum(notnan) > 0:
                     pixlist = radec2pix(filenside, input_cat1[racolumn][notnan], input_cat1[deccolumn][notnan])
                     for pix in set(pixlist):
-                        _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix) # fragile
+                        _targetfile = alltargetfiles[0].split('hp-')[0]+f'hp-{pix}.fits' # fragile
                         if os.path.isfile(_targetfile):
                             targetfiles.append(_targetfile)
     
@@ -424,7 +427,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                         photo_targetid = photocache[targetfile]
                         I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
                         
-                    log.debug('Matched {} targets in {}'.format(len(I), targetfile))
+                    log.debug(f'Matched {len(I)} targets in {targetfile}')
                     if len(I) > 0:
                         if type(photocache[targetfile]) == astropy.table.Table:
                             cachecat = photocache[targetfile][I]
@@ -442,7 +445,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                 if 'ToO' in targetfile:
                     photo1 = Table.read(targetfile, guess=False, format='ascii.ecsv')
                     I = np.where(np.isin(photo1['TARGETID'], input_cat1['TARGETID']))[0]
-                    log.debug('Matched {} TOO targets'.format(len(I)))
+                    log.debug(f'Matched {len(I)} TOO targets')
                     if len(I) > 0:
                         photo1 = photo1[I]
                         _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
@@ -467,7 +470,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                 photo_targetid = tinfo[extname].read(columns='TARGETID')
                 I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
     
-                log.debug('Matched {} targets in {}'.format(len(I), targetfile))
+                log.debug(f'Matched {len(I)} targets in {targetfile}')
                 if len(I) > 0:
                     photo1 = tinfo[extname].read(rows=I)
                     # Columns can be out of order, so sort them here based on the
@@ -534,8 +537,10 @@ def tractorphot_datamodel(from_file=False, datarelease='dr9'):
     datamodel for the given data release.
 
     """
+    desi_root = get_desi_root_readonly()    
+
     if from_file:
-        datamodel_file = os.environ.get('DESI_ROOT')+f'/external/legacysurvey/{datarelease}/south/tractor/000/tractor-0001m002.fits'
+        datamodel_file = f'{desi_root}/external/legacysurvey/{datarelease}/south/tractor/000/tractor-0001m002.fits'
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
         for col in datamodel.colnames:
             datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
@@ -980,10 +985,10 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
             region = 'north'
     
         #raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in input_cat['RA']])
-        tractorfile = os.path.join(legacysurveydir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        tractorfile = os.path.join(legacysurveydir, region, 'tractor', brick[:3], f'tractor-{brick}.fits')
     
         if not os.path.isfile(tractorfile):
-            errmsg = 'Unable to find Tractor catalog {}'.format(tractorfile)
+            errmsg = f'Unable to find Tractor catalog {tractorfile}'
             log.critical(errmsg)
             raise IOError(errmsg)
 
@@ -1027,8 +1032,8 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
         rad = radius_match * u.arcsec
 
         # resolve north/south
-        tractorfile_north = os.path.join(legacysurveydir, 'north', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
-        tractorfile_south = os.path.join(legacysurveydir, 'south', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        tractorfile_north = os.path.join(legacysurveydir, 'north', 'tractor', brick[:3], f'tractor-{brick}.fits')
+        tractorfile_south = os.path.join(legacysurveydir, 'south', 'tractor', brick[:3], f'tractor-{brick}.fits')
         if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
             tractorfile = tractorfile_north
         elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
@@ -1044,7 +1049,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
         _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
         iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
         if len(iprimary) == 0:
-            log.warning('No primary photometric targets on brick {}.'.format(brick))
+            log.warning(f'No primary photometric targets on brick {brick}.')
         else:
             _tractor = _tractor[iprimary]
             coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
@@ -1097,6 +1102,8 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     from desitarget.targets import decode_targetid    
     from desiutil.brick import brickname
     from desiutil.log import get_logger, DEBUG
+
+    desi_root = get_desi_root_readonly()
     
     if verbose:
         log = get_logger(DEBUG)
@@ -1109,7 +1116,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
 
     for col in ['TARGETID', racolumn, deccolumn]:
         if col not in input_cat.colnames:
-            errmsg = 'Missing required input column {}'.format(col)
+            errmsg = f'Missing required input column {col}'
             log.critical(errmsg)
             raise ValueError(errmsg)
 
@@ -1126,7 +1133,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         legacysurveydir = dr9dir
 
     if legacysurveydir is None:
-        legacysurveydir = os.environ.get('DESI_ROOT')+'/external/legacysurvey/dr9'
+        legacysurveydir = os.path.join(desi_root, 'external', 'legacysurvey', 'dr9')
 
     if not os.path.isdir(legacysurveydir):
         errmsg = f'Legacy Surveys directory {legacysurveydir} not found.'
@@ -1159,7 +1166,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     # *after* the decode step, above!
     inobrickname = np.where(input_cat['BRICKNAME'] == '')[0]
     if len(inobrickname) > 0:
-        log.debug('Inferring brickname for {:,} objects'.format(len(inobrickname)))
+        log.debug(f'Inferring brickname for {len(inobrickname):,d} objects')
         input_cat['BRICKNAME'][inobrickname] = brickname(input_cat[racolumn][inobrickname],
                                                          input_cat[deccolumn][inobrickname])
 
