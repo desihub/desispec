@@ -240,7 +240,10 @@ def read_spectra(
     # code to check for file locally, and then recreate file structure and save if not local
 
     # Check for remote file (AWS)
-    if 'http:' or 'https:' in infile:
+    ftype = np.float64
+    if single:
+        ftype = np.float32
+    if 'http:' in infile or 'https:' in infile:
         # Save remote image to local file
         img_data = requests.get(infile).content
         file_name = infile.split('/')[-1] # Get file name from url
@@ -249,10 +252,6 @@ def read_spectra(
         infile = file_name
     else:
         infile = checkgzip(infile)
-        ftype = np.float64
-        if single:
-            ftype = np.float32
-
         infile = os.path.abspath(infile)
         if not os.path.isfile(infile):
             raise IOError("{} is not a file".format(infile))
