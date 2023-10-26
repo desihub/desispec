@@ -2,10 +2,25 @@
 desispec Change Log
 ===================
 
-0.60.2 (unreleased)
+0.60.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.60.2 (2023-10-26)
+-------------------
+
+* Update validredshifts.validate() to work on SV observations (PR `#2122`_).
+* Add desi_exposure_info script (PR `#2124`_).
+* Fix exp_fibermap when specifying targetids to read_spectra (PR `#2126`_).
+* Add desi_average_flux_calibration --unflat option (PR `#2127`_).
+* io.photo use read-only mount (PR `#2132`_).
+
+.. _`#2122`: https://github.com/desihub/desispec/pull/2122
+.. _`#2124`: https://github.com/desihub/desispec/pull/2124
+.. _`#2126`: https://github.com/desihub/desispec/pull/2126
+.. _`#2127`: https://github.com/desihub/desispec/pull/2127
+.. _`#2132`: https://github.com/desihub/desispec/pull/2132
 
 0.60.1 (2023-09-25)
 -------------------
