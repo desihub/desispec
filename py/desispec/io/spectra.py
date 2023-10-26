@@ -250,11 +250,10 @@ def read_spectra(
         with open(file_name, 'wb') as handler:
             handler.write(img_data)
         infile = file_name
-    else:
-        infile = checkgzip(infile)
-        infile = os.path.abspath(infile)
-        if not os.path.isfile(infile):
-            raise IOError("{} is not a file".format(infile))
+    infile = checkgzip(infile)
+    infile = os.path.abspath(infile)
+    if not os.path.isfile(infile):
+        raise IOError("{} is not a file".format(infile))
 
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
