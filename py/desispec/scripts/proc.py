@@ -725,7 +725,13 @@ def main(args=None, comm=None):
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
-                cmd += ' --psferr 0.01'
+
+                #- Larger PSF model uncertainty for the blue cameras because a lower value
+                #- results in many pixels with specmask.BAD2DFIT on the 5578A sky line.
+                if camera.startswith('b'):
+                    cmd += ' --psferr 0.04'
+                else :
+                    cmd += ' --psferr 0.01'
 
                 if args.use_specter:
                     cmd += ' --use-specter'
