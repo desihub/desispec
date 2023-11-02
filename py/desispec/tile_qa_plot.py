@@ -1443,7 +1443,7 @@ def make_tile_qa_plot(
             # AR reference number of valid zspec
             sel &= (ref["ZMIN"] >= zmin) & (ref["ZMAX"] <= zmax)
             nref_valid += ref["N_MEAN"][sel].sum() * istracer.sum()
-        ax.legend(ncol=2)
+        ax.legend(loc=1, ncol=1)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
         if hdr["FAPRGRM"].lower() == "bright":
