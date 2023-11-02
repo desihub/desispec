@@ -971,7 +971,7 @@ def get_expids_efftimes(tileqafits, prod):
 
 def get_expid_vccdsec(expid, night, prod):
     """
-    Get the VCCDSEC header keyword for an exposure.
+    Get the VCCDSEC header keyword for an exposure for each frame file.
 
 
     Args:
@@ -981,14 +981,18 @@ def get_expid_vccdsec(expid, night, prod):
 
 
     Returns:
-        vccdsec: VCCDSEC value (float)
-
+        vccdsec: dictionary with VCCDSEC value for each frame file (dict. of floats)
+        pb_campets: list of {camera}{petal} which have VCCDSEC < threshold
 
     Notes:
-        * We read one frame file (assuming VCCDSEC is the same for all frame files)
-        * If VCCDSEC is not present, returns None
+        * The VCCDSEC threshold is set in desispec/data/qa/qa-params.yaml
+        * If VCCDSEC is not present for a given frame file, returns -99s
+            (so that it gets attention)
+        * If no frame files, returns an empty dictionary
     """
-    vccdsec = None
+    vccdsec = {}
+    pb_campets = []
+
     expdir = os.path.join(
         prod,
         "exposures",
@@ -996,16 +1000,35 @@ def get_expid_vccdsec(expid, night, prod):
         "{:08d}".format(expid)
     )
     fns = sorted(glob(os.path.join(expdir, "frame-??-{:08d}.fits*".format(expid))))
+
     if len(fns) == 0:
         log.warning("no frame file found in {}".format(expdir))
     else:
-        fn = fns[0]
-        hdr = fits.getheader(fn, 0)
-        if "VCCDSEC" in hdr:
-            vccdsec = hdr["VCCDSEC"]
-        else:
-            log.warning("no VCCDSEC keyword in {}".format(fn))
-    return vccdsec
+        for fn in fns:
+            hdr = fits.getheader(fn, 0)
+            campet = hdr["CAMERA"] # AR actually is {camera}{petal}
+            if "VCCDSEC" in hdr:
+                vccdsec[campet] = hdr["VCCDSEC"]
+            else:
+                vccdsec[campet] = -99.
+                log.warning("no VCCDSEC keyword in {}; set VCCDSEC=-99.".format(fn))
+
+    # AR potentially problematic campets
+    config = get_qa_config()
+    for campet in vccdsec:
+        if vccdsec[campet] < config["tile_qa_plot"]["vccdsec_min"]:
+            pb_campets.append(campet)
+    if len(pb_campets) > 0:
+        vals = ["{}={}".format(campet, vccdsec[campet]) for campet in pb_campets]
+        log.warning(
+            "For EXPID={}, the following VCCDSEC values are below the {} threshold: {}".format(
+                expid,
+                config["tile_qa_plot"]["vccdsec_min"],
+                ", ".join(vals),
+            )
+        )
+
+    return vccdsec, pb_campets
 
 
 def get_quantz_cmap(name, n, cmin=0, cmax=1):
@@ -1313,24 +1336,25 @@ def make_tile_qa_plot(
 
     # AR exposures from that TILEID
     exps = get_expids_efftimes(tileqafits, prod)
-    exps["VCCDSEC"] = np.array(
-        [
-            get_expid_vccdsec(expid, night, prod) for (expid, night) in zip(
-                exps["EXPID"], exps["NIGHT"]
-            )
-        ]
-    )
-    exps["VCCDHR"] = [
-        "{:.1f}".format(vccdsec / 3600.)
-        if vccdsec is not None else "None"
-        for vccdsec in exps["VCCDSEC"]
-    ]
+    nexp = len(exps)
+
+    # AR VCCDSEC: for each exposure, a dictionary
+    # AR VCCDSEC_PB: for each exposure, a list of pb_campets
+    # AR MINVCCDSEC: for each exposure, store min(vccdsec)
+    exps["VCCDSEC"] = np.zeros(nexp, dtype=object)
+    exps["VCCDSEC_PBCAMPETS"] = np.zeros(nexp, dtype=object)
+    exps["VCCDSEC_MIN"] = np.zeros(nexp, dtype=float)
+    for i, (expid, night) in enumerate(zip(exps["EXPID"], exps["NIGHT"])):
+        vccdsec, pb_campets = get_expid_vccdsec(expid, night, prod)
+        exps["VCCDSEC"][i] = vccdsec
+        exps["VCCDSEC_PBCAMPETS"][i] = pb_campets
+        exps["VCCDSEC_MIN"][i] = np.min([vccdsec[campet] for campet in vccdsec])
     xs = (-0.25, 0.03, 0.33, 0.57, 0.90)
     y, dy = 0.95, -0.10
     fs = 10
     ax = plt.subplot(gs[0, 1])
     ax.axis("off")
-    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME", "VCCDHR"]
+    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME", "VCCDSEC"]
     for x, txt in zip(xs, txts):
         ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
     y += 2 * dy
@@ -1340,16 +1364,13 @@ def make_tile_qa_plot(
             "{}".format(exps["NIGHT"][i]),
             "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
             "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
-            exps["VCCDHR"][i],
+            "{:.1f}hr".format(exps["VCCDSEC_MIN"][i] / 3600),
         ]
         for x, txt in zip(xs, txts):
             fontweight, col = "normal", "k"
             if txt == txts[-1]:
-                if exps["VCCDSEC"][i] is None:
+                if len(exps["VCCDSEC_PBCAMPETS"][i]) > 0:
                     fontweight, col = "bold", "r"
-                else:
-                    if exps["VCCDSEC"][i] < config["tile_qa_plot"]["vccdsec_min"]:
-                        fontweight, col = "bold", "r"
             ax.text(x, y, txt, fontsize=fs, fontweight=fontweight, color=col, transform=ax.transAxes)
         y += dy
 
@@ -1765,15 +1786,21 @@ def make_tile_qa_plot(
     print_petal_infos(ax, petalqa,fiberqa)
 
     # AR VCCDSEC alert?
+    # AR    grouping them by petal to save display space
     vccdsec_alert = []
-    for expid, vccdsec in zip(exps["EXPID"], exps["VCCDSEC"]):
-        if vccdsec is None:
-            vccdsec_alert.append(str(expid))
-        else:
-            if vccdsec < config["tile_qa_plot"]["vccdsec_min"]:
-                vccdsec_alert.append(str(expid))
+    for expid, vccdsec, pb_campets in zip(exps["EXPID"], exps["VCCDSEC"], exps["VCCDSEC_PBCAMPETS"]):
+        if len(pb_campets) > 0:
+            pb_pets = np.unique([_[1] for _ in pb_campets])
+            pb_brzpets = []
+            for pet in pb_pets:
+                pb_brzpets.append("{}{}".format("".join([_[0] for _ in pb_campets if _[1] == pet]), pet))
+            txt = "{}={}".format(expid, "-".join(pb_brzpets))
+            vccdsec_alert.append(txt)
     if len(vccdsec_alert) > 0:
-        txt = "Alert: VCCDSEC: EXPID={}".format(",".join(vccdsec_alert))
+        txt = "Alert: VCCDSEC:{}".format(", ".join(vccdsec_alert))
+        # AR fixed length display
+        nchar = 180
+        txt = "\n".join(wrap(txt, nchar))
         ax.text(0.05, 0.01, txt, color="r", fontsize=10, ha="left", va="bottom", transform=ax.transAxes)
 
     try :
