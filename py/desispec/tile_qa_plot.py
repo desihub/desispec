@@ -969,6 +969,45 @@ def get_expids_efftimes(tileqafits, prod):
     return d
 
 
+def get_expid_vccdsec(expid, night, prod):
+    """
+    Get the VCCDSEC header keyword for an exposure.
+
+
+    Args:
+        expid: exposure id (int)
+        night: night (int)
+        prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
+
+
+    Returns:
+        vccdsec: VCCDSEC value (float)
+
+
+    Notes:
+        * We read one frame file (assuming VCCDSEC is the same for all frame files)
+        * If VCCDSEC is not present, returns None
+    """
+    vccdsec = None
+    expdir = os.path.join(
+        prod,
+        "exposures",
+        "{}".format(night),
+        "{:08d}".format(expid)
+    )
+    fns = sorted(glob(os.path.join(expdir, "frame-??-{:08d}.fits*".format(expid))))
+    if len(fns) == 0:
+        log.warning("no frame file found in {}".format(expdir))
+    else:
+        fn = fns[0]
+        hdr = fits.getheader(fn, 0)
+        if "VCCDSEC" in hdr:
+            vccdsec = hdr["VCCDSEC"]
+        else:
+            log.warning("no VCCDSEC keyword in {}".format(fn))
+    return vccdsec
+
+
 def get_quantz_cmap(name, n, cmin=0, cmax=1):
     """
     Creates a quantized colormap.
@@ -1274,12 +1313,24 @@ def make_tile_qa_plot(
 
     # AR exposures from that TILEID
     exps = get_expids_efftimes(tileqafits, prod)
-    xs = (-0.2, 0.1, 0.4, 0.7)
+    exps["VCCDSEC"] = np.array(
+        [
+            get_expid_vccdsec(expid, night, prod) for (expid, night) in zip(
+                exps["EXPID"], exps["NIGHT"]
+            )
+        ]
+    )
+    exps["VCCDHR"] = [
+        "{:.1f}".format(vccdsec / 3600.)
+        if vccdsec is not None else "None"
+        for vccdsec in exps["VCCDSEC"]
+    ]
+    xs = (-0.25, 0.03, 0.33, 0.57, 0.90)
     y, dy = 0.95, -0.10
     fs = 10
     ax = plt.subplot(gs[0, 1])
     ax.axis("off")
-    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME"]
+    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME", "VCCDHR"]
     for x, txt in zip(xs, txts):
         ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
     y += 2 * dy
@@ -1289,9 +1340,17 @@ def make_tile_qa_plot(
             "{}".format(exps["NIGHT"][i]),
             "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
             "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
+            exps["VCCDHR"][i],
         ]
         for x, txt in zip(xs, txts):
-            ax.text(x, y, txt, fontsize=fs, transform=ax.transAxes)
+            fontweight, col = "normal", "k"
+            if txt == txts[-1]:
+                if exps["VCCDSEC"][i] is None:
+                    fontweight, col = "bold", "r"
+                else:
+                    if exps["VCCDSEC"][i] < config["tile_qa_plot"]["vccdsec_min"]:
+                        fontweight, col = "bold", "r"
+            ax.text(x, y, txt, fontsize=fs, fontweight=fontweight, color=col, transform=ax.transAxes)
         y += dy
 
     # AR cutout
@@ -1704,6 +1763,19 @@ def make_tile_qa_plot(
     # AR per petal diagnoses
     ax = plt.subplot(gs[2:4, 0])
     print_petal_infos(ax, petalqa,fiberqa)
+
+    # AR VCCDSEC alert?
+    vccdsec_alert = []
+    for expid, vccdsec in zip(exps["EXPID"], exps["VCCDSEC"]):
+        if vccdsec is None:
+            vccdsec_alert.append(str(expid))
+        else:
+            if vccdsec < config["tile_qa_plot"]["vccdsec_min"]:
+                vccdsec_alert.append(str(expid))
+    if len(vccdsec_alert) > 0:
+        txt = "Alert: VCCDSEC: EXPID={}".format(",".join(vccdsec_alert))
+        ax.text(0.05, 0.01, txt, color="r", fontsize=10, ha="left", va="bottom", transform=ax.transAxes)
+
     try :
         #  AR saving plot
         plt.savefig(pngoutfile, bbox_inches="tight")
