@@ -310,36 +310,40 @@ def read_spectra(
     for h in range(1, nhdu):
         name = hdus[h].read_header()["EXTNAME"]
         log.debug('Reading %s', name)
-        if name == "FIBERMAP" and name not in skip_hdus:
-            fmap = encode_table(
-                Table(
-                    hdus[h].read(rows=rows, columns=select_columns["FIBERMAP"]),
-                    copy=True,
-                ).as_array()
-            )
-        elif name == "EXP_FIBERMAP" and name not in skip_hdus:
-            expfmap = encode_table(
-                Table(
-                    hdus[h].read(rows=exp_rows, columns=select_columns["EXP_FIBERMAP"]),
-                    copy=True,
-                ).as_array()
-            )
-        elif name == "SCORES" and name not in skip_hdus:
-            scores = encode_table(
-                Table(
-                    hdus[h].read(rows=rows, columns=select_columns["SCORES"]),
-                    copy=True,
-                ).as_array()
-            )
-        elif name == "EXTRA_CATALOG" and name not in skip_hdus:
-            extra_catalog = encode_table(
-                Table(
-                    hdus[h].read(
-                        rows=rows, columns=select_columns["EXTRA_CATALOG"]
-                    ),
-                    copy=True,
-                ).as_array()
-            )
+        if name == "FIBERMAP":
+            if name not in skip_hdus:
+                fmap = encode_table(
+                    Table(
+                        hdus[h].read(rows=rows, columns=select_columns["FIBERMAP"]),
+                        copy=True,
+                    ).as_array()
+                )
+        elif name == "EXP_FIBERMAP":
+            if name not in skip_hdus:
+                expfmap = encode_table(
+                    Table(
+                        hdus[h].read(rows=exp_rows, columns=select_columns["EXP_FIBERMAP"]),
+                        copy=True,
+                    ).as_array()
+                )
+        elif name == "SCORES":
+            if name not in skip_hdus:
+                scores = encode_table(
+                    Table(
+                        hdus[h].read(rows=rows, columns=select_columns["SCORES"]),
+                        copy=True,
+                    ).as_array()
+                )
+        elif name == "EXTRA_CATALOG":
+            if name not in skip_hdus:
+                extra_catalog = encode_table(
+                    Table(
+                        hdus[h].read(
+                            rows=rows, columns=select_columns["EXTRA_CATALOG"]
+                        ),
+                        copy=True,
+                    ).as_array()
+                )
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -374,6 +378,7 @@ def read_spectra(
                 res[band] = _read_image(hdus, h, ftype, rows=rows)
             elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
                 # this must be an "extra" HDU
+                log.debug('Reading extra HDU %s', name)
                 if extra is None:
                     extra = {}
                 if band not in extra:
