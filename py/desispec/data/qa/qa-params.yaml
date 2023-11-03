@@ -105,3 +105,6 @@ tile_qa_plot:
  # sky
  skythrurms_max : 0.05
  skychi2pdf_max : 1.5
+
+ # vccdsec
+ vccdsec_min : 72000
