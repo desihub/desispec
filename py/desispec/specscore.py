@@ -51,9 +51,14 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
 
     if coadd.bands == ['brz']:
         #- i.e. this is a coadd across cameras
+        if coadd.resolution_data is not None:
+            rdat = coadd.resolution_data['brz']
+        else:
+            rdat = None
+
         fr = Frame(coadd.wave['brz'], coadd.flux['brz'], coadd.ivar['brz'],
                     fibermap=coadd.fibermap, fibers=fibers, meta=coadd.meta,
-                    resolution_data=coadd.resolution_data['brz'])
+                    resolution_data=rdat)
         for band in ['b', 'r', 'z']:
             bandscores, bandcomments = compute_frame_scores(fr, band=band,
                     suffix='COADD', flux_per_angstrom=True)
@@ -63,9 +68,14 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
         #- otherwise try individual bands, upper or lowercase
         for band in ['b', 'r', 'z', 'B', 'R', 'Z']:
             if band in coadd.bands:
+                if coadd.resolution_data is not None:
+                    rdat = coadd.resolution_data[band]
+                else:
+                    rdat = None
+
                 fr = Frame(coadd.wave[band], coadd.flux[band], coadd.ivar[band],
                         fibermap=coadd.fibermap, fibers=fibers, meta=coadd.meta,
-                        resolution_data=coadd.resolution_data[band])
+                        resolution_data=rdat)
                 bandscores, bandcomments = compute_frame_scores(fr, band=band,
                         suffix='COADD', flux_per_angstrom=True)
                 scores.update(bandscores)

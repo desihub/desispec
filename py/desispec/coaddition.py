@@ -656,10 +656,10 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
 
     # ndiag = max of all cameras
     ndiag=0
-    for b in sbands :
-        ndiag=max(ndiag,spectra.resolution_data[b].shape[1])
-    log.debug("ndiag= {}".format(ndiag))
-
+    if spectra.resolution_data is not None:
+        for b in sbands :
+            ndiag=max(ndiag,spectra.resolution_data[b].shape[1])
+    log.debug("ndiag=%d", ndiag)
 
     b = sbands[0]
     flux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
@@ -671,7 +671,10 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         ivar_unmasked=ivar
         mask=None
 
-    rdata=np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
+    if spectra.resolution_data is not None:
+        rdata=np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
+    else:
+        rdata = None
 
     for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
@@ -679,7 +682,10 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         # indices
         windices = windict[b]
 
-        band_ndiag = spectra.resolution_data[b].shape[1]
+        if spectra.resolution_data is not None:
+            band_ndiag = spectra.resolution_data[b].shape[1]
+        else:
+            band_ndiag = 0
 
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
@@ -749,8 +755,9 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
 
             ivar[i,windices] += np.sum(ivarjj,axis=0)
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
-            for r in range(band_ndiag) :
-                rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0)
+            if spectra.resolution_data is not None:
+                for r in range(band_ndiag) :
+                    rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0)
             if spectra.mask is not None :
                 # this deserves some attention ...
 
@@ -770,7 +777,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         if np.sum(ok)>0 :
             flux[i][ok] /= ivar[i][ok]
         ok=(ivar_unmasked[i]>0)
-        if np.sum(ok)>0 :
+        if np.sum(ok)>0 and rdata is not None:
             rdata[i][:,ok] /= ivar_unmasked[i][ok]
 
     if 'COADD_NUMEXP' in spectra.fibermap.colnames:
@@ -788,13 +795,16 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
     else :
         dmask=None
 
+    if rdata is not None:
+        rdata = {bands:rdata}
+
     res = Spectra(
             bands=[bands,],
             wave={bands:wave,},
             flux={bands:flux,},
             ivar={bands:ivar,},
             mask=dmask,
-            resolution_data={bands:rdata,},
+            resolution_data=rdata,
             fibermap=fibermap,
             exp_fibermap=exp_fibermap,
             meta=spectra.meta,
