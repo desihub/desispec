@@ -281,7 +281,7 @@ class TestSpectra(unittest.TestCase):
         # manually create the spectra and write
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
             ivar=self.ivar, mask=self.mask, resolution_data=self.res,
-            fibermap=self.fmap1, meta=self.meta)
+            fibermap=self.fmap1, meta=self.meta, exp_fibermap=self.fmap1)
 
         write_spectra(self.fileio, spec)
 
@@ -290,6 +290,11 @@ class TestSpectra(unittest.TestCase):
         self.assertIsNone(test.R)
         self.assertIsNotNone(test.fibermap) #- fibermap not skipped
 
+        test = read_spectra(self.fileio, skip_hdus=('EXP_FIBERMAP', 'SCORES', 'RESOLUTION'))
+        self.assertIsNone(test.exp_fibermap)
+        self.assertIsNone(test.scores)
+        self.assertIsNone(test.R)
+        self.assertIsNotNone(test.fibermap) #- fibermap not skipped
 
     def test_empty(self):
 
