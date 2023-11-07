@@ -885,6 +885,13 @@ class TestCoadd(unittest.TestCase):
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
 
+        # Test coadding without resolution or mask data
+        spec = self.spectra[:]  #- copy before modifying
+        spec.resolution_data = None
+        spec.R = None
+        spec.mask = None
+        coadd = coadd_cameras(spec)
+
 
 def test_suite():
     """Allows testing of only this module with the command::
