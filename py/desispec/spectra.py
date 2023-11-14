@@ -20,6 +20,12 @@ import numbers
 import numpy as np
 from astropy.table import Table
 
+_specutils_imported = True
+try:
+    from specutils import SpectrumList, Spectrum1D
+except ImportError:
+    _specutils_imported = False
+
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
@@ -30,7 +36,7 @@ class Spectra(object):
     """Represents a grouping of spectra.
 
     This class contains an "extended" fibermap that has information about
-    the night and exposure of each spectrum.  For each band, this class has 
+    the night and exposure of each spectrum.  For each band, this class has
     the wavelength grid, flux, ivar, mask, and resolution arrays.
 
     Parameters
@@ -76,7 +82,7 @@ class Spectra(object):
             meta=None, extra=None,
             single=False, scores=None, scores_comments=None,
             extra_catalog=None):
-        
+
         self._bands = bands
         self._single = single
         self._ftype = np.float64
@@ -166,14 +172,14 @@ class Spectra(object):
             self.mask = None
         else:
             self.mask = {}
-        
+
         if resolution_data is None:
             self.resolution_data = None
             self.R = None
         else:
             self.resolution_data = {}
             self.R = {}
-        
+
         if extra is None:
             self.extra = None
         else:
@@ -397,8 +403,8 @@ class Spectra(object):
         Overwrite or append new data.
 
         Given another Spectra object, compare the fibermap information with
-        the existing one.  For spectra that already exist, overwrite existing 
-        data with the new values.  For spectra that do not exist, append that 
+        the existing one.  For spectra that already exist, overwrite existing
+        data with the new values.  For spectra that do not exist, append that
         data to the end of the spectral data.
 
         Args:
@@ -502,7 +508,7 @@ class Spectra(object):
         indx_exists = np.where(exists == 1)[0]
         indx_new = np.where(exists == 0)[0]
 
-        # Make new data arrays of the correct size to hold both the old and 
+        # Make new data arrays of the correct size to hold both the old and
         # new data
 
         nupdate = len(indx_exists)
@@ -515,7 +521,7 @@ class Spectra(object):
             nold = len(self.fibermap)
             newfmap = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.fibermap.dtype))
-        
+
         newscores = None
         if self.scores is not None:
             newscores = encode_table(np.zeros( (nold + nnew, ),
@@ -529,11 +535,11 @@ class Spectra(object):
         newwave = {}
         newflux = {}
         newivar = {}
-        
+
         newmask = None
         if add_mask or self.mask is not None:
             newmask = {}
-        
+
         newres = None
         newR = None
         if add_res or self.resolution_data is not None:
@@ -657,6 +663,25 @@ class Spectra(object):
         self.extra_catalog = newextra_catalog
 
         return
+
+    def to_specutils(self):
+        """Convert to ``specutils`` objects.
+
+        Returns
+        -------
+        specutils.SpectrumList
+            A list with each band represented as a specutils.Spectrum1D object.
+
+        Raises
+        ------
+        ValueError
+            If ``specutils`` is not available in the environment.
+        """
+        if not _specutils_imported:
+            raise ValueError("specutils is not available in the environment.")
+        sl = SpectrumList()
+        return sl
+
 
 def stack(speclist):
     """
