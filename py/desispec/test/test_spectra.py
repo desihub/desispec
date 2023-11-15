@@ -31,6 +31,7 @@ import desispec.coaddition
 from desispec.spectra import *
 from desispec.io.spectra import *
 
+
 class TestSpectra(unittest.TestCase):
 
     def setUp(self):
@@ -323,7 +324,6 @@ class TestSpectra(unittest.TestCase):
 
         path = write_spectra(self.filebuild, spec)
 
-
     def test_updateselect(self):
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
@@ -495,6 +495,26 @@ class TestSpectra(unittest.TestCase):
             extra_catalog=self.extra_catalog)
         spectrum_list = sp1.to_specutils()
         sp2 = Spectra.from_specutils(spectrum_list)
+        self.assertListEqual(sp1.bands, sp2.bands)
+        self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
+        self.assertTrue((sp1.ivar[self.bands[1]] == sp2.ivar[self.bands[1]]).all())
+        self.assertTrue((sp1.mask[self.bands[2]] == sp2.mask[self.bands[2]]).all())
+        self.assertDictEqual(sp1.meta, sp2.meta)
+
+    # @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    @unittest.expectedFailure
+    def test_from_specutils_coadd(self):
+        """Test conversion from a Spectrum1D object representing a coadd across cameras.
+        """
+        sp0 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        sp1 = desispec.coaddition.coadd_cameras(sp0)
+        spectrum_list = sp1.to_specutils()
+        sp2 = Spectra.from_specutils(spectrum_list[0])
+        self.assertEqual(sp2.bands[0], 'brz')
         self.assertListEqual(sp1.bands, sp2.bands)
         self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
         self.assertTrue((sp1.ivar[self.bands[1]] == sp2.ivar[self.bands[1]]).all())

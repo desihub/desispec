@@ -714,7 +714,7 @@ class Spectra(object):
 
     @classmethod
     def from_specutils(cls, spectra):
-        """Convert ``specutils`` objects to a :class:`~desiutil.spectra.Spectra` object.
+        """Convert ``specutils`` objects to a :class:`~desispec.spectra.Spectra` object.
 
         Parameters
         ----------
@@ -723,7 +723,7 @@ class Spectra(object):
 
         Returns
         -------
-        :class:`~desiutil.spectra.Spectra`
+        :class:`~desispec.spectra.Spectra`
             The corresponding DESI-internal object.
 
         Raises
