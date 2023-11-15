@@ -682,6 +682,38 @@ class Spectra(object):
         sl = SpectrumList()
         return sl
 
+    @classmethod
+    def from_specutils(cls, spectra):
+        """Convert ``specutils`` objects to a :class:`~desiutil.spectra.Spectra` object.
+
+        Parameters
+        ----------
+        spectra : specutils.Spectrum1D or specutils.SpectrumList
+            A ``specutils`` object.
+
+        Returns
+        -------
+        :class:`~desiutil.spectra.Spectra`
+            The corresponding DESI-internal object.
+
+        Raises
+        ------
+        ValueError
+            If ``specutils`` is not available in the environment.
+        """
+        if not _specutils_imported:
+            raise ValueError("specutils is not available in the environment.")
+        if isinstance(spectra, SpectrumList):
+            pass
+        elif isinstance(spectra, Spectrum1D):
+            #
+            # Assume this is a coadd across cameras.
+            #
+            pass
+        else:
+            raise ValueError("Unknown type input to from_specutils!")
+        return cls()
+
 
 def stack(speclist):
     """
