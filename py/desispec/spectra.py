@@ -23,6 +23,8 @@ from astropy.table import Table
 _specutils_imported = True
 try:
     from specutils import SpectrumList, Spectrum1D
+    from astropy.units import Unit
+    from astropy.nddata import InverseVariance, StdDevUncertainty
 except ImportError:
     _specutils_imported = False
 
@@ -674,12 +676,40 @@ class Spectra(object):
 
         Raises
         ------
-        ValueError
+        NameError
             If ``specutils`` is not available in the environment.
         """
         if not _specutils_imported:
-            raise ValueError("specutils is not available in the environment.")
+            raise NameError("specutils is not available in the environment.")
         sl = SpectrumList()
+        AA = Unit('Angstrom')
+        specunit = Unit('10-17 erg cm-2 s-1 AA-1')
+        for i, band in enumerate(self.bands):
+            meta = {'band': band}
+            spectral_axis = self.wave[band] * AA
+            flux = self.flux[band] * specunit
+            uncertainty = InverseVariance(self.ivar[band] * (specunit**-2))
+            mask = self.mask[band] != 0
+            meta['int_mask'] = self.mask[band]
+            meta['resolution_data'] = self.resolution_data[band]
+            try:
+                meta['extra'] = self.extra[band]
+            except KeyError:
+                meta['extra'] = None
+            if i == 0:
+                #
+                # Only add these to the first item in the list.
+                #
+                meta['bands'] = self.bands
+                meta['fibermap'] = self.fibermap
+                meta['exp_fibermap'] = self.exp_fibermap
+                meta['desi_meta'] = self.meta
+                meta['single'] = self._single
+                meta['scores'] = self.scores
+                meta['scores_comments'] = self.scores_comments
+                meta['extra_catalog'] = self.extra_catalog
+            sl.append(Spectrum1D(flux=flux, spectral_axis=spectral_axis,
+                                 uncertainty=uncertainty, mask=mask, meta=meta))
         return sl
 
     @classmethod
@@ -698,21 +728,102 @@ class Spectra(object):
 
         Raises
         ------
-        ValueError
+        NameError
             If ``specutils`` is not available in the environment.
+        ValueError
+            If an unknown type is found in `spectra`.
         """
         if not _specutils_imported:
-            raise ValueError("specutils is not available in the environment.")
+            raise NameError("specutils is not available in the environment.")
         if isinstance(spectra, SpectrumList):
-            pass
+            try:
+                bands = spectra[0].meta['bands']
+            except KeyError:
+                #
+                # This is a big assumption; it doesn't capture ['b', 'z'] or ['r', 'z'].
+                #
+                bands = ['b', 'r', 'z'][0:len(spectra)]
         elif isinstance(spectra, Spectrum1D):
             #
             # Assume this is a coadd across cameras.
             #
-            pass
+            try:
+                bands = spectra.meta['bands']
+            except KeyError:
+                bands = ['brz']
         else:
             raise ValueError("Unknown type input to from_specutils!")
-        return cls()
+        #
+        # Load objects that are independent of band from the first item.
+        #
+        try:
+            fibermap = spectra[0].meta['fibermap']
+        except KeyError:
+            fibermap = None
+        try:
+            exp_fibermap = spectra[0].meta['exp_fibermap']
+        except KeyError:
+            exp_fibermap = None
+        try:
+            meta = spectra[0].meta['desi_meta']
+        except KeyError:
+            meta = None
+        try:
+            single = spectra[0].meta['single']
+        except KeyError:
+            single = False
+        try:
+            scores = spectra[0].meta['scores']
+        except KeyError:
+            scores = None
+        try:
+            scores_comments = spectra[0].meta['scores_comments']
+        except KeyError:
+            scores_comments = None
+        try:
+            extra_catalog = spectra[0].meta['extra_catalog']
+        except KeyError:
+            extra_catalog = None
+        #
+        # Load band-dependent quantities.
+        #
+        wave = dict()
+        flux = dict()
+        ivar = dict()
+        mask = dict()
+        resolution_data = None
+        extra = None
+        for i, band in enumerate(bands):
+            wave[band] = spectra[i].spectral_axis.value
+            flux[band] = spectra[i].flux.value
+            if isinstance(spectra[i].uncertainty, InverseVariance):
+                ivar[band] = spectra[i].uncertainty.array
+            elif isinstance(spectra[i].uncertainty, StdDevUncertainty):
+                # Future: may need np.isfinite() here?
+                ivar[band] = (spectra[i].uncertainty.array)**-2
+            else:
+                raise ValueError("Unknown uncertainty type!")
+            try:
+                mask[band] = spectra[i].meta['int_mask']
+            except KeyError:
+                try:
+                    mask[band] = spectra.mask.astype(np.int32)
+                except AttributeError:
+                    mask[band] = np.zeros(flux.shape, dtype=np.int32)
+            if 'resolution_data' in spectra[i].meta:
+                if resolution_data is None:
+                    resolution_data = {band: spectra[i].meta['resolution_data']}
+                else:
+                    resolution_data[band] = spectra[i].meta['resolution_data']
+            if 'extra' in spectra[i].meta:
+                if extra is None:
+                    extra = {band: spectra[i].meta['extra']}
+                else:
+                    extra[band] = spectra[i].meta['extra']
+        return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
+                   resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
+                   meta=meta, extra=extra, single=single, scores=scores,
+                   scores_comments=scores_comments, extra_catalog=extra_catalog)
 
 
 def stack(speclist):

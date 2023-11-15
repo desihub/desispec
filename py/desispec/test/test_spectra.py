@@ -14,6 +14,14 @@ import numpy.testing as nt
 
 from astropy.table import Table, vstack
 
+_specutils_imported = True
+try:
+    from specutils import SpectrumList, Spectrum1D
+    # from astropy.units import Unit
+    # from astropy.nddata import InverseVariance, StdDevUncertainty
+except ImportError:
+    _specutils_imported = False
+
 from desiutil.io import encode_table
 from desispec.io import empty_fibermap
 from desispec.io.util import add_columns
@@ -46,7 +54,7 @@ class TestSpectra(unittest.TestCase):
                            ['NIGHT', 'EXPID', 'TILEID'],
                            [np.int32(0), np.int32(0), np.int32(0)],
                            )
-        
+
         for s in range(self.nspec):
             fmap[s]["TARGETID"] = 456 + s
             fmap[s]["FIBER"] = 123 + s
@@ -94,9 +102,9 @@ class TestSpectra(unittest.TestCase):
                 self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
-                self.mask[b] = np.tile(np.arange(2, dtype=np.uint32), 
+                self.mask[b] = np.tile(np.arange(2, dtype=np.uint32),
                     (self.nwave * self.nspec) // 2).reshape( (self.nspec, self.nwave) )
-                self.res[b] = np.zeros( (self.nspec, self.ndiag, self.nwave), 
+                self.res[b] = np.zeros( (self.nspec, self.ndiag, self.nwave),
                     dtype=np.float64)
                 self.res[b][:,1,:] = 1.0
                 self.extra[b] = {}
@@ -117,7 +125,6 @@ class TestSpectra(unittest.TestCase):
             os.remove(self.filebuild)
         pass
 
-
     def verify(self, spec, fmap):
         for key, val in self.meta.items():
             assert(key in spec.meta)
@@ -135,12 +142,11 @@ class TestSpectra(unittest.TestCase):
         if spec.extra_catalog is not None:
             assert(np.all(spec.extra_catalog == self.extra_catalog))
 
-
     def test_io(self):
 
         # manually create the spectra and write
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
-            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
             fibermap=self.fmap1, meta=self.meta, extra=self.extra)
 
         self.verify(spec, self.fmap1)
@@ -165,8 +171,8 @@ class TestSpectra(unittest.TestCase):
         self.verify(comp, self.fmap1)
 
         # test I/O with the extra_catalog HDU enabled
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
-            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
             fibermap=self.fmap1, meta=self.meta, extra=self.extra,
             extra_catalog=self.extra_catalog)
 
@@ -259,8 +265,6 @@ class TestSpectra(unittest.TestCase):
         with self.assertRaises(ValueError):
             subset = read_spectra(self.fileio, rows=rows, targetids=[1,2])
 
-
-
     def test_read_columns(self):
         """test reading while subselecting columns"""
         # manually create the spectra and write
@@ -302,9 +306,9 @@ class TestSpectra(unittest.TestCase):
 
         other = {}
         for b in self.bands:
-            other[b] = Spectra(bands=[b], wave={b : self.wave[b]}, 
-                flux={b : self.flux[b]}, ivar={b : self.ivar[b]}, 
-                mask={b : self.mask[b]}, resolution_data={b : self.res[b]}, 
+            other[b] = Spectra(bands=[b], wave={b : self.wave[b]},
+                flux={b : self.flux[b]}, ivar={b : self.ivar[b]},
+                mask={b : self.mask[b]}, resolution_data={b : self.res[b]},
                 fibermap=self.fmap1, meta=self.meta, extra={b : self.extra[b]})
 
         for b in self.bands:
@@ -315,18 +319,18 @@ class TestSpectra(unittest.TestCase):
         dummy = Spectra()
         spec.update(dummy)
 
-        self.verify(spec, self.fmap1)        
+        self.verify(spec, self.fmap1)
 
         path = write_spectra(self.filebuild, spec)
 
 
     def test_updateselect(self):
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, 
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
             meta=self.meta, extra=self.extra)
 
-        other = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, 
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap2, 
+        other = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, fibermap=self.fmap2,
             meta=self.meta, extra=self.extra)
 
         spec.update(other)
@@ -378,7 +382,6 @@ class TestSpectra(unittest.TestCase):
         nt.assert_array_equal(spec.fibermap.dtype, self.fmap1.dtype)
         nt.assert_array_equal(spec.fibermap['NIGHT'][self.nspec:], 0)
         nt.assert_array_equal(spec.fibermap['TARGETID'][0:self.nspec], spec.fibermap['TARGETID'][self.nspec:])
-
 
     def test_stack(self):
         """Test desispec.spectra.stack"""
@@ -466,6 +469,37 @@ class TestSpectra(unittest.TestCase):
         sp2 = sp1[[True,False,True,False,True]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
+
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    def test_to_specutils(self):
+        """Test conversion to a specutils object.
+        """
+        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        sl = sp1.to_specutils()
+        self.assertEqual(sl[0].meta['single'], sp1._single)
+        self.assertTrue((sl[0].mask == (sp1.mask[self.bands[0]] != 0)).all())
+        self.assertTrue((sl[1].flux.value == sp1.flux[sp1.bands[1]]).all())
+
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    def test_from_specutils(self):
+        """Test conversion from a specutils object.
+        """
+        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        spectrum_list = sp1.to_specutils()
+        sp2 = Spectra.from_specutils(spectrum_list)
+        self.assertListEqual(sp1.bands, sp2.bands)
+        self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
+        self.assertTrue((sp1.ivar[self.bands[1]] == sp2.ivar[self.bands[1]]).all())
+        self.assertTrue((sp1.mask[self.bands[2]] == sp2.mask[self.bands[2]]).all())
+        self.assertDictEqual(sp1.meta, sp2.meta)
 
 
 def test_suite():
