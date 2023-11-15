@@ -736,52 +736,54 @@ class Spectra(object):
         if not _specutils_imported:
             raise NameError("specutils is not available in the environment.")
         if isinstance(spectra, SpectrumList):
+            sl = spectra
             try:
-                bands = spectra[0].meta['bands']
+                bands = sl[0].meta['bands']
             except KeyError:
                 #
                 # This is a big assumption; it doesn't capture ['b', 'z'] or ['r', 'z'].
                 #
-                bands = ['b', 'r', 'z'][0:len(spectra)]
+                bands = ['b', 'r', 'z'][0:len(sl)]
         elif isinstance(spectra, Spectrum1D):
+            sl = [spectra]
             #
             # Assume this is a coadd across cameras.
             #
             try:
-                bands = spectra.meta['bands']
+                bands = sl[0].meta['bands']
             except KeyError:
                 bands = ['brz']
         else:
-            raise ValueError("Unknown type input to from_specutils!")
+            raise ValueError("Unknown type input to Spectra.from_specutils!")
         #
         # Load objects that are independent of band from the first item.
         #
         try:
-            fibermap = spectra[0].meta['fibermap']
+            fibermap = sl[0].meta['fibermap']
         except KeyError:
             fibermap = None
         try:
-            exp_fibermap = spectra[0].meta['exp_fibermap']
+            exp_fibermap = sl[0].meta['exp_fibermap']
         except KeyError:
             exp_fibermap = None
         try:
-            meta = spectra[0].meta['desi_meta']
+            meta = sl[0].meta['desi_meta']
         except KeyError:
             meta = None
         try:
-            single = spectra[0].meta['single']
+            single = sl[0].meta['single']
         except KeyError:
             single = False
         try:
-            scores = spectra[0].meta['scores']
+            scores = sl[0].meta['scores']
         except KeyError:
             scores = None
         try:
-            scores_comments = spectra[0].meta['scores_comments']
+            scores_comments = sl[0].meta['scores_comments']
         except KeyError:
             scores_comments = None
         try:
-            extra_catalog = spectra[0].meta['extra_catalog']
+            extra_catalog = sl[0].meta['extra_catalog']
         except KeyError:
             extra_catalog = None
         #
@@ -794,32 +796,32 @@ class Spectra(object):
         resolution_data = None
         extra = None
         for i, band in enumerate(bands):
-            wave[band] = spectra[i].spectral_axis.value
-            flux[band] = spectra[i].flux.value
-            if isinstance(spectra[i].uncertainty, InverseVariance):
-                ivar[band] = spectra[i].uncertainty.array
-            elif isinstance(spectra[i].uncertainty, StdDevUncertainty):
+            wave[band] = sl[i].spectral_axis.value
+            flux[band] = sl[i].flux.value
+            if isinstance(sl[i].uncertainty, InverseVariance):
+                ivar[band] = sl[i].uncertainty.array
+            elif isinstance(sl[i].uncertainty, StdDevUncertainty):
                 # Future: may need np.isfinite() here?
-                ivar[band] = (spectra[i].uncertainty.array)**-2
+                ivar[band] = (sl[i].uncertainty.array)**-2
             else:
                 raise ValueError("Unknown uncertainty type!")
             try:
-                mask[band] = spectra[i].meta['int_mask']
+                mask[band] = sl[i].meta['int_mask']
             except KeyError:
                 try:
-                    mask[band] = spectra.mask.astype(np.int32)
+                    mask[band] = sl.mask.astype(np.int32)
                 except AttributeError:
-                    mask[band] = np.zeros(flux.shape, dtype=np.int32)
-            if 'resolution_data' in spectra[i].meta:
+                    mask[band] = np.zeros(flux[band].shape, dtype=np.int32)
+            if 'resolution_data' in sl[i].meta:
                 if resolution_data is None:
-                    resolution_data = {band: spectra[i].meta['resolution_data']}
+                    resolution_data = {band: sl[i].meta['resolution_data']}
                 else:
-                    resolution_data[band] = spectra[i].meta['resolution_data']
-            if 'extra' in spectra[i].meta:
+                    resolution_data[band] = sl[i].meta['resolution_data']
+            if 'extra' in sl[i].meta:
                 if extra is None:
-                    extra = {band: spectra[i].meta['extra']}
+                    extra = {band: sl[i].meta['extra']}
                 else:
-                    extra[band] = spectra[i].meta['extra']
+                    extra[band] = sl[i].meta['extra']
         return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
                    resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
                    meta=meta, extra=extra, single=single, scores=scores,
