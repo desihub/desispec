@@ -46,8 +46,8 @@ class TestSpectra(unittest.TestCase):
             "KEY1" : "VAL1",
             "KEY2" : "VAL2"
         }
-        self.nwave = 100
-        self.nspec = 5
+        self.nwave = 101
+        self.nspec = 6
         self.ndiag = 3
 
         fmap = empty_fibermap(self.nspec)
@@ -96,9 +96,9 @@ class TestSpectra(unittest.TestCase):
         self.extra = {}
 
         for s in range(self.nspec):
-            self.wave['b'] = np.linspace(3600, 5800, self.nwave, dtype=float)
-            self.wave['r'] = np.linspace(5760, 7620, self.nwave, dtype=float)
-            self.wave['z'] = np.linspace(7520, 9824, self.nwave, dtype=float)
+            self.wave['b'] = np.linspace(3500, 5800, self.nwave, dtype=float)
+            self.wave['r'] = np.linspace(5570, 7870, self.nwave, dtype=float)
+            self.wave['z'] = np.linspace(7640, 9940, self.nwave, dtype=float)
             for b in self.bands:
                 self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
@@ -501,15 +501,14 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue((sp1.mask[self.bands[2]] == sp2.mask[self.bands[2]]).all())
         self.assertDictEqual(sp1.meta, sp2.meta)
 
-    # @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
-    @unittest.expectedFailure
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
     def test_from_specutils_coadd(self):
         """Test conversion from a Spectrum1D object representing a coadd across cameras.
         """
         sp0 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res,
             fibermap=self.fmap1, exp_fibermap=self.efmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=None, scores=self.scores,
             extra_catalog=self.extra_catalog)
         sp1 = desispec.coaddition.coadd_cameras(sp0)
         spectrum_list = sp1.to_specutils()
@@ -517,8 +516,8 @@ class TestSpectra(unittest.TestCase):
         self.assertEqual(sp2.bands[0], 'brz')
         self.assertListEqual(sp1.bands, sp2.bands)
         self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
-        self.assertTrue((sp1.ivar[self.bands[1]] == sp2.ivar[self.bands[1]]).all())
-        self.assertTrue((sp1.mask[self.bands[2]] == sp2.mask[self.bands[2]]).all())
+        self.assertTrue((sp1.ivar[self.bands[0]] == sp2.ivar[self.bands[0]]).all())
+        self.assertTrue((sp1.mask[self.bands[0]] == sp2.mask[self.bands[0]]).all())
         self.assertDictEqual(sp1.meta, sp2.meta)
 
 

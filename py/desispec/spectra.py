@@ -758,34 +758,13 @@ class Spectra(object):
         #
         # Load objects that are independent of band from the first item.
         #
-        try:
-            fibermap = sl[0].meta['fibermap']
-        except KeyError:
-            fibermap = None
-        try:
-            exp_fibermap = sl[0].meta['exp_fibermap']
-        except KeyError:
-            exp_fibermap = None
-        try:
-            meta = sl[0].meta['desi_meta']
-        except KeyError:
-            meta = None
-        try:
-            single = sl[0].meta['single']
-        except KeyError:
-            single = False
-        try:
-            scores = sl[0].meta['scores']
-        except KeyError:
-            scores = None
-        try:
-            scores_comments = sl[0].meta['scores_comments']
-        except KeyError:
-            scores_comments = None
-        try:
-            extra_catalog = sl[0].meta['extra_catalog']
-        except KeyError:
-            extra_catalog = None
+        fibermap = sl[0].meta.get('fibermap', None)
+        exp_fibermap = sl[0].meta.get('exp_fibermap', None)
+        meta = sl[0].meta.get('desi_meta', None)
+        single = sl[0].meta.get('single', False)
+        scores = sl[0].meta.get('scores', None)
+        scores_comments = sl[0].meta.get('scores_comments', None)
+        extra_catalog = sl[0].meta.get('extra_catalog', None)
         #
         # Load band-dependent quantities.
         #
@@ -795,14 +774,16 @@ class Spectra(object):
         mask = dict()
         resolution_data = None
         extra = None
+        AA = Unit('Angstrom')
+        specunit = Unit('10-17 erg cm-2 s-1 AA-1')
         for i, band in enumerate(bands):
-            wave[band] = sl[i].spectral_axis.value
-            flux[band] = sl[i].flux.value
+            wave[band] = sl[i].spectral_axis.to(AA).value
+            flux[band] = sl[i].flux.to(specunit).value
             if isinstance(sl[i].uncertainty, InverseVariance):
-                ivar[band] = sl[i].uncertainty.array
+                ivar[band] = sl[i].uncertainty.quantity.to(specunit**-2).value
             elif isinstance(sl[i].uncertainty, StdDevUncertainty):
                 # Future: may need np.isfinite() here?
-                ivar[band] = (sl[i].uncertainty.array)**-2
+                ivar[band] = (sl[i].uncertainty.quantity.to(specunit).value)**-2
             else:
                 raise ValueError("Unknown uncertainty type!")
             try:
