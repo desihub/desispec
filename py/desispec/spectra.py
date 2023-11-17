@@ -694,7 +694,7 @@ class Spectra(object):
             meta['resolution_data'] = self.resolution_data[band]
             try:
                 meta['extra'] = self.extra[band]
-            except KeyError:
+            except (KeyError, TypeError):
                 meta['extra'] = None
             if i == 0:
                 #
