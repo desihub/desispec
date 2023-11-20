@@ -761,13 +761,32 @@ class Spectra(object):
         #
         # Load objects that are independent of band from the first item.
         #
-        fibermap = sl[0].meta.get('fibermap', None)
-        exp_fibermap = sl[0].meta.get('exp_fibermap', None)
-        meta = sl[0].meta.get('desi_meta', None)
         single = sl[0].meta.get('single', False)
-        scores = sl[0].meta.get('scores', None)
-        scores_comments = sl[0].meta.get('scores_comments', None)
-        extra_catalog = sl[0].meta.get('extra_catalog', None)
+        meta = fibermap = exp_fibermap = scores = scores_comments = extra_catalog = None
+        try:
+            meta = sl[0].meta['desi_meta'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            fibermap = sl[0].meta['fibermap'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            exp_fibermap = sl[0].meta['exp_fibermap'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            scores = sl[0].meta['scores'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            scores_comments = sl[0].meta['scores_comments'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            extra_catalog = sl[0].meta['extra_catalog'].copy()
+        except (KeyError, AttributeError):
+            pass
         #
         # Load band-dependent quantities.
         #
