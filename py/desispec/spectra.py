@@ -698,20 +698,20 @@ class Spectra(object):
             meta['resolution_data'] = self.resolution_data[band].copy()
             try:
                 meta['extra'] = self.extra[band].copy()
-            except (KeyError, TypeError):
-                meta['extra'] = None
+            except (KeyError, TypeError, AttributeError):
+                pass
             if i == 0:
                 #
                 # Only add these to the first item in the list.
                 #
                 meta['bands'] = self.bands
-                meta['fibermap'] = self.fibermap.copy()
-                meta['exp_fibermap'] = self.exp_fibermap.copy()
-                meta['desi_meta'] = self.meta.copy()
                 meta['single'] = self._single
-                meta['scores'] = self.scores.copy()
-                meta['scores_comments'] = self.scores_comments.copy()
-                meta['extra_catalog'] = self.extra_catalog.copy()
+                for key in ('fibermap', 'exp_fibermap', 'desi_meta',
+                            'scores', 'scores_comments', 'extra_catalog'):
+                    try:
+                        meta[key] = getattr(self, key).copy()
+                    except AttributeError:
+                        pass
             sl.append(Spectrum1D(flux=flux, spectral_axis=spectral_axis,
                                  uncertainty=uncertainty, mask=mask, meta=meta))
         return sl
