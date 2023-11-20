@@ -203,9 +203,10 @@ class Spectra(object):
                 self.resolution_data[b] = resolution_data[b].astype(self._ftype)
                 self.R[b] = np.array( [ Resolution(r) for r in resolution_data[b] ] )
             if extra is not None:
-                self.extra[b] = {}
-                for ex in extra[b].items():
-                    self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
+                if extra[b] is not None:
+                    self.extra[b] = {}
+                    for ex in extra[b].items():
+                        self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
 
     @property
     def bands(self):
