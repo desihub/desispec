@@ -706,7 +706,9 @@ class Spectra(object):
                 #
                 meta['bands'] = self.bands
                 meta['single'] = self._single
-                for key in ('fibermap', 'exp_fibermap', 'desi_meta',
+                if self.meta:
+                    meta['desi_meta'] = self.meta.copy()
+                for key in ('fibermap', 'exp_fibermap',
                             'scores', 'scores_comments', 'extra_catalog'):
                     try:
                         meta[key] = getattr(self, key).copy()
