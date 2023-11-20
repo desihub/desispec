@@ -139,9 +139,12 @@ class Spectra(object):
                 if resolution_data[b].shape[2] != wave[b].shape[0]:
                     raise RuntimeError("resolution array wavelength dimension for band {} does not match grid".format(b))
             if extra is not None:
-                for ex in extra[b].items():
-                    if ex[1].shape != flux[b].shape:
-                        raise RuntimeError("extra arrays must have the same shape as the flux array")
+                try:
+                    for ex in extra[b].items():
+                        if ex[1].shape != flux[b].shape:
+                            raise RuntimeError("extra arrays must have the same shape as the flux array")
+                except (KeyError, AttributeError):
+                    pass
 
         if fibermap is not None and extra_catalog is not None:
             if len(fibermap) != len(extra_catalog):
@@ -203,7 +206,6 @@ class Spectra(object):
                 self.extra[b] = {}
                 for ex in extra[b].items():
                     self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
-
 
     @property
     def bands(self):

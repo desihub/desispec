@@ -226,6 +226,7 @@ class TestSpectra(unittest.TestCase):
 
         # read subset in different order than original file, with repeats and missing targetids
         spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0, 0, 2, 2, 4, 4] for nspec=6
+        spec.fibermap['TARGETID'][-1] = 5
         write_spectra(self.fileio, spec)
         targetids = [2,10,4,4,4,0,0]
         comp_subset = read_spectra(self.fileio, targetids=targetids)
@@ -234,8 +235,10 @@ class TestSpectra(unittest.TestCase):
         # targetid 4 appears 3x because it was requested 3 times
         # targetid 0 appears 4x because it was in the input file twice and requested twice
         # and targetid 0 is at the end of comp_subset, not the beginning like the file
+        # targetid 5 was not requested.
         # targetid 10 doesn't appear because it wasn't in the input file, ok
-        self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == np.array([2,2,4,4,4,0,0,0,0])))
+        self.assertListEqual(comp_subset.fibermap['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
 
         # make sure coadded spectra with FIBERMAP vs. EXP_FIBERMAP works
         tid = 555666
@@ -466,7 +469,7 @@ class TestSpectra(unittest.TestCase):
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 2)
 
-        sp2 = sp1[[True,False,True,False,True]]
+        sp2 = sp1[[True, False, True, False, True, False]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
 
