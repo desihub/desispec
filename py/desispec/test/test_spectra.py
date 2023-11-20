@@ -518,9 +518,9 @@ class TestSpectra(unittest.TestCase):
         sp2 = Spectra.from_specutils(spectrum_list[0])
         self.assertEqual(sp2.bands[0], 'brz')
         self.assertListEqual(sp1.bands, sp2.bands)
-        self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
-        self.assertTrue((sp1.ivar[self.bands[0]] == sp2.ivar[self.bands[0]]).all())
-        self.assertTrue((sp1.mask[self.bands[0]] == sp2.mask[self.bands[0]]).all())
+        self.assertTrue((sp1.flux[sp1.bands[0]] == sp2.flux[sp2.bands[0]]).all())
+        self.assertTrue((sp1.ivar[sp1.bands[0]] == sp2.ivar[sp2.bands[0]]).all())
+        self.assertTrue((sp1.mask[sp1.bands[0]] == sp2.mask[sp2.bands[0]]).all())
         self.assertDictEqual(sp1.meta, sp2.meta)
 
 
