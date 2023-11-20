@@ -225,7 +225,7 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.all(spec_subset.mask['z'] == comp_subset.mask['z']))
 
         # read subset in different order than original file, with repeats and missing targetids
-        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0,0,2,2,4] for nspec=5
+        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0, 0, 2, 2, 4, 4] for nspec=6
         write_spectra(self.fileio, spec)
         targetids = [2,10,4,4,4,0,0]
         comp_subset = read_spectra(self.fileio, targetids=targetids)

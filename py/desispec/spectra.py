@@ -19,11 +19,11 @@ import numbers
 
 import numpy as np
 from astropy.table import Table
+from astropy.units import Unit
 
 _specutils_imported = True
 try:
     from specutils import SpectrumList, Spectrum1D
-    from astropy.units import Unit
     from astropy.nddata import InverseVariance, StdDevUncertainty
 except ImportError:
     _specutils_imported = False
@@ -79,6 +79,9 @@ class Spectra(object):
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
     """
+    wavelength_unit = Unit('Angstrom')
+    flux_density_unit = Unit('10-17 erg cm-2 s-1 AA-1')
+
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None,
@@ -682,13 +685,11 @@ class Spectra(object):
         if not _specutils_imported:
             raise NameError("specutils is not available in the environment.")
         sl = SpectrumList()
-        AA = Unit('Angstrom')
-        specunit = Unit('10-17 erg cm-2 s-1 AA-1')
         for i, band in enumerate(self.bands):
             meta = {'band': band}
-            spectral_axis = self.wave[band] * AA
-            flux = self.flux[band] * specunit
-            uncertainty = InverseVariance(self.ivar[band] * (specunit**-2))
+            spectral_axis = self.wave[band] * self.wavelength_unit
+            flux = self.flux[band] * self.flux_density_unit
+            uncertainty = InverseVariance(self.ivar[band] * (self.flux_density_unit**-2))
             mask = self.mask[band] != 0
             meta['int_mask'] = self.mask[band]
             meta['resolution_data'] = self.resolution_data[band]
@@ -774,16 +775,14 @@ class Spectra(object):
         mask = dict()
         resolution_data = None
         extra = None
-        AA = Unit('Angstrom')
-        specunit = Unit('10-17 erg cm-2 s-1 AA-1')
         for i, band in enumerate(bands):
-            wave[band] = sl[i].spectral_axis.to(AA).value
-            flux[band] = sl[i].flux.to(specunit).value
+            wave[band] = sl[i].spectral_axis.to(cls.wavelength_unit).value
+            flux[band] = sl[i].flux.to(cls.flux_density_unit).value
             if isinstance(sl[i].uncertainty, InverseVariance):
-                ivar[band] = sl[i].uncertainty.quantity.to(specunit**-2).value
+                ivar[band] = sl[i].uncertainty.quantity.to(cls.flux_density_unit**-2).value
             elif isinstance(sl[i].uncertainty, StdDevUncertainty):
                 # Future: may need np.isfinite() here?
-                ivar[band] = (sl[i].uncertainty.quantity.to(specunit).value)**-2
+                ivar[band] = (sl[i].uncertainty.quantity.to(cls.flux_density_unit).value)**-2
             else:
                 raise ValueError("Unknown uncertainty type!")
             try:
