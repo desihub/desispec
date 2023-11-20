@@ -690,14 +690,14 @@ class Spectra(object):
         sl = SpectrumList()
         for i, band in enumerate(self.bands):
             meta = {'band': band}
-            spectral_axis = self.wave[band] * self.wavelength_unit
-            flux = self.flux[band] * self.flux_density_unit
-            uncertainty = InverseVariance(self.ivar[band] * (self.flux_density_unit**-2))
-            mask = self.mask[band] != 0
-            meta['int_mask'] = self.mask[band]
-            meta['resolution_data'] = self.resolution_data[band]
+            spectral_axis = self.wave[band].copy() * self.wavelength_unit
+            flux = self.flux[band].copy() * self.flux_density_unit
+            uncertainty = InverseVariance(self.ivar[band].copy() * (self.flux_density_unit**-2))
+            mask = (self.mask[band] != 0).copy()
+            meta['int_mask'] = self.mask[band].copy()
+            meta['resolution_data'] = self.resolution_data[band].copy()
             try:
-                meta['extra'] = self.extra[band]
+                meta['extra'] = self.extra[band].copy()
             except (KeyError, TypeError):
                 meta['extra'] = None
             if i == 0:
@@ -705,13 +705,13 @@ class Spectra(object):
                 # Only add these to the first item in the list.
                 #
                 meta['bands'] = self.bands
-                meta['fibermap'] = self.fibermap
-                meta['exp_fibermap'] = self.exp_fibermap
-                meta['desi_meta'] = self.meta
+                meta['fibermap'] = self.fibermap.copy()
+                meta['exp_fibermap'] = self.exp_fibermap.copy()
+                meta['desi_meta'] = self.meta.copy()
                 meta['single'] = self._single
-                meta['scores'] = self.scores
-                meta['scores_comments'] = self.scores_comments
-                meta['extra_catalog'] = self.extra_catalog
+                meta['scores'] = self.scores.copy()
+                meta['scores_comments'] = self.scores_comments.copy()
+                meta['extra_catalog'] = self.extra_catalog.copy()
             sl.append(Spectrum1D(flux=flux, spectral_axis=spectral_axis,
                                  uncertainty=uncertainty, mask=mask, meta=meta))
         return sl
@@ -744,10 +744,7 @@ class Spectra(object):
             try:
                 bands = sl[0].meta['bands']
             except KeyError:
-                #
-                # This is a big assumption; it doesn't capture ['b', 'z'] or ['r', 'z'].
-                #
-                bands = ['b', 'r', 'z'][0:len(sl)]
+                raise ValueError("Band details not supplied. Bands should be specified with, e.g.: spectra[0].meta['bands'] = ['b', 'r', 'z'].")
         elif isinstance(spectra, Spectrum1D):
             sl = [spectra]
             #
@@ -779,32 +776,32 @@ class Spectra(object):
         resolution_data = None
         extra = None
         for i, band in enumerate(bands):
-            wave[band] = sl[i].spectral_axis.to(cls.wavelength_unit).value
-            flux[band] = sl[i].flux.to(cls.flux_density_unit).value
+            wave[band] = sl[i].spectral_axis.to(cls.wavelength_unit).value.copy()
+            flux[band] = sl[i].flux.to(cls.flux_density_unit).value.copy()
             if isinstance(sl[i].uncertainty, InverseVariance):
-                ivar[band] = sl[i].uncertainty.quantity.to(cls.flux_density_unit**-2).value
+                ivar[band] = sl[i].uncertainty.quantity.to(cls.flux_density_unit**-2).value.copy()
             elif isinstance(sl[i].uncertainty, StdDevUncertainty):
                 # Future: may need np.isfinite() here?
-                ivar[band] = (sl[i].uncertainty.quantity.to(cls.flux_density_unit).value)**-2
+                ivar[band] = (sl[i].uncertainty.quantity.to(cls.flux_density_unit).value.copy())**-2
             else:
                 raise ValueError("Unknown uncertainty type!")
             try:
-                mask[band] = sl[i].meta['int_mask']
+                mask[band] = sl[i].meta['int_mask'].copy()
             except KeyError:
                 try:
-                    mask[band] = sl.mask.astype(np.int32)
+                    mask[band] = sl.mask.astype(np.int32).copy()
                 except AttributeError:
                     mask[band] = np.zeros(flux[band].shape, dtype=np.int32)
             if 'resolution_data' in sl[i].meta:
                 if resolution_data is None:
-                    resolution_data = {band: sl[i].meta['resolution_data']}
+                    resolution_data = {band: sl[i].meta['resolution_data'].copy()}
                 else:
-                    resolution_data[band] = sl[i].meta['resolution_data']
+                    resolution_data[band] = sl[i].meta['resolution_data'].copy()
             if 'extra' in sl[i].meta:
                 if extra is None:
-                    extra = {band: sl[i].meta['extra']}
+                    extra = {band: sl[i].meta['extra'].copy()}
                 else:
-                    extra[band] = sl[i].meta['extra']
+                    extra[band] = sl[i].meta['extra'].copy()
         return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
                    resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
                    meta=meta, extra=extra, single=single, scores=scores,
