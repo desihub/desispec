@@ -18,12 +18,16 @@ parser.add_argument('--fibers', type=str, default = None, required = False,
                     help = 'defines from_to which fiber to work on. (ex: --fibers=50:60,4 means that only fibers 4, and fibers from 50 to 60 (excluded) will be plotted)')
 parser.add_argument('--image', type=str, default = None, required = False,
                     help = 'overplot traces on image')
+parser.add_argument('--mask', action='store_true', required = False,
+                    help = 'Use image mask when plotting')
 parser.add_argument('--lines', type=str, default = None, required = False,
                     help = 'coma separated list of lines')
 parser.add_argument('--vmin', type=float, default = None, required = False,
                     help = 'min value for image display')
 parser.add_argument('--vmax', type=float, default = None, required = False,
                     help = 'max value for image display')
+parser.add_argument('--zscale', action='store_true', required = False,
+                    help = 'Use IRAF/ds9-like zscale limits for image')
 parser.add_argument('--other-psf', type= str, default = None, required = False,
                     help = 'other psf to compare with')
 parser.add_argument('--wavelength', type= float, default = None, required = False,
@@ -63,14 +67,28 @@ plt.figure("traces")
 
 if args.image is not None :
     img=fitsio.read(args.image)
-    vmax=1000
-    for l in range(5) :
-        vmax=np.median(img[img>vmax])
-        vmin=0
-    if args.vmin is not None :
-        vmin=args.vmin
-    if args.vmax is not None :
-        vmax=args.vmax
+
+    if args.zscale:
+        from astropy.visualization import ZScaleInterval
+        vmin, vmax = ZScaleInterval().get_limits(img)
+    else:
+        vmax=1000
+        for l in range(5) :
+            vmax=np.median(img[img>vmax])
+            vmin=0
+        if args.vmin is not None :
+            vmin=args.vmin
+        if args.vmax is not None :
+            vmax=args.vmax
+
+    #- Apply mask -> NaN after vmin to not mess up medians.
+    #- Use NaN instead of 0 so that masked pixels aren't colored
+    #- like normal pixels
+    if args.mask:
+        mask = fitsio.read(args.image, 'MASK')
+        # img *= (mask==0)
+        img[mask!=0] = np.NaN
+
     plt.imshow(img,origin="lower",vmin=vmin,vmax=vmax,aspect="auto")
 
 for i,fiber in enumerate(fibers) :
