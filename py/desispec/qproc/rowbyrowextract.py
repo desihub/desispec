@@ -1,3 +1,10 @@
+"""
+desispec.qproc.rowbyrowextract
+============
+
+Row-by-row extraction routines.
+"""
+
 import numpy as np
 import numba
 from scipy import special, linalg

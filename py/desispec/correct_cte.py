@@ -1,4 +1,10 @@
-# need a CTE model function
+"""
+desispec.correct_cte
+============
+
+Methods to fit CTE effects and remove them from images.
+"""
+
 from copy import deepcopy
 import os
 import numpy as np
@@ -396,7 +402,7 @@ def fit_cte(images):
             ampbd = ampreg[0].stop
         else:
             ampbd = ampreg[0].start
-        npix = 10
+        npix = 11
         need_to_reverse = ampreg[1].stop == image.pix.shape[1]
         start, stop = tcte['start'], tcte['stop']
         step = 1
@@ -418,7 +424,8 @@ def fit_cte(images):
         fac = np.sqrt(np.pi / 2 / npix)
         uncertainties = [
             fac * np.sqrt(np.median(
-                im.ivar[sclean]**-1 + im.ivar[scte]**-1, keepdims=True))
+                im.ivar[sclean]**-1 + im.ivar[scte]**-1, axis=0,
+                keepdims=True))
             for im in images]
 
         chi = partial(chi_simplified_regnault,
