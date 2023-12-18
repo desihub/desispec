@@ -8,6 +8,7 @@ import shutil
 import time
 import copy
 import warnings
+import tempfile
 
 import numpy as np
 import numpy.testing as nt
@@ -24,6 +25,44 @@ from desispec.spectra import *
 from desispec.io.spectra import *
 
 class TestSpectra(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """Create specprod directory structure"""
+        cls.testDir = tempfile.mkdtemp()
+        cls.origEnv = {
+            "SPECPROD": None,
+            "DESI_SPECTRO_REDUX": None,
+            }
+        cls.testEnv = {
+            'SPECPROD':'dailytest',
+            "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+            }
+
+        for e in cls.origEnv:
+            if e in os.environ:
+                cls.origEnv[e] = os.environ[e]
+            os.environ[e] = cls.testEnv[e]
+
+        cls.reduxdir = os.path.join(
+                cls.testEnv['DESI_SPECTRO_REDUX'],
+                cls.testEnv['SPECPROD'])
+
+        os.makedirs(cls.reduxdir, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        """Cleanup test files if they exist.
+        """
+        for e in cls.origEnv:
+            if cls.origEnv[e] is None:
+                del os.environ[e]
+            else:
+                os.environ[e] = cls.origEnv[e]
+
+        if os.path.exists(cls.testDir):
+            shutil.rmtree(cls.testDir)
+
 
     def setUp(self):
         #- catch specific warnings so that we can find and fix
