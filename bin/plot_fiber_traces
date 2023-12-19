@@ -95,7 +95,7 @@ for i,fiber in enumerate(fibers) :
     x = tset.x_vs_wave(fiber,wave)
     y = tset.y_vs_wave(fiber,wave)
     color=None
-    if args.image is not None: color="white"
+    if args.image is not None: color="lightgray"
     plt.plot(x,y,color=color)
 
 
@@ -107,7 +107,7 @@ if lines is not None :
             xl[i] = tset.x_vs_wave(fiber,line)
             yl[i] = tset.y_vs_wave(fiber,line)
         color=None
-        if args.image is not None: color="white"
+        if args.image is not None: color="lightgray"
         plt.plot(xl,yl,color=color)
 
 plt.xlabel("xccd")
