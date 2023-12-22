@@ -27,6 +27,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.io.util import replace_prefix
 from desispec.calibfinder import CalibFinder
 from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
@@ -1448,7 +1449,7 @@ def create_petalnz_pdf(
                 log.warning("{} : no file".format(fn))
             else:
                 # AR switching to zmtl
-                fn = fn.replace("redrock", "zmtl")
+                fn = replace_prefix(fn, "redrock", "zmtl")
                 if not os.path.isfile(fn):
                     log.warning("{} : no file".format(fn))
                     continue
