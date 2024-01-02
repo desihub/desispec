@@ -535,8 +535,3 @@ class TestQL_QA(unittest.TestCase):
         resl=qa(inp,**qargs)
         self.assertTrue("yaml" in qargs["qafile"])
         self.assertTrue(len(resl["METRICS"]["MEDIAN_SNR"])==self.nspec) #- positive definite
-
-
-if __name__ == '__main__':
-    unittest.main()
-

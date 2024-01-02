@@ -144,7 +144,3 @@ class TestResolution(unittest.TestCase):
         data2, offsets2 = desispec.resolution._sort_and_symmeterize(data, offsets)
         self.assertTrue(data is data2)
         self.assertTrue(offsets is offsets2)
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()           

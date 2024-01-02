@@ -105,7 +105,3 @@ class TestFibermap(unittest.TestCase):
         tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
-
-
-if __name__ == '__main__':
-    unittest.main()

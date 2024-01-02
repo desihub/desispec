@@ -891,7 +891,3 @@ class TestCoadd(unittest.TestCase):
         spec.R = None
         spec.mask = None
         coadd = coadd_cameras(spec)
-
-
-if __name__ == '__main__':
-    unittest.main()           

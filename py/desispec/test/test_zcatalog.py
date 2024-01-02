@@ -49,8 +49,3 @@ class TestZCatalog(unittest.TestCase):
         zcat['TSNR2_LRG'] = np.zeros(len(zcat))
         n, best = find_primary_spectra(zcat, sort_column='BLAT')
         self.assertTrue( np.all(zcat['TEST'] == best) )
-
-
-if __name__ == '__main__':
-    unittest.main()
-        

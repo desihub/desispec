@@ -5,13 +5,6 @@ import numpy.testing as nt
 from astropy.io import fits
 from astropy.table import Table
 from copy import deepcopy
-
-if __name__ == '__main__':
-    print('Run this instead:')
-    thisfile = __file__.removeprefix(os.getcwd()+'/')
-    print(f'pytest {thisfile}')
-    sys.exit(1)
-
 from ..test.util import get_frame_data
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns

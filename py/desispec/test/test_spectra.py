@@ -466,8 +466,3 @@ class TestSpectra(unittest.TestCase):
         sp2 = sp1[[True,False,True,False,True]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

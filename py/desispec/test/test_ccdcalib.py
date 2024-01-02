@@ -110,7 +110,3 @@ class TestCcdCalib(unittest.TestCase):
             del os.environ['DESI_LOGLEVEL']
         else:
             os.environ['DESI_LOGLEVEL'] = original_log_level
-
-
-if __name__ == '__main__':
-    unittest.main()           

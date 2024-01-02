@@ -52,7 +52,3 @@ class TestFibermap(unittest.TestCase):
         #- but OIII should have NaN for second since it is off wavelength grid
         self.assertFalse(np.isnan(results['OIII']['FLUX'][0]))
         self.assertTrue(np.isnan(results['OIII']['FLUX'][1]))
-
-
-if __name__ == '__main__':
-    unittest.main()

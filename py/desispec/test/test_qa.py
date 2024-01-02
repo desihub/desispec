@@ -316,9 +316,3 @@ class TestQA(unittest.TestCase):
 
     def runTest(self):
         pass
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()
-    #qa_frame_plot_test()

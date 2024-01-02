@@ -479,7 +479,3 @@ class TestPreProc(unittest.TestCase):
 
     def test_default_mask(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
-
-
-if __name__ == '__main__':
-    unittest.main()

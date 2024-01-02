@@ -352,8 +352,3 @@ for legacy standards
         result, success = runcmd(desispec.scripts.sky.main, args=args,
             inputs=inputs, outputs=outputs, clobber=True)
         self.assertTrue(success)
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

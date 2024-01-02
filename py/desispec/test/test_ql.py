@@ -216,8 +216,3 @@ class TestQL(unittest.TestCase):
  
 #        if runcmd(cmd) != 0:
 #              raise RuntimeError('quicklook pipeline failed')
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

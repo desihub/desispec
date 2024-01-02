@@ -142,8 +142,3 @@ class TestSpecStatus(unittest.TestCase):
         newstatus = update_specstatus(specstatus, tiles, update_only=False)
         self.assertTrue(np.all(newstatus['LASTNIGHT'] != specstatus['LASTNIGHT']))
         self.assertTrue(np.all(newstatus['LASTNIGHT'] == tiles['LASTNIGHT']))
-
-
-#- run all unit tests in this file
-if __name__ == '__main__':
-    unittest.main()

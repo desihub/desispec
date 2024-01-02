@@ -140,7 +140,3 @@ class TestScripts(unittest.TestCase):
                 environ[k] = self.environ_cache[k]
         self.environ_cache.clear()
         return
-
-
-if __name__ == '__main__':
-    unittest.main()

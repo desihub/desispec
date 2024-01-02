@@ -68,8 +68,3 @@ class TestPipelinePlan(unittest.TestCase):
         # fullgrph = load_prod()
         # self.assertTrue(grph == fullgrph)
         pass
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

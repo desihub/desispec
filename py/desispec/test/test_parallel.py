@@ -161,8 +161,3 @@ class TestParallel(unittest.TestCase):
 
         groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
         check_weight_distribution(weights, groups, num_nodes, groups_per_node)
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

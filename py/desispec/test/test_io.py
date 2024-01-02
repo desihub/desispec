@@ -4,12 +4,6 @@
 """
 
 import sys
-if __name__ == '__main__':
-    print('Run this instead:')
-    # print('python setup.py test -m desispec.test.test_io')
-    print('pytest py/desispec/test/test_io.py')
-    sys.exit(1)
-
 import unittest
 from unittest.mock import patch, MagicMock
 import os

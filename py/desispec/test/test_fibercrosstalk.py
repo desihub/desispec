@@ -74,6 +74,3 @@ class TestSky(unittest.TestCase):
 
         xyset = read_xytraceset(self.psffile)
         correct_fiber_crosstalk(spectra,xyset=xyset)
-
-if __name__ == '__main__':
-    unittest.main()
