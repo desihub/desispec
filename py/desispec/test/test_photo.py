@@ -8,8 +8,10 @@ import unittest
 import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
 
-if 'NERSC_HOST' in os.environ and \
-        os.getenv('DESI_SPECTRO_DATA') == '/global/cfs/cdirs/desi/spectro/data':
+from desispec.io.meta import get_desi_root_readonly 
+desi_root = get_desi_root_readonly()
+
+if 'NERSC_HOST' in os.environ and os.getenv('DESI_SPECTRO_DATA') == os.path.join(desi_root, 'spectro', 'data'):
     standard_nersc_environment = True
 else:
     standard_nersc_environment = False
@@ -65,20 +67,20 @@ class TestFibermap(unittest.TestCase):
         surveyops_dir = os.environ['DESI_SURVEYOPS']
         truedirs = {
             # sv1
-            '80613': np.array(['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
+            '80613': np.array([desi_root+'/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
             # sv3 including ToOs
             '19': np.array([surveyops_dir+'/mtl/sv3/ToO/ToO.ecsv',
-                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
-                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits']),
+                            desi_root+'/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
+                            desi_root+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits']),
             # main
             '2070': np.array([surveyops_dir+'/mtl/main/ToO/ToO.ecsv',
-                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
-                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
+                              desi_root+'/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
+                              desi_root+'/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
                    }
 
         for tileid in truedirs.keys():
             targetdirs = gather_targetdirs(int(tileid))
-            #print(tileid, targetdirs, truedirs[tileid])
+            print(tileid, targetdirs, truedirs[tileid])
             self.assertTrue(np.all(targetdirs == truedirs[tileid]))
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
