@@ -7,9 +7,7 @@ import unittest
 
 import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
-
 from desispec.io.meta import get_desi_root_readonly 
-desi_root = get_desi_root_readonly()
 
 if 'NERSC_HOST' in os.environ and os.getenv('DESI_SPECTRO_DATA') == os.path.join(desi_root, 'spectro', 'data'):
     standard_nersc_environment = True
@@ -64,6 +62,7 @@ class TestFibermap(unittest.TestCase):
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
+        desi_root = get_desi_root_readonly()
         surveyops_dir = os.environ['DESI_SURVEYOPS']
         truedirs = {
             # sv1
@@ -102,8 +101,8 @@ class TestFibermap(unittest.TestCase):
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_gather_tractorphot_dr10(self):
         """Like test_gather_tractorphot but for DR10 photometry."""
-
-        legacysurveydir = os.path.join(os.getenv('DESI_ROOT'), 'external', 'legacysurvey', 'dr10')
+        desi_root = get_desi_root_readonly()
+        legacysurveydir = os.path.join(desi_root, 'external', 'legacysurvey', 'dr10')
         tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
