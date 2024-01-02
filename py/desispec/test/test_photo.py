@@ -9,8 +9,12 @@ import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
 from desispec.io.meta import get_desi_root_readonly 
 
-if 'NERSC_HOST' in os.environ and os.getenv('DESI_SPECTRO_DATA') == os.path.join(desi_root, 'spectro', 'data'):
-    standard_nersc_environment = True
+if 'NERSC_HOST' in os.environ:
+    desi_root = get_desi_root_readonly()
+    if os.getenv('DESI_SPECTRO_DATA') == os.path.join(desi_root, 'spectro', 'data'):
+        standard_nersc_environment = True
+    else:
+        standard_nersc_environment = False        
 else:
     standard_nersc_environment = False
 
