@@ -162,12 +162,6 @@ class TestParallel(unittest.TestCase):
         groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
         check_weight_distribution(weights, groups, num_nodes, groups_per_node)
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

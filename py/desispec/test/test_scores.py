@@ -38,13 +38,7 @@ class TestScores(unittest.TestCase):
         
     def runTest(self):
         pass
-                
-def test_suite():
-    """Allows testing of only this module with the command::
 
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
+    
 if __name__ == '__main__':
     unittest.main()

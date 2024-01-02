@@ -1636,9 +1636,3 @@ class TestIO(unittest.TestCase):
         self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

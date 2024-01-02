@@ -221,9 +221,3 @@ class TestBoot(unittest.TestCase):
         y = psf.y(ispec=indices, wavelength=waves)
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

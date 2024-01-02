@@ -377,9 +377,3 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(n6, 0)
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m desispec.test.test_pixgroup
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

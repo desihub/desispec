@@ -53,12 +53,6 @@ class TestFibermap(unittest.TestCase):
         self.assertFalse(np.isnan(results['OIII']['FLUX'][0]))
         self.assertTrue(np.isnan(results['OIII']['FLUX'][1]))
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m desispec.test.test_emlinefit
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 if __name__ == '__main__':
     unittest.main()

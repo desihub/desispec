@@ -106,12 +106,6 @@ class TestFibermap(unittest.TestCase):
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 if __name__ == '__main__':
     unittest.main()
