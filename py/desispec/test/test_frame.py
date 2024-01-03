@@ -112,7 +112,3 @@ class TestFrame(unittest.TestCase):
         # Mess with shape
         frame.nspec = 5
         self.assertEqual(frame.vet(), 1)
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()           

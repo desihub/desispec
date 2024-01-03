@@ -131,14 +131,3 @@ class TestFibermap(unittest.TestCase):
         update_survey_keywords(hdr)
         self.assertEqual(hdr['SURVEY'], 'sv2')
         self.assertEqual(hdr['FAPRGRM'], 'dark')
-
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-if __name__ == '__main__':
-    unittest.main()

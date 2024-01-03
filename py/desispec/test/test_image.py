@@ -122,7 +122,3 @@ class TestImage(unittest.TestCase):
             img1[1:2, 'blat']
         with self.assertRaises(ValueError):
             img1[None, 1:2]
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()           

@@ -11,11 +11,11 @@ from desispec.io.meta import get_desi_root_readonly
 
 class TestPhoto(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         from astropy.table import Table
-
         # for testing gather_targetphot and gather_tractorphot
-        
+
         # sv3-dark (secondary), sv1-bright (primary), main-dark (secondary), main-dark (primary, south), main-dark (primary, north), sv3-bright (TOO)
         input_cat = Table()
         input_cat['TARGETID'] = [929413348720641, 39627061832191195, 2253225356951552, 39627565329026280, 39633086782113662, 43977491483722156]
@@ -53,6 +53,10 @@ class TestPhoto(unittest.TestCase):
         tractorphot['FLUX_IVAR_W3'] = np.array([0.0014487484, 0.0010963874, 0.001165816]).astype('f4')
         tractorphot['LS_ID'] = np.array([10995128657712508, 10995128743167117, 10995128743105186]).astype(np.int64)
         self.tractorphot_dr10 = tractorphot
+
+    @classmethod
+    def tearDownClass(self):
+        pass
 
     @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetdirs(self):
@@ -102,6 +106,3 @@ class TestPhoto(unittest.TestCase):
         tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
-
-if __name__ == '__main__':
-    unittest.main()

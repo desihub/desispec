@@ -466,15 +466,3 @@ class TestSpectra(unittest.TestCase):
         sp2 = sp1[[True,False,True,False,True]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
-
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

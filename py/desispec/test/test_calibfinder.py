@@ -44,7 +44,3 @@ class TestCalibFinder(unittest.TestCase):
         print(cfinder.value("DETECTOR"))
         if cfinder.haskey("BIAS") :
             print(cfinder.findfile("BIAS"))
-        
-
-if __name__ == '__main__':
-    unittest.main()

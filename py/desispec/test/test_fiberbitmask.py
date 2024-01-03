@@ -38,7 +38,3 @@ class TestFrameBitMask(unittest.TestCase):
 
         ivar2 = get_fiberbitmasked_frame_arrays(self.frame, bitmask=1)
         self.assertTrue( np.all(ivar1 == ivar2) )
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

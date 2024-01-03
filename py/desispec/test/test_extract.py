@@ -171,6 +171,3 @@ class TestExtract(unittest.TestCase):
 
     def test_bundles3(self):
         self._test_bundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} --bundlesize 5 -o {} -m {} -s {} -n {}", 20, 5)
-
-if __name__ == '__main__':
-    unittest.main()
