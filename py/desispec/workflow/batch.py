@@ -30,7 +30,7 @@ def get_config(name):
     if name is None:
         name = default_system()
 
-    configfile = resources('desispec').joinpath('data/batch_config.yaml')
+    configfile = resources.files('desispec').joinpath('data/batch_config.yaml')
     with open(configfile) as fx:
         config = yaml.safe_load(fx)
 
