@@ -303,7 +303,10 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         ylbl -= yoff
         ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['METRICS'][key]),
             transform=ax2.transAxes, ha='left', fontsize='small')
+    """
 
+
+    '''
     # Residuals
     scatt_sz = 0.5
     ax_res = plt.subplot(gs[1])
@@ -328,6 +331,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     ax_sig.set_ylim(-5., 5.)
     ax_sig.plot([xmin,xmax], [0.,0], 'g-')
     ax_sig.set_xlim(xmin,xmax)
+    '''
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -335,7 +339,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
-    """
 
 def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     """ QA plots for Flux calibration in a Frame
