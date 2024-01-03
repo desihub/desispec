@@ -77,15 +77,18 @@ class TestIO(unittest.TestCase):
         for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
-
         for e in cls.origEnv:
             if cls.origEnv[e] is None:
                 del os.environ[e]
             else:
                 os.environ[e] = cls.origEnv[e]
 
-        if os.path.exists(cls.testDir):
+        if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
+
+        # reset the readonly cache
+        from ..io import meta
+        meta._desi_root_readonly = None
 
     def test_write_bintable(self):
         """Test writing binary tables to FITS.
@@ -969,7 +972,8 @@ class TestIO(unittest.TestCase):
         meta._desi_root_readonly = None
 
         #- Case 1: $DESI_ROOT_READONLY is set and exists -> use it
-        os.environ['DESI_ROOT_READONLY'] = tempfile.mkdtemp()
+        tmpdir = tempfile.mkdtemp()
+        os.environ['DESI_ROOT_READONLY'] = tmpdir
         blat = meta.get_desi_root_readonly()
         self.assertEqual(blat, os.environ['DESI_ROOT_READONLY'])
 
