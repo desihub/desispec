@@ -9,16 +9,7 @@ import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
 from desispec.io.meta import get_desi_root_readonly 
 
-if 'NERSC_HOST' in os.environ:
-    desi_root = get_desi_root_readonly()
-    if os.getenv('DESI_SPECTRO_DATA') == os.path.join(desi_root, 'spectro', 'data'):
-        standard_nersc_environment = True
-    else:
-        standard_nersc_environment = False        
-else:
-    standard_nersc_environment = False
-
-class TestFibermap(unittest.TestCase):
+class TestPhoto(unittest.TestCase):
 
     def setUp(self):
         from astropy.table import Table
@@ -63,11 +54,12 @@ class TestFibermap(unittest.TestCase):
         tractorphot['LS_ID'] = np.array([10995128657712508, 10995128743167117, 10995128743105186]).astype(np.int64)
         self.tractorphot_dr10 = tractorphot
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
         desi_root = get_desi_root_readonly()
-        surveyops_dir = os.environ['DESI_SURVEYOPS']
+        #surveyops_dir = os.environ['DESI_SURVEYOPS']
+        surveyops_dir = desi_root+'/survey/ops/surveyops/trunk' # assumes a standard installation / environment
         truedirs = {
             # sv1
             '80613': np.array([desi_root+'/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
@@ -86,7 +78,7 @@ class TestFibermap(unittest.TestCase):
             print(tileid, targetdirs, truedirs[tileid])
             self.assertTrue(np.all(targetdirs == truedirs[tileid]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetphot(self):
         """Test that we get the correct targeting photometry for an input set of objects."""
 
@@ -94,7 +86,7 @@ class TestFibermap(unittest.TestCase):
         for col in self.targetphot.colnames:
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_tractorphot(self):
         """Test that we get the correct Tractor photometry for an input set of objects."""
 
@@ -102,7 +94,7 @@ class TestFibermap(unittest.TestCase):
         for col in self.tractorphot.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_tractorphot_dr10(self):
         """Like test_gather_tractorphot but for DR10 photometry."""
         desi_root = get_desi_root_readonly()
