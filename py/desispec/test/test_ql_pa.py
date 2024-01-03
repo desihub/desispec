@@ -148,7 +148,3 @@ class TestQL_PA(unittest.TestCase):
 #        pargs["dumpfile"]=self.pixfile
 #        img=pa(inp,**pargs) 
 #        self.assertTrue(np.all(img.mask == mask))
-
-
-if __name__ == '__main__':
-    unittest.main()

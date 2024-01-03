@@ -405,8 +405,3 @@ class TestUtil(unittest.TestCase):
         key, value = util.parse_keyval("biz=False  ")
         self.assertEqual(type(value), bool)
         self.assertEqual(value, False)
-
-
-if __name__ == '__main__':
-    unittest.main()
-        

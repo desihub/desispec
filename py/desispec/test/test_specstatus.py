@@ -142,14 +142,3 @@ class TestSpecStatus(unittest.TestCase):
         newstatus = update_specstatus(specstatus, tiles, update_only=False)
         self.assertTrue(np.all(newstatus['LASTNIGHT'] != specstatus['LASTNIGHT']))
         self.assertTrue(np.all(newstatus['LASTNIGHT'] == tiles['LASTNIGHT']))
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-#- run all unit tests in this file
-if __name__ == '__main__':
-    unittest.main()

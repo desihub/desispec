@@ -232,9 +232,3 @@ class TestFluxCalibration(unittest.TestCase):
 
     def test_main(self):
         pass
-
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

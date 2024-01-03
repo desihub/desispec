@@ -417,8 +417,11 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
 
-    # median flux used as internal spectral reference
-    mflux=np.median(flux,axis=0)
+    # boolean mask of fibers with good data
+    good_fibers = (np.sum(ivar>0, axis=1) > 0)
+
+    # median flux of good fibers used as internal spectral reference
+    mflux=np.median(flux[good_fibers],axis=0)
 
     # measure y shifts
     wavemin = xytraceset.wavemin
@@ -661,24 +664,30 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     # here we get rid of continuum by applying a median filter 
     continuum_win = 17
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win))>continuum_win /2.
+
     # we only keep emission lines and get rid of continuum
     for ii in range(flux.shape[0]):
         flux[ii] = flux[ii] - median_filter(flux[ii], footprint=continuum_foot)
-    mflux = np.median(flux, axis=0)
+
+    # boolean mask of fibers with good data
+    good_fibers = (np.sum(ivar>0, axis=1) > 0)
+    num_good_fibers = np.sum(good_fibers)
+
     # median flux used as internal spectral reference
+    mflux = np.median(flux[good_fibers], axis=0)
 
     # we use data variance and MAD from different spectra
     # to assign variance to a spectrum (1.48 is MAD factor,
     # pi/2 is a factor from Stddev[median(N(0,1))]
     mad_factor = 1.48
-    mad = np.maximum(np.median(np.abs(flux - mflux[None, :]),
+    mad = np.maximum(np.median(np.abs(flux[good_fibers] - mflux[None, :]),
                                axis=0), 1e-100)
     # I prevent it from being zero to avoid the warning below
     # The exact value does not matter as we're comparing to actual
     # median(ivar)
     mivar = np.minimum(
-        np.median(ivar, axis=0) ,
-        1./mad_factor**2 / mad**2) * flux.shape[0] * (2. / np.pi)
+        np.median(ivar[good_fibers], axis=0) ,
+        1./mad_factor**2 / mad**2) * num_good_fibers * (2. / np.pi)
     # finally use use the MAD of the background subtracted spectra to
     # assign further variance limit
     # this is sort of "effective" noise in the continuum subtracted spectrum

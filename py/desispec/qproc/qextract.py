@@ -15,7 +15,7 @@ from desispec.io.fibermap import empty_fibermap
 from desispec.qproc.qframe import QFrame
 
 
-@numba.jit
+@numba.jit(nopython=True)
 def numba_extract(image_flux,image_var,x,hw=3) :
     n0=image_flux.shape[0]
     flux=np.zeros(n0)

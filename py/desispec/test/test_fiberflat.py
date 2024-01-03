@@ -404,8 +404,3 @@ class TestFiberFlatObject(unittest.TestCase):
         x = self.ff[1:2]
         x = self.ff[[1,2,3]]
         x = self.ff[self.ff.fibers<3]
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

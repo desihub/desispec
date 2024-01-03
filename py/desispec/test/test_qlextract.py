@@ -76,6 +76,3 @@ class TestExtract(unittest.TestCase):
         self.assertEqual(resolution.shape[0], nspec)
         # resolution.shape[1] is number of diagonals; picked by algorithm
         self.assertEqual(resolution.shape[2], nwave)
-
-if __name__ == '__main__':
-    unittest.main()
