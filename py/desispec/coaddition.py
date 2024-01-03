@@ -892,7 +892,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
         bb=max(0,b1-b)
         ee=min(e-b,e1-b)
         if e<=b : continue
-        L,X = scipy.linalg.eigh(Cinv[b:e,b:e],overwrite_a=False,driver=gvd)
+        L,X = scipy.linalg.eigh(Cinv[b:e,b:e],overwrite_a=False,driver='gvd')
         nbad = np.count_nonzero(L < Lmin)
         if nbad > 0:
             #log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
