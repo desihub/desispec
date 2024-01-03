@@ -561,7 +561,7 @@ def parse_nist(ion, vacuum=True):
         log.error("Cannot find NIST file {:s}".format(srch_file))
         raise Exception("Cannot find NIST file {:s}".format(srch_file))
     # Read, while working around non-ASCII characters in NIST line lists
-    nist_file = resources.files('desispec').joinpath(srch_file)
+    nist_file = str(resources.files('desispec').joinpath(srch_file))
     log.info("reading NIST file {:s}".format(nist_file))
     # The data files contain the non-ASCII character 'Å', so explicitly set the
     # encoding when reading the table.
@@ -796,9 +796,9 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
         filename = good_lines_filename
     else :
         if vacuum :
-            filename = resources.files('desispec').joinpath("data/arc_lines/goodlines_vacuum.ascii")
+            filename = str(resources.files('desispec').joinpath("data/arc_lines/goodlines_vacuum.ascii"))
         else :
-            filename = resources.files('desispec').joinpath("data/arc_lines/goodlines_air.ascii")
+            filename = str(resources.files('desispec').joinpath("data/arc_lines/goodlines_air.ascii"))
 
     log.info("Reading good lines in {:s}".format(filename))
     lines={}

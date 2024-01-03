@@ -29,7 +29,7 @@ class TestCalibFinder(unittest.TestCase):
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
-            shutil.copy(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml'), os.path.join(specdir,f"{c}0.yaml"))
+            shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir,f"{c}0.yaml"))
         #- Set calibration environment variable    
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
         

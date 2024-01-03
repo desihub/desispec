@@ -345,7 +345,7 @@ class TestPixGroup(unittest.TestCase):
 
     def test_exp2healpix_map(self):
         """Test get_exp2healpix_map"""
-        os.environ['DESI_SPECTRO_REDUX'] = resources.files('desispec').joinpath('test/data')
+        os.environ['DESI_SPECTRO_REDUX'] = str(resources.files('desispec').joinpath('test/data'))
         os.environ['SPECPROD'] = 'miniprod'
         expfile = findfile('exposures')
 
