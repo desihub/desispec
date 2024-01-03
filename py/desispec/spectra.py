@@ -139,6 +139,8 @@ class Spectra(object):
                 if resolution_data[b].shape[2] != wave[b].shape[0]:
                     raise RuntimeError("resolution array wavelength dimension for band {} does not match grid".format(b))
             if extra is not None:
+                # if extra[band] exists, its elements should match the shape of the flux array,
+                # but allow for some flexibility for missing bands or extra[band] being None.
                 try:
                     for ex in extra[b].items():
                         if ex[1].shape != flux[b].shape:
