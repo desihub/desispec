@@ -16,7 +16,7 @@ from astropy.table import Table
 import fitsio
 import numpy as np
 import yaml
-from pkg_resources import resource_filename
+from importlib import resources
 from desispec.tile_qa_plot import (
     get_qa_config,
     get_zbins,
@@ -58,7 +58,7 @@ def main():
 
     # AR outdir
     if args.outdir is None:
-        args.outdir = resource_filename("desispec", "data/qa")
+        args.outdir = resources.files("desispec").joinpath("data/qa")
 
     # AR output files
     outroot_nz = os.path.join(args.outdir, "qa-reference-nz")
