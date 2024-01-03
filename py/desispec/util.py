@@ -700,7 +700,9 @@ def argmatch(a, b):
     
     Related: desitarget.geomask.match_to which is similar, but doesn't allow
     duplicates in `b`.
-    """    
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
     ii = np.argsort(a)
     jj = np.argsort(b)
     kk = np.searchsorted(a[ii], b[jj])
@@ -711,7 +713,7 @@ def argmatch(a, b):
         #- only do expensive check if needed
         bad_b = np.isin(b, a, invert=True) 
         if np.any(bad_b):
-            raise ValueError(f'b contains values in a; impossible to match {set(b[bad_b])}')
+            raise ValueError(f'b contains values not in a; impossible to match {set(b[bad_b])} to {a=}')
         else:
             #- this should not occur
             raise RuntimeError(f'argmatch failure for unknown reason {a=}, {b=}')

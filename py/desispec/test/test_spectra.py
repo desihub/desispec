@@ -16,9 +16,11 @@ import numpy.testing as nt
 from astropy.table import Table, vstack
 
 from desiutil.io import encode_table
-from desispec.io import empty_fibermap
+from desispec.io import empty_fibermap, findfile
+from desispec.io import read_tile_spectra
 from desispec.io.util import add_columns
 import desispec.coaddition
+from desispec.test.util import get_blank_spectra
 
 # Import all functions from the module we are testing.
 from desispec.spectra import *
@@ -505,3 +507,106 @@ class TestSpectra(unittest.TestCase):
         sp2 = sp1[[True,False,True,False,True]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
+
+    def test_read_tile_spectra(self):
+        """test desispec.io.read_tile_spectra"""
+
+        #-----
+        #- Setup
+        np.random.seed(0)
+        nspec = 5
+        nspec2 = 2
+        tileid = 100
+        night = 20201010
+        spectra = get_blank_spectra(nspec)
+        spectra.fibermap['TARGETID'] = 100000 + np.arange(nspec)
+        spectra.fibermap['FIBER'] = np.arange(nspec)
+        spectra.fibermap['TILEID'] = 1234
+
+        #- extend with extra exposures of the first two targets
+        spectra = stack([spectra, spectra[0:nspec2]])
+
+        #- coadd_spectra is in-place update, so generate another copy
+        coadd = spectra[:]
+        desispec.coaddition.coadd(coadd, onetile=True)
+
+        #- bookkeeping checks
+        self.assertEqual(len(spectra.fibermap), nspec+nspec2)
+        self.assertEqual(len(coadd.fibermap), nspec)
+        self.assertEqual(len(np.unique(spectra.fibermap['TARGETID'])),
+                         len(np.unique(coadd.fibermap['TARGETID'])))
+
+        #- Fake Redrock catalog
+        zcat = Table()
+        zcat['TARGETID'] = coadd.fibermap['TARGETID']
+        zcat['Z'] = np.ones(nspec)
+        zcat['ZERR'] = 1e-6 * np.ones(nspec)
+        zcat['ZWARN'] = np.zeros(nspec, dtype=np.int32)
+        zcat['SPECTYPE'] = 'QSO'
+        zcat['SUBTYPE'] = 'LOZ'
+        zcat.meta['EXTNAME'] = 'REDSHIFTS'
+
+        #- Write files
+        npetal = 3
+        for petal in range(npetal):
+            specfile = findfile('spectra', tile=tileid, night=night, spectrograph=petal)
+            coaddfile = findfile('coadd', tile=tileid, night=night, spectrograph=petal)
+            rrfile = findfile('redrock', tile=tileid, night=night, spectrograph=petal)
+
+            os.makedirs(os.path.dirname(specfile), exist_ok=True)
+
+            write_spectra(specfile, spectra)
+            write_spectra(coaddfile, coadd)
+            zcat.write(rrfile)
+
+            #- increment FIBERs and TARGETIDs for next petal
+            spectra.fibermap['FIBER'] += 500
+            coadd.fibermap['FIBER'] += 500
+            coadd.exp_fibermap['FIBER'] += 500
+
+            spectra.fibermap['TARGETID'] += 10000
+            coadd.fibermap['TARGETID'] += 10000
+            coadd.exp_fibermap['TARGETID'] += 10000
+            zcat['TARGETID'] += 10000
+
+        #-----
+        #- Try reading it
+
+        #- spectra
+        spectra, redshifts = read_tile_spectra(tileid, night=night, coadd=False, redrock=True)
+        self.assertEqual(len(spectra.fibermap), npetal*(nspec+nspec2))
+        self.assertEqual(len(spectra.fibermap), len(redshifts))
+        self.assertTrue(np.all(spectra.fibermap['TARGETID'] == redshifts['TARGETID']))
+
+        #- coadd
+        spectra, redshifts = read_tile_spectra(tileid, night=night, coadd=True, redrock=True)
+        self.assertEqual(len(spectra.fibermap), npetal*nspec)
+        self.assertEqual(len(spectra.fibermap), len(redshifts))
+        self.assertTrue(np.all(spectra.fibermap['TARGETID'] == redshifts['TARGETID']))
+
+        #- coadd without redrock
+        spectra = read_tile_spectra(tileid, night=night, coadd=True, redrock=False)
+        self.assertEqual(len(spectra.fibermap), npetal*nspec)
+
+        #- subset of fibers
+        #- Note: test files only have 5 spectra, so test fiber%500 < 5
+        fibers = [1,3,502]
+        spectra, redshifts = read_tile_spectra(tileid, night=night, coadd=True, fibers=fibers, redrock=True)
+        self.assertEqual(len(spectra.fibermap), 3)
+        self.assertEqual(list(spectra.fibermap['FIBER']), fibers)
+        self.assertEqual(list(spectra.fibermap['TARGETID']), list(redshifts['TARGETID']))
+
+        #- auto-derive night
+        sp1 = read_tile_spectra(tileid, night=night, redrock=False)
+        sp2 = read_tile_spectra(tileid, redrock=False)
+        self.assertTrue(np.all(sp1.fibermap == sp2.fibermap))
+
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
