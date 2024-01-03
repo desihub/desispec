@@ -9,7 +9,7 @@ import sys
 import glob
 import warnings
 import time
-from pkg_resources import resource_filename
+from importlib import resources
 import fitsio
 
 import yaml
@@ -610,7 +610,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- Read QA parameters to find max offset for POOR and BAD positioning
     #- replicates desispec.exposure_qa.get_qa_params, but that has
     #- circular import if loaded from here
-    param_filename = resource_filename('desispec', 'data/qa/qa-params.yaml')
+    param_filename = resources.files('desispec').joinpath('data/qa/qa-params.yaml')
     with open(param_filename) as f:
         qa_params = yaml.safe_load(f)['exposure_qa']
 

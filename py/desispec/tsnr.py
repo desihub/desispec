@@ -15,7 +15,7 @@ from astropy.convolution import convolve, Box1DKernel
 import json
 import glob
 import yaml
-from pkg_resources import resource_filename
+from importlib import resources
 
 from scipy.optimize import minimize
 from scipy.interpolate import RectBivariateSpline,interp1d
@@ -50,7 +50,7 @@ class gfa_template_ensemble(object):
         self.tracer = 'GPBDARK'
 
         # https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1297
-        self.pb_fname = resource_filename('desispec', 'data/gfa/gfa-mean-desi-1297.csv')
+        self.pb_fname = resources.files('desispec').joinpath('data/gfa/gfa-mean-desi-1297.csv')
 
         log.info('Retrieved {}.'.format(self.pb_fname))
 
@@ -134,7 +134,7 @@ class template_ensemble(object):
         self.cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
 
         if config_filename is None :
-            config_filename = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(self.tracer))
+            config_filename = resources.files('desispec').joinpath(f'data/tsnr/tsnr-config-{self.tracer}.yaml')
         self.read_config(config_filename)
 
         self.seed = 1

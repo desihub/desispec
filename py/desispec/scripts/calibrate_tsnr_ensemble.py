@@ -10,7 +10,7 @@ import os
 import sys
 import argparse
 import numpy as np
-from pkg_resources import resource_filename
+from importlib import resources
 
 import astropy.io.fits as fits
 from astropy.table import Table, join
@@ -195,9 +195,9 @@ def main(args):
     log = get_logger()
 
     if args.sv1 :
-        effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/sv1-exposures.csv')
+        effective_time_calibration_table_filename = resources.files('desispec').joinpath('data/tsnr/sv1-exposures.csv')
     else :
-        effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/tsnr_refset_etc.csv')
+        effective_time_calibration_table_filename = resources.files('desispec').joinpath('data/tsnr/tsnr_refset_etc.csv')
 
 
 

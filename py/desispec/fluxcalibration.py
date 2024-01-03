@@ -23,7 +23,7 @@ import sys
 import time
 from astropy import units
 import multiprocessing
-from pkg_resources import resource_exists, resource_filename
+from importlib import resources
 import numpy.linalg
 import copy
 
@@ -636,10 +636,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
 
     # mask telluric lines
     srch_filename = "data/arc_lines/telluric_lines.txt"
-    if not resource_exists('desispec', srch_filename):
+    if not resources.files('desispec').joinpath(srch_filename).is_file():
         log.error("Cannot find telluric mask file {:s}".format(srch_filename))
         raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
-    telluric_mask_filename = resource_filename('desispec', srch_filename)
+    telluric_mask_filename = resources.files('desispec').joinpath(srch_filename)
     telluric_features = np.loadtxt(telluric_mask_filename)
     log.debug("Masking telluric features from file %s"%telluric_mask_filename)
     for cam in wave.keys() :

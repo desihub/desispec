@@ -169,8 +169,8 @@ def targetphot_datamodel(from_file=False):
             'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
             ]
         
-        from pkg_resources import resource_filename
-        #datamodel_file = resource_filename('desitarget.test', 't/targets.fits')
+        from importlib import resources
+        #datamodel_file = resources.files('desitarget.test').joinpath('t/targets.fits')
         datamodel_file = os.path.join(desi_root, 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
                                       'main', 'resolve', 'dark', 'targets-dark-hp-0.fits')
         if not os.path.isfile(datamodel_file):

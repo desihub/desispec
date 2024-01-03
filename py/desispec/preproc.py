@@ -9,7 +9,6 @@ import re
 import os
 import numpy as np
 import scipy.interpolate
-from pkg_resources import resource_exists, resource_filename
 import numba
 import time
 

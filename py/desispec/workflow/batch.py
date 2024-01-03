@@ -6,7 +6,7 @@ Utilities for working with slurm batch queues.
 """
 
 import os
-from pkg_resources import resource_filename
+from importlib import resources
 import yaml
 
 from desiutil.log import get_logger
@@ -30,7 +30,7 @@ def get_config(name):
     if name is None:
         name = default_system()
 
-    configfile = resource_filename('desispec', 'data/batch_config.yaml')
+    configfile = resources('desispec').joinpath('data/batch_config.yaml')
     with open(configfile) as fx:
         config = yaml.safe_load(fx)
 

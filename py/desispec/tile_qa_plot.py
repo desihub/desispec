@@ -8,7 +8,7 @@ Utility functions to generate the tile QA png.
 import os
 import sys
 import subprocess
-from pkg_resources import resource_filename
+from importlib import resources
 import yaml
 from glob import glob
 from datetime import datetime
@@ -51,7 +51,7 @@ def get_qa_config():
     Returns:
         Content of the qa-params.yaml file
     """
-    fn = resource_filename("desispec", "data/qa/qa-params.yaml")
+    fn = resources.files("desispec").joinpath("data/qa/qa-params.yaml")
     f = open(fn, "r")
     config = yaml.safe_load(f)
     f.close()
@@ -1279,7 +1279,7 @@ def make_tile_qa_plot(
     pngoutfile=None,
     dchi2_min=None,
     tsnr2_key=None,
-    refdir=resource_filename("desispec", "data/qa"),
+    refdir = resources.files("desispec").joinpath("data/qa"),
 ):
     """
     Generate the tile QA png file.

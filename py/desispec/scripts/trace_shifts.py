@@ -10,7 +10,7 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
-from pkg_resources import resource_exists, resource_filename
+from importlib import resources
 
 import specter.psf
 
@@ -149,16 +149,16 @@ def fit_trace_shifts(image, args):
     spectrum_filename = args.spectrum
     if args.sky :
         srch_file = "data/spec-sky.dat"
-        if not resource_exists('desispec', srch_file):
+        if not resources.files('desispec').joinpath(srch_file).is_file():
             log.error("Cannot find sky spectrum file {:s}".format(srch_file))
             raise RuntimeError("Cannot find sky spectrum file {:s}".format(srch_file))
-        spectrum_filename=resource_filename('desispec', srch_file)
+        spectrum_filename = resources.files('desispec').joinpath(srch_file)
     elif args.arc_lamps :
         srch_file = "data/spec-arc-lamps.dat"
-        if not resource_exists('desispec', srch_file):
+        if not resources.files('desispec').joinpath(srch_file).is_file():
             log.error("Cannot find arc lamps spectrum file {:s}".format(srch_file))
             raise RuntimeError("Cannot find arc lamps spectrum file {:s}".format(srch_file))
-        spectrum_filename=resource_filename('desispec', srch_file)
+        spectrum_filename = resources.files('desispec').joinpath(srch_file)
     if spectrum_filename is not None :
         log.info("Use external calibration from cross-correlation with {}".format(spectrum_filename))
 

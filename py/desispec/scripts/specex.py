@@ -82,8 +82,8 @@ def main(args=None, comm=None):
     if 'SPECEXDATA' in os.environ:
         specexdata = os.environ['SPECEXDATA']
     else:
-        from pkg_resources import resource_filename
-        specexdata = resource_filename('specex', 'data')
+        from importlib import resources
+        specexdata = resources.files('specex').joinpath('data')
 
     lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
