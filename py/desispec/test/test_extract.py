@@ -14,7 +14,7 @@ import unittest
 import uuid
 import os
 from glob import glob
-from pkg_resources import resource_filename
+from importlib import resources
 
 import desispec.image
 import desispec.io
@@ -32,8 +32,8 @@ class TestExtract(unittest.TestCase):
         cls.outfile = 'test-out-{}.fits'.format(cls.testhash)
         cls.outmodel = 'test-model-{}.fits'.format(cls.testhash)
         cls.fibermapfile = 'test-fibermap-{}.fits'.format(cls.testhash)
-        # cls.psffile = resource_filename('specter', 'test/t/psf-monospot.fits')
-        cls.psffile = resource_filename('gpu_specter', 'test/data/psf-r0-00051060.fits')
+        # cls.psffile = resources.files('specter').joinpath('test/t/psf-monospot.fits')
+        cls.psffile = resources.files('gpu_specter').joinpath('test/data/psf-r0-00051060.fits')
         # cls.psf = load_psf(cls.psffile)
 
         pix = np.random.normal(0, 3.0, size=(4128, 4114))

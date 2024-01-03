@@ -9,7 +9,7 @@ import numpy as np
 import os
 from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
-from pkg_resources import resource_filename
+from importlib import resources
 import desispec.sky
 from desispec.preproc import parse_sec_keyword
 from specter.psf import load_psf
@@ -70,7 +70,7 @@ class TestQL_QA(unittest.TestCase):
     #- Create some test data
     def setUp(self):
         #- use specter psf for this test
-        self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
+        self.psffile = resources.files('specter').joinpath('test/t/psf-monospot.fits')
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={"kwargs":{
             "refKey":None,

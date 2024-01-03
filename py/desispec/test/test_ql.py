@@ -15,7 +15,7 @@ from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
 import datetime
 import pytz
-from pkg_resources import resource_filename
+from importlib import resources
 
 class TestQL(unittest.TestCase):
     @classmethod
@@ -173,7 +173,7 @@ class TestQL(unittest.TestCase):
 
             #- PSF has to be real file
             psffile = '{}/psf-{}.fits'.format(calibDir, camera)
-            example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
+            example_psf = resources.files('desispec').joinpath(f'test/data/ql/psf-{camera}.fits')
             shutil.copy(example_psf, psffile)
             
         #- Copy test calibration-data.yaml file 
@@ -181,7 +181,7 @@ class TestQL(unittest.TestCase):
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
-            shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
+            shutil.copy(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml'), os.path.join(specdir, f"{c}0.yaml"))
         
         #- Set calibration environment variable
         os.environ['DESI_SPECTRO_CALIB'] = calibDir

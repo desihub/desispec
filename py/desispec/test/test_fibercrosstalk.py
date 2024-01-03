@@ -5,7 +5,7 @@ tests desispec.fibercrosstalk
 import unittest
 
 import numpy as np
-from pkg_resources import resource_filename
+from importlib import resources
 
 from desispec.fibercrosstalk import correct_fiber_crosstalk
 from desispec.frame import Frame
@@ -24,7 +24,7 @@ class TestSky(unittest.TestCase):
         for i in range(0, self.nwave, 20):
             self.flux[i] = i
         self.ivar = np.ones(self.flux.shape)
-        self.psffile = resource_filename('specter', 'test/t/psf-monospot.fits')
+        self.psffile = resources.files('specter').joinpath('test/t/psf-monospot.fits')
 
     def _get_spectra(self,with_gradient=False):
         #- Setup data for a Resolution matrix
