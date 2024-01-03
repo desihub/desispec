@@ -418,7 +418,7 @@ class TestUtil(unittest.TestCase):
         b = np.array([3,2,1,4,2,3])
         ii = util.argmatch(a, b)
         self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
-        
+
         #- special case already matching
         a = np.array([1,3,2,4])
         b = a.copy()
@@ -430,7 +430,7 @@ class TestUtil(unittest.TestCase):
         b = a.copy()
         ii = util.argmatch(a, b)
         self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
-        
+
         #- a with extras (before, in middle, and after range of b values)
         a = np.array([1,3,2,4,0,5])
         b = np.array([3,1,4])
@@ -453,13 +453,13 @@ class TestUtil(unittest.TestCase):
         b = np.array([3,1,1,2,4])
         ii = util.argmatch(a, b)
         self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
-        
+
         #- a can have extras, but not b
         a = np.array([1,3,2,4])
         b = np.array([3,2,5,4])
         with self.assertRaises(ValueError):
             ii = util.argmatch(a, b)
-        
+
         #- Brute force random testing with shuffles
         a = np.arange(10)
         b = a.copy()
@@ -478,7 +478,7 @@ class TestUtil(unittest.TestCase):
             #- Note: extras in a is ok, just not in b
             keep = np.isin(b, a)
             b = b[keep]
-            
+
             ii = util.argmatch(a,b)
             self.assertTrue(np.all(a[ii] == b), f'test number {test}\n{a=}\n{ii=}\n{a[ii]=} !=\n{b=}')
 
