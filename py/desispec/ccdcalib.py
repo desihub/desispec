@@ -186,7 +186,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         "CLOCK17","CLOCK18","OFFSET0","OFFSET1","OFFSET2","OFFSET3",
         "OFFSET4","OFFSET5","OFFSET6","OFFSET7","DELAYS","CDSPARMS",
         "PGAGAIN","OCSVER","DOSVER","CONSTVER",
-        "GAINA", "GAINB", "GAINC", "GAIND",
+        "GAINA", "GAINB", "GAINC", "GAIND","VCCDSEC"
         ] :
         if key in first_image_header :
             hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
@@ -322,7 +322,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
             "CLOCK13","CLOCK14","CLOCK15","CLOCK16","CLOCK17","CLOCK18",
             "OFFSET0","OFFSET1","OFFSET2","OFFSET3","OFFSET4","OFFSET5",
             "OFFSET6","OFFSET7","DELAYS","CDSPARMS","PGAGAIN","OCSVER",
-            "DOSVER","CONSTVER"] :
+            "DOSVER","CONSTVER", "VCCDSEC"] :
         if key in first_image_header :
             hdus[0].header[key] = (first_image_header[key],first_image_header.comments[key])
 
