@@ -564,6 +564,18 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
     redshifts = list()
     for filename in specfiles:
         log.debug(f'reading {os.path.basename(filename)}')
+
+        #- if filtering by fibers, check if we need to read this file
+        if fibers is not None:
+            # filenames are like prefix-PETAL-tileid-night.*
+            thispetal = int(os.path.basename(filename).split('-')[1])
+            petals = np.asarray(fibers)//500
+
+            if not np.any(np.isin(thispetal, petals)):
+                log.debug('Skipping petal %d, not needed by fibers %s',
+                          thispetal, fibers)
+                continue
+
         sp = read_spectra(filename, single=single)
         if targets is not None:
             keep = np.in1d(sp.fibermap['TARGETID'], targets)
