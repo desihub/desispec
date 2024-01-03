@@ -15,6 +15,14 @@ import numpy.testing as nt
 
 from astropy.table import Table, vstack
 
+_specutils_imported = True
+try:
+    from specutils import SpectrumList, Spectrum1D
+    # from astropy.units import Unit
+    # from astropy.nddata import InverseVariance, StdDevUncertainty
+except ImportError:
+    _specutils_imported = False
+
 from desiutil.io import encode_table
 from desispec.io import empty_fibermap, findfile
 from desispec.io import read_tile_spectra
@@ -25,6 +33,7 @@ from desispec.test.util import get_blank_spectra
 # Import all functions from the module we are testing.
 from desispec.spectra import *
 from desispec.io.spectra import *
+
 
 class TestSpectra(unittest.TestCase):
 
@@ -78,8 +87,8 @@ class TestSpectra(unittest.TestCase):
             "KEY1" : "VAL1",
             "KEY2" : "VAL2"
         }
-        self.nwave = 100
-        self.nspec = 5
+        self.nwave = 101
+        self.nspec = 6
         self.ndiag = 3
 
         fmap = empty_fibermap(self.nspec)
@@ -87,7 +96,7 @@ class TestSpectra(unittest.TestCase):
                            ['NIGHT', 'EXPID', 'TILEID'],
                            [np.int32(0), np.int32(0), np.int32(0)],
                            )
-        
+
         for s in range(self.nspec):
             fmap[s]["TARGETID"] = 456 + s
             fmap[s]["FIBER"] = 123 + s
@@ -128,16 +137,16 @@ class TestSpectra(unittest.TestCase):
         self.extra = {}
 
         for s in range(self.nspec):
-            self.wave['b'] = np.linspace(3600, 5800, self.nwave, dtype=float)
-            self.wave['r'] = np.linspace(5760, 7620, self.nwave, dtype=float)
-            self.wave['z'] = np.linspace(7520, 9824, self.nwave, dtype=float)
+            self.wave['b'] = np.linspace(3500, 5800, self.nwave, dtype=float)
+            self.wave['r'] = np.linspace(5570, 7870, self.nwave, dtype=float)
+            self.wave['z'] = np.linspace(7640, 9940, self.nwave, dtype=float)
             for b in self.bands:
                 self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
-                self.mask[b] = np.tile(np.arange(2, dtype=np.uint32), 
+                self.mask[b] = np.tile(np.arange(2, dtype=np.uint32),
                     (self.nwave * self.nspec) // 2).reshape( (self.nspec, self.nwave) )
-                self.res[b] = np.zeros( (self.nspec, self.ndiag, self.nwave), 
+                self.res[b] = np.zeros( (self.nspec, self.ndiag, self.nwave),
                     dtype=np.float64)
                 self.res[b][:,1,:] = 1.0
                 self.extra[b] = {}
@@ -158,7 +167,6 @@ class TestSpectra(unittest.TestCase):
             os.remove(self.filebuild)
         pass
 
-
     def verify(self, spec, fmap):
         for key, val in self.meta.items():
             assert(key in spec.meta)
@@ -176,12 +184,11 @@ class TestSpectra(unittest.TestCase):
         if spec.extra_catalog is not None:
             assert(np.all(spec.extra_catalog == self.extra_catalog))
 
-
     def test_io(self):
 
         # manually create the spectra and write
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
-            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
             fibermap=self.fmap1, meta=self.meta, extra=self.extra)
 
         self.verify(spec, self.fmap1)
@@ -206,8 +213,8 @@ class TestSpectra(unittest.TestCase):
         self.verify(comp, self.fmap1)
 
         # test I/O with the extra_catalog HDU enabled
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
-            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
             fibermap=self.fmap1, meta=self.meta, extra=self.extra,
             extra_catalog=self.extra_catalog)
 
@@ -259,7 +266,8 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.all(spec_subset.mask['z'] == comp_subset.mask['z']))
 
         # read subset in different order than original file, with repeats and missing targetids
-        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0,0,2,2,4] for nspec=5
+        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0, 0, 2, 2, 4, 4] for nspec=6
+        spec.fibermap['TARGETID'][-1] = 5
         write_spectra(self.fileio, spec)
         targetids = [2,10,4,4,4,0,0]
         comp_subset = read_spectra(self.fileio, targetids=targetids)
@@ -268,8 +276,10 @@ class TestSpectra(unittest.TestCase):
         # targetid 4 appears 3x because it was requested 3 times
         # targetid 0 appears 4x because it was in the input file twice and requested twice
         # and targetid 0 is at the end of comp_subset, not the beginning like the file
+        # targetid 5 was not requested.
         # targetid 10 doesn't appear because it wasn't in the input file, ok
-        self.assertTrue(np.all(comp_subset.fibermap['TARGETID'] == np.array([2,2,4,4,4,0,0,0,0])))
+        self.assertListEqual(comp_subset.fibermap['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
 
         # make sure coadded spectra with FIBERMAP vs. EXP_FIBERMAP works
         tid = 555666
@@ -299,8 +309,6 @@ class TestSpectra(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             subset = read_spectra(self.fileio, rows=rows, targetids=[1,2])
-
-
 
     def test_read_columns(self):
         """test reading while subselecting columns"""
@@ -343,9 +351,9 @@ class TestSpectra(unittest.TestCase):
 
         other = {}
         for b in self.bands:
-            other[b] = Spectra(bands=[b], wave={b : self.wave[b]}, 
-                flux={b : self.flux[b]}, ivar={b : self.ivar[b]}, 
-                mask={b : self.mask[b]}, resolution_data={b : self.res[b]}, 
+            other[b] = Spectra(bands=[b], wave={b : self.wave[b]},
+                flux={b : self.flux[b]}, ivar={b : self.ivar[b]},
+                mask={b : self.mask[b]}, resolution_data={b : self.res[b]},
                 fibermap=self.fmap1, meta=self.meta, extra={b : self.extra[b]})
 
         for b in self.bands:
@@ -356,18 +364,17 @@ class TestSpectra(unittest.TestCase):
         dummy = Spectra()
         spec.update(dummy)
 
-        self.verify(spec, self.fmap1)        
+        self.verify(spec, self.fmap1)
 
         path = write_spectra(self.filebuild, spec)
 
-
     def test_updateselect(self):
-        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, 
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1, 
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
             meta=self.meta, extra=self.extra)
 
-        other = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, 
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap2, 
+        other = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, fibermap=self.fmap2,
             meta=self.meta, extra=self.extra)
 
         spec.update(other)
@@ -419,7 +426,6 @@ class TestSpectra(unittest.TestCase):
         nt.assert_array_equal(spec.fibermap.dtype, self.fmap1.dtype)
         nt.assert_array_equal(spec.fibermap['NIGHT'][self.nspec:], 0)
         nt.assert_array_equal(spec.fibermap['TARGETID'][0:self.nspec], spec.fibermap['TARGETID'][self.nspec:])
-
 
     def test_stack(self):
         """Test desispec.spectra.stack"""
@@ -504,9 +510,59 @@ class TestSpectra(unittest.TestCase):
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 2)
 
-        sp2 = sp1[[True,False,True,False,True]]
+        sp2 = sp1[[True, False, True, False, True, False]]
         for band in self.bands:
             self.assertEqual(sp2.flux[band].shape[0], 3)
+
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    def test_to_specutils(self):
+        """Test conversion to a specutils object.
+        """
+        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        sl = sp1.to_specutils()
+        self.assertEqual(sl[0].meta['single'], sp1._single)
+        self.assertTrue((sl[0].mask == (sp1.mask[self.bands[0]] != 0)).all())
+        self.assertTrue((sl[1].flux.value == sp1.flux[sp1.bands[1]]).all())
+
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    def test_from_specutils(self):
+        """Test conversion from a specutils object.
+        """
+        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        spectrum_list = sp1.to_specutils()
+        sp2 = Spectra.from_specutils(spectrum_list)
+        self.assertListEqual(sp1.bands, sp2.bands)
+        self.assertTrue((sp1.flux[self.bands[0]] == sp2.flux[self.bands[0]]).all())
+        self.assertTrue((sp1.ivar[self.bands[1]] == sp2.ivar[self.bands[1]]).all())
+        self.assertTrue((sp1.mask[self.bands[2]] == sp2.mask[self.bands[2]]).all())
+        self.assertDictEqual(sp1.meta, sp2.meta)
+
+    @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
+    def test_from_specutils_coadd(self):
+        """Test conversion from a Spectrum1D object representing a coadd across cameras.
+        """
+        sp0 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta, extra=None, scores=self.scores,
+            extra_catalog=self.extra_catalog)
+        sp1 = desispec.coaddition.coadd_cameras(sp0)
+        spectrum_list = sp1.to_specutils()
+        sp2 = Spectra.from_specutils(spectrum_list[0])
+        self.assertEqual(sp2.bands[0], 'brz')
+        self.assertListEqual(sp1.bands, sp2.bands)
+        self.assertTrue((sp1.flux[sp1.bands[0]] == sp2.flux[sp2.bands[0]]).all())
+        self.assertTrue((sp1.ivar[sp1.bands[0]] == sp2.ivar[sp2.bands[0]]).all())
+        self.assertTrue((sp1.mask[sp1.bands[0]] == sp2.mask[sp2.bands[0]]).all())
+        self.assertDictEqual(sp1.meta, sp2.meta)
 
     def test_read_tile_spectra(self):
         """test desispec.io.read_tile_spectra"""
@@ -600,4 +656,3 @@ class TestSpectra(unittest.TestCase):
         sp1 = read_tile_spectra(tileid, night=night, redrock=False)
         sp2 = read_tile_spectra(tileid, redrock=False)
         self.assertTrue(np.all(sp1.fibermap == sp2.fibermap))
-
