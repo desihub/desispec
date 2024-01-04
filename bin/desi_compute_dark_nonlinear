@@ -225,8 +225,8 @@ for night in nights:
                     log.warning(f"no VCCDSEC header on {rawfile}, {args.camera}")
                 zerofiles.append(rawfile)
                 all_zerofiles.append(rawfile)
-    if len(zerofiles)==0:
-        log.warning(f"no ZEROs left on {night}, skipping that NIGHT")
+    if len(zerofiles)<5:
+        log.critical(f'{len(zerofiles)} ZEROS on {night} is insufficient, reason are VCCD checks with minimum time {args.min_vccdsec}')
         continue
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
