@@ -226,6 +226,7 @@ for night in nights:
                 zerofiles.append(rawfile)
                 all_zerofiles.append(rawfile)
     if len(zerofiles)==0:
+        log.warning(f"no ZEROs left on {night}, skipping that NIGHT")
         continue
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
@@ -270,6 +271,10 @@ for exptime in darktimes:
                 if os.path.isfile(biasfile):
                     rawfiles.append(filename)
                     biasfiles.append(biasfile)
+    if len(rawfiles)==0:
+        log.warning(f"no DARKs with {exptime}s left, skipping that EXPTIME")
+        continue
+
     compute_dark_file(rawfiles, darkfile, args.camera, bias=biasfiles,
         exptime=exptime)
 
