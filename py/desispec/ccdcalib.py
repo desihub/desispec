@@ -96,6 +96,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         if first_image_header is None :
             first_image_header = fitsfile[camera].header
+        elif 'VCCDSEC' in first_image_header and 'VCCDSEC' in fitsfile[camera].header:
+            if fitsfile[camera].header['VCCDSEC']<first_image_header['VCCDSEC']:
+                first_image_header['VCCDSEC']=fitsfile[camera].header['VCCDSEC']
+                first_image_header['VCCDON']=fitsfile[camera].header['VCCDON']
 
         fitsfile.close()
 
@@ -260,6 +264,10 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
         if first_image_header is None :
             first_image_header = image_header
+        elif 'VCCDSEC' in first_image_header and 'VCCDSEC' in fitsfile[camera].header:
+            if fitsfile[camera].header['VCCDSEC']<first_image_header['VCCDSEC']:
+                first_image_header['VCCDSEC']=fitsfile[camera].header['VCCDSEC']
+                first_image_header['VCCDON']=fitsfile[camera].header['VCCDON']
 
         flavor = image_header['FLAVOR'].upper()
         if flavor != 'ZERO':
