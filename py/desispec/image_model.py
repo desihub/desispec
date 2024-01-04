@@ -23,7 +23,7 @@ from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat
 
-@numba.jit
+@numba.jit(nopython=True)
 def numba_proj(image,x,sigma,flux) :
     '''
     Add a spectrum to a model of the pixel values in a CCD image assuming a Gaussian cross-dispersion profile.

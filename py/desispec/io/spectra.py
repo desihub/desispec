@@ -35,6 +35,7 @@ from .fibermap import fibermap_comments
 
 from ..spectra import Spectra, stack
 from .meta import specprod_root
+from ..util import argmatch
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -497,17 +498,17 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
 
     return spec
 
-def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
+def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=False,
                       single=False, targets=None, fibers=None, redrock=True,
-                      group=None):
+                      group='cumulative'):
     """
     Read and return combined spectra for a tile/night
 
     Args:
         tileid (int) : Tile ID
-        night (int or str) : YEARMMDD night or tile group, e.g. 'deep' or 'all'
 
     Options:
+        night (int or str) : YEARMMDD night
         specprod (str) : overrides $SPECPROD
         reduxdir (str) : overrides $DESI_SPECTRO_REDUX/$SPECPROD
         coadd (bool) : if True, read coadds instead of per-exp spectra
@@ -532,12 +533,15 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         #- will automatically use $SPECPROD if specprod=None
         reduxdir = specprod_root(specprod)
 
-    tiledir = os.path.join(reduxdir, 'tiles')
+    tiledir = os.path.join(reduxdir, 'tiles', group)
+    if night is None:
+        nightdirglob = os.path.join(tiledir, str(tileid), '*')
+        tilenightdirs = sorted(glob.glob(nightdirglob))
+        night = os.path.basename(tilenightdirs[-1])
+
     nightstr = str(night)
-    if group is not None:
-        tiledir = os.path.join(tiledir, group)
-        if group == 'cumulative':
-            nightstr = 'thru'+nightstr
+    if group == 'cumulative':
+        nightstr = 'thru'+nightstr
 
     tiledir = os.path.join(tiledir, str(tileid), str(night))
 
@@ -548,10 +552,11 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*')
+    specglob = f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*'
+    specfiles = glob.glob(specglob)
 
     if len(specfiles) == 0:
-        raise ValueError(f'No spectra found in {tiledir}')
+        raise ValueError(f'No spectra found in {specglob}')
 
     specfiles = sorted(specfiles)
 
@@ -559,6 +564,18 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
     redshifts = list()
     for filename in specfiles:
         log.debug(f'reading {os.path.basename(filename)}')
+
+        #- if filtering by fibers, check if we need to read this file
+        if fibers is not None:
+            # filenames are like prefix-PETAL-tileid-night.*
+            thispetal = int(os.path.basename(filename).split('-')[1])
+            petals = np.asarray(fibers)//500
+
+            if not np.any(np.isin(thispetal, petals)):
+                log.debug('Skipping petal %d, not needed by fibers %s',
+                          thispetal, fibers)
+                continue
+
         sp = read_spectra(filename, single=single)
         if targets is not None:
             keep = np.in1d(sp.fibermap['TARGETID'], targets)
@@ -572,29 +589,17 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
             if redrock:
                 #- Read matching redrock file for this spectra/coadd file
                 rrfile = os.path.basename(filename).replace(prefix, 'redrock', 1)
-                log.debug(f'Reading {rrfile}')
-                rrfile = os.path.join(tiledir, rrfile)
+                rrfile = checkgzip(os.path.join(tiledir, rrfile))
+                log.debug(f'Reading {os.path.basename(rrfile)}')
                 rr = Table.read(rrfile, 'REDSHIFTS')
 
                 #- Trim rr to only have TARGETIDs in filtered spectra sp
                 keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
                 rr = rr[keep]
 
-                #- spectra files can have multiple entries per TARGETID,
-                #- while redrock files have only 1.  Expand to match spectra.
-                #- Note: astropy.table.join changes the order
-                if len(sp.fibermap) > len(rr):
-                    rrx = Table()
-                    rrx['TARGETID'] = sp.fibermap['TARGETID']
-                    rrx = astropy.table.join(rrx, rr, keys='TARGETID')
-                else:
-                    rrx = rr
-
-                #- Sort the rrx Table to match the order of sp['TARGETID']
-                ii = np.argsort(sp.fibermap['TARGETID'])
-                jj = np.argsort(rrx['TARGETID'])
-                kk = np.argsort(ii[jj])
-                rrx = rrx[kk]
+                #- match the Redrock entries to the spectra fibermap entries
+                ii = argmatch(rr['TARGETID'], sp.fibermap['TARGETID'])
+                rrx = rr[ii]
 
                 #- Confirm that we got all that expanding and sorting correct
                 assert np.all(sp.fibermap['TARGETID'] == rrx['TARGETID'])

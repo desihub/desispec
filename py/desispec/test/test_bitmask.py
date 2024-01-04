@@ -22,6 +22,4 @@ class TestBitMasks(unittest.TestCase):
                 self.assertEqual(m.mask(name), m.mask(m.bitnum(name)), 'Failed matching mask to name for '+name)
                 self.assertEqual(m.bitname(m.bitnum(name)), name, 'Failed bit name->num->name roundtrip for '+name)
                 c = m.comment(name)
-                
-if __name__ == '__main__':
-    unittest.main()
+

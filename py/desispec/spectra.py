@@ -19,6 +19,14 @@ import numbers
 
 import numpy as np
 from astropy.table import Table
+from astropy.units import Unit
+
+_specutils_imported = True
+try:
+    from specutils import SpectrumList, Spectrum1D
+    from astropy.nddata import InverseVariance, StdDevUncertainty
+except ImportError:
+    _specutils_imported = False
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
@@ -30,7 +38,7 @@ class Spectra(object):
     """Represents a grouping of spectra.
 
     This class contains an "extended" fibermap that has information about
-    the night and exposure of each spectrum.  For each band, this class has 
+    the night and exposure of each spectrum.  For each band, this class has
     the wavelength grid, flux, ivar, mask, and resolution arrays.
 
     Parameters
@@ -71,12 +79,15 @@ class Spectra(object):
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
     """
+    wavelength_unit = Unit('Angstrom')
+    flux_density_unit = Unit('10-17 erg cm-2 s-1 AA-1')
+
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None,
             single=False, scores=None, scores_comments=None,
             extra_catalog=None):
-        
+
         self._bands = bands
         self._single = single
         self._ftype = np.float64
@@ -128,9 +139,14 @@ class Spectra(object):
                 if resolution_data[b].shape[2] != wave[b].shape[0]:
                     raise RuntimeError("resolution array wavelength dimension for band {} does not match grid".format(b))
             if extra is not None:
-                for ex in extra[b].items():
-                    if ex[1].shape != flux[b].shape:
-                        raise RuntimeError("extra arrays must have the same shape as the flux array")
+                # if extra[band] exists, its elements should match the shape of the flux array,
+                # but allow for some flexibility for missing bands or extra[band] being None.
+                try:
+                    for ex in extra[b].items():
+                        if ex[1].shape != flux[b].shape:
+                            raise RuntimeError("extra arrays must have the same shape as the flux array")
+                except (KeyError, AttributeError):
+                    pass
 
         if fibermap is not None and extra_catalog is not None:
             if len(fibermap) != len(extra_catalog):
@@ -166,14 +182,14 @@ class Spectra(object):
             self.mask = None
         else:
             self.mask = {}
-        
+
         if resolution_data is None:
             self.resolution_data = None
             self.R = None
         else:
             self.resolution_data = {}
             self.R = {}
-        
+
         if extra is None:
             self.extra = None
         else:
@@ -189,10 +205,10 @@ class Spectra(object):
                 self.resolution_data[b] = resolution_data[b].astype(self._ftype)
                 self.R[b] = np.array( [ Resolution(r) for r in resolution_data[b] ] )
             if extra is not None:
-                self.extra[b] = {}
-                for ex in extra[b].items():
-                    self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
-
+                if extra[b] is not None:
+                    self.extra[b] = {}
+                    for ex in extra[b].items():
+                        self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
 
     @property
     def bands(self):
@@ -397,8 +413,8 @@ class Spectra(object):
         Overwrite or append new data.
 
         Given another Spectra object, compare the fibermap information with
-        the existing one.  For spectra that already exist, overwrite existing 
-        data with the new values.  For spectra that do not exist, append that 
+        the existing one.  For spectra that already exist, overwrite existing
+        data with the new values.  For spectra that do not exist, append that
         data to the end of the spectral data.
 
         Args:
@@ -502,7 +518,7 @@ class Spectra(object):
         indx_exists = np.where(exists == 1)[0]
         indx_new = np.where(exists == 0)[0]
 
-        # Make new data arrays of the correct size to hold both the old and 
+        # Make new data arrays of the correct size to hold both the old and
         # new data
 
         nupdate = len(indx_exists)
@@ -515,7 +531,7 @@ class Spectra(object):
             nold = len(self.fibermap)
             newfmap = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.fibermap.dtype))
-        
+
         newscores = None
         if self.scores is not None:
             newscores = encode_table(np.zeros( (nold + nnew, ),
@@ -529,11 +545,11 @@ class Spectra(object):
         newwave = {}
         newflux = {}
         newivar = {}
-        
+
         newmask = None
         if add_mask or self.mask is not None:
             newmask = {}
-        
+
         newres = None
         newR = None
         if add_res or self.resolution_data is not None:
@@ -657,6 +673,163 @@ class Spectra(object):
         self.extra_catalog = newextra_catalog
 
         return
+
+    def to_specutils(self):
+        """Convert to ``specutils`` objects.
+
+        Returns
+        -------
+        specutils.SpectrumList
+            A list with each band represented as a specutils.Spectrum1D object.
+
+        Raises
+        ------
+        NameError
+            If ``specutils`` is not available in the environment.
+        """
+        if not _specutils_imported:
+            raise NameError("specutils is not available in the environment.")
+        sl = SpectrumList()
+        for i, band in enumerate(self.bands):
+            meta = {'band': band}
+            spectral_axis = self.wave[band].copy() * self.wavelength_unit
+            flux = self.flux[band].copy() * self.flux_density_unit
+            uncertainty = InverseVariance(self.ivar[band].copy() * (self.flux_density_unit**-2))
+            mask = (self.mask[band] != 0).copy()
+            meta['int_mask'] = self.mask[band].copy()
+            meta['resolution_data'] = self.resolution_data[band].copy()
+            try:
+                meta['extra'] = self.extra[band].copy()
+            except (KeyError, TypeError, AttributeError):
+                pass
+            if i == 0:
+                #
+                # Only add these to the first item in the list.
+                #
+                meta['bands'] = self.bands
+                meta['single'] = self._single
+                if self.meta:
+                    meta['desi_meta'] = self.meta.copy()
+                for key in ('fibermap', 'exp_fibermap',
+                            'scores', 'scores_comments', 'extra_catalog'):
+                    try:
+                        meta[key] = getattr(self, key).copy()
+                    except AttributeError:
+                        pass
+            sl.append(Spectrum1D(flux=flux, spectral_axis=spectral_axis,
+                                 uncertainty=uncertainty, mask=mask, meta=meta))
+        return sl
+
+    @classmethod
+    def from_specutils(cls, spectra):
+        """Convert ``specutils`` objects to a :class:`~desispec.spectra.Spectra` object.
+
+        Parameters
+        ----------
+        spectra : specutils.Spectrum1D or specutils.SpectrumList
+            A ``specutils`` object.
+
+        Returns
+        -------
+        :class:`~desispec.spectra.Spectra`
+            The corresponding DESI-internal object.
+
+        Raises
+        ------
+        NameError
+            If ``specutils`` is not available in the environment.
+        ValueError
+            If an unknown type is found in `spectra`.
+        """
+        if not _specutils_imported:
+            raise NameError("specutils is not available in the environment.")
+        if isinstance(spectra, SpectrumList):
+            sl = spectra
+            try:
+                bands = sl[0].meta['bands']
+            except KeyError:
+                raise ValueError("Band details not supplied. Bands should be specified with, e.g.: spectra[0].meta['bands'] = ['b', 'r', 'z'].")
+        elif isinstance(spectra, Spectrum1D):
+            sl = [spectra]
+            #
+            # Assume this is a coadd across cameras.
+            #
+            try:
+                bands = sl[0].meta['bands']
+            except KeyError:
+                bands = ['brz']
+        else:
+            raise ValueError("Unknown type input to Spectra.from_specutils!")
+        #
+        # Load objects that are independent of band from the first item.
+        #
+        single = sl[0].meta.get('single', False)
+        meta = fibermap = exp_fibermap = scores = scores_comments = extra_catalog = None
+        try:
+            meta = sl[0].meta['desi_meta'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            fibermap = sl[0].meta['fibermap'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            exp_fibermap = sl[0].meta['exp_fibermap'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            scores = sl[0].meta['scores'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            scores_comments = sl[0].meta['scores_comments'].copy()
+        except (KeyError, AttributeError):
+            pass
+        try:
+            extra_catalog = sl[0].meta['extra_catalog'].copy()
+        except (KeyError, AttributeError):
+            pass
+        #
+        # Load band-dependent quantities.
+        #
+        wave = dict()
+        flux = dict()
+        ivar = dict()
+        mask = dict()
+        resolution_data = None
+        extra = None
+        for i, band in enumerate(bands):
+            wave[band] = sl[i].spectral_axis.to(cls.wavelength_unit).value.copy()
+            flux[band] = sl[i].flux.to(cls.flux_density_unit).value.copy()
+            if isinstance(sl[i].uncertainty, InverseVariance):
+                ivar[band] = sl[i].uncertainty.quantity.to(cls.flux_density_unit**-2).value.copy()
+            elif isinstance(sl[i].uncertainty, StdDevUncertainty):
+                # Future: may need np.isfinite() here?
+                ivar[band] = (sl[i].uncertainty.quantity.to(cls.flux_density_unit).value.copy())**-2
+            else:
+                raise ValueError("Unknown uncertainty type!")
+            try:
+                mask[band] = sl[i].meta['int_mask'].copy()
+            except KeyError:
+                try:
+                    mask[band] = sl.mask.astype(np.int32).copy()
+                except AttributeError:
+                    mask[band] = np.zeros(flux[band].shape, dtype=np.int32)
+            if 'resolution_data' in sl[i].meta:
+                if resolution_data is None:
+                    resolution_data = {band: sl[i].meta['resolution_data'].copy()}
+                else:
+                    resolution_data[band] = sl[i].meta['resolution_data'].copy()
+            if 'extra' in sl[i].meta:
+                if extra is None:
+                    extra = {band: sl[i].meta['extra'].copy()}
+                else:
+                    extra[band] = sl[i].meta['extra'].copy()
+        return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
+                   resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
+                   meta=meta, extra=extra, single=single, scores=scores,
+                   scores_comments=scores_comments, extra_catalog=extra_catalog)
+
 
 def stack(speclist):
     """

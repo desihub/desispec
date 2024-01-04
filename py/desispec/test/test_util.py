@@ -406,7 +406,79 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(type(value), bool)
         self.assertEqual(value, False)
 
+    def test_argmatch(self):
+        #- basic argmatch
+        a = np.array([1,3,2,4])
+        b = np.array([3,2,1,4])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
 
-if __name__ == '__main__':
-    unittest.main()
-        
+        #- b with duplicates
+        a = np.array([1,3,2,4])
+        b = np.array([3,2,1,4,2,3])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- special case already matching
+        a = np.array([1,3,2,4])
+        b = a.copy()
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- special case already sorted
+        a = np.array([1,2,3,4])
+        b = a.copy()
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- a with extras (before, in middle, and after range of b values)
+        a = np.array([1,3,2,4,0,5])
+        b = np.array([3,1,4])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- a has duplicates
+        a = np.array([1,3,3,2,4])
+        b = np.array([3,2,1,4])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- equal length arrays, not not equal values
+        a = np.array([1,3,2,4])
+        b = np.array([3,1,1,2])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        a = np.array([1,3,2,4,2])
+        b = np.array([3,1,1,2,4])
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b), f'{a=}, {ii=}, {a[ii]=} != {b=}')
+
+        #- a can have extras, but not b
+        a = np.array([1,3,2,4])
+        b = np.array([3,2,5,4])
+        with self.assertRaises(ValueError):
+            ii = util.argmatch(a, b)
+
+        #- Brute force random testing with shuffles
+        a = np.arange(10)
+        b = a.copy()
+        for test in range(100):
+            np.random.shuffle(a)
+            np.random.shuffle(b)
+            ii = util.argmatch(a,b)
+            self.assertTrue(np.all(a[ii] == b), f'test number {test}\n{a=}\n{ii=}\n{a[ii]=} !=\n{b=}')
+
+        #- Brute force random testing with repeats and extras
+        for test in range(100):
+            a = np.random.randint(0,20, size=50)
+            b = np.random.randint(5,15, size=51)
+
+            #- all values in b must be in a, so remove extras in b
+            #- Note: extras in a is ok, just not in b
+            keep = np.isin(b, a)
+            b = b[keep]
+
+            ii = util.argmatch(a,b)
+            self.assertTrue(np.all(a[ii] == b), f'test number {test}\n{a=}\n{ii=}\n{a[ii]=} !=\n{b=}')
+
