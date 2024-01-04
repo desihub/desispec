@@ -973,7 +973,8 @@ def model_y1d(image, smooth=0):
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
-                      copy_outputs_to_split_dirs=False, prepared_exptable=None, system_name=None):
+                      copy_outputs_to_split_dirs=False, prepared_exptable=None, system_name=None,
+                      min_vccdsec=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -993,6 +994,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         copy_outputs_to_split_dirs (bool): whether to copy outputs to bias_frames/dark_frames subdirs
         prepared_exptable (exptable): if a table is submitted here, no further spectra will be searched and this will be used instead
         system_name (str): the system for which batch files should be created, defaults to guessing current system
+        min_vccdsec(str): minimum time a ccd needs to be turned on to be allowed in the model
+
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -1164,6 +1167,8 @@ cd {outdir}
                 cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
             if first_expid is not None:
                 cmd += f" \\\n    --first-expid {first_expid}"
+            if min_vccdsec is not None:
+                cmd += f" \\\n    --min-vccdsec {min_vccdsec}"
 
             with open(batchfile, 'a') as fx:
                 fx.write(f"time {cmd} > {logfile2} 2> {logfile2} &\n")
@@ -1191,7 +1196,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
                       first_expid=None,night_for_name=None, use_exptable=True,queue='realtime',
                       copy_outputs_to_split_dirs=None, transmit_obslist = True, system_name=None,
-                      no_obslist=False):
+                      no_obslist=False,min_vccdsec=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -1211,7 +1216,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         transmit_obslist(bool): if True will give use the obslist from here downstream
         system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
         no_obslist(str): just use exactly the specified night-range, but assume we do not have exposure tables for this (useful when there is no exposure_table yet)
-
+        min_vccdsec(str): minimum time a ccd needs to be turned on to be allowed in the model
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -1311,4 +1316,5 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
     make_dark_scripts(outdir, nights=nights, cameras=cameras,
                       linexptime=linexptime, nskip_zeros=nskip_zeros, tempdir=tempdir, nosubmit=nosubmit,
                       first_expid=first_expid,night_for_name=night_for_name, use_exptable=use_exptable,queue=queue,
-                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist, system_name=system_name)
+                      copy_outputs_to_split_dirs=copy_outputs_to_split_dirs,prepared_exptable=obslist, system_name=system_name,
+                      min_vccdsec=min_vccdsec)

@@ -47,6 +47,9 @@ parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
+parser.add_argument('--min-vccdsec', type=float, default=86400., required=False,
+                    help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
+
 
 args = parser.parse_args()
 
@@ -215,7 +218,7 @@ for night in nights:
         with pyfits.open(rawfile) as hdulist :
             if args.camera in hdulist :
                 if 'VCCDSEC' in hdulist[args.camera].header:
-                    if hdulist[args.camera].header['VCCDSEC']<10000:
+                    if hdulist[args.camera].header['VCCDSEC']<args.min_vccdsec:
                         log.info(f"{args.camera} in {rawfile} had low VCCDSEC, skipping")
                         continue
                 else:
@@ -256,7 +259,7 @@ for exptime in darktimes:
         with pyfits.open(filename) as hdulist :
             if args.camera in hdulist :
                 if 'VCCDSEC' in hdulist[args.camera].header:
-                    if hdulist[args.camera].header['VCCDSEC']<10000:
+                    if hdulist[args.camera].header['VCCDSEC']<args.min_vccdsec:
                         log.info(f"{args.camera} in {filename} had low VCCDSEC, skipping")
                         continue
                 else:
