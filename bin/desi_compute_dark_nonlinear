@@ -225,7 +225,8 @@ for night in nights:
                     log.warning(f"no VCCDSEC header on {rawfile}, {args.camera}")
                 zerofiles.append(rawfile)
                 all_zerofiles.append(rawfile)
-
+    if len(zerofiles)==0:
+        continue
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
         log.info(f'{biasfile} already exists')
@@ -238,7 +239,7 @@ if os.path.exists(args.biasfile):
     log.info(f'{args.biasfile} already exists')
 else:
     log.info(f'Generating {args.biasfile}')
-    compute_bias_file(zerofiles, args.biasfile, args.camera)
+    compute_bias_file(all_zerofiles, args.biasfile, args.camera)
 
 #- Combine the DARKs into master darks per exptime
 darktimes = np.array(sorted(set(speclog['EXPTIME_INT'][isDark])))
