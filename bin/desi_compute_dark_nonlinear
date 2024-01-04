@@ -47,8 +47,8 @@ parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
-parser.add_argument('--min-vccdsec', type=float, default=86400., required=False,
-                    help='Minimum number of DARKs per EXPTIME to use that EXPTIME (default: 1d)')
+parser.add_argument('--min-vccdsec', type=float, default=21600., required=False,
+                    help='Minimum number of DARKs per EXPTIME to use that EXPTIME (default: 6h)')
 
 
 args = parser.parse_args()

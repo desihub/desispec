@@ -186,7 +186,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         "CLOCK17","CLOCK18","OFFSET0","OFFSET1","OFFSET2","OFFSET3",
         "OFFSET4","OFFSET5","OFFSET6","OFFSET7","DELAYS","CDSPARMS",
         "PGAGAIN","OCSVER","DOSVER","CONSTVER",
-        "GAINA", "GAINB", "GAINC", "GAIND","VCCDSEC"
+        "GAINA", "GAINB", "GAINC", "GAIND",
+        "VCCDSEC","VCCDON"
         ] :
         if key in first_image_header :
             hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
@@ -322,7 +323,8 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
             "CLOCK13","CLOCK14","CLOCK15","CLOCK16","CLOCK17","CLOCK18",
             "OFFSET0","OFFSET1","OFFSET2","OFFSET3","OFFSET4","OFFSET5",
             "OFFSET6","OFFSET7","DELAYS","CDSPARMS","PGAGAIN","OCSVER",
-            "DOSVER","CONSTVER", "VCCDSEC"] :
+            "DOSVER","CONSTVER",
+            "VCCDSEC","VCCDON"] :
         if key in first_image_header :
             hdus[0].header[key] = (first_image_header[key],first_image_header.comments[key])
 
@@ -1216,7 +1218,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         transmit_obslist(bool): if True will give use the obslist from here downstream
         system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
         no_obslist(str): just use exactly the specified night-range, but assume we do not have exposure tables for this (useful when there is no exposure_table yet)
-        min_vccdsec(float): minimum time a ccd needs to be turned on to be allowed in the model (default: 1d)
+        min_vccdsec(float): minimum time a ccd needs to be turned on to be allowed in the model (default: 6h)
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
