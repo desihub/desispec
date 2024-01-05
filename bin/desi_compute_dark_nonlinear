@@ -49,7 +49,8 @@ parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
 parser.add_argument('--min-vccdsec', type=float, default=21600., required=False,
                     help='Minimum VCCDSEC (seconds since VCCD on) to use dark, (default: 21600=6h)')
-
+parser.add_argument('--temp-tolerance', type=float, default=1, required=False,
+                    help='Do not create model if maximum CCD temperature difference is above this threshold, (default: 1K)')
 
 args = parser.parse_args()
 
@@ -212,6 +213,7 @@ for night in nights:
     else:
         log.info(f'Using {nzeros_good} ZEROs on {night}')
 
+    min_temp=max_temp=None
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
         # check cam exists for this file
@@ -223,6 +225,17 @@ for night in nights:
                         continue
                 else:
                     log.warning(f"no VCCDSEC header on {rawfile}, {args.camera}")
+                if 'CCDTEMP' in hdulist[args.camera].header:
+                    if min_temp is None:
+                        min_temp=max_temp=float(hdulist[args.camera].header)
+                    else:
+                        min_temp=min([min_temp,float(hdulist[args.camera].header)])
+                        max_temp=max([max_temp,float(hdulist[args.camera].header)])
+                    if max_temp-min_temp > args.temp_tolerance:
+                        log.critical(f"{args.camera} in {rawfile} caused high temperature shift of {max_temp-min_temp}K")
+                        sys.exit(3)
+                else:
+                    log.warning(f"no CCDTEMP header on {rawfile}, {args.camera}")
                 zerofiles.append(rawfile)
                 all_zerofiles.append(rawfile)
     if len(zerofiles)<5:
@@ -255,6 +268,7 @@ for exptime in darktimes:
     rawfiles = list()
     biasfiles = list()
     ii = (speclog['EXPTIME_INT'] == exptime)
+    min_temp=max_temp=None
     for row in speclog[isDark & ii]:
         day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
         filename = findfile('raw', night, expid, args.camera)
@@ -266,7 +280,17 @@ for exptime in darktimes:
                         continue
                 else:
                     log.warning(f"no VCCDSEC header on {filename}, {args.camera}")
-
+                if 'CCDTEMP' in hdulist[args.camera].header:
+                    if min_temp is None:
+                        min_temp=max_temp=float(hdulist[args.camera].header)
+                    else:
+                        min_temp=min([min_temp,float(hdulist[args.camera].header)])
+                        max_temp=max([max_temp,float(hdulist[args.camera].header)])
+                    if max_temp-min_temp > args.temp_tolerance:
+                        log.critical(f"{args.camera} in {filename} caused high temperature shift of {max_temp-min_temp}K")
+                        sys.exit(3)
+                else:
+                    log.warning(f"no CCDTEMP header on {filename}, {args.camera}")
                 biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
                 if os.path.isfile(biasfile):
                     rawfiles.append(filename)
