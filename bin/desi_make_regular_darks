@@ -46,7 +46,7 @@ parser.add_argument('--system-name', type=str, default=None, required=False,
 parser.add_argument('--no-obslist', action='store_true',
                     help='Do not use list of observations for the computation, instead parse from all frames observed in the timespan')
 parser.add_argument('--min-vccdsec', type=float, default=None, required=False,
-                    help='Minimum number of DARKs per EXPTIME to use that EXPTIME (default: 6h defined downstream)')
+                    help='Minimum VCCDSEC (seconds since VCCD on) to use dark (default: 21600=6h defined downstream)')
 args        = parser.parse_args()
 
 make_regular_darks(**vars(args))
