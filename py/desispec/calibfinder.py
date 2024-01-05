@@ -498,12 +498,12 @@ class CalibFinder() :
                         if dark_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTMING"],self.data["CCDTMING"]))
                             continue
-                    if "CCDTEMP" in self.data and "CCDTEMP" in dark_entry.colnames:
-                        if np.abs(float(dark_entry["CCDTEMP"].strip()) - float(self.data["CCDTEMP"].strip()))>temperature_tolerance :
-                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTEMP"],self.data["CCDTEMP"]))
+                    if "CCDTEMP" in header and "CCDTEMP" in dark_entry.colnames:
+                        if np.abs(dark_entry["CCDTEMP"] - header["CCDTEMP"])>temperature_tolerance :
+                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTEMP"],header["CCDTEMP"]))
                             continue
                         else:
-                            log.debug(f"Temperature difference to selected dark is {np.abs(float(dark_entry['CCDTEMP'].strip()) - float(self.data['CCDTEMP'].strip()))}")
+                            log.debug(f'Temperature difference to selected dark is {np.abs(dark_entry["CCDTEMP"] - header["CCDTEMP"])}')
                     else:
                         raise KeyError("did not find CCDTEMP")
 
@@ -519,12 +519,12 @@ class CalibFinder() :
                         if bias_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTMING"],self.data["CCDTMING"]))
                             continue
-                    if "CCDTEMP" in self.data and "CCDTEMP" in bias_entry.colnames:
-                        if np.abs(float(bias_entry["CCDTEMP"].strip()) - float(self.data["CCDTEMP"].strip()))>temperature_tolerance :
-                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTEMP"],self.data["CCDTEMP"]))
+                    if "CCDTEMP" in header and "CCDTEMP" in bias_entry.colnames:
+                        if np.abs(bias_entry["CCDTEMP"] - header["CCDTEMP"])>temperature_tolerance :
+                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTEMP"],header["CCDTEMP"]))
                             continue
                         else:
-                            log.debug(f"Temperature difference to selected bias is {np.abs(float(bias_entry['CCDTEMP'].strip()) - float(self.data['CCDTEMP'].strip()))}")
+                            log.debug(f'Temperature difference to selected bias is {np.abs(bias_entry["CCDTEMP"] - header["CCDTEMP"])}')
                     else:
                         raise KeyError("did not find CCDTEMP")
                     
