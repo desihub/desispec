@@ -1,5 +1,5 @@
 import unittest, os, sys, shutil, tempfile
-from pkg_resources import resource_filename
+from importlib import resources
 import numpy as np
 import numpy.testing as nt
 from astropy.io import fits
@@ -345,7 +345,7 @@ class TestPixGroup(unittest.TestCase):
 
     def test_exp2healpix_map(self):
         """Test get_exp2healpix_map"""
-        os.environ['DESI_SPECTRO_REDUX'] = resource_filename('desispec', 'test/data')
+        os.environ['DESI_SPECTRO_REDUX'] = str(resources.files('desispec').joinpath('test/data'))
         os.environ['SPECPROD'] = 'miniprod'
         expfile = findfile('exposures')
 

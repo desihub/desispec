@@ -21,7 +21,6 @@ import multiprocessing
 from astropy.table import Table,vstack
 
 import yaml
-from   pkg_resources import resource_filename
 
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat

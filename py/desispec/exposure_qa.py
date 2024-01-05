@@ -10,7 +10,7 @@ import numpy as np
 from astropy.table import Table
 import fitsio
 import yaml
-from pkg_resources import resource_filename
+from importlib import resources
 
 from desiutil.log import get_logger
 
@@ -26,7 +26,7 @@ def get_qa_params() :
     """
     global _qa_params
     if _qa_params is None :
-        param_filename =resource_filename('desispec', 'data/qa/qa-params.yaml')
+        param_filename = resources.files('desispec').joinpath('data/qa/qa-params.yaml')
         with open(param_filename) as f:
             _qa_params = yaml.safe_load(f)
     return _qa_params

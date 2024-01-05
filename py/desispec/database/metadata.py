@@ -599,7 +599,6 @@ def main():
     # command-line arguments
     #
     from argparse import ArgumentParser
-    from pkg_resources import resource_filename
     prsr = ArgumentParser(description=("Create and load a DESI metadata "+
                                        "database."))
     # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',

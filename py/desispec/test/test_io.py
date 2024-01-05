@@ -10,7 +10,6 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
-from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, MaskedColumn
