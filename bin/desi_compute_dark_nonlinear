@@ -199,6 +199,7 @@ if len(nights)==0:
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()
+min_temp=max_temp=None
 for night in nights:
     zerofiles = list()
     ii = isZero & (speclog[daynight] == night)
@@ -213,7 +214,6 @@ for night in nights:
     else:
         log.info(f'Using {nzeros_good} ZEROs on {night}')
 
-    min_temp=max_temp=None
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
         # check cam exists for this file
@@ -259,6 +259,7 @@ else:
 
 #- Combine the DARKs into master darks per exptime
 darktimes = np.array(sorted(set(speclog['EXPTIME_INT'][isDark])))
+
 for exptime in darktimes:
     darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
     if os.path.exists(darkfile):
@@ -270,7 +271,6 @@ for exptime in darktimes:
     rawfiles = list()
     biasfiles = list()
     ii = (speclog['EXPTIME_INT'] == exptime)
-    min_temp=max_temp=None
     for row in speclog[isDark & ii]:
         day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
         filename = findfile('raw', night, expid, args.camera)
