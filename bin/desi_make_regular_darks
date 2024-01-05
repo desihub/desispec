@@ -45,6 +45,8 @@ parser.add_argument('--system-name', type=str, default=None, required=False,
                     help='Name of system to make scripts for (default: current system)')
 parser.add_argument('--no-obslist', action='store_true',
                     help='Do not use list of observations for the computation, instead parse from all frames observed in the timespan')
+parser.add_argument('--min-vccdsec', type=float, default=None, required=False,
+                    help='Minimum VCCDSEC (seconds since VCCD on) to use dark (default: 21600=6h defined downstream)')
 args        = parser.parse_args()
 
 make_regular_darks(**vars(args))

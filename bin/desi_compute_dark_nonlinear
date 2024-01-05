@@ -47,6 +47,10 @@ parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
+parser.add_argument('--min-vccdsec', type=float, default=21600., required=False,
+                    help='Minimum VCCDSEC (seconds since VCCD on) to use dark, (default: 21600=6h)')
+parser.add_argument('--temp-tolerance', type=float, default=1, required=False,
+                    help='Do not create model if maximum CCD temperature difference is above this threshold, (default: 1K)')
 
 args = parser.parse_args()
 
@@ -195,6 +199,7 @@ if len(nights)==0:
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()
+min_temp=max_temp=None
 for night in nights:
     zerofiles = list()
     ii = isZero & (speclog[daynight] == night)
@@ -214,9 +219,29 @@ for night in nights:
         # check cam exists for this file
         with pyfits.open(rawfile) as hdulist :
             if args.camera in hdulist :
+                if 'VCCDSEC' in hdulist[args.camera].header:
+                    if hdulist[args.camera].header['VCCDSEC']<args.min_vccdsec:
+                        log.info(f"{args.camera} in {rawfile} had low VCCDSEC, skipping")
+                        continue
+                else:
+                    log.warning(f"no VCCDSEC header on {rawfile}, {args.camera}")
+                if 'CCDTEMP' in hdulist[args.camera].header:
+                    if min_temp is None:
+                        min_temp=max_temp=hdulist[args.camera].header['CCDTEMP']
+                    else:
+                        min_temp=min([min_temp,hdulist[args.camera].header['CCDTEMP']])
+                        max_temp=max([max_temp,hdulist[args.camera].header['CCDTEMP']])
+                    if max_temp-min_temp > args.temp_tolerance:
+                        log.critical(f"{args.camera} in {rawfile} caused high temperature shift of {max_temp-min_temp:.3f}K")
+                        sys.exit(3)
+
+                else:
+                    log.warning(f"no CCDTEMP header on {rawfile}, {args.camera}")
                 zerofiles.append(rawfile)
                 all_zerofiles.append(rawfile)
-
+    if len(zerofiles)<5:
+        log.warning(f'{len(zerofiles)} ZEROS on {night} is insufficient, reason are VCCD checks with minimum time {args.min_vccdsec}')
+        continue
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
         log.info(f'{biasfile} already exists')
@@ -229,10 +254,11 @@ if os.path.exists(args.biasfile):
     log.info(f'{args.biasfile} already exists')
 else:
     log.info(f'Generating {args.biasfile}')
-    compute_bias_file(zerofiles, args.biasfile, args.camera)
+    compute_bias_file(all_zerofiles, args.biasfile, args.camera)
 
 #- Combine the DARKs into master darks per exptime
 darktimes = np.array(sorted(set(speclog['EXPTIME_INT'][isDark])))
+
 for exptime in darktimes:
     darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
     if os.path.exists(darkfile):
@@ -249,10 +275,31 @@ for exptime in darktimes:
         filename = findfile('raw', night, expid, args.camera)
         with pyfits.open(filename) as hdulist :
             if args.camera in hdulist :
+                if 'VCCDSEC' in hdulist[args.camera].header:
+                    if hdulist[args.camera].header['VCCDSEC']<args.min_vccdsec:
+                        log.info(f"{args.camera} in {filename} had low VCCDSEC, skipping")
+                        continue
+                else:
+                    log.warning(f"no VCCDSEC header on {filename}, {args.camera}")
+                if 'CCDTEMP' in hdulist[args.camera].header:
+                    if min_temp is None:
+                        min_temp=max_temp=hdulist[args.camera].header['CCDTEMP']
+                    else:
+                        min_temp=min([min_temp,hdulist[args.camera].header['CCDTEMP']])
+                        max_temp=max([max_temp,hdulist[args.camera].header['CCDTEMP']])
+                    if max_temp-min_temp > args.temp_tolerance:
+                        log.critical(f"{args.camera} in {filename} caused high temperature shift of {max_temp-min_temp:.3f}K")
+                        sys.exit(3)
+                else:
+                    log.warning(f"no CCDTEMP header on {filename}, {args.camera}")
                 biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
                 if os.path.isfile(biasfile):
                     rawfiles.append(filename)
                     biasfiles.append(biasfile)
+    if len(rawfiles)==0:
+        log.warning(f"no DARKs with {exptime}s left, skipping that EXPTIME")
+        continue
+
     compute_dark_file(rawfiles, darkfile, args.camera, bias=biasfiles,
         exptime=exptime)
 
