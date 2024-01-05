@@ -503,10 +503,8 @@ class CalibFinder() :
                             log.debug("Skip file %s with CCDTEMP=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTEMP"],header["CCDTEMP"]))
                             continue
                         else:
-                            log.debug(f'Temperature difference to selected dark is {np.abs(dark_entry["CCDTEMP"] - header["CCDTEMP"])}')
-                    else:
-                        raise KeyError("did not find CCDTEMP")
-
+                            log.debug(f'Temperature difference to selected dark is {np.abs(dark_entry["CCDTEMP"] - header["CCDTEMP"]):.5f}')
+                    
                     #same for bias
                     if bias_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
                         log.debug("Skip file %s with DETECTOR=%s != %s"%(bias_entry["FILENAME"],bias_entry["DETECTOR"],self.data["DETECTOR"]))
@@ -524,9 +522,7 @@ class CalibFinder() :
                             log.debug("Skip file %s with CCDTEMP=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTEMP"],header["CCDTEMP"]))
                             continue
                         else:
-                            log.debug(f'Temperature difference to selected bias is {np.abs(bias_entry["CCDTEMP"] - header["CCDTEMP"])}')
-                    else:
-                        raise KeyError("did not find CCDTEMP")
+                            log.debug(f'Temperature difference to selected bias is {np.abs(bias_entry["CCDTEMP"] - header["CCDTEMP"]):.5f}')
                     
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
