@@ -234,6 +234,8 @@ for night in nights:
                     if max_temp-min_temp > args.temp_tolerance:
                         log.critical(f"{args.camera} in {rawfile} caused high temperature shift of {max_temp-min_temp}K")
                         sys.exit(3)
+                    else:
+                        log.debug(f"temperature range between frames is currently {min_temp} to {max_temp}")
                 else:
                     log.warning(f"no CCDTEMP header on {rawfile}, {args.camera}")
                 zerofiles.append(rawfile)
@@ -289,6 +291,8 @@ for exptime in darktimes:
                     if max_temp-min_temp > args.temp_tolerance:
                         log.critical(f"{args.camera} in {filename} caused high temperature shift of {max_temp-min_temp}K")
                         sys.exit(3)
+                    else:
+                        log.debug(f"temperature range between frames is currently {min_temp} to {max_temp}")
                 else:
                     log.warning(f"no CCDTEMP header on {filename}, {args.camera}")
                 biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
