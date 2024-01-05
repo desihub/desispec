@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+# coding: utf-8
+import glob
+import os
+import numpy as np
+import astropy.table as t
+from astropy.io import fits
+import argparse
+
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description="Generate tables of DARK and BIAS frames in DESI_SPECTRO_DARK",
+    epilog='''
+    Scans all dark and bias frames currently in the DESI_SPECTRO_DARK directories
+    and puts information relevant for choosing the right file into a table to 
+    avoid opening all files for each calibfinder call
+    currently uses DETECTOR, CCDTMING, CCDCFG and CCDTEMP for doing the decision,
+    date and spectrograph are encoded in the filenames
+    automatically creates a backup if the outfile exists already
+''')
+
+
+parser.add_argument('--dark-dir', type=str, default='dark_frames', required=False,
+                    help='sub-directory to scan for dark frames')
+parser.add_argument('--bias-dir', type=str, default='bias_frames', required=False,
+                    help='sub-directory to scan for bias frames')
+parser.add_argument('-i', '--indir', type=str, default=f'{os.getenv("DESI_SPECTRO_DARK")}', required=False,
+                    help='directory where dark data is expected')
+parser.add_argument('-o', '--outdir', type=str, default=f'{os.getenv("DESI_SPECTRO_DARK")}', required=False,
+                    help='directory to put the output table in')
+parser.add_argument('--suffix', type=str, default="",required=False,
+                    help="suffix to add to output filenames")
+args = parser.parse_args()
+
+
+dark_files=glob.glob(f'{args.indir}/{args.dark_dir}/dark*.fits.gz')
+bias_files=glob.glob(f'{args.indir}/{args.bias_dir}/bias*.fits.gz')
+dark_files.sort()
+bias_files.sort()
+for files,outfile in zip([dark_files,bias_files],
+                         [f'{args.outdir}/dark_table{"_"+args.suffix if args.suffix else ""}.csv',
+                          f'{args.outdir}/bias_table{"_"+args.suffix if args.suffix else ""}.csv']):
+    outlist = []
+    if os.path.exists(outfile):
+        outtab=t.Table.read(outfile)
+        outtab.write(f'{outfile}.bak{np.random.randint(10000)}',format='csv')
+        files_new = [f for f in files if f.replace(f"{args.indir}/","") not in outtab['FILENAME']]
+    else:
+        files_new = files
+    for fi in files_new:
+        with fits.open(fi, "readonly") as f:
+            det = f[0].header["DETECTOR"]
+            tming = f[0].header["CCDTMING"]
+            cfg = f[0].header["CCDCFG"]
+            if "CCDTEMP" in f[0].header:
+              temp = f[0].header["CCDTEMP"]
+            else:
+              temp = np.nan
+        outlist.append([fi.replace(f"{args.indir}/",""), det, cfg, tming, temp])
+    newtab=t.Table(
+        np.array(outlist), names=["FILENAME", "DETECTOR", "CCDCFG", "CCDTMING", "CCDTEMP"]
+    )
+    if len(newtab)>0:
+        if os.path.exists(outfile):
+            outtab=t.vstack([outtab,newtab])
+        else:
+            outtab = newtab
+        outtab.sort('FILENAME')
+        outtab.write(outfile,overwrite=True)
