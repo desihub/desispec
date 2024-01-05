@@ -416,6 +416,10 @@ class CalibFinder() :
         """
         log = get_logger()
 
+        #temperature tolerance to be used in K
+        #only applicable for R,Z as B stores 850 deg throughout
+        temperature_tolerance = 1.
+
         #- Should only be called if $DESI_SPECTRO_DARK is set, but check that
         #- to avoid accidentally creating paths like "None/dark_table.csv"
         if 'DESI_SPECTRO_DARK' not in os.environ:
@@ -494,6 +498,10 @@ class CalibFinder() :
                         if dark_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTMING"],self.data["CCDTMING"]))
                             continue
+                    if "CCDTEMP" in self.data and "CCDTEMP" in dark_entry.colnames:
+                        if np.abs(float(dark_entry["CCDTEMP"].strip()) - float(self.data["CCDTEMP"].strip()))>temperature_tolerance :
+                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTEMP"],self.data["CCDTEMP"]))
+                            continue
 
                     #same for bias
                     if bias_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
@@ -506,6 +514,10 @@ class CalibFinder() :
                     if "CCDTMING" in self.data :
                         if bias_entry["CCDTMING"].strip() != self.data["CCDTMING"].strip() :
                             log.debug("Skip file %s with CCDTMING=%s != %s "%(bias_entry["FILENAME"],bias_entry["CCDTMING"],self.data["CCDTMING"]))
+                            continue
+                    if "CCDTEMP" in self.data and "CCDTEMP" in dark_entry.colnames:
+                        if np.abs(float(bias_entry["CCDTEMP"].strip()) - float(self.data["CCDTEMP"].strip()))>temperature_tolerance :
+                            log.debug("Skip file %s with CCDTEMP=%s != %s "%(dark_entry["FILENAME"],dark_entry["CCDTEMP"],self.data["CCDTEMP"]))
                             continue
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
