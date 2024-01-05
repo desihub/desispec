@@ -227,10 +227,10 @@ for night in nights:
                     log.warning(f"no VCCDSEC header on {rawfile}, {args.camera}")
                 if 'CCDTEMP' in hdulist[args.camera].header:
                     if min_temp is None:
-                        min_temp=max_temp=float(hdulist[args.camera].header)
+                        min_temp=max_temp=hdulist[args.camera].header['CCDTEMP']
                     else:
-                        min_temp=min([min_temp,float(hdulist[args.camera].header)])
-                        max_temp=max([max_temp,float(hdulist[args.camera].header)])
+                        min_temp=min([min_temp,hdulist[args.camera].header['CCDTEMP']])
+                        max_temp=max([max_temp,hdulist[args.camera].header['CCDTEMP']])
                     if max_temp-min_temp > args.temp_tolerance:
                         log.critical(f"{args.camera} in {rawfile} caused high temperature shift of {max_temp-min_temp}K")
                         sys.exit(3)
@@ -282,10 +282,10 @@ for exptime in darktimes:
                     log.warning(f"no VCCDSEC header on {filename}, {args.camera}")
                 if 'CCDTEMP' in hdulist[args.camera].header:
                     if min_temp is None:
-                        min_temp=max_temp=float(hdulist[args.camera].header)
+                        min_temp=max_temp=hdulist[args.camera].header['CCDTEMP']
                     else:
-                        min_temp=min([min_temp,float(hdulist[args.camera].header)])
-                        max_temp=max([max_temp,float(hdulist[args.camera].header)])
+                        min_temp=min([min_temp,hdulist[args.camera].header['CCDTEMP']])
+                        max_temp=max([max_temp,hdulist[args.camera].header['CCDTEMP']])
                     if max_temp-min_temp > args.temp_tolerance:
                         log.critical(f"{args.camera} in {filename} caused high temperature shift of {max_temp-min_temp}K")
                         sys.exit(3)
