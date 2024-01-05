@@ -1226,7 +1226,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         transmit_obslist(bool): if True will give use the obslist from here downstream
         system_name(str): allows to overwrite the system for which slurm scripts are created, will default to guessing the current system
         no_obslist(str): just use exactly the specified night-range, but assume we do not have exposure tables for this (useful when there is no exposure_table yet)
-        min_vccdsec(float): minimum time a ccd needs to be turned on to be allowed in the model (default: 6h)
+        min_vccdsec(float): minimum time a ccd needs to be turned on to be allowed in the model (default: 21600=6h)
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
