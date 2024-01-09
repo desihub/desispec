@@ -43,14 +43,19 @@ def test_rowbyrowextract():
 
     zeropix = rowbyrowextract.model(frame, profile, profilex, shape)
     assert np.allclose(zeropix, 0)
-    frame0 = rowbyrowextract.extract(image, psf, nspec=25)
-    assert np.allclose(frame0.flux, 0)
 
     frame.flux[...] = 1
     onefluxpix = rowbyrowextract.model(frame, profile, profilex, shape)
     image2 = io.image.Image(onefluxpix, ivar)
     frame2 = rowbyrowextract.extract(image2, psf, nspec=25)
     assert np.allclose(frame2.flux, 1)
+
+    np.random.seed(1)
+    frame.flux[...] = np.random.randn(*frame.flux.shape) + 10
+    randomfluxpix = rowbyrowextract.model(frame, profile, profilex, shape)
+    imagerandom = io.image.Image(randomfluxpix, ivar)
+    framerandom = rowbyrowextract.extract(imagerandom, psf, nspec=25)
+    assert np.allclose(framerandom.flux, frame.flux)
 
     noise = np.random.randn(*shape) * ivar**(-0.5)
     image3 = io.image.Image(onefluxpix + noise, ivar)
