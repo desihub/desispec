@@ -1,6 +1,6 @@
 """
 desispec.correct_cte
-============
+====================
 
 Methods to fit CTE effects and remove them from images.
 """
@@ -82,8 +82,8 @@ def correct_amp(image, ctefun, niter=1, apply_only=False):
     In the limit that CTE is perturbative, one can correct for CTE
     as follows:
     for i in range(niter):
-        I' = CTE(I)
-        I = I - (I' - I)
+    I' = CTE(I)
+    I = I - (I' - I)
     This function implements that approach.
 
     However, for large traps, this approach correlates the noise
@@ -104,6 +104,7 @@ def correct_amp(image, ctefun, niter=1, apply_only=False):
     -------
     CTE-corrected image
     """
+
     # more than one iteration makes the noise properties worse, but
     # does make things more self-consistent.
     corrected_image = image.copy()
@@ -620,9 +621,9 @@ def correct_image_via_model(image, niter=10, cteparam=None):
 
     As pseudocode, this corresponds to:
     for i in range(niter):
-        M = get_model(I)
-        M' = CTE(M)
-        I = I - (M' - M)
+    M = get_model(I)
+    M' = CTE(M)
+    I = I - (M' - M)
     This function implements that approach.
 
     Parameters
@@ -639,8 +640,8 @@ def correct_image_via_model(image, niter=10, cteparam=None):
     -------
     outimage : Image
         image after correction for CTE
-
     """
+
     amp, cte = get_amps_and_cte(image, cteparam=cteparam)
     outimage = deepcopy(image)
     log = get_logger()

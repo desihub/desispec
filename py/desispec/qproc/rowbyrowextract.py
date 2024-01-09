@@ -1,6 +1,6 @@
 """
 desispec.qproc.rowbyrowextract
-============
+==============================
 
 Row-by-row extraction routines (Horne 1986).
 """
