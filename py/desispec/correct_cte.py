@@ -13,7 +13,8 @@ from desispec.io import findfile, read_image
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io.fiberflat import read_fiberflat
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
-from desispec.preproc import get_amp_ids, parse_sec_keyword
+# removed from here because of circular imports:
+# from desispec.preproc import get_amp_ids, parse_sec_keyword
 from desiutil.log import get_logger
 from functools import partial
 from astropy.stats import sigma_clipped_stats

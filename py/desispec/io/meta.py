@@ -173,6 +173,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
+        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{camera}-{night}.csv',
         #
         # spectra- healpix based
         #
@@ -296,7 +297,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 root_key = key.removesuffix('_hp')
                 location[root_key] = val
     del loc_copy
-    
+
     if groupname is not None and tile is None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:

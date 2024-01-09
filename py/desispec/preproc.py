@@ -31,6 +31,8 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
+from desispec.correct_cte import correct_image_via_model
+from desispec.io.ctecorr import get_cte_corr
 
 def get_amp_ids(header):
     '''
@@ -688,7 +690,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False):
+            keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
+            no_cte_corr=False):
     '''
     preprocess image using metadata in header
 
@@ -736,6 +739,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional fit and subtraction of scattered light
 
     Optional disabling of overscan subtraction per row if no_overscan_per_row=True
+
+    Optional disabling of CTE correction if no_cte_corr=True
 
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
@@ -1299,6 +1304,32 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         bkg = _background(image,header)
         image -= bkg
 
+    #- CTE correction if any exist
+    if not no_cte_corr :
+        log.info("Apply CTE correction")
+        #log.warning("CTE correction not implemented yet")
+
+        night = header2night(header)
+        camera = header['CAMERA'].lower()
+        if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
+            for amplifier in amp_ids :
+                key = "OFFCOLS"+amplifier
+                if cfinder.haskey(key) :
+                    sector = cfinder.value(key)
+                    log.debug(f"Looking for CTE correction for {night},{camera},{amplifier},{sector}")
+                    params = get_cte_corr(night,camera,amplifier,sector)
+                    if params is not None :
+                        log.warning("Doing CTE correction now")
+                    else :
+                        log.warning(f"No CTE correction for {night},{camera},{amplifier},{sector}")
+                        pass
+        else :
+            log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined. Cannot find calibration data, so cannot do a CTE correction")
+    else :
+        log.info("CTE correction disabled")
+    log.warning("EXIT FOR DEBUG")
+    import sys
+    sys.exit(12)
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
