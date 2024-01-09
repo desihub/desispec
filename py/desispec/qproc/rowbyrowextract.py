@@ -2,7 +2,7 @@
 desispec.qproc.rowbyrowextract
 ============
 
-Row-by-row extraction routines.
+Row-by-row extraction routines (Horne 1986).
 """
 
 import numpy as np
@@ -218,7 +218,8 @@ def model(frame, profile, profilepix, shape):
 def build_atcinva(atcinva, xstart, xend, profiles, ivar):
     """Build A^T C^-1 A for the row-by-row extraction.
 
-    Modifies input atcinva in place.
+    Modifies input atcinva in place.  Assumes spectra are ordered,
+    so xstart[i+1] > xstart[i].
 
     Parameters
     ----------
@@ -277,7 +278,7 @@ def build_atcinvb(atcinvb, xstart, profiles, data):
 
 
 def extract(image, psf, blocksize=25, fibermap=None, nspec=500,
-            return_model=False):
+            return_model=False, tails=False):
     """Extract spectra from image using an optimal row-by-row extraction.
 
     The algorithm extracts the spectra row-by-row, finding the fluxes
@@ -303,6 +304,9 @@ def extract(image, psf, blocksize=25, fibermap=None, nspec=500,
     return_model : bool
         if True, return also the model of the image, the profiles,
         and the locations in the image corresponding to the profiles.
+    tails : bool
+        include PSF tails in the modeling.  These are usually identically
+        zero for DESI and so default to off.
 
     Returns
     -------
@@ -328,7 +332,7 @@ def extract(image, psf, blocksize=25, fibermap=None, nspec=500,
         # tails = False since these aren't actually used at present,
         # and we compute a lot to get zero.
         xxa, profilesa, wavea = onedprofile_gh(psf, np.arange(ny), ispec,
-                                               tails=False)
+                                               tails=tails)
         outprofile.append(profilesa)
         outprofilepix.append(xxa)
         wave[ispec, :] = wavea
