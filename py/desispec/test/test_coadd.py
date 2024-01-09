@@ -891,15 +891,3 @@ class TestCoadd(unittest.TestCase):
         spec.R = None
         spec.mask = None
         coadd = coadd_cameras(spec)
-
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m desispec.test.test_coadd
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-
-if __name__ == '__main__':
-    unittest.main()           

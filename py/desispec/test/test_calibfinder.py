@@ -6,7 +6,7 @@
 import unittest
 import os
 import shutil
-from pkg_resources import resource_filename
+from importlib import resources
 
 
 
@@ -29,7 +29,7 @@ class TestCalibFinder(unittest.TestCase):
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
-            shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
+            shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir,f"{c}0.yaml"))
         #- Set calibration environment variable    
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
         
@@ -44,7 +44,3 @@ class TestCalibFinder(unittest.TestCase):
         print(cfinder.value("DETECTOR"))
         if cfinder.haskey("BIAS") :
             print(cfinder.findfile("BIAS"))
-        
-
-if __name__ == '__main__':
-    unittest.main()

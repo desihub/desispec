@@ -1,17 +1,10 @@
 import unittest, os, sys, shutil, tempfile
-from pkg_resources import resource_filename
+from importlib import resources
 import numpy as np
 import numpy.testing as nt
 from astropy.io import fits
 from astropy.table import Table
 from copy import deepcopy
-
-if __name__ == '__main__':
-    print('Run this instead:')
-    thisfile = __file__.removeprefix(os.getcwd()+'/')
-    print(f'pytest {thisfile}')
-    sys.exit(1)
-
 from ..test.util import get_frame_data
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
@@ -352,7 +345,7 @@ class TestPixGroup(unittest.TestCase):
 
     def test_exp2healpix_map(self):
         """Test get_exp2healpix_map"""
-        os.environ['DESI_SPECTRO_REDUX'] = resource_filename('desispec', 'test/data')
+        os.environ['DESI_SPECTRO_REDUX'] = str(resources.files('desispec').joinpath('test/data'))
         os.environ['SPECPROD'] = 'miniprod'
         expfile = findfile('exposures')
 
@@ -377,9 +370,3 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(n6, 0)
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m desispec.test.test_pixgroup
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

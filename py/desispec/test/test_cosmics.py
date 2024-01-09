@@ -86,7 +86,3 @@ class TestCosmics(unittest.TestCase):
         reject_cosmic_rays(image)
         cosmic = (image.pix > 0)
         self.assertTrue(np.all(image.mask[cosmic] & ccdmask.COSMIC))
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()

@@ -8,7 +8,7 @@ Utility functions to correct for the fibercrosstalk
 from __future__ import absolute_import, division
 
 import numpy as np
-from pkg_resources import resource_filename
+from importlib import resources
 import yaml
 from scipy.signal import fftconvolve
 
@@ -209,7 +209,7 @@ def read_crosstalk_parameters() :
        nested dictionary with parameters per camera
     """
     log=get_logger()
-    parameter_filename = resource_filename('desispec', "data/fiber-crosstalk.yaml")
+    parameter_filename = resources.files('desispec').joinpath("data/fiber-crosstalk.yaml")
     log.info("read parameters in {}".format(parameter_filename))
     stream = open(parameter_filename, 'r')
     params = yaml.safe_load(stream)

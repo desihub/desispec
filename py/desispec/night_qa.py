@@ -27,6 +27,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.io.util import replace_prefix
 from desispec.calibfinder import CalibFinder
 from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
@@ -1437,13 +1438,21 @@ def create_petalnz_pdf(
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
         # AR reading zmtl files
+        # AR 20231221: look for redrock files, to handle case of
+        # AR    a reprocessing generates a dummy zmtl file
+        # AR https://desisurvey.slack.com/archives/C01HNN87Y7J/p1703203812637849
         istileid = False
         pix_ntilecovs = None
         for petal in petals:
-            fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
+            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
                 log.warning("{} : no file".format(fn))
             else:
+                # AR switching to zmtl
+                fn = replace_prefix(fn, "redrock", "zmtl")
+                if not os.path.isfile(fn):
+                    log.warning("{} : no file".format(fn))
+                    continue
                 istileid = True
                 d = Table.read(fn, hdu="ZMTL")
                 # AR rename *DESI_TARGET and *BGS_TARGET to DESI_TARGET and BGS_TARGET

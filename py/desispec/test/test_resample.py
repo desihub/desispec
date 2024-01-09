@@ -100,8 +100,3 @@ class TestResample(unittest.TestCase):
         yy = resample_flux(xx, x, y)
         diff = np.abs(yy - np.interp(xx, x, y))
         self.assertLess(np.max(np.abs(diff)), 1e-2)
-    
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()           

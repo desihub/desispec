@@ -5,13 +5,13 @@ import numpy as np
 from astropy.table import Table, join
 from desispec.io   import findfile
 from desiutil.log import get_logger
-from pkg_resources import resource_filename
+from importlib import resources
 
 
 log=get_logger()
 
 fname='/project/projectdirs/desi/spectro/redux/daily/tsnr-exposures.fits'
-opath=resource_filename('desispec','data/tsnr/tsnr_refset_etc.csv')
+opath=resources.files('desispec').joinpath('data/tsnr/tsnr_refset_etc.csv')
 
 log.info('Writing to {}.'.format(opath))
 

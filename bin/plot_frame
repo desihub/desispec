@@ -6,7 +6,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import fitsio
-from pkg_resources import resource_exists, resource_filename
+from importlib import resources
 
 from desispec.util import parse_fibers
 from desispec.qproc.io import read_qframe
@@ -163,7 +163,7 @@ for filename in args.infile :
 if not args.focal_plane :
 
     if args.sky_spectrum :
-        args.ascii_spectrum = resource_filename('desispec','data/spec-sky.dat')
+        args.ascii_spectrum = resources.files('desispec').joinpath('data/spec-sky.dat')
 
 
     if args.ascii_spectrum :

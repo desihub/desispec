@@ -50,10 +50,3 @@ class TestGPU(unittest.TestCase):
 
         desispec.gpu.redistribute_gpu_ranks(comm=FakeComm(0,16))
         desispec.gpu.redistribute_gpu_ranks(comm=FakeComm(1,16))
-
-
-
-
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()           

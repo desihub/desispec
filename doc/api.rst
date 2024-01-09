@@ -23,6 +23,9 @@ desispec API
 .. automodule:: desispec.coaddition
     :members:
 
+.. automodule:: desispec.correct_cte
+    :members:
+
 .. automodule:: desispec.cosmics
     :members:
 
@@ -354,6 +357,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.qproc.qsky
+    :members:
+
+.. automodule:: desispec.qproc.rowbyrowextract
     :members:
 
 .. automodule:: desispec.quicklook

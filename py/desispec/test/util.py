@@ -5,6 +5,7 @@ import numpy as np
 
 from desispec.resolution import Resolution
 from desispec.frame import Frame
+from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 
 from desitarget.targetmask import desi_mask
@@ -87,6 +88,10 @@ def get_models(nspec=10, nwave=1000, wavemin=4000, wavemax=5000):
 
 
 def set_resolmatrix(nspec,nwave):
+    """arguably typo function name, retained for backwards compatibility"""
+    return get_resolmatrix(nspec, nwave)
+
+def get_resolmatrix(nspec,nwave):
     """ Generate a Resolution Matrix
     Args:
         nspec: int
@@ -107,3 +112,57 @@ def set_resolmatrix(nspec,nwave):
             kernel /= sum(kernel)
             Rdata[i,:,j] = kernel
     return Rdata
+
+def get_resolmatrix_fixedsigma(nspec,nwave):
+    """ Generate a Resolution Matrix with fixed sigma
+    Args:
+        nspec: int
+        nwave: int
+
+    Returns:
+        Rdata: np.array
+
+    """
+    sigma = 3.0
+    ndiag = 21
+    xx = np.linspace(-ndiag/2.0, +ndiag/2.0, ndiag)
+    kernel = np.exp(-xx**2/(2*sigma**2))
+    kernel /= sum(kernel)
+    Rdata = np.zeros( (nspec, len(xx), nwave) )
+
+    for i in range(nspec):
+        for j in range(nwave):
+            Rdata[i,:,j] = kernel
+
+    return Rdata
+
+def get_blank_spectra(nspec):
+    """Generate a blank spectrum object with realistic wavelength coverage"""
+
+    wave = dict(
+            b=np.arange(3600, 5800.1, 0.8),
+            r=np.arange(5760, 7620.1, 0.8),
+            z=np.arange(7520, 9824.1, 0.8),
+            )
+    bands = tuple(wave.keys())
+    flux = dict()
+    ivar = dict()
+    mask = dict()
+    rdat = dict()
+    for band in bands:
+        nwave = len(wave[band])
+        flux[band] = np.ones((nspec, nwave))
+        ivar[band] = np.zeros((nspec, nwave))
+        mask[band] = np.zeros((nspec, nwave), dtype=np.int32)
+        rdat[band] = get_resolmatrix_fixedsigma(nspec, nwave)
+
+    fm = empty_fibermap(nspec)
+    fm['FIBER'] = np.arange(nspec, dtype=np.int32)
+    fm['TARGETID'] = np.arange(nspec, dtype=np.int64)
+
+    sp = Spectra(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
+                 resolution_data=rdat, fibermap=fm)
+
+    return sp
+
+

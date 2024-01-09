@@ -7,7 +7,7 @@ import warnings
 from astropy.io import fits
 import numpy as np
 import shutil
-from pkg_resources import resource_filename
+from importlib import resources
 
 import desispec.scripts.preproc
 from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
@@ -43,7 +43,7 @@ class TestPreProc(unittest.TestCase):
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
-            shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
+            shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir, f"{c}0.yaml"))
         #- Set calibration environment variable
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
 
@@ -479,14 +479,3 @@ class TestPreProc(unittest.TestCase):
 
     def test_default_mask(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
-
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-if __name__ == '__main__':
-    unittest.main()
