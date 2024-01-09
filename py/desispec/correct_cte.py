@@ -150,26 +150,8 @@ def add_cte(img, cte_transfer_func=None, **cteparam):
     return out
 
 
-# This hard codes the one set of trap parameters I have been working with.
-# Only get_amps_and_cte know about this dictionary.
-# Eventually, get_amps_and_cte need to be made smarter to be able to find
-# relevant CTE calibration files for each night where they are needed.
-ctefun_dict = {
-    'z1C': {
-        '543:2057': (115.0, 0.21),
-    },  # should move to 543?  Needs to coordinate with DESI_SPECTRO_CALIB.
-}
-
-
 def get_amps_and_cte(image, cteparam=None):
     """Get amp and CTE information from image metadata.
-
-    *** This function currently finds CTE information just by
-    *** looking it up in a hard-coded dictionary in this file,
-    *** unless it is passed in via the cteparam dictionary.
-    *** We need to invent a scheme for storing this information
-    *** as another kind of night calibration, and having this function
-    *** find and load that calibration information.
 
     Parameters
     ----------
@@ -226,11 +208,7 @@ def get_amps_and_cte(image, cteparam=None):
                 log.info(
                     "Adding CTE correction in amp {} with location {}".format(
                         amp, sector))
-                if cteparam is not None:
-                    ctedict_here = cteparam
-                else:
-                    ctedict_here = ctefun_dict
-                ctefuns = ctedict_here.get(meta['CAMERA'] + amp, None)
+                ctefuns = cteparam.get(meta['CAMERA'] + amp, None)
                 if ctefuns is None:
                     ctefun = None
                 else:
