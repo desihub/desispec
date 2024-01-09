@@ -155,17 +155,18 @@ def add_cte(img, cte_transfer_func=None, **cteparam):
 # Eventually, get_amps_and_cte need to be made smarter to be able to find
 # relevant CTE calibration files for each night where they are needed.
 ctefun_dict = {
-    'z1': {
-        '543:2057': partial(add_cte, amplitude=115, fracleak=0.21),
+    'z1C': {
+        '543:2057': (115.0, 0.21),
     },  # should move to 543?  Needs to coordinate with DESI_SPECTRO_CALIB.
 }
 
 
-def get_amps_and_cte(image):
+def get_amps_and_cte(image, cteparam=None):
     """Get amp and CTE information from image metadata.
 
     *** This function currently finds CTE information just by
-    *** looking it up in a hard-coded dictionary in this file.
+    *** looking it up in a hard-coded dictionary in this file,
+    *** unless it is passed in via the cteparam dictionary.
     *** We need to invent a scheme for storing this information
     *** as another kind of night calibration, and having this function
     *** find and load that calibration information.
@@ -174,6 +175,9 @@ def get_amps_and_cte(image):
     ----------
     image : object
         Must have 'meta' attribute.
+    cteparam : dict or None
+        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
+        provides the CTE parameters for the trap on a particular image.
 
     Returns
     -------
@@ -222,14 +226,20 @@ def get_amps_and_cte(image):
                 log.info(
                     "Adding CTE correction in amp {} with location {}".format(
                         amp, sector))
-                ctefuns = ctefun_dict.get(meta['CAMERA'], None)
+                if cteparam is not None:
+                    ctedict_here = cteparam
+                else:
+                    ctedict_here = ctefun_dict
+                ctefuns = ctedict_here.get(meta['CAMERA'] + amp, None)
                 if ctefuns is None:
                     ctefun = None
                 else:
                     ctefun = ctefuns.get(offcols, None)
                 if ctefun is None:
-                    log.warning('Could not find CTE correction calib '
-                                'information, not applying.')
+                    log.warning('No precomputed CTE calib information found.')
+                else:
+                    ctefun = partial(
+                        add_cte, amplitude=ctefun[0], fracleak=ctefun[1])
                 cte_regions[amp].append(
                     dict(start=start, stop=stop, function=ctefun))
     return amp_regions, cte_regions
@@ -246,6 +256,9 @@ def correct_image(image, **kw):
     ----------
     image : desispec.io.image.Image
         the image to correct
+    cteparam : dict or None
+        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
+        provides the CTE parameters for the trap on a particular image.
     **kw : dict
         additional arguments passed to correct_amp
 
@@ -254,7 +267,7 @@ def correct_image(image, **kw):
     outimage : desispec.io.image.Image
     CTE-corrected image
     """
-    amp, cte = get_amps_and_cte(image)
+    amp, cte = get_amps_and_cte(image, cteparam)
     outimage = deepcopy(image)
     for ampname in amp:
         ampreg = amp[ampname]
@@ -268,8 +281,15 @@ def correct_image(image, **kw):
             field, offset, sign = 'stop', ampreg[1].stop, -1
         else:
             field, offset, sign = 'start', 0, 1
+        for x in cteamp:
+            if x['function'] is None:
+                log.info('Not correcting CTE on {ampname} at {loc}; '
+                         'not included in calib information.')
+
+        cteamp = [x for x in cteamp if x['function'] is not None]
         ctelocs = [sign * (x[field] - offset) for x in cteamp]
         individual_ctefuns = [x['function'] for x in cteamp]
+
         ctefun = partial(apply_multiple_cte_effects, locations=ctelocs,
                          ctefuns=individual_ctefuns)
         outimage.pix[ampreg] = correct_amp(imamp.pix[:, ::sign], ctefun, **kw)
@@ -606,7 +626,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
                                  preproc.pix.shape)
 
 
-def correct_image_via_model(image, niter=10):
+def correct_image_via_model(image, niter=10, cteparam=None):
     """Correct for CTE via an image model.
 
     The idea here is that you can roughly extract spectra from a
@@ -633,6 +653,9 @@ def correct_image_via_model(image, niter=10):
         input image
     niter : int
         number of iterations to run
+    cteparam : dict or None
+        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
+        provides the CTE parameters for the trap on a particular image.
 
     Returns
     -------
@@ -640,7 +663,7 @@ def correct_image_via_model(image, niter=10):
         image after correction for CTE
 
     """
-    amp, cte = get_amps_and_cte(image)
+    amp, cte = get_amps_and_cte(image, cteparam=cteparam)
     outimage = deepcopy(image)
     log = get_logger()
 
@@ -659,8 +682,16 @@ def correct_image_via_model(image, niter=10):
                 field, offset, sign = 'stop', ampreg[1].stop, -1
             else:
                 field, offset, sign = 'start', 0, 1
+
+            for x in cteamp:
+                if x['function'] is None:
+                    log.info('Not correcting CTE on {ampname} at {loc}; '
+                             'not included in calib information.')
+
+            cteamp = [x for x in cteamp if x['function'] is not None]
             ctelocs = [sign * (x[field] - offset) for x in cteamp]
             individual_ctefuns = [x['function'] for x in cteamp]
+
             cteimage[ampreg] = apply_multiple_cte_effects(
                 imamp[:, ::sign], locations=ctelocs,
                 ctefuns=individual_ctefuns)
