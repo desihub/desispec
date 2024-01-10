@@ -130,7 +130,7 @@ def get_sector_masks(frame):
             val = cfinder.value(key)
             for tmp1 in val.split(",") :
                 tmp2 = tmp1.split(":")
-                if len(tmp2) != 2 :
+                if len(tmp2) != 2 and len(tmp2) != 3 :
                     mess="cannot decode {}={}".format(key,val)
                     log.error(mess)
                     raise KeyError(mess)
