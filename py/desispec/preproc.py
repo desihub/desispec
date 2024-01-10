@@ -30,8 +30,7 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
-from desispec.correct_cte import correct_image_via_model
-from desispec.io.ctecorr import get_cte_corr
+#from desispec.correct_cte import correct_image_via_model
 
 def get_amp_ids(header):
     '''
@@ -1303,33 +1302,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         bkg = _background(image,header)
         image -= bkg
 
+    img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
+
     #- CTE correction if any exist
     if not no_cte_corr :
-        log.info("Apply CTE correction")
-        #log.warning("CTE correction not implemented yet")
-
-        night = header2night(header)
-        camera = header['CAMERA'].lower()
-        if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
-            for amplifier in amp_ids :
-                key = "OFFCOLS"+amplifier
-                if cfinder.haskey(key) :
-                    sector = cfinder.value(key)
-                    log.debug(f"Looking for CTE correction for {night},{camera},{amplifier},{sector}")
-                    params = get_cte_corr(night,camera,amplifier,sector)
-                    if params is not None :
-                        log.warning("Doing CTE correction now")
-                    else :
-                        log.warning(f"No CTE correction for {night},{camera},{amplifier},{sector}")
-                        pass
-        else :
+        # ugly fix to circular import: only import the function here
+        # and not at the top of the file
+        from desispec.correct_cte import correct_image_via_model
+        if not ( 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ ) :
             log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined. Cannot find calibration data, so cannot do a CTE correction")
+        else :
+            log.info("Apply CTE correction")
+            img = correct_image_via_model(img,niter=5)
     else :
         log.info("CTE correction disabled")
-    log.warning("EXIT FOR DEBUG")
-    import sys
-    sys.exit(12)
-    img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
     if not nocosmic :

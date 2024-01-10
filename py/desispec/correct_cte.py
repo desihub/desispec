@@ -14,7 +14,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io.fiberflat import read_fiberflat
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 # removed from here because of circular imports:
-# from desispec.preproc import get_amp_ids, parse_sec_keyword
+from desispec.preproc import get_amp_ids, parse_sec_keyword, header2night
 from desiutil.log import get_logger
 from functools import partial
 from astropy.stats import sigma_clipped_stats
@@ -152,16 +152,12 @@ def add_cte(img, cte_transfer_func=None, **cteparam):
     return out
 
 
-def get_amps_and_cte(image, cteparam=None):
-    """Get amp and CTE information from image metadata.
+def get_amps_and_cte(header,with_params=True):
+    """Get amp and CTE information from image header.
 
     Parameters
     ----------
-    image : object
-        Must have 'meta' attribute.
-    cteparam : dict or None
-        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
-        provides the CTE parameters for the trap on a particular image.
+    header (can be image.meta)
 
     Returns
     -------
@@ -178,50 +174,84 @@ def get_amps_and_cte(image, cteparam=None):
     """
     # get sector info from metadata
 
-    meta = image.meta
-    cfinder = CalibFinder([meta])
-    amps = get_amp_ids(meta)
     log = get_logger()
+    cfinder = CalibFinder([header])
+    amps = get_amp_ids(header)
+    night = header2night(header)
+    camera = header['CAMERA'].lower()
+
+    if with_params :
+        # look for CTE param table for this camera
+        filename = findfile('ctecorrnight', night=night, camera=camera)
+        log.debug(f"Looking for file {filename}")
+        if not os.path.isfile(filename) :
+            log.debug(f"No CTE file {filename}")
+            return dict(),dict()
+        ctecorrnight_table = Table.read(filename)
+    else :
+        ctecorrnight_table = None
 
     amp_regions = dict()
     cte_regions = dict()
     for amp in amps:
-        key = "OFFCOLS"+amp
-        sec = parse_sec_keyword(image.meta['CCDSEC'+amp])
-        amp_regions[amp] = sec
-        cte_regions[amp] = list()
-        yb = sec[0].start
-        ye = sec[0].stop
 
-        if cfinder.haskey(key):
-            val = cfinder.value(key)
-            for offcols in val.split(","):
-                tmp2 = offcols.split(":")
-                if len(tmp2) != 2:
-                    mess = "cannot decode {}={}".format(key, val)
-                    log.error(mess)
-                    raise KeyError(mess)
-                start, stop = int(tmp2[0]), int(tmp2[1])
-                # HACK!  temporary parameters for z1.
-                # Set this to None if these aren't available?
-                xb = max(sec[1].start, start)
-                xe = min(sec[1].stop, stop)
-                sector = [yb, ye, xb, xe]
-                log.info(
-                    "Adding CTE correction in amp {} with location {}".format(
-                        amp, sector))
-                ctefuns = cteparam.get(meta['CAMERA'] + amp, None)
-                if ctefuns is None:
-                    ctefun = None
-                else:
-                    ctefun = ctefuns.get(offcols, None)
-                if ctefun is None:
-                    log.warning('No precomputed CTE calib information found.')
-                else:
-                    ctefun = partial(
-                        add_cte, amplitude=ctefun[0], fracleak=ctefun[1])
-                cte_regions[amp].append(
-                    dict(start=start, stop=stop, function=ctefun))
+        if with_params :
+            selection = (ctecorrnight_table["NIGHT"]==night)&(ctecorrnight_table["CAMERA"]==camera)&(ctecorrnight_table["AMPLIFIER"]==amp)
+            if np.sum(selection)==0 :
+                log.debug(f"No CTE correction in file {filename} for amplifier {amp}")
+                continue
+
+        key = "OFFCOLS"+amp
+        if not cfinder.haskey(key) :
+            log.debug(f"No {key} for {camera} on {night}")
+            continue
+        value = cfinder.value(key)
+
+        amp_sec = parse_sec_keyword(header["CCDSEC"+amp])
+
+        yb = amp_sec[0].start
+        ye = amp_sec[0].stop
+        cte_regions_in_amp = list()
+        for offcols in value.split(","):
+            if len(offcols)==0 : continue
+            vals  = offcols.split(":")
+            nvals = len(vals)
+            if nvals != 2 and nvals != 3 :
+                mess = "cannot decode {}={}".format(key, value)
+                log.error(mess)
+                raise KeyError(mess)
+            if nvals<3 or vals[2].upper() != "Y" :
+                log.warning(f"Ignore {key}={offcols}, we expect it to be of the form BEGIN:END:Y to include in CTE modeling")
+                continue
+
+            start, stop = int(vals[0]), int(vals[1])
+
+            if with_params :
+                selection2 = selection&(ctecorrnight_table["SECTOR"]==offcols)
+                if np.sum(selection2)==0 :
+                    log.info(f"No CTE correction in file {filename}, amplifier {amp}, sector {offcols}")
+                    continue
+                entry=np.where(selection2)[0][0]
+
+
+
+            xb = max(amp_sec[1].start, start)
+            xe = min(amp_sec[1].stop, stop)
+            sector = [yb, ye, xb, xe]
+
+            cteparam={"start":start,"stop":stop}
+            if  with_params :
+                for k in ["FUNC","AMPLITUDE","FRACLEAK"] :
+                    cteparam[k]=ctecorrnight_table[k][entry]
+
+            log.info(f"CTE correction in amplifier {amp}, sector {offcols}, {cteparam}")
+            cte_regions_in_amp.append(cteparam)
+
+        # only add if we have a model for it
+        if len(cte_regions_in_amp)>0 :
+            amp_regions[amp] = amp_sec
+            cte_regions[amp] = cte_regions_in_amp
+
     return amp_regions, cte_regions
 
 
@@ -320,6 +350,13 @@ def chi_simplified_regnault(param, cleantraces=None, ctetraces=None,
     return res.reshape(-1)
 
 
+def get_transfer_function(function_name) :
+    if function_name == "simplified_regnault" :
+        return simplified_regnault
+    else :
+        raise KeyError(f"No transfer function called '{function_name}'")
+
+
 def fit_cte(images):
     """Fits CTE models to a list of images.
 
@@ -345,13 +382,7 @@ def fit_cte(images):
 
     Returns
     -------
-    dict[dict[tuple(tuple, float)]]
-    The top-level dictionary has amplifier names as keys.
-    The next-level dictionary has a string identifying the specific trap as
-    keys.
-    The tuple contains the parameters of the CTE function as its first
-    element, and the chi^2 per degree of freedom of the fit as its second
-    element.
+    astropy.Table
     """
     # take a bunch of preproc images on one camera
     # these should all be flats and the same device
@@ -365,10 +396,14 @@ def fit_cte(images):
     # we need to extract only the relevant region and have
     # some robustness / noise tracking.
 
+    log = get_logger()
+    log.debug("begin fit_cte")
+
     assert len(images) > 0
+    night = header2night(images[0].meta)
     camera = images[0].meta['CAMERA']
     obstype = images[0].meta['OBSTYPE']
-    log = get_logger()
+
     if obstype != 'FLAT':
         log.warning('Really should not use this function with a non-flat?!')
     # only use with flats; otherwise the matching above and below the
@@ -382,7 +417,14 @@ def fit_cte(images):
         'B': 'D',
         'D': 'B',
     }
-    amp, cte = get_amps_and_cte(images[0])
+    amp, cte = get_amps_and_cte(images[0].meta, with_params=False)
+
+
+    res = dict()
+    for k in ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"] :
+        res[k]=list()
+
+
     ctefits = dict()
     for ampname in amp:
         tcte = cte[ampname]
@@ -390,7 +432,7 @@ def fit_cte(images):
             continue
         if len(tcte) > 1:
             raise ValueError('Two CTE effect fitting not yet implemented.')
-        if len(cte[matching_amps[ampname]]) != 0:
+        if matching_amps[ampname] in cte and len(cte[matching_amps[ampname]]) != 0:
             raise ValueError('CTE effect on amp and its mirror not yet '
                              'implemented.')
         tcte = tcte[0]
@@ -405,6 +447,7 @@ def fit_cte(images):
         npix = 11
         need_to_reverse = ampreg[1].stop == image.pix.shape[1]
         start, stop = tcte['start'], tcte['stop']
+
         step = 1
         if need_to_reverse:
             step = -1
@@ -438,11 +481,24 @@ def fit_cte(images):
         par = least_squares(chi, [startguesses[bestguess], 0.2],
                             diff_step=[0.2, 0.01], loss='huber')
         ctefits[ampname] = dict()
-        offcols = f'{tcte["start"]}:{tcte["stop"]}'
+        offcols = f'{tcte["start"]}:{tcte["stop"]}:Y'
         chi2dof = par.cost / len(par.fun)
         ctefits[ampname][offcols] = (par.x, chi2dof)
         log.info(f'CTE fit chi^2 / dof = {chi2dof:5.2f}')
-    return ctefits
+
+        res["NIGHT"].append(night)
+        res["CAMERA"].append(camera)
+        res["AMPLIFIER"].append(ampname)
+        res["SECTOR"].append(offcols)
+        res["FUNC"].append("simplified_regnault")
+        res["AMPLITUDE"].append(par.x[0])
+        res["FRACLEAK"].append(par.x[1])
+        res["CHI2PDF"].append(chi2dof)
+
+    table = Table()
+    for k in res.keys() :
+        table[k] = np.array(res[k])
+    return table
 
 
 def get_cte_images(night, camera):
@@ -606,7 +662,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
                                  preproc.pix.shape)
 
 
-def correct_image_via_model(image, niter=10, cteparam=None):
+def correct_image_via_model(image, niter=5):
     """Correct for CTE via an image model.
 
     The idea here is that you can roughly extract spectra from a
@@ -633,9 +689,6 @@ def correct_image_via_model(image, niter=10, cteparam=None):
         input image
     niter : int
         number of iterations to run
-    cteparam : dict or None
-        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
-        provides the CTE parameters for the trap on a particular image.
 
     Returns
     -------
@@ -643,13 +696,25 @@ def correct_image_via_model(image, niter=10, cteparam=None):
         image after correction for CTE
     """
 
-    amp, cte = get_amps_and_cte(image, cteparam=cteparam)
-    outimage = deepcopy(image)
+
     log = get_logger()
 
+    # here we get the list of amplifiers and the list
+    # of sectors per amplifiers that are affected by CTE issues
+    # and for which we have a model to apply
+    # (only amplifers and sectors with a model are in this list)
+    amp, cte = get_amps_and_cte(image.meta)
+    if len(cte) == 0 :
+        log.info("No CTE correction to do for this image, return original")
+        return image
+
+    outimage = deepcopy(image)
+
+    previous_rms = 0.
     for i in range(niter):
         outmodel = get_rowbyrow_image_model(outimage)
         cteimage = outmodel.copy()
+
         for ampname in amp:
             ampreg = amp[ampname]
             imamp = outmodel[ampreg]
@@ -657,20 +722,20 @@ def correct_image_via_model(image, niter=10, cteparam=None):
             if len(cteamp) == 0:
                 # don't need to do anything in this case.
                 continue
+
             need_to_reverse = ampreg[1].stop == image.pix.shape[1]
             if need_to_reverse:
                 field, offset, sign = 'stop', ampreg[1].stop, -1
             else:
                 field, offset, sign = 'start', 0, 1
 
-            for x in cteamp:
-                if x['function'] is None:
-                    log.info('Not correcting CTE on {ampname} at {loc}; '
-                             'not included in calib information.')
-
-            cteamp = [x for x in cteamp if x['function'] is not None]
             ctelocs = [sign * (x[field] - offset) for x in cteamp]
-            individual_ctefuns = [x['function'] for x in cteamp]
+            individual_ctefuns = []
+            for entry in cteamp :
+                individual_ctefuns.append(partial( add_cte,
+                                                   cte_transfer_func=get_transfer_function(entry['FUNC']),
+                                                   amplitude=entry['AMPLITUDE'],
+                                                   fracleak=entry['FRACLEAK']))
 
             cteimage[ampreg] = apply_multiple_cte_effects(
                 imamp[:, ::sign], locations=ctelocs,
@@ -679,6 +744,9 @@ def correct_image_via_model(image, niter=10, cteparam=None):
             mn, med, rms = sigma_clipped_stats(correction_amp)
             log.info(
                 f'Correcting CTE, iteration {i}, correction rms {rms:6.3f}')
+            if abs(rms-previous_rms)<0.1 :
+                break
+            previous_rms =rms
         correction = cteimage - outmodel
         outimage.pix = image.pix - correction
     return outimage
