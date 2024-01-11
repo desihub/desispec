@@ -8,13 +8,14 @@ Methods to fit CTE effects and remove them from images.
 from copy import deepcopy
 import os
 import numpy as np
+import fitsio
 from desispec.calibfinder import CalibFinder
-from desispec.io import findfile, read_image
-from desispec.io.xytraceset import read_xytraceset
-from desispec.io.fiberflat import read_fiberflat
+import desispec.io
+import desispec.io.util
+import desispec.io.xytraceset
+import desispec.io.fiberflat
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
-# removed from here because of circular imports:
-from desispec.preproc import get_amp_ids, parse_sec_keyword, header2night
+import desispec.preproc
 from desiutil.log import get_logger
 from functools import partial
 from astropy.stats import sigma_clipped_stats
@@ -176,13 +177,13 @@ def get_amps_and_cte(header,with_params=True):
 
     log = get_logger()
     cfinder = CalibFinder([header])
-    amps = get_amp_ids(header)
-    night = header2night(header)
+    amps = desispec.preproc.get_amp_ids(header)
+    night = desispec.preproc.header2night(header)
     camera = header['CAMERA'].lower()
 
     if with_params :
         # look for CTE param table for this camera
-        filename = findfile('ctecorrnight', night=night, camera=camera)
+        filename = desispec.io.findfile('ctecorrnight', night=night, camera=camera)
         log.debug(f"Looking for file {filename}")
         if not os.path.isfile(filename) :
             log.debug(f"No CTE file {filename}")
@@ -207,7 +208,7 @@ def get_amps_and_cte(header,with_params=True):
             continue
         value = cfinder.value(key)
 
-        amp_sec = parse_sec_keyword(header["CCDSEC"+amp])
+        amp_sec = desispec.preproc.parse_sec_keyword(header["CCDSEC"+amp])
 
         yb = amp_sec[0].start
         ye = amp_sec[0].stop
@@ -399,8 +400,19 @@ def fit_cte(images):
     log = get_logger()
     log.debug("begin fit_cte")
 
+    keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"]
+
+
+    if images is None :
+        # nothing to do
+        # return empty table with just the column names
+        table = Table()
+        for k in keys :
+            table[k] = np.array([])
+        return table
+
     assert len(images) > 0
-    night = header2night(images[0].meta)
+    night = desispec.preproc.header2night(images[0].meta)
     camera = images[0].meta['CAMERA']
     obstype = images[0].meta['OBSTYPE']
 
@@ -421,7 +433,7 @@ def fit_cte(images):
 
 
     res = dict()
-    for k in ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"] :
+    for k in keys :
         res[k]=list()
 
 
@@ -519,20 +531,47 @@ def get_cte_images(night, camera):
     -------
     Fit results; see fit_cte for details.
     """
+
+    log = get_logger()
+
     exptablefn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                               os.environ['SPECPROD'],
                               'exposure_tables', str(night // 100),
                               f'exposure_table_{night}.csv')
     exptable = Table.read(exptablefn)
-    # we'll base it on ... the led03 flat for cte check and the exposure right
-    # before that one??
-    onesecexp = ((np.abs(exptable['EXPTIME'] - 1) < 0.1) &
-                 (exptable['OBSTYPE'] == 'flat'))
-    index = np.flatnonzero(onesecexp)[0]
-    imagefn = [
-        findfile('preproc', night, exptable['EXPID'][i], camera)
-        for i in (index, index - 1)]
-    images = [read_image(fn) for fn in imagefn]
+
+    index1 = np.where(((np.abs(exptable['EXPTIME'] - 1) < 0.1) & (exptable['OBSTYPE'] == 'flat')))[0][0]
+
+    # first use the calibration finder to see if there is any CTE issue with this camera
+    # so that we don't preprocess exposures for nothing
+
+    # get header and primary header of image
+    filename  = desispec.io.findfile('raw',night,exptable['EXPID'][index1])
+    header    = fitsio.read_header(filename, camera.upper())
+    amp, cte = get_amps_and_cte(header,with_params=False)
+    if len(cte)==0 :
+        log.info(f"No CTE correction to compute for {night} {camera}")
+        return None
+
+    index2 = np.where(((np.abs(exptable['EXPTIME'] - 120) < 10) & (exptable['OBSTYPE'] == 'flat')))[0][-1]
+    exposure_indices = [index1, index2]
+    log.info(f"Will use exposures {exposure_indices}")
+    images = list()
+    for i in exposure_indices :
+        expid=exptable['EXPID'][i]
+        preproc_filename = desispec.io.findfile('preproc_for_cte', night, expid, camera)
+        if not os.path.isfile(preproc_filename) :
+            log.info(f"Computing {preproc_filename}")
+            infile = desispec.io.findfile('raw',night,expid)
+            image  = desispec.io.read_raw(infile, camera, no_cte_corr = True)
+            tmpfile = desispec.io.util.get_tempfilename(preproc_filename)
+            desispec.io.write_image(tmpfile,image)
+            os.rename(tmpfile, preproc_filename)
+            log.info(f"Wrote {preproc_filename}")
+            images.append(image)
+        else :
+            images.append(desispec.io.read_image(preproc_filename))
+
     return images
 
 
@@ -572,9 +611,9 @@ def get_image_model(preproc, psf=None):
     meta = preproc.meta
     cfinder = CalibFinder([meta])
     psf_filename = cfinder.findfile("PSF")
-    xyset = read_xytraceset(psf_filename)
+    xyset = desispec.io.xytraceset.read_xytraceset(psf_filename)
     fiberflat_filename = cfinder.findfile("FIBERFLAT")
-    fiberflat = read_fiberflat(fiberflat_filename)
+    fiberflat = desispec.io.fiberflat.read_fiberflat(fiberflat_filename)
     with_sky_model = True
     with_spectral_smoothing = True
     spectral_smoothing_sigma_length = 71
@@ -630,7 +669,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
         psf_filename = cfinder.findfile("PSF")
         psf = specter.psf.load_psf(psf_filename)
         # try to update the trace shifts first?
-        xytraceset = read_xytraceset(psf_filename)
+        xytraceset = desispec.io.xytraceset.read_xytraceset(psf_filename)
         x, y, dx, ex, fiber, wave = compute_dx_from_cross_dispersion_profiles(
             xcoef=xytraceset.x_vs_wave_traceset._coeff,
             ycoef=xytraceset.y_vs_wave_traceset._coeff,
@@ -646,7 +685,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
     qframe, model, profile, profilepix = res
 
     fiberflat_filename = cfinder.findfile("FIBERFLAT")
-    fiberflat = read_fiberflat(fiberflat_filename)
+    fiberflat = desispec.io.fiberflat.read_fiberflat(fiberflat_filename)
     fqframe = copy.deepcopy(qframe)
     flat = qfiberflat.qproc_apply_fiberflat(
         fqframe, fiberflat, return_flat=True)

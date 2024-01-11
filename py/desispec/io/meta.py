@@ -138,6 +138,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
+        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-cte-{camera}-{expid:08d}.fits.gz',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
