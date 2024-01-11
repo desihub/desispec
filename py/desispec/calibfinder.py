@@ -543,4 +543,5 @@ class CalibFinder() :
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
-            log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
+            log.critical(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+            raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
