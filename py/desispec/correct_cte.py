@@ -202,7 +202,7 @@ def get_amps_and_cte(header,with_params=True):
                 log.debug(f"No CTE correction in file {filename} for amplifier {amp}")
                 continue
 
-        key = "OFFCOLS"+amp
+        key = "CTECOLS"+amp
         if not cfinder.haskey(key) :
             log.debug(f"No {key} for {camera} on {night}")
             continue
@@ -217,13 +217,10 @@ def get_amps_and_cte(header,with_params=True):
             if len(offcols)==0 : continue
             vals  = offcols.split(":")
             nvals = len(vals)
-            if nvals != 2 and nvals != 3 :
+            if nvals != 2 :
                 mess = "cannot decode {}={}".format(key, value)
                 log.error(mess)
                 raise KeyError(mess)
-            if nvals<3 or vals[2].upper() != "Y" :
-                log.warning(f"Ignore {key}={offcols}, we expect it to be of the form BEGIN:END:Y to include in CTE modeling")
-                continue
 
             start, stop = int(vals[0]), int(vals[1])
 
