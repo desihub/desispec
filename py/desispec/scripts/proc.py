@@ -193,7 +193,8 @@ def main(args=None, comm=None):
     if args.batch:
 
         if args.nightlycte:
-            log.warning("don't know what to do in batch for nightlycte!")
+            log.critical("don't know what to do in batch for nightlycte!")
+            sys.exit(1)
 
         #exp_str = '{:08d}'.format(args.expid)
         if args.obstype is not None:
