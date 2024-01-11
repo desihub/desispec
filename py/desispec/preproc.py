@@ -1306,9 +1306,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- CTE correction if any exist
     if not no_cte_corr :
-        # ugly fix to circular import: only import the function here
-        # and not at the top of the file
-
         if not ( 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ ) :
             log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined. Cannot find calibration data, so cannot do a CTE correction")
         else :
