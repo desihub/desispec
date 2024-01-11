@@ -482,6 +482,9 @@ desispec API
 .. automodule:: desispec.scripts.fiberflat
     :members:
 
+.. automodule:: desispec.scripts.fit_cte_night
+    :members:
+
 .. automodule:: desispec.scripts.fluxcalibration
     :members:
 
