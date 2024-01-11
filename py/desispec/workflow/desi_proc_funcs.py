@@ -117,6 +117,7 @@ def add_desi_proc_singular_terms(parser):
     parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
     parser.add_argument("--nightlybias", action="store_true", help="Create nightly bias model from ZEROs")
+    parser.add_argument("--nightlycte", action="store_true", help="Fit CTE model from LED exposures")
     return parser
 
 def add_desi_proc_joint_fit_terms(parser):

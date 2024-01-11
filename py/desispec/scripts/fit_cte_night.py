@@ -30,6 +30,7 @@ def parse(options=None):
                         help = f"number of parallel processes to use [{default_nproc}]")
     parser.add_argument('--specprod-dir', type=str, default=None, required=False,
                         help = "specify another specprod dir for debugging")
+
     args = parser.parse_args(options)
 
     #- Convert cameras into list
@@ -54,7 +55,7 @@ def main(args=None) :
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
-        #- Assemble options to pass for each camera
+    #- Assemble options to pass for each camera
     #- so that they can be optionally parallelized
     opts_array = [ dict(night = args.night, camera = camera, specprod_dir = args.specprod_dir) for  camera in args.cameras ]
 
