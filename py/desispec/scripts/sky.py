@@ -1,6 +1,6 @@
 """
-desispec.scripts.fit_cte_night
-==============================
+desispec.scripts.sky
+====================
 
 """
 
