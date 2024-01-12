@@ -296,16 +296,12 @@ def main(args=None, comm=None):
             cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
 
             log.info(f'RUNNING {cmd}')
-
-            #- Note: nightly_bias may not produce all biasnight files if some
-            #- are determined to be worse than the default, so check existence
-            #- of output files separately.
             result, success = runcmd(desispec.scripts.fit_cte_night.main,
                     args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
 
             #- check for ctecorrnight
-            ctecorrnighfiles = [findfile('ctecorrnight', args.night, camera=cam) for cam in args.cameras]
-            for filename in ctecorrnighfiles:
+            ctecorrnightfiles = [findfile('ctecorrnight', args.night, camera=cam) for cam in args.cameras]
+            for filename in ctecorrnightfiles:
                 if not os.path.exists(filename):
                     missing_ctecorrnight += 1
 
