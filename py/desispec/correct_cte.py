@@ -490,7 +490,7 @@ def fit_cte(images):
         par = least_squares(chi, [startguesses[bestguess], 0.2],
                             diff_step=[0.2, 0.01], loss='huber')
         ctefits[ampname] = dict()
-        offcols = f'{tcte["start"]}:{tcte["stop"]}:Y'
+        offcols = f'{tcte["start"]}:{tcte["stop"]}'
         chi2dof = par.cost / len(par.fun)
         ctefits[ampname][offcols] = (par.x, chi2dof)
         log.info(f'CTE fit chi^2 / dof = {chi2dof:5.2f}')
