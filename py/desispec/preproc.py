@@ -687,7 +687,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False):
+            keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
+            fail_on_dark_not_found=False):
     '''
     preprocess image using metadata in header
 
@@ -724,6 +725,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
     Optional disabling of dark trail correction if nodarktrail=True
+    Optionally failing if fail_on_dark_not_found=True and files are not found in DESI_SPECTRO_DARK (else falling-back on DESI_SPECTRO_CALIB)
 
     Optional bias image (testing only) may be provided by bias_img=
 
@@ -791,7 +793,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     cfinder = None
     if ccd_calibration_filename is not False:
-        cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
+        cfinder = CalibFinder([header, primary_header], 
+                              yaml_file=ccd_calibration_filename,
+                              fail_on_dark_not_found=fail_on_dark_not_found)
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
