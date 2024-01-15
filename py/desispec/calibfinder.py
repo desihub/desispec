@@ -542,8 +542,8 @@ class CalibFinder() :
                 raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
             else:
                 #this would prevent nightwatch failures in case of problems with e.g. permissions
-                log.error(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}, 
-                            falling back to DESI_SPECTRO_CALIB")
+                log.error(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}, "
+                           "falling back to DESI_SPECTRO_CALIB")
                 return
         if found:
             self.data.update({"DARK": dark_filename,
@@ -554,6 +554,6 @@ class CalibFinder() :
                 raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
-                log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, 
-                            falling back to $DESI_SPECTRO_CALIB")
+                log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, "
+                           "falling back to $DESI_SPECTRO_CALIB")
 
