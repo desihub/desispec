@@ -2,12 +2,12 @@
 desispec Change Log
 ===================
 
-0.60.4 (unreleased)
+0.61.1 (unreleased)
 -------------------
 
 * No changes yet.
 
-0.60.3 (2024-01-12)
+0.61.0 (2024-01-15)
 -------------------
 
 * Add VCCDSEC info to tile_qa_plot (PR `#2136`_).
