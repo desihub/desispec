@@ -187,6 +187,18 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     """Utility function to write a fits binary table complete with
     comments and units in the FITS header too.  DATA can either be
     dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray.
+
+    Args:
+        filename: full path to filename to write
+        data: dict or table-like data to write
+
+    Options:
+        header: dict-like header key/value pairs to propagate
+        comments (dict): comments[COLNAME] per column
+        units (dict): units[COLNAME] per column
+        extname (str): extension name for EXTNAME header
+        clobber (bool): if True, overwrite pre-existing file
+        primary_extname (str): EXTNAME to use for primary HDU=0
     """
     from astropy.table import Table
 
@@ -221,16 +233,22 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     #
     # Add comments and units to the *columns* of the table.
     #
-    for i in range(1, 999):
+    for i in range(1, 1000):
         key = 'TTYPE'+str(i)
         if key not in hdu.header:
             break
         else:
-            value = hdu.header[key]
-            if value in comments:
-                hdu.header[key] = (value, comments[value])
-            if value in units:
-                hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
+            colname = hdu.header[key]
+            if colname in comments:
+                hdu.header[key] = (colname, comments[colname])
+            if colname in units and units[colname].strip() != '':
+                tunit_key = 'TUNIT'+str(i)
+                if tunit_key in hdu.header and hdu.header[tunit_key] != units[colname]:
+                    log.warning(f'Overriding {colname} units {hdu.header[tunit_key]} -> {units[colname]}')
+
+                # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
+                tform_key = 'TFORM'+str(i)
+                hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
     #
     # Add checksum cards.
     #

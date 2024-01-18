@@ -22,7 +22,7 @@ import os
 import sys
 import argparse
 import locale
-from pkg_resources import resource_exists, resource_filename
+from importlib import resources
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -557,11 +557,11 @@ def parse_nist(ion, vacuum=True):
         log.info("Using air wavelengths")
         medium = 'air'
     srch_file = "data/arc_lines/{0}_{1}.ascii".format(ion, medium)
-    if not resource_exists('desispec', srch_file):
+    if not resources.files('desispec').joinpath(srch_file).is_file():
         log.error("Cannot find NIST file {:s}".format(srch_file))
         raise Exception("Cannot find NIST file {:s}".format(srch_file))
     # Read, while working around non-ASCII characters in NIST line lists
-    nist_file = resource_filename('desispec', srch_file)
+    nist_file = str(resources.files('desispec').joinpath(srch_file))
     log.info("reading NIST file {:s}".format(nist_file))
     # The data files contain the non-ASCII character 'Å', so explicitly set the
     # encoding when reading the table.
@@ -637,7 +637,7 @@ def load_arcline_list(camera, vacuum=True,lamps=None):
     if not vacuum:
         log.info("Using air wavelengths")
         medium = 'air'
-    rej_file = resource_filename('desispec', "data/arc_lines/rejected_lines_{0}.yaml".format(medium))
+    rej_file = resources.files('desispec').joinpath(f"data/arc_lines/rejected_lines_{medium}.yaml")
     with open(rej_file, 'r') as infile:
         rej_dict = yaml.safe_load(infile)
     # Loop through the NIST Tables
@@ -796,9 +796,9 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
         filename = good_lines_filename
     else :
         if vacuum :
-            filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
+            filename = str(resources.files('desispec').joinpath("data/arc_lines/goodlines_vacuum.ascii"))
         else :
-            filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
+            filename = str(resources.files('desispec').joinpath("data/arc_lines/goodlines_air.ascii"))
 
     log.info("Reading good lines in {:s}".format(filename))
     lines={}

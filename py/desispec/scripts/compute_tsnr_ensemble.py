@@ -23,7 +23,6 @@ from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
-from   pkg_resources                 import resource_filename
 from   scipy.interpolate             import interp1d
 from   astropy.table                 import Table, join
 

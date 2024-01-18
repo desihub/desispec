@@ -10,8 +10,9 @@ from __future__ import absolute_import
 # The line above will help with 2to3 support.
 
 import warnings
-warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
-warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+warnings.filterwarnings('ignore', message="'.*nanomaggie.* did not parse as fits unit.*")
+warnings.filterwarnings('ignore', message="'.*nanomaggy.* did not parse as fits unit.*")
+warnings.filterwarnings('ignore', message=r".*'10\*\*6 arcsec.* did not parse as fits unit.*")
 
 # from .download import download, filepath2url
 from .fiberflat import read_fiberflat, write_fiberflat

@@ -35,6 +35,7 @@ from .fibermap import fibermap_comments
 
 from ..spectra import Spectra, stack
 from .meta import specprod_root
+from ..util import argmatch
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -185,8 +186,31 @@ def write_spectra(outfile, spec, units=None):
 
     return outfile
 
+def _read_image(hdus, extname, dtype, rows=None):
+    """
+    Helper function to read extname from fitsio.FITS hdus, filter by rows,
+    convert to native endian, and cast to dtype.  Returns image.
+    """
+    data = hdus[extname].read()
+    if rows is not None:
+        data = data[rows]
 
-def read_spectra(infile, single=False):
+    return native_endian(data).astype(dtype)
+
+
+def read_spectra(
+    infile,
+    single=False,
+    targetids=None,
+    rows=None,
+    skip_hdus=None,
+    select_columns={
+        "FIBERMAP": None,
+        "EXP_FIBERMAP": None,
+        "SCORES": None,
+        "EXTRA_CATALOG": None,
+    },
+):
     """
     Read Spectra object from FITS file.
 
@@ -196,10 +220,21 @@ def read_spectra(infile, single=False):
     Args:
         infile (str): path to read
         single (bool): if True, keep spectra as single precision in memory.
+        targetids (list): Optional, list of targetids to read from file, if present.
+        rows (list): Optional, list of rows to read from file
+        skip_hdus (list): Optional, list/set/tuple of HDUs to skip
+        select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
         The object containing the data read from disk.
 
+    `skip_hdus` options are FIBERMAP, EXP_FIBERMAP, SCORES, EXTRA_CATALOG, MASK, RESOLUTION;
+    where MASK and RESOLUTION mean to skip those for all cameras.
+    Note that WAVE, FLUX, and IVAR are always required.
+
+    If a table HDU is not listed in `select_columns`, all of its columns will be read
+
+    User can optionally specify targetids OR rows, but not both
     """
     log = get_logger()
     infile = checkgzip(infile)
@@ -212,11 +247,46 @@ def read_spectra(infile, single=False):
         raise IOError("{} is not a file".format(infile))
 
     t0 = time.time()
-    hdus = fitsio.FITS(infile, mode='r')
+    hdus = fitsio.FITS(infile, mode="r")
     nhdu = len(hdus)
 
-    # load the metadata.
+    if targetids is not None and rows is not None:
+        raise ValueError('Set rows or targetids but not both')
 
+    #- default skip_hdus empty set -> include everything, without
+    #- having to check for None before checking if X is in skip_hdus
+    if skip_hdus is None:
+        skip_hdus = set()
+
+    #- Map targets -> rows and exp_rows.
+    #- Note: coadds can have uncoadded EXP_FIBERMAP HDU with more rows than
+    #- the coadded FIBERMAP HDU, so track rows vs. exp_rows separately
+    exp_rows = None
+    if targetids is not None:
+        targetids = np.atleast_1d(targetids)
+        file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
+        rows = np.where(np.isin(file_targetids, targetids))[0]
+        if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
+            exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
+            exp_rows = np.where(np.isin(exp_targetids, targetids))[0]
+        if len(rows) == 0:
+            return Spectra()
+    elif rows is not None:
+        rows = np.asarray(rows)
+        # figure out exp_rows
+        file_targetids = hdus["FIBERMAP"].read(rows=rows, columns="TARGETID")
+        if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
+            exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
+            exp_rows = np.where(np.isin(exp_targetids, file_targetids))[0]
+        
+    if select_columns is None:
+        select_columns = dict()
+
+    for extname in ("FIBERMAP", "EXP_FIBERMAP", "SCORES", "EXTRA_CATALOG"):
+        if extname not in select_columns:
+            select_columns[extname] = None
+
+    # load the metadata.
     meta = dict(hdus[0].read_header())
 
     # initialize data objects
@@ -240,19 +310,48 @@ def read_spectra(infile, single=False):
 
     for h in range(1, nhdu):
         name = hdus[h].read_header()["EXTNAME"]
+        log.debug('Reading %s', name)
         if name == "FIBERMAP":
-            fmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
+            if name not in skip_hdus:
+                fmap = encode_table(
+                    Table(
+                        hdus[h].read(rows=rows, columns=select_columns["FIBERMAP"]),
+                        copy=True,
+                    ).as_array()
+                )
         elif name == "EXP_FIBERMAP":
-            expfmap = encode_table(Table(hdus[h].read(), copy=True).as_array())
+            if name not in skip_hdus:
+                expfmap = encode_table(
+                    Table(
+                        hdus[h].read(rows=exp_rows, columns=select_columns["EXP_FIBERMAP"]),
+                        copy=True,
+                    ).as_array()
+                )
         elif name == "SCORES":
-            scores = encode_table(Table(hdus[h].read(), copy=True).as_array())
-        elif name == 'EXTRA_CATALOG':
-            extra_catalog = encode_table(Table(hdus[h].read(), copy=True).as_array())
+            if name not in skip_hdus:
+                scores = encode_table(
+                    Table(
+                        hdus[h].read(rows=rows, columns=select_columns["SCORES"]),
+                        copy=True,
+                    ).as_array()
+                )
+        elif name == "EXTRA_CATALOG":
+            if name not in skip_hdus:
+                extra_catalog = encode_table(
+                    Table(
+                        hdus[h].read(
+                            rows=rows, columns=select_columns["EXTRA_CATALOG"]
+                        ),
+                        copy=True,
+                    ).as_array()
+                )
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
             if mat is None:
-                raise RuntimeError("FITS extension name {} does not contain the band".format(name))
+                raise RuntimeError(
+                    "FITS extension name {} does not contain the band".format(name)
+                )
             band = mat.group(1).lower()
             type = mat.group(2)
             if band not in bands:
@@ -260,44 +359,77 @@ def read_spectra(infile, single=False):
             if type == "WAVELENGTH":
                 if wave is None:
                     wave = {}
-                #- Note: keep original float64 resolution for wavelength
+                # - Note: keep original float64 resolution for wavelength
                 wave[band] = native_endian(hdus[h].read())
             elif type == "FLUX":
                 if flux is None:
                     flux = {}
-                flux[band] = native_endian(hdus[h].read().astype(ftype))
+                flux[band] = _read_image(hdus, h, ftype, rows=rows)
             elif type == "IVAR":
                 if ivar is None:
                     ivar = {}
-                ivar[band] = native_endian(hdus[h].read().astype(ftype))
-            elif type == "MASK":
+                ivar[band] = _read_image(hdus, h, ftype, rows=rows)
+            elif type == "MASK" and type not in skip_hdus:
                 if mask is None:
                     mask = {}
-                mask[band] = native_endian(hdus[h].read().astype(np.uint32))
-            elif type == "RESOLUTION":
+                mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
+            elif type == "RESOLUTION" and type not in skip_hdus:
                 if res is None:
                     res = {}
-                res[band] = native_endian(hdus[h].read().astype(ftype))
-            else:
+                res[band] = _read_image(hdus, h, ftype, rows=rows)
+            elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
                 # this must be an "extra" HDU
+                log.debug('Reading extra HDU %s', name)
                 if extra is None:
                     extra = {}
                 if band not in extra:
                     extra[band] = {}
-                extra[band][type] = native_endian(hdus[h].read().astype(ftype))
+
+                extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
 
     hdus.close()
     duration = time.time() - t0
-    log.info(iotime.format('read', infile, duration))
+    log.info(iotime.format("read", infile, duration))
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
 
-    spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
-        fibermap=fmap, exp_fibermap=expfmap,
-        meta=meta, extra=extra, extra_catalog=extra_catalog,
-        single=single, scores=scores)
+    spec = Spectra(
+        bands,
+        wave,
+        flux,
+        ivar,
+        mask=mask,
+        resolution_data=res,
+        fibermap=fmap,
+        exp_fibermap=expfmap,
+        meta=meta,
+        extra=extra,
+        extra_catalog=extra_catalog,
+        single=single,
+        scores=scores,
+    )
+
+    # if needed, sort spectra to match order of targetids, which could be
+    # different than the order they appear in the file
+    if targetids is not None:
+        from desispec.util import ordered_unique
+        #- Input targetids that we found in the file, in the order they appear in targetids
+        ii = np.isin(targetids, spec.fibermap['TARGETID'])
+        found_targetids = ordered_unique(targetids[ii])
+        log.debug('found_targetids=%s', found_targetids)
+
+        #- Unique targetids of input file in the order they first appear
+        input_targetids = ordered_unique(spec.fibermap['TARGETID'])
+        log.debug('input_targetids=%s', np.asarray(input_targetids))
+
+        #- Only reorder if needed
+        if not np.all(input_targetids == found_targetids):
+            rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
+            log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
+            log.debug("rows for subselection=%s", rows)
+            spec = spec[rows]
 
     return spec
 
@@ -366,17 +498,17 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
 
     return spec
 
-def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
+def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=False,
                       single=False, targets=None, fibers=None, redrock=True,
-                      group=None):
+                      group='cumulative'):
     """
     Read and return combined spectra for a tile/night
 
     Args:
         tileid (int) : Tile ID
-        night (int or str) : YEARMMDD night or tile group, e.g. 'deep' or 'all'
 
     Options:
+        night (int or str) : YEARMMDD night
         specprod (str) : overrides $SPECPROD
         reduxdir (str) : overrides $DESI_SPECTRO_REDUX/$SPECPROD
         coadd (bool) : if True, read coadds instead of per-exp spectra
@@ -401,12 +533,15 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         #- will automatically use $SPECPROD if specprod=None
         reduxdir = specprod_root(specprod)
 
-    tiledir = os.path.join(reduxdir, 'tiles')
+    tiledir = os.path.join(reduxdir, 'tiles', group)
+    if night is None:
+        nightdirglob = os.path.join(tiledir, str(tileid), '*')
+        tilenightdirs = sorted(glob.glob(nightdirglob))
+        night = os.path.basename(tilenightdirs[-1])
+
     nightstr = str(night)
-    if group is not None:
-        tiledir = os.path.join(tiledir, group)
-        if group == 'cumulative':
-            nightstr = 'thru'+nightstr
+    if group == 'cumulative':
+        nightstr = 'thru'+nightstr
 
     tiledir = os.path.join(tiledir, str(tileid), str(night))
 
@@ -417,10 +552,11 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*')
+    specglob = f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits*'
+    specfiles = glob.glob(specglob)
 
     if len(specfiles) == 0:
-        raise ValueError(f'No spectra found in {tiledir}')
+        raise ValueError(f'No spectra found in {specglob}')
 
     specfiles = sorted(specfiles)
 
@@ -428,6 +564,18 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
     redshifts = list()
     for filename in specfiles:
         log.debug(f'reading {os.path.basename(filename)}')
+
+        #- if filtering by fibers, check if we need to read this file
+        if fibers is not None:
+            # filenames are like prefix-PETAL-tileid-night.*
+            thispetal = int(os.path.basename(filename).split('-')[1])
+            petals = np.asarray(fibers)//500
+
+            if not np.any(np.isin(thispetal, petals)):
+                log.debug('Skipping petal %d, not needed by fibers %s',
+                          thispetal, fibers)
+                continue
+
         sp = read_spectra(filename, single=single)
         if targets is not None:
             keep = np.in1d(sp.fibermap['TARGETID'], targets)
@@ -441,29 +589,17 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
             if redrock:
                 #- Read matching redrock file for this spectra/coadd file
                 rrfile = os.path.basename(filename).replace(prefix, 'redrock', 1)
-                log.debug(f'Reading {rrfile}')
-                rrfile = os.path.join(tiledir, rrfile)
+                rrfile = checkgzip(os.path.join(tiledir, rrfile))
+                log.debug(f'Reading {os.path.basename(rrfile)}')
                 rr = Table.read(rrfile, 'REDSHIFTS')
 
                 #- Trim rr to only have TARGETIDs in filtered spectra sp
                 keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
                 rr = rr[keep]
 
-                #- spectra files can have multiple entries per TARGETID,
-                #- while redrock files have only 1.  Expand to match spectra.
-                #- Note: astropy.table.join changes the order
-                if len(sp.fibermap) > len(rr):
-                    rrx = Table()
-                    rrx['TARGETID'] = sp.fibermap['TARGETID']
-                    rrx = astropy.table.join(rrx, rr, keys='TARGETID')
-                else:
-                    rrx = rr
-
-                #- Sort the rrx Table to match the order of sp['TARGETID']
-                ii = np.argsort(sp.fibermap['TARGETID'])
-                jj = np.argsort(rrx['TARGETID'])
-                kk = np.argsort(ii[jj])
-                rrx = rrx[kk]
+                #- match the Redrock entries to the spectra fibermap entries
+                ii = argmatch(rr['TARGETID'], sp.fibermap['TARGETID'])
+                rrx = rr[ii]
 
                 #- Confirm that we got all that expanding and sorting correct
                 assert np.all(sp.fibermap['TARGETID'] == rrx['TARGETID'])

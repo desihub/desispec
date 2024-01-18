@@ -10,7 +10,6 @@ import numpy as np
 from astropy.table import Table,vstack
 import fitsio
 import yaml
-from pkg_resources import resource_filename
 import glob
 
 from desiutil.log import get_logger

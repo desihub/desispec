@@ -8,7 +8,7 @@ import os
 import shutil
 import desispec
 from desispec.quicklook import procalgs as PA
-from pkg_resources import resource_filename
+from importlib import resources
 from desispec.test.test_ql_qa import xy2hdr
 from desispec.preproc import parse_sec_keyword
 import astropy.io.fits as fits
@@ -43,7 +43,7 @@ class TestQL_PA(unittest.TestCase):
 
             #- PSF has to be real file
             psffile = '{}/psf-{}.fits'.format(calibDir, camera)
-            example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
+            example_psf = str(resources.files('desispec').joinpath(f'test/data/ql/psf-{camera}.fits'))
             shutil.copy(example_psf, psffile)
             
         #- Copy test calibration-data.yaml file 
@@ -51,7 +51,7 @@ class TestQL_PA(unittest.TestCase):
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
-            shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
+            shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir, f"{c}0.yaml"))
         
         #- Set calibration environment variable
         os.environ['DESI_SPECTRO_CALIB'] = calibDir
@@ -148,7 +148,3 @@ class TestQL_PA(unittest.TestCase):
 #        pargs["dumpfile"]=self.pixfile
 #        img=pa(inp,**pargs) 
 #        self.assertTrue(np.all(img.mask == mask))
-
-
-if __name__ == '__main__':
-    unittest.main()

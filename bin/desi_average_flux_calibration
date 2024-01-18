@@ -11,6 +11,7 @@ This script averages the flux calibration for a DESI spectrograph camera.
 from desispec.io.fluxcalibration import read_flux_calibration,write_average_flux_calibration,read_average_flux_calibration
 from desispec.averagefluxcalibration import AverageFluxCalib
 from desiutil.log import get_logger
+from desispec.io.util import replace_prefix
 
 import argparse
 import os
@@ -19,7 +20,7 @@ import numpy as np
 import sys
 import fitsio
 import scipy.interpolate
-from pkg_resources import resource_exists, resource_filename
+from importlib import resources
 from desimodel.fastfiberacceptance import FastFiberAcceptance
 import desimodel.io
 from glob import glob
@@ -42,10 +43,10 @@ def get_ffracflux_wave(seeing, ffracflux, wave, fac_wave_power):
     Returns:
         Fiber acceptance for seeing, normalized to ffracflux at 6500A
 
-    
+
     Comment:
         GFA now provide ffrac for fiber_diameter=1.52", so no need to correct for different diameters
-        we do the normalization using fac_wave, and then to be interpolated to wave    
+        we do the normalization using fac_wave, and then to be interpolated to wave
     """
     #
     desi = desimodel.io.load_desiparams()
@@ -61,7 +62,7 @@ def get_ffracflux_wave(seeing, ffracflux, wave, fac_wave_power):
     ffracflux_wave /= ffracflux_wave[np.abs(fac_wave-6500).argmin()] # AR normalizing to 1 at 6500A
     ffracflux_wave *= ffracflux # AR normalising to ffracflux[i] at 6500A
     return np.interp(wave, fac_wave, ffracflux_wave) # AR interpolating on wave
-    
+
 
 
 if __name__ == '__main__':
@@ -78,6 +79,7 @@ if __name__ == '__main__':
     parser.add_argument('--seeing_key', type = str, default = 'RADPROF_FWHM_ASEC', choices = ['FWHM_ASEC', 'RADPROF_FWHM_ASEC'], help = 'key in GFA catalog for seeing (default=RADPROF_FWHM_ASEC)')
     parser.add_argument('--fac_wave_power', type = float, default = -0.25, help = 'wavelength dependence of fiber acceptance (default=-0.25)')
     parser.add_argument('--first_night', type = int, default = None, help = 'first night for which this calibration is usable (default=None)')
+    parser.add_argument('--unflat', action='store_true', help="undo flatfield correction to get the variation of thru from spectro to spectro")
 
     args = parser.parse_args()
     log=get_logger()
@@ -151,6 +153,12 @@ if __name__ == '__main__':
         if np.any(np.isnan(cal.calib)) :
             log.error("calib has nan")
             continue
+
+        if args.unflat :
+            ffilename=replace_prefix(filename, "fluxcalib", "fiberflatexp")
+            log.info(f"reading {ffilename}")
+            flat=fitsio.read(ffilename)
+            cal.calib *= flat
 
         mcalib = np.median(cal.calib,axis=0)
 
@@ -233,10 +241,10 @@ if __name__ == '__main__':
     telluricmask=np.zeros(wave.size)
     # mask telluric lines
     srch_filename = "data/arc_lines/telluric_lines.txt"
-    if not resource_exists('desispec', srch_filename):
+    if not resources.files('desispec').joinpath(srch_filename).is_file():
         log.error("Cannot find telluric mask file {:s}".format(srch_filename))
         raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
-    telluric_mask_filename = resource_filename('desispec', srch_filename)
+    telluric_mask_filename = resources.files('desispec').joinpath(srch_filename)
     telluric_features = np.loadtxt(telluric_mask_filename)
     log.debug("Masking telluric features from file %s"%telluric_mask_filename)
     for feature in telluric_features :

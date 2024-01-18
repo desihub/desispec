@@ -9,7 +9,6 @@ import re
 import os
 import numpy as np
 import scipy.interpolate
-from pkg_resources import resource_exists, resource_filename
 import numba
 import time
 
@@ -375,7 +374,7 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
-@numba.jit
+@numba.jit(nopython=True)
 def numba_mean(image_flux,image_ivar,x,hw=3) :
     """
     Returns mean of pixels vs. row about x+-hw

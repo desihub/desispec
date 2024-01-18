@@ -18,7 +18,7 @@ import numpy as np
 import argparse
 from desiutil.log import get_logger
 from desispec.io import specprod_root
-from pkg_resources import resource_filename
+from importlib import resources
 from desispec.night_qa import (
     get_nightqa_outfns,
     get_surveys_night_expids,
@@ -50,7 +50,7 @@ def parse(options=None):
     parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
                         help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
     parser.add_argument("--css", type = str, default = None, required = False,
-                        help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
+                        help = "html formatting css file; default to importlib.resources.files('desispec').joinpath('data/qa/nightqa.css')")
     parser.add_argument("--recompute", action = "store_true",
                         help = "recompute (i.e. overwrite args.outfile if already existing")
     parser.add_argument("--compute_missing_only", action = "store_true",
@@ -93,7 +93,7 @@ def main():
     if args.outdir is None :
         args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
     if args.css is None:
-        args.css = resource_filename("desispec", "data/qa/nightqa.css")
+        args.css = resources.files("desispec").joinpath("data/qa/nightqa.css")
     for kwargs in args._get_kwargs():
         log.info(kwargs)
 
@@ -196,8 +196,8 @@ def main():
         os.system("cp {} {}".format(args.css, args.outdir))
         write_nightqa_html(
             outfns, args.night, args.prod, os.path.basename(args.css),
-            surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
-
+            expids, tileids, surveys,
+        )
     duration_seconds = time.time() - start_time
     minutes = int(duration_seconds // 60)
     seconds = int(duration_seconds % 60)

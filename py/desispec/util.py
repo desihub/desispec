@@ -461,6 +461,37 @@ def header2night(header):
 
     raise ValueError('Unable to derive YEARMMDD from header NIGHT,DATE-OBS,MJD')
 
+def parse_keyval(keyval):
+    """
+    Parse "key=val" string -> (key,val) tuple with int/float/str/bool val
+
+    Args:
+        keyval (str): "key=value" string
+
+    Returns (key, value) tuple where value has been promoted from string
+    into int/float/bool if possible.
+
+    value="True" or "False" becomes boolean True/False, but all other forms
+    like "T"/"F" or "true"/"false" remain strings.
+    0 and 1 become ints, not bool.
+    """
+    key, value_string = keyval.split('=', maxsplit=1)
+    try:
+        value = int(value_string)
+    except ValueError:
+        try:
+            value = float(value_string)
+        except ValueError:
+            if value_string.strip() == 'True':
+                value = True
+            elif value_string.strip() == 'False':
+                value = False
+            else:
+                value = value_string
+
+    return (key, value)
+
+
 def combine_ivar(ivar1, ivar2):
     """
     Returns the combined inverse variance of two inputs, making sure not to
@@ -653,3 +684,42 @@ def itemindices(a):
 
     return idmap
 
+def argmatch(a, b):
+    """
+    Returns indices ii such that a[ii] == b
+
+    Args:
+        a: array-like
+        b: array-like
+
+    Returns indices ii such that a[ii] == b
+
+    Both `a` and `b` are allowed to have repeats, and `a` values can be a
+    superset of `b`, but `b` cannot contain values that are not in `a`
+    because then no indices `ii` could result in `a[ii] == b`.
+
+    Related: desitarget.geomask.match_to which is similar, but doesn't allow
+    duplicates in `b`.
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
+    ii = np.argsort(a)
+    jj = np.argsort(b)
+    kk = np.searchsorted(a[ii], b[jj])
+    try:
+        match_indices = ii[kk[np.argsort(jj)]]
+    except IndexError:
+        #- if b has elements not in a, that can fail;
+        #- only do expensive check if needed
+        bad_b = np.isin(b, a, invert=True)
+        if np.any(bad_b):
+            raise ValueError(f'b contains values not in a; impossible to match {set(b[bad_b])} to {a=}')
+        else:
+            #- this should not occur
+            raise RuntimeError(f'argmatch failure for unknown reason {a=}, {b=}')
+
+    if not np.all(a[match_indices] == b):
+        #- this should not occur
+        raise RuntimeError(f'argmatch failure for unknown reason {a=} {match_indices=} {a[match_indices]=} != {b}')
+
+    return match_indices

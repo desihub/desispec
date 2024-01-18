@@ -123,9 +123,3 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(frameid(9876543, 'z9'), 987654329)
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

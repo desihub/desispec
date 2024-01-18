@@ -2,18 +2,145 @@
 desispec Change Log
 ===================
 
-0.59.2 (unreleased)
+0.61.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.61.0 (2024-01-15)
+-------------------
+
+* Add VCCDSEC info to tile_qa_plot (PR `#2136`_).
+* Don't skip exp_fibermap in io.spectra.read_spectra (PR `#2137`_).
+* Don't require a resolution matrix when coadding across cameras (PR `#2139`_).
+* Add new methods to convert to and from ``spectra.Spectra`` and
+  ``specutils.SpectrumList`` objects (PR `#2141`_).
+* New row-by-row extraction and CTE correction modules (PR `#2144`_).
+* Add ``--zscale`` and ``--mask`` options to ``plot_fiber_traces`` (PR
+  `#2145`_).
+* Fix traceshifts when half CCD amps are masked (PR `#2150`_).
+* In ``create_petalnz_pdf``, look for Redrock instead of zmtl files (PR
+  `#2151`_).
+* Fix failing ``io.photo`` unit tests at NERSC (PR `#2154`_).
+* Remove deprecated test_suite functions from all unit tests that use it (PR
+  `#2155`_).
+* Various bug fixes and updates to ``io.read_tile_spectra`` (PR `#2156`_).
+* Deprecate ``pkg_resources`` in favor of ``importlib`` (PR `#2157`_).
+* Check for VCCDSEC and VCCDON when generating bias and dark models (PR
+  `#2158`_).
+* Check CCDTEMP when generating bias and dark models (PR `#2159`_).
+
+.. _`#2136`: https://github.com/desihub/desispec/pull/2136
+.. _`#2137`: https://github.com/desihub/desispec/pull/2137
+.. _`#2139`: https://github.com/desihub/desispec/pull/2139
+.. _`#2141`: https://github.com/desihub/desispec/pull/2141
+.. _`#2144`: https://github.com/desihub/desispec/pull/2144
+.. _`#2145`: https://github.com/desihub/desispec/pull/2145
+.. _`#2150`: https://github.com/desihub/desispec/pull/2150
+.. _`#2151`: https://github.com/desihub/desispec/pull/2151
+.. _`#2154`: https://github.com/desihub/desispec/pull/2154
+.. _`#2155`: https://github.com/desihub/desispec/pull/2155
+.. _`#2156`: https://github.com/desihub/desispec/pull/2156
+.. _`#2157`: https://github.com/desihub/desispec/pull/2157
+.. _`#2158`: https://github.com/desihub/desispec/pull/2158
+.. _`#2159`: https://github.com/desihub/desispec/pull/2159
+
+0.60.2 (2023-10-26)
+-------------------
+
+* Update validredshifts.validate() to work on SV observations (PR `#2122`_).
+* Add desi_exposure_info script (PR `#2124`_).
+* Fix exp_fibermap when specifying targetids to read_spectra (PR `#2126`_).
+* Add desi_average_flux_calibration --unflat option (PR `#2127`_).
+* io.photo use read-only mount (PR `#2132`_).
+
+.. _`#2122`: https://github.com/desihub/desispec/pull/2122
+.. _`#2124`: https://github.com/desihub/desispec/pull/2124
+.. _`#2126`: https://github.com/desihub/desispec/pull/2126
+.. _`#2127`: https://github.com/desihub/desispec/pull/2127
+.. _`#2132`: https://github.com/desihub/desispec/pull/2132
+
+0.60.1 (2023-09-25)
+-------------------
+
+* zcatalog FIRSTNIGHT/LASTNIGHT when missing petals (PR `#2118`_).
+* night_qa: protect against missing OBSTYPE keyword (PR `#2120`_).
+* zcatalog usage cleanup (PR `#2121`_).
+
+.. _`#2118`: https://github.com/desihub/desispec/pull/2118
+.. _`#2120`: https://github.com/desihub/desispec/pull/2120
+.. _`#2121`: https://github.com/desihub/desispec/pull/2121
+
+0.60.0 (2023-09-14)
+-------------------
+
+Updates for patching Iron/DR1 redshift catalogs
+
+* coadd_fibermap handle RA wraparound (PR `#2090`_).
+* Update COADD_FIBERSTATUS to bitwise OR when all inputs are bad (PR `#2093`_).
+* Coadd bitwise OR of input targeting bits, e.g. DESI_TARGET (PR `#2094`_).
+* Add IN_COADD/B/R/Z columns to EXP_FIBERMAP (PR `#2100`_).
+* Fix dtype of ``*_NSPEC`` columns to int16 (PR `#2103`_).
+* desi_zcatalog --recoadd-fibermap option (PR `#2109`_, `#2116`_).
+* fix HPXNEST header type (PR `#2110`_).
+* desi_zcatalog --add-units option for DR1 patching (PR `#2111`_).
+* Refactor desi_zcatalog options, add parallelism (PR `#2117`_).
+
+Algorithmic Updates
+
+* Fix incorrect weights in trace shift polyfit (PR `#2105`_).
+* Improve trace shifts for bright/backup data (PR `#2106`_, `#2115`_).
+
+Miscellaneous
+
+* Add read_spectra options to read subsets by targetids or rows (PR `#2052`_).
+* Night QA flab calibs later than first science rather than absolute
+  timestamp (PR `#2089`_).
+* Night QA orient images and display CCD amp names (PR `#2091`_).
+* Add desi_compute_fiberflat_vs_humidity --first-night option (PR `#2101`_).
+* Add desi_compute_gains exposure time flexibility (PR `#2107`_).
+* Update readthedocs configuration (PR `#2112`_).
+
+.. _`#2052`: https://github.com/desihub/desispec/pull/2052
+.. _`#2089`: https://github.com/desihub/desispec/pull/2089
+.. _`#2090`: https://github.com/desihub/desispec/pull/2090
+.. _`#2091`: https://github.com/desihub/desispec/pull/2091
+.. _`#2093`: https://github.com/desihub/desispec/pull/2093
+.. _`#2094`: https://github.com/desihub/desispec/pull/2094
+.. _`#2100`: https://github.com/desihub/desispec/pull/2100
+.. _`#2101`: https://github.com/desihub/desispec/pull/2101
+.. _`#2103`: https://github.com/desihub/desispec/pull/2103
+.. _`#2105`: https://github.com/desihub/desispec/pull/2105
+.. _`#2106`: https://github.com/desihub/desispec/pull/2106
+.. _`#2107`: https://github.com/desihub/desispec/pull/2107
+.. _`#2109`: https://github.com/desihub/desispec/pull/2109
+.. _`#2110`: https://github.com/desihub/desispec/pull/2110
+.. _`#2111`: https://github.com/desihub/desispec/pull/2111
+.. _`#2112`: https://github.com/desihub/desispec/pull/2112
+.. _`#2114`: https://github.com/desihub/desispec/pull/2114
+.. _`#2115`: https://github.com/desihub/desispec/pull/2115
+.. _`#2116`: https://github.com/desihub/desispec/pull/2116
+.. _`#2117`: https://github.com/desihub/desispec/pull/2117
+
+
+0.59.2 (2023-08-04)
 -------------------
 
 * Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
 * night_qa optional override of reprocessing darks (PR `#2066`_).
 * desi_vi_tile defaults to only new tiles (PR `#2073`_).
 * Optionally match to DR10 photometry (PR `#2079`_).
+* Move desi_archive_tilenight contents into callable funcs (PR `#2081`_).
+* Add (re-)archive options when missing petals (PR `#2082`_).
+* Fix circular imports with trace_shifts (PR `#2084`_).
 
 .. _`#2059`: https://github.com/desihub/desispec/pull/2059
 .. _`#2066`: https://github.com/desihub/desispec/pull/2066
 .. _`#2073`: https://github.com/desihub/desispec/pull/2073
 .. _`#2079`: https://github.com/desihub/desispec/pull/2079
+.. _`#2081`: https://github.com/desihub/desispec/pull/2081
+.. _`#2082`: https://github.com/desihub/desispec/pull/2082
+.. _`#2084`: https://github.com/desihub/desispec/pull/2084
 
 0.59.1 (2023-06-23)
 -------------------

@@ -31,6 +31,8 @@ def parse(options=None):
                         help = "output directory")
     parser.add_argument("-s", "--spectrographs", type = str, default = "0,1,2,3,4,5,6,7,8,9", required = False,
                         help = "comma separated list of spectographs, default is '0,1,2,3,4,5,6,7,8,9'")
+    parser.add_argument("--first-night", type = int, default = None, required = False,
+                        help = "specify first night (in case of change in the hardware)")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -85,7 +87,7 @@ def define_template_bins(input_table_filename) :
 
     return wavebins, nights_in_bins
 
-def compute_humidity_table(camera,years,specprod_dir,fit_dip_wavelength=False) :
+def compute_humidity_table(camera,years,specprod_dir,fit_dip_wavelength=False,first_night=None) :
     """
 
     Look for nightly flatfield is a series of years for a camera and record the night and
@@ -98,6 +100,7 @@ def compute_humidity_table(camera,years,specprod_dir,fit_dip_wavelength=False) :
 
     Optional:
        fit_dip_wavelength: fit the wavelength of the absorption feature.
+       first_night: first night to consider
 
     Returns:
       astropy.Table with columns 'NIGHT', 'HUMIDITY' and optionally 'DIPWAVE'
@@ -124,6 +127,10 @@ def compute_humidity_table(camera,years,specprod_dir,fit_dip_wavelength=False) :
             log.info(f"reading {flat_filename}")
             head=fitsio.read_header(flat_filename)
             night=int(head['NIGHT'])
+
+            if first_night is not None and night < first_night :
+                log.warning(f"skip {night} < {first_night}")
+                continue
 
             if camera == "b1" and night == 20220413 :
                 log.warning("skip 20220413 for b1 because we tested a different mirror")
@@ -195,7 +202,7 @@ def main():
     # reference table with columns NIGHT HUMIDITY DIPWAVE
     reference_humidity_table_filename=f"{args.outdir}/humidity_table_{args.reference_camera}.csv"
     if not os.path.isfile(reference_humidity_table_filename) :
-        table = compute_humidity_table(args.reference_camera,args.years,args.prod,fit_dip_wavelength=True)
+        table = compute_humidity_table(args.reference_camera,args.years,args.prod,fit_dip_wavelength=True,first_night=args.first_night)
         table.write(reference_humidity_table_filename)
         log.info("wrote "+reference_humidity_table_filename)
 
@@ -214,7 +221,7 @@ def main():
         humidity_table_filename=f"{args.outdir}/humidity_table_{cam}.csv"
 
         if not os.path.isfile(humidity_table_filename) :
-            table = compute_humidity_table(cam,args.years,args.prod,fit_dip_wavelength=False)
+            table = compute_humidity_table(cam,args.years,args.prod,fit_dip_wavelength=False,first_night=args.first_night)
             table.write(humidity_table_filename)
             log.info("wrote "+humidity_table_filename)
 

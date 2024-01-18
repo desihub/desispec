@@ -1407,8 +1407,8 @@ class Sky_Rband(MonitoringAlg):
 
             #- Get filter response information from speclite
             try:
-                from pkg_resources import resource_filename
-                responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+                from importlib import resources
+                responsefile = resources.files('speclite').joinpath(f'data/filters/{responsefilter}.ecsv')
                 #- Grab wavelength and response information from file
                 rfile=np.genfromtxt(responsefile)
                 rfile=rfile[1:] # remove wavelength/response labels
@@ -1797,8 +1797,8 @@ class Integrate_Spec(MonitoringAlg):
 
         #- Get filter response information from speclite
         try:
-            from pkg_resources import resource_filename
-            responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+            from importlib import resources
+            responsefile = resources.files('speclite').joinpath(f'data/filters/{responsefilter}.ecsv')
             #- Grab wavelength and response information from file
             rfile=np.genfromtxt(responsefile)
             rfile=rfile[1:] # remove wavelength/response labels

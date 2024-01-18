@@ -27,6 +27,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.io.util import replace_prefix
 from desispec.calibfinder import CalibFinder
 from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
@@ -105,6 +106,11 @@ def get_surveys_night_expids(
     expids, tileids, surveys = [], [], []
     for i in range(len(fns)):
         hdr = fitsio.read_header(fns[i], "SPEC")
+        # AR protect against corrupted exposures...
+        # AR see https://github.com/desihub/desispec/issues/2119
+        if "OBSTYPE" not in hdr:
+            log.warning("OBSTYPE keyword missing in {}; ignoring that exposure".format(fns[i]))
+            continue
         if hdr["OBSTYPE"] == "SCIENCE":
             survey = "unknown"
             # AR look for the fiberassign file
@@ -405,12 +411,19 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         log.info("reading {}".format(fn))
         with fitsio.FITS(fn) as h:
             image, ivar, mask = h["IMAGE"].read(), h["IVAR"].read(), h["MASK"].read()
+            image_hdr = h["IMAGE"].read_header()
+        h.close()
         # AR setting to np.nan pixels with ivar = 0 or mask > 0
         # AR hence, when binning, any binned pixel with a masked pixel
         # AR will appear as np.nan (easy way to go)
         d = image.copy()
         sel = (ivar == 0) | (mask > 0)
         d[sel] = np.nan
+        # AR amps locations (only to display A,B,C,D in the dark image
+        # AR    so it s ok if it s only approximate to few pixels
+        # AR    after the trimming
+        for amp in ["a", "b", "c", "d"]:
+            mydict["ampsec{}".format(amp)] = image_hdr["AMPSEC{}".format(amp.upper())]
         # AR trimming
         shape_orig = d.shape
         if shape_orig[0] % binning != 0:
@@ -636,6 +649,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 # AR plot
                 for mydict, title in zip(campet_mydicts, campet_titles):
                     ax = fig.add_subplot(gs[1, 2 * ic])
+                    ax.set_xlabel(r"Fiber direction $\Longrightarrow$")
+                    if ic == 0:
+                        ax.set_ylabel(r"Wavelength direction $\Longrightarrow$")
                     ax_y = fig.add_subplot(gs[0, 2 * ic])
                     ax_x = fig.add_subplot(gs[1, 2 * ic + 1])
                     if mydict is not None:
@@ -643,6 +659,16 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         assert(mydict["camera"] == camera)
                         img = mydict["image"]
                         im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                        # AR amp labels
+                        for amp in ["a", "b", "c", "d"]:
+                            ampsec = mydict["ampsec{}".format(amp)]
+                            ampsecx, ampsecy = ampsec.replace("[", "").replace("]", "").split(",")
+                            ampsecx = np.mean([int(_) for _ in ampsecx.split(":")]) / binning
+                            ampsecy = np.mean([int(_) for _ in ampsecy.split(":")]) / binning
+                            ax.text(ampsecx, ampsecy, amp.upper(), fontweight="bold", ha="center", va="center")
+                        # AR flip the y-axis to have y coords increasing towars up
+                        # AR    (e.g. see Guy+2023 Fig.4)
+                        ax.set_ylim(ax.get_ylim()[::-1])
                         pos = ax.get_position().bounds
                         # AR median profile along x, for each pair of amps
                         tmpxs = np.nanmedian(img[:, : img.shape[1] // 2], axis=1)
@@ -651,7 +677,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.nanmedian(img[:, img.shape[1] // 2 :], axis=1)
                         tmpys = np.arange(len(tmpxs))
                         ax_x.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
-                        ax_x.set_ylim(ax.get_xlim()[::-1])
+                        ax_x.set_ylim(ax.get_xlim())
                         ax_x.set_xlim(-0.5, 0.5)
                         ax_x.set_yticklabels([])
                         ax_x.grid()
@@ -666,7 +692,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         tmpxs = np.arange(len(tmpys))
                         ax_y.plot(tmpxs, tmpys, color=tmpcols[1], alpha=0.5, zorder=1)
                         ax_y.set_title(title)
-                        ax_y.set_xlim(ax.get_ylim()[::-1])
+                        ax_y.set_xlim(ax.get_ylim())
                         ax_y.set_ylim(-0.5, 0.5)
                         ax_y.set_xticklabels([])
                         ax_y.grid()
@@ -1412,13 +1438,21 @@ def create_petalnz_pdf(
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
         # AR reading zmtl files
+        # AR 20231221: look for redrock files, to handle case of
+        # AR    a reprocessing generates a dummy zmtl file
+        # AR https://desisurvey.slack.com/archives/C01HNN87Y7J/p1703203812637849
         istileid = False
         pix_ntilecovs = None
         for petal in petals:
-            fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
+            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
                 log.warning("{} : no file".format(fn))
             else:
+                # AR switching to zmtl
+                fn = replace_prefix(fn, "redrock", "zmtl")
+                if not os.path.isfile(fn):
+                    log.warning("{} : no file".format(fn))
+                    continue
                 istileid = True
                 d = Table.read(fn, hdu="ZMTL")
                 # AR rename *DESI_TARGET and *BGS_TARGET to DESI_TARGET and BGS_TARGET
@@ -1827,7 +1861,7 @@ def write_html_collapse_script(html, classname):
 
 
 
-def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=None):
+def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     """
     Write the nightqa-{NIGHT}.html page.
 
@@ -1836,9 +1870,12 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         css: path to the nightqa.css file
-        surveys (optional, defaults to None): considered surveys (string)
-        nexp (optional, defaults to None): number of considered exposures (int)
-        ntile (optional, defaults to None): number of considered tiles (int)
+        expids: EXPIDs for the considered science exposures (np.array() of ints)
+        tileids: TILEIDs for the considered science exposures (np.array() of ints)
+        surveys: SURVEYs for the considered science exposures (np.array() of strings)
+
+    Notes:
+        expids, tileids, surveys: fiducial use is that those are the outputs of get_surveys_night_expids()
     """
     # ADM html preamble.
     html = open(outfns["html"], "w")
@@ -1859,7 +1896,11 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("<body>\n")
     html.write("\n")
     #
-    html.write("\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(night, nexp, ntile, surveys))
+    html.write(
+        "\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(
+            night, expids.size, np.unique(tileids).size, "/".join(np.unique(surveys))
+        )
+    )
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log
@@ -1899,6 +1940,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR color-coding:
     # AR - red : file does not exist
     # AR - blue : file exists, but is a symlink
+    # AR - orange: file exists, but has been generated *after* processed science exposures
     # AR - green : file exists
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} calibnight</strong>\n</button>\n".format(
@@ -1911,24 +1953,63 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("\t<p>If a file appears in <span style='color:green;'>green</span>, it means it is present.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:blue;'>blue</span>, it means it is a symlink to another file, the name of which is reported.</p>\n")
     html.write("\t<p>If a file appears in <span style='color:red;'>red</span>, it means it is missing.</p>\n")
-    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it does not date from the corresponding night (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
+    html.write("\t<p>If a file appears in <span style='color:orange;'>orange</span>, it means it has been generated after the earliest frame file of the processed science exposures (likely done in the morning, in which case the pipeline uses some default files, if no special action has been taken by the data team).</p>\n")
     html.write("\t</br>\n")
     html.write("<table>\n")
+    # AR science exposure earliest timestamps per campet
+    earliest_sci_fns, earliest_sci_m_times = {}, {}
+    log.info("earliest science exposure frame file timestamp per campet:")
+    for petal in petals:
+        for camera in cameras:
+            campet = "{}{}".format(camera, petal)
+            # AR list all science exposure files for that campet
+            fns = []
+            for expid in expids:
+                fn = findfile("frame", night, expid=expid, camera=camera+str(petal), specprod_dir=prod)
+                if os.path.isfile(fn):
+                    fns.append(fn)
+            # AR protect against case where a campet has no processed files
+            if len(fns) == 0:
+                earliest_sci_fns[campet] = None
+                earliest_sci_m_times[campet] = -99
+                log.warning("{}\tdid not find any science exposure frame files".format(campet))
+            # AR grab the earliest file
+            else:
+                m_times = [os.path.getmtime(fn) for fn in fns]
+                earliest_sci_fns[campet] = fns[np.argmin(m_times)]
+                earliest_sci_m_times[campet] = np.min(m_times)
+                log.info(
+                    "\t{}\t{}\t{}".format(
+                        campet,
+                        datetime.fromtimestamp(earliest_sci_m_times[campet]).strftime("%Y-%m-%dT%H:%M:%S"),
+                        os.path.basename(earliest_sci_fns[campet])
+                    )
+                )
+
+    #
+    log.info("calibration files timestamps per campet:")
     for petal in petals:
         html.write("\t<tr>\n")
         for case in ["psfnight", "fiberflatnight", "biasnight"]:
             for camera in cameras:
-                fn = findfile(case, night, camera=camera+str(petal),
-                        specprod_dir=prod)
+                campet = "{}{}".format(camera, petal)
+                fn = findfile(case, night, camera=campet, specprod_dir=prod)
                 fnshort, color = os.path.basename(fn).replace("-{}".format(night), ""), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):
                         fnshort, color = os.path.basename(os.readlink(fn)), "blue"
                     else:
-                        # AR check the timestamp "night" vs. the night
-                        # AR if cals are done before observations, those should match
-                        m_time = os.path.getmtime(fn)
-                        if int(datetime.fromtimestamp(m_time).strftime("%Y%m%d")) != night:
+                        # AR check the timestamp against the earliest processed exposure file
+                        calib_m_time = os.path.getmtime(fn)
+                        calib_m_time_str = datetime.fromtimestamp(calib_m_time).strftime("%Y-%m-%dT%H:%M:%S")
+                        log.info("\t{}\t{}\t{}".format(campet, calib_m_time_str, os.path.basename(fn)))
+                        # science earliest m_time
+                        earliest_sci_fn, earliest_sci_m_time = earliest_sci_fns[campet], earliest_sci_m_times[campet]
+                        if earliest_sci_m_time == -99:
+                            earliest_sci_m_time_str = str(None)
+                        else:
+                            earliest_sci_m_time_str = datetime.fromtimestamp(earliest_sci_m_time).strftime("%Y-%m-%dT%H:%M:%S")
+                        if (calib_m_time > earliest_sci_m_time) & (earliest_sci_m_time != -99):
                             color = "orange"
                         else:
                             color = "green"

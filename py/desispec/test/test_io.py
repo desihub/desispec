@@ -4,19 +4,12 @@
 """
 
 import sys
-if __name__ == '__main__':
-    print('Run this instead:')
-    # print('python setup.py test -m desispec.test.test_io')
-    print('pytest py/desispec/test/test_io.py')
-    sys.exit(1)
-
 import unittest
 from unittest.mock import patch, MagicMock
 import os
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
-from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, MaskedColumn
@@ -83,15 +76,18 @@ class TestIO(unittest.TestCase):
         for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
-
         for e in cls.origEnv:
             if cls.origEnv[e] is None:
                 del os.environ[e]
             else:
                 os.environ[e] = cls.origEnv[e]
 
-        if os.path.exists(cls.testDir):
+        if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
+
+        # reset the readonly cache
+        from ..io import meta
+        meta._desi_root_readonly = None
 
     def test_write_bintable(self):
         """Test writing binary tables to FITS.
@@ -975,7 +971,8 @@ class TestIO(unittest.TestCase):
         meta._desi_root_readonly = None
 
         #- Case 1: $DESI_ROOT_READONLY is set and exists -> use it
-        os.environ['DESI_ROOT_READONLY'] = tempfile.mkdtemp()
+        tmpdir = tempfile.mkdtemp()
+        os.environ['DESI_ROOT_READONLY'] = tmpdir
         blat = meta.get_desi_root_readonly()
         self.assertEqual(blat, os.environ['DESI_ROOT_READONLY'])
 
@@ -1636,9 +1633,3 @@ class TestIO(unittest.TestCase):
         self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

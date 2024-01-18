@@ -16,9 +16,8 @@ from astropy.io import fits
 from pytz import utc
 from sqlalchemy import (create_engine, text, Table, ForeignKey, Column,
                         Integer, String, Float, DateTime)
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import sessionmaker, relationship, reconstructor
+from sqlalchemy.orm import sessionmaker, relationship, reconstructor, declarative_base
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from matplotlib.patches import Circle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
@@ -600,7 +599,6 @@ def main():
     # command-line arguments
     #
     from argparse import ArgumentParser
-    from pkg_resources import resource_filename
     prsr = ArgumentParser(description=("Create and load a DESI metadata "+
                                        "database."))
     # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',

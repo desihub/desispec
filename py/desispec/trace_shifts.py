@@ -15,6 +15,7 @@ from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
+from scipy.ndimage import median_filter
 import numba
 
 from desispec.io import read_image
@@ -204,7 +205,9 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 # @numba.jit no real gain
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False) :
+def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
+                                               hw=3., calibrate=False,
+                                               prior_width_dy=None) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -218,6 +221,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     Optional:
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
+        prior_width_dy: applied sigma of the Gaussian prior on dy
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -241,22 +245,21 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             refflux *= scale
 
 
-
     error_floor=0.01 #A
 
     if ivar is None :
-        ivar=np.ones(flux.shape)
-    dwave=wave[1]-wave[0]
-    ihw=int(hw/dwave)+1
-    chi2=np.zeros((2*ihw+1))
-    ndata=np.sum(ivar[ihw:-ihw]>0)
-    for i in range(2*ihw+1) :
-        d=i-ihw
-        b=ihw+d
-        e=-ihw+d
-        if e==0 :
-            e=wave.size
-        chi2[i] = np.sum(ivar[ihw:-ihw]*(flux[ihw:-ihw]-refflux[b:e])**2)
+        ivar = np.ones(flux.shape)
+    dwave = wave[1] - wave[0]
+    ihw = int(hw / dwave)+1
+    chi2 = np.zeros((2 * ihw + 1))
+    for d in range(-ihw, ihw + 1) :
+        b = d + ihw
+        e = wave.size + d - ihw
+        chi2[ihw + d] = np.sum(ivar[ihw:-ihw] *
+                               (flux[ihw:-ihw] - refflux[b:e])**2)
+        if prior_width_dy is not None:
+            chi2[ihw + d] += (dwave * d / prior_width_dy)**2
+        
 
 
     i=np.argmin(chi2)
@@ -414,8 +417,11 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
 
-    # median flux used as internal spectral reference
-    mflux=np.median(flux,axis=0)
+    # boolean mask of fibers with good data
+    good_fibers = (np.sum(ivar>0, axis=1) > 0)
+
+    # median flux of good fibers used as internal spectral reference
+    mflux=np.median(flux[good_fibers],axis=0)
 
     # measure y shifts
     wavemin = xytraceset.wavemin
@@ -566,7 +572,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
                 break
 
             try :
-                c             = np.polyfit(fy,fdx,deg,w=1/fex**2)
+                c             = np.polyfit(fy, fdx, deg, w=1. / fex)
                 pol           = np.poly1d(c)
                 chi2          = (fdx-pol(fy))**2/fex**2
                 mchi2         = 2*np.median(chi2)
@@ -609,7 +615,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     return ox,oy,odx,oex,of,ol
 
 
-def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_filename,degyy=2,width=7) :
+def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
+                                        spectrum_filename, degyy=2, width=7,
+                                        prior_width_dy=0.1):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -626,6 +634,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     Optional:
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
+        prior_width_dy: float with of the Gaussian prior on dy
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficents for each fiber to convert wavelenght to YCCD
@@ -652,10 +661,39 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
 
+    # here we get rid of continuum by applying a median filter 
+    continuum_win = 17
+    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win))>continuum_win /2.
+
+    # we only keep emission lines and get rid of continuum
+    for ii in range(flux.shape[0]):
+        flux[ii] = flux[ii] - median_filter(flux[ii], footprint=continuum_foot)
+
+    # boolean mask of fibers with good data
+    good_fibers = (np.sum(ivar>0, axis=1) > 0)
+    num_good_fibers = np.sum(good_fibers)
 
     # median flux used as internal spectral reference
-    mflux=np.median(flux,axis=0)
-    mivar=np.median(ivar,axis=0)*flux.shape[0]*(2./np.pi) # very appoximate !
+    mflux = np.median(flux[good_fibers], axis=0)
+
+    # we use data variance and MAD from different spectra
+    # to assign variance to a spectrum (1.48 is MAD factor,
+    # pi/2 is a factor from Stddev[median(N(0,1))]
+    mad_factor = 1.48
+    mad = np.maximum(np.median(np.abs(flux[good_fibers] - mflux[None, :]),
+                               axis=0), 1e-100)
+    # I prevent it from being zero to avoid the warning below
+    # The exact value does not matter as we're comparing to actual
+    # median(ivar)
+    mivar = np.minimum(
+        np.median(ivar[good_fibers], axis=0) ,
+        1./mad_factor**2 / mad**2) * num_good_fibers * (2. / np.pi)
+    # finally use use the MAD of the background subtracted spectra to
+    # assign further variance limit
+    # this is sort of "effective" noise in the continuum subtracted spectrum
+    mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
+    # do not allow negatives
+    mflux[mflux <  0] = 0
 
 
     # trim ref_spectrum
@@ -696,14 +734,14 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
 
     log.info("absorb difference of calibration")
-    x=(wave-wave[wave.size//2])/50.
-    kernel=np.exp(-x**2/2)
-    f1=fftconvolve(mflux,kernel,mode='same')
-    f2=fftconvolve(ref_spectrum,kernel,mode='same')
-    if np.all(f2>0) :
-        scale=f1/f2
-        ref_spectrum *= scale
-
+    x = (wave - wave[wave.size//2]) / 50.
+    kernel = np.exp(- x**2/2)
+    f1 = fftconvolve(mflux, kernel, mode='same')
+    f2 = fftconvolve(ref_spectrum, kernel, mode='same')
+    # We scale by a constant factor
+    scale = (f1 * f2).sum() / (f2 * f2).sum()
+    ref_spectrum *= scale
+    
     log.info("fit shifts on wavelength bins")
     # define bins
     n_wavelength_bins = degyy+4
@@ -711,6 +749,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     dy=np.array([])
     ey=np.array([])
     wave_for_dy=np.array([])
+
     for b in range(n_wavelength_bins) :
         wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
         if b<n_wavelength_bins-1 :
@@ -721,7 +760,9 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
         sw= np.sum(mflux[ok]*(mflux[ok]>0))
         if sw==0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=10.)
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
+                wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
+                prior_width_dy=prior_width_dy)
         bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
         x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
         eps=0.1
@@ -756,7 +797,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     log.info("polynomial fit of shifts and modification of PSF ycoef")
     # pol fit
-    coef = np.polyfit(wave_for_dy,dy,degyy,w=1./ey**2)
+    coef = np.polyfit(wave_for_dy, dy, degyy, w=1. / ey)
     pol  = np.poly1d(coef)
 
     for i in range(dy.size) :

@@ -1,17 +1,10 @@
 import unittest, os, sys, shutil, tempfile
-from pkg_resources import resource_filename
+from importlib import resources
 import numpy as np
 import numpy.testing as nt
 from astropy.io import fits
 from astropy.table import Table
 from copy import deepcopy
-
-if __name__ == '__main__':
-    print('Run this instead:')
-    thisfile = __file__.removeprefix(os.getcwd()+'/')
-    print(f'pytest {thisfile}')
-    sys.exit(1)
-
 from ..test.util import get_frame_data
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
@@ -267,6 +260,48 @@ class TestPixGroup(unittest.TestCase):
         with fits.open(self.specfile, memmap=True) as fx:
             mask = fx['B_MASK'].data
 
+    def test_regroup_healpix(self):
+        """Test grouping table of exposures with healpix filter"""
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        cmd += f' --healpix {self.healpix}'
+        cmd += f' --header BLAT=True BIM=False BAM=false FOO=bar BIZ=1 BAT=2.3'
+
+        # Note: BLAT=True and BIM=False should be promoted to genuine
+        # boolean True/False, but BAM=false remains 'false'
+
+        print(f'RUNNING {cmd}')
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+
+        spectra = read_spectra(self.specfile)
+        num_nights = len(self.nights)
+        nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
+
+        self.assertEqual(len(spectra.fibermap), nspec)
+        self.assertEqual(spectra.flux['b'].shape[0], nspec)
+
+        #- confirm that we can read the mask with memmap=True
+        with fits.open(self.specfile, memmap=True) as fx:
+            mask = fx['B_MASK'].data
+            hdr = fx[0].header
+
+        print(f"HEADER {type(hdr)} is")
+        for key in hdr:
+            print(key, hdr[key])
+
+        self.assertEqual(hdr['SPGRP'], 'healpix')
+        self.assertEqual(hdr['SPGRPVAL'], self.healpix)
+        self.assertEqual(hdr['HPXPIXEL'], self.healpix)
+        self.assertEqual(hdr['HPXNSIDE'], 64)
+        self.assertEqual(hdr['HPXNEST'], True)
+        self.assertEqual(hdr['BLAT'], True)
+        self.assertEqual(hdr['BIM'], False)
+        self.assertEqual(hdr['BAM'], 'false')
+        self.assertEqual(hdr['FOO'], 'bar')
+        self.assertEqual(hdr['BIZ'], 1)
+        self.assertEqual(hdr['BAT'], 2.3)
+
+
     def test_reduxdir(self):
         #- Test using a non-standard redux directory
         reduxdir = specprod_root()
@@ -310,7 +345,7 @@ class TestPixGroup(unittest.TestCase):
 
     def test_exp2healpix_map(self):
         """Test get_exp2healpix_map"""
-        os.environ['DESI_SPECTRO_REDUX'] = resource_filename('desispec', 'test/data')
+        os.environ['DESI_SPECTRO_REDUX'] = str(resources.files('desispec').joinpath('test/data'))
         os.environ['SPECPROD'] = 'miniprod'
         expfile = findfile('exposures')
 
@@ -335,9 +370,3 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(n6, 0)
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m desispec.test.test_pixgroup
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

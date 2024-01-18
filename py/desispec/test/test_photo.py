@@ -7,20 +7,15 @@ import unittest
 
 import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
+from desispec.io.meta import get_desi_root_readonly 
 
-if 'NERSC_HOST' in os.environ and \
-        os.getenv('DESI_SPECTRO_DATA') == '/global/cfs/cdirs/desi/spectro/data':
-    standard_nersc_environment = True
-else:
-    standard_nersc_environment = False
+class TestPhoto(unittest.TestCase):
 
-class TestFibermap(unittest.TestCase):
-
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         from astropy.table import Table
-
         # for testing gather_targetphot and gather_tractorphot
-        
+
         # sv3-dark (secondary), sv1-bright (primary), main-dark (secondary), main-dark (primary, south), main-dark (primary, north), sv3-bright (TOO)
         input_cat = Table()
         input_cat['TARGETID'] = [929413348720641, 39627061832191195, 2253225356951552, 39627565329026280, 39633086782113662, 43977491483722156]
@@ -59,29 +54,35 @@ class TestFibermap(unittest.TestCase):
         tractorphot['LS_ID'] = np.array([10995128657712508, 10995128743167117, 10995128743105186]).astype(np.int64)
         self.tractorphot_dr10 = tractorphot
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @classmethod
+    def tearDownClass(self):
+        pass
+
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
-        surveyops_dir = os.environ['DESI_SURVEYOPS']
+        desi_root = get_desi_root_readonly()
+        #surveyops_dir = os.environ['DESI_SURVEYOPS']
+        surveyops_dir = desi_root+'/survey/ops/surveyops/trunk' # assumes a standard installation / environment
         truedirs = {
             # sv1
-            '80613': np.array(['/global/cfs/cdirs/desi/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
+            '80613': np.array([desi_root+'/target/catalogs/dr9/0.47.0/targets/sv1/resolve/bright/']),
             # sv3 including ToOs
             '19': np.array([surveyops_dir+'/mtl/sv3/ToO/ToO.ecsv',
-                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
-                            '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits']),
+                            desi_root+'/target/catalogs/dr9/0.57.0/targets/sv3/resolve/bright',
+                            desi_root+'/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits']),
             # main
             '2070': np.array([surveyops_dir+'/mtl/main/ToO/ToO.ecsv',
-                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
-                              '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
+                              desi_root+'/target/catalogs/dr9/1.1.1/targets/main/resolve/dark',
+                              desi_root+'/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
                    }
 
         for tileid in truedirs.keys():
             targetdirs = gather_targetdirs(int(tileid))
-            #print(tileid, targetdirs, truedirs[tileid])
+            print(tileid, targetdirs, truedirs[tileid])
             self.assertTrue(np.all(targetdirs == truedirs[tileid]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetphot(self):
         """Test that we get the correct targeting photometry for an input set of objects."""
 
@@ -89,7 +90,7 @@ class TestFibermap(unittest.TestCase):
         for col in self.targetphot.colnames:
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_tractorphot(self):
         """Test that we get the correct Tractor photometry for an input set of objects."""
 
@@ -97,21 +98,11 @@ class TestFibermap(unittest.TestCase):
         for col in self.tractorphot.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_tractorphot_dr10(self):
         """Like test_gather_tractorphot but for DR10 photometry."""
-
-        legacysurveydir = os.path.join(os.getenv('DESI_ROOT'), 'external', 'legacysurvey', 'dr10')
+        desi_root = get_desi_root_readonly()
+        legacysurveydir = os.path.join(desi_root, 'external', 'legacysurvey', 'dr10')
         tractorphot = gather_tractorphot(self.input_cat_dr10, legacysurveydir=legacysurveydir)
         for col in self.tractorphot_dr10.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot_dr10[col]))
-
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-if __name__ == '__main__':
-    unittest.main()
