@@ -159,6 +159,14 @@ def get_amps_and_cte(header,with_params=True):
     Parameters
     ----------
     header (can be image.meta)
+    with_params : bool
+        if true, will return only amplifiers and
+        CTE sectors with fitted parameters
+        as found in the nightly calib
+        if false, will return amplifiers and CTE
+        sector columns for cameras with keywords
+        CTECOLSX (with X the amplifier Id) in
+        their calibration.
 
     Returns
     -------
@@ -181,31 +189,43 @@ def get_amps_and_cte(header,with_params=True):
     night = desispec.preproc.header2night(header)
     camera = header['CAMERA'].lower()
 
+    ctecorrnight_table = None
     if with_params :
         # look for CTE param table for this camera
         filename = desispec.io.findfile('ctecorrnight', night=night, camera=camera)
         log.debug(f"Looking for file {filename}")
-        if not os.path.isfile(filename) :
-            log.debug(f"No CTE file {filename}")
-            return dict(),dict()
-        ctecorrnight_table = Table.read(filename)
-    else :
-        ctecorrnight_table = None
+        if os.path.isfile(filename) :
+            ctecorrnight_table = Table.read(filename)
+        else :
+            log.warning(f"No CTE file {filename}")
 
     amp_regions = dict()
     cte_regions = dict()
     for amp in amps:
 
-        if with_params :
-            selection = (ctecorrnight_table["NIGHT"]==night)&(ctecorrnight_table["CAMERA"]==camera)&(ctecorrnight_table["AMPLIFIER"]==amp)
-            if np.sum(selection)==0 :
-                log.debug(f"No CTE correction in file {filename} for amplifier {amp}")
-                continue
-
         key = "CTECOLS"+amp
         if not cfinder.haskey(key) :
+            # that's ok, we don't expect this keyword for each camera and amplifier luckily
             log.debug(f"No {key} for {camera} on {night}")
             continue
+
+        if with_params :
+
+            if ctecorrnight_table is None :
+                # we do expect a CTE file because we know the effect is there and
+                # we asked for the parameters, this is an error
+                mess = f"Missing CTE file {filename}"
+                log.error(mess)
+                raise RuntimeError(mess)
+
+            selection = (ctecorrnight_table["NIGHT"]==night)&(ctecorrnight_table["CAMERA"]==camera)&(ctecorrnight_table["AMPLIFIER"]==amp)
+            if np.sum(selection)==0 :
+                # we do expect a set of CTE parameter for the amplifier because we know the effect is there and
+                # we asked for the parameters, this is an error
+                mess = f"No CTE correction in file {filename} for amplifier {amp}"
+                log.error(mess)
+                raise RuntimeError(mess)
+
         value = cfinder.value(key)
 
         amp_sec = desispec.preproc.parse_sec_keyword(header["CCDSEC"+amp])
@@ -349,6 +369,7 @@ def chi_simplified_regnault(param, cleantraces=None, ctetraces=None,
 
 
 def get_transfer_function(function_name) :
+    """Returns a function from its name. Only 'simplified_regnault' so far."""
     if function_name == "simplified_regnault" :
         return simplified_regnault
     else :
@@ -380,7 +401,14 @@ def fit_cte(images):
 
     Returns
     -------
-    astropy.Table
+    astropy.Table with columns "NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC",
+                               "AMPLITUDE","FRACLEAK","CHI2PDF"
+
+      "NIGHT","CAMERA","AMPLIFIER" are properties of the image
+      "SECTOR" is a string of the form 'BEGIN:END' defining a range of CCD cols.
+      "FUNC" is a transfer function, only 'simplified_regnault' implemented for now.
+      "AMPLITUDE","FRACLEAK" are parameters of the transfer function
+      "CHI2PDF" is the reduced chi2 of the fit
     """
     # take a bunch of preproc images on one camera
     # these should all be flats and the same device
