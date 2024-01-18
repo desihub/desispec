@@ -9,7 +9,7 @@ from __future__ import absolute_import, division
 import argparse
 import multiprocessing as mp
 from desiutil.log import get_logger
-from desispec.correct_cte import fit_cte_night
+import desispec.correct_cte
 from desispec.io.util import decode_camword,parse_cameras
 from desispec.io import findfile
 from desispec.parallel import default_nproc
@@ -44,7 +44,7 @@ def _fit_cte_night_kwargs_wrapper(opts):
     used with multiprocessing.Pool.map
     """
 
-    table = fit_cte_night(night=opts["night"],camera=opts["camera"])
+    table = desispec.correct_cte.fit_cte_night(night=opts["night"],camera=opts["camera"])
     filename = findfile("ctecorrnight",night=opts["night"],camera=opts["camera"],specprod_dir = opts["specprod_dir"])
     table.write(filename,overwrite=True)
     log.info(f"wrote {filename}")
@@ -71,7 +71,3 @@ def main(args=None) :
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         for opts in opts_array:
             _fit_cte_night_kwargs_wrapper(opts)
-
-    #table=fit_cte_night(night=args.night,camera=args.camera)
-    #table.write(args.outfile,overwrite=True)
-    #log.info("successfully wrote %s"%args.outfile)
