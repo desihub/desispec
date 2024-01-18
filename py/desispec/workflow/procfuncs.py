@@ -779,6 +779,53 @@ def parse_previous_tables(etable, ptable, night):
            curtile, lasttile,\
            internal_id
 
+def generate_calibration_dict_and_iid(ptable, night):
+    """
+    This takes in a processing table and regenerates the working memory calibration
+    dictionary for dependency tracking and internal ID for future job assignment
+
+    Used by the daily processing to define most of its state-ful variables into working memory.
+    If the processing table is empty, these are simply declared and returned for use.
+    If the code had previously run and exited (or crashed), however, this will all the code to
+    re-establish itself by redefining these values.
+
+    Args:
+        ptable, Table, Processing table of all exposures that have been processed.
+        night, str or int, the night the data was taken.
+
+    Returns:
+        tuple: A tuple containing:
+        * calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'badcol', 'psfnight'
+          and 'nightlyflat'. Each key corresponds to a Table.Row or
+          None. The table.Row() values are for the corresponding
+          calibration job.
+        * internal_id, int, an internal identifier unique to each job. Increments with each new job. This
+          is the latest unassigned value.
+    """
+    log = get_logger()
+    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None, 'psfnight': None,
+                 'nightlyflat': None}
+
+    if len(ptable) > 0:
+        prow = ptable[-1]
+        internal_id = int(prow['INTID'])+1
+        jobtypes = ptable['JOBDESC']
+
+        if 'nightlybias' in jobtypes:
+            calibjobs['nightlybias'] = table_row_to_dict(ptable[jobtypes=='nightlybias'][0])
+            log.info("Located nightlybias job in exposure table: {}".format(calibjobs['nightlybias']))
+        if 'ccdcalib' in jobtypes:
+            calibjobs['ccdcalib'] = table_row_to_dict(ptable[jobtypes=='ccdcalib'][0])
+            log.info("Located ccdcalib job in exposure table: {}".format(calibjobs['ccdcalib']))
+        if 'psfnight' in jobtypes:
+            calibjobs['psfnight'] = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
+            log.info("Located joint fit psfnight job in exposure table: {}".format(calibjobs['psfnight']))
+        if 'nightlyflat' in jobtypes:
+            calibjobs['nightlyflat'] = table_row_to_dict(ptable[jobtypes=='nightlyflat'][0])
+            log.info("Located joint fit nightlyflat job in exposure table: {}".format(calibjobs['nightlyflat']))
+
+    return calibjobs, internal_id
+
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
