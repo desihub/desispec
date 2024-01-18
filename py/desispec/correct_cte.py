@@ -563,9 +563,20 @@ def get_cte_images(night, camera):
                               os.environ['SPECPROD'],
                               'exposure_tables', str(night // 100),
                               f'exposure_table_{night}.csv')
+
+    if not os.path.isfile(exptablefn) :
+        mess = f"Cannot find exposure table file '{exptablefn}'. Because of that the flat exposures needed for the CTE correction modeling cannot be identified. Maybe check env. variables DESI_SPECTRO_REDUX and SPECPROD?"
+        log.error(mess)
+        raise RuntimeError(mess)
+
     exptable = Table.read(exptablefn)
 
-    index1 = np.where(((np.abs(exptable['EXPTIME'] - 1) < 0.1) & (exptable['OBSTYPE'] == 'flat')))[0][0]
+    selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1) & (exptable['OBSTYPE'] == 'flat')
+    if np.sum(selection)<1 :
+        mess = f"No flat exposure of approx. 1s found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
+        log.error(mess)
+        raise RuntimeError(mess)
+    index1 = np.where(selection)[0][0]
 
     # first use the calibration finder to see if there is any CTE issue with this camera
     # so that we don't preprocess exposures for nothing
@@ -578,7 +589,12 @@ def get_cte_images(night, camera):
         log.info(f"No CTE correction to compute for {night} {camera}")
         return None
 
-    index2 = np.where(((np.abs(exptable['EXPTIME'] - 120) < 10) & (exptable['OBSTYPE'] == 'flat')))[0][-1]
+    selection = (np.abs(exptable['EXPTIME'] - 120) < 10) & (exptable['OBSTYPE'] == 'flat')
+    if np.sum(selection)<1 :
+        mess = f"No flat exposure of approx. 120s found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
+        log.error(mess)
+        raise RuntimeError(mess)
+    index2 = np.where(selection)[0][-1]
     exposure_indices = [index1, index2]
     log.info(f"Will use exposures {exposure_indices}")
     images = list()
