@@ -14,6 +14,7 @@ Contents
     dev.rst
     coadd.rst
     qa.rst
+    cte-correction.rst
     changes.rst
     api.rst
 
