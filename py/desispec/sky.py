@@ -126,6 +126,10 @@ def get_sector_masks(frame):
         yb = sec[0].start
         ye = sec[0].stop
 
+        # fit an offset as part of sky sub if OFFCOLSX or CTECOLSX in calib
+        # to correct for CTE issues
+        # if CTECOLSX, another correction is also applied at preproc
+        # see also doc/cte-correction.rst
         for key in [ "OFFCOLS"+amp , "CTECOLS"+amp ] :
             if cfinder.haskey(key) :
                 val = cfinder.value(key)
