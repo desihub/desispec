@@ -272,58 +272,6 @@ def get_amps_and_cte(header,with_params=True):
 
     return amp_regions, cte_regions
 
-
-def correct_image(image, **kw):
-    """Correct an image for CTE.
-
-    This function wraps correct_amp, looping over amplifiers and reversing
-    readout directions as appropriate.  The approach taken here correlates the
-    noise and is not actually used for DESI.
-
-    Parameters
-    ----------
-    image : desispec.io.image.Image
-        the image to correct
-    cteparam : dict or None
-        dictionary of form {'z1C': {'543:2057': (115.0, 0.21)}} that
-        provides the CTE parameters for the trap on a particular image.
-    **kw : dict
-        additional arguments passed to correct_amp
-
-    Returns
-    -------
-    outimage : desispec.io.image.Image
-    CTE-corrected image
-    """
-    amp, cte = get_amps_and_cte(image, cteparam)
-    outimage = deepcopy(image)
-    for ampname in amp:
-        ampreg = amp[ampname]
-        imamp = outimage[ampreg]
-        cteamp = cte[ampname]
-        if len(cteamp) == 0:
-            # don't need to do anything in this case.
-            continue
-        need_to_reverse = ampreg[1].stop == image.pix.shape[1]
-        if need_to_reverse:
-            field, offset, sign = 'stop', ampreg[1].stop, -1
-        else:
-            field, offset, sign = 'start', 0, 1
-        for x in cteamp:
-            if x['function'] is None:
-                log.info('Not correcting CTE on {ampname} at {loc}; '
-                         'not included in calib information.')
-
-        cteamp = [x for x in cteamp if x['function'] is not None]
-        ctelocs = [sign * (x[field] - offset) for x in cteamp]
-        individual_ctefuns = [x['function'] for x in cteamp]
-
-        ctefun = partial(apply_multiple_cte_effects, locations=ctelocs,
-                         ctefuns=individual_ctefuns)
-        outimage.pix[ampreg] = correct_amp(imamp.pix[:, ::sign], ctefun, **kw)
-    return outimage
-
-
 def simplified_regnault(pixval, in_trap, amplitude, fracleak):
     """CTE transfer function of Regnault+.
 
