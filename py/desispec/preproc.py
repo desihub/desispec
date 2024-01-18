@@ -689,7 +689,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
-            no_cte_corr=False):
+            no_cte_corr=False,cte_params_filename=None):
     '''
     preprocess image using metadata in header
 
@@ -1306,11 +1306,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- CTE correction if any exist
     if not no_cte_corr :
-        if not ( 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ ) :
-            log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined. Cannot find calibration data, so cannot do a CTE correction")
+        if (not ( 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ )) and ( cte_params_filename is None ) :
+            log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction")
         else :
             log.info("Apply CTE correction")
-            img = desispec.correct_cte.correct_image_via_model(img,niter=5)
+            img = desispec.correct_cte.correct_image_via_model(img,niter=5,cte_params_filename=cte_params_filename)
     else :
         log.info("CTE correction disabled")
 

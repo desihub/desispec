@@ -101,6 +101,7 @@ Must specify --infile OR --night and --expid.
             help=f"number of parallel processes to use [{default_nproc}]")
     parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
     parser.add_argument('--no-cte-correction', action="store_true", help="disable CTE correction")
+    parser.add_argument('--cte-params', type = str, required = False, default=None, help="specify the CTE correction csv table file to use")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -202,6 +203,7 @@ def main(args=None):
                 keep_overscan_cols=args.keep_overscan_cols,
                 no_overscan_per_row=args.no_overscan_per_row,
                 no_cte_corr=args.no_cte_correction,
+                cte_params_filename=args.cte_params
         )
         opts_array.append(opts)
 

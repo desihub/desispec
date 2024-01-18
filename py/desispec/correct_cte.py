@@ -153,7 +153,7 @@ def add_cte(img, cte_transfer_func=None, **cteparam):
     return out
 
 
-def get_amps_and_cte(header,with_params=True):
+def get_amps_and_cte(header,with_params=True,cte_params_filename=None):
     """Get amp and CTE information from image header.
 
     Parameters
@@ -167,6 +167,11 @@ def get_amps_and_cte(header,with_params=True):
         sector columns for cameras with keywords
         CTECOLSX (with X the amplifier Id) in
         their calibration.
+    Optional
+    --------
+    cte_params_filename : str or None (default)
+        if filename is not None, use this one instead
+        of the default one found with find_file
 
     Returns
     -------
@@ -192,7 +197,10 @@ def get_amps_and_cte(header,with_params=True):
     ctecorrnight_table = None
     if with_params :
         # look for CTE param table for this camera
-        filename = desispec.io.findfile('ctecorrnight', night=night, camera=camera)
+        if cte_params_filename is None :
+            filename = desispec.io.findfile('ctecorrnight', night=night, camera=camera)
+        else :
+            filename = cte_params_filename
         log.debug(f"Looking for file {filename}")
         if os.path.isfile(filename) :
             ctecorrnight_table = Table.read(filename)
@@ -222,7 +230,7 @@ def get_amps_and_cte(header,with_params=True):
             if np.sum(selection)==0 :
                 # we do expect a set of CTE parameter for the amplifier because we know the effect is there and
                 # we asked for the parameters, this is an error
-                mess = f"No CTE correction in file {filename} for amplifier {amp}"
+                mess = f"No CTE correction in file {filename} for night {night} camera {camera} amplifier {amp}"
                 log.error(mess)
                 raise RuntimeError(mess)
 
@@ -247,7 +255,7 @@ def get_amps_and_cte(header,with_params=True):
             if with_params :
                 selection2 = selection&(ctecorrnight_table["SECTOR"]==offcols)
                 if np.sum(selection2)==0 :
-                    log.info(f"No CTE correction in file {filename}, amplifier {amp}, sector {offcols}")
+                    log.info(f"No CTE correction in file {filename} for night {night} camera {camera} amplifier {amp} sector {offcols}")
                     continue
                 entry=np.where(selection2)[0][0]
 
@@ -690,7 +698,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
                                  preproc.pix.shape)
 
 
-def correct_image_via_model(image, niter=5):
+def correct_image_via_model(image, niter=5, cte_params_filename=None):
     """Correct for CTE via an image model.
 
     The idea here is that you can roughly extract spectra from a
@@ -718,6 +726,15 @@ def correct_image_via_model(image, niter=5):
     niter : int
         number of iterations to run
 
+    Optional
+    --------
+    cte_params_filename : str or None (default)
+        if filename is not None, use this one instead
+        of the default one found with find_file
+
+
+
+
     Returns
     -------
     outimage : Image
@@ -731,7 +748,7 @@ def correct_image_via_model(image, niter=5):
     # of sectors per amplifiers that are affected by CTE issues
     # and for which we have a model to apply
     # (only amplifers and sectors with a model are in this list)
-    amp, cte = get_amps_and_cte(image.meta)
+    amp, cte = get_amps_and_cte(image.meta, cte_params_filename = cte_params_filename)
     if len(cte) == 0 :
         log.info("No CTE correction to do for this image, return original")
         return image
