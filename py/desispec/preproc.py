@@ -1305,14 +1305,24 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- CTE correction if any exist
-    if not no_cte_corr :
-        if (not ( 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ )) and ( cte_params_filename is None ) :
-            log.warning("No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction")
-        else :
-            log.info("Apply CTE correction")
-            img = desispec.correct_cte.correct_image_via_model(img,niter=5,cte_params_filename=cte_params_filename)
-    else :
+    if no_cte_corr:
         log.info("CTE correction disabled")
+    else:
+        if cte_params_filename is None:
+            if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):
+                mess = "No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction.  Run with --no-cte-corr to skip."
+                log.critical(mess)
+                raise RuntimeError(mess)
+            else:
+                cte_params_filename = findfile('ctecorrnight', night=header['NIGHT'], camera=camera)
+
+        if not os.path.isfile(cte_params_filename):
+            mess = f'Missing {cte_params_filename}; use --no-cte-corr to skip CTE corrections or provide a different file with --cte-params'
+            log.critical(mess)
+            raise RuntimeError(mess)
+
+        log.info("Apply CTE correction")
+        img = desispec.correct_cte.correct_image_via_model(img,niter=5,cte_params_filename=cte_params_filename)
 
     #- update img.mask to mask cosmic rays
     if not nocosmic :
