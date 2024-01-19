@@ -325,7 +325,13 @@ def chi_simplified_regnault(param, cleantraces=None, ctetraces=None,
 
 
 def get_transfer_function(function_name) :
-    """Returns a function from its name. Only 'simplified_regnault' so far."""
+    """Returns a CTE correction function from its name.
+
+    This maps the FUNC name in $DESI_SPECTRO_CALIB yaml files to the
+    Python function that should be called.
+
+    Only 'simplified_regnault' so far.
+    """
     if function_name == "simplified_regnault" :
         return simplified_regnault
     else :
