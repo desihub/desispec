@@ -4,13 +4,12 @@ desispec.scripts.fit_cte_night
 
 """
 
-from __future__ import absolute_import, division
-
+import os
 import argparse
 import multiprocessing as mp
 from desiutil.log import get_logger
 import desispec.correct_cte
-from desispec.io.util import decode_camword,parse_cameras
+from desispec.io.util import decode_camword, parse_cameras, get_tempfilename
 from desispec.io import findfile
 from desispec.parallel import default_nproc
 from astropy.table import Table,vstack
@@ -46,7 +45,9 @@ def _fit_cte_night_kwargs_wrapper(opts):
 
     table = desispec.correct_cte.fit_cte_night(night=opts["night"],camera=opts["camera"])
     filename = findfile("ctecorrnight",night=opts["night"],camera=opts["camera"],specprod_dir = opts["specprod_dir"])
-    table.write(filename,overwrite=True)
+    tmpfile = get_tempfilename(filename)
+    table.write(tmpfile)
+    os.rename(tmpfile, filename)
     log.info(f"wrote {filename}")
     return filename
 
@@ -54,6 +55,10 @@ def main(args=None) :
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
+
+    #- Create output directory if needed
+    filename = findfile("ctecorrnight", args.night, camera=args.cameras[0], specprod_dir=args.specprod_dir)
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     #- Assemble options to pass for each camera
     #- so that they can be optionally parallelized

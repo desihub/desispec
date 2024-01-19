@@ -558,7 +558,7 @@ def get_cte_images(night, camera):
         raise RuntimeError(mess)
     index2 = np.where(selection)[0][-1]
     exposure_indices = [index1, index2]
-    log.info(f"Will use exposures {exposure_indices}")
+    log.info(f"Will use exposures {list(exptable['EXPID'][exposure_indices])}")
     images = list()
     for i in exposure_indices :
         expid=exptable['EXPID'][i]
