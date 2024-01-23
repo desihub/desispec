@@ -56,7 +56,7 @@ def _fit_cte_night_kwargs_wrapper(opts):
     log.info(f"wrote {filename}")
     return filename
 
-def main(args=None) :
+def main(args=None, comm=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
@@ -72,13 +72,16 @@ def main(args=None) :
         opts_array.append(dict(night=args.night, camera=camera, expids=args.expids, specprod_dir= args.specprod_dir))
 
     num_cameras = len(args.cameras)
-    if args.ncpu > 1 and num_cameras>1:
+    if comm is not None:
+        from mpi4py.futures import MPICommExecutor
+        log.info(f'Processing {num_cameras} cameras with MPI')
+        with MPICommExecutor(comm, root=0) as pool:
+            pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
+    elif args.ncpu > 1 and num_cameras>1:
         n = min(args.ncpu, num_cameras)
         log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
-        pool = mp.Pool(n)
-        pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
-        pool.close()
-        pool.join()
+        with mp.Pool(n) as pool:
+            pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
     else:
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         for opts in opts_array:

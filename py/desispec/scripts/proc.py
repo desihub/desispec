@@ -171,7 +171,7 @@ def main(args=None, comm=None):
         raise ValueError('obstype {} not in {}'.format(args.obstype, known_obstype))
 
     if args.expid is None and (not args.nightlybias) and (not args.nightlycte) :
-        msg = 'Must provide --expid or --nightlybias'
+        msg = 'Must provide --expid or --nightlybias or --nightlycte'
         if rank == 0:
             log.critical(msg)
 
@@ -286,29 +286,18 @@ def main(args=None, comm=None):
     #- Create cte model from several LED exposures
     if args.nightlycte:
 
-        missing_ctecorrnight = 0
+        timer.start('nightlycte')
 
-        if rank == 0: # nightlycte is still not MPI so only rank 0 will do it
+        camword = create_camword(args.cameras)
+        cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
 
-            timer.start('nightlycte')
+        ctecorrnightfiles = [findfile('ctecorrnight', args.night, camera=cam) for cam in args.cameras]
 
-            camword = create_camword(args.cameras)
-            cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
-
+        if rank == 0:
             log.info(f'RUNNING {cmd}')
-            result, success = runcmd(desispec.scripts.fit_cte_night.main,
-                    args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
 
-            #- check for ctecorrnight
-            ctecorrnightfiles = [findfile('ctecorrnight', args.night, camera=cam) for cam in args.cameras]
-            for filename in ctecorrnightfiles:
-                if not os.path.exists(filename):
-                    missing_ctecorrnight += 1
-
-        if comm is not None:
-            missing_ctecorrnight = comm.bcast(missing_ctecorrnight, root=0)
-
-        success &= (missing_ctecorrnight == 0)
+        result, success = runcmd(desispec.scripts.fit_cte_night.main,
+                args=cmd.split()[1:], inputs=[], outputs=ctecorrnightfiles, comm=comm)
 
         if not success:
             error_count += 1
@@ -430,9 +419,17 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
+
+            inputs = [args.input]
+
+            #- TBD: require ctecorrnight file here, or allow to be missing?
+            # if args.obstype not in ('ZERO', 'DARK') and camera[0].lower() != 'b':
+            #     ctecorrfile = findfile('ctecorrnight', args.night, camera=camera)
+            #     inputs.append(ctecorrfile)
+
             cmdargs = cmd.split()[1:]
             result, success = runcmd(desispec.scripts.preproc.main,
-                    args=cmdargs, inputs=[args.input], outputs=[outfile])
+                    args=cmdargs, inputs=inputs, outputs=[outfile,])
             if not success:
                 error_count += 1
 
