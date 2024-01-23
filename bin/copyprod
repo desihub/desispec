@@ -114,7 +114,19 @@ def link_dirfiles(indir, outdir, abspath=False):
         basename = os.path.basename(infile)
         src = os.path.join(srcpath, basename)
         dst = os.path.join(outdir, basename)
-        link(src, dst)
+
+        # changed or broken links need to remove dst first
+        if os.path.islink(dst):
+            orig_src = os.readlink(dst)
+            if orig_src != src or not os.path.exists(dst):
+                log.warning(f'Replacing {dst} -> {orig_src} with {src}')
+                os.remove(dst)
+
+        if not os.path.exists(dst):
+            link(src, dst)
+        elif not os.path.islink(dst):
+            log.warning(f'Not replacing non-link {dst}')
+
 
 #- calibnight: link all files for requested nights
 for night in np.unique(explist['NIGHT']):
