@@ -265,6 +265,11 @@ def get_cte_params(header, cte_params_filename=None):
     if cte_params_filename is None :
         cte_params_filename = desispec.io.findfile('ctecorrnight', night=night, readonly=True)
 
+    if not os.path.isfile(cte_params_filename):
+        msg = f'Missing {cte_params_filename}; run preproc with --no-cte-correction or --cte-params FILENAME'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
     # CTE table has columns NIGHT CAMERA AMPLIFIER SECTOR to identify regions
     # and columns FUNC AMPLITUDE FRACLEAK with CTE parameters
     ctecorrnight_table = Table.read(cte_params_filename)

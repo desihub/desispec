@@ -1316,11 +1316,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             else:
                 cte_params_filename = findfile('ctecorrnight', night=header['NIGHT'], readonly=True)
 
-        if not os.path.isfile(cte_params_filename):
-            mess = f'Missing {cte_params_filename}; use --no-cte-corr to skip CTE corrections or provide a different file with --cte-params'
-            log.critical(mess)
-            raise RuntimeError(mess)
-
         log.info("Apply CTE correction")
         img = desispec.correct_cte.correct_image_via_model(img,niter=5,cte_params_filename=cte_params_filename)
 
