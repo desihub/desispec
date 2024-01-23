@@ -1314,7 +1314,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.critical(mess)
                 raise RuntimeError(mess)
             else:
-                cte_params_filename = findfile('ctecorrnight', night=header['NIGHT'], camera=camera)
+                cte_params_filename = findfile('ctecorrnight', night=header['NIGHT'], readonly=True)
 
         if not os.path.isfile(cte_params_filename):
             mess = f'Missing {cte_params_filename}; use --no-cte-corr to skip CTE corrections or provide a different file with --cte-params'

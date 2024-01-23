@@ -138,7 +138,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
-        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-cte-{camera}-{expid:08d}.fits.gz',
+        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits.gz',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
@@ -174,7 +174,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
-        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{camera}-{night}.csv',
+        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.csv',
         #
         # spectra- healpix based
         #

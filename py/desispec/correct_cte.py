@@ -234,7 +234,7 @@ def get_cte_params(header, cte_params_filename=None):
     --------
     cte_params_filename (str):
         Alternate filename with nightly CTE parameters
-        instead of default findfile('ctecorrnight', night, camera)
+        instead of default findfile('ctecorrnight', night)
 
     Returns
     -------
@@ -263,7 +263,7 @@ def get_cte_params(header, cte_params_filename=None):
     camera = header['CAMERA'].lower()
 
     if cte_params_filename is None :
-        cte_params_filename = desispec.io.findfile('ctecorrnight', night=night, camera=camera)
+        cte_params_filename = desispec.io.findfile('ctecorrnight', night=night, readonly=True)
 
     # CTE table has columns NIGHT CAMERA AMPLIFIER SECTOR to identify regions
     # and columns FUNC AMPLITUDE FRACLEAK with CTE parameters
@@ -409,14 +409,9 @@ def fit_cte(images):
 
     keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"]
 
-
-    if images is None :
+    if images is None or len(images)==0:
         # nothing to do
-        # return empty table with just the column names
-        table = Table()
-        for k in keys :
-            table[k] = np.array([])
-        return table
+        return None
 
     assert len(images) > 0
     night = desispec.preproc.header2night(images[0].meta)

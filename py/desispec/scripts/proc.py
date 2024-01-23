@@ -291,13 +291,13 @@ def main(args=None, comm=None):
         camword = create_camword(args.cameras)
         cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
 
-        ctecorrnightfiles = [findfile('ctecorrnight', args.night, camera=cam) for cam in args.cameras]
+        ctecorrnightfile = findfile('ctecorrnight', args.night)
 
         if rank == 0:
             log.info(f'RUNNING {cmd}')
 
         result, success = runcmd(desispec.scripts.fit_cte_night.main,
-                args=cmd.split()[1:], inputs=[], outputs=ctecorrnightfiles, comm=comm)
+                args=cmd.split()[1:], inputs=[], outputs=[ctecorrnightfile,], comm=comm)
 
         if not success:
             error_count += 1
