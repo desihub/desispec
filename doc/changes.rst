@@ -5,7 +5,9 @@ desispec Change Log
 0.61.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Better handling of copyprod links (PR `#2160`_).
+
+.. _`#2160`: https://github.com/desihub/desispec/pull/2160
 
 0.61.0 (2024-01-15)
 -------------------
