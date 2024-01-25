@@ -836,8 +836,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
 
-            #- nightlybias implies that this is a ccdcalib job, where we will
-            #- also run CTE fitting
+            #- nightlybias implies that this is a ccdcalib job,
+            #- where we will also run CTE fitting
             if nightlybias:
 
                 #- first check if previous command failed
@@ -850,10 +850,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
                 #- then proceed with desi_fit_cte_night command
                 camword = create_camword(cameras)
-                fx.write('\n# Fit CTE parameters from flats\n')
+                fx.write('\n# Fit CTE parameters from flats if needed\n')
                 cmd = f'desi_fit_cte_night -n {night} -c {camword}'
-                fx.write(f'echo running {cmd}\n')
-                fx.write(f'{cmd}\n')
+                fx.write(f'if [ -f $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/{night}/ctecorr-{night}.csv ]; then\n')
+                fx.write(f'  echo Already have ctecorr-{night}.csv\n')
+                fx.write(f'else\n')
+                fx.write(f'  echo running {cmd}\n')
+                fx.write(f'  {cmd}\n')
+                fx.write(f'fi\n')
 
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
