@@ -170,7 +170,7 @@ def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIB
 class CalibFinder() :
 
 
-    def __init__(self,headers,yaml_file=None) :
+    def __init__(self,headers,yaml_file=None, fallback_on_dark_not_found=False) :
         """
         Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
 
@@ -186,6 +186,7 @@ class CalibFinder() :
         log = get_logger()
 
         old_version = False
+        self.fallback_on_dark_not_found=fallback_on_dark_not_found
 
         # temporary backward compatibility
         if not "DESI_SPECTRO_CALIB" in os.environ :
@@ -418,7 +419,8 @@ class CalibFinder() :
 
         #temperature tolerance to be used in K
         #only applicable for R,Z as B stores 850 deg throughout
-        temperature_tolerance = 1.
+        #temperature tolerance set to 2K for the moment, 1K 
+        temperature_tolerance = 2.
 
         #- Should only be called if $DESI_SPECTRO_DARK is set, but check that
         #- to avoid accidentally creating paths like "None/dark_table.csv"
@@ -535,11 +537,23 @@ class CalibFinder() :
                     raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
-            log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
-            raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
-
+            if not self.fallback_on_dark_not_found:
+                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+            else:
+                #this would prevent nightwatch failures in case of problems with e.g. permissions
+                log.error(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}, "
+                           "falling back to DESI_SPECTRO_CALIB")
+                return
         if found:
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
-            log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK using default from $DESI_SPECTRO_CALIB instead")
+            if not self.fallback_on_dark_not_found:
+                log.critical(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+            else:
+                #this would prevent nightwatch failures in case of not-yet-existing files
+                log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, "
+                           "falling back to $DESI_SPECTRO_CALIB")
+

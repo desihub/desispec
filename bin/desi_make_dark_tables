@@ -53,13 +53,17 @@ for files,outfile in zip([dark_files,bias_files],
             tming = f[0].header["CCDTMING"]
             cfg = f[0].header["CCDCFG"]
             if "CCDTEMP" in f[0].header:
-              temp = f[0].header["CCDTEMP"]
+              temp = float(f[0].header["CCDTEMP"])
             else:
               temp = np.nan
         outlist.append([fi.replace(f"{args.indir}/",""), det, cfg, tming, temp])
+    outarr=np.array(outlist)
     newtab=t.Table(
-        np.array(outlist), names=["FILENAME", "DETECTOR", "CCDCFG", "CCDTMING", "CCDTEMP"]
+        outarr[:,:-1], names=["FILENAME", "DETECTOR", "CCDCFG", "CCDTMING"],
     )
+    outtemp=outarr[:,-1]
+    outtemp=np.array(outtemp,dtype=float)
+    newtab['CCDTEMP']=outtemp
     if len(newtab)>0:
         if os.path.exists(outfile):
             outtab=t.vstack([outtab,newtab])
