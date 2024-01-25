@@ -836,6 +836,25 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
 
+            #- nightlybias implies that this is a ccdcalib job, where we will
+            #- also run CTE fitting
+            if nightlybias:
+
+                #- first check if previous command failed
+                fx.write('\nif [ $? -eq 0 ]; then\n')
+                fx.write('  echo command succeeded at $(date)\n')
+                fx.write('else\n')
+                fx.write('  echo FAILED: processing failed; stopping at $(date)\n')
+                fx.write('  exit 1\n')
+                fx.write('fi\n')
+
+                #- then proceed with desi_fit_cte_night command
+                camword = create_camword(cameras)
+                fx.write('\n# Fit CTE parameters from flats\n')
+                cmd = f'desi_fit_cte_night -n {night} -c {camword}'
+                fx.write(f'echo running {cmd}\n')
+                fx.write(f'{cmd}\n')
+
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
                 fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')

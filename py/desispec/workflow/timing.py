@@ -3,11 +3,13 @@ desispec.workflow.timing
 ========================
 
 """
-import os
-import numpy as np
-
+import os, glob, json
 import time, datetime
 
+import numpy as np
+
+from desiutil.log import get_logger
+from desispec.io.meta import rawdata_root
 
 #######################################
 ########## Time Functions #############
@@ -153,3 +155,58 @@ def during_operating_hours(dry_run=False, starthour=None, endhour=None):
         return dry_run or (hour < endhour) or (hour > starthour)
     else:
         return dry_run or ( (hour < endhour) and (hour > starthour) )
+
+def wait_for_cals(night):
+    """
+    Wait for calibrations to arrive on given night before returning
+
+    Looks for request file with PROGRAM='CALIB Flats all done'
+
+    If night is the current night, this will keep trying until morning;
+    for other nights it will give up immediately if cals aren't found.
+    """
+    log = get_logger()
+    already_checked = list()
+    rawnightdir = rawdata_root()
+    calsdone = False
+
+    tonight = what_night_is_it()
+
+    while not calsdone:
+        log.info(f'Looking for {night} calibration data at {time.asctime()}')
+        requestfiles = sorted(glob.glob(f'{rawnightdir}/{night}/????????/request-*.json'))
+        for filename in requestfiles:
+            if filename in already_checked:
+                continue
+
+            already_checked.append(filename)
+            with open(filename) as fp:
+                request = json.load(fp)
+
+            if 'PROGRAM' in request:
+                program = request['PROGRAM']
+            else:
+                program = 'UNKNOWN'
+
+            expid = int(os.path.basename(filename)[8:16])
+            log.info(f'{night}/{expid} - {program}')
+            if program == 'CALIB Flats all done':
+                log.info(f'{night} calibration data arrived; returning')
+                calsdone = True
+                break
+
+        #- keep waiting if this is the current night, cals haven't arrived,
+        #- and it isn't morning yet
+        if not calsdone:
+            if (night == tonight) and during_operating_hours(starthour=12):
+                sleep_minutes = 10
+                log.info(f'{night} cals not yet arrived at {time.asctime()}; waiting {sleep_minutes} minutes')
+                time.sleep(sleep_minutes*60)
+            else:
+                log.info(f'Giving up waiting for cals at {time.asctime()}')
+                break
+
+    if not calsdone:
+        log.error(f'Night {night} cals not found')
+
+    return calsdone

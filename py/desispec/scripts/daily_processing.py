@@ -14,7 +14,7 @@ import glob
 from desispec.workflow.tableio import load_tables, write_tables, write_table
 from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, \
                                     get_printable_banner, sleep_and_report
-from desispec.workflow.timing import during_operating_hours, what_night_is_it
+from desispec.workflow.timing import during_operating_hours, what_night_is_it, wait_for_cals
 from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
     get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
@@ -101,6 +101,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         print(f"True night is {true_night}, but running for night={night}")
     else:
         night = true_night
+
+    ## Wait for calibrations to completely arrive before proceeding,
+    ## since we need to measure CTE from flats first
+    found_cals = wait_for_cals(night)
+    if not found_cals:
+        print(f"ERROR: didn't find calibration data for {night}")
+        sys.exit(1)
 
     if continue_looping_debug:
         print("continue_looping_debug is set. Will continue looking for new data and needs to be terminated by the user.")
