@@ -2,10 +2,53 @@
 desispec Change Log
 ===================
 
-0.60.3 (unreleased)
+0.62.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Better handling of copyprod links (PR `#2160`_).
+* Dark missing from DESI_SPECTRO_DARK is now a fatal error unless
+  preproc with --fallback-on-dark-not-found (PR `#2162`_).
+
+.. _`#2160`: https://github.com/desihub/desispec/pull/2160
+.. _`#2162`: https://github.com/desihub/desispec/pull/2162
+
+0.61.0 (2024-01-15)
+-------------------
+
+* Add VCCDSEC info to tile_qa_plot (PR `#2136`_).
+* Don't skip exp_fibermap in io.spectra.read_spectra (PR `#2137`_).
+* Don't require a resolution matrix when coadding across cameras (PR `#2139`_).
+* Add new methods to convert to and from ``spectra.Spectra`` and
+  ``specutils.SpectrumList`` objects (PR `#2141`_).
+* New row-by-row extraction and CTE correction modules (PR `#2144`_).
+* Add ``--zscale`` and ``--mask`` options to ``plot_fiber_traces`` (PR
+  `#2145`_).
+* Fix traceshifts when half CCD amps are masked (PR `#2150`_).
+* In ``create_petalnz_pdf``, look for Redrock instead of zmtl files (PR
+  `#2151`_).
+* Fix failing ``io.photo`` unit tests at NERSC (PR `#2154`_).
+* Remove deprecated test_suite functions from all unit tests that use it (PR
+  `#2155`_).
+* Various bug fixes and updates to ``io.read_tile_spectra`` (PR `#2156`_).
+* Deprecate ``pkg_resources`` in favor of ``importlib`` (PR `#2157`_).
+* Check for VCCDSEC and VCCDON when generating bias and dark models (PR
+  `#2158`_).
+* Check CCDTEMP when generating bias and dark models (PR `#2159`_).
+
+.. _`#2136`: https://github.com/desihub/desispec/pull/2136
+.. _`#2137`: https://github.com/desihub/desispec/pull/2137
+.. _`#2139`: https://github.com/desihub/desispec/pull/2139
+.. _`#2141`: https://github.com/desihub/desispec/pull/2141
+.. _`#2144`: https://github.com/desihub/desispec/pull/2144
+.. _`#2145`: https://github.com/desihub/desispec/pull/2145
+.. _`#2150`: https://github.com/desihub/desispec/pull/2150
+.. _`#2151`: https://github.com/desihub/desispec/pull/2151
+.. _`#2154`: https://github.com/desihub/desispec/pull/2154
+.. _`#2155`: https://github.com/desihub/desispec/pull/2155
+.. _`#2156`: https://github.com/desihub/desispec/pull/2156
+.. _`#2157`: https://github.com/desihub/desispec/pull/2157
+.. _`#2158`: https://github.com/desihub/desispec/pull/2158
+.. _`#2159`: https://github.com/desihub/desispec/pull/2159
 
 0.60.2 (2023-10-26)
 -------------------
