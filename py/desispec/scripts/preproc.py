@@ -100,6 +100,8 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--ncpu', type=int, default=default_nproc,
             help=f"number of parallel processes to use [{default_nproc}]")
     parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
+    parser.add_argument('--fallback-on-dark-not-found', action="store_true", help="fall back to DESI_SPECTRO_CALIB darks if dark files are missing from DESI_SPECTRO_DARK, else fail")
+
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -199,7 +201,8 @@ def main(args=None):
                 zero_masked=args.zero_masked,
                 no_traceshift=args.no_traceshift,
                 keep_overscan_cols=args.keep_overscan_cols,
-                no_overscan_per_row=args.no_overscan_per_row
+                no_overscan_per_row=args.no_overscan_per_row,
+                fallback_on_dark_not_found=args.fallback_on_dark_not_found
         )
         opts_array.append(opts)
 
