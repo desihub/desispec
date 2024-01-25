@@ -170,7 +170,7 @@ def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIB
 class CalibFinder() :
 
 
-    def __init__(self,headers,yaml_file=None, fail_on_dark_not_found=False) :
+    def __init__(self,headers,yaml_file=None, fallback_on_dark_not_found=False) :
         """
         Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
 
@@ -186,7 +186,7 @@ class CalibFinder() :
         log = get_logger()
 
         old_version = False
-        self.fail_on_dark_not_found=fail_on_dark_not_found
+        self.fallback_on_dark_not_found=fallback_on_dark_not_found
 
         # temporary backward compatibility
         if not "DESI_SPECTRO_CALIB" in os.environ :
@@ -537,7 +537,7 @@ class CalibFinder() :
                     raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
-            if self.fail_on_dark_not_found:
+            if not self.fallback_on_dark_not_found:
                 log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
                 raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
             else:
@@ -549,7 +549,7 @@ class CalibFinder() :
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
-            if self.fail_on_dark_not_found:
+            if not self.fallback_on_dark_not_found:
                 log.critical(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
                 raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
             else:
