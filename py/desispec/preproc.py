@@ -827,6 +827,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if len(missing_keywords) > 0:
         raise KeyError("Camera {} missing keywords {}".format(camera, ' '.join(missing_keywords)))
 
+    #- don't use CTE correction for DARK and ZERO images
+    if 'OBSTYPE' in primary_header and primary_header['OBSTYPE'] in ('ZERO', 'DARK'):
+        if no_cte_corr is False:
+            log.info(f"Not applying CTE corrections for OBSTYPE={primary_header['OBSTYPE']}")
+            no_cte_corr = True
+
     #- Subtract bias image
 
     #- convert rawimage to float64 : this is the output format of read_image
@@ -1290,9 +1296,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         lowpixflat = (0 < pixflat) & (pixflat < 0.1)
         if np.any(lowpixflat):
             mask[lowpixflat] |= ccdmask.PIXFLATLOW
-
-
-
 
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
     var = poisson_var + readnoise**2
