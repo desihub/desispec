@@ -413,10 +413,12 @@ def fit_cte(images):
     log.debug("begin fit_cte")
 
     keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"]
+    dtypes = [int,str,str,str,str,float,float,float]
 
     if images is None or len(images)==0:
         # nothing to do
-        return None
+        empty_table = Table(names=keys, dtype=dtypes)
+        return empty_table
 
     assert len(images) > 0
     night = desispec.preproc.header2night(images[0].meta)
@@ -512,8 +514,8 @@ def fit_cte(images):
         res["CHI2PDF"].append(chi2dof)
 
     table = Table()
-    for k in res.keys() :
-        table[k] = np.array(res[k])
+    for k, dt in zip(keys, dtypes):
+        table[k] = np.array(res[k], dtype=dt)
     return table
 
 

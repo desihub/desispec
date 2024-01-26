@@ -93,6 +93,7 @@ def main(args=None, comm=None):
 
     #- Write output with rank 0
     if comm is None or comm.rank == 0:
+        #- filter for None just in case, then stack into one table
         cte_tables = [t for t in cte_tables if t is not None]
         cte_table = vstack(cte_tables)
 
