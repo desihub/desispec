@@ -656,3 +656,115 @@ class TestSpectra(unittest.TestCase):
         sp1 = read_tile_spectra(tileid, night=night, redrock=False)
         sp2 = read_tile_spectra(tileid, redrock=False)
         self.assertTrue(np.all(sp1.fibermap == sp2.fibermap))
+
+    def test_determine_specgroup(self):
+        """test parallel spectra I/O"""
+        from desispec.io.spectra import determine_specgroup as spgrp
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC']),
+                         'cumulative')
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HPXPIXEL']),
+                         'healpix')
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX']),
+                         'healpix')
+        #- tiles/cumulative trumps healpix
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HPXPIXEL']),
+                         'cumulative')
+
+        with self.assertRaises(ValueError):
+            spgrp(['BLAT', 'FOO', 'BAR'])
+
+    def test_read_spectra_parallel_healpix(self):
+        """test parallel tile-based spectra I/O"""
+
+        #- setup two tiles of targets
+        nspec = 5
+        survey = 'main'
+        program = 'dark'
+        sp1 = get_blank_spectra(nspec)
+        sp1.fibermap['TARGETID'] = 1000 + np.arange(nspec)
+        sp1.meta['HPXPIXEL'] = 1000
+        sp1.meta['SURVEY'] = survey
+        sp1.meta['PROGRAM'] = program
+        file1 = findfile('coadd', healpix=1000, survey=survey, faprogram=program)
+
+        sp2 = get_blank_spectra(nspec)
+        sp2.fibermap['TARGETID'] = 2000 + np.arange(nspec)
+        sp2.meta['HPXPIXEL'] = 2000
+        sp2.meta['SURVEY'] = survey
+        sp2.meta['PROGRAM'] = program
+        file2 = findfile('coadd', healpix=2000, survey=survey, faprogram=program)
+
+        write_spectra(file1, sp1)
+        write_spectra(file2, sp2)
+
+        #- create targets table, purposefully in different order than
+        #- they appear in the files
+        targets = Table()
+        targets['TARGETID'] = [1001,1000,2002,2001]
+        targets['HPXPIXEL'] = [1000,1000,2000,2000]
+        targets['SURVEY'] = survey
+        targets['PROGRAM'] = program
+
+        spectra = read_spectra_parallel(targets, nproc=2)
+        self.assertEqual(len(spectra), len(targets))
+        self.assertTrue(np.all(spectra.fibermap['TARGETID']==targets['TARGETID']))
+        self.assertTrue(np.all(spectra.fibermap['HPXPIXEL']==targets['HPXPIXEL']))
+
+        #- read serially instead of parallel
+        spectra2 = read_spectra_parallel(targets, nproc=1)
+        self.assertTrue(np.all(
+            spectra.fibermap['TARGETID']==spectra2.fibermap['TARGETID']))
+
+        #- also works with targets['HEALPIX'] instead of 'HPIXPIXEL'
+        #- and if requested number of processor is more than num files
+        targets.rename_column('HPXPIXEL', 'HEALPIX')
+        spectra3 = read_spectra_parallel(targets, nproc=3)
+        self.assertTrue(np.all(
+            spectra.fibermap['TARGETID']==spectra3.fibermap['TARGETID']))
+
+    def test_read_spectra_parallel_tiles(self):
+        """test parallel tile-based spectra I/O"""
+
+        #- setup two tiles of targets
+        nspec = 5
+        night = 20201010
+        sp1 = get_blank_spectra(nspec)
+        sp1.fibermap['TILEID'] = 1000
+        sp1.fibermap['LASTNIGHT'] = night
+        sp1.fibermap['PETAL_LOC'] = 0
+        sp1.fibermap['TARGETID'] = 1000 + np.arange(nspec)
+        file1 = findfile('coadd', groupname='cumulative', tile=1000,
+                         night=night, spectrograph=0)
+
+        sp2 = get_blank_spectra(nspec)
+        sp2.fibermap['TILEID'] = 2000
+        sp2.fibermap['LASTNIGHT'] = night
+        sp2.fibermap['PETAL_LOC'] = 1
+        sp2.fibermap['TARGETID'] = 2000 + np.arange(nspec)
+        file2 = findfile('coadd', groupname='cumulative', tile=2000,
+                         night=night, spectrograph=1)
+
+        write_spectra(file1, sp1)
+        write_spectra(file2, sp2)
+
+        #- create targets table, purposefully in different order than
+        #- they appear in the files
+        targets = Table()
+        targets['TARGETID'] = [1001,1000,2002,2001]
+        targets['TILEID'] = [1000,1000,2000,2000]
+        targets['LASTNIGHT'] = night
+        targets['PETAL_LOC'] = [0,0,1,1]
+
+        spectra = read_spectra_parallel(targets, nproc=2)
+        self.assertEqual(len(spectra), len(targets))
+        self.assertTrue(np.all(spectra.fibermap['TARGETID'] == targets['TARGETID']))
+        for key in targets.colnames:
+            self.assertTrue(np.all(spectra.fibermap[key] == targets[key]))
+
+        #- read serially instead of parallel
+        spectra2 = read_spectra_parallel(targets, nproc=1)
+        self.assertTrue(np.all(
+            spectra.fibermap['TARGETID']==spectra2.fibermap['TARGETID']))
+
+
+

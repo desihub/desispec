@@ -14,12 +14,14 @@ import re
 import warnings
 import time
 import glob
+import multiprocessing
 
 import numpy as np
 import astropy.units as u
 import astropy.io.fits as fits
 import astropy.table
 from astropy.table import Table
+from astropy.table import vstack as stack_tables
 import fitsio
 
 from desiutil.depend import add_dependencies
@@ -33,9 +35,11 @@ from . import iotime
 from .frame import read_frame
 from .fibermap import fibermap_comments
 
-from ..spectra import Spectra, stack
-from .meta import specprod_root
+from ..spectra import Spectra
+from ..spectra import stack as stack_spectra
+from .meta import specprod_root, findfile
 from ..util import argmatch
+
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -608,7 +612,7 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
     if len(spectra) == 0:
         raise ValueError('No spectra found matching filters')
 
-    spectra = stack(spectra)
+    spectra = stack_spectra(spectra)
 
     if redrock:
         redshifts = astropy.table.vstack(redshifts)
@@ -616,3 +620,213 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
         return (spectra, redshifts)
     else:
         return spectra
+
+
+#   If specgroup=='healpix', targets must have TARGETID,HPXPIXEL,SURVEY,PROGRAM.
+#   If specgroup=='tiles' or 'cumulative', targets must have
+#           TARGETID,TILEID,LASTNIGHT,PETAL_LOC.
+
+def determine_specgroup(colnames):
+    """Return specgroup 'healpix' or 'cumulative' based upon column names"""
+    colnames = set(colnames) # for faster lookup
+    if ('TILEID' in colnames and
+        'LASTNIGHT' in colnames and
+        'PETAL_LOC' in colnames):
+        return 'cumulative'
+    elif ('SURVEY' in colnames and
+          'PROGRAM' in colnames and
+          ('HPXPIXEL' in colnames or 'HEALPIX' in colnames)):
+        return 'healpix'
+    else:
+        raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
+
+def _get_hpixcol(columns):
+    """return which column name to use for healpix, HPXPIXEL or HEALPIX"""
+    if 'HPXPIXEL' in columns:
+        hpixcol = 'HPXPIXEL'
+    elif 'HEALPIX' in columns:
+        hpixcol = 'HEALPIX'
+    else:
+        raise ValueError(f'Unable to find HPXPIXEL or HEALPIX in columns {columns}')
+
+    return hpixcol
+
+def split_targets_by_file(targets, n, specgroup='healpix'):
+    """
+    Split targets table into n tables, keeping all TARGETIDs in a file together
+
+    Args:
+        targets (table): table of targets; see notes for columns
+        n (int): number of groups to split into
+        specgroup (str): 'healpix', 'tiles', or 'cumulative'
+
+    Returns: list of n subtables, grouped by file
+
+    Notes: if specgroup=='healpix', group by HPXPIXEL, SURVEY, and PROGRAM;
+    if spectroup=='tiles' or 'cumulative', group by 'TILEID', 'LASTNIGHT',
+    and 'PETAL_LOC'.  Additional columns are allowed and propagated,
+    but not used.
+    """
+    #- What columns should we group by to split by file?
+    specgroup = determine_specgroup(targets.dtype.names)
+    if specgroup == 'healpix':
+        hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
+        filecolumns = (hpixcol, 'SURVEY', 'PROGRAM')
+    elif specgroup in ('tiles', 'cumulative'):
+        filecolumns = ('TILEID', 'LASTNIGHT', 'PETAL_LOC')
+
+    #- Split into n groups, keeping TARGETID by file together
+    #- If there are fewer than n files, pad with blank tables of right format
+    target_filerows = targets.group_by(filecolumns).groups
+    group_indices = np.array_split(np.arange(len(target_filerows)), n)
+    target_tables = [target_filerows[ii] for ii in group_indices]
+
+    return target_tables
+
+def _readspec_healpix(targets, prefix, rdspec_kwargs):
+    """
+    Read healpix-based spectra for targets table
+
+    Args:
+        targets (table): table of targets with TARGETID,HPXPIXEL,SURVEY,PROGRAM
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+
+    Returns: Spectra for targets table
+    """
+    hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
+    groupcols = (hpixcol, 'SURVEY', 'PROGRAM')
+
+    spectra = list()
+    for zz in targets.group_by(groupcols).groups:
+        hpix = zz[hpixcol][0]
+        survey = zz['SURVEY'][0]
+        program = zz['PROGRAM'][0]
+        targetids = np.array(zz['TARGETID'])
+
+        specfile = findfile(prefix, healpix=hpix, survey=survey,
+                            faprogram=program, readonly=True)
+        sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if hpixcol not in sp.fibermap.colnames:
+            #- header keyword is HPXPIXEL, not HEALPIX, regardless of hpixcol
+            sp.fibermap[hpixcol] = sp.meta['HPXPIXEL']
+
+        for col in ('SURVEY', 'PROGRAM'):
+            if col not in sp.fibermap.colnames:
+                sp.fibermap[col] = sp.meta[col]
+
+        spectra.append(sp)
+
+    spectra = stack_spectra(spectra)
+
+    assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
+    assert np.all(spectra.fibermap[hpixcol] == targets[hpixcol])
+    assert np.all(spectra.fibermap['SURVEY'] == targets['SURVEY'])
+    assert np.all(spectra.fibermap['PROGRAM'] == targets['PROGRAM'])
+
+    return spectra
+
+def _readspec_tiles(targets, prefix, rdspec_kwargs):
+    """
+    Read tile-based spectra for targets table
+
+    Args:
+        targets (table): target table with TARGETID,TILEID,LASTNIGHT,PETAL_LOC
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+
+    Returns: Spectra for targets table
+    """
+    spectra = list()
+    for zz in targets.group_by(('TILEID', 'LASTNIGHT', 'PETAL_LOC')).groups:
+        tileid = zz['TILEID'][0]
+        night = zz['LASTNIGHT'][0]
+        spectro = zz['PETAL_LOC'][0]
+        targetids = np.array(zz['TARGETID'])
+
+        specfile = findfile(prefix, night=night, tile=tileid,
+                            spectrograph=spectro, readonly=True)
+        sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if 'LASTNIGHT' not in sp.fibermap.colnames:
+            sp.fibermap['LASTNIGHT'] = sp.meta['NIGHT']
+
+        spectra.append(sp)
+
+    spectra = stack_spectra(spectra)
+
+    assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
+    assert np.all(spectra.fibermap['TILEID'] == targets['TILEID'])
+    assert np.all(spectra.fibermap['LASTNIGHT'] == targets['LASTNIGHT'])
+    assert np.all(spectra.fibermap['PETAL_LOC'] == targets['PETAL_LOC'])
+
+    return spectra
+
+def read_spectra_parallel(targets, nproc=None,
+                          prefix='coadd', rdspec_kwargs=dict(), comm=None):
+    """
+    Read spectra for targets table in parallel
+
+    Args:
+        targets (table): targets table; see notes for columns
+
+    Options
+        nproc (int): number of processes to use if comm is None
+        specgroup (str): 'healpix', 'tiles', or 'cumulative'
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+        comm: MPI communicator
+
+    Returns: Spectra for targets in targets table
+
+    If comm is not None, use MPI, elif nproc>1 use multiprocessing, else read
+    serially but still read each file only once to get the necessary targets.
+
+    If specgroup=='healpix', targets must have TARGETID,HPXPIXEL,SURVEY,PROGRAM.
+    If specgroup=='tiles' or 'cumulative', targets must have
+            TARGETID,TILEID,LASTNIGHT,PETAL_LOC.
+    """
+    #- Determine which reader to use
+    specgroup = determine_specgroup(targets.dtype.names)
+    if specgroup == 'healpix':
+        readspec = _readspec_healpix
+    elif specgroup in ('tiles', 'cumulative'):
+        readspec = _readspec_tiles
+
+    #- targets -> list of subtables, grouped by file
+    target_groups = split_targets_by_file(targets, nproc)
+
+    #- strip out emptry target_groups, which happens if nfiles < nproc
+    target_groups = [t for t in target_groups if len(t)>0]
+    nproc = min(nproc, len(target_groups))
+
+    #- list of (targets, prefix, rdspec_kwargs)
+    arglist = [(t, prefix, rdspec_kwargs) for t in target_groups]
+
+    if comm is not None:
+        rank, size = comm.rank, comm.size
+    else:
+        rank, size = 0, 1
+
+    if comm is not None:
+        #- MPI parallelism
+        from mpi4py.futures import MPICommExecutor
+        with MPICommExecutor(comm, root=0) as pool:
+            if pool is not None:
+                spectra = list(pool.starmap(readspec, arglist))
+            else:
+                spectra = None
+    elif nproc>1:
+        #- Multiprocessing parallelism
+        with multiprocessing.Pool(nproc) as pool:
+            spectra = list(pool.starmap(readspec, arglist))
+    else:
+        #- Serial
+        spectra = [readspec(*args) for args in arglist]
+
+    if spectra is not None:
+        spectra = stack_spectra(spectra)
+
+    return spectra
+
