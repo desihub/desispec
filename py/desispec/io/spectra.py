@@ -693,7 +693,12 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs):
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
 
     Returns: Spectra for targets table
+
+    If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
     """
+    if len(targets) == 0:
+        return None
+
     hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
     groupcols = (hpixcol, 'SURVEY', 'PROGRAM')
 
@@ -737,7 +742,12 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs):
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
 
     Returns: Spectra for targets table
+
+    If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
     """
+    if len(targets) == 0:
+        return None
+
     spectra = list()
     for zz in targets.group_by(('TILEID', 'LASTNIGHT', 'PETAL_LOC')).groups:
         tileid = zz['TILEID'][0]
@@ -769,11 +779,10 @@ def read_spectra_parallel(targets, nproc=None,
     Read spectra for targets table in parallel
 
     Args:
-        targets (table): targets table; see notes for columns
+        targets (table): targets table; see notes for required columns
 
     Options
         nproc (int): number of processes to use if comm is None
-        specgroup (str): 'healpix', 'tiles', or 'cumulative'
         prefix (str): 'coadd' or 'spectra'
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
         comm: MPI communicator
@@ -783,9 +792,15 @@ def read_spectra_parallel(targets, nproc=None,
     If comm is not None, use MPI, elif nproc>1 use multiprocessing, else read
     serially but still read each file only once to get the necessary targets.
 
-    If specgroup=='healpix', targets must have TARGETID,HPXPIXEL,SURVEY,PROGRAM.
-    If specgroup=='tiles' or 'cumulative', targets must have
-            TARGETID,TILEID,LASTNIGHT,PETAL_LOC.
+    If targets table has columns TARGETID,TILEID,LASTNIGHT,PETAL_LOC,
+    then specta will be read from tiles/cumulative files.  Otherwise,
+    if targets has columns TARGETID,SURVEY,PROGRAM,HPXPIXEL or HEALPIX,
+    spectra will be read from healpix-based spectra.  Additional columns
+    are allowed and ignored.
+
+    determine_specgroup(colnames) is used to determine tiles/cumulative
+    vs. healpix and can be used to pre-check how a targets table will
+    be interpreted.
     """
     #- Determine which reader to use
     specgroup = determine_specgroup(targets.dtype.names)
@@ -794,7 +809,8 @@ def read_spectra_parallel(targets, nproc=None,
     elif specgroup in ('tiles', 'cumulative'):
         readspec = _readspec_tiles
 
-    #- targets -> list of subtables, grouped by file
+    #- split targets into list of nproc subtables, such that targets in
+    #- a file are only in a single subtable (i.e. it will be ready only once)
     target_groups = split_targets_by_file(targets, nproc)
 
     #- strip out emptry target_groups, which happens if nfiles < nproc
@@ -826,6 +842,8 @@ def read_spectra_parallel(targets, nproc=None,
         spectra = [readspec(*args) for args in arglist]
 
     if spectra is not None:
+        #- belt and suspenders check: remove any None values before stack
+        spectra = [sp for sp in spectra if sp is not None]
         spectra = stack_spectra(spectra)
 
     return spectra
