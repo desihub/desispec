@@ -29,13 +29,18 @@ class TestLinkCalibNight(unittest.TestCase):
         cls.newnight = 20201011
         os.makedirs(f'{cls.testdir}/testlinks/calibnight/{cls.refnight}')
         os.makedirs(f'{cls.testdir}/testlinks/calibnight/{cls.altrefnight}')
-        cls.prefixes = ['badcolumns', 'biasnight', 'fiberflatnight', 'psfnight']
+        cls.prefixes = tuple(link_calibnight.calibnight_prefixes)
         for night in (cls.refnight, cls.altrefnight):
             for prefix in cls.prefixes:
-                for camera in decode_camword('a0123456789'):
-                    filename = findfile(prefix, night=night, camera=camera)
+                if prefix == 'ctecorr':
+                    filename = findfile(prefix, night=night)
                     with open(filename, 'w') as fx:
                         fx.write(os.path.basename(filename))
+                else:
+                    for camera in decode_camword('a0123456789'):
+                        filename = findfile(prefix, night=night, camera=camera)
+                        with open(filename, 'w') as fx:
+                            fx.write(os.path.basename(filename))
 
     def tearDown(self):
         newdir = f'{self.reduxdir}/calibnight/{self.newnight}'
@@ -75,26 +80,34 @@ class TestLinkCalibNight(unittest.TestCase):
         options = f'--refnight {self.refnight} --newnight {self.newnight} --c a12'.split()
         link_calibnight.main(options)
         for prefix in self.prefixes:
-            for camera in decode_camword('a12'):
+            if prefix == 'ctecorr':
+                #- ctecorr always is made, regardless of cameras option
                 newfile = findfile(prefix, night=self.newnight, camera=camera)
-                self.assertTrue(os.path.islink(newfile))
-            for camera in decode_camword('a03456789'):
-                newfile = findfile(prefix, night=self.newnight, camera=camera)
-                self.assertFalse(os.path.islink(newfile))
+                self.assertTrue(os.path.islink(newfile), f'Missing link {newfile}')
+            else:
+                for camera in decode_camword('a12'):
+                    newfile = findfile(prefix, night=self.newnight, camera=camera)
+                    self.assertTrue(os.path.islink(newfile), f'Missing link {newfile}')
+                for camera in decode_camword('a03456789'):
+                    newfile = findfile(prefix, night=self.newnight, camera=camera)
+                    self.assertFalse(os.path.islink(newfile), f'Unexpected link {newfile}')
 
     def test_link_include(self):
         """test --include option to link a subset of prefixes"""
 
         #- link biasnight and fiberflatnight, but not the other prefixes
         options = f'--refnight {self.refnight} --newnight {self.newnight} --include biasnight,fiberflatnight'.split()
-        link_calibnight.main(options)
+        args = link_calibnight.parse(options)
+        self.assertEqual(set(args.include), set(('biasnight', 'fiberflatnight')))
+
+        link_calibnight.main(args)
         for prefix in self.prefixes:
             for camera in decode_camword('a0123456789'):
                 newfile = findfile(prefix, night=self.newnight, camera=camera)
                 if prefix in ('biasnight', 'fiberflatnight'):
-                    self.assertTrue(os.path.islink(newfile))
+                    self.assertTrue(os.path.islink(newfile), f'Missing link {newfile}')
                 else:
-                    self.assertFalse(os.path.islink(newfile))
+                    self.assertFalse(os.path.islink(newfile), f'Unexpected link {newfile}')
 
 
     def test_link_exclude(self):
@@ -102,14 +115,32 @@ class TestLinkCalibNight(unittest.TestCase):
 
         #- link all prefixes except biasnight and fiberflatnight
         options = f'--refnight {self.refnight} --newnight {self.newnight} --exclude biasnight,fiberflatnight'.split()
+        args = link_calibnight.parse(options)
+        self.assertEqual(set(args.include), set(self.prefixes) - set(('biasnight', 'fiberflatnight')))
+
         link_calibnight.main(options)
         for prefix in self.prefixes:
             for camera in decode_camword('a0123456789'):
                 newfile = findfile(prefix, night=self.newnight, camera=camera)
                 if prefix in ('biasnight', 'fiberflatnight'):
-                    self.assertFalse(os.path.islink(newfile))
+                    self.assertFalse(os.path.islink(newfile), f'Unexpected link {newfile}')
                 else:
-                    self.assertTrue(os.path.islink(newfile))
+                    self.assertTrue(os.path.islink(newfile), f'Missing link {newfile}')
+
+    def test_bad_exclude(self):
+        """Test --include / --exclude failure cases"""
+        nightopts = f'--refnight {self.refnight} --newnight {self.newnight}'
+
+        #- include and exclude are mutually exclusive
+        options = f'{nightopts} --include badcolumns --exclude biasnight,fiberflatnight'.split()
+        with self.assertRaises(SystemExit):
+            link_calibnight.parse(options)
+
+        #- exclude must be subset of default include
+        options = f'{nightopts} --exclude blatfoo'.split()
+        with self.assertRaises(ValueError):
+            link_calibnight.parse(options)
+
 
     def test_dryrun(self):
         """test --dryrun doesn't make any links"""

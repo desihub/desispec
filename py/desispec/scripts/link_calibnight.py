@@ -5,7 +5,10 @@ import argparse
 from desiutil.log import get_logger
 
 from desispec.io import findfile
-from desispec.io.util import decode_camword, relsymlink
+from desispec.io.util import parse_cameras, decode_camword, relsymlink
+
+calibnight_prefixes = ('badcolumns','biasnight','fiberflatnight','psfnight','ctecorr')
+_prefixstr = ','.join(calibnight_prefixes)
 
 def parse(options=None):
     """parse options from sys.argv or input list of options"""
@@ -15,25 +18,35 @@ def parse(options=None):
     p.add_argument('--newnight', type=int, required=True,
                    help='New night without calibs, to link to refnight')
     p.add_argument('-c', '--cameras', type=str, default='a0123456789',
-                   help='Camword of cameras to link, e.g. a0123b6r7z8')
-    p.add_argument('--include', type=str, 
-                   default='badcolumns,biasnight,fiberflatnight,psfnight,ctecorr',
-                   help='prefixes of types of calibnight files to create links')
-    p.add_argument('--exclude', type=str, 
-                   help='prefixes of types of calibnight files to exclude from links')
+                   help='Camword of cameras to link, e.g. a01 or b0,r1,z2 [default a0123456789]')
+
+    inout = p.add_mutually_exclusive_group()
+    inout.add_argument('--include', type=str,
+                   help=f'comma separated prefixes of calibnight files to create links [default "{_prefixstr}"]')
+    inout.add_argument('--exclude', type=str,
+                   help='comma separated prefixes of calibnight files to exclude from links')
+
     p.add_argument('--dryrun', action='store_true',
                    help="dry run; don't actually create links")
 
     args = p.parse_args(options)
 
-    if args.exclude is None:
-        args.exclude = set()
+    if args.include is not None:
+        args.include = set([x.strip() for x in args.include.split(',')])
     else:
-        args.exclude = set(args.exclude.split(','))
+        args.include = set(calibnight_prefixes)
 
-    args.include = set(args.include.split(',')) - args.exclude
+    # --include and --exclude are mutually exclusive, so if --exclude is set,
+    # then --include is default value; remove --exclude options from that
+    if args.exclude is not None:
+        args.exclude = set([x.strip() for x in args.exclude.split(',')])
+        extras = args.exclude - args.include
+        if len(extras) > 0:
+            raise ValueError(f'--exclude has values not found in default --include: {extras}')
 
-    args.cameras = decode_camword(args.cameras)
+        args.include -= args.exclude
+
+    args.cameras = decode_camword(parse_cameras(args.cameras, loglevel='WARNING'))
 
     return args
 
@@ -92,8 +105,24 @@ def main(args=None):
     reffiles = list()
     newfiles = list()
     for prefix in args.include:
+
+        #- special case: ctecorr is per-night, not per-camera,
+        #- and allow it to be missing (revisit after PR #2163 is merged)
         if prefix == 'ctecorr':
-            log.warning('ctecorr not yet supported; see PR #2163')
+            reffile = findfile(prefix, night=args.refnight)
+            newfile = findfile(prefix, night=args.newnight)
+
+            if not os.path.exists(reffile):
+                #- warn, but not fatal, i.e. proceed with other links
+                log.warning(f'Skipping missing reference {reffile}')
+            else:
+                if check_link(newfile, reffile):
+                    reffiles.append(reffile)
+                    newfiles.append(newfile)
+                else:
+                    num_errors += 1
+
+            #- done with ctecorr, move on to next prefix
             continue
 
         for camera in args.cameras:
@@ -129,10 +158,10 @@ def main(args=None):
             log.info(f'Dry run: would create link {newfile} -> {relpath}')
         else:
             #- pre-flight checks confirmed this is ok
-            if os.path.islink(newfile) or os.path.exists(newfile):
+            if os.path.islink(newfile):
                 os.remove(newfile)
 
-            log.debug(f'Linking {newfile} -> {relpath}')
+            log.info(f'Linking {newfile} -> {relpath}')
             relsymlink(reffile, newfile)
 
 
