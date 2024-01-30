@@ -24,7 +24,7 @@ except ImportError:
     _specutils_imported = False
 
 from desiutil.io import encode_table
-from desispec.io import empty_fibermap, findfile
+from desispec.io import empty_fibermap, findfile, specprod_root
 from desispec.io import read_tile_spectra
 from desispec.io.util import add_columns
 import desispec.coaddition
@@ -766,5 +766,28 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.all(
             spectra.fibermap['TARGETID']==spectra2.fibermap['TARGETID']))
 
+        #-----
+        #- alternate specprod, read with specprod=name or full path
+        altdir = specprod_root('rdspec_test')
+        os.makedirs(altdir)
+        file1 = findfile('coadd', groupname='cumulative', tile=1000,
+                         night=night, spectrograph=0, specprod_dir=altdir)
+        file2 = findfile('coadd', groupname='cumulative', tile=2000,
+                         night=night, spectrograph=1, specprod_dir=altdir)
 
+        #- change TARGETID so that we know we're reading different files
+        sp1.fibermap['TARGETID'] += 10
+        sp2.fibermap['TARGETID'] += 10
+        targets['TARGETID'] += 10
+
+        write_spectra(file1, sp1)
+        write_spectra(file2, sp2)
+
+        spectra3 = read_spectra_parallel(targets, nproc=1, specprod='rdspec_test')
+        self.assertTrue(np.all(
+            spectra3.fibermap['TARGETID']==targets['TARGETID']))
+
+        spectra4 = read_spectra_parallel(targets, nproc=1, specprod=altdir)
+        self.assertTrue(np.all(
+            spectra4.fibermap['TARGETID']==targets['TARGETID']))
 

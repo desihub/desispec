@@ -683,7 +683,7 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
 
     return target_tables
 
-def _readspec_healpix(targets, prefix, rdspec_kwargs):
+def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
     """
     Read healpix-based spectra for targets table
 
@@ -692,12 +692,17 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs):
         prefix (str): 'coadd' or 'spectra'
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
 
+    Options:
+        specprod (str): production name or full path to production
+
     Returns: Spectra for targets table
 
     If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
     """
     if len(targets) == 0:
         return None
+
+    log = get_logger()
 
     hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
     groupcols = (hpixcol, 'SURVEY', 'PROGRAM')
@@ -710,8 +715,13 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs):
         targetids = np.array(zz['TARGETID'])
 
         specfile = findfile(prefix, healpix=hpix, survey=survey,
-                            faprogram=program, readonly=True)
+                            faprogram=program, readonly=True, specprod=specprod)
+        log.debug('Reading spectra from %s', specfile)
         sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if sp.num_targets() == 0:
+            log.warning(f'No matching targets found in {specfile}')
+            continue
 
         if hpixcol not in sp.fibermap.colnames:
             #- header keyword is HPXPIXEL, not HEALPIX, regardless of hpixcol
@@ -723,6 +733,11 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs):
 
         spectra.append(sp)
 
+    if len(spectra) == 0:
+        msg = 'No matching targets found in input files'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
     spectra = stack_spectra(spectra)
 
     assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
@@ -732,7 +747,7 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs):
 
     return spectra
 
-def _readspec_tiles(targets, prefix, rdspec_kwargs):
+def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
     """
     Read tile-based spectra for targets table
 
@@ -741,12 +756,17 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs):
         prefix (str): 'coadd' or 'spectra'
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
 
+    Options:
+        specprod (str): production name or full path to production
+
     Returns: Spectra for targets table
 
     If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
     """
     if len(targets) == 0:
         return None
+
+    log = get_logger()
 
     spectra = list()
     for zz in targets.group_by(('TILEID', 'LASTNIGHT', 'PETAL_LOC')).groups:
@@ -756,13 +776,24 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs):
         targetids = np.array(zz['TARGETID'])
 
         specfile = findfile(prefix, night=night, tile=tileid,
-                            spectrograph=spectro, readonly=True)
+                            spectrograph=spectro, readonly=True,
+                            specprod=specprod)
+        log.debug('Reading spectra from %s', specfile)
         sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if sp.num_targets() == 0:
+            log.warning(f'No matching targets found in {specfile}')
+            continue
 
         if 'LASTNIGHT' not in sp.fibermap.colnames:
             sp.fibermap['LASTNIGHT'] = sp.meta['NIGHT']
 
         spectra.append(sp)
+
+    if len(spectra) == 0:
+        msg = 'No matching targets found in input files'
+        log.critical(msg)
+        raise RuntimeError(msg)
 
     spectra = stack_spectra(spectra)
 
@@ -774,7 +805,8 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs):
     return spectra
 
 def read_spectra_parallel(targets, nproc=None,
-                          prefix='coadd', rdspec_kwargs=dict(), comm=None):
+                          prefix='coadd', rdspec_kwargs=dict(), specprod=None,
+                          comm=None):
     """
     Read spectra for targets table in parallel
 
@@ -818,7 +850,7 @@ def read_spectra_parallel(targets, nproc=None,
     nproc = min(nproc, len(target_groups))
 
     #- list of (targets, prefix, rdspec_kwargs)
-    arglist = [(t, prefix, rdspec_kwargs) for t in target_groups]
+    arglist = [(t, prefix, rdspec_kwargs, specprod) for t in target_groups]
 
     if comm is not None:
         rank, size = comm.rank, comm.size

@@ -32,6 +32,7 @@ class TestIO(unittest.TestCase):
         cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
         # cls.testbrfile appears to be unused by this class.
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
+        cls.specprod = 'dailytest'
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
                        "DESI_ROOT_READONLY": None,
@@ -39,7 +40,7 @@ class TestIO(unittest.TestCase):
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
                        }
-        cls.testEnv = {'SPECPROD':'dailytest',
+        cls.testEnv = {'SPECPROD': cls.specprod,
                        "DESI_ROOT": cls.testDir,
                        "DESI_ROOT_READONLY": cls.readonlyDir,
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
@@ -959,6 +960,17 @@ class TestIO(unittest.TestCase):
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
+        #- alternate directories
+        filename = findfile('tiles')
+        self.assertEqual(filename, f'{self.reduxdir}/tiles-{self.specprod}.fits')
+
+        filename = findfile('tiles', specprod_dir='/blat/foo')
+        self.assertEqual(filename, f'/blat/foo/tiles-foo.fits')
+
+        filename = findfile('tiles', specprod='blat')
+        self.assertEqual(filename, os.environ['DESI_SPECTRO_REDUX']+f'/blat/tiles-blat.fits')
+
+
     def test_desi_root_readonly(self):
         """test $DESI_ROOT_READONLY + findfile"""
         from ..io import meta
@@ -1632,4 +1644,15 @@ class TestIO(unittest.TestCase):
         self.assertEqual(spectros_to_camword([0,5,6]), 'a056')
         self.assertEqual(spectros_to_camword([5,6,0]), 'a056')
 
+
+    def test_specprod_root(self):
+        from ..io.meta import specprod_root
+
+        self.assertEqual(specprod_root(),
+                         os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD'))
+        self.assertEqual(specprod_root('blat'),
+                         os.path.expandvars('$DESI_SPECTRO_REDUX/blat'))
+
+        self.assertEqual(specprod_root('blat/foo'), 'blat/foo')
+        self.assertEqual(specprod_root('/blat/foo'), '/blat/foo')
 
