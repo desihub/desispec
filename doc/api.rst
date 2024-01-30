@@ -500,6 +500,9 @@ desispec API
 .. automodule:: desispec.scripts.interpolate_fiber_psf
     :members:
 
+.. automodule:: desispec.scripts.link_calibnight
+    :members:
+
 .. automodule:: desispec.scripts.makezmtl
     :members:
 
