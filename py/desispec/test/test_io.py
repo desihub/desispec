@@ -224,6 +224,7 @@ class TestIO(unittest.TestCase):
         t['a'] = ['a', 'b', '']
         t['x'] = [1.0, 2.0, np.NaN]
         t['blat'] = [10, 20, 30]
+        t['rows'] = np.arange(len(t), dtype=np.int16)
         t.meta['EXTNAME'] = 'TABLE'
         t.meta['BLAT'] = 'foo'
 
@@ -254,6 +255,14 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.isnan(t['x'][2]))
         self.assertTrue(np.all(t['blat'] == tx['blat']))
         self.assertEqual(t.meta, tx.meta)
+
+        #- read subset of rows
+        tx = read_table(testfile, rows=[0,2])
+        self.assertEqual(list(tx['rows']), [0,2])
+
+        #- read subset of columns
+        tx = read_table(testfile, columns=('a', 'blat'))
+        self.assertEqual(tx.colnames, ['a', 'blat'])
 
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
