@@ -791,3 +791,47 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.all(
             spectra4.fibermap['TARGETID']==targets['TARGETID']))
 
+    def test_read_spectra_parallel_nproc(self):
+        """test nproc options of read_spectra_parallel"""
+
+        #- setup two tiles of targets
+        nspec = 5
+        survey = 'main'
+        program = 'dark'
+        sp1 = get_blank_spectra(nspec)
+        sp1.fibermap['TARGETID'] = 1000 + np.arange(nspec)
+        sp1.meta['HPXPIXEL'] = 1000
+        sp1.meta['SURVEY'] = survey
+        sp1.meta['PROGRAM'] = program
+        file1 = findfile('coadd', healpix=1000, survey=survey, faprogram=program)
+
+        sp2 = get_blank_spectra(nspec)
+        sp2.fibermap['TARGETID'] = 2000 + np.arange(nspec)
+        sp2.meta['HPXPIXEL'] = 2000
+        sp2.meta['SURVEY'] = survey
+        sp2.meta['PROGRAM'] = program
+        file2 = findfile('coadd', healpix=2000, survey=survey, faprogram=program)
+
+        write_spectra(file1, sp1)
+        write_spectra(file2, sp2)
+
+        #- create targets table, purposefully in different order than
+        #- they appear in the files
+        targets = Table()
+        targets['TARGETID'] = [1001,1000,2002,2001]
+        targets['HPXPIXEL'] = [1000,1000,2000,2000]
+        targets['SURVEY'] = survey
+        targets['PROGRAM'] = program
+
+        sp0 = read_spectra_parallel(targets)
+        sp1 = read_spectra_parallel(targets, nproc=1)
+        sp2 = read_spectra_parallel(targets, nproc=2)
+        sp3 = read_spectra_parallel(targets, nproc=3)
+        sp4 = read_spectra_parallel(targets, nproc=4)
+
+        self.assertTrue(np.all(sp0.fibermap['TARGETID']==targets['TARGETID']))
+        self.assertTrue(np.all(sp1.fibermap['TARGETID']==targets['TARGETID']))
+        self.assertTrue(np.all(sp2.fibermap['TARGETID']==targets['TARGETID']))
+        self.assertTrue(np.all(sp3.fibermap['TARGETID']==targets['TARGETID']))
+        self.assertTrue(np.all(sp4.fibermap['TARGETID']==targets['TARGETID']))
+

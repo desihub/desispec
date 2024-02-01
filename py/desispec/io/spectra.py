@@ -841,6 +841,14 @@ def read_spectra_parallel(targets, nproc=None,
     elif specgroup in ('tiles', 'cumulative'):
         readspec = _readspec_tiles
 
+    if comm is not None:
+        rank, size = comm.rank, comm.size
+        nproc = size
+    else:
+        rank, size = 0, 1
+        if nproc is None:
+            nproc = max(1, multiprocessing.cpu_count() // 2)
+
     #- split targets into list of nproc subtables, such that targets in
     #- a file are only in a single subtable (i.e. it will be ready only once)
     target_groups = split_targets_by_file(targets, nproc)
@@ -851,11 +859,6 @@ def read_spectra_parallel(targets, nproc=None,
 
     #- list of (targets, prefix, rdspec_kwargs)
     arglist = [(t, prefix, rdspec_kwargs, specprod) for t in target_groups]
-
-    if comm is not None:
-        rank, size = comm.rank, comm.size
-    else:
-        rank, size = 0, 1
 
     if comm is not None:
         #- MPI parallelism
