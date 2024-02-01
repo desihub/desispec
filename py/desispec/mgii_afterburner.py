@@ -43,7 +43,7 @@ def load_redrock_templates(template_dir=None):
     sys.stdout = open('/dev/null', 'w')
     try:
         templates = dict()
-        for filename in redrock.templates.find_templates(template_dir=template_dir):
+        for filename in redrock.templates.find_templates(template_path=template_dir):
             tx = redrock.templates.Template(filename)
             templates[(tx.template_type, tx.sub_type)] = tx
     except Exception as err:
