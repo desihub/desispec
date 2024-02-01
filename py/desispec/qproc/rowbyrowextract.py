@@ -369,6 +369,9 @@ def extract(image, psf, blocksize=25, fibermap=None, nspec=500,
         log.warning("setting up a fibermap to save the FIBER identifiers")
         fibermap = io.fibermap.empty_fibermap(nspec)  # 2% of time
         fibermap["FIBER"] = np.arange(nspec)
+        if 'CAMERA' in image.meta:
+            petal = int(image.meta['CAMERA'][1])
+            fibermap["FIBER"] += petal*500
     else:
         fibermap = fibermap[:nspec]
 
