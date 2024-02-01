@@ -8,9 +8,11 @@ desispec Change Log
 * Better handling of copyprod links (PR `#2160`_).
 * Dark missing from DESI_SPECTRO_DARK is now a fatal error unless
   preproc with --fallback-on-dark-not-found (PR `#2162`_).
+* Add read_spectra_parallel (PR `#2169`_).
 
 .. _`#2160`: https://github.com/desihub/desispec/pull/2160
 .. _`#2162`: https://github.com/desihub/desispec/pull/2162
+.. _`#2169`: https://github.com/desihub/desispec/pull/2169
 
 0.61.0 (2024-01-15)
 -------------------
