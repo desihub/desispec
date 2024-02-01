@@ -24,7 +24,7 @@ from astropy.table import Table
 from astropy.table import vstack as stack_tables
 import fitsio
 
-from desiutil.depend import add_dependencies
+from desiutil.depend import add_dependencies, hasdep, getdep
 from desiutil.io import encode_table
 from desiutil.log import get_logger
 
@@ -834,6 +834,19 @@ def read_spectra_parallel(targets, nproc=None,
     vs. healpix and can be used to pre-check how a targets table will
     be interpreted.
     """
+    #- recreate Table wrapper, but don't copy underlying data;
+    #- allows adding extra columns if needed and supporting non-Table input
+    targets = Table(targets, copy=False)
+
+    #- if not specified, get specprod from header or $SPECPROD
+    if specprod is None:
+        if 'SPECPROD' in targets.meta:
+            specprod = targets.meta['SPECPROD']
+        elif hasdep(targets.meta, 'SPECPROD'):
+            specprod = getdep(targets.meta, 'SPECPROD')
+        else:
+            specprod = os.environ['SPECPROD']
+
     #- Determine which reader to use
     specgroup = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':

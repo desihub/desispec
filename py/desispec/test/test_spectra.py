@@ -45,8 +45,9 @@ class TestSpectra(unittest.TestCase):
             "SPECPROD": None,
             "DESI_SPECTRO_REDUX": None,
             }
+        cls.specprod = 'dailytest'
         cls.testEnv = {
-            'SPECPROD':'dailytest',
+            'SPECPROD': cls.specprod,
             "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
             }
 
@@ -712,15 +713,19 @@ class TestSpectra(unittest.TestCase):
 
         #- read serially instead of parallel
         spectra2 = read_spectra_parallel(targets, nproc=1)
-        self.assertTrue(np.all(
-            spectra.fibermap['TARGETID']==spectra2.fibermap['TARGETID']))
+        self.assertTrue(np.all(spectra2.fibermap == spectra.fibermap))
 
         #- also works with targets['HEALPIX'] instead of 'HPIXPIXEL'
         #- and if requested number of processor is more than num files
         targets.rename_column('HPXPIXEL', 'HEALPIX')
+        spectra.fibermap.rename_column('HPXPIXEL', 'HEALPIX')
         spectra3 = read_spectra_parallel(targets, nproc=3)
-        self.assertTrue(np.all(
-            spectra.fibermap['TARGETID']==spectra3.fibermap['TARGETID']))
+
+        self.assertTrue(np.all(spectra3.fibermap == spectra.fibermap))
+
+        #- also works with targets structured array, not just Table
+        spectra4 = read_spectra_parallel(targets.as_array(), nproc=2)
+        self.assertTrue(np.all(spectra4.fibermap == spectra.fibermap))
 
     def test_read_spectra_parallel_tiles(self):
         """test parallel tile-based spectra I/O"""
@@ -763,8 +768,11 @@ class TestSpectra(unittest.TestCase):
 
         #- read serially instead of parallel
         spectra2 = read_spectra_parallel(targets, nproc=1)
-        self.assertTrue(np.all(
-            spectra.fibermap['TARGETID']==spectra2.fibermap['TARGETID']))
+        self.assertTrue(np.all(spectra2.fibermap==spectra.fibermap))
+
+        #- works as targets structured array, not just Table
+        spectra3 = read_spectra_parallel(targets.as_array(), nproc=1)
+        self.assertTrue(np.all(spectra3.fibermap==spectra.fibermap))
 
         #-----
         #- alternate specprod, read with specprod=name or full path
@@ -790,6 +798,26 @@ class TestSpectra(unittest.TestCase):
         spectra4 = read_spectra_parallel(targets, nproc=1, specprod=altdir)
         self.assertTrue(np.all(
             spectra4.fibermap['TARGETID']==targets['TARGETID']))
+
+        #- auto-derive specprod from targets.meta
+        #- note $SPECPROD != rdspec_test and specprod option is not set
+        self.assertEqual(os.environ['SPECPROD'], self.specprod)
+        self.assertNotEqual(os.environ['SPECPROD'], 'rdspec_test')
+        targets.meta['SPECPROD'] = 'rdspec_test'
+
+        spectra5 = read_spectra_parallel(targets, nproc=2)
+        self.assertTrue(np.all(
+            spectra5.fibermap['TARGETID']==targets['TARGETID']))
+
+        #- DEPNAMnn/DEPVERnn should also work for specprod
+        del targets.meta['SPECPROD']
+        targets.meta['DEPNAM00'] = 'SPECPROD'
+        targets.meta['DEPVER00'] = 'rdspec_test'
+
+        spectra6 = read_spectra_parallel(targets, nproc=2)
+        self.assertTrue(np.all(
+            spectra6.fibermap['TARGETID']==targets['TARGETID']))
+
 
     def test_read_spectra_parallel_nproc(self):
         """test nproc options of read_spectra_parallel"""
