@@ -38,76 +38,81 @@ from desispec.maskbits import fibermask
 # different columns for other surveys, but these will also be coerced into
 # a pre-defined order.
 #
-fibermap_columns = {'main': [('TARGETID',              'i8',                 '', 'Unique target ID'),
+# Units and descriptions should be kept in sync with column_descriptions.csv
+# in desidatamodel.
+#
+# What about survey = 'special'?
+#
+fibermap_columns = {'main': [('TARGETID',              'i8',                 '', 'Unique DESI target ID'),
                              ('PETAL_LOC',             'i2',                 '', 'Petal location [0-9]'),
                              ('DEVICE_LOC',            'i4',                 '', 'Device location on focal plane [0-523]'),
                              ('LOCATION',              'i8',                 '', 'FP location PETAL_LOC*1000 + DEVICE_LOC'),
                              ('FIBER',                 'i4',                 '', 'Fiber ID on the CCDs [0-4999]'),
-                             ('FIBERSTATUS',           'i4',                 '', 'Fiber status; 0=good'),
-                             ('TARGET_RA',             'f8',           'degree', 'Target Right Ascension [degrees]'),
-                             ('TARGET_DEC',            'f8',           'degree', 'Target declination [degrees]'),
-                             ('PMRA',                  'f4',     'marcsec/year', 'PM in +RA dir (already incl cos(dec))'),
-                             ('PMDEC',                 'f4',     'marcsec/year', 'Proper motion in +dec direction'),
-                             ('REF_EPOCH',             'f4',                 '', 'proper motion reference epoch'),
-                             ('LAMBDA_REF',            'f4',         'Angstrom', 'Wavelength at which fiber was centered'),
-                             ('FA_TARGET',             'i8',                 '', ''),
-                             ('FA_TYPE',               'u1',                 '', 'Internal fiberassign target type'),
-                             ('OBJTYPE',           (str, 3),                 '', 'SKY, TGT, NON'),
-                             ('FIBERASSIGN_X',         'f4',               'mm', 'Expected CS5 X on focal plane'),
-                             ('FIBERASSIGN_Y',         'f4',               'mm', 'Expected CS5 Y on focal plane'),
-                             ('PRIORITY',              'i4',                 '', 'Assignment priority; larger=higher priority'),
-                             ('SUBPRIORITY',           'f8',                 '', 'Assignment subpriority [0-1)'),
-                             ('OBSCONDITIONS',         'i4',                 '', 'bitmask of allowable observing conditions'),
-                             ('RELEASE',               'i2',                 '', 'imaging surveys release ID'),
-                             ('BRICKNAME',         (str, 8),                 '', 'Imaging Surveys brick name'),
-                             ('BRICKID',               'i8',                 '', 'Imaging Surveys brick ID'),
+                             ('FIBERSTATUS',           'i4',                 '', 'Fiber status mask. 0=good'),
+                             ('TARGET_RA',             'f8',              'deg', 'Barycentric right ascension in ICRS'),
+                             ('TARGET_DEC',            'f8',              'deg', 'Barycentric declination in ICRS'),
+                             ('PMRA',                  'f4',        'mas yr^-1', 'proper motion in the +RA direction (already including cos(dec))'),
+                             ('PMDEC',                 'f4',        'mas yr^-1', 'Proper motion in the +Dec direction'),
+                             ('REF_EPOCH',             'f4',               'yr', 'Reference epoch for Gaia/Tycho astrometry. Typically 2015.5 for Gaia'),
+                             ('LAMBDA_REF',            'f4',         'Angstrom', 'Requested wavelength at which targets should be centered on fibers'),
+                             ('FA_TARGET',             'i8',                 '', 'Targeting bit internally used by fiberassign (linked with FA_TYPE)'),
+                             ('FA_TYPE',               'u1',                 '', 'Fiberassign internal target type (science, standard, sky, safe, suppsky)'),
+                             ('OBJTYPE',           (str, 3),                 '', 'Object type: TGT, SKY, NON, BAD'),
+                             ('FIBERASSIGN_X',         'f4',               'mm', 'Fiberassign expected CS5 X location on focal plane'),
+                             ('FIBERASSIGN_Y',         'f4',               'mm', 'Fiberassign expected CS5 Y location on focal plane'),
+                             ('PRIORITY',              'i4',                 '', 'Target current priority'),
+                             ('SUBPRIORITY',           'f8',                 '', 'Random subpriority [0-1) to break assignment ties'),
+                             ('OBSCONDITIONS',         'i4',                 '', 'Bitmask of allowed observing conditions'),
+                             ('RELEASE',               'i2',                 '', 'Imaging surveys release ID'),
+                             ('BRICKNAME',         (str, 8),                 '', 'Brick name from tractor input'),
+                             ('BRICKID',               'i8',                 '', 'Brick ID from tractor input'),
                              ('BRICK_OBJID',           'i8',                 '', 'Imaging Surveys OBJID on that brick'),
-                             ('MORPHTYPE',         (str, 4),                 '', 'Imaging Surveys morphological type'),
-                             ('EBV',                   'f4',                 '', 'Galactic extinction E(B-V) reddening from SFD98'),
-                             ('FLUX_G',                'f4',      'nanomaggies', 'g-band flux'),
-                             ('FLUX_R',                'f4',      'nanomaggies', 'r-band flux'),
-                             ('FLUX_Z',                'f4',      'nanomaggies', 'z-band flux'),
-                             ('FLUX_W1',               'f4',      'nanomaggies', 'WISE W1-band flux'),
-                             ('FLUX_W2',               'f4',      'nanomaggies', 'WISE W2-band flux'),
-                             ('FLUX_IVAR_G',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_G'),
-                             ('FLUX_IVAR_R',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_R'),
-                             ('FLUX_IVAR_Z',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_Z'),
-                             ('FLUX_IVAR_W1',          'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W1'),
-                             ('FLUX_IVAR_W2',          'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W2'),
-                             ('FIBERFLUX_G',           'f4',      'nanomaggies', 'g-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERFLUX_R',           'f4',      'nanomaggies', 'r-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERFLUX_Z',           'f4',      'nanomaggies', 'z-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERTOTFLUX_G',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('FIBERTOTFLUX_R',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('FIBERTOTFLUX_Z',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('MASKBITS',              'i2',                 '', 'Photometry mask bits'),
-                             ('SERSIC',                'f4',                 '', 'Power-law index for the Sersic profile model'),
-                             ('SHAPE_R',               'f4',           'arcsec', 'Half-light radius of galaxy model'),
-                             ('SHAPE_E1',              'f4',                 '', 'Ellipticity component 1 for galaxy model'),
-                             ('SHAPE_E2',              'f4',                 '', 'Ellipticity component 2 for galaxy model'),
-                             ('REF_ID',                'i8',                 '', 'Astrometric cat refID (Gaia SOURCE_ID)'),
-                             ('REF_CAT',           (str, 2),                 '', 'astrometry reference catalog'),
-                             ('GAIA_PHOT_G_MEAN_MAG',  'f4',              'mag', 'Gaia G band mag'),
-                             ('GAIA_PHOT_BP_MEAN_MAG', 'f4',              'mag', 'Gaia BP band mag'),
-                             ('GAIA_PHOT_RP_MEAN_MAG', 'f4',              'mag', 'Gaia RP band mag'),
-                             ('PARALLAX',              'f4',          'marcsec', 'Parallax'),
-                             ('PHOTSYS',           (str, 1),                 '', 'N for BASS/MzLS, S for DECam'),
-                             ('PRIORITY_INIT',         'i8',                 '', 'initial priority'),
-                             ('NUMOBS_INIT',           'i8',                 '', 'initial number of requested observations'),
-                             ('DESI_TARGET',           'i8',                 '', 'Dark survey + calibration targeting bits'),
-                             ('BGS_TARGET',            'i8',                 '', 'Bright Galaxy Survey targeting bits'),
+                             ('MORPHTYPE',         (str, 4),                 '', 'Imaging Surveys morphological type from Tractor'),
+                             ('EBV',                   'f4',              'mag', 'Galactic extinction E(B-V) reddening from SFD98'),
+                             ('FLUX_G',                'f4',        'nanomaggy', 'Flux in the Legacy Survey g-band (AB)'),
+                             ('FLUX_R',                'f4',        'nanomaggy', 'Flux in the Legacy Survey r-band (AB)'),
+                             ('FLUX_Z',                'f4',        'nanomaggy', 'Flux in the Legacy Survey z-band (AB)'),
+                             ('FLUX_W1',               'f4',        'nanomaggy', 'WISE flux in W1 (AB)'),
+                             ('FLUX_W2',               'f4',        'nanomaggy', 'WISE flux in W2 (AB)'),
+                             ('FLUX_IVAR_G',           'f4',     'nanomaggy^-2', 'Inverse variance of FLUX_G (AB)'),
+                             ('FLUX_IVAR_R',           'f4',     'nanomaggy^-2', 'Inverse variance of FLUX_R (AB)'),
+                             ('FLUX_IVAR_Z',           'f4',     'nanomaggy^-2', 'Inverse variance of FLUX_Z (AB)'),
+                             ('FLUX_IVAR_W1',          'f4',     'nanomaggy^-2', 'Inverse variance of FLUX_W1 (AB)'),
+                             ('FLUX_IVAR_W2',          'f4',     'nanomaggy^-2', 'Inverse variance of FLUX_W2 (AB)'),
+                             ('FIBERFLUX_G',           'f4',        'nanomaggy', 'Predicted g-band flux within a fiber of diameter 1.5 arcsec from this object in 1 arcsec Gaussian seeing'),
+                             ('FIBERFLUX_R',           'f4',        'nanomaggy', 'Predicted r-band flux within a fiber of diameter 1.5 arcsec from this object in 1 arcsec Gaussian seeing'),
+                             ('FIBERFLUX_Z',           'f4',        'nanomaggy', 'Predicted z-band flux within a fiber of diameter 1.5 arcsec from this object in 1 arcsec Gaussian seeing'),
+                             ('FIBERTOTFLUX_G',        'f4',        'nanomaggy', 'Predicted g-band flux within a fiber of diameter 1.5 arcsec from all sources at this location in 1 arcsec Gaussian seeing'),
+                             ('FIBERTOTFLUX_R',        'f4',        'nanomaggy', 'Predicted r-band flux within a fiber of diameter 1.5 arcsec from all sources at this location in 1 arcsec Gaussian seeing'),
+                             ('FIBERTOTFLUX_Z',        'f4',        'nanomaggy', 'Predicted z-band flux within a fiber of diameter 1.5 arcsec from all sources at this location in 1 arcsec Gaussian seeing'),
+                             ('MASKBITS',              'i2',                 '', 'Bitwise mask from the imaging indicating potential issue or blending'),
+                             ('SERSIC',                'f4',                 '', "Power-law index for the Sersic profile model (MORPHTYPE='SER')"),
+                             ('SHAPE_R',               'f4',           'arcsec', 'Half-light radius of galaxy model (>0)'),
+                             ('SHAPE_E1',              'f4',                 '', 'Ellipticity component 1 of galaxy model for galaxy type MORPHTYPE'),
+                             ('SHAPE_E2',              'f4',                 '', 'Ellipticity component 2 of galaxy model for galaxy type MORPHTYPE'),
+                             ('REF_ID',                'i8',                 '', "Tyc1*1,000,000+Tyc2*10+Tyc3 for Tycho-2; ``sourceid`` for Gaia DR2"),
+                             ('REF_CAT',           (str, 2),                 '', "Reference catalog source for star: 'T2' for Tycho-2, 'G2' for Gaia DR2, 'L2' for the SGA, empty otherwise"),
+                             ('GAIA_PHOT_G_MEAN_MAG',  'f4',              'mag', 'Gaia G band magnitude'),
+                             ('GAIA_PHOT_BP_MEAN_MAG', 'f4',              'mag', 'Gaia BP band magnitude'),
+                             ('GAIA_PHOT_RP_MEAN_MAG', 'f4',              'mag', 'Gaia RP band magnitude'),
+                             ('PARALLAX',              'f4',              'mas', 'Reference catalog parallax'),
+                             ('PHOTSYS',           (str, 1),                 '', "'N' for the MzLS/BASS photometric system, 'S' for DECaLS"),
+                             ('PRIORITY_INIT',         'i8',                 '', 'Target initial priority from target selection bitmasks and OBSCONDITIONS'),
+                             ('NUMOBS_INIT',           'i8',                 '', 'Initial number of observations for target calculated across target selection bitmasks and OBSCONDITIONS'),
+                             ('DESI_TARGET',           'i8',                 '', 'DESI (dark time program) target selection bitmask'),
+                             ('BGS_TARGET',            'i8',                 '', 'BGS (Bright Galaxy Survey) target selection bitmask'),
                              ('MWS_TARGET',            'i8',                 '', 'Milky Way Survey targeting bits'),
-                             ('SCND_TARGET',           'i8',                 '', 'Secondary program targeting bits'),
-                             ('PLATE_RA',              'f8',           'degree', 'Right Ascension for Platemaker to use [degrees]'),
-                             ('PLATE_DEC',             'f8',           'degree', 'declination for Platemaker to use [degrees]'),
+                             ('SCND_TARGET',           'i8',                 '', 'Target selection bitmask for secondary programs'),
+                             ('PLATE_RA',              'f8',              'deg', 'Barycentric Right Ascension in ICRS to be used by PlateMaker'),
+                             ('PLATE_DEC',             'f8',              'deg', 'Barycentric Declination in ICRS to be used by PlateMaker'),
                              ('NUM_ITER',              'i8',                 '', 'Number of positioner iterations'),
                              ('FIBER_X',               'f8',               'mm', 'CS5 X location requested by PlateMaker'),
                              ('FIBER_Y',               'f8',               'mm', 'CS5 Y location requested by PlateMaker'),
-                             ('DELTA_X',               'f8',               'mm', 'CS5 X diff requested and actual position'),
-                             ('DELTA_Y',               'f8',               'mm', 'CS5 Y diff requested and actual position'),
-                             ('FIBER_RA',              'f8',           'degree', 'RA of actual fiber position'),
-                             ('FIBER_DEC',             'f8',           'degree', 'DEC of actual fiber position'),
-                             ('EXPTIME',               'f8',                's', 'Exposure time'),]}
+                             ('DELTA_X',               'f8',               'mm', 'CS5 X requested minus actual position'),
+                             ('DELTA_Y',               'f8',               'mm', 'CS5 Y requested minus actual position'),
+                             ('FIBER_RA',              'f8',              'deg', 'RA of actual fiber position'),
+                             ('FIBER_DEC',             'f8',              'deg', 'DEC of actual fiber position'),
+                             ('EXPTIME',               'f8',                's', 'Length of time shutter was open'),]}
 
 fibermap_comments = {'main': dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['main']])}
 #
@@ -118,6 +123,10 @@ fibermap_comments = {'main': dict([(tmp[0], tmp[3]) for tmp in fibermap_columns[
 
 def _set_fibermap_columns():
     """Prepare survey-specific list of columns.
+
+    Unless only the 'main' survey will be used, this should *always*
+    be called before using ``desispec.io.fibermap.fibermap_columns`` or
+    ``desispec.io.fibermap.fibermap_columns``.
 
     Returns
     -------
@@ -131,15 +140,21 @@ def _set_fibermap_columns():
         for t in ('DESI', 'BGS', 'MWS', 'SCND'):
             index_columns = [x[0] for x in fibermap_columns[survey]]
             i = index_columns.index('{0}_TARGET'.format(t))
-            row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '',
-                   fibermap_columns[survey][i][3])
+            # Some bitmask comments differ from main survey in non-trivial ways.
+            if t == 'SCND':
+                comment = f'Secondary target selection bitmask'
+            elif t == 'MWS':
+                'MWS (bright time program) target selection bitmask'
+            else:
+                comment = fibermap_columns[survey][i][3]
+            row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '', comment + f' for {survey.upper()}')
             fibermap_columns[survey].insert(index_columns.index('DESI_TARGET'), row)
         index_columns = [x[0] for x in fibermap_columns[survey]]
         del fibermap_columns[survey][index_columns.index('SCND_TARGET')]
         fibermap_comments[survey] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns[survey]])
     fibermap_columns['cmx'] = fibermap_columns['main'].copy()
     index_columns = [x[0] for x in fibermap_columns['cmx']]
-    row = ('CMX_TARGET', 'i8', '', 'Targeting bits for instrument commissioning')
+    row = ('CMX_TARGET', 'i8', '', 'Target selection bitmask for commissioning')
     fibermap_columns['cmx'].insert(index_columns.index('DESI_TARGET'), row)
     index_columns = [x[0] for x in fibermap_columns['cmx']]
     del fibermap_columns['cmx'][index_columns.index('SCND_TARGET')]
