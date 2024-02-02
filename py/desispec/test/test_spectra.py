@@ -727,6 +727,27 @@ class TestSpectra(unittest.TestCase):
         spectra4 = read_spectra_parallel(targets.as_array(), nproc=2)
         self.assertTrue(np.all(spectra4.fibermap == spectra.fibermap))
 
+        #- use header for SURVEY and PROGRAM if not in columns
+        targets.meta['SURVEY'] = survey
+        targets.meta['PROGRAM'] = program
+        targets.remove_column('SURVEY')
+        targets.remove_column('PROGRAM')
+
+        spectra5 = read_spectra_parallel(targets, nproc=2)
+        self.assertTrue(np.all(spectra5.fibermap == spectra.fibermap))
+
+        # check input wasn't modified
+        self.assertIn('SURVEY', targets.meta)
+        self.assertIn('PROGRAM', targets.meta)
+        self.assertNotIn('SURVEY', targets.colnames)
+        self.assertNotIn('PROGRAM', targets.colnames)
+
+        #- but we do have to find 'SURVEY' and 'PROGRAM' somewhere
+        del targets.meta['SURVEY']
+        del targets.meta['PROGRAM']
+        with self.assertRaises(ValueError):
+            spectra6 = read_spectra_parallel(targets, nproc=2)
+
     def test_read_spectra_parallel_tiles(self):
         """test parallel tile-based spectra I/O"""
 

@@ -22,7 +22,7 @@ from .fluxcalibration import (read_stdstar_templates, write_stdstar_models,
                               read_stdstar_models, read_flux_calibration,
                               write_flux_calibration, read_average_flux_calibration)
 from .spectra import (read_spectra, write_spectra, read_frame_as_spectra,
-                      read_tile_spectra)
+                      read_tile_spectra, read_spectra_parallel)
 from .frame import read_meta_frame, read_frame, write_frame
 from .xytraceset import read_xytraceset, write_xytraceset
 from .image import read_image, write_image

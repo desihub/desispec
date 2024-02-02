@@ -633,9 +633,7 @@ def determine_specgroup(colnames):
         'LASTNIGHT' in colnames and
         'PETAL_LOC' in colnames):
         return 'cumulative'
-    elif ('SURVEY' in colnames and
-          'PROGRAM' in colnames and
-          ('HPXPIXEL' in colnames or 'HEALPIX' in colnames)):
+    elif ('HPXPIXEL' in colnames or 'HEALPIX' in colnames):
         return 'healpix'
     else:
         raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
@@ -834,6 +832,8 @@ def read_spectra_parallel(targets, nproc=None,
     vs. healpix and can be used to pre-check how a targets table will
     be interpreted.
     """
+    log = get_logger()
+
     #- recreate Table wrapper, but don't copy underlying data;
     #- allows adding extra columns if needed and supporting non-Table input
     targets = Table(targets, copy=False)
@@ -853,6 +853,22 @@ def read_spectra_parallel(targets, nproc=None,
         readspec = _readspec_healpix
     elif specgroup in ('tiles', 'cumulative'):
         readspec = _readspec_tiles
+
+    #- healpix: get SURVEY and PROGRAM from header insteaad of cols if needed
+    if specgroup == 'healpix':
+        ok = True
+        for col in ['SURVEY', 'PROGRAM']:
+            if ((col not in targets.colnames) and (col in targets.meta)):
+                targets[col] = targets.meta[col]
+
+            if col not in targets.colnames:
+                log.error(f'Healpix targets need {col} in either header or columns')
+                ok = False
+
+        if not ok:
+            msg = 'Unable to find SURVEY and/or PROGRAM for healpix targets'
+            log.critical(msg)
+            raise ValueError(msg)
 
     if comm is not None:
         rank, size = comm.rank, comm.size
