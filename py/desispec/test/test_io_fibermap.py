@@ -3,7 +3,9 @@
 """Test desispec.io.fibermap.
 """
 import os
+import tempfile
 import unittest
+from shutil import rmtree
 
 import numpy as np
 from astropy.io import fits
@@ -12,23 +14,77 @@ import fitsio
 
 from ..io.fibermap import empty_fibermap, read_fibermap, write_fibermap, find_fiberassign_file
 
-class TestIO(unittest.TestCase):
+class TestIOFibermap(unittest.TestCase):
     """Test desispec.io.fibermap.
     """
 
     @classmethod
     def setUpClass(cls):
-        pass
+        """Create unique test filename in a subdirectory.
+        """
+        cls.testDir = tempfile.mkdtemp()
+        cls.readonlyDir = tempfile.mkdtemp()
+        cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
+        cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
+        cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
+        # cls.testbrfile appears to be unused by this class.
+        cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
+        cls.origEnv = {'SPECPROD': None,
+                       "DESI_ROOT": None,
+                       "DESI_ROOT_READONLY": None,
+                       "DESI_SPECTRO_DATA": None,
+                       "DESI_SPECTRO_REDUX": None,
+                       "DESI_SPECTRO_CALIB": None,
+                       }
+        cls.testEnv = {'SPECPROD':'dailytest',
+                       "DESI_ROOT": cls.testDir,
+                       "DESI_ROOT_READONLY": cls.readonlyDir,
+                       "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+                       "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       }
+        cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
+        cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
+                                    cls.testEnv['SPECPROD'])
+        for e in cls.origEnv:
+            if e in os.environ:
+                cls.origEnv[e] = os.environ[e]
+            os.environ[e] = cls.testEnv[e]
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        """Cleanup test files if they exist.
+        """
+        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
+            if os.path.exists(testfile):
+                os.remove(testfile)
+        for e in cls.origEnv:
+            if cls.origEnv[e] is None:
+                del os.environ[e]
+            else:
+                os.environ[e] = cls.origEnv[e]
+
+        if os.path.isdir(cls.testDir):
+            rmtree(cls.testDir)
+
+        # reset the readonly cache
+        from ..io import meta
+        meta._desi_root_readonly = None
 
     def setUp(self):
-        pass
+        if os.path.isdir(self.datadir):
+            rmtree(self.datadir)
+        if os.path.isdir(self.reduxdir):
+            rmtree(self.reduxdir)
 
     def tearDown(self):
-        pass
+        for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
+            if os.path.exists(testfile):
+                os.remove(testfile)
+
+        # restore environment variables if test changed them
+        for key, value in self.testEnv.items():
+            os.environ[key] = value
 
     def test_empty_fibermap(self):
         """Test creating empty fibermap objects.
