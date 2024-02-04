@@ -715,6 +715,16 @@ class TestSpectra(unittest.TestCase):
         spectra2 = read_spectra_parallel(targets, nproc=1)
         self.assertTrue(np.all(spectra2.fibermap == spectra.fibermap))
 
+        #- test that input order is preserved when shuffled
+        for ii in ([0,3,2,1], [3,2,1,0], [3,1,0,2], [1,3,2,0]):
+            sp = read_spectra_parallel(targets[ii], nproc=2)
+            self.assertTrue(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))
+
+        #-  match_order=False won't preser order, but saves memory
+        ii = [0,3,1,2]
+        sp = read_spectra_parallel(targets[ii], nproc=2, match_order=False)
+        self.assertFalse(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))
+
         #- also works with targets['HEALPIX'] instead of 'HPIXPIXEL'
         #- and if requested number of processor is more than num files
         targets.rename_column('HPXPIXEL', 'HEALPIX')

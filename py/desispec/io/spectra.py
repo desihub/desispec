@@ -802,8 +802,9 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
 
     return spectra
 
-def read_spectra_parallel(targets, nproc=None,
-                          prefix='coadd', rdspec_kwargs=dict(), specprod=None,
+def read_spectra_parallel(targets, nproc=None, prefix='coadd',
+                          rdspec_kwargs=dict(), specprod=None,
+                          match_order=True,
                           comm=None):
     """
     Read spectra for targets table in parallel
@@ -815,6 +816,8 @@ def read_spectra_parallel(targets, nproc=None,
         nproc (int): number of processes to use if comm is None
         prefix (str): 'coadd' or 'spectra'
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+        specprod (str): production name or full path to production
+        match_order (bool): if True (default), spectra will match order of input targets
         comm: MPI communicator
 
     Returns: Spectra for targets in targets table
@@ -909,6 +912,12 @@ def read_spectra_parallel(targets, nproc=None,
         #- belt and suspenders check: remove any None values before stack
         spectra = [sp for sp in spectra if sp is not None]
         spectra = stack_spectra(spectra)
+
+        #- reorder spectra to match input target table if needed
+        if match_order and np.any(spectra.fibermap['TARGETID'] != targets['TARGETID']):
+            ii = argmatch(spectra.fibermap['TARGETID'], targets['TARGETID'])
+            spectra = spectra[ii]
+            assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
 
     return spectra
 
