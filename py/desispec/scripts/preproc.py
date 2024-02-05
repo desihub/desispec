@@ -100,8 +100,9 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--ncpu', type=int, default=default_nproc,
             help=f"number of parallel processes to use [{default_nproc}]")
     parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
+    parser.add_argument('--no-cte-correction', action="store_true", help="disable CTE correction")
+    parser.add_argument('--cte-params', type = str, required = False, default=None, help="specify the CTE correction csv table file to use")
     parser.add_argument('--fallback-on-dark-not-found', action="store_true", help="fall back to DESI_SPECTRO_CALIB darks if dark files are missing from DESI_SPECTRO_DARK, else fail")
-
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -202,6 +203,8 @@ def main(args=None):
                 no_traceshift=args.no_traceshift,
                 keep_overscan_cols=args.keep_overscan_cols,
                 no_overscan_per_row=args.no_overscan_per_row,
+                no_cte_corr=args.no_cte_correction,
+                cte_params_filename=args.cte_params,
                 fallback_on_dark_not_found=args.fallback_on_dark_not_found
         )
         opts_array.append(opts)

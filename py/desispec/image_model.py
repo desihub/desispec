@@ -77,6 +77,7 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     # this is done here to avoid circular import
     from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 
+
     if fit_x_shift :
         t0=time.time()
         log.info("fitting dx ...")
@@ -91,9 +92,11 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
         log.info("dx fit took {:.2f} sec".format(time.time()-t0))
         xytraceset.x_vs_wave_traceset._coeff[:,0] += dx
 
+    # create unmasked version of image for boxcar extraction
+    image = Image(image.pix, image.ivar, mask=None, readnoise=image.readnoise, camera=image.camera, meta=image.meta)
+
     # first perform a fast boxcar extraction
     log.info("extract spectra")
-    image.mask = None
     qframe = qproc_boxcar_extraction(xytraceset,image)
     fqframe = None
     sqframe = None

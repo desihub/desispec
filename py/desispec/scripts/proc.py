@@ -65,6 +65,8 @@ import desispec.scripts.select_calib_stars
 import desispec.scripts.fluxcalibration
 import desispec.scripts.procexp
 import desispec.scripts.nightly_bias
+import desispec.scripts.fit_cte_night
+
 from desispec.maskbits import ccdmask
 from desispec.gpu import is_gpu_available
 
@@ -145,7 +147,7 @@ def main(args=None, comm=None):
         #- Let rank 0 fetch these, and then broadcast
         args, hdr, camhdr = None, None, None
     else:
-        if args.nightlybias and (args.expid is None) and (args.input is None):
+        if ( args.nightlybias or args.nightlycte ) and (args.expid is None) and (args.input is None):
             hdr = camhdr = None
         else:
             args, hdr, camhdr = update_args_with_headers(args)
@@ -165,11 +167,11 @@ def main(args=None, comm=None):
     known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
         'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
     only_nightlybias = args.nightlybias and args.expid is None
-    if args.obstype not in known_obstype and not only_nightlybias:
+    if args.obstype not in known_obstype and (not only_nightlybias) and (not args.nightlycte) :
         raise ValueError('obstype {} not in {}'.format(args.obstype, known_obstype))
 
-    if args.expid is None and not args.nightlybias:
-        msg = 'Must provide --expid or --nightlybias'
+    if args.expid is None and (not args.nightlybias) and (not args.nightlycte) :
+        msg = 'Must provide --expid or --nightlybias or --nightlycte'
         if rank == 0:
             log.critical(msg)
 
@@ -178,8 +180,10 @@ def main(args=None, comm=None):
     if isinstance(args.cameras, str):
         args.cameras = decode_camword(args.cameras)
 
-    if only_nightlybias and args.cameras is None:
+    if only_nightlybias  and args.cameras is None:
         args.cameras = decode_camword('a0123456789')
+    if args.nightlycte and args.cameras is None:
+        args.cameras = decode_camword('r0123456789z0123456789') # no CTE for blue
 
     timer.stop('preflight')
 
@@ -187,6 +191,11 @@ def main(args=None, comm=None):
     #- Create and submit a batch job if requested
 
     if args.batch:
+
+        if args.nightlycte:
+            log.critical("don't know what to do in batch for nightlycte!")
+            sys.exit(1)
+
         #exp_str = '{:08d}'.format(args.expid)
         if args.obstype is not None:
             jobdesc = args.obstype.lower()
@@ -273,7 +282,29 @@ def main(args=None, comm=None):
 
         timer.stop('nightlybias')
 
-    #- this might be just nightly bias, with no single exposure to process
+    #-------------------------------------------------------------------------
+    #- Create cte model from several LED exposures
+    if args.nightlycte:
+
+        timer.start('nightlycte')
+
+        camword = create_camword(args.cameras)
+        cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
+
+        ctecorrnightfile = findfile('ctecorrnight', args.night)
+
+        if rank == 0:
+            log.info(f'RUNNING {cmd}')
+
+        result, success = runcmd(desispec.scripts.fit_cte_night.main,
+                args=cmd.split()[1:], inputs=[], outputs=[ctecorrnightfile,], comm=comm)
+
+        if not success:
+            error_count += 1
+
+        timer.stop('nightlycte')
+
+    #- this might be just nightly bias, or nightly cte, with no single exposure to process
     if args.expid is None:
         if comm is not None:
             all_error_counts = comm.gather(error_count, root=0)
@@ -388,9 +419,17 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
+
+            inputs = [args.input]
+
+            #- TBD: require ctecorrnight file here, or allow to be missing?
+            # if args.obstype not in ('ZERO', 'DARK') and camera[0].lower() != 'b':
+            #     ctecorrfile = findfile('ctecorrnight', args.night, camera=camera)
+            #     inputs.append(ctecorrfile)
+
             cmdargs = cmd.split()[1:]
             result, success = runcmd(desispec.scripts.preproc.main,
-                    args=cmdargs, inputs=[args.input], outputs=[outfile])
+                    args=cmdargs, inputs=inputs, outputs=[outfile,])
             if not success:
                 error_count += 1
 

@@ -117,6 +117,7 @@ def add_desi_proc_singular_terms(parser):
     parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
     parser.add_argument("--nightlybias", action="store_true", help="Create nightly bias model from ZEROs")
+    parser.add_argument("--nightlycte", action="store_true", help="Fit CTE model from LED exposures")
     return parser
 
 def add_desi_proc_joint_fit_terms(parser):
@@ -834,6 +835,29 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                     +mps_wrapper+f' {cmd}')
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
+
+            #- nightlybias implies that this is a ccdcalib job,
+            #- where we will also run CTE fitting
+            if nightlybias:
+
+                #- first check if previous command failed
+                fx.write('\nif [ $? -eq 0 ]; then\n')
+                fx.write('  echo command succeeded at $(date)\n')
+                fx.write('else\n')
+                fx.write('  echo FAILED: processing failed; stopping at $(date)\n')
+                fx.write('  exit 1\n')
+                fx.write('fi\n')
+
+                #- then proceed with desi_fit_cte_night command
+                camword = create_camword(cameras)
+                fx.write('\n# Fit CTE parameters from flats if needed\n')
+                cmd = f'desi_fit_cte_night -n {night} -c {camword}'
+                fx.write(f'if [ -f $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/{night}/ctecorr-{night}.csv ]; then\n')
+                fx.write(f'  echo Already have ctecorr-{night}.csv\n')
+                fx.write(f'else\n')
+                fx.write(f'  echo running {cmd}\n')
+                fx.write(f'  {cmd}\n')
+                fx.write(f'fi\n')
 
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:

@@ -105,8 +105,10 @@ def main(args=None):
             print("ERROR: Need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
-        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,],fallback_on_dark_not_found=args.fallback_on_dark_not_found)
-
+        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,],
+                         fallback_on_dark_not_found=args.fallback_on_dark_not_found,
+                         no_cte_corr=True,
+                         )
 
     if args.auto :
         log.debug("AUTOMATIC MODE")

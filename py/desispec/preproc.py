@@ -30,6 +30,7 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
+import desispec.correct_cte
 
 def get_amp_ids(header):
     '''
@@ -688,6 +689,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
+            no_cte_corr=False,cte_params_filename=None,
             fallback_on_dark_not_found=False):
     '''
     preprocess image using metadata in header
@@ -737,6 +739,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional fit and subtraction of scattered light
 
     Optional disabling of overscan subtraction per row if no_overscan_per_row=True
+
+    Optional disabling of CTE correction if no_cte_corr=True
 
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
@@ -822,6 +826,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     if len(missing_keywords) > 0:
         raise KeyError("Camera {} missing keywords {}".format(camera, ' '.join(missing_keywords)))
+
+    #- don't use CTE correction for DARK and ZERO images
+    if 'OBSTYPE' in primary_header and primary_header['OBSTYPE'] in ('ZERO', 'DARK'):
+        if no_cte_corr is False:
+            log.info(f"Not applying CTE corrections for OBSTYPE={primary_header['OBSTYPE']}")
+            no_cte_corr = True
 
     #- Subtract bias image
 
@@ -1287,9 +1297,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if np.any(lowpixflat):
             mask[lowpixflat] |= ccdmask.PIXFLATLOW
 
-
-
-
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
     var = poisson_var + readnoise**2
     ivar = np.zeros(var.shape)
@@ -1303,6 +1310,27 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         image -= bkg
 
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
+
+    #- force using img object (which gets further updated, but not original inputs)
+    del image
+    del ivar
+    del mask
+    del header
+
+    #- CTE correction if any exist
+    if no_cte_corr:
+        log.info("CTE correction disabled")
+    else:
+        if cte_params_filename is None:
+            if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):
+                mess = "No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction.  Run with --no-cte-corr to skip."
+                log.critical(mess)
+                raise RuntimeError(mess)
+            else:
+                cte_params_filename = findfile('ctecorrnight', night=img.meta['NIGHT'], readonly=True)
+
+        log.info("Apply CTE correction")
+        img = desispec.correct_cte.correct_image_via_model(img,niter=5,cte_params_filename=cte_params_filename)
 
     #- update img.mask to mask cosmic rays
     if not nocosmic :
@@ -1332,7 +1360,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if psf_filename is None :
             psf_filename = cfinder.findfile("PSF")
 
-        depend.setdep(header, 'CCD_CALIB_PSF', shorten_filename(psf_filename))
+        depend.setdep(img.meta, 'CCD_CALIB_PSF', shorten_filename(psf_filename))
         xyset = read_xytraceset(psf_filename)
 
         fiberflat = None
@@ -1342,7 +1370,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if with_sky_model :
             log.debug(f"Camera {camera} will use a sky model to model the spectra")
             fiberflat_filename = cfinder.findfile("FIBERFLAT")
-            depend.setdep(header, 'CCD_CALIB_FIBERFLAT', shorten_filename(fiberflat_filename))
+            depend.setdep(img.meta, 'CCD_CALIB_FIBERFLAT', shorten_filename(fiberflat_filename))
             if fiberflat_filename is not None :
                 fiberflat = read_fiberflat(fiberflat_filename)
 
@@ -1356,30 +1384,30 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # here we bring back original image for large outliers
         # this allows to have a correct ivar for cosmic rays and bright sources
         eps = 0.1
-        out = (((ivar>0)*(image-mimage)**2/(1./(ivar+(ivar==0))+(0.1*mimage)**2))>nsig**2)
+        out = (((img.ivar>0)*(img.pix-mimage)**2/(1./(img.ivar+(img.ivar==0))+(0.1*mimage)**2))>nsig**2)
         # out &= (image>mimage) # could request this to be conservative on the variance ... but this could cause other issues
-        mimage[out] = image[out]
+        mimage[out] = img.pix[out]
 
         log.info(f"Camera {camera} use image model to compute variance")
         if bkgsub_dark :
-
             mimage += bkg
+
         if pixflat is not False :
             # undo pixflat
             mimage *= pixflat
+
         if dark is not False  :
             mimage  += dark
+
         poisson_var = mimage.clip(0)
         if pixflat is not False :
             if np.all(pixflat > almost_zero ):
                 poisson_var /= pixflat**2
             else:
                 poisson_var[good] /= pixflat[good]**2
-        var = poisson_var + readnoise**2
-        ivar[var>0] = 1.0 / var[var>0]
 
-        # regenerate img object
-        img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
+        var = poisson_var + readnoise**2
+        img.ivar[var>0] = 1.0 / var[var>0]
 
     if np.all(img.mask>0):
         log.error(f'Camera {camera} is entirely masked (i.e. unusable)')
@@ -1388,7 +1416,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if xyset is None :
             if psf_filename is None :
                 psf_filename = cfinder.findfile("PSF")
-                depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
+                depend.setdep(img.meta, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
 
@@ -1396,7 +1424,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if xyset is None :
             if psf_filename is None :
                 psf_filename = cfinder.findfile("PSF")
-                depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
+                depend.setdep(img.meta, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
         ccdbkg, bkgqa = compute_background_between_fiber_blocks(img,xyset)
         img.pix -= ccdbkg

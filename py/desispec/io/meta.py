@@ -138,6 +138,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
+        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits.gz',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
@@ -298,7 +299,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 root_key = key.removesuffix('_hp')
                 location[root_key] = val
     del loc_copy
-    
+
     if groupname is not None and tile is None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:

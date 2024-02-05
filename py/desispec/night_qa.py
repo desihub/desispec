@@ -817,7 +817,7 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
             mydict["is_onesec_flat"] = False
         # AR grab columns with identified problem
         cfinder = CalibFinder([hdr])
-        for key in ["OFFCOLSA", "OFFCOLSB", "OFFCOLSC", "OFFCOLSD"]:
+        for key in ["OFFCOLSA", "OFFCOLSB", "OFFCOLSC", "OFFCOLSD", "CTECOLSA", "CTECOLSB", "CTECOLSC", "CTECOLSD"]:
             if cfinder.haskey(key):
                 mydict[key] = cfinder.value(key)
             else:
@@ -908,16 +908,16 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 # AR known columns with offset?
                 # AR     stored in format like "12:24,1700:1900"
                 for amp in ["A", "B", "C", "D"]:
-                    key = "OFFCOLS{}".format(amp)
-                    if mydict[key] is not None:
-                        for colrange in mydict[key].split(","):
-                            colmin, colmax = int(colrange.split(":")[0]), int(colrange.split(":")[1])
-                            ax1d.annotate("", xy=(colmax, yoffcols[amp]), xytext=(colmin, yoffcols[amp]), arrowprops=dict(arrowstyle="<->", lw="3", color=colors[amp]))
-                            if amp in ["A", "C"]:
-                                tmpy = yoffcols[amp] + 0.025 * (ylim[1] - ylim[0])
-                            else:
-                                tmpy = yoffcols[amp] - 0.030 * (ylim[1] - ylim[0])
-                            ax1d.text(0.5 * (colmin + colmax), tmpy, "AMP{} known offset: {}".format(amp, colrange), ha="center", va="center")
+                    for key in ["OFFCOLS{}".format(amp) , "CTECOLS{}".format(amp)] :
+                        if mydict[key] is not None:
+                            for colrange in mydict[key].split(","):
+                                colmin, colmax = int(colrange.split(":")[0]), int(colrange.split(":")[1])
+                                ax1d.annotate("", xy=(colmax, yoffcols[amp]), xytext=(colmin, yoffcols[amp]), arrowprops=dict(arrowstyle="<->", lw="3", color=colors[amp]))
+                                if amp in ["A", "C"]:
+                                    tmpy = yoffcols[amp] + 0.025 * (ylim[1] - ylim[0])
+                                else:
+                                    tmpy = yoffcols[amp] - 0.030 * (ylim[1] - ylim[0])
+                                ax1d.text(0.5 * (colmin + colmax), tmpy, "AMP{} known offset: {}".format(amp, colrange), ha="center", va="center")
                 # AR plot 1d median
                 ax1d.plot(xx, above, alpha=0.5, color=colors["C"], label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
                 ax1d.plot(xx, below, alpha=0.5, color=colors["A"], label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
