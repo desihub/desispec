@@ -128,7 +128,7 @@ def _set_fibermap_columns():
 
     Unless only the 'main' survey will be used, this should *always*
     be called before using ``desispec.io.fibermap.fibermap_columns`` or
-    ``desispec.io.fibermap.fibermap_columns``.
+    ``desispec.io.fibermap.fibermap_comments``.
 
     Returns
     -------
@@ -1235,32 +1235,41 @@ def annotate_fibermap(fibermap, survey='main', extra_columns=None, checkonly=Fal
     else:
         log.error("Number of fields (TFIELDS==%d) != Number of expected fibermap columns (%d)!",
                   fh['TFIELDS'], len(fibermap_columns))
-    column_index = dict()
     for i in range(1, fh['TFIELDS'] + 1):
         ttype = f"TTYPE{i:d}"
         tform = f"TFORM{i:d}"
         tunit = f"TUNIT{i:d}"
-        assert fh[ttype] == fibermap_columns[i][0]
+        col = fh[ttype]
+        assert col == fibermap_columns[i][0]
         if fh[tform] in tforms:
             assert tforms[fh[tform]] == fibermap_columns[i][1]
         elif fh[tform].endswith('A'):
             assert int(fh[tform][:-1]) == fibermap_columns[i][1][1]
         else:
-            log.error('unknown type')
-        if tunit in fh:
-            if fh[tunit] == fibermap_columns[i][2]:
-                log.info('good units')
+            log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
+                      fh[tform], col)
+        if fibermap_columns[i][2]:
+            if tunit in fh:
+                if fh[tunit] == fibermap_columns[i][2]:
+                    log.debug('Units for column %s match expected fibermap columns.', col)
+                else:
+                    log.warning("Overriding units for column '%s': '%s' -> '%s'.",
+                                col, fh[tunit].strip(), fibermap_columns[i][2])
+                    fh[tunit] = (fibermap_columns[i][2], col + ' units')
             else:
-                log.warning('coerce units')
+                log.info("Setting units for column %s to '%s'.", col, fibermap_columns[i][2])
+                fh.insert(tform, (tunit, fibermap_columns[i][2], col + ' units'), after=True)
         else:
-            log.info('set the units')
+            log.debug("Column %s is not supposed to have units, skipping.", col)
         if ttype in fhc:
             if fhc[ttype] == fibermap_columns[i][3]:
-                log.info('good comment')
+                log.debug('Comment for column %s match expected fibermap columns.', col)
             else:
-                log.warning('coerce comment')
+                log.warning('Overriding comment for column %s!', col)
+                fh[ttype] = (col, fibermap_columns[i][3])
         else:
-            log.info('set the comment')
+            log.info('Setting comment for column %s.', col)
+            fh[ttype] = (col, fibermap_columns[i][3])
     if not checkonly:
         fibermap.add_checksum()
     return fibermap
