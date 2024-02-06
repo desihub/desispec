@@ -936,6 +936,14 @@ class TestSpectra(unittest.TestCase):
             sp = read_spectra_parallel(targets[ii], nproc=2)
             self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
 
+        #- Also when all are same TARGETID
+        keep = targets['TARGETID'] == targets['TARGETID'][0]
+        targets = targets[keep]
+        ii = np.arange(len(targets))
+        for test in range(10):
+            np.random.shuffle(ii)
+            sp = read_spectra_parallel(targets[ii], nproc=2)
+            self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
 
         #- targets tabless across various tileids
         nspec = 5

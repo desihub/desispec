@@ -9,6 +9,7 @@ from uuid import uuid4
 import importlib
 
 import numpy as np
+from astropy.table import Table
 
 from desispec import util
 import desispec.parallel as dpl
@@ -481,4 +482,25 @@ class TestUtil(unittest.TestCase):
 
             ii = util.argmatch(a,b)
             self.assertTrue(np.all(a[ii] == b), f'test number {test}\n{a=}\n{ii=}\n{a[ii]=} !=\n{b=}')
+
+
+        #- Test tables
+        a = Table()
+        a['x'] = np.arange(5)
+        a['y'] = ['a', 'b', 'c', 'd', 'e']
+        b = a[[3,1,2,4,0]]
+
+        ii = util.argmatch(a, b)
+        self.assertTrue(np.all(a[ii] == b))
+
+        #- should also work with columns of compatible but different types
+        b['x'] = b['x'].astype('i4')
+        b['y'] = b['y'].astype('>U5')
+
+        ii = util.argmatch(a, b)
+
+        #- compare columns, since comparing tables will say False due to dtype mismatch
+        self.assertTrue(np.all(a['x'][ii] == b['x']))
+        self.assertTrue(np.all(a['y'][ii] == b['y']))
+
 
