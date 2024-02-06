@@ -11,8 +11,11 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 import fitsio
+from desiutil.annotate import check_comment_length
 
-from ..io.fibermap import empty_fibermap, read_fibermap, write_fibermap, find_fiberassign_file
+from ..io.fibermap import (fibermap_columns, fibermap_comments, _set_fibermap_columns,
+                           empty_fibermap, write_fibermap, read_fibermap, find_fiberassign_file)
+
 
 class TestIOFibermap(unittest.TestCase):
     """Test desispec.io.fibermap.
@@ -170,3 +173,15 @@ class TestIOFibermap(unittest.TestCase):
 
         with self.assertRaises(IOError) as ex:
             find_fiberassign_file(night, 12348, tileid=4444)
+
+    def test_fibermap_comment_lengths(self):
+        """Automate testing of fibermap comment lengths.
+        """
+        f = _set_fibermap_columns()
+        n_long = check_comment_length(fibermap_comments['main'], error=True)
+        self.assertEqual(n_long, 0)
+        n_long = check_comment_length(fibermap_comments['cmx'], error=True)
+        self.assertEqual(n_long, 0)
+        n_long = check_comment_length(fibermap_comments['sv3'], error=True)
+        self.assertEqual(n_long, 0)
+
