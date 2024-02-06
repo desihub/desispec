@@ -22,6 +22,7 @@ from desitarget.targetmask import desi_mask
 from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
+from desiutil.names import radec_to_desiname
 from desimodel.focalplane import get_tile_radius_deg
 from desimodel.io import load_focalplane
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
@@ -51,6 +52,7 @@ fibermap_columns = {'main': [('TARGETID',              'i8',                 '',
                              ('FIBERSTATUS',           'i4',                 '', 'Fiber status mask. 0=good'),
                              ('TARGET_RA',             'f8',              'deg', 'Barycentric right ascension in ICRS'),
                              ('TARGET_DEC',            'f8',              'deg', 'Barycentric declination in ICRS'),
+                             ('DESINAME',         (str, 16),                 '', 'DESI Name'),
                              ('PMRA',                  'f4',        'mas yr^-1', 'Proper motion in the +RA direction'),
                              ('PMDEC',                 'f4',        'mas yr^-1', 'Proper motion in the +Dec direction'),
                              ('REF_EPOCH',             'f4',               'yr', 'Reference epoch for Gaia/Tycho astrometry'),

@@ -178,10 +178,10 @@ class TestIOFibermap(unittest.TestCase):
         """Automate testing of fibermap comment lengths.
         """
         f = _set_fibermap_columns()
-        n_long = check_comment_length(fibermap_comments['main'], error=True)
+        n_long = check_comment_length(fibermap_comments['main'], error=False)
         self.assertEqual(n_long, 0)
-        n_long = check_comment_length(fibermap_comments['cmx'], error=True)
+        n_long = check_comment_length(fibermap_comments['cmx'], error=False)
         self.assertEqual(n_long, 0)
-        n_long = check_comment_length(fibermap_comments['sv3'], error=True)
+        n_long = check_comment_length(fibermap_comments['sv3'], error=False)
         self.assertEqual(n_long, 0)
 
