@@ -663,10 +663,10 @@ class TestSpectra(unittest.TestCase):
         from desispec.io.spectra import determine_specgroup as spgrp
         self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC'])[0],
                          'cumulative')
-        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HPXPIXEL'])[0],
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX'])[0],
                          'healpix')
         #- tiles/cumulative trumps healpix
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HPXPIXEL'])[0],
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HEALPIX'])[0],
                          'cumulative')
 
         with self.assertRaises(ValueError):
@@ -700,14 +700,14 @@ class TestSpectra(unittest.TestCase):
         #- they appear in the files
         targets = Table()
         targets['TARGETID'] = [1001,1000,2002,2001]
-        targets['HPXPIXEL'] = [1000,1000,2000,2000]
+        targets['HEALPIX'] = [1000,1000,2000,2000]
         targets['SURVEY'] = survey
         targets['PROGRAM'] = program
 
         spectra = read_spectra_parallel(targets, nproc=2)
         self.assertEqual(len(spectra), len(targets))
         self.assertTrue(np.all(spectra.fibermap['TARGETID']==targets['TARGETID']))
-        self.assertTrue(np.all(spectra.fibermap['HPXPIXEL']==targets['HPXPIXEL']))
+        self.assertTrue(np.all(spectra.fibermap['HEALPIX']==targets['HEALPIX']))
 
         #- read serially instead of parallel
         spectra2 = read_spectra_parallel(targets, nproc=1)
@@ -723,12 +723,12 @@ class TestSpectra(unittest.TestCase):
         sp = read_spectra_parallel(targets[ii], nproc=2, match_order=False)
         self.assertFalse(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))
 
-        #- also works with targets['HEALPIX'] instead of 'HPIXPIXEL'
+        #- also works with targets['HPXPIXEL'] instead of 'HEALPIX'
         #- and if requested number of processor is more than num files
-        targets.rename_column('HPXPIXEL', 'HEALPIX')
+        targets.rename_column('HEALPIX', 'HPXPIXEL')
         spectra3 = read_spectra_parallel(targets, nproc=3)
-        self.assertIn('HEALPIX', targets.colnames)  # input colname wasn't changed
-        self.assertTrue(np.all(spectra3.fibermap['HPXPIXEL'] == targets['HEALPIX']))
+        self.assertIn('HPXPIXEL', targets.colnames)  # input colname wasn't changed
+        self.assertTrue(np.all(spectra3.fibermap['HEALPIX'] == targets['HPXPIXEL']))
         self.assertTrue(np.all(spectra3.fibermap['TARGETID'] == targets['TARGETID']))
 
         #- also works with targets structured array, not just Table
@@ -899,7 +899,7 @@ class TestSpectra(unittest.TestCase):
         nspec = 5
         t1 = Table()
         t1['TARGETID'] = 1000 + np.arange(nspec)
-        t1['HPXPIXEL'] = 1000
+        t1['HEALPIX'] = 1000
         t1['SURVEY'] = 'main'
         t1['PROGRAM'] = 'bright'
 
@@ -912,12 +912,12 @@ class TestSpectra(unittest.TestCase):
         t1000 = vstack([t1,t2,t3])
         t2000 = t1000.copy()
         t2000['TARGETID'] += 1000
-        t2000['HPXPIXEL'] = 2000
+        t2000['HEALPIX'] = 2000
 
         targets = vstack([t1000, t2000])
 
-        for tt in targets.group_by(['HPXPIXEL', 'SURVEY', 'PROGRAM']).groups:
-            hpix = tt['HPXPIXEL'][0]
+        for tt in targets.group_by(['HEALPIX', 'SURVEY', 'PROGRAM']).groups:
+            hpix = tt['HEALPIX'][0]
             survey = tt['SURVEY'][0]
             program = tt['PROGRAM'][0]
             filename = findfile('coadd', healpix=hpix, survey=survey, faprogram=program)
