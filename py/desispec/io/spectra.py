@@ -645,17 +645,6 @@ def determine_specgroup(colnames):
     else:
         raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
 
-def _get_hpixcol(columns):
-    """return which column name to use for healpix, HPXPIXEL or HEALPIX"""
-    if 'HPXPIXEL' in columns:
-        hpixcol = 'HPXPIXEL'
-    elif 'HEALPIX' in columns:
-        hpixcol = 'HEALPIX'
-    else:
-        raise ValueError(f'Unable to find HPXPIXEL or HEALPIX in columns {columns}')
-
-    return hpixcol
-
 def split_targets_by_file(targets, n, specgroup='healpix'):
     """
     Split targets table into n tables, keeping all TARGETIDs in a file together
@@ -708,12 +697,9 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
 
     log = get_logger()
 
-    hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
-    groupcols = (hpixcol, 'SURVEY', 'PROGRAM')
-
     spectra = list()
-    for zz in targets.group_by(groupcols).groups:
-        hpix = zz[hpixcol][0]
+    for zz in targets.group_by(['HPXPIXEL', 'SURVEY', 'PROGRAM']).groups:
+        hpix = zz['HPXPIXEL'][0]
         survey = zz['SURVEY'][0]
         program = zz['PROGRAM'][0]
         targetids = np.array(zz['TARGETID'])
@@ -727,9 +713,8 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
             log.warning(f'No matching targets found in {specfile}')
             continue
 
-        if hpixcol not in sp.fibermap.colnames:
-            #- header keyword is HPXPIXEL, not HEALPIX, regardless of hpixcol
-            sp.fibermap[hpixcol] = sp.meta['HPXPIXEL']
+        if 'HPXPIXEL' not in sp.fibermap.colnames:
+            sp.fibermap['HPXPIXEL'] = sp.meta['HPXPIXEL']
 
         for col in ('SURVEY', 'PROGRAM'):
             if col not in sp.fibermap.colnames:
@@ -745,7 +730,7 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
     spectra = stack_spectra(spectra)
 
     assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
-    assert np.all(spectra.fibermap[hpixcol] == targets[hpixcol])
+    assert np.all(spectra.fibermap['HPXPIXEL'] == targets['HPXPIXEL'])
     assert np.all(spectra.fibermap['SURVEY'] == targets['SURVEY'])
     assert np.all(spectra.fibermap['PROGRAM'] == targets['PROGRAM'])
 
@@ -792,6 +777,9 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
         if 'LASTNIGHT' not in sp.fibermap.colnames:
             sp.fibermap['LASTNIGHT'] = sp.meta['NIGHT']
 
+        if 'TILEID' not in sp.fibermap.colnames:
+            sp.fibermap['TILEID'] = sp.meta['TILEID']
+
         spectra.append(sp)
 
     if len(spectra) == 0:
@@ -801,14 +789,10 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
 
     spectra = stack_spectra(spectra)
 
-    assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
+    assert np.all(spectra.fibermap['TARGETID']  == targets['TARGETID'])
     assert np.all(spectra.fibermap['LASTNIGHT'] == targets['LASTNIGHT'])
     assert np.all(spectra.fibermap['PETAL_LOC'] == targets['PETAL_LOC'])
-
-    if 'TILEID' in spectra.fibermap.colnames:
-        assert np.all(spectra.fibermap['TILEID'] == targets['TILEID'])
-    else:
-        assert np.all(spectra.fibermap.meta['TILEID'] == targets['TILEID'])
+    assert np.all(spectra.fibermap['TILEID']    == targets['TILEID'])
 
     return spectra
 
@@ -851,7 +835,7 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     #- allows adding/renaming columns if needed and supporting non-Table input
     targets = Table(targets, copy=False)
 
-    #- support HPXPIXEL or HEALPIX
+    #- support HPXPIXEL or HEALPIX in input targets table
     if 'HEALPIX' in targets.colnames:
         targets.rename_column('HEALPIX', 'HPXPIXEL')
 

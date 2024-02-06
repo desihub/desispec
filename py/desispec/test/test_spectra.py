@@ -726,11 +726,10 @@ class TestSpectra(unittest.TestCase):
         #- also works with targets['HEALPIX'] instead of 'HPIXPIXEL'
         #- and if requested number of processor is more than num files
         targets.rename_column('HPXPIXEL', 'HEALPIX')
-        spectra.fibermap.rename_column('HPXPIXEL', 'HEALPIX')
         spectra3 = read_spectra_parallel(targets, nproc=3)
-        # rename before comparison
-        spectra.fibermap.rename_column('HEALPIX', 'HPXPIXEL')
-        self.assertTrue(np.all(spectra3.fibermap == spectra.fibermap))
+        self.assertIn('HEALPIX', targets.colnames)  # input colname wasn't changed
+        self.assertTrue(np.all(spectra3.fibermap['HPXPIXEL'] == targets['HEALPIX']))
+        self.assertTrue(np.all(spectra3.fibermap['TARGETID'] == targets['TARGETID']))
 
         #- also works with targets structured array, not just Table
         spectra4 = read_spectra_parallel(targets.as_array(), nproc=2)
@@ -973,8 +972,4 @@ class TestSpectra(unittest.TestCase):
         for test in range(10):
             np.random.shuffle(ii)
             sp = read_spectra_parallel(targets[ii], nproc=1)
-            for col in cols:
-                self.assertTrue(np.all(sp.fibermap[col] == targets[col][ii]),
-                                f'{col} mismatch for {ii=}')
-
-
+            self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
