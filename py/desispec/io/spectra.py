@@ -912,10 +912,16 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
         spectra = stack_spectra(spectra)
 
         #- reorder spectra to match input target table if needed
-        if match_order and np.any(spectra.fibermap[keycols] != targets[keycols]):
-            ii = argmatch(spectra.fibermap[keycols], targets[keycols])
-            spectra = spectra[ii]
-            assert np.all(spectra.fibermap[keycols] == targets[keycols])
+        if match_order:
+            need_to_reorder = False
+            for col in keycols:
+                if np.any(spectra.fibermap[col] != targets[col]):
+                    need_to_reorder = True
+                    break
+
+            if need_to_reorder:
+                ii = argmatch(spectra.fibermap[keycols], targets[keycols])
+                spectra = spectra[ii]
 
     return spectra
 

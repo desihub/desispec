@@ -895,7 +895,7 @@ class TestSpectra(unittest.TestCase):
     def test_read_spectra_parallel_order(self):
         """test various combinations of reading targets in different orders"""
 
-        #- targets tabless across various healpix, surveys, programs
+        #- targets tables across various healpix, surveys, programs
         nspec = 5
         t1 = Table()
         t1['TARGETID'] = 1000 + np.arange(nspec)
@@ -945,7 +945,14 @@ class TestSpectra(unittest.TestCase):
             sp = read_spectra_parallel(targets[ii], nproc=2)
             self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
 
-        #- targets tabless across various tileids
+        #- and when dtype is different but compatible (e.g. str20 vs. str8),
+        #- in which case we need to copmare by column instead of the entire table
+        targets['SURVEY'] = targets['SURVEY'].astype('>U20')
+        sp = read_spectra_parallel(targets[ii], nproc=2)
+        for col in targets.colnames:
+            self.assertTrue(np.all(sp.fibermap[col] == targets[col][ii]))
+
+        #- targets tables across various tileids
         nspec = 5
         t1 = Table()
         t1['TARGETID'] = 1000 + np.arange(nspec)
