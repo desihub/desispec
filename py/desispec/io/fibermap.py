@@ -52,7 +52,7 @@ fibermap_columns = {'main': [('TARGETID',              'i8',                 '',
                              ('FIBERSTATUS',           'i4',                 '', 'Fiber status mask. 0=good'),
                              ('TARGET_RA',             'f8',              'deg', 'Barycentric right ascension in ICRS'),
                              ('TARGET_DEC',            'f8',              'deg', 'Barycentric declination in ICRS'),
-                             ('DESINAME',         (str, 16),                 '', 'DESI Name'),
+                             ('DESINAME',         (str, 22),                 '', 'Human-readable object name'),
                              ('PMRA',                  'f4',        'mas yr^-1', 'Proper motion in the +RA direction'),
                              ('PMDEC',                 'f4',        'mas yr^-1', 'Proper motion in the +Dec direction'),
                              ('REF_EPOCH',             'f4',               'yr', 'Reference epoch for Gaia/Tycho astrometry'),
@@ -706,6 +706,10 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.debug("Adding PLATE_DEC column.")
         fa['PLATE_DEC'] = fa['TARGET_DEC']
 
+    if 'DESINAME' not in fa.colnames:
+        log.debug("Adding DESINAME column.")
+        fa['DESINAME'] = radec_to_desiname(fa['TARGET_RA'], fa['TARGET_DEC'])
+
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
     if 'OUTDIR' in fa_hdr0:
@@ -1176,9 +1180,90 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     fibermap.meta.clear()
     fibermap_hdu = fits.BinTableHDU(fibermap)
     fibermap_hdu.header.extend(fibermap_header, update=True)
+    fibermap_hdu = annotate_fibermap(fibermap_hdu, survey=survey)
     fibermap_hdulist = fits.HDUList([fits.PrimaryHDU(), fibermap_hdu])
 
     return fibermap_hdulist
+
+
+def annotate_fibermap(fibermap, survey='main', extra_columns=None, checkonly=False):
+    """Add units and column descriptions to a fibermap HDU.
+
+    There may be some conceptual code overlap with :func:`desiutil.annotate.annotate_fits`,
+    but that is for annotating existing files, whereas here we want to modify
+    a HDU that hasn't been written out to a file at all.
+
+    Parameters
+    ----------
+    fibermap : :class:`~astropy.io.fits.BinTableHDU`
+        A fibermap HDU that has all data added except for units and column descriptions.
+    survey : :class:`str`, optional
+        Use the list of columns related to this survey.
+    extra_columns : :class:`list`, optional
+        In addition to the expected columns, annotate these additional columns.
+        Each member of the list should be a tuple of ``(column_name, type, units, description)``.
+    checkonly : :class:`bool`, optional
+        Instead of modifying `fibermap`, check whether it already has
+        the expected units and column names.
+
+    Returns
+    -------
+    :class:`~astropy.io.fits.BinTableHDU`
+        `fibermap` will be modified by this function, but it is also returned as a convenience.
+
+    Raises
+    ------
+    ValueError
+        If `extra_columns` does not conform to the same structure as the fibermap
+        column data.
+    """
+    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8'}
+    log = get_logger()
+    try:
+        fibermap_columns = fibermap_columns[survey]
+    except KeyError:
+        fibermap_columns = _set_fibermap_columns()[survey]
+    if extra_columns is not None:
+        if all([len(e) == 4 for e in extra_columns]):
+            fibermap_columns += extra_columns
+        else:
+            raise ValueError("extra_columns does not conform to fibermap column data!")
+    fh = fibermap.header
+    fhc = fibermap.header.comments
+    if fh['TFIELDS'] == len(fibermap_columns):
+        log.info("Expected and found %d fibermap columns.", fh['TFIELDS'])
+    else:
+        log.error("Number of fields (TFIELDS==%d) != Number of expected fibermap columns (%d)!",
+                  fh['TFIELDS'], len(fibermap_columns))
+    column_index = dict()
+    for i in range(1, fh['TFIELDS'] + 1):
+        ttype = f"TTYPE{i:d}"
+        tform = f"TFORM{i:d}"
+        tunit = f"TUNIT{i:d}"
+        assert fh[ttype] == fibermap_columns[i][0]
+        if fh[tform] in tforms:
+            assert tforms[fh[tform]] == fibermap_columns[i][1]
+        elif fh[tform].endswith('A'):
+            assert int(fh[tform][:-1]) == fibermap_columns[i][1][1]
+        else:
+            log.error('unknown type')
+        if tunit in fh:
+            if fh[tunit] == fibermap_columns[i][2]:
+                log.info('good units')
+            else:
+                log.warning('coerce units')
+        else:
+            log.info('set the units')
+        if ttype in fhc:
+            if fhc[ttype] == fibermap_columns[i][3]:
+                log.info('good comment')
+            else:
+                log.warning('coerce comment')
+        else:
+            log.info('set the comment')
+    if not checkonly:
+        fibermap.add_checksum()
+    return fibermap
 
 
 def fibermap_new2old(fibermap):

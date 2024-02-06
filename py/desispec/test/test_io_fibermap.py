@@ -14,7 +14,8 @@ import fitsio
 from desiutil.annotate import check_comment_length
 
 from ..io.fibermap import (fibermap_columns, fibermap_comments, _set_fibermap_columns,
-                           empty_fibermap, write_fibermap, read_fibermap, find_fiberassign_file)
+                           empty_fibermap, write_fibermap, read_fibermap, find_fiberassign_file,
+                           annotate_fibermap)
 
 
 class TestIOFibermap(unittest.TestCase):
@@ -185,3 +186,7 @@ class TestIOFibermap(unittest.TestCase):
         n_long = check_comment_length(fibermap_comments['sv3'], error=False)
         self.assertEqual(n_long, 0)
 
+    def test_annotate_fibermap(self):
+        """Test updating units and column descriptions in a fibermap HDU.
+        """
+        pass
