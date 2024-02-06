@@ -661,14 +661,12 @@ class TestSpectra(unittest.TestCase):
     def test_determine_specgroup(self):
         """test parallel spectra I/O"""
         from desispec.io.spectra import determine_specgroup as spgrp
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC']),
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC'])[0],
                          'cumulative')
-        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HPXPIXEL']),
-                         'healpix')
-        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX']),
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HPXPIXEL'])[0],
                          'healpix')
         #- tiles/cumulative trumps healpix
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HPXPIXEL']),
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HPXPIXEL'])[0],
                          'cumulative')
 
         with self.assertRaises(ValueError):
@@ -730,7 +728,8 @@ class TestSpectra(unittest.TestCase):
         targets.rename_column('HPXPIXEL', 'HEALPIX')
         spectra.fibermap.rename_column('HPXPIXEL', 'HEALPIX')
         spectra3 = read_spectra_parallel(targets, nproc=3)
-
+        # rename before comparison
+        spectra.fibermap.rename_column('HEALPIX', 'HPXPIXEL')
         self.assertTrue(np.all(spectra3.fibermap == spectra.fibermap))
 
         #- also works with targets structured array, not just Table
@@ -893,4 +892,89 @@ class TestSpectra(unittest.TestCase):
         self.assertTrue(np.all(sp2.fibermap['TARGETID']==targets['TARGETID']))
         self.assertTrue(np.all(sp3.fibermap['TARGETID']==targets['TARGETID']))
         self.assertTrue(np.all(sp4.fibermap['TARGETID']==targets['TARGETID']))
+
+    def test_read_spectra_parallel_order(self):
+        """test various combinations of reading targets in different orders"""
+
+        #- targets tabless across various healpix, surveys, programs
+        nspec = 5
+        t1 = Table()
+        t1['TARGETID'] = 1000 + np.arange(nspec)
+        t1['HPXPIXEL'] = 1000
+        t1['SURVEY'] = 'main'
+        t1['PROGRAM'] = 'bright'
+
+        t2 = t1.copy()
+        t2['PROGRAM'] = 'dark'
+
+        t3 = t1.copy()
+        t3['SURVEY'] = 'sv3'
+
+        t1000 = vstack([t1,t2,t3])
+        t2000 = t1000.copy()
+        t2000['TARGETID'] += 1000
+        t2000['HPXPIXEL'] = 2000
+
+        targets = vstack([t1000, t2000])
+
+        for tt in targets.group_by(['HPXPIXEL', 'SURVEY', 'PROGRAM']).groups:
+            hpix = tt['HPXPIXEL'][0]
+            survey = tt['SURVEY'][0]
+            program = tt['PROGRAM'][0]
+            filename = findfile('coadd', healpix=hpix, survey=survey, faprogram=program)
+            sp = get_blank_spectra(len(tt))
+            sp.fibermap['TARGETID'] = tt['TARGETID']
+            sp.meta['HPXPIXEL'] = hpix
+            sp.meta['SURVEY'] = survey
+            sp.meta['PROGRAM'] = program
+
+            write_spectra(filename, sp)
+
+        ii = np.arange(len(targets))
+        cols = targets.colnames
+        for test in range(10):
+            np.random.shuffle(ii)
+            sp = read_spectra_parallel(targets[ii], nproc=2)
+            self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
+
+
+        #- targets tabless across various tileids
+        nspec = 5
+        t1 = Table()
+        t1['TARGETID'] = 1000 + np.arange(nspec)
+        t1['TILEID'] = 1000
+        t1['LASTNIGHT'] = 20241010
+        t1['PETAL_LOC'] = np.int16(4)
+
+        t2 = t1.copy()
+        t2['TILEID'] = 2000
+
+        t3 = t1.copy()
+        t3['TILEID'] = 3000
+
+        targets = vstack([t1, t2, t3])
+
+        for tt in targets.group_by(['TILEID']).groups:
+            tileid = tt['TILEID'][0]
+            night = tt['LASTNIGHT'][0]
+            petal = tt['PETAL_LOC'][0]
+            filename = findfile('coadd', night, tile=tileid, spectrograph=petal,
+                                groupname='cumulative')
+            sp = get_blank_spectra(len(tt))
+            sp.fibermap['TARGETID'] = tt['TARGETID']
+            sp.fibermap['PETAL_LOC'] = petal
+            sp.fibermap['TILEID'] = tileid
+            sp.meta['NIGHT'] = night
+
+            write_spectra(filename, sp)
+
+        ii = np.arange(len(targets))
+        cols = targets.colnames
+        for test in range(10):
+            np.random.shuffle(ii)
+            sp = read_spectra_parallel(targets[ii], nproc=1)
+            for col in cols:
+                self.assertTrue(np.all(sp.fibermap[col] == targets[col][ii]),
+                                f'{col} mismatch for {ii=}')
+
 

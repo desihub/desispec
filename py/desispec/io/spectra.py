@@ -627,14 +627,21 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
 #           TARGETID,TILEID,LASTNIGHT,PETAL_LOC.
 
 def determine_specgroup(colnames):
-    """Return specgroup 'healpix' or 'cumulative' based upon column names"""
+    """Determine specgroup 'healpix' or 'cumulative' based upon column names
+
+    Args:
+        colnames: list of str column names
+
+    Returns (specgroup, keycols) where specgroup is 'cumulative' or 'healpix',
+    and keycols is list of columns to use for unique primary key.
+    """
     colnames = set(colnames) # for faster lookup
     if ('TILEID' in colnames and
         'LASTNIGHT' in colnames and
         'PETAL_LOC' in colnames):
-        return 'cumulative'
-    elif ('HPXPIXEL' in colnames or 'HEALPIX' in colnames):
-        return 'healpix'
+        return 'cumulative', ('TARGETID', 'TILEID', 'LASTNIGHT')
+    elif 'HPXPIXEL' in colnames:
+        return 'healpix', ('TARGETID', 'HPXPIXEL', 'SURVEY', 'PROGRAM')
     else:
         raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
 
@@ -666,10 +673,9 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
     but not used.
     """
     #- What columns should we group by to split by file?
-    specgroup = determine_specgroup(targets.dtype.names)
+    specgroup, keycols = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':
-        hpixcol = _get_hpixcol(targets.dtype.names) #- HEALPIX or HPXPIXEL
-        filecolumns = (hpixcol, 'SURVEY', 'PROGRAM')
+        filecolumns = ('HPXPIXEL', 'SURVEY', 'PROGRAM')
     elif specgroup in ('tiles', 'cumulative'):
         filecolumns = ('TILEID', 'LASTNIGHT', 'PETAL_LOC')
 
@@ -796,9 +802,13 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
     spectra = stack_spectra(spectra)
 
     assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
-    assert np.all(spectra.fibermap['TILEID'] == targets['TILEID'])
     assert np.all(spectra.fibermap['LASTNIGHT'] == targets['LASTNIGHT'])
     assert np.all(spectra.fibermap['PETAL_LOC'] == targets['PETAL_LOC'])
+
+    if 'TILEID' in spectra.fibermap.colnames:
+        assert np.all(spectra.fibermap['TILEID'] == targets['TILEID'])
+    else:
+        assert np.all(spectra.fibermap.meta['TILEID'] == targets['TILEID'])
 
     return spectra
 
@@ -838,8 +848,12 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     log = get_logger()
 
     #- recreate Table wrapper, but don't copy underlying data;
-    #- allows adding extra columns if needed and supporting non-Table input
+    #- allows adding/renaming columns if needed and supporting non-Table input
     targets = Table(targets, copy=False)
+
+    #- support HPXPIXEL or HEALPIX
+    if 'HEALPIX' in targets.colnames:
+        targets.rename_column('HEALPIX', 'HPXPIXEL')
 
     #- if not specified, get specprod from header or $SPECPROD
     if specprod is None:
@@ -851,27 +865,27 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
             specprod = os.environ['SPECPROD']
 
     #- Determine which reader to use
-    specgroup = determine_specgroup(targets.dtype.names)
+    specgroup, keycols = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':
         readspec = _readspec_healpix
     elif specgroup in ('tiles', 'cumulative'):
         readspec = _readspec_tiles
 
-    #- healpix: get SURVEY and PROGRAM from header insteaad of cols if needed
-    if specgroup == 'healpix':
-        ok = True
-        for col in ['SURVEY', 'PROGRAM']:
-            if ((col not in targets.colnames) and (col in targets.meta)):
-                targets[col] = targets.meta[col]
+    #- promote columns from targets.meta if needed
+    #- e.g. target.meta['SURVEY'] -> targets['SURVEY']
+    ok = True
+    for col in keycols:
+        if ((col not in targets.colnames) and (col in targets.meta)):
+            targets[col] = targets.meta[col]
 
-            if col not in targets.colnames:
-                log.error(f'Healpix targets need {col} in either header or columns')
-                ok = False
+        if col not in targets.colnames:
+            log.error(f'{specgroup} targets need {col} in either header or columns')
+            ok = False
 
-        if not ok:
-            msg = 'Unable to find SURVEY and/or PROGRAM for healpix targets'
-            log.critical(msg)
-            raise ValueError(msg)
+    if not ok:
+        msg = 'Unable to find SURVEY and/or PROGRAM for healpix targets'
+        log.critical(msg)
+        raise ValueError(msg)
 
     if comm is not None:
         rank, size = comm.rank, comm.size
@@ -915,9 +929,9 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
 
         #- reorder spectra to match input target table if needed
         if match_order and np.any(spectra.fibermap['TARGETID'] != targets['TARGETID']):
-            ii = argmatch(spectra.fibermap['TARGETID'], targets['TARGETID'])
+            ii = argmatch(spectra.fibermap[keycols], targets[keycols])
             spectra = spectra[ii]
-            assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
+            assert np.all(spectra.fibermap[keycols] == targets[keycols])
 
     return spectra
 
