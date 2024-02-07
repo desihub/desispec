@@ -718,8 +718,16 @@ def argmatch(a, b):
             #- this should not occur
             raise RuntimeError(f'argmatch failure for unknown reason {a=}, {b=}')
 
-    if not np.all(a[match_indices] == b):
-        #- this should not occur
-        raise RuntimeError(f'argmatch failure for unknown reason {a=} {match_indices=} {a[match_indices]=} != {b}')
+    if a.dtype.names is None:
+        if np.any(a[match_indices] != b):
+            #- this should not occur
+            raise RuntimeError(f'argmatch failure for unknown reason {a=} {match_indices=} {a[match_indices]=} != {b=}')
+
+    else:
+        #- compare column by column, since comparing the whole table will fail on harmless
+        #- dtype mismatches e.g. int32 vs. int64 even if all values are the same
+        for col in a.dtype.names:
+            if np.any(a[col][match_indices] != b[col]):
+                raise RuntimeError(f'argmatch failure for unknown reason {a[col]=} {match_indices=} {a[col][match_indices]=} != {b[col]=}')
 
     return match_indices
