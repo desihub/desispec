@@ -1222,30 +1222,35 @@ def annotate_fibermap(fibermap, columns, checkonly=False):
     fh = fibermap.header
     fhc = fibermap.header.comments
     if fh['TFIELDS'] == len(columns):
-        log.info("Expected and found %d fibermap columns.", fh['TFIELDS'])
+        log.debug("Expected and found %d fibermap columns.", fh['TFIELDS'])
     else:
         log.error("Number of fields (TFIELDS==%d) != Number of expected fibermap columns (%d)!",
                   fh['TFIELDS'], len(columns))
-    for i in range(1, fh['TFIELDS'] + 1):
-        ttype = f"TTYPE{i:d}"
-        tform = f"TFORM{i:d}"
-        tunit = f"TUNIT{i:d}"
+    for i in range(fh['TFIELDS']):
+        ttype = f"TTYPE{i+1:d}"
+        tform = f"TFORM{i+1:d}"
+        tunit = f"TUNIT{i+1:d}"
         col = fh[ttype]
+        coltype = fh[tform]
+        try:
+            colunit = fh[tunit]
+        except KeyError:
+            colunit = None
         assert col == columns[i][0]
-        if fh[tform] in tforms:
-            assert tforms[fh[tform]] == columns[i][1]
-        elif fh[tform].endswith('A'):
-            assert int(fh[tform][:-1]) == columns[i][1][1]
+        if coltype in tforms:
+            assert tforms[coltype] == columns[i][1]
+        elif coltype.endswith('A'):
+            assert int(coltype.replace('A', '')) == columns[i][1][1]
         else:
             log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
-                      fh[tform], col)
+                      coltype, col)
         if columns[i][2]:
-            if tunit in fh:
-                if fh[tunit] == columns[i][2]:
+            if colunit:
+                if colunit == columns[i][2]:
                     log.debug('Units for column %s match expected fibermap columns.', col)
                 else:
                     log.warning("Overriding units for column '%s': '%s' -> '%s'.",
-                                col, fh[tunit].strip(), columns[i][2])
+                                col, colunit.strip(), columns[i][2])
                     fh[tunit] = (columns[i][2], col + ' units')
             else:
                 log.info("Setting units for column %s to '%s'.", col, columns[i][2])
