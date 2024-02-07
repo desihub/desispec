@@ -368,7 +368,7 @@ def populate_night_info(night, check_on_disk=False,
                 faprog = '----'
 
         derived_obstype = obstype
-        if obstype == 'flat' and exptime < 2.0:
+        if obstype == 'flat' and row['EXPTIME'] <= 10.0:
             derived_obstype = 'cteflat'
 
         if derived_obstype in expected_by_type.keys():
