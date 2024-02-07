@@ -407,6 +407,9 @@ class Spectra(object):
         #- __getitem__ differs from _get_slice as it has a single argument
         return self._get_slice(index)
 
+    def __len__(self):
+        """Return number of spectra (not number of unique targets)"""
+        return len(self.fibermap)
 
     def update(self, other):
         """
