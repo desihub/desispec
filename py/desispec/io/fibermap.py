@@ -40,7 +40,8 @@ from desispec.maskbits import fibermask
 # a pre-defined order.
 #
 # Units and descriptions should be kept in sync with column_descriptions.csv
-# in desidatamodel.
+# in desidatamodel, although the descriptions here are shortened due to
+# limitations on FITS header keyword comments.
 #
 # What about survey = 'special'?
 #
@@ -52,7 +53,7 @@ fibermap_columns = {'main': [('TARGETID',              'i8',                 '',
                              ('FIBERSTATUS',           'i4',                 '', 'Fiber status mask. 0=good'),
                              ('TARGET_RA',             'f8',              'deg', 'Barycentric right ascension in ICRS'),
                              ('TARGET_DEC',            'f8',              'deg', 'Barycentric declination in ICRS'),
-                             ('DESINAME',         (str, 22),                 '', 'Human-readable object name'),
+                             ('DESINAME',         (str, 22),                 '', 'Human readable identifier of a sky location'),
                              ('PMRA',                  'f4',        'mas yr^-1', 'Proper motion in the +RA direction'),
                              ('PMDEC',                 'f4',        'mas yr^-1', 'Proper motion in the +Dec direction'),
                              ('REF_EPOCH',             'f4',               'yr', 'Reference epoch for Gaia/Tycho astrometry'),
@@ -1180,13 +1181,13 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     fibermap.meta.clear()
     fibermap_hdu = fits.BinTableHDU(fibermap)
     fibermap_hdu.header.extend(fibermap_header, update=True)
-    fibermap_hdu = annotate_fibermap(fibermap_hdu, survey=survey)
+    fibermap_hdu = annotate_fibermap(fibermap_hdu, final_columns)
     fibermap_hdulist = fits.HDUList([fits.PrimaryHDU(), fibermap_hdu])
 
     return fibermap_hdulist
 
 
-def annotate_fibermap(fibermap, survey='main', extra_columns=None, checkonly=False):
+def annotate_fibermap(fibermap, columns, checkonly=False):
     """Add units and column descriptions to a fibermap HDU.
 
     There may be some conceptual code overlap with :func:`desiutil.annotate.annotate_fits`,
@@ -1197,10 +1198,8 @@ def annotate_fibermap(fibermap, survey='main', extra_columns=None, checkonly=Fal
     ----------
     fibermap : :class:`~astropy.io.fits.BinTableHDU`
         A fibermap HDU that has all data added except for units and column descriptions.
-    survey : :class:`str`, optional
-        Use the list of columns related to this survey.
-    extra_columns : :class:`list`, optional
-        In addition to the expected columns, annotate these additional columns.
+    columns : :class:`list`
+        A list of expected columns with units and descriptions, in final order.
         Each member of the list should be a tuple of ``(column_name, type, units, description)``.
     checkonly : :class:`bool`, optional
         Instead of modifying `fibermap`, check whether it already has
@@ -1214,62 +1213,54 @@ def annotate_fibermap(fibermap, survey='main', extra_columns=None, checkonly=Fal
     Raises
     ------
     ValueError
-        If `extra_columns` does not conform to the same structure as the fibermap
-        column data.
+        If `columns` does not conform to the expected fibermap column data structure.
     """
     tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8'}
     log = get_logger()
-    try:
-        fibermap_columns = fibermap_columns[survey]
-    except KeyError:
-        fibermap_columns = _set_fibermap_columns()[survey]
-    if extra_columns is not None:
-        if all([len(e) == 4 for e in extra_columns]):
-            fibermap_columns += extra_columns
-        else:
-            raise ValueError("extra_columns does not conform to fibermap column data!")
+    if any([len(e) != 4 for e in columns]):
+        raise ValueError("columns does not conform to requiredfibermap column data!")
     fh = fibermap.header
     fhc = fibermap.header.comments
-    if fh['TFIELDS'] == len(fibermap_columns):
+    if fh['TFIELDS'] == len(columns):
         log.info("Expected and found %d fibermap columns.", fh['TFIELDS'])
     else:
         log.error("Number of fields (TFIELDS==%d) != Number of expected fibermap columns (%d)!",
-                  fh['TFIELDS'], len(fibermap_columns))
+                  fh['TFIELDS'], len(columns))
     for i in range(1, fh['TFIELDS'] + 1):
         ttype = f"TTYPE{i:d}"
         tform = f"TFORM{i:d}"
         tunit = f"TUNIT{i:d}"
         col = fh[ttype]
-        assert col == fibermap_columns[i][0]
+        assert col == columns[i][0]
         if fh[tform] in tforms:
-            assert tforms[fh[tform]] == fibermap_columns[i][1]
+            assert tforms[fh[tform]] == columns[i][1]
         elif fh[tform].endswith('A'):
-            assert int(fh[tform][:-1]) == fibermap_columns[i][1][1]
+            assert int(fh[tform][:-1]) == columns[i][1][1]
         else:
             log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
                       fh[tform], col)
-        if fibermap_columns[i][2]:
+        if columns[i][2]:
             if tunit in fh:
-                if fh[tunit] == fibermap_columns[i][2]:
+                if fh[tunit] == columns[i][2]:
                     log.debug('Units for column %s match expected fibermap columns.', col)
                 else:
                     log.warning("Overriding units for column '%s': '%s' -> '%s'.",
-                                col, fh[tunit].strip(), fibermap_columns[i][2])
-                    fh[tunit] = (fibermap_columns[i][2], col + ' units')
+                                col, fh[tunit].strip(), columns[i][2])
+                    fh[tunit] = (columns[i][2], col + ' units')
             else:
-                log.info("Setting units for column %s to '%s'.", col, fibermap_columns[i][2])
-                fh.insert(tform, (tunit, fibermap_columns[i][2], col + ' units'), after=True)
+                log.info("Setting units for column %s to '%s'.", col, columns[i][2])
+                fh.insert(tform, (tunit, columns[i][2], col + ' units'), after=True)
         else:
             log.debug("Column %s is not supposed to have units, skipping.", col)
         if ttype in fhc:
-            if fhc[ttype] == fibermap_columns[i][3]:
+            if fhc[ttype] == columns[i][3]:
                 log.debug('Comment for column %s match expected fibermap columns.', col)
             else:
                 log.warning('Overriding comment for column %s!', col)
-                fh[ttype] = (col, fibermap_columns[i][3])
+                fh[ttype] = (col, columns[i][3])
         else:
             log.info('Setting comment for column %s.', col)
-            fh[ttype] = (col, fibermap_columns[i][3])
+            fh[ttype] = (col, columns[i][3])
     if not checkonly:
         fibermap.add_checksum()
     return fibermap
