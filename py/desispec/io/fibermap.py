@@ -1238,9 +1238,18 @@ def annotate_fibermap(fibermap, columns, checkonly=False):
             colunit = None
         assert col == columns[i][0]
         if coltype in tforms:
-            assert tforms[coltype] == columns[i][1]
+            if tforms[coltype] == columns[i][1]:
+                log.debug("Expected data type, %s, for column %s found.",
+                          columns[i][1], col)
+            else:
+                log.error("Unexpected data type, %s != %s, for column %s!",
+                          tforms[coltype], columns[i][1], col)
         elif coltype.endswith('A'):
-            assert int(coltype.replace('A', '')) == columns[i][1][1]
+            if int(coltype.replace('A', '')) == columns[i][1][1]:
+                log.debug("Expected string length, %d, for column %s found.", columns[i][1][1], col)
+            else:
+                log.error("Unexpected string length, %d != %d, for column %s found.",
+                          int(coltype.replace('A', '')), columns[i][1][1], col)
         else:
             log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
                       coltype, col)
