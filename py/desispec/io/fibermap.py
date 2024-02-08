@@ -119,7 +119,7 @@ fibermap_columns = {'main': [('TARGETID',              'i8',                 '',
 
 fibermap_comments = {'main': dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['main']])}
 #
-# This doesn't appear to be used.
+# This doesn't appear to be used. Can we remove this?
 #
 # fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
 
@@ -196,8 +196,9 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
 
     #- Fill in some values
     fibermap['FIBER'][:] = np.arange(specmin, specmin+nspec)
-    fibers_per_spectrograph = 500
-    ### fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
+    # Can we remove unused code?
+    # fibers_per_spectrograph = 500
+    # fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = load_focalplane()[0]
     fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
@@ -212,15 +213,16 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
     fibermap['LAMBDA_REF'][:]  = 5400.0
     fibermap['NUM_ITER'][:] = 2
     #- Set MW_TRANSMISSION_* to be slightly less than 1 to trigger dust correction code for testing
-    ### fibermap['MW_TRANSMISSION_G'][:] = 0.999
-    ### fibermap['MW_TRANSMISSION_R'][:] = 0.999
-    ### fibermap['MW_TRANSMISSION_Z'][:] = 0.999
+    # Can we remove unused code?
+    # fibermap['MW_TRANSMISSION_G'][:] = 0.999
+    # fibermap['MW_TRANSMISSION_R'][:] = 0.999
+    # fibermap['MW_TRANSMISSION_Z'][:] = 0.999
     fibermap['EBV'][:] = 0.001
     fibermap['PHOTSYS'][:] = 'S'
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
-    assert set(fibermap.keys()) == set([x[0] for x in columns])
+    assert set(fibermap.colnames) == set([x[0] for x in columns])
 
     return fibermap
 
