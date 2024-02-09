@@ -14,6 +14,7 @@ from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from . import iotime
 from .util import checkgzip, get_tempfilename
+from .fibermap import annotate_fibermap
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
@@ -72,7 +73,7 @@ def write_image(outfile, image, meta=None):
             fmhdu.name = 'FIBERMAP'
         else:
             fmhdu = fits.BinTableHDU(image.fibermap, name='FIBERMAP')
-
+        fmhdu = annotate_fibermap(fmhdu)
         hx.append(fmhdu)
 
     t0 = time.time()
