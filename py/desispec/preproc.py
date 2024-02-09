@@ -682,6 +682,21 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
 
     return badrows, active_col_val
 
+def find_masked_rows(mask, header, amp):
+    """
+    Find rows that are entirely masked on this amp
+
+    Args:
+        mask: 2D array of mask values; 0=good
+        header: dict-like header keywords (to look up amp regions)
+        amp: CCD amplifier 'A', 'B', 'C', or 'D'
+
+    Returns: boolean array of masked rows only for this amp (not entire CCD)
+    """
+    yy, xx = parse_sec_keyword(header['CCDSEC'+amp.upper()])
+    masked_rows = np.all(mask[yy,xx] != 0, axis=1)
+    return masked_rows
+
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=None,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
@@ -1038,6 +1053,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         # find rows impacted by a large cosmic charge deposit
         badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
+
+        # also mask overscan rows that are entirely masked in the active region
+        masked_rows = find_masked_rows(mask, header, amp)
+        num_masked_rows = np.sum(masked_rows)
+        log.info(f'{num_masked_rows} rows entirely masked on amp {amp} of camera {camera}')
+        badrows |= masked_rows
+
         if np.any(badrows) :
             log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
                 camera,amp,np.where(badrows)[0],active_col_val[badrows]))
