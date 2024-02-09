@@ -189,4 +189,5 @@ class TestIOFibermap(unittest.TestCase):
     def test_annotate_fibermap(self):
         """Test updating units and column descriptions in a fibermap HDU.
         """
-        pass
+        with self.assertRaises(ValueError) as e:
+            fibermap = annotate_fibermap(dict())
