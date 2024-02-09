@@ -73,7 +73,7 @@ def write_image(outfile, image, meta=None):
             fmhdu.name = 'FIBERMAP'
         else:
             fmhdu = fits.BinTableHDU(image.fibermap, name='FIBERMAP')
-        fmhdu = annotate_fibermap(fmhdu)
+        fmhdu = annotate_fibermap(fmhdu, survey=fmhdu.header['SURVEY'])
         hx.append(fmhdu)
 
     t0 = time.time()

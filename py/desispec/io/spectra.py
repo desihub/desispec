@@ -33,7 +33,7 @@ from .util import get_tempfilename
 from . import iotime
 
 from .frame import read_frame
-from .fibermap import fibermap_comments
+from .fibermap import annotate_fibermap
 
 from ..spectra import Spectra
 from ..spectra import stack as stack_spectra
@@ -91,13 +91,14 @@ def write_spectra(outfile, spec, units=None):
         hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
-    for i, colname in enumerate(fmap.dtype.names):
-        if colname in fibermap_comments:
-            key = "TTYPE{}".format(i+1)
-            name = hdu.header[key]
-            assert name == colname
-            comment = fibermap_comments[name]
-            hdu.header[key] = (name, comment)
+    # for i, colname in enumerate(fmap.dtype.names):
+    #     if colname in fibermap_comments:
+    #         key = "TTYPE{}".format(i+1)
+    #         name = hdu.header[key]
+    #         assert name == colname
+    #         comment = fibermap_comments[name]
+    #         hdu.header[key] = (name, comment)
+    hdu = annotate_fibermap(hdu, survey=hdu.header['SURVEY'], provenance='spectra')
 
     all_hdus.append(hdu)
 
@@ -111,13 +112,14 @@ def write_spectra(outfile, spec, units=None):
             hdu = fits.convenience.table_to_hdu(expfmap)
 
         # Add comments for exp_fibermap columns.
-        for i, colname in enumerate(expfmap.dtype.names):
-            if colname in fibermap_comments:
-                key = "TTYPE{}".format(i+1)
-                name = hdu.header[key]
-                assert name == colname
-                comment = fibermap_comments[name]
-                hdu.header[key] = (name, comment)
+        # for i, colname in enumerate(expfmap.dtype.names):
+        #     if colname in fibermap_comments:
+        #         key = "TTYPE{}".format(i+1)
+        #         name = hdu.header[key]
+        #         assert name == colname
+        #         comment = fibermap_comments[name]
+        #         hdu.header[key] = (name, comment)
+        hdu = annotate_fibermap(hdu, survey=hdu.header['SURVEY'], provenance='exp_fibermap')
 
         all_hdus.append(hdu)
 
@@ -282,7 +284,7 @@ def read_spectra(
         if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
             exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
             exp_rows = np.where(np.isin(exp_targetids, file_targetids))[0]
-        
+
     if select_columns is None:
         select_columns = dict()
 
