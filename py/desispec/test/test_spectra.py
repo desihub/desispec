@@ -107,6 +107,7 @@ class TestSpectra(unittest.TestCase):
         self.efmap1 = vstack([self.fmap1, self.fmap1])
 
         fmap = empty_fibermap(self.nspec)
+        fmap.meta['SURVEY'] = 'main'  # Maybe do this in empty_fibermap instead?
         fmap = add_columns(fmap,
                            ['NIGHT', 'EXPID', 'TILEID'],
                            [np.int32(0), np.int32(0), np.int32(0)],
