@@ -106,6 +106,8 @@ class TestIOFibermap(unittest.TestCase):
         self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
         self.assertTrue(np.all(fm3['PETAL_LOC'] == [0,0,0,0,0,1,1,1,1,1]))
 
+        self.assertListEqual(fm3.colnames, [c[0] for c in fibermap_columns['main'] if c[4] == 'empty'])
+
     def test_fibermap_rw(self):
         """Test reading and writing fibermap files.
         """
