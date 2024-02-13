@@ -194,12 +194,16 @@ class TestSpectra(unittest.TestCase):
 
         self.verify(spec, self.fmap1)
 
+        spec.fibermap.meta['BLAT'] = 'foo'
+
         path = write_spectra(self.fileio, spec)
         assert(path == os.path.abspath(self.fileio))
 
         # read back in and verify
         comp = read_spectra(self.fileio)
         self.verify(comp, self.fmap1)
+        self.assertIn('BLAT', comp.fibermap.meta)
+        self.assertEqual(comp.fibermap.meta['BLAT'], 'foo')
 
         # test writing/reading with scores
         spec.scores = self.scores

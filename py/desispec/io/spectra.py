@@ -29,7 +29,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
-from .util import get_tempfilename
+from .util import get_tempfilename, addkeys
 from . import iotime
 
 from .frame import read_frame
@@ -325,6 +325,8 @@ def read_spectra(
                         copy=True,
                     ).as_array()
                 )
+                addkeys(fmap.meta, hdus[h].read_header())
+
         elif name == "EXP_FIBERMAP":
             if name not in skip_hdus:
                 expfmap = encode_table(
@@ -333,6 +335,8 @@ def read_spectra(
                         copy=True,
                     ).as_array()
                 )
+                addkeys(expfmap.meta, hdus[h].read_header())
+
         elif name == "SCORES":
             if name not in skip_hdus:
                 scores = encode_table(
@@ -341,6 +345,8 @@ def read_spectra(
                         copy=True,
                     ).as_array()
                 )
+                addkeys(scores.meta, hdus[h].read_header())
+
         elif name == "EXTRA_CATALOG":
             if name not in skip_hdus:
                 extra_catalog = encode_table(
@@ -351,6 +357,7 @@ def read_spectra(
                         copy=True,
                     ).as_array()
                 )
+                addkeys(extra_catalog.meta, hdus[h].read_header())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
