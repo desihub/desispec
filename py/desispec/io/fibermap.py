@@ -238,7 +238,7 @@ def empty_fibermap(nspec, specmin=0, survey='main', provenance='empty'):
     fibermap['PHOTSYS'][:] = 'S'
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
-    # Add survey to meta?
+    fibermap.meta['SURVEY'] = survey
 
     assert set(fibermap.colnames) == set([x[0] for x in columns])
 
@@ -1255,7 +1255,7 @@ def annotate_fibermap(fibermap, survey='main'):
         col = fh[ttype]
         try:
             row = all_columns[column_names.index(col)]
-        except IndexError:
+        except ValueError:
             log.error("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
             continue
         coltype = fh[tform]
