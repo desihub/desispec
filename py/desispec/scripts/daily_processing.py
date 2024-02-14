@@ -21,7 +21,7 @@ from desispec.workflow.proctable import default_obstypes_for_proctable, \
                                         get_processing_table_path, \
                                         get_processing_table_name, \
                                         erow_to_prow, default_prow
-from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
+from desispec.workflow.processing import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job, \
                                         submit_tilenight_and_redshifts

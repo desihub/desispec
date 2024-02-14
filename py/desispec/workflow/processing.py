@@ -1,5 +1,5 @@
 """
-desispec.workflow.procfuncs
+desispec.workflow.processing
 ===========================
 
 """

@@ -19,7 +19,7 @@ from desispec.workflow.exptable import get_exposure_table_path, \
 from desispec.workflow.proctable import default_obstypes_for_proctable, get_processing_table_path, \
                                         get_processing_table_name, erow_to_prow, table_row_to_dict, \
                                         default_prow
-from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
+from desispec.workflow.processing import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, \
                                         checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete

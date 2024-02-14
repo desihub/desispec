@@ -25,7 +25,7 @@ from desispec.workflow.timing import what_night_is_it, during_operating_hours
 from desispec.workflow.exptable import get_last_step_options
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
     erow_to_prow, default_prow, table_row_to_dict
-from desispec.workflow.procfuncs import define_and_assign_dependency, \
+from desispec.workflow.processing import define_and_assign_dependency, \
                                          create_and_submit, \
                                          submit_tilenight_and_redshifts, \
                                          generate_calibration_dict, \

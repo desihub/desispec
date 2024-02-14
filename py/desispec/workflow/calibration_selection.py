@@ -15,7 +15,7 @@ import subprocess
 from copy import deepcopy
 
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
-from desispec.workflow.procfuncs import generate_calibration_dict
+from desispec.workflow.processing import generate_calibration_dict
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
                                         get_ztile_relpath, \
                                         get_ztile_script_suffix

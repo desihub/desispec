@@ -683,7 +683,7 @@ desispec API
 .. automodule:: desispec.workflow.proc_dashboard_funcs
     :members:
 
-.. automodule:: desispec.workflow.procfuncs
+.. automodule:: desispec.workflow.processing
     :members:
 
 .. automodule:: desispec.workflow.proctable
