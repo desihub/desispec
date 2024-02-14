@@ -1,6 +1,6 @@
 """
 desispec.workflow.science_selection
-===========================
+===================================
 
 """
 import sys, os, glob

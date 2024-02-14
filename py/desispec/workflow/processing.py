@@ -1,6 +1,6 @@
 """
 desispec.workflow.processing
-===========================
+============================
 
 """
 import sys, os, glob
@@ -882,10 +882,10 @@ def generate_calibration_dict(ptable):
 
     Returns:
         tuple: A tuple containing:
-        * calibjobs, dict. Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
-          'psfnight', 'nightlyflat', and 'linkcal'. Each key corresponds to a
-          Table.Row or None. The table.Row() values are for the corresponding
-          calibration job.
+            calibjobs, dict. Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
+            'psfnight', 'nightlyflat', and 'linkcal'. Each key corresponds to a
+            Table.Row or None. The table.Row() values are for the corresponding
+            calibration job.
     """
     log = get_logger()
     calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
