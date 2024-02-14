@@ -12,7 +12,7 @@ from shutil import rmtree
 import numpy as np
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, Column
 import fitsio
 from desiutil.annotate import check_comment_length
 
@@ -222,4 +222,26 @@ class TestIOFibermap(unittest.TestCase):
         #
         mock_log().warning.assert_has_calls([call("Overriding units for column '%s': '%s' -> '%s'.", 'PMRA', 'mas yr-1', 'mas yr^-1'),
                                              call("Overriding units for column '%s': '%s' -> '%s'.", 'PMDEC', 'mas yr-1', 'mas yr^-1')])
-
+        #
+        # Test with alternate survey
+        #
+        fibermap = empty_fibermap(500, survey='cmx')
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+            fibermap_hdu = fits.BinTableHDU(fibermap)
+        fibermap_hdu = annotate_fibermap(fibermap_hdu, survey='cmx')
+        self.assertEqual(fibermap_hdu.header['TTYPE58'], 'CMX_TARGET')
+        self.assertEqual(fibermap_hdu.header.comments['TTYPE58'], 'Target selection bitmask for commissioning')  # CMX_TARGET
+        #
+        # Test with unexpected column
+        #
+        fibermap = empty_fibermap(500)
+        unex = Column(np.arange(500), name='UNEXPECTED')
+        fibermap.add_column(unex, index=2)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+            fibermap_hdu = fits.BinTableHDU(fibermap)
+        fibermap_hdu = annotate_fibermap(fibermap_hdu)
+        self.assertEqual(fibermap_hdu.header['TTYPE3'], 'UNEXPECTED')
+        self.assertEqual(fibermap_hdu.header.comments['TTYPE3'], '')
+        mock_log().error.assert_called_once_with('Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.', 'UNEXPECTED')
