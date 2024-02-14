@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.scripts.exposuretable import create_exposure_tables
+
+
+def get_parser():
+    """
+    Creates an ArgumentParser object for the desi_update_exposure_table script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+
+    parser.add_argument('-n', '--night', type=int,
+                        help='8 digit night, e.g. 20200314, of data to run on. '
+                             'If None, it runs on the current night.')
+    parser.add_argument('-s', '--specprod', type=str,
+                        help='The name of the current production. If used, this '
+                             'will overwrite the SPECPROD environment variable.')
+    parser.add_argument('--exp-table-path', type=str,
+                        help='Full path to where the exposure tables are stored, '
+                             'WITHOUT the monthly directory included.')
+    parser.add_argument('--path_to_data', type=str,
+                        help='Path to the raw data.')
+    parser.add_argument('--exp_obstypes', type=str,
+                        help='Exposure OBSTYPE(s) separated by commas.')
+    parser.add_argument('-c', '--camword', type=str,
+                        help='Camword that alters the set of cameras for processing.')
+    parser.add_argument('--badcamword', type=str,
+                        help='Camword that will be removed from the camword if '
+                             'given, or the camword inferred from the data if camword is not given.')
+    parser.add_argument('--badamps', type=str,
+                        help='Comma separated list of bad amplifiers that should '
+                             'not be processed.')
+    parser.add_argument('--tab-filetype', type=str,
+                        help='File extension (without the \'.\') of the exposure '
+                             'and processing tables.')
+    parser.add_argument('--exps-to-ignore', nargs='+', type=int,
+                        help='List of exposure id\'s that should not be processed.')
+    parser.add_argument('--dry-run-level', type=int, default=0,
+                        help='Simulated run level. 1: scripts will be written '
+                             'or submitted. 2: scripts will not be written or'
+                             ' submitted. Default is 0 (false).')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='True if you want more verbose output, '
+                             'false otherwise.')
+
+    return parser
+
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+
+    create_exposure_tables(**args.__dict__)

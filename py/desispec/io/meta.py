@@ -118,6 +118,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
+    month = str(night)[:-2]
     location = dict(
         #
         # Raw data.
@@ -128,6 +129,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # Top level
+        exposure_table = '{specprod_dir}/exposure_tables/{month}/exposure_table_{night}.csv',
+        processing_table = '{specprod_dir}/processing_tables/processing_table_{specprod}-{night}.csv',
+        unprocessed_table = '{specprod_dir}/processing_tables/unprocessed_table_{specprod}-{night}.csv',
+        override = '{specprod_dir}/exposure_tables/{month}/override_{night}.csv',
         exposures = '{specprod_dir}/exposures-{specprod}.fits',
         tiles = '{specprod_dir}/tiles-{specprod}.fits',
         exposures_csv = '{specprod_dir}/exposures-{specprod}.csv',
@@ -232,7 +237,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
         ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
         ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
     )
+    ## aliases
     location['desi'] = location['raw']
+    location['exptable'] = location['exposure_table']
+    location['proctable'] = location['processing_table']
+    location['unproctable'] = location['unprocessed_table']
 
     #- default group is "cumulative" for tile-based files
     if groupname is None and tile is not None and filetype in (

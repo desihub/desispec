@@ -230,7 +230,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     arcs, flats, sciences, calibjobs, curtype, lasttype, \
     curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
     do_bias = ('bias' in procobstypes or 'dark' in procobstypes)
-
+    
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):

@@ -300,3 +300,26 @@ def any_jobs_not_complete(statuses, termination_states=None):
     if termination_states is None:
         termination_states = get_termination_states()
     return np.any([status not in termination_states for status in statuses])
+
+# def any_jobs_failed(statuses, termination_states=None):
+#     """
+#     Returns True if any of the job statuses in the input column of the
+#     processing table, statuses, are not complete (as based on the list of
+#     acceptable final states, termination_states, given as an argument. These
+#     should be states that are viewed as final, as opposed to job states
+#     that require resubmission.
+#
+#     Args:
+#         statuses, Table.Column or list or np.array. The statuses in the
+#             processing table "STATUS". Each element should be a string.
+#         termination_states, list or np.array. Each element should be a string
+#             signifying a state that is returned by the Slurm scheduler that
+#             should be deemed terminal state.
+#
+#     Returns:
+#         bool. True if any of the statuses of the jobs given in statuses are NOT a member of the termination states.
+#               Otherwise returns False.
+#     """
+#     if termination_states is None:
+#         termination_states = get_termination_states()
+#     return np.any([status not in termination_states for status in statuses])

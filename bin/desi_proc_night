@@ -6,11 +6,12 @@ import argparse
 import os, sys
 from desispec.scripts.proc_night import proc_night
 
-def parse_args():  # options=None):
+def parse_args():
     """
-    Creates an arguments parser for the desi run production
+    Creates an arguments parser for desi_proc_night to be given to scripts.proc_night
     """
-    parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
+    parser = argparse.ArgumentParser(description="Submit data for processing "
+                                                 "with the DESI data pipeline.")
 
     parser.add_argument("-n","--night", type=int, required=True, help="The night you want processed.")
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
@@ -29,7 +30,7 @@ def parse_args():  # options=None):
     parser.add_argument("--surveys", type=str, required=False, default=None,
                         help="Comma separated list of surveys to include (e.g. sv1,sv3 or main); "+
                              "use --proc-obstypes to filter out arcs/flats if desired")
-    parser.add_argument("--laststeps", type=str, required=False, default=None,
+    parser.add_argument("--science-laststeps", type=str, required=False, default=None,
                         help="Comma separated list of LASTSTEP's to process "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
                              + "by default we only process 'all'.")
@@ -89,9 +90,14 @@ def parse_args():  # options=None):
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")
     parser.add_argument("--use-specter", action="store_true",
                         help="Use specter. Default is to use gpu_specter")
-    parser.add_argument("--do-cte-flat", action="store_true",
-                        help="If flag set then one second flat exposures are "
+    parser.add_argument("--do-cte-flats", action="store_true",
+                        help="If flag set then cte flat exposures are "
                              + "processed for cte identification.")
+    parser.add_argument("--dont-require-cals", action="store_true",
+                        help="If set then the code requires either a valid set "
+                             + "of calibrations or a valid override file to link"
+                             + " to calibrations in order to proceed with "
+                             + "science processing.")
 
     args = parser.parse_args()
 
@@ -109,15 +115,17 @@ def parse_args():  # options=None):
     if args.laststeps is not None:
         args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
 
-    if args.use_tilenight is None:
-        if 'NERSC_HOST' in os.environ and os.environ['NERSC_HOST'] == 'cori':
-            args.use_tilenight = False
+    if args.z_submit_types is None:
+        pass
+    else:
+        if args.z_submit_types.lower() in ['false', 'none']:
+            args.z_submit_types = None
         else:
-            args.use_tilenight = True
+            args.z_submit_types = [ztype.strip().lower() for ztype in
+                                   args.z_submit_types.split(',')]
 
     return args
 
 if __name__ == '__main__':
     args = parse_args()
-
-    sys.exit(proc_night(**args.__dict__))
+    proc_night(**args.__dict__)

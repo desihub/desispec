@@ -13,10 +13,8 @@ import fitsio
 import desispec.io
 import desiutil
 from desispec.io import findfile
-from desispec.io.meta import get_desi_root_readonly
-from desispec.io.util import create_camword, decode_camword, parse_cameras, \
+from desispec.io.util import decode_camword, parse_cameras, \
     get_tempfilename
-# from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 
 from . import batch
@@ -134,7 +132,7 @@ def add_desi_proc_tilenight_terms(parser):
     """
     parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
     parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
-    parser.add_argument("--laststeps", type=str, default=None,
+    parser.add_argument("--science_laststeps", type=str, default=None,
                         help="Comma separated list of LASTSTEP values "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
                              + "by default, exposures with LASTSTEP "
@@ -143,6 +141,7 @@ def add_desi_proc_tilenight_terms(parser):
                              + "will not be processed at all.")
 
     return parser
+
 
 def assign_mpi(do_mpi, do_batch, log):
     """
@@ -372,7 +371,7 @@ def log_timer(timer, timingfile=None, comm=None):
             tmax = steptiming['duration.max']
             log.info(f'  {stepname:16s} {tmax:.2f}')
 
-def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, system_name=None):
+def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, system_name=None):
     """
     Determine the resources that should be assigned to the batch script given what
     desi_proc needs for the given input information.
@@ -380,8 +379,6 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     Args:
         ncameras (int): number of cameras to be processed
         jobdesc (str): type of data being processed
-        queue (str): the queue at NERSC to be submitted to. 'realtime' will force
-            restrictions on number of nodes.
         nexps (int, optional): the number of exposures processed in this step
         force_runtime (int, optional): the amount of runtime in minutes to allow for the script. Should be left
             to default heuristics unless needed for some reason.
@@ -460,6 +457,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         nodes = 1
         runtime = 100
         ncores = nodes * config['cores_per_node']
+    elif jobdesc == 'LINKCAL':
+        nodes, ncores = 1, 1
+        runtime = 5.
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -557,7 +557,9 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
         pathname: str, the default script name for a desi_proc batch script file
     """
     camword = parse_cameras(cameras)
-    if type(exp) is not str:
+    if jobdesc.lower() == 'linkcal':
+        expstr = ""
+    elif type(exp) is not str:
         if exp is None:
             expstr = 'none'
         elif np.isscalar(exp):
@@ -567,10 +569,15 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
             expstr = '{:08d}'.format(exp[0])
     else:
         expstr = exp
-    jobname = '{}-{}-{}-{}'.format(jobdesc.lower(), night, expstr, camword)
+
+    if expstr != "":
+        expstr = "-" + expstr
+
+    jobname = f'{jobdesc.lower()}-{night}{expstr}-{camword}'
     return jobname
 
-def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=None):
+def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras,
+                                      reduxdir=None):
     """
     Returns the default directory location to store a batch script file given a night
 
@@ -584,7 +591,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     Returns:
         pathname: str, the default location and script name for a desi_proc batch script file
     """
-    path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
+    path = get_desi_proc_batch_file_path(night, reduxdir=reduxdir)
     name = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
     return os.path.join(path, name)
 
@@ -603,6 +610,120 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
     name = get_desi_proc_tilenight_batch_file_name(night,tileid)
     return os.path.join(path, name)
+
+def create_linkcal_batch_script(newnight, refnight, queue, cameras=None,
+                                  runtime=None, batch_opts=None, timingfile=None,
+                                  batchdir=None, jobname=None, cmd=None,
+                                  system_name=None):
+    """
+    Generate a batch script to be submitted to the slurm scheduler to run
+    desi_link_calibnight.
+
+    Args:
+        newnight (str or int): The night in calibnight where the links will
+        refnight (str or int): The night with a valid set of calibrations
+            be created.
+        queue (str): Queue to be used.
+        cameras (str or list of str): List of cameras to include in the processing.
+        runtime (str, optional): Timeout wall clock time.
+        batch_opts (str, optional): Other options to give to the slurm batch scheduler (written into the script).
+        timingfile (str, optional): Specify the name of the timing file.
+        batchdir (str, optional): Specify where the batch file will be written.
+        jobname (str, optional): Specify the name of the slurm script written.
+        cmd (str, optional): Complete command as would be given in terminal to
+            run desi_link_calibnight.
+        system_name (str, optional): name of batch system, e.g. cori-haswell, cori-knl
+
+    Returns:
+        scriptfile: the full path name for the script written.
+
+    Note:
+        batchdir and jobname can be used to define an alternative pathname, but may not work with assumptions in desi_proc.
+        These optional arguments should be used with caution and primarily for debugging.
+    """
+    jobdesc = 'linkcal'
+
+    if cameras is None or np.isscalar(cameras):
+        camword = cameras
+        cameras = decode_camword(camword)
+
+    if batchdir is None:
+        batchdir = get_desi_proc_batch_file_path(newnight)
+
+    os.makedirs(batchdir, exist_ok=True)
+
+    if jobname is None:
+        jobname = get_desi_proc_batch_file_name(night=newnight, exp="",
+                                                jobdesc=jobdesc, cameras=cameras)
+
+    if timingfile is None:
+        timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        timingfile = os.path.join(batchdir, timingfile)
+
+    scriptfile = os.path.join(batchdir, jobname + '.slurm')
+
+    ## If system name isn't specified, pick it based upon jobdesc
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=jobdesc)
+
+    batch_config = batch.get_config(system_name)
+    threads_per_core = batch_config['threads_per_core']
+    gpus_per_node = batch_config['gpus_per_node']
+    ncameras = len(cameras)
+
+
+    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(),
+                                                 forced_runtime=runtime,
+                                                 system_name=system_name)
+
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
+
+    with open(scriptfile, 'w') as fx:
+        fx.write('#!/bin/bash -l\n\n')
+        fx.write('#SBATCH -N {}\n'.format(nodes))
+        fx.write('#SBATCH --qos {}\n'.format(queue))
+        for opts in batch_config['batch_opts']:
+            fx.write('#SBATCH {}\n'.format(opts))
+        if batch_opts is not None:
+            fx.write('#SBATCH {}\n'.format(batch_opts))
+        if system_name == 'perlmutter-gpu':
+            # perlmutter-gpu requires projects name with "_g" appended
+            fx.write('#SBATCH --account desi_g\n')
+        else:
+            fx.write('#SBATCH --account desi\n')
+        fx.write('#SBATCH --job-name {}\n'.format(jobname))
+        fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
+        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
+        fx.write('#SBATCH --exclusive\n')
+
+        fx.write('\n')
+
+        fx.write(f'# {jobdesc} with {ncameras} cameras\n')
+        fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
+
+        fx.write('echo Starting at $(date)\n')
+
+        mps_wrapper=''
+        fx.write("export OMP_NUM_THREADS=1\n")
+
+        fx.write(f'\n# Link {refnight=} to {newnight=}\n')
+        srun=(f'srun -N {nodes} -n {ncores} -c {threads_per_core} '
+              + f'--cpu-bind=cores {cmd}')
+        fx.write('echo Running {}\n'.format(srun))
+        fx.write('{}\n'.format(srun))
+
+        fx.write('\nif [ $? -eq 0 ]; then\n')
+        fx.write('  echo SUCCESS: done at $(date)\n')
+        fx.write('else\n')
+        fx.write('  echo FAILED: done at $(date)\n')
+        fx.write('  exit 1\n')
+        fx.write('fi\n')
+
+    print('Wrote {}'.format(scriptfile))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
+
+    return scriptfile
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
@@ -895,7 +1016,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
         use_specter: bool. Use classic specter instead of gpu_specter for extractions
         no_gpu: bool. Do not use GPU even if available
-        laststeps: list of str. A list of laststeps to pass as the laststeps argument to tilenight
+        science_laststeps: list of str. A list of science_laststeps to pass as the science_laststeps argument to tilenight
         cameras: str, must be camword.
 
     Returns:
@@ -985,7 +1106,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         elif use_specter:
             cmd += f' --use-specter'
         if laststeps is not None:
-            cmd += f' --laststeps="{",".join(laststeps)}"'
+            cmd += f' --science_laststeps="{",".join(laststeps)}"'
 
         cmd += f' --timingfile {timingfile}'
 

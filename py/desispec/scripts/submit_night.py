@@ -76,7 +76,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             remaining cameras not found to exist.
         tiles (array-like, optional): Only submit jobs for these TILEIDs.
         surveys (array-like, optional): Only submit science jobs for these surveys (lowercase)
-        laststeps (array-like, optional): Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
+        laststeps (array-like, optional): Only submit jobs for exposures with LASTSTEP in these science_laststeps (lowercase)
         use_tilenight (bool, optional): Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
             and poststdstar steps for science exposures.
         all_tiles (bool, optional): Default is False. Set to NOT restrict to completed tiles as defined by
@@ -151,7 +151,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
-    ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
+    ## If science_laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     tilenight_laststeps = laststeps
     if laststeps is None:
         laststeps = ['all',]
@@ -159,7 +159,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         laststep_options = get_last_step_options()
         for laststep in laststeps:
             if laststep not in laststep_options:
-                raise ValueError(f"Couldn't understand laststep={laststep} in laststeps={laststeps}.")
+                raise ValueError(f"Couldn't understand laststep={laststep} in science_laststeps={laststeps}.")
     print(f"Processing exposures with the following LASTSTEP's: {laststeps}")
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing

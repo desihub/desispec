@@ -10,6 +10,9 @@ import numpy as np
 import glob
 import json
 
+import yaml
+
+from desispec.io.meta import findfile
 from desiutil.log import get_logger
 ## Give a shortcut name to os.path.join
 pathjoin = os.path.join
@@ -83,7 +86,7 @@ def get_json_dict(reqpath):
         reqpath, str. The full pathname including file name of the json file. A relative path can be given, so long
                       as it is accurate based on the current working directory.
 
-    Retrun:
+    Returns:
         req_dict, dict. A dictionary with keys and values defined by the json file.
     """
     req_dict = {}
@@ -92,6 +95,40 @@ def get_json_dict(reqpath):
             req_dict = json.load(req)
     return req_dict
 
+def load_override_file(filepathname=None, night=None):
+    """
+    Loads the spectro processing "override" yaml file that documents special
+    processing decisions to be made for a particular night. Currently
+    only calibration linking to earlier nights is implemented.
+
+    Args:
+        filepathname, str. The full pathname including file name of the yaml
+            override file.
+        night, int. The night of processing that you want override information
+            for.
+    Returns:
+        overrides, dict. A dictionary with keys and values defined by the yaml
+            file.
+    """
+    log = get_logger()
+    if filepathname is None and night is None:
+        err = "Either filepath or night must be specified"
+        log.error(err)
+        raise ValueError(err)
+    elif filepathname is not None and night is not None:
+        log.info("Both filepath and night given to load_override_file, "
+                 + "using filepathname.")
+    elif night is not None:
+        filepathname = findfile('override', night=int(night))
+
+    overrides = {}
+    if os.path.isfile(filepathname):
+        with open(filepathname, 'r') as override_file:
+            overrides = yaml.safe_load(override_file)
+    else:
+        log.warning(f"Override file {filepathname} doesn't exist. Returning"
+                    + " and empty dictionary.")
+    return overrides
 
 def define_variable_from_environment(env_name, var_descr):
     """

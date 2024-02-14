@@ -12,7 +12,6 @@ import numpy as np
 import time, datetime
 from collections import OrderedDict
 import subprocess
-from copy import deepcopy
 
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
@@ -21,13 +20,14 @@ from desispec.workflow.redshifts import get_ztile_script_pathname, \
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
-                                              create_desi_proc_batch_script, \
-                                              get_desi_proc_batch_file_path, \
-                                              get_desi_proc_tilenight_batch_file_pathname, \
-                                              create_desi_proc_tilenight_batch_script
-from desispec.workflow.utils import pathjoin, sleep_and_report
+    create_desi_proc_batch_script, \
+    get_desi_proc_batch_file_path, \
+    get_desi_proc_tilenight_batch_file_pathname, \
+    create_desi_proc_tilenight_batch_script, create_linkcal_batch_script
+from desispec.workflow.utils import pathjoin, sleep_and_report, \
+    load_override_file
 from desispec.workflow.tableio import write_table
-from desispec.workflow.proctable import table_row_to_dict
+from desispec.workflow.proctable import table_row_to_dict, erow_to_prow
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -58,7 +58,21 @@ def night_to_starting_iid(night=None):
     internal_id = (night - 20000000) * 1000
     return internal_id
 
+class ProcessingParams():
+    def __init__(self, dry_run_level=0, queue='realtime',
+                 reservation=None, strictly_successful=True,
+                 check_for_outputs=True,
+                 resubmit_partial_complete=True,
+                 system_name='perlmutter', use_specter=True):
 
+        self.dry_run_level = dry_run_level
+        self.system_name = system_name
+        self.queue = queue
+        self.reservation = reservation
+        self.strictly_successful = strictly_successful
+        self.check_for_outputs = check_for_outputs
+        self.resubmit_partial_complete = resubmit_partial_complete
+        self.use_specter = use_specter
 
 #################################################
 ############ Script Functions ###################
@@ -196,9 +210,10 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
                  f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
     return prow
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
-                      strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
-                      system_name=None,use_specter=False,laststeps=None):
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
+                      joint=False, strictly_successful=False,
+                      check_for_outputs=True, resubmit_partial_complete=True,
+                      system_name=None, use_specter=False, laststeps=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -225,7 +240,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated to reflect
@@ -242,14 +257,43 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint
         if prow['STATUS'].upper() == 'COMPLETED':
             return prow
 
-    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name, use_specter=use_specter,laststeps=laststeps)
-    prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
-    ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond to the pruned values. But we want to
+    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint,
+                               system_name=system_name, use_specter=use_specter,
+                               laststeps=laststeps)
+    prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run,
+                               strictly_successful=strictly_successful)
+
+    ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond
+    ## to the pruned values. But we want to
     ## retain the full job's value, so get those from the old job.
     if resubmit_partial_complete:
         prow['PROCCAMWORD'] = orig_prow['PROCCAMWORD']
         prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
+
+def desi_link_calibnight_command(prow):
+    """
+    Wrapper script that takes a processing table row (or dictionary with
+    REFNIGHT, NIGHT, PROCCAMWORD defined) and determines the proper command
+    line call to link data defined by the input row/dict.
+
+    Args:
+        prow (Table.Row or dict): Must include keyword accessible definitions
+            for 'NIGHT', 'REFNIGHT', and 'PROCCAMWORD'.
+
+    Returns:
+        str: The proper command to be submitted to desi_link_calibnight
+            to process the job defined by the prow values.
+    """
+    cmd = 'desi_link_calibnight'
+    if 'REFNIGHT' not in prow:
+        cmd += f' --refnight=unknown'
+    else:
+        cmd += f' --refnight={prow["REFNIGHT"]}'
+    cmd += f' --newnight={prow["NIGHT"]}'
+    cmd += f'--cameras={prow["PROCCAMWORD"]}'
+
+    return cmd
 
 def desi_proc_command(prow, system_name, use_specter=False, queue=None):
     """
@@ -301,7 +345,8 @@ def desi_proc_joint_fit_command(prow, queue=None):
         queue (str): The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
 
     Returns:
-        str: The proper command to be submitted to desi_proc_joint_fit to process the job defined by the prow values.
+        str: The proper command to be submitted to desi_proc_joint_fit
+            to process the job defined by the prow values.
     """
     cmd = 'desi_proc_joint_fit'
     cmd += ' --batch'
@@ -321,7 +366,9 @@ def desi_proc_joint_fit_command(prow, queue=None):
         cmd += f' -e {expid_str}'
     return cmd
 
-def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None, use_specter=False, laststeps=None):
+
+def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
+                        system_name=None, use_specter=False, laststeps=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -337,7 +384,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
@@ -375,6 +422,29 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
                 log.info(f"Returned scriptnames were {scripts}")
             else:
                 scriptpathname = scripts[0]
+    elif prow['JOBDESC'] == 'linkcal':
+        if dry_run > 1:
+            scriptpathname = batch_script_name(prow)
+            log.info("Output file would have been: {}".format(scriptpathname))
+            cmd = desi_link_calibnight_command(prow)
+            log.info("Command to be run: {}".format(cmd.split()))
+        else:
+            if 'REFNIGHT' not in prow:
+                override_pathname = findfile('override', night=int(prow['NIGHT']))
+                ## Load calibration_override_file
+                overrides = load_override_file(filepathname=override_pathname)
+                if 'calibration' in overrides and 'refnight' in overrides['calibration']:
+                    if isinstance(prow, Table.Row):
+                        prow = table_row_to_dict(prow)
+                    prow['REFNIGHT'] = overrides['calibration']['refnight']
+            cmd = desi_link_calibnight_command(prow)
+            log.info("Running: {}".format(cmd.split()))
+            scriptpathname = create_linkcal_batch_script(newnight=prow['NIGHT'],
+                                                        refnight=prow['REFNIGHT'],
+                                                        cameras=prow['PROCCAMWORD'],
+                                                        queue=queue,
+                                                        cmd=cmd,
+                                                        system_name=system_name)
     else:
         if prow['JOBDESC'] != 'tilenight':
             if joint:
@@ -488,7 +558,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
         script_path = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                         night=prow['NIGHT'], expid=np.min(prow['EXPID']))
-        jobname = os.path.split(script_path)[-1]
+        jobname = os.path.basename(script_path)
     else:
         batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
         jobname = batch_script_name(prow)
@@ -577,8 +647,12 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
             dependency = calibjobs['psfnight']
         elif calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        else:
+        elif calibjobs['nightlybias'] is not None:
             dependency = calibjobs['nightlybias']
+        elif calibjobs['badcol'] is not None:
+            dependency = calibjobs['badcol']
+        else:
+            dependency = calibjobs['linkcal']
         if not use_tilenight:
             prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
@@ -586,8 +660,12 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
             dependency = calibjobs['psfnight']
         elif calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        else:
+        elif calibjobs['nightlybias'] is not None:
             dependency = calibjobs['nightlybias']
+        elif calibjobs['badcol'] is not None:
+            dependency = calibjobs['badcol']
+        else:
+            dependency = calibjobs['linkcal']
     elif prow['OBSTYPE'] == 'arc':
         if calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
@@ -596,8 +674,18 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
         elif calibjobs['badcol'] is not None:
             dependency = calibjobs['badcol']
         else:
-            # arc job, but no ZEROs or DARKs to process ahead of time
-            dependency = None
+            dependency = calibjobs['linkcal']
+    elif prow['JOBDESC'] in ['badcol', 'nightlybias', 'ccdcalib']:
+        dependency = calibjobs['linkcal']
+    elif prow['OBSTYPE'] == 'dark':
+        if calibjobs['ccdcalib'] is not None:
+            dependency = calibjobs['ccdcalib']
+        elif calibjobs['nightlybias'] is not None:
+            dependency = calibjobs['nightlybias']
+        elif calibjobs['badcol'] is not None:
+            dependency = calibjobs['badcol']
+        else:
+            dependency = calibjobs['linkcal']
     else:
         dependency = None
 
@@ -779,10 +867,10 @@ def parse_previous_tables(etable, ptable, night):
            curtile, lasttile,\
            internal_id
 
-def generate_calibration_dict_and_iid(ptable, night):
+def generate_calibration_dict(ptable):
     """
     This takes in a processing table and regenerates the working memory calibration
-    dictionary for dependency tracking and internal ID for future job assignment
+    dictionary for dependency tracking
 
     Used by the daily processing to define most of its state-ful variables into working memory.
     If the processing table is empty, these are simply declared and returned for use.
@@ -791,41 +879,26 @@ def generate_calibration_dict_and_iid(ptable, night):
 
     Args:
         ptable, Table, Processing table of all exposures that have been processed.
-        night, str or int, the night the data was taken.
 
     Returns:
         tuple: A tuple containing:
-        * calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'badcol', 'psfnight'
-          and 'nightlyflat'. Each key corresponds to a Table.Row or
-          None. The table.Row() values are for the corresponding
+        * calibjobs, dict. Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
+          'psfnight', 'nightlyflat', and 'linkcal'. Each key corresponds to a
+          Table.Row or None. The table.Row() values are for the corresponding
           calibration job.
-        * internal_id, int, an internal identifier unique to each job. Increments with each new job. This
-          is the latest unassigned value.
     """
     log = get_logger()
-    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None, 'psfnight': None,
-                 'nightlyflat': None}
+    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
+                 'psfnight': None, 'nightlyflat': None, 'linkcal': None}
 
-    if len(ptable) > 0:
-        prow = ptable[-1]
-        internal_id = int(prow['INTID'])+1
-        jobtypes = ptable['JOBDESC']
+    ptable_jobtypes = ptable['JOBDESC']
 
-        if 'nightlybias' in jobtypes:
-            calibjobs['nightlybias'] = table_row_to_dict(ptable[jobtypes=='nightlybias'][0])
-            log.info("Located nightlybias job in exposure table: {}".format(calibjobs['nightlybias']))
-        if 'ccdcalib' in jobtypes:
-            calibjobs['ccdcalib'] = table_row_to_dict(ptable[jobtypes=='ccdcalib'][0])
-            log.info("Located ccdcalib job in exposure table: {}".format(calibjobs['ccdcalib']))
-        if 'psfnight' in jobtypes:
-            calibjobs['psfnight'] = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
-            log.info("Located joint fit psfnight job in exposure table: {}".format(calibjobs['psfnight']))
-        if 'nightlyflat' in jobtypes:
-            calibjobs['nightlyflat'] = table_row_to_dict(ptable[jobtypes=='nightlyflat'][0])
-            log.info("Located joint fit nightlyflat job in exposure table: {}".format(calibjobs['nightlyflat']))
+    for jobtype in calibjobs.keys():
+        if jobtype in ptable_jobtypes:
+            calibjobs[jobtype] = table_row_to_dict(ptable[ptable_jobtypes==jobtype][0])
+            log.info(f"Located {jobtype} job in exposure table: {calibjobs[jobtype]}")
 
-    return calibjobs, internal_id
-
+    return calibjobs
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
@@ -980,6 +1053,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
               dry_run=0, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
               system_name=None):
     """
+    DEPRECATED
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
     for all the individual exposures also created and submitted. The returned ptable has all of these rows added to the
@@ -1040,10 +1114,9 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     log.info(f"Joint fit criteria found. Running {descriptor}.\n")
 
     if descriptor == 'science':
-        joint_prow = make_joint_prow(prows, descriptor='stdstarfit', internal_id=internal_id)
+        joint_prow, internal_id = make_joint_prow(prows, descriptor='stdstarfit', internal_id=internal_id)
     else:
-        joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
-    internal_id += 1
+        joint_prow, internal_id = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
@@ -1098,8 +1171,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                 for zprow in zprows:
                     log.info(" ")
                     log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
-                    joint_prow = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
-                    internal_id += 1
+                    joint_prow, internal_id = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
                     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
@@ -1109,8 +1181,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                 log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {nightly_zprows[0]['TILEID']}.")
                 expids = [prow['EXPID'][0] for prow in nightly_zprows]
                 log.info(f"Expids: {expids}.\n")
-                joint_prow = make_joint_prow(nightly_zprows, descriptor=zsubtype, internal_id=internal_id)
-                internal_id += 1
+                joint_prow, internal_id = make_joint_prow(nightly_zprows, descriptor=zsubtype, internal_id=internal_id)
                 joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
@@ -1121,6 +1192,77 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
         ptable = set_calibrator_flag(prows, ptable)
 
     return ptable, joint_prow, internal_id
+
+def joint_cal_fit(descriptor, ptable, prows, internal_id, queue, reservation,
+                  dry_run=0, strictly_successful=False, check_for_outputs=True,
+                  resubmit_partial_complete=True, system_name=None):
+    """
+    Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
+    joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
+    for all the individual exposures also created and submitted. The returned ptable has all of these rows added to the
+    table given as input.
+
+    Args:
+        descriptor (str): Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
+            or 'flat' or 'nightlyflat'.
+        prows (list or array of dict): The rows corresponding to the individual exposure jobs that are
+            inputs to the joint fit.
+        ptable (Table): The processing table where each row is a processed job.
+        internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
+        queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+            for testing as though scripts are being submitted. Default is 0 (false).
+        strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
+            less desirable because e.g. the sciences can run with SVN default calibrations rather
+            than failing completely from failed calibrations. Default is False.
+        check_for_outputs (bool, optional): Default is True. If True, the code checks for the existence of the expected final
+            data products for the script being submitted. If all files exist and this is True,
+            then the script will not be submitted. If some files exist and this is True, only the
+            subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
+            jobs with some prior data are pruned using PROCCAMWORD to only process the
+            remaining cameras not found to exist.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
+
+    Returns:
+        tuple: A tuple containing:
+
+        * ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
+          of a stdstarfit, the poststdstar science exposure jobs.
+        * joint_prow, dict. Row of a processing table corresponding to the joint fit job.
+        * internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+    """
+    log = get_logger()
+    if len(prows) < 1:
+        return ptable, None, internal_id
+
+    if descriptor is None:
+        return ptable, None
+    elif descriptor == 'arc':
+        descriptor = 'psfnight'
+    elif descriptor == 'flat':
+        descriptor = 'nightlyflat'
+
+    if descriptor not in ['psfnight', 'nightlyflat']:
+        return ptable, None, internal_id
+
+    log.info(" ")
+    log.info(f"Joint fit criteria found. Running {descriptor}.\n")
+
+    joint_prow, internal_id = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
+    joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                   strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                   resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+    ptable.add_row(joint_prow)
+
+    if descriptor in ['psfnight', 'nightlyflat']:
+        log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
+        ptable = set_calibrator_flag(prows, ptable)
+
+    return ptable, joint_prow, internal_id
+
 
 #########################################
 ########     Redshifts     ##############
@@ -1235,7 +1377,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
 
     Returns:
         tuple: A tuple containing:
@@ -1267,7 +1409,7 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservati
                       check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
-    Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit and redshift fitting.
+    Wrapper function for desiproc.workflow.processing.joint_fit specific to the stdstarfit joint fit and redshift fitting.
 
     All variables are the same except::
 
@@ -1285,7 +1427,7 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
                    check_for_outputs=True, resubmit_partial_complete=True,
                    system_name=None):
     """
-    Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the nightlyflat joint fit.
+    Wrapper function for desiproc.workflow.processing.joint_fit specific to the nightlyflat joint fit.
 
     All variables are the same except::
 
@@ -1303,7 +1445,7 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
                   check_for_outputs=True, resubmit_partial_complete=True,
                   system_name=None):
     """
-    Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the psfnight joint fit.
+    Wrapper function for desiproc.workflow.processing.joint_fit specific to the psfnight joint fit.
 
     All variables are the same except::
 
@@ -1314,7 +1456,6 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
                      descriptor='psfnight', dry_run=dry_run, strictly_successful=strictly_successful,
                      check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
                      system_name=system_name)
-
 
 def make_joint_prow(prows, descriptor, internal_id):
     """
@@ -1330,11 +1471,13 @@ def make_joint_prow(prows, descriptor, internal_id):
 
     Returns:
         dict: Row of a processing table corresponding to the joint fit job.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     first_row = prows[0]
     joint_prow = first_row.copy()
 
     joint_prow['INTID'] = internal_id
+    internal_id += 1
     joint_prow['JOBDESC'] = descriptor
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
@@ -1384,8 +1527,19 @@ def make_joint_prow(prows, descriptor, internal_id):
                     goodcams.append(cam)
             joint_prow['PROCCAMWORD'] = create_camword(goodcams)
 
-    joint_prow = assign_dependency(joint_prow,dependency=prows)
-    return joint_prow
+    joint_prow = assign_dependency(joint_prow, dependency=prows)
+    return joint_prow, internal_id
+
+def make_exposure_prow(erow, int_id, calibjobs, jobdesc=None):
+    prow = erow_to_prow(erow)
+    prow['INTID'] = int_id
+    int_id += 1
+    if jobdesc is None:
+        prow['JOBDESC'] = prow['OBSTYPE']
+    else:
+        prow['JOBDESC'] = jobdesc
+    prow = define_and_assign_dependency(prow, calibjobs)
+    return prow, int_id
 
 def make_tnight_prow(prows, calibjobs, internal_id):
     """
@@ -1612,7 +1766,7 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
             exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
     Returns:
         tuple: A tuple containing:
 
