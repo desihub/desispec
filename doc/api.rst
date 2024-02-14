@@ -536,6 +536,9 @@ desispec API
 .. automodule:: desispec.scripts.proc_joint_fit
     :members:
 
+.. automodule:: desispec.scripts.proc_night
+    :members:
+
 .. automodule:: desispec.scripts.proc_tilenight
     :members:
 
@@ -570,6 +573,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.quicklook
+    :members:
+
+.. automodule:: desispec.scripts.reformat_exptables
     :members:
 
 .. automodule:: desispec.scripts.rejectcosmics
@@ -617,7 +623,7 @@ desispec API
 .. automodule:: desispec.scripts.update_spectra
     :members:
 
-.. automodule:: desispec.scripts.updateexptables
+.. automodule:: desispec.scripts.update_exptable
     :members:
 
 .. automodule:: desispec.scripts.zcatalog
@@ -680,6 +686,9 @@ desispec API
 .. automodule:: desispec.workflow.batch
     :members:
 
+.. automodule:: desispec.workflow.calibration_selection
+    :members:
+
 .. automodule:: desispec.workflow.desi_proc_funcs
     :members:
 
@@ -702,6 +711,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.workflow.schedule
+    :members:
+
+.. automodule:: desispec.workflow.science_selection
     :members:
 
 .. automodule:: desispec.workflow.tableio
