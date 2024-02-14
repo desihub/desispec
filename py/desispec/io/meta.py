@@ -73,7 +73,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         healpix=None, nside=64,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
-        rawdata_dir=None, specprod_dir=None,
+        rawdata_dir=None, specprod_dir=None, specprod=None,
         download=False, outdir=None, qaprod_dir=None,
         return_exists=False,
         readonly=False, logfile=False):
@@ -98,6 +98,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
+        specprod : production name, or full path to production
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
@@ -143,6 +144,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
+        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits.gz',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
@@ -178,6 +180,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
+        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.csv',
+        ctecorr      = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.csv', #- alias, same file
         #
         # spectra- healpix based
         #
@@ -305,7 +309,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 root_key = key.removesuffix('_hp')
                 location[root_key] = val
     del loc_copy
-    
+
     if groupname is not None and tile is None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:
@@ -325,8 +329,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         log.debug("rawdata_dir = '%s'", rawdata_dir)
 
     if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
-        specprod_dir = specprod_root()
-        log.debug("specprod_dir = '%s'", specprod_dir)
+        specprod_dir = specprod_root(specprod)
+        log.debug("specprod_dir = '%s', specprod = '%s'", specprod_dir, specprod)
     elif outdir is not None :
         # if outdir is set, we will replace specprod_dir anyway
         # but we may need the variable to be set in the meantime
@@ -335,11 +339,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
-    if 'specprod' in required_inputs and outdir is None :
-        #- Replace / with _ in $SPECPROD so we can use it in a filename
-        specprod = os.environ['SPECPROD'].replace('/', '_')
-    else:
-        specprod = None
+    if 'specprod' in required_inputs and specprod is None and outdir is None :
+        specprod = os.path.basename(specprod_dir)
+        log.debug("Setting specprod = '%s'", specprod)
 
     if camera is not None:
         camera = camera.lower()
@@ -695,15 +697,23 @@ def specprod_root(specprod=None):
     ``$DESI_SPECTRO_REDUX/$SPECPROD``.
 
     Options:
-        specprod (str): overrides $SPECPROD
+        specprod (str): production name or full path to prodution
 
     Raises:
         KeyError: if these environment variables aren't set.
+
+    If specprod contains '/', treat as path and return that.
+    If specprod is None, return $DESI_SPECTRO_REDUX/$SPECPROD.
+    Otherwise, treat specprod as production name to override $SPECPROD
+    and return $DESI_SPECTRO_REDUX/$SPECPROD
     """
     if specprod is None:
         specprod = os.environ['SPECPROD']
 
-    return os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+    if '/' in specprod:
+        return specprod
+    else:
+        return os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
 
 
 def qaprod_root(specprod_dir=None):

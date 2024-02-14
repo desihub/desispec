@@ -75,6 +75,7 @@ def parse(options=None):
     parser.add_argument('--auto-output-dir', type = str, default = '.', required = False,
                         help = 'Output directory when running the script in auto mode')
     parser.add_argument('--auto', action = 'store_true', help = 'auto-decide the list of processes to run based on the input. Output files are saved in an output directory which is by default the current working directory but can be modified with the option --auto-output-dir')
+    parser.add_argument('--fallback-on-dark-not-found', action="store_true", help="fall back to DESI_SPECTRO_CALIB darks if dark files are missing from DESI_SPECTRO_DARK, else fail")
 
     args = parser.parse_args(options)
 
@@ -104,8 +105,10 @@ def main(args=None):
             print("ERROR: Need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
-        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,])
-
+        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,],
+                         fallback_on_dark_not_found=args.fallback_on_dark_not_found,
+                         no_cte_corr=True,
+                         )
 
     if args.auto :
         log.debug("AUTOMATIC MODE")

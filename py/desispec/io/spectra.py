@@ -14,15 +14,17 @@ import re
 import warnings
 import time
 import glob
+import multiprocessing
 
 import numpy as np
 import astropy.units as u
 import astropy.io.fits as fits
 import astropy.table
 from astropy.table import Table
+from astropy.table import vstack as stack_tables
 import fitsio
 
-from desiutil.depend import add_dependencies
+from desiutil.depend import add_dependencies, hasdep, getdep
 from desiutil.io import encode_table
 from desiutil.log import get_logger
 
@@ -33,9 +35,11 @@ from . import iotime
 from .frame import read_frame
 from .fibermap import fibermap_comments
 
-from ..spectra import Spectra, stack
-from .meta import specprod_root
+from ..spectra import Spectra
+from ..spectra import stack as stack_spectra
+from .meta import specprod_root, findfile
 from ..util import argmatch
+
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -608,7 +612,7 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
     if len(spectra) == 0:
         raise ValueError('No spectra found matching filters')
 
-    spectra = stack(spectra)
+    spectra = stack_spectra(spectra)
 
     if redrock:
         redshifts = astropy.table.vstack(redshifts)
@@ -616,3 +620,311 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
         return (spectra, redshifts)
     else:
         return spectra
+
+def determine_specgroup(colnames):
+    """Determine specgroup 'healpix' or 'cumulative' based upon column names
+
+    Args:
+        colnames: list of str column names
+
+    Returns (specgroup, keycols) where specgroup is 'cumulative' or 'healpix',
+    and keycols is list of columns to use for unique primary key.
+    """
+    colnames = set(colnames) # for faster lookup
+    if ('TILEID' in colnames and
+        'LASTNIGHT' in colnames and
+        'PETAL_LOC' in colnames):
+        return 'cumulative', ('TARGETID', 'TILEID', 'LASTNIGHT')
+    elif 'HEALPIX' in colnames:
+        return 'healpix', ('TARGETID', 'HEALPIX', 'SURVEY', 'PROGRAM')
+    else:
+        raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
+
+def split_targets_by_file(targets, n, specgroup='healpix'):
+    """
+    Split targets table into n tables, keeping all TARGETIDs in a file together
+
+    Args:
+        targets (table): table of targets; see notes for columns
+        n (int): number of groups to split into
+        specgroup (str): 'healpix', 'tiles', or 'cumulative'
+
+    Returns: list of n subtables, grouped by file
+
+    Notes: if specgroup=='healpix', group by HEALPIX, SURVEY, and PROGRAM;
+    if spectroup=='tiles' or 'cumulative', group by 'TILEID', 'LASTNIGHT',
+    and 'PETAL_LOC'.  Additional columns are allowed and propagated,
+    but not used.
+    """
+    #- What columns should we group by to split by file?
+    specgroup, keycols = determine_specgroup(targets.dtype.names)
+    if specgroup == 'healpix':
+        filecolumns = ('HEALPIX', 'SURVEY', 'PROGRAM')
+    elif specgroup in ('tiles', 'cumulative'):
+        filecolumns = ('TILEID', 'LASTNIGHT', 'PETAL_LOC')
+
+    #- Split into n groups, keeping TARGETID by file together
+    #- If there are fewer than n files, pad with blank tables of right format
+    target_filerows = targets.group_by(filecolumns).groups
+    group_indices = np.array_split(np.arange(len(target_filerows)), n)
+    target_tables = [target_filerows[ii] for ii in group_indices]
+
+    return target_tables
+
+def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
+    """
+    Read healpix-based spectra for targets table
+
+    Args:
+        targets (table): table of targets with TARGETID,HEALPIX,SURVEY,PROGRAM
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+
+    Options:
+        specprod (str): production name or full path to production
+
+    Returns: Spectra for targets table
+
+    If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
+    """
+    if len(targets) == 0:
+        return None
+
+    log = get_logger()
+
+    spectra = list()
+    for zz in targets.group_by(['HEALPIX', 'SURVEY', 'PROGRAM']).groups:
+        hpix = zz['HEALPIX'][0]
+        survey = zz['SURVEY'][0]
+        program = zz['PROGRAM'][0]
+        targetids = np.array(zz['TARGETID'])
+
+        specfile = findfile(prefix, healpix=hpix, survey=survey,
+                            faprogram=program, readonly=True, specprod=specprod)
+        log.debug('Reading spectra from %s', specfile)
+        sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if sp.num_targets() == 0:
+            log.warning(f'No matching targets found in {specfile}')
+            continue
+
+        if 'HEALPIX' not in sp.fibermap.colnames:
+            sp.fibermap['HEALPIX'] = hpix
+
+        #- String columns force dtype to match number of chars to input targets
+        if 'SURVEY' not in sp.fibermap.colnames:
+            sp.fibermap['SURVEY'] = survey
+            sp.fibermap['SURVEY'] = sp.fibermap['SURVEY'].astype(targets['SURVEY'].dtype)
+
+        if 'PROGRAM' not in sp.fibermap.colnames:
+            sp.fibermap['PROGRAM'] = program
+            sp.fibermap['PROGRAM'] = sp.fibermap['PROGRAM'].astype(targets['PROGRAM'].dtype)
+
+        spectra.append(sp)
+
+    if len(spectra) == 0:
+        msg = 'No matching targets found in input files'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
+    spectra = stack_spectra(spectra)
+
+    assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
+    assert np.all(spectra.fibermap['HEALPIX'] == targets['HEALPIX'])
+    assert np.all(spectra.fibermap['SURVEY'] == targets['SURVEY'])
+    assert np.all(spectra.fibermap['PROGRAM'] == targets['PROGRAM'])
+
+    return spectra
+
+def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
+    """
+    Read tile-based spectra for targets table
+
+    Args:
+        targets (table): target table with TARGETID,TILEID,LASTNIGHT,PETAL_LOC
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+
+    Options:
+        specprod (str): production name or full path to production
+
+    Returns: Spectra for targets table
+
+    If len(targets)==0, returns None rather than guessing Spectra.fibermap cols
+    """
+    if len(targets) == 0:
+        return None
+
+    log = get_logger()
+
+    spectra = list()
+    for zz in targets.group_by(('TILEID', 'LASTNIGHT', 'PETAL_LOC')).groups:
+        tileid = zz['TILEID'][0]
+        night = zz['LASTNIGHT'][0]
+        spectro = zz['PETAL_LOC'][0]
+        targetids = np.array(zz['TARGETID'])
+
+        specfile = findfile(prefix, night=night, tile=tileid,
+                            spectrograph=spectro, readonly=True,
+                            specprod=specprod)
+        log.debug('Reading spectra from %s', specfile)
+        sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+
+        if sp.num_targets() == 0:
+            log.warning(f'No matching targets found in {specfile}')
+            continue
+
+        if 'LASTNIGHT' not in sp.fibermap.colnames:
+            sp.fibermap['LASTNIGHT'] = night
+
+        if 'TILEID' not in sp.fibermap.colnames:
+            sp.fibermap['TILEID'] = tileid
+
+        if 'PETAL_LOC' not in sp.fibermap.colnames:
+            sp.fibermap['PETAL_LOC'] = spectro
+
+        spectra.append(sp)
+
+    if len(spectra) == 0:
+        msg = 'No matching targets found in input files'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
+    spectra = stack_spectra(spectra)
+
+    assert np.all(spectra.fibermap['TARGETID']  == targets['TARGETID'])
+    assert np.all(spectra.fibermap['LASTNIGHT'] == targets['LASTNIGHT'])
+    assert np.all(spectra.fibermap['PETAL_LOC'] == targets['PETAL_LOC'])
+    assert np.all(spectra.fibermap['TILEID']    == targets['TILEID'])
+
+    return spectra
+
+def read_spectra_parallel(targets, nproc=None, prefix='coadd',
+                          rdspec_kwargs=dict(), specprod=None,
+                          match_order=True,
+                          comm=None):
+    """
+    Read spectra for targets table in parallel
+
+    Args:
+        targets (table): targets table; see notes for required columns
+
+    Options
+        nproc (int): number of processes to use if comm is None
+        prefix (str): 'coadd' or 'spectra'
+        rdspec_kwargs (dict): additional key/value args to pass to read_spectra
+        specprod (str): production name or full path to production
+        match_order (bool): if True (default), spectra will match order of input targets
+        comm: MPI communicator
+
+    Returns: Spectra for targets in targets table
+
+    If comm is not None, use MPI, elif nproc>1 use multiprocessing, else read
+    serially but still read each file only once to get the necessary targets.
+
+    If targets table has columns TARGETID,TILEID,LASTNIGHT,PETAL_LOC,
+    then specta will be read from tiles/cumulative files.  Otherwise,
+    if targets has columns TARGETID,SURVEY,PROGRAM,HEALPIX (or HPXPIXEL),
+    spectra will be read from healpix-based spectra.  Additional columns
+    are allowed and ignored.
+
+    determine_specgroup(colnames) is used to determine tiles/cumulative
+    vs. healpix and can be used to pre-check how a targets table will
+    be interpreted.
+    """
+    log = get_logger()
+
+    #- recreate Table wrapper, but don't copy underlying data;
+    #- allows adding/renaming columns if needed and supporting non-Table input
+    targets = Table(targets, copy=False)
+
+    #- support HPXPIXEL or HEALPIX in input targets table
+    if 'HPXPIXEL' in targets.colnames:
+        targets.rename_column('HPXPIXEL', 'HEALPIX')
+
+    #- if not specified, get specprod from header or $SPECPROD
+    if specprod is None:
+        if 'SPECPROD' in targets.meta:
+            specprod = targets.meta['SPECPROD']
+        elif hasdep(targets.meta, 'SPECPROD'):
+            specprod = getdep(targets.meta, 'SPECPROD')
+        else:
+            specprod = os.environ['SPECPROD']
+
+    #- Determine which reader to use
+    specgroup, keycols = determine_specgroup(targets.dtype.names)
+    if specgroup == 'healpix':
+        readspec = _readspec_healpix
+    elif specgroup in ('tiles', 'cumulative'):
+        readspec = _readspec_tiles
+
+    #- promote columns from targets.meta if needed
+    #- e.g. target.meta['SURVEY'] -> targets['SURVEY']
+    ok = True
+    for col in keycols:
+        if ((col not in targets.colnames) and (col in targets.meta)):
+            targets[col] = targets.meta[col]
+
+        if col not in targets.colnames:
+            log.error(f'{specgroup} targets need {col} in either header or columns')
+            ok = False
+
+    if not ok:
+        msg = 'Unable to find SURVEY and/or PROGRAM for healpix targets'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    if comm is not None:
+        rank, size = comm.rank, comm.size
+        nproc = size
+    else:
+        rank, size = 0, 1
+        if nproc is None:
+            nproc = max(1, multiprocessing.cpu_count() // 2)
+
+    #- split targets into list of nproc subtables, such that targets in
+    #- a file are only in a single subtable (i.e. it will be ready only once)
+    target_groups = split_targets_by_file(targets, nproc)
+
+    #- strip out emptry target_groups, which happens if nfiles < nproc
+    target_groups = [t for t in target_groups if len(t)>0]
+    nproc = min(nproc, len(target_groups))
+
+    #- list of (targets, prefix, rdspec_kwargs)
+    arglist = [(t, prefix, rdspec_kwargs, specprod) for t in target_groups]
+
+    if comm is not None:
+        #- MPI parallelism
+        from mpi4py.futures import MPICommExecutor
+        with MPICommExecutor(comm, root=0) as pool:
+            if pool is not None:
+                spectra = list(pool.starmap(readspec, arglist))
+            else:
+                spectra = None
+    elif nproc>1:
+        #- Multiprocessing parallelism
+        with multiprocessing.Pool(nproc) as pool:
+            spectra = list(pool.starmap(readspec, arglist))
+    else:
+        #- Serial
+        spectra = [readspec(*args) for args in arglist]
+
+    if spectra is not None:
+        #- belt and suspenders check: remove any None values before stack
+        spectra = [sp for sp in spectra if sp is not None]
+        spectra = stack_spectra(spectra)
+
+        #- reorder spectra to match input target table if needed
+        if match_order:
+            need_to_reorder = False
+            for col in keycols:
+                if np.any(spectra.fibermap[col] != targets[col]):
+                    need_to_reorder = True
+                    break
+
+            if need_to_reorder:
+                ii = argmatch(spectra.fibermap[keycols], targets[keycols])
+                spectra = spectra[ii]
+
+    return spectra
+

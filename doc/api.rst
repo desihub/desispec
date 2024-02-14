@@ -482,6 +482,9 @@ desispec API
 .. automodule:: desispec.scripts.fiberflat
     :members:
 
+.. automodule:: desispec.scripts.fit_cte_night
+    :members:
+
 .. automodule:: desispec.scripts.fluxcalibration
     :members:
 
@@ -498,6 +501,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.interpolate_fiber_psf
+    :members:
+
+.. automodule:: desispec.scripts.link_calibnight
     :members:
 
 .. automodule:: desispec.scripts.makezmtl

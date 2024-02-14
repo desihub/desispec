@@ -121,25 +121,30 @@ def get_sector_masks(frame):
 
     sectors = []
     for amp in amps:
-        key = "OFFCOLS"+amp
+
         sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
         yb = sec[0].start
         ye = sec[0].stop
 
-        if cfinder.haskey(key) :
-            val = cfinder.value(key)
-            for tmp1 in val.split(",") :
-                tmp2 = tmp1.split(":")
-                if len(tmp2) != 2 :
-                    mess="cannot decode {}={}".format(key,val)
-                    log.error(mess)
-                    raise KeyError(mess)
-                xb = max(sec[1].start,int(tmp2[0]))
-                xe = min(sec[1].stop,int(tmp2[1]))
-                sector = [yb,ye,xb,xe]
-                sectors.append(sector)
-                log.info("Adding CCD sector in amp {} with offset: {}".format(
-                    amp,sector))
+        # fit an offset as part of sky sub if OFFCOLSX or CTECOLSX in calib
+        # to correct for CTE issues
+        # if CTECOLSX, another correction is also applied at preproc
+        # see also doc/cte-correction.rst
+        for key in [ "OFFCOLS"+amp , "CTECOLS"+amp ] :
+            if cfinder.haskey(key) :
+                val = cfinder.value(key)
+                for tmp1 in val.split(",") :
+                    tmp2 = tmp1.split(":")
+                    if len(tmp2) != 2 :
+                        mess="cannot decode {}={}".format(key,val)
+                        log.error(mess)
+                        raise KeyError(mess)
+                    xb = max(sec[1].start,int(tmp2[0]))
+                    xe = min(sec[1].stop,int(tmp2[1]))
+                    sector = [yb,ye,xb,xe]
+                    sectors.append(sector)
+                    log.info("Adding CCD sector in amp {} with offset: {}".format(
+                        amp,sector))
 
     if len(sectors) == 0:
         return [], [[]]
