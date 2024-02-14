@@ -176,14 +176,14 @@ def _set_fibermap_columns():
                 'MWS target selection bitmask'
             else:
                 comment = fibermap_columns[survey][i][3]
-            row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '', comment + f' for {survey.upper()}', 'fibermap')
+            row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '', comment + f' for {survey.upper()}', 'empty')
             fibermap_columns[survey].insert(index_columns.index('DESI_TARGET'), row)
         index_columns = [x[0] for x in fibermap_columns[survey]]
         del fibermap_columns[survey][index_columns.index('SCND_TARGET')]
         fibermap_comments[survey] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns[survey]])
     fibermap_columns['cmx'] = fibermap_columns['main'].copy()
     index_columns = [x[0] for x in fibermap_columns['cmx']]
-    row = ('CMX_TARGET', 'i8', '', 'Target selection bitmask for commissioning', 'fibermap')
+    row = ('CMX_TARGET', 'i8', '', 'Target selection bitmask for commissioning', 'empty')
     fibermap_columns['cmx'].insert(index_columns.index('DESI_TARGET'), row)
     index_columns = [x[0] for x in fibermap_columns['cmx']]
     del fibermap_columns['cmx'][index_columns.index('SCND_TARGET')]

@@ -5,9 +5,12 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch, call
+import warnings
 from shutil import rmtree
 
 import numpy as np
+from astropy.utils.exceptions import AstropyUserWarning
 from astropy.io import fits
 from astropy.table import Table
 import fitsio
@@ -29,10 +32,7 @@ class TestIOFibermap(unittest.TestCase):
         cls.testDir = tempfile.mkdtemp()
         cls.readonlyDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
-        cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
-        # cls.testbrfile appears to be unused by this class.
-        cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
                        "DESI_ROOT_READONLY": None,
@@ -59,7 +59,7 @@ class TestIOFibermap(unittest.TestCase):
     def tearDownClass(cls):
         """Cleanup test files if they exist.
         """
-        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
+        for testfile in [cls.testfile, cls.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
         for e in cls.origEnv:
@@ -80,9 +80,17 @@ class TestIOFibermap(unittest.TestCase):
             rmtree(self.datadir)
         if os.path.isdir(self.reduxdir):
             rmtree(self.reduxdir)
+        #
+        # Reset desispec.io.fibermap.fibermap_columns
+        #
+        keys = list(fibermap_columns.keys())
+        for key in keys:
+            if key != 'main':
+                del fibermap_columns[key]
+                del fibermap_comments[key]
 
     def tearDown(self):
-        for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
+        for testfile in [self.testfile, self.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
 
@@ -107,6 +115,10 @@ class TestIOFibermap(unittest.TestCase):
         self.assertTrue(np.all(fm3['PETAL_LOC'] == [0,0,0,0,0,1,1,1,1,1]))
 
         self.assertListEqual(fm3.colnames, [c[0] for c in fibermap_columns['main'] if c[4] == 'empty'])
+
+        fm4 = empty_fibermap(10, specmin=495, survey='cmx')
+        self.assertIn('CMX_TARGET', fm4.colnames)
+        self.assertEqual(fm4.meta['SURVEY'], 'cmx')
 
     def test_fibermap_rw(self):
         """Test reading and writing fibermap files.
@@ -188,8 +200,26 @@ class TestIOFibermap(unittest.TestCase):
         n_long = check_comment_length(fibermap_comments['sv3'], error=False)
         self.assertEqual(n_long, 0)
 
-    def test_annotate_fibermap(self):
+    @patch('desispec.io.fibermap.get_logger')
+    def test_annotate_fibermap(self, mock_log):
         """Test updating units and column descriptions in a fibermap HDU.
         """
         with self.assertRaises(ValueError) as e:
             fibermap = annotate_fibermap(dict())
+        #
+        # Test normal operation
+        #
+        fibermap = empty_fibermap(500)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+            fibermap_hdu = fits.BinTableHDU(fibermap)
+        fibermap_hdu = annotate_fibermap(fibermap_hdu)
+        self.assertEqual(fibermap_hdu.header.comments['TTYPE7'], 'Barycentric right ascension in ICRS')   # TARGET_RA
+        self.assertEqual(fibermap_hdu.header['TUNIT7'], 'deg')  # TARGET_RA
+        mock_log().error.assert_not_called()
+        #
+        # This is a by-product of creating the table via empty_fibermap.
+        #
+        mock_log().warning.assert_has_calls([call("Overriding units for column '%s': '%s' -> '%s'.", 'PMRA', 'mas yr-1', 'mas yr^-1'),
+                                             call("Overriding units for column '%s': '%s' -> '%s'.", 'PMDEC', 'mas yr-1', 'mas yr^-1')])
+
