@@ -66,8 +66,8 @@ def get_processing_table_column_defs(return_default_values=False,
     Returns:
         colnames, list. List of column names for an processing table.
         coldtypes, list. List of column datatypes for the names in colnames.
-        coldeflts, list. Optionally returned if return_default_values is True.
-            List of default values for the corresponding colnames.
+        coldeflts, list. Optionally returned if return_default_values is
+            True. List of default values for the corresponding colnames.
     """
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
