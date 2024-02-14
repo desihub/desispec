@@ -104,7 +104,7 @@ def parse_args():
     # convert str lists to actual lists
     if args.proc_obstypes is not None:
         args.proc_obstypes = [pobstype.strip().lower() for pobstype in
-                                   args.proc_obstypes.split(',')]
+                              args.proc_obstypes.split(',')]
 
     if args.tiles is not None:
         args.tiles = [int(tileid) for tileid in args.tiles.split(',')]
@@ -112,8 +112,9 @@ def parse_args():
     if args.surveys is not None:
         args.surveys = [survey.strip().lower() for survey in args.surveys.split(',')]
 
-    if args.laststeps is not None:
-        args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
+    if args.science_laststeps is not None:
+        args.science_laststeps = [laststep.strip().lower() for laststep in
+                                  args.science_laststeps.split(',')]
 
     if args.z_submit_types is None:
         pass

@@ -4,7 +4,7 @@
 import argparse
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.scripts.exposuretable import create_exposure_tables
+from desispec.scripts.update_exptable import update_exposure_table
 
 
 def get_parser():
@@ -55,4 +55,4 @@ if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
 
-    create_exposure_tables(**args.__dict__)
+    update_exposure_table(**args.__dict__)
