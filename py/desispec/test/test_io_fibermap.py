@@ -273,6 +273,14 @@ class TestIOFibermap(unittest.TestCase):
                 self.assertIn(col, fm.columns.names)
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    def test_compare_empty_to_assemble(self):
+        """Compare the output of empty_fibermap to assemble_fibermap.
+        """
+        empty = fits.convenience.table_to_hdu(empty_fibermap(5000))
+        fm_hdu = assemble_fibermap(20210517, 89031)
+        self.assertListEqual(empty.data.columns.names, fm_hdu.data.columns.names)
+
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_missing_input_files(self):
         """Test creation of fibermaps with missing input files"""
         #- missing coordinates file for this exposure
