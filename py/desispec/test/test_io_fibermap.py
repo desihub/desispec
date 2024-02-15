@@ -34,9 +34,9 @@ class TestIOFibermap(unittest.TestCase):
         """Create unique test filename in a subdirectory.
         """
         cls.testDir = tempfile.mkdtemp()
-        cls.readonlyDir = tempfile.mkdtemp()
-        cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
-        cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
+        # cls.readonlyDir = tempfile.mkdtemp()
+        cls.testfile = os.path.join(cls.testDir, 'desispec_test_io_fibermap.fits')
+        # cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
                        "DESI_ROOT_READONLY": None,
@@ -44,55 +44,56 @@ class TestIOFibermap(unittest.TestCase):
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
                        }
-        cls.testEnv = {'SPECPROD':'dailytest',
-                       "DESI_ROOT": cls.testDir,
-                       "DESI_ROOT_READONLY": cls.readonlyDir,
-                       "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
-                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
-                       "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
-                       }
-        cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
-        cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
-                                    cls.testEnv['SPECPROD'])
-        for e in cls.origEnv:
-            if e in os.environ:
-                cls.origEnv[e] = os.environ[e]
-            os.environ[e] = cls.testEnv[e]
+        # cls.testEnv = {'SPECPROD':'dailytest',
+        #                "DESI_ROOT": cls.testDir,
+        #                "DESI_ROOT_READONLY": cls.readonlyDir,
+        #                "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
+        #                "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+        #                "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+        #                }
+        cls.dataDir = os.path.join(cls.testDir, 'spectro', 'data')
+        # cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
+        # cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
+        #                             cls.testEnv['SPECPROD'])
+        # for e in cls.origEnv:
+        #     if e in os.environ:
+        #         cls.origEnv[e] = os.environ[e]
+        #     os.environ[e] = cls.testEnv[e]
 
     @classmethod
     def tearDownClass(cls):
         """Cleanup test files if they exist.
         """
-        for testfile in [cls.testfile, cls.testlog]:
-            if os.path.exists(testfile):
-                os.remove(testfile)
-        for e in cls.origEnv:
-            if cls.origEnv[e] is None:
-                del os.environ[e]
-            else:
-                os.environ[e] = cls.origEnv[e]
+        # for testfile in [cls.testfile, cls.testlog]:
+        #     if os.path.exists(testfile):
+        #         os.remove(testfile)
+        # for e in cls.origEnv:
+        #     if cls.origEnv[e] is None:
+        #         del os.environ[e]
+        #     else:
+        #         os.environ[e] = cls.origEnv[e]
 
         if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
 
         # reset the readonly cache
-        from ..io import meta
-        meta._desi_root_readonly = None
+        # from ..io import meta
+        # meta._desi_root_readonly = None
 
-    def setUp(self):
-        if os.path.isdir(self.datadir):
-            rmtree(self.datadir)
-        if os.path.isdir(self.reduxdir):
-            rmtree(self.reduxdir)
+    # def setUp(self):
+    #     if os.path.isdir(self.datadir):
+    #         rmtree(self.datadir)
+    #     if os.path.isdir(self.reduxdir):
+    #         rmtree(self.reduxdir)
 
     def tearDown(self):
-        for testfile in [self.testfile, self.testlog]:
+        for testfile in [self.testfile]:
             if os.path.exists(testfile):
                 os.remove(testfile)
 
         # restore environment variables if test changed them
-        for key, value in self.testEnv.items():
-            os.environ[key] = value
+        # for key, value in self.testEnv.items():
+        #     os.environ[key] = value
 
     def test_empty_fibermap(self):
         """Test creating empty fibermap objects.
@@ -155,7 +156,7 @@ class TestIOFibermap(unittest.TestCase):
         '''Test finding (non)gzipped fiberassign files.
         '''
         night = 20101020
-        nightdir = os.path.join(self.datadir, str(night))
+        nightdir = os.path.join(self.dataDir, str(night))
         os.makedirs(nightdir)
         os.makedirs(f'{nightdir}/00012345')
         os.makedirs(f'{nightdir}/00012346')
@@ -166,24 +167,25 @@ class TestIOFibermap(unittest.TestCase):
 
         fx = open(fafile, 'w'); fx.close()
         fx = open(fafilegz, 'w'); fx.close()
+        with patch.dict('os.environ', {'DESI_SPECTRO_DATA': self.dataDir}):
 
-        a = find_fiberassign_file(night, 12346)
-        self.assertEqual(a, fafile)
+            a = find_fiberassign_file(night, 12346)
+            self.assertEqual(a, fafile)
 
-        a = find_fiberassign_file(night, 12347)
-        self.assertEqual(a, fafilegz)
+            a = find_fiberassign_file(night, 12347)
+            self.assertEqual(a, fafilegz)
 
-        a = find_fiberassign_file(night, 12348)
-        self.assertEqual(a, fafilegz)
+            a = find_fiberassign_file(night, 12348)
+            self.assertEqual(a, fafilegz)
 
-        a = find_fiberassign_file(night, 12348, tileid=1111)
-        self.assertEqual(a, fafile)
+            a = find_fiberassign_file(night, 12348, tileid=1111)
+            self.assertEqual(a, fafile)
 
-        with self.assertRaises(IOError) as ex:
-            find_fiberassign_file(night, 12345)
+            with self.assertRaises(IOError) as ex:
+                find_fiberassign_file(night, 12345)
 
-        with self.assertRaises(IOError) as ex:
-            find_fiberassign_file(night, 12348, tileid=4444)
+            with self.assertRaises(IOError) as ex:
+                find_fiberassign_file(night, 12348, tileid=4444)
 
     def test_fibermap_comment_lengths(self):
         """Automate testing of fibermap comment lengths.

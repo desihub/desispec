@@ -54,7 +54,7 @@ from desispec.maskbits import fibermask
 # The utility function final_columns(survey) handles differences between
 # 'cmx', 'sv1', 'sv2', 'sv3'. We assume that 'special' has identical columns to 'main'.
 #
-fibermap_columns = [('TARGETID',                   'i8',             '', 'Unique DESI target ID',                        'empty'),
+fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique DESI target ID',                        'empty'),
                     ('PETAL_LOC',                  'i2',             '', 'Petal location [0-9]',                         'empty'),
                     ('DEVICE_LOC',                 'i4',             '', 'Device location on focal plane [0-523]',       'empty'),
                     ('LOCATION',                   'i8',             '', 'FP location PETAL_LOC*1000 + DEVICE_LOC',      'empty'),
@@ -158,7 +158,7 @@ fibermap_columns = [('TARGETID',                   'i8',             '', 'Unique
                     ('STD_FIBER_DEC',              'f4',          'deg', 'Standard deviation (over exposures) of DEC',   'coadd'),
                     ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean (over exposures) PSF_TO_FIBER_SPECFLUX',  'coadd'),
                     ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
-                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),]
+                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
 
 #
 # These are commented out pending removal.
@@ -183,7 +183,7 @@ def _set_fibermap_columns(survey='main'):
     :class:`list`
         Return the full set of survey-specific columns.
     """
-    working_columns = fibermap_columns.copy()
+    working_columns = list(fibermap_columns).copy()
     if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
         survey_index = f"empty:{survey}"
         return [row for row in working_columns
