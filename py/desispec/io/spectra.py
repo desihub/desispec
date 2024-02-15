@@ -98,7 +98,7 @@ def write_spectra(outfile, spec, units=None):
     #         assert name == colname
     #         comment = fibermap_comments[name]
     #         hdu.header[key] = (name, comment)
-    hdu = annotate_fibermap(hdu, survey=hdu.header['SURVEY'])
+    hdu = annotate_fibermap(hdu)
 
     all_hdus.append(hdu)
 
@@ -119,7 +119,7 @@ def write_spectra(outfile, spec, units=None):
         #         assert name == colname
         #         comment = fibermap_comments[name]
         #         hdu.header[key] = (name, comment)
-        hdu = annotate_fibermap(hdu, survey=hdu.header['SURVEY'])
+        hdu = annotate_fibermap(hdu)
 
         all_hdus.append(hdu)
 

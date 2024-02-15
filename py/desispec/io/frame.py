@@ -91,15 +91,13 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         add_dependencies(fibermap.meta)
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
         fmhdu = fits.convenience.table_to_hdu(fibermap)
-        # TODO: determine provenance: frame, sframe or cframe?
-        # TODO: Only cframe has an extra fibermap column.
-        fmhdu = annotate_fibermap(fmhdu, survey=fmhdu.header['SURVEY'])
+        fmhdu = annotate_fibermap(fmhdu)
         hdus.append( fmhdu )
     elif frame.fibermap is not None:
         fibermap = Table(frame.fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         fmhdu = fits.convenience.table_to_hdu(fibermap)
-        fmhdu = annotate_fibermap(fmhdu, survey=fmhdu.header['SURVEY'])
+        fmhdu = annotate_fibermap(fmhdu)
         hdus.append( fmhdu )
     elif frame.spectrograph is not None:
         x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
