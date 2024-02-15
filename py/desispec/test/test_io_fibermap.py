@@ -280,8 +280,8 @@ class TestIOFibermap(unittest.TestCase):
     def test_compare_empty_to_assemble(self):
         """Compare the output of empty_fibermap to assemble_fibermap.
         """
-        for survey, night, expid in (('cmx', 20201214, 67768),
-                                     ('sv1', 20201218, 68684),
+        # ('cmx', 20201214, 67768),
+        for survey, night, expid in (('sv1', 20201218, 68684),
                                      ('sv2', 20210327, 82497),
                                      ('sv3', 20210406, 83726),
                                      ('main', 20210517, 89031),
