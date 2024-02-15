@@ -33,6 +33,8 @@ class TestIOFibermap(unittest.TestCase):
     def setUpClass(cls):
         """Create unique test filename in a subdirectory.
         """
+        # For verbose failure reports
+        cls.maxDiff = None
         cls.testDir = tempfile.mkdtemp()
         # cls.readonlyDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io_fibermap.fits')
@@ -290,6 +292,7 @@ class TestIOFibermap(unittest.TestCase):
                 warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
                 empty = fits.convenience.table_to_hdu(empty_fibermap(5000, survey=survey))
             fm = assemble_fibermap(night, expid)
+            self.assertEqual(empty.header['SURVEY'], fm['FIBERMAP'].header['SURVEY'])
             self.assertListEqual(empty.data.columns.names, fm['FIBERMAP'].data.columns.names)
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
