@@ -620,10 +620,10 @@ desispec API
 .. automodule:: desispec.scripts.trace_shifts
     :members:
 
-.. automodule:: desispec.scripts.update_spectra
-    :members:
-
 .. automodule:: desispec.scripts.update_exptable
+    :members:
+       
+.. automodule:: desispec.scripts.update_spectra
     :members:
 
 .. automodule:: desispec.scripts.zcatalog

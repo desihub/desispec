@@ -39,7 +39,7 @@ from desispec.io.util import decode_camword, difference_camwords, \
 def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                queue='realtime', reservation=None, system_name=None,
                exp_table_pathname=None, proc_table_pathname=None,
-               override_pathname=None,
+               override_pathname=None, update_exptable=False,
                dry_run_level=0, dry_run=False, no_redshifts=False,
                ignore_proc_table_failures = False,
                dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
@@ -76,6 +76,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         proc_table_pathname (str): Full path to where to processing tables to be
             written, including file name
         override_pathname (str): Full path to the override file.
+        update_exptable (bool): If true then the exposure table is updated.
+            The default is False.
         dry_run_level (int, optional): If nonzero, this is a simulated run.
             If dry_run=1 the scripts will be written but not submitted.
             If dry_run=2, the scripts will not be written nor submitted.
@@ -171,7 +173,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Set a flag to determine whether to process the last tile in the exposure table
     ## or not. This is used in daily mode when processing and exiting mid-night.
     ignore_last_tile = False
-
+    
     ## If running in daily mode, change a bunch of defaults
     if daily:
         ## What night are we running on?
@@ -186,7 +188,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         if during_operating_hours(dry_run=dry_run) and (true_night == night):
             ignore_last_tile = True
 
-        update_exptable = True
+        update_exptable = True    
         append_to_proc_table = True
         all_cumulatives = True
         all_tiles = True
@@ -280,7 +282,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## This reads in and writes out the exposure table to disk
     if update_exptable:
         update_exposure_table(night=night, specprod=specprod,
-                              exp_table_path=exp_table_pathname,
+                              exp_table_pathname=exp_table_pathname,
                               path_to_data=path_to_data, exp_obstypes=exp_obstypes,
                               camword=camword, badcamword=badcamword, badamps=badamps,
                               exps_to_ignore=exps_to_ignore,
@@ -316,10 +318,13 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                       + "you entered '--ignore-proc-table-failures'. This "
                       + "script will not fix them. "
                       + "You should have fixed those first. Proceeding...")
-        ptable_expids = set(np.unique(np.concatenate(
+        if np.sum(ptable['OBSTYPE']=='science')>0:
+            ptable_expids = set(np.unique(np.concatenate(
                                 ptable['EXPID'][ptable['OBSTYPE']=='science']
                             )))
-        etable_expids = set(etable['EXPID'][ptable['OBSTYPE']=='science'])
+        else:
+            ptable_expids = set()
+        etable_expids = set(etable['EXPID'][etable['OBSTYPE']=='science'])
         if len(etable_expids.difference(ptable_expids)) == 0:
             log.info("All science EXPID's already present in processing table, "
                      + "nothing to run. Exiting")
@@ -342,7 +347,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Determine the appropriate set of calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
     cal_etable = None
-    if calibjobs['ccdlink'] is None and calibjobs['nightlyflat'] is None:
+    if calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
                                                     still_acquiring=ignore_last_tile)
@@ -392,11 +397,13 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Only run if we haven't already linked or done fiberflatnight's
     if calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
         ptable, calibjobs, int_id = submit_calibrations(cal_etable, ptable,
-                                                cal_override, calibjobs, int_id,
+                                                cal_override, calibjobs,
+                                                int_id, night,
                                                 create_submit_add_and_save)
 
     ## Require some minimal level of calibrations to process science exposures
-    if require_cals and calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
+    if not dry_run and require_cals and calibjobs['linkcal'] is None \
+            and calibjobs['nightlyflat'] is None:
         err = (f"Required to have at least psf calibrations via override link"
                + f" or psfnight")
         log.error(err)
@@ -447,8 +454,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
             ## Now that processing is complete, lets identify what we didn't process
-            processed = np.isin(full_etable['EXPID'], np.unique(np.concatenate(ptable['EXPID'])))
-            unproc_table = full_etable[~processed]
+            if len(ptable) > 0:
+                processed = np.isin(full_etable['EXPID'], np.unique(np.concatenate(ptable['EXPID'])))
+                unproc_table = full_etable[~processed]
+            else:
+                unproc_table = full_etable
             write_table(unproc_table, tablename=unproc_table_pathname)
     elif dry_run_level < 3 and len(full_etable) > 0:
         ## Done determining what not to process, so write out unproc file
@@ -470,7 +480,10 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                         curnight, create_submit_add_and_save):
     log = get_logger()
-    processed_cal_expids = np.unique(np.concatenate(ptable['EXPIDS']).astype(int))
+    if len(ptable) > 0:
+        processed_cal_expids = np.unique(np.concatenate(ptable['EXPID']).astype(int))
+    else:
+        processed_cal_expids = np.array([]).astype(int)
 
     ######## Submit caliblink if requested ########
     if 'refnight' in cal_override and calibjobs['linkcal'] is None:
@@ -505,7 +518,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'flat' in cal_etable['OBSTYPE']:
         flats = cal_etable[cal_etable['OBSTYPE']=='flat']
-        num_cte = np.sum(['cte' in prog.lower() for prog in flats])
+        num_cte = np.sum(['cte' in prog.lower() for prog in flats['PROGRAM']])
 
     ## If just starting out and no dark, do the nightlybias
     if dark_erow is None and num_zeros > 0 and calibjobs['nightlybias'] is None:

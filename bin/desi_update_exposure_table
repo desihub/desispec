@@ -19,8 +19,8 @@ def get_parser():
     parser.add_argument('-s', '--specprod', type=str,
                         help='The name of the current production. If used, this '
                              'will overwrite the SPECPROD environment variable.')
-    parser.add_argument('--exp-table-path', type=str,
-                        help='Full path to where the exposure tables are stored, '
+    parser.add_argument('--exp-table-pathname', type=str,
+                        help='Full path and filename where the exposure tables are stored, '
                              'WITHOUT the monthly directory included.')
     parser.add_argument('--path_to_data', type=str,
                         help='Path to the raw data.')
@@ -34,9 +34,6 @@ def get_parser():
     parser.add_argument('--badamps', type=str,
                         help='Comma separated list of bad amplifiers that should '
                              'not be processed.')
-    parser.add_argument('--tab-filetype', type=str,
-                        help='File extension (without the \'.\') of the exposure '
-                             'and processing tables.')
     parser.add_argument('--exps-to-ignore', nargs='+', type=int,
                         help='List of exposure id\'s that should not be processed.')
     parser.add_argument('--dry-run-level', type=int, default=0,

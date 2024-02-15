@@ -73,6 +73,7 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
         return etable[[]]
 
     valid_etable, exptypes = select_valid_calib_exposures(etable)
+
     zeros = valid_etable[exptypes=='zero']
     best_arcflat_set = None
     if np.sum(exptypes=='dark') >= 1 and np.sum(exptypes=='arc') >= 5 \
@@ -88,7 +89,7 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
             log.info(f"Only found {np.sum(exptypes=='cteflat')} cteflats "
                      f"but no longer acquiring new data, so proceeding "
                      f"to check for complete calibration sets.")
-        best_arcflat_set = find_best_arc_flat_sets(etable)
+        best_arcflat_set = find_best_arc_flat_sets(valid_etable)
     elif still_acquiring:
         log.info(f"Couldn't find a complete set of cals to test for validity "
                  f"but still acquiring new data, so stopping here until "
@@ -99,14 +100,14 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
                  f"and no longer acquiring new data, so this will likely be "
                  f"a fatal issue.")
 
-    out_table = vstack([zeros, etable[exptypes == 'dark'][:1]])
+    out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
     if best_arcflat_set is not None:
         out_table = vstack([out_table, best_arcflat_set])
     if do_cte_flats:
-        out_table = vstack([out_table, etable[exptypes == 'cteflat'][:3]])
+        out_table = vstack([out_table, valid_etable[exptypes == 'cteflat'][:3]])
 
     ## Since the arc set can include LASTSTEP=='ignore', cut those out now
-    if len(out_table) > 1:
+    if len(out_table) > 0:
         out_table = out_table[out_table['LASTSTEP']=='all']
     return out_table
 
@@ -131,7 +132,7 @@ def select_valid_calib_exposures(etable):
             obseration types include CTE information and aren't redundant with
             column 'OBSTYPE'.
      """
-    etable = etable[((etable['OBSTYPE'] == 'arc') or (etable['LASTSTEP'] == 'all'))]
+    etable = etable[((etable['OBSTYPE'] == 'arc') | (etable['LASTSTEP'] == 'all'))]
     good_exptimes, exptype = [], []
     for erow in etable:
         ## Zero should have 0 exptime
@@ -140,7 +141,7 @@ def select_valid_calib_exposures(etable):
             good_exptimes.append(True)
             exptype.append('zero')
         ## Any 300s dark is valid
-        if erow['OBSTYPE'] == 'dark' \
+        elif erow['OBSTYPE'] == 'dark' \
                 and matches_exptime(erow['EXPTIME'], 300.):
             good_exptimes.append(True)
             exptype.append('dark')
@@ -148,17 +149,17 @@ def select_valid_calib_exposures(etable):
         ## for correct duration
         elif erow['OBSTYPE'] == 'arc' \
                 and matches_exptime(erow['EXPTIME'], 5.) \
-                and erow['PROGRAM'] == 'CALIB short Arcs all':
+                and erow['PROGRAM'] == 'calib short arcs all':
             good_exptimes.append(True)
             exptype.append('arc')
         ## Only 120s flats labeled 'DESI-CALIB-0' are correct for flat fielding
         elif erow['OBSTYPE'] == 'flat' \
                 and matches_exptime(erow['EXPTIME'], 120.) \
-                and 'DESI-CALIB-0' in erow['PROGRAM']:
+                and 'desi-calib-0' in erow['PROGRAM']:
             good_exptimes.append(True)
             exptype.append('flat')
         ## CTE flats come in 1s, 3s, and 10s varieties
-        elif erow['OBSTYPE'] == 'flat' and 'CTE' in erow['PROGRAM']:
+        elif erow['OBSTYPE'] == 'flat' and 'cte' in erow['PROGRAM']:
             if matches_exptime(erow['EXPTIME'],1.) \
                     or matches_exptime(erow['EXPTIME'],3.) \
                     or matches_exptime(erow['EXPTIME'],10.):
@@ -166,11 +167,9 @@ def select_valid_calib_exposures(etable):
                 exptype.append('cteflat')
             else:
                 good_exptimes.append(False)
-                exptype.append('other')
         ## Everything else is invalid (note zeros are handled separately)
         else:
             good_exptimes.append(False)
-            exptype.append('other')
 
     outtable = etable[np.array(good_exptimes)]
     exptype = np.array(exptype)
@@ -258,7 +257,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
             if no set is available or just arcs if no valid flat set is
             available.
      """
-    exptable = select_valid_calib_exposures(etable=exptable)
+    exptable, exptypes = select_valid_calib_exposures(etable=exptable)
     log = get_logger()
     exptable.sort(['EXPID'])
     arc_sequence_sum = int(narcsequence*(1+narcsequence)/2)

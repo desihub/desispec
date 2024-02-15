@@ -14,6 +14,10 @@ def parse_args():
                                                  "with the DESI data pipeline.")
 
     parser.add_argument("-n","--night", type=int, required=True, help="The night you want processed.")
+    parser.add_argument("--daily", action="store_true", help="If set the "
+                        + "the pipeline operates in daily mode, updating"
+                        + " the exposure_table, not submitting the last"
+                        + " tile, waiting for a complete set of cals, etc.")
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
@@ -44,12 +48,12 @@ def parse_args():
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
     parser.add_argument("--system-name", type=str, required=False, default=None,
                         help="Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu, ...")
-    parser.add_argument("--exp-table-path", type=str, required=False, default=None,
-                        help="Directory name where the output exposure table should be saved.")
-    parser.add_argument("--proc-table-path", type=str, required=False, default=None,
-                        help="Directory name where the output processing table should be saved.")
-    parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
-                        help="File format and extension for the exp and proc tables.")
+    parser.add_argument("--exp-table-pathname", type=str, required=False, default=None,
+                        help="Directory and file name where the output exposure table should be saved.")
+    parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
+                        help="Directory and file name where the output processing table should be saved.")
+    parser.add_argument("--update-exptable", action="store_true", help="If true then the "
+                       + "exposure table is updated. The default is False.")
     parser.add_argument("--complete-tiles-thrunight", type=int, required=False, default=None,
                         help="Only tiles completed on or before the supplied YYYYMMDD are "
                         +"considered complete and will be processed. None will process "
@@ -60,12 +64,6 @@ def parse_args():
                         "dry-run-level is defined as nonzero.")
     parser.add_argument("--no-redshifts", action="store_true",
                         help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
-    parser.add_argument("--error-if-not-available", action="store_true",
-                        help="Raise an error instead of reporting and moving on if an exposure "+\
-                             "table doesn't exist.")
-    parser.add_argument("--append-to-proc-table", action="store_true",
-                        help="Give this flag if you want to submit jobs even if proc table exists."+
-                        " Note this will skip existing exposures present in proc table.")
     parser.add_argument("--ignore-proc-table-failures", action="store_true",
                         help="Give this flag if you want to submit jobs even if "+
                         " there are incomplete jobs in the existing proc table."+
@@ -77,9 +75,6 @@ def parse_args():
     parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
-    parser.add_argument("--use-tilenight", action=argparse.BooleanOptionalAction,
-                        help="Use desi_proc_tilenight (or not) for prestdstar, stdstar, and poststdstar steps. "+
-                             "Default False for NERSC Cori, True otherwise")
     parser.add_argument("--all-tiles", action="store_true",
                         help="Set to NOT restrict to completed tiles as defined by the table pointed to by specstatus_path.")
     parser.add_argument("--all-cumulatives", action="store_true",

@@ -119,7 +119,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
-    month = str(night)[:-2]
+    if night is not None:
+        month = str(night)[:-2]
+    else:
+        month = None
     location = dict(
         #
         # Raw data.
@@ -358,7 +361,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph, 'nightprefix':nightprefix,
+        'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }
 
     #- survey and faprogram should be lower, but don't trip on None

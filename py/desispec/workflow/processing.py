@@ -1473,7 +1473,7 @@ def make_joint_prow(prows, descriptor, internal_id):
         dict: Row of a processing table corresponding to the joint fit job.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
-    first_row = prows[0]
+    first_row = table_row_to_dict(prows[0])
     joint_prow = first_row.copy()
 
     joint_prow['INTID'] = internal_id
@@ -1558,7 +1558,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
     Returns:
         dict: Row of a processing table corresponding to the tilenight job.
     """
-    first_row = prows[0]
+    first_row = table_row_to_dict(prows[0])
     joint_prow = first_row.copy()
 
     joint_prow['INTID'] = internal_id
@@ -1589,7 +1589,7 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
     Returns:
         dict: Row of a processing table corresponding to the tilenight job.
     """
-    first_row = prows[0]
+    first_row = table_row_to_dict(prows[0])
     redshift_prow = first_row.copy()
 
     redshift_prow['INTID'] = internal_id
@@ -1732,7 +1732,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                             )
     return ptable, calibjobs, sciences, internal_id
 
-def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id, dry_run=0,
+def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
                                   z_submit_types=None, system_name=None,use_specter=False,
@@ -1744,7 +1744,6 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, intern
         ptable (Table): Processing table of all exposures that have been processed.
         sciences (list of dict): list of the most recent individual prestdstar science exposures
             (if currently processing that tile). May be empty if none identified yet.
-        lasttype (str or None): the obstype of the last individual exposure row to be processed.
         internal_id (int): an internal identifier unique to each job. Increments with each new job. This
             is the smallest unassigned value.
         dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
