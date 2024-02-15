@@ -278,11 +278,19 @@ class TestIOFibermap(unittest.TestCase):
     def test_compare_empty_to_assemble(self):
         """Compare the output of empty_fibermap to assemble_fibermap.
         """
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
-            empty = fits.convenience.table_to_hdu(empty_fibermap(5000))
-        fm = assemble_fibermap(20210517, 89031)
-        self.assertListEqual(empty.data.columns.names, fm['FIBERMAP'].data.columns.names)
+        for survey, night, expid in (('cmx', 20201214, 67768),
+                                     ('sv1', 20201218, 68684),
+                                     ('sv2', 20210327, 82497),
+                                     ('sv3', 20210406, 83726),
+                                     ('main', 20210517, 89031),
+                                     ('main', 20240115, 219391),
+                                     ('special', 20210512, 88150),
+                                     ('special', 20240211, 225032)):
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+                empty = fits.convenience.table_to_hdu(empty_fibermap(5000, survey=survey))
+            fm = assemble_fibermap(night, expid)
+            self.assertListEqual(empty.data.columns.names, fm['FIBERMAP'].data.columns.names)
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_missing_input_files(self):
