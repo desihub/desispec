@@ -13,8 +13,8 @@ import fitsio
 import desispec.io
 import desiutil
 from desispec.io import findfile
-from desispec.io.util import decode_camword, parse_cameras, \
-    get_tempfilename
+from desispec.io.util import decode_camword, \
+    parse_cameras, get_tempfilename
 from desiutil.log import get_logger
 
 from . import batch
@@ -372,7 +372,7 @@ def log_timer(timer, timingfile=None, comm=None):
             tmax = steptiming['duration.max']
             log.info(f'  {stepname:16s} {tmax:.2f}')
 
-def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, system_name=None):
+def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=None, system_name=None):
     """
     Determine the resources that should be assigned to the batch script given what
     desi_proc needs for the given input information.
@@ -384,6 +384,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, system_
         force_runtime (int, optional): the amount of runtime in minutes to allow for the script. Should be left
             to default heuristics unless needed for some reason.
         system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
+        queue (str, optional): the Slurm queue to be submitted to. Currently not used.
 
     Returns:
         tuple: A tuple containing:
@@ -970,7 +971,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('fi\n')
 
                 #- then proceed with desi_fit_cte_night command
-                camword = create_camword(cameras)
+                camword = parse_cameras(cameras)
                 fx.write('\n# Fit CTE parameters from flats if needed\n')
                 cmd = f'desi_fit_cte_night -n {night} -c {camword}'
                 fx.write(f'if [ -f $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/{night}/ctecorr-{night}.csv ]; then\n')

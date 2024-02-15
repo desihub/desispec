@@ -37,7 +37,7 @@ from desispec.io.util import decode_camword, difference_camwords, \
 
 
 def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
-               queue='realtime', reservation=None, system_name=None,
+               queue=None, reservation=None, system_name=None,
                exp_table_pathname=None, proc_table_pathname=None,
                override_pathname=None, update_exptable=False,
                dry_run_level=0, dry_run=False, no_redshifts=False,
@@ -49,7 +49,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                all_cumulatives=False,
                daily=False, specprod=None, path_to_data=None, exp_obstypes=None,
                camword=None, badcamword=None, badamps=None,
-               exps_to_ignore=None, exp_cadence_time=0.5, verbose=False,
+               exps_to_ignore=None, sub_wait_time=0.5, verbose=False,
                dont_require_cals=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
@@ -144,8 +144,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'. Note this is
             only true for new exposures being added to the
             exposure_table in 'daily' mode.
-        exp_cadence_time: int. Wait time in seconds between loops over each
-            science exposure. Default 0.5 seconds.
+        sub_wait_time: int. Wait time in seconds between submission loops.
+            Default 0.5 seconds.
         verbose: bool. True if you want more verbose output, false otherwise.
             Current not propagated to lower code, so it is only used in the
             main daily_processing script itself.
@@ -193,7 +193,15 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         all_cumulatives = True
         all_tiles = True
         complete_tiles_thrunight = None
+        ## Default for nightly processing is realtime queue
+        if queue is None:
+            queue = 'realtime'
 
+    ## Default for normal processing is regular queue
+    if queue is None:
+        queue = 'regular'
+    log.info(f"Submitting to the {queue} queue.")
+             
     ## Set night
     if night is None:
         err = "Must specify night unless running in daily=True mode"
@@ -388,7 +396,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         proctable.add_row(prow)
         if len(proctable) > 0 and dry_run_level < 3:
             write_table(proctable, tablename=proc_table_pathname)
-        sleep_and_report(exp_cadence_time,
+        sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
                          dry_run=dry_run)
         return prow, proctable
@@ -415,15 +423,30 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         log.info(f'\n\n##################### {tile} #########################')
 
         ## Identify the science exposures for the given tile
-        sciences = sci_etable[sci_etable['TILEID'] == tile]
-
+        tile_etable = sci_etable[sci_etable['TILEID'] == tile]
+        
+        ## Should change submit_tilenight_and_redshifts to take erows
+        ## but for now will remain backward compatible and use prows
+        ## Create list of prows from selected etable rows
+        sciences = []
+        for erow in tile_etable:
+            prow = erow_to_prow(erow)
+            prow['INTID'] = int_id
+            int_id += 1
+            prow['JOBDESC'] = prow['OBSTYPE']
+            prow = define_and_assign_dependency(prow, calibjobs)
+            sciences.append(prow)
+            
         # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
         cur_z_submit_types = z_submit_types.copy()
         if ((z_submit_types is not None) and ('cumulative' in z_submit_types)
             and (tile not in tiles_cumulative)):
             cur_z_submit_types.remove('cumulative')
 
-        ptable, internal_id = submit_tilenight_and_redshifts(
+        ## No longer need to return sciences since this is always the
+        ## full set of exposures, but will keep for now for backward
+        ## compatibility
+        ptable, sciences, internal_id = submit_tilenight_and_redshifts(
                                     ptable, sciences, calibjobs, int_id,
                                     dry_run=dry_run_level, queue=queue,
                                     reservation=reservation,
@@ -438,7 +461,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         if len(ptable) > 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
 
-        sleep_and_report(exp_cadence_time,
+        sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
                          dry_run=dry_run)
 
@@ -471,7 +494,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         log.info(f"\nn{ptable=}")
         log.info(f"\n{unproc_table=}")
 
-    log.info(f"Completed submission of exposures for night {night}.", '\n\n\n')
+    if ignore_last_tile:
+        log.info(f"Current submission of exposures "
+                 + f"for {night=} are complete.\n\n\n\n")
+    else:
+        log.info(f"All done: Completed submission of exposures for night {night}.\n")
+        
     return ptable, unproc_table
 
 

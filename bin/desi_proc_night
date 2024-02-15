@@ -21,9 +21,9 @@ def parse_args():
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
-    parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
+    parser.add_argument("--z-submit-types", type=str, default='cumulative', required=False,
                         help="The group types of redshifts that should be submitted with each exposure. If not "+
-                             "specified, default  is 'perexp,pernight'. If "+
+                             "specified, default  is 'cumulative'. If "+
                              "'false' or 'None' then no redshifts are submitted")
     parser.add_argument("--dry-run-level", type=int, default=0, required=False,
                         help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
@@ -42,7 +42,7 @@ def parse_args():
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
     #                         "Overwrites the environment variable SPECPROD")
-    parser.add_argument("-q", "--queue", type=str, required=False, default='regular',
+    parser.add_argument("-q", "--queue", type=str, required=False, default=None,
                         help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
@@ -58,6 +58,8 @@ def parse_args():
                         help="Only tiles completed on or before the supplied YYYYMMDD are "
                         +"considered complete and will be processed. None will process "
                         +"all completed tiles.")
+    parser.add_argument("--sub-wait-time", type=float, required=False, default=0.5,
+                        help="Time to wait between submissions.")
     # Code Flags
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
