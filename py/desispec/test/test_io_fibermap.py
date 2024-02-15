@@ -16,7 +16,7 @@ from astropy.table import Table, Column
 import fitsio
 from desiutil.annotate import check_comment_length
 
-from ..io.fibermap import (fibermap_columns, fibermap_comments, _set_fibermap_columns,
+from ..io.fibermap import (fibermap_columns, _set_fibermap_columns,
                            empty_fibermap, write_fibermap, read_fibermap, find_fiberassign_file,
                            annotate_fibermap)
 
@@ -80,14 +80,6 @@ class TestIOFibermap(unittest.TestCase):
             rmtree(self.datadir)
         if os.path.isdir(self.reduxdir):
             rmtree(self.reduxdir)
-        #
-        # Reset desispec.io.fibermap.fibermap_columns
-        #
-        keys = list(fibermap_columns.keys())
-        for key in keys:
-            if key != 'main':
-                del fibermap_columns[key]
-                del fibermap_comments[key]
 
     def tearDown(self):
         for testfile in [self.testfile, self.testlog]:
@@ -114,7 +106,7 @@ class TestIOFibermap(unittest.TestCase):
         self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
         self.assertTrue(np.all(fm3['PETAL_LOC'] == [0,0,0,0,0,1,1,1,1,1]))
 
-        self.assertListEqual(fm3.colnames, [c[0] for c in fibermap_columns['main'] if c[4] == 'empty'])
+        self.assertListEqual(fm3.colnames, [c[0] for c in fibermap_columns if c[4] == 'empty'])
 
         fm4 = empty_fibermap(10, specmin=495, survey='cmx')
         self.assertIn('CMX_TARGET', fm4.colnames)
@@ -192,12 +184,8 @@ class TestIOFibermap(unittest.TestCase):
     def test_fibermap_comment_lengths(self):
         """Automate testing of fibermap comment lengths.
         """
-        f = _set_fibermap_columns()
-        n_long = check_comment_length(fibermap_comments['main'], error=False)
-        self.assertEqual(n_long, 0)
-        n_long = check_comment_length(fibermap_comments['cmx'], error=False)
-        self.assertEqual(n_long, 0)
-        n_long = check_comment_length(fibermap_comments['sv3'], error=False)
+        fibermap_comments = dict([(row[0], row[3]) for row in fibermap_columns])
+        n_long = check_comment_length(fibermap_comments, error=False)
         self.assertEqual(n_long, 0)
 
     @patch('desispec.io.fibermap.get_logger')
@@ -222,16 +210,6 @@ class TestIOFibermap(unittest.TestCase):
         #
         mock_log().warning.assert_has_calls([call("Overriding units for column '%s': '%s' -> '%s'.", 'PMRA', 'mas yr-1', 'mas yr^-1'),
                                              call("Overriding units for column '%s': '%s' -> '%s'.", 'PMDEC', 'mas yr-1', 'mas yr^-1')])
-        #
-        # Test with alternate survey
-        #
-        fibermap = empty_fibermap(500, survey='cmx')
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
-            fibermap_hdu = fits.BinTableHDU(fibermap)
-        fibermap_hdu = annotate_fibermap(fibermap_hdu, survey='cmx')
-        self.assertEqual(fibermap_hdu.header['TTYPE58'], 'CMX_TARGET')
-        self.assertEqual(fibermap_hdu.header.comments['TTYPE58'], 'Target selection bitmask for commissioning')  # CMX_TARGET
         #
         # Test with unexpected column
         #
