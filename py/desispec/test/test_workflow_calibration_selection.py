@@ -59,6 +59,35 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
                             flatflatgap=3, expid_offset=0):
         flatset = Table()
 
+        nexps = nflatsperset * nflatsets
+        flatitteroffset = nflatsperset + flatflatgap - 1
+
+        expids, seqnums, seqtots, progs = list(), list(), list(), list()
+        for fset in range(nflatsets):
+            fulloffset = expid_offset + fset * flatitteroffset
+            expids += list(np.arange(fulloffset, fulloffset + nflatsperset))
+            seqnums += list(1 + np.arange(nflatsperset))
+            seqtots += list(np.ones(nflatsperset, dtype=int) * nflatsperset)
+            progs += [f'calib desi-calib-0{fset} leds only'] * nflatsperset
+
+        flatset["EXPID"] = expids
+        flatset['SEQNUM'] = seqnums
+        flatset['SEQTOT'] = seqtots
+        flatset['PROGRAM'] = progs
+        flatset['EXPTIME'] = [120.0] * nexps
+
+        flatset['LASTSTEP'] = ['ignore'] * nexps
+        flatset['LASTSTEP'][:] = 'all'
+        flatset['BADCAMWORD'] = ['b0123456789r0123456789'] * nexps
+        flatset['BADCAMWORD'][:] = ''
+        flatset['BADAMPS'] = ['b0123456789r0123456789'] * nexps
+        flatset['BADAMPS'][:] = ''
+        flatset['OBSTYPE'] = ['flat'] * nexps
+
+    def _make_flatset_etable_withcte(self, nflatsperset=3, nflatsets=4,
+                            flatflatgap=3, expid_offset=0):
+        flatset = Table()
+
         nexps = nflatsperset * nflatsets + 1
         flatitteroffset = nflatsperset + flatflatgap - 1
 
