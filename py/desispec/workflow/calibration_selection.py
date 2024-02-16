@@ -10,7 +10,7 @@ from astropy.table import Table, join
 import numpy as np
 
 import time, datetime
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 import subprocess
 from copy import deepcopy
 
@@ -74,32 +74,23 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
 
     valid_etable, exptypes = select_valid_calib_exposures(etable)
 
-    zeros = valid_etable[exptypes=='zero']
-    best_arcflat_set = None
-    if np.sum(exptypes=='dark') >= 1 and np.sum(exptypes=='arc') >= 5 \
-            and np.sum(exptypes=='flat') >= 12:
-        if np.sum(exptypes=='cteflat')>=1 or not do_cte_flats:
-            log.info(f"Found at least one possible calibration set to test.")
-        elif still_acquiring:
-            log.info(f"Only found {np.sum(exptypes=='cteflat')} cteflats "
-                     f"but still acquiring new data, so stopping here until "
-                     f"more information is known.")
-            return etable[[]]
-        else:
-            log.info(f"Only found {np.sum(exptypes=='cteflat')} cteflats "
-                     f"but no longer acquiring new data, so proceeding "
-                     f"to check for complete calibration sets.")
-        best_arcflat_set = find_best_arc_flat_sets(valid_etable)
+    if np.sum(exptypes == 'dark') >= 1 and np.sum(exptypes == 'arc') >= 5 \
+            and np.sum(exptypes == 'flat') >= 12 \
+            and (np.sum(exptypes == 'cteflat') >= 1 or not do_cte_flats):
+        log.info(f"Found at least one possible calibration set to test.")
     elif still_acquiring:
-        log.info(f"Couldn't find a complete set of cals to test for validity "
-                 f"but still acquiring new data, so stopping here until "
-                 f"more information is known.")
+        log.info(f"Only found {Counter(exptypes)} calibrations "
+                 + f"but still acquiring new data, so stopping here until "
+                 + f"more information is known.")
         return etable[[]]
     else:
-        log.error(f"Couldn't find a complete set of cals to test for validity "
-                 f"and no longer acquiring new data, so this will likely be "
-                 f"a fatal issue.")
+        log.error(f"Only found {Counter(exptypes)} calibrations "
+                  + "and not acquiring new data, so this may be fatal. "
+                  + "You may want to consider using an override night.")
 
+    best_arcflat_set = find_best_arc_flat_sets(valid_etable)
+    
+    zeros = valid_etable[exptypes=='zero']
     out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
     if best_arcflat_set is not None:
         out_table = vstack([out_table, best_arcflat_set])
@@ -109,6 +100,7 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
     ## Since the arc set can include LASTSTEP=='ignore', cut those out now
     if len(out_table) > 0:
         out_table = out_table[out_table['LASTSTEP']=='all']
+
     return out_table
 
 
@@ -265,6 +257,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
     arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
     complete_arc_sets, complete_sets = [], []
     log.info(f"Looping over {len(exptable)} rows")
+
     for erow in exptable:
         if erow['OBSTYPE'] == 'arc':
             if erow['SEQNUM'] == 1:

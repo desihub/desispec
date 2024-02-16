@@ -410,7 +410,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                                 create_submit_add_and_save)
 
     ## Require some minimal level of calibrations to process science exposures
-    if not dry_run and require_cals and calibjobs['linkcal'] is None \
+    if require_cals and calibjobs['linkcal'] is None \
             and calibjobs['nightlyflat'] is None:
         err = (f"Required to have at least psf calibrations via override link"
                + f" or psfnight")
@@ -535,21 +535,19 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
     ## Otherwise proceed with submitting the calibrations
     ## Define objects to process
-    dark_erow, zeros, arcs, flats = None, None, None, None
-    num_zeros, num_cte = 0, 0
-    if 'zero' in cal_etable['OBSTYPE']:
-        zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
-        num_zeros = len(zeros)
+    dark_erow, flats, ctes = list(), list(), list()
+    zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
+    arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'dark' in cal_etable['OBSTYPE']:
         dark_erow = cal_etable[cal_etable['OBSTYPE']=='dark'][0]
-    if 'arc' in cal_etable['OBSTYPE']:
-        arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'flat' in cal_etable['OBSTYPE']:
-        flats = cal_etable[cal_etable['OBSTYPE']=='flat']
-        num_cte = np.sum(['cte' in prog.lower() for prog in flats['PROGRAM']])
+        allflats = cal_etable[cal_etable['OBSTYPE']=='flat']
+        is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
+        flats = allflats[~is_cte]
+        ctes = allflats[is_cte]
 
     ## If just starting out and no dark, do the nightlybias
-    if dark_erow is None and num_zeros > 0 and calibjobs['nightlybias'] is None:
+    if len(dark_erow) == 0 and len(zeros) > 0 and calibjobs['nightlybias'] is None:
         log.info("\nNo dark found. Submitting nightlybias before processing "
                  "exposures.\n")
         prow = erow_to_prow(zeros[0])
@@ -567,11 +565,11 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow = define_and_assign_dependency(prow, calibjobs)
         prow, ptable = create_submit_add_and_save(prow, ptable)
         calibjobs['nightlybias'] = prow.copy()
-    elif dark_erow is not None:
+    elif len(dark_erow) > 0:
         ######## Submit dark or ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
         ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
-        if num_zeros == 0 and num_cte == 0:
+        if len(zeros) == 0 and len(cte) == 0:
             jobdesc = 'badcol'
         else:
             jobdesc = 'ccdcalib'
@@ -583,15 +581,16 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
             calibjobs[prow['JOBDESC']] = prow.copy()
 
     ######## Submit arcs and psfnight ########
-    if calibjobs['psfnight'] is None:
+    if calibjobs['psfnight'] is None and len(arcs)>0:
+        arc_prows = []
         for arc_erow in arcs:
             if arc_erow['EXPID'] in processed_cal_expids:
                 continue
             prow, int_id = make_exposure_prow(arc_erow, int_id, calibjobs)
             log.info(f"\nProcessing: {prow}\n")
             prow, ptable = create_submit_add_and_save(prow, ptable)
+            arc_prows.append(prow)
 
-        arc_prows = ptable[ptable['OBSTYPE']=='arc']
         joint_prow, int_id = make_joint_prow(arc_prows, descriptor='psfnight',
                                              internal_id=int_id)
         ptable = set_calibrator_flag(arc_prows, ptable)
@@ -599,29 +598,34 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
 
     ######## Submit flats and nightlyflat ########
-    for flat_erow in flats:
-        if flat_erow['EXPID'] in processed_cal_expids:
-            continue
-
-        if 'cte' in flat_erow['PROGRAM'] or flat_erow['EXPTIME'] < 119:
-            jobdesc = 'cteflat'
-        else:
-            jobdesc = 'flat'
-            ## If nightlyflat defined we don't need to process more normal flats
-            if calibjobs['nightlyflat'] is not None:
+    ## If nightlyflat defined we don't need to process more normal flats
+    if calibjobs['nightlyflat'] is None and len(flats) > 0:
+        flat_prows = []
+        for flat_erow in flats:
+            if flat_erow['EXPID'] in processed_cal_expids:
                 continue
 
-        prow, int_id = make_exposure_prow(flat_erow, int_id, calibjobs,
-                                          jobdesc=jobdesc)
-        prow, ptable = create_submit_add_and_save(prow, ptable)
+            jobdesc = 'flat'
+            prow, int_id = make_exposure_prow(flat_erow, int_id, calibjobs,
+                                              jobdesc=jobdesc)
+            prow, ptable = create_submit_add_and_save(prow, ptable)
+            flat_prows.append(prow)
 
-    if calibjobs['nightlyflat'] is None:
-        flat_prows = ptable[ptable['JOBDESC'] == 'flat']
         joint_prow, int_id = make_joint_prow(flat_prows, descriptor='nightlyflat',
                                              internal_id=int_id)
         ptable = set_calibrator_flag(flat_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
 
+    ######## Submit cte flats ########
+    if len(ctes) > 0:
+        for cte_erow in ctes:
+            if cte_erow['EXPID'] in processed_cal_expids:
+                continue
+            jobdesc = 'cteflat'
+            prow, int_id = make_exposure_prow(flat_erow, int_id, calibjobs,
+                                          jobdesc=jobdesc)
+            prow, ptable = create_submit_add_and_save(prow, ptable)
+            
     return ptable, calibjobs, int_id
 
 
