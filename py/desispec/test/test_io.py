@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Test desispec.io.
 """
-
+import warnings
 import sys
 import unittest
 from unittest.mock import patch, MagicMock
@@ -13,6 +13,7 @@ from shutil import rmtree
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, MaskedColumn
+from astropy.utils.exceptions import AstropyUserWarning
 import fitsio
 from ..frame import Frame
 
@@ -134,6 +135,24 @@ class TestIO(unittest.TestCase):
             self.assertIn(key, newhdr)
         self.assertIn('DATASUM', newhdr)
         self.assertIn('CHECKSUM', newhdr)
+        os.remove(self.testfile)
+        #
+        # Input: BinTableHDU
+        #
+        hdu = fits.BinTableHDU.from_columns([fits.Column(name='X', format='E', unit='deg', array=np.array([1.0, 2.0, 3.0], dtype=np.float32)),
+                                             fits.Column(name='Y', format='E', unit='s', array=np.array([2.0, 4.0, 6.0], dtype=np.float32))])
+        hdu.header['EXTNAME'] = 'DATATABLE'
+        hdu.header['TTYPE1'] = ('X', 'Comment on X')
+        hdu.header['TTYPE2'] = ('Y', 'Comment on Y')
+        hdu.header['A'] = ('Value', 'Comment on A')
+        hdu.header['B'] = (12345, 'Comment on B')
+        write_bintable(self.testfile, hdu)
+        result, newhdr = fits.getdata(self.testfile, header=True)
+        self.assertListEqual(result.columns.names, ['X', 'Y'])
+        self.assertIn('A', newhdr)
+        self.assertIn('B', newhdr)
+        self.assertEqual(newhdr.comments['TTYPE1'], 'Comment on X')
+        self.assertEqual(newhdr['TUNIT1'], 'deg')
         os.remove(self.testfile)
         #
         # Input: dictionary
@@ -422,33 +441,36 @@ class TestIO(unittest.TestCase):
             data = fits.getdata(self.testfile, extname)
             self.assertEqual(data.dtype, np.dtype('>f8'), '{} not type >f8'.format(extname))
 
-        #- with and without units
-        frx = Frame(wave, flux, ivar, mask, R, meta=meta)
-        write_frame(self.testfile, frx)
-        frame = read_frame(self.testfile)
-        self.assertTrue('BUNIT' not in frame.meta)
-        write_frame(self.testfile, frx, units='photon/bin')
-        frame = read_frame(self.testfile)
-        self.assertEqual(frame.meta['BUNIT'], 'photon/bin')
-        frx.meta['BUNIT'] = 'blatfoo'
-        write_frame(self.testfile, frx)
-        frame = read_frame(self.testfile)
-        self.assertEqual(frame.meta['BUNIT'], 'blatfoo')
-        #- function argument trumps pre-existing BUNIT
-        write_frame(self.testfile, frx, units='quat')
-        frame = read_frame(self.testfile)
-        self.assertEqual(frame.meta['BUNIT'], 'quat')
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
 
-        #- with and without fibermap
-        self.assertEqual(frame.fibermap, None)
-        fibermap = empty_fibermap(nspec)
-        fibermap['TARGETID'] = np.arange(nspec)*2
-        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap, meta=dict(FLAVOR='science'))
-        write_frame(self.testfile, frx)
-        frame = read_frame(self.testfile)
-        for name in fibermap.dtype.names:
-            match = np.all(fibermap[name] == frame.fibermap[name])
-            self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
+            #- with and without units
+            frx = Frame(wave, flux, ivar, mask, R, meta=meta)
+            write_frame(self.testfile, frx)
+            frame = read_frame(self.testfile)
+            self.assertTrue('BUNIT' not in frame.meta)
+            write_frame(self.testfile, frx, units='photon/bin')
+            frame = read_frame(self.testfile)
+            self.assertEqual(frame.meta['BUNIT'], 'photon/bin')
+            frx.meta['BUNIT'] = 'blatfoo'
+            write_frame(self.testfile, frx)
+            frame = read_frame(self.testfile)
+            self.assertEqual(frame.meta['BUNIT'], 'blatfoo')
+            #- function argument trumps pre-existing BUNIT
+            write_frame(self.testfile, frx, units='quat')
+            frame = read_frame(self.testfile)
+            self.assertEqual(frame.meta['BUNIT'], 'quat')
+
+            #- with and without fibermap
+            self.assertEqual(frame.fibermap, None)
+            fibermap = empty_fibermap(nspec)
+            fibermap['TARGETID'] = np.arange(nspec)*2
+            frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap, meta=dict(FLAVOR='science'))
+            write_frame(self.testfile, frx)
+            frame = read_frame(self.testfile)
+            for name in fibermap.dtype.names:
+                match = np.all(fibermap[name] == frame.fibermap[name])
+                self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
     def test_sky_rw(self):
         """Test reading and writing sky files.

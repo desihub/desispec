@@ -190,7 +190,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     Args:
         filename: full path to filename to write
-        data: dict or table-like data to write
+        data: dict or table-like data to write, or a prepared BinTableHDU
 
     Options:
         header: dict-like header key/value pairs to propagate
@@ -204,55 +204,59 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     log = get_logger()
 
+    hdu = None
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
         outdata = Table(data)
+    elif isinstance(data, astropy.io.fits.BinTableHDU):
+        hdu = data
     else:
         outdata = Table(_dict2ndarray(data))
 
-    # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
-    hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
-    if extname is not None:
-        hdu.header['EXTNAME'] = extname
-    else:
-        log.warning("Table does not have EXTNAME set!")
-
-    if header is not None:
-        if isinstance(header, astropy.io.fits.header.Header):
-            for key, value in header.items():
-                comment = header.comments[key]
-                hdu.header[key] = (value, comment)
+    if hdu is None:
+        # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
+        hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
+        if extname is not None:
+            hdu.header['EXTNAME'] = extname
         else:
-            hdu.header.update(header)
+            log.warning("Table does not have EXTNAME set!")
 
-    #- Allow comments and units to be None
-    if comments is None:
-        comments = dict()
-    if units is None:
-        units = dict()
-    #
-    # Add comments and units to the *columns* of the table.
-    #
-    for i in range(1, 1000):
-        key = 'TTYPE'+str(i)
-        if key not in hdu.header:
-            break
-        else:
-            colname = hdu.header[key]
-            if colname in comments:
-                hdu.header[key] = (colname, comments[colname])
-            if colname in units and units[colname].strip() != '':
-                tunit_key = 'TUNIT'+str(i)
-                if tunit_key in hdu.header and hdu.header[tunit_key] != units[colname]:
-                    log.warning(f'Overriding {colname} units {hdu.header[tunit_key]} -> {units[colname]}')
+        if header is not None:
+            if isinstance(header, astropy.io.fits.header.Header):
+                for key, value in header.items():
+                    comment = header.comments[key]
+                    hdu.header[key] = (value, comment)
+            else:
+                hdu.header.update(header)
 
-                # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
-                tform_key = 'TFORM'+str(i)
-                hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
-    #
-    # Add checksum cards.
-    #
-    hdu.add_checksum()
+        #- Allow comments and units to be None
+        if comments is None:
+            comments = dict()
+        if units is None:
+            units = dict()
+        #
+        # Add comments and units to the *columns* of the table.
+        #
+        for i in range(1, 1000):
+            key = 'TTYPE'+str(i)
+            if key not in hdu.header:
+                break
+            else:
+                colname = hdu.header[key]
+                if colname in comments:
+                    hdu.header[key] = (colname, comments[colname])
+                if colname in units and units[colname].strip() != '':
+                    tunit_key = 'TUNIT'+str(i)
+                    if tunit_key in hdu.header and hdu.header[tunit_key] != units[colname]:
+                        log.warning(f'Overriding {colname} units {hdu.header[tunit_key]} -> {units[colname]}')
+
+                    # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
+                    tform_key = 'TFORM'+str(i)
+                    hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
+        #
+        # Add checksum cards.
+        #
+        hdu.add_checksum()
 
     #- Write the data and header
 
@@ -382,7 +386,7 @@ def healpix_subdirectory(nside, pixel):
     pixdir = str(pixel)
     return os.path.join(subdir, pixdir)
 
-    
+
 def create_camword(cameras):
     """
     Function that takes in a list of cameras and creates a succinct listing
@@ -431,16 +435,16 @@ def decode_camword(camword):
     """
     Function that takes in a succinct listing
     of all spectrographs and outputs a 1-d numpy array with a list of all
-    spectrograph/camera pairs. It uses "a" followed by                                                      
-    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
-    b, r, and z represent the camera of the same name. All trailing numbers                                                     
-    represent the spectrographs for which that camera exists in the list.                                                       
-                                                                                                                                
-    Args:                      
-       camword (str): A string representing all information about the spectrographs/cameras                                    
-                        e.g. a01234678b59z9                                                                                                  
-    Returns (np.ndarray, 1d):  an array containing strings of                                                              
-                                cameras, e.g. 'b0','r1',...                                                                
+    spectrograph/camera pairs. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       camword (str): A string representing all information about the spectrographs/cameras
+                        e.g. a01234678b59z9
+    Returns (np.ndarray, 1d):  an array containing strings of
+                                cameras, e.g. 'b0','r1',...
     """
     log = get_logger()
     searchstr = camword
@@ -778,7 +782,7 @@ def parse_badamps(badamps,joinsymb=','):
         raise TypeError(err)
     elif badamps == '':
         return cam_petal_amps
-    
+
     for cpa in badamps.split(joinsymb):
         cpa = cpa.strip()
         if len(cpa) != 3:
