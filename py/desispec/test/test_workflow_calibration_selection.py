@@ -8,8 +8,6 @@ import unittest
 import numpy as np
 from astropy.table import Table, vstack
 
-from desispec.workflow.calibration_selection import select_valid_calib_exposures, find_best_arc_flat_sets
-
 class TestWorkflowCalibrationSelection(unittest.TestCase):
     """Test desispec.workflow.calibration_selection
     """
@@ -58,8 +56,8 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
     def _make_flatset_etable(self, nflatsperset=3, nflatsets=4,
                             flatflatgap=3, expid_offset=0):
         flatset = Table()
-
-        nexps = nflatsperset * nflatsets
+        ncte = 3
+        nexps = nflatsperset * nflatsets + ncte
         flatitteroffset = nflatsperset + flatflatgap - 1
 
         expids, seqnums, seqtots, progs = list(), list(), list(), list()
@@ -70,40 +68,11 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
             seqtots += list(np.ones(nflatsperset, dtype=int) * nflatsperset)
             progs += [f'calib desi-calib-0{fset} leds only'] * nflatsperset
 
-        flatset["EXPID"] = expids
-        flatset['SEQNUM'] = seqnums
-        flatset['SEQTOT'] = seqtots
-        flatset['PROGRAM'] = progs
-        flatset['EXPTIME'] = [120.0] * nexps
-
-        flatset['LASTSTEP'] = ['ignore'] * nexps
-        flatset['LASTSTEP'][:] = 'all'
-        flatset['BADCAMWORD'] = ['b0123456789r0123456789'] * nexps
-        flatset['BADCAMWORD'][:] = ''
-        flatset['BADAMPS'] = ['b0123456789r0123456789'] * nexps
-        flatset['BADAMPS'][:] = ''
-        flatset['OBSTYPE'] = ['flat'] * nexps
-
-    def _make_flatset_etable_withcte(self, nflatsperset=3, nflatsets=4,
-                            flatflatgap=3, expid_offset=0):
-        flatset = Table()
-
-        nexps = nflatsperset * nflatsets + 1
-        flatitteroffset = nflatsperset + flatflatgap - 1
-
-        expids, seqnums, seqtots, progs = list(), list(), list(), list()
-        for fset in range(nflatsets):
-            fulloffset = expid_offset + fset * flatitteroffset
-            expids += list(np.arange(fulloffset, fulloffset + nflatsperset))
-            seqnums += list(1 + np.arange(nflatsperset))
-            seqtots += list(np.ones(nflatsperset, dtype=int) * nflatsperset)
-            progs += [f'calib desi-calib-0{fset} leds only'] * nflatsperset
-
-        flatset["EXPID"] = expids + [np.max(expids) + 1]
-        flatset['SEQNUM'] = seqnums + [1]
-        flatset['SEQTOT'] = seqtots + [1]
-        flatset['PROGRAM'] = progs + ['led03 flat for cte check']
-        flatset['EXPTIME'] = [120.0] * (nexps - 1) + [1.0]
+        flatset["EXPID"] = expids + list(range(np.max(expids)+1,np.max(expids)+ncte+1))
+        flatset['SEQNUM'] = seqnums + [1]*ncte
+        flatset['SEQTOT'] = seqtots + [1]*ncte
+        flatset['PROGRAM'] = progs + ['led03 flat for cte check']*ncte
+        flatset['EXPTIME'] = [120.0] * (nflatsperset*nflatsets) + [1.0]*ncte
 
         flatset['LASTSTEP'] = ['ignore'] * nexps
         flatset['LASTSTEP'][:] = 'all'
@@ -128,17 +97,26 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         arcflatset.sort(['EXPID'])
         return arcflatset
 
+    def _get_cleaned_table(self, tab):
+        from desispec.workflow.calibration_selection import \
+            select_valid_calib_exposures
+        cleaned_table, exptypes = select_valid_calib_exposures(tab)
+        return cleaned_table[exptypes!='cteflat']
+    
     def _test_tables_equal(self, tab1, tab2):
         self.assertTrue(len(tab1) == len(tab2) and np.all(
                 np.array(tab1['EXPID']) == np.array(tab2['EXPID'])))
+
     def test_find_best_arc_flat_sets(self):
+        from desispec.workflow.calibration_selection import \
+            find_best_arc_flat_sets
         ## Two good sets
         ## Should select first set since it came first
         set1 = self._make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         for erow in vstack([set1, set2]):
             print(list(erow))
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -147,7 +125,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set1 = make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['LASTSTEP'][7] = 'ignore'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -156,7 +134,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set1 = make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['LASTSTEP'][2] = 'ignore'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -165,7 +143,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set1 = make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['BADCAMWORD'][::4] = 'r3'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -175,7 +153,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['LASTSTEP'][2] = 'ignore'
         set2['BADCAMWORD'][::4] = 'r3'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -184,7 +162,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set1 = make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -194,7 +172,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['LASTSTEP'][2] = 'ignore'
         set2['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -206,7 +184,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set1['LASTSTEP'][7] = 'ignore'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -215,7 +193,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         # set2 = make_arcflatset_etable(expid_offset=40)
         set1['LASTSTEP'][2] = 'ignore'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -224,7 +202,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         # set2 = make_arcflatset_etable(expid_offset=40)
         set1['BADCAMWORD'][::4] = 'r3'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -234,7 +212,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set2 = make_arcflatset_etable(expid_offset=40)
         set1['LASTSTEP'][2] = 'ignore'
         set1['BADCAMWORD'][::4] = 'r3'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -243,7 +221,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         # set2 = make_arcflatset_etable(expid_offset=40)
         set1['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -253,7 +231,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # set2 = make_arcflatset_etable(expid_offset=40)
         set1['LASTSTEP'][2] = 'ignore'
         set1['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -263,7 +241,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## Should select second set since complete
         set1 = self._make_arcset_etable()
         set2 = self._make_arcflatset_etable(expid_offset=50)
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -272,7 +250,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         set2 = self._make_arcset_etable(expid_offset=50)
         set1['LASTSTEP'][2] = 'ignore'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -281,7 +259,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         set2 = self._make_arcset_etable(expid_offset=50)
         set1['LASTSTEP'][:2] = 'ignore'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -290,7 +268,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set1 = self._make_arcflatset_etable()
         set2 = self._make_arcset_etable(expid_offset=50)
         set1['LASTSTEP'][:3] = 'ignore'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -300,7 +278,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set2 = self._make_arcflatset_etable(expid_offset=50)
         set2['LASTSTEP'][2] = 'ignore'
         set2['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set2)
+        expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
@@ -310,6 +288,6 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         set2 = self._make_flatset_etable(expid_offset=50)
         set1['LASTSTEP'][2] = 'ignore'
         set1['BADAMPS'][14] = 'b3A'
-        expected = select_valid_calib_exposures(set1)
+        expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
