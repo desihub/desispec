@@ -9,7 +9,7 @@ import time
 import numpy as np
 from desiutil.log import get_logger
 from desispec.io import read_fiberflat,write_fiberflat
-from desispec.fiberflat import autocalib_fiberflat,average_fiberflat
+from desispec.fiberflat import autocalib_fiberflat, average_fiberflat, gradient_correction
 from desispec.io import findfile
 
 import argparse
@@ -22,6 +22,7 @@ def parse(options=None):
     parser.add_argument('--night', type = str, required=False, default=None)
     parser.add_argument('--arm', type = str, required=False, default=None, help="b, r or z")
     parser.add_argument('--average-per-program', action="store_true",help="first average per spectro and program name")
+    parser.add_argument('--gradient-ref-night', type=str, required=False, default=None, help='reference night for gradient correction')
 
     args = parser.parse_args(options)
 
@@ -111,6 +112,14 @@ def main(args=None) :
         inputs = fflat_to_average
 
     fiberflats = autocalib_fiberflat(inputs)
+
+    if args.gradient_ref_night is not None:
+        ref_fiberflats = {}
+        for spectro in fiberflats.keys():
+            ref_filename = findfile('fiberflatnight', night=args.gradient_ref_night, camera="{}{}".format(args.arm, spectro))
+            ref_fiberflats[spectro] = read_fiberflat(ref_filename)
+        fiberflats = gradient_correction(fiberflats, ref_fiberflats)
+
     for spectro in fiberflats.keys() :
         if args.prefix :
             ofilename="{}{}-autocal.fits".format(args.prefix,spectro)
