@@ -266,7 +266,7 @@ def get_cte_params(header, cte_params_filename=None):
         cte_params_filename = desispec.io.findfile('ctecorrnight', night=night, readonly=True)
 
     if not os.path.isfile(cte_params_filename):
-        msg = f'Missing {cte_params_filename}; run preproc with --no-cte-correction or --cte-params FILENAME'
+        msg = f'Missing {cte_params_filename}; Generate it with desi_fit_cte_night -n {night}, or run preproc with --no-cte-correction or specify an alternate file with --cte-params FILENAME'
         log.critical(msg)
         raise RuntimeError(msg)
 
