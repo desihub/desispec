@@ -195,6 +195,8 @@ class TestIOFibermap(unittest.TestCase):
         fibermap_comments = dict([(row[0], row[3]) for row in fibermap_columns])
         n_long = check_comment_length(fibermap_comments, error=False)
         self.assertEqual(n_long, 0)
+        self.assertTrue(len(fibermap_comments['PSF_TO_FIBER_SPECFLUX']) < 40)
+        self.assertTrue(len(fibermap_comments['MEAN_PSF_TO_FIBER_SPECFLUX']) < 45)
 
     def test_update_survey_keywords(self):
         """Test updating survey keywords.

@@ -138,7 +138,7 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('FIBER_RA',                   'f8',          'deg', 'RA of actual fiber position',                  'empty'),
                     ('FIBER_DEC',                  'f8',          'deg', 'DEC of actual fiber position',                 'empty'),
                     ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
-                    ('PSF_TO_FIBER_SPECFLUX',      'f8',             '', 'Fraction of light captured by 1.5" fiber',     'cframe'),
+                    ('PSF_TO_FIBER_SPECFLUX',      'f8',             '', 'Fraction of light captured by a fiber',        'cframe'),
                     ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
                     ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
                     ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),
@@ -156,7 +156,7 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('STD_FIBER_RA',               'f4',          'deg', 'Standard deviation (over exposures) of RA',    'coadd'),
                     ('MEAN_FIBER_DEC',             'f8',          'deg', 'Mean (over exposures) DEC of fiber position',  'coadd'),
                     ('STD_FIBER_DEC',              'f4',          'deg', 'Standard deviation (over exposures) of DEC',   'coadd'),
-                    ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean (over exposures) PSF_TO_FIBER_SPECFLUX',  'coadd'),
+                    ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean of PSF_TO_FIBER_SPECFLUX',                'coadd'),
                     ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
                     ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
 
