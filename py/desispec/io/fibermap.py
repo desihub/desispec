@@ -287,44 +287,14 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
         hdr = fitsheader(fibermap.meta)
 
     add_dependencies(hdr)
-    #
-    # Sort by FIBER like assemble_fibermap does?
-    #
-    # fibermap.sort('FIBER')
-    #
-    # Detect the survey.
-    #
-    # if 'CMX_TARGET' in fibermap.colnames:
-    #     survey = 'cmx'
-    # elif 'SV1_DESI_TARGET' in fibermap.colnames:
-    #     survey = 'sv1'
-    # elif 'SV2_DESI_TARGET' in fibermap.colnames:
-    #     survey = 'sv2'
-    # elif 'SV3_DESI_TARGET' in fibermap.colnames:
-    #     survey = 'sv3'
-    # else:
-    #     survey = 'main'
-    #
-    # Coerce into final column order, like assemble_fibermap?
-    #
-    # final_columns = _set_fibermap_columns(survey)
-
-    # fibermap = fibermap[ [ c[0] for c in final_columns] ]
 
     fibermap_hdu = fits.BinTableHDU(fibermap)
     fibermap_hdu.header.extend(hdr, update=True)
     fibermap_hdu = annotate_fibermap(fibermap_hdu)
 
-    # fibermap_comments = dict([(row[0], row[3]) for row in _set_fibermap_columns(survey)])
     t0 = time.time()
     write_bintable(outfile, fibermap_hdu, clobber=clobber)
     duration = time.time() - t0
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter("ignore")
-    #     t0 = time.time()
-    #     write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
-    #                    extname=extname, clobber=clobber)
-    #     duration = time.time() - t0
 
     log.info(iotime.format('write', outfile, duration))
 
