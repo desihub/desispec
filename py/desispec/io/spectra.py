@@ -91,13 +91,6 @@ def write_spectra(outfile, spec, units=None):
         hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
-    # for i, colname in enumerate(fmap.dtype.names):
-    #     if colname in fibermap_comments:
-    #         key = "TTYPE{}".format(i+1)
-    #         name = hdu.header[key]
-    #         assert name == colname
-    #         comment = fibermap_comments[name]
-    #         hdu.header[key] = (name, comment)
     hdu = annotate_fibermap(hdu)
 
     all_hdus.append(hdu)
@@ -112,13 +105,6 @@ def write_spectra(outfile, spec, units=None):
             hdu = fits.convenience.table_to_hdu(expfmap)
 
         # Add comments for exp_fibermap columns.
-        # for i, colname in enumerate(expfmap.dtype.names):
-        #     if colname in fibermap_comments:
-        #         key = "TTYPE{}".format(i+1)
-        #         name = hdu.header[key]
-        #         assert name == colname
-        #         comment = fibermap_comments[name]
-        #         hdu.header[key] = (name, comment)
         hdu = annotate_fibermap(hdu)
 
         all_hdus.append(hdu)

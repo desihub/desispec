@@ -51,7 +51,7 @@ from desispec.maskbits import fibermask
 # "empty" (which is shorter than "assemble"). Other provenances are provided for
 # informational purposes.
 #
-# The utility function final_columns(survey) handles differences between
+# The utility function _set_fibermap_columns(survey) handles differences between
 # 'cmx', 'sv1', 'sv2', 'sv3'. We assume that 'special' has identical columns to 'main'.
 #
 fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique DESI target ID',                        'empty'),
