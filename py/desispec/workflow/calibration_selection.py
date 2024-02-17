@@ -76,7 +76,7 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
 
     if np.sum(exptypes == 'dark') >= 1 and np.sum(exptypes == 'arc') >= 5 \
             and np.sum(exptypes == 'flat') >= 12 \
-            and (np.sum(exptypes == 'cteflat') >= 1 or not do_cte_flats):
+            and (np.sum(exptypes == 'cteflat') >= 3 or not do_cte_flats):
         log.info(f"Found at least one possible calibration set to test.")
     elif still_acquiring:
         log.info(f"Only found {Counter(exptypes)} calibrations "
