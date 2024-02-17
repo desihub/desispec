@@ -291,7 +291,7 @@ def desi_link_calibnight_command(prow):
     else:
         cmd += f' --refnight={prow["REFNIGHT"]}'
     cmd += f' --newnight={prow["NIGHT"]}'
-    cmd += f'--cameras={prow["PROCCAMWORD"]}'
+    cmd += f' --cameras={prow["PROCCAMWORD"]}'
 
     return cmd
 

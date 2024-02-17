@@ -524,7 +524,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = curnight
         ## REFNIGHT will be removed before appending to the processing table
-        prow['REFNIGHT'] = cal_override['REFNIGHT']
+        prow['REFNIGHT'] = cal_override['refnight']
         prow, ptable = create_submit_add_and_save(prow, ptable,
                                                   check_outputs=False)
         calibjobs[prow['JOBDESC']] = prow.copy()
@@ -595,6 +595,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                              internal_id=int_id)
         ptable = set_calibrator_flag(arc_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
+        calibjobs['psfnight'] = joint_prow.copy()
 
 
     ######## Submit flats and nightlyflat ########
@@ -615,7 +616,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                              internal_id=int_id)
         ptable = set_calibrator_flag(flat_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
-
+        calibjobs['nightlyflat'] = joint_prow.copy()
+        
     ######## Submit cte flats ########
     if len(ctes) > 0:
         for cte_erow in ctes:

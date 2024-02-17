@@ -697,7 +697,7 @@ def create_linkcal_batch_script(newnight, refnight, queue, cameras=None,
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
-        fx.write('#SBATCH --exclusive\n')
+        #fx.write('#SBATCH --exclusive\n')
 
         fx.write('\n')
 
