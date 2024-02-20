@@ -128,7 +128,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             fibermap_orig = read_table(spectra_filename)
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
         else:
-            fibermap = fx['FIBERMAP'].read()
+            fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = fx['EXP_FIBERMAP'].read()
 
         tsnr2 = fx['TSNR2'].read()
@@ -136,10 +136,24 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
         assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
     if minimal:
+        # basic set of target information
         fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
+
+        # add targeting columns
         for colname in fibermap.dtype.names:
             if colname.endswith('_TARGET') and colname != 'FA_TARGET':
                 fmcols.append(colname)
+
+        # add columns needed for uniqueness that differ for healpix vs. tiles
+        extracols = ['TILEID', 'LASTNIGHT', 'HEALPIX', 'SURVEY', 'PROGRAM']
+        for colname in extracols:
+            if colname in fibermap.dtype.names:
+                fmcols.append(colname)
+
+        # NIGHT header -> fibermap LASTNIGHT
+        if ('LASTNIGHT' not in fmcols) and ('NIGHT' in hdr):
+            fibermap['LASTNIGHT'] = np.int32(hdr['NIGHT'])
+            fmcols.append('LASTNIGHT')
 
         data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
 
