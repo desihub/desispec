@@ -37,7 +37,7 @@ class TestPixGroup(unittest.TestCase):
         cls.specbase = os.path.basename(cls.specfile)
 
         frames = dict()
-        meta = {'EXPID': 1.0, 'FLAVOR': 'science'}
+        meta = {'EXPID': 1.0, 'FLAVOR': 'science', 'SURVEY': cls.survey, 'PROGRAM': cls.faprogram}
         frames['b'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=4500, wavemax=4600,
                                  nwave=100, meta=meta.copy())
         frames['r'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=6500, wavemax=6600,
@@ -237,6 +237,9 @@ class TestPixGroup(unittest.TestCase):
 
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
+
+        self.assertIn('SURVEY', spectra.fibermap.meta)
+        self.assertEqual(spectra.fibermap.meta['SURVEY'], self.survey)
 
         #- confirm that we can read the mask with memmap=True
         with fits.open(self.specfile, memmap=True) as fx:

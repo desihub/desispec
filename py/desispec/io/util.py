@@ -190,7 +190,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     Args:
         filename: full path to filename to write
-        data: dict or table-like data to write
+        data: dict or table-like data to write, or a prepared BinTableHDU
 
     Options:
         header: dict-like header key/value pairs to propagate
@@ -204,17 +204,21 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     log = get_logger()
 
+    hdu = None
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
         outdata = Table(data)
+    elif isinstance(data, astropy.io.fits.BinTableHDU):
+        hdu = data
     else:
         outdata = Table(_dict2ndarray(data))
 
-    # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
-    hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
+    if hdu is None:
+        hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
+
     if extname is not None:
         hdu.header['EXTNAME'] = extname
-    else:
+    elif 'EXTNAME' not in hdu.header:
         log.warning("Table does not have EXTNAME set!")
 
     if header is not None:
@@ -382,7 +386,7 @@ def healpix_subdirectory(nside, pixel):
     pixdir = str(pixel)
     return os.path.join(subdir, pixdir)
 
-    
+
 def create_camword(cameras):
     """
     Function that takes in a list of cameras and creates a succinct listing
@@ -431,16 +435,16 @@ def decode_camword(camword):
     """
     Function that takes in a succinct listing
     of all spectrographs and outputs a 1-d numpy array with a list of all
-    spectrograph/camera pairs. It uses "a" followed by                                                      
-    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
-    b, r, and z represent the camera of the same name. All trailing numbers                                                     
-    represent the spectrographs for which that camera exists in the list.                                                       
-                                                                                                                                
-    Args:                      
-       camword (str): A string representing all information about the spectrographs/cameras                                    
-                        e.g. a01234678b59z9                                                                                                  
-    Returns (np.ndarray, 1d):  an array containing strings of                                                              
-                                cameras, e.g. 'b0','r1',...                                                                
+    spectrograph/camera pairs. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       camword (str): A string representing all information about the spectrographs/cameras
+                        e.g. a01234678b59z9
+    Returns (np.ndarray, 1d):  an array containing strings of
+                                cameras, e.g. 'b0','r1',...
     """
     log = get_logger()
     searchstr = camword
@@ -778,7 +782,7 @@ def parse_badamps(badamps,joinsymb=','):
         raise TypeError(err)
     elif badamps == '':
         return cam_petal_amps
-    
+
     for cpa in badamps.split(joinsymb):
         cpa = cpa.strip()
         if len(cpa) != 3:
@@ -971,6 +975,7 @@ def addkeys(hdr1, hdr2, skipkeys=None):
                and not key.startswith('TTYPE') \
                and not key.startswith('TFORM') \
                and not key.startswith('TUNIT') \
+               and not key.startswith('TNULL') \
                and key not in hdr1:
             log.debug('Adding %s', key)
             hdr1[key] = hdr2[key]

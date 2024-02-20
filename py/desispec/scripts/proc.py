@@ -358,7 +358,9 @@ def main(args=None, comm=None):
             tilepix = findfile('tilepix', args.night, args.expid, tile=tileid)
 
             log.info('Creating fibermap {}'.format(fibermap))
-            cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
+            # This command isn't actually executed, it only exists to populate
+            # the equivalent of sys.argv.
+            cmd = 'desi_assemble_fibermap -n {} -e {} -o {} -t {}'.format(
                     args.night, args.expid, fibermap, tilepix)
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
@@ -392,7 +394,7 @@ def main(args=None, comm=None):
     if args.obstype == 'SCIENCE' and not fibermap_ok:
         sys.stdout.flush()
         if rank == 0:
-            log.critical('assemble_fibermap failed for science exposure; exiting now')
+            log.critical('desi_assemble_fibermap failed for science exposure; exiting now')
 
         sys.exit(13)
 
