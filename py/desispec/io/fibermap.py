@@ -160,12 +160,9 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
                     ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
 
-#
-# These are commented out pending removal.
-#
-# fibermap_comments = {'main': dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['main']])}
-# fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
-
+# dict to allow unit tests etc that augment fibermaps to look up the
+# correct dtype based upon the column name
+fibermap_dtype = dict([(tmp[0], tmp[1]) for tmp in fibermap_columns])
 
 def _set_fibermap_columns(survey='main'):
     """Prepare survey-specific list of columns.
@@ -226,9 +223,6 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
 
     #- Fill in some values
     fibermap['FIBER'][:] = np.arange(specmin, specmin+nspec)
-    # Can we remove unused code?
-    # fibers_per_spectrograph = 500
-    # fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = load_focalplane()[0]
     fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
@@ -242,11 +236,6 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
     fibermap['LAMBDA_REF'][:]  = 5400.0
     fibermap['NUM_ITER'][:] = 2
-    #- Set MW_TRANSMISSION_* to be slightly less than 1 to trigger dust correction code for testing
-    # Can we remove unused code?
-    # fibermap['MW_TRANSMISSION_G'][:] = 0.999
-    # fibermap['MW_TRANSMISSION_R'][:] = 0.999
-    # fibermap['MW_TRANSMISSION_Z'][:] = 0.999
     fibermap['EBV'][:] = 0.001
     fibermap['PHOTSYS'][:] = 'S'
 
@@ -261,7 +250,7 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
 def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERMAP'):
     """Write fibermap binary table to outfile.
 
-    This function is provided for tests but is not used for downstream
+    This function is provided for tests but is currently not used in downstream
     pipeline code. For example :command:`desi_assemble_fibermap` bypasses
     this function.
 
