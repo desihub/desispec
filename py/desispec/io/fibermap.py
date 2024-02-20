@@ -1278,7 +1278,7 @@ def annotate_fibermap(fibermap):
                                 col, colunit.strip(), row[2])
                     fh[tunit] = (row[2], col + ' units')
             else:
-                log.info("Setting units for column %s to '%s'.", col, row[2])
+                log.debug("Setting units for column %s to '%s'.", col, row[2])
                 fh.insert(tform, (tunit, row[2], col + ' units'), after=True)
         else:
             log.debug("Column %s is not supposed to have units, skipping.", col)
@@ -1289,7 +1289,7 @@ def annotate_fibermap(fibermap):
                 log.warning('Overriding comment for column %s!', col)
                 fh[ttype] = (col, row[3])
         else:
-            log.info('Setting comment for column %s.', col)
+            log.debug('Setting comment for column %s.', col)
             fh[ttype] = (col, row[3])
     fibermap.add_checksum()
     return fibermap
