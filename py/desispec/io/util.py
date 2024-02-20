@@ -214,49 +214,49 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
         outdata = Table(_dict2ndarray(data))
 
     if hdu is None:
-        # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
         hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
-        if extname is not None:
-            hdu.header['EXTNAME'] = extname
+
+    if extname is not None:
+        hdu.header['EXTNAME'] = extname
+    elif 'EXTNAME' not in hdu.header:
+        log.warning("Table does not have EXTNAME set!")
+
+    if header is not None:
+        if isinstance(header, astropy.io.fits.header.Header):
+            for key, value in header.items():
+                comment = header.comments[key]
+                hdu.header[key] = (value, comment)
         else:
-            log.warning("Table does not have EXTNAME set!")
+            hdu.header.update(header)
 
-        if header is not None:
-            if isinstance(header, astropy.io.fits.header.Header):
-                for key, value in header.items():
-                    comment = header.comments[key]
-                    hdu.header[key] = (value, comment)
-            else:
-                hdu.header.update(header)
+    #- Allow comments and units to be None
+    if comments is None:
+        comments = dict()
+    if units is None:
+        units = dict()
+    #
+    # Add comments and units to the *columns* of the table.
+    #
+    for i in range(1, 1000):
+        key = 'TTYPE'+str(i)
+        if key not in hdu.header:
+            break
+        else:
+            colname = hdu.header[key]
+            if colname in comments:
+                hdu.header[key] = (colname, comments[colname])
+            if colname in units and units[colname].strip() != '':
+                tunit_key = 'TUNIT'+str(i)
+                if tunit_key in hdu.header and hdu.header[tunit_key] != units[colname]:
+                    log.warning(f'Overriding {colname} units {hdu.header[tunit_key]} -> {units[colname]}')
 
-        #- Allow comments and units to be None
-        if comments is None:
-            comments = dict()
-        if units is None:
-            units = dict()
-        #
-        # Add comments and units to the *columns* of the table.
-        #
-        for i in range(1, 1000):
-            key = 'TTYPE'+str(i)
-            if key not in hdu.header:
-                break
-            else:
-                colname = hdu.header[key]
-                if colname in comments:
-                    hdu.header[key] = (colname, comments[colname])
-                if colname in units and units[colname].strip() != '':
-                    tunit_key = 'TUNIT'+str(i)
-                    if tunit_key in hdu.header and hdu.header[tunit_key] != units[colname]:
-                        log.warning(f'Overriding {colname} units {hdu.header[tunit_key]} -> {units[colname]}')
-
-                    # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
-                    tform_key = 'TFORM'+str(i)
-                    hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
-        #
-        # Add checksum cards.
-        #
-        hdu.add_checksum()
+                # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
+                tform_key = 'TFORM'+str(i)
+                hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
+    #
+    # Add checksum cards.
+    #
+    hdu.add_checksum()
 
     #- Write the data and header
 
