@@ -569,7 +569,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         ######## Submit dark or ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
         ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
-        if len(zeros) == 0 and len(cte) == 0:
+        if len(zeros) == 0 and len(ctes) == 0:
             jobdesc = 'badcol'
         else:
             jobdesc = 'ccdcalib'
@@ -619,14 +619,13 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         calibjobs['nightlyflat'] = joint_prow.copy()
         
     ######## Submit cte flats ########
-    if len(ctes) > 0:
-        for cte_erow in ctes:
-            if cte_erow['EXPID'] in processed_cal_expids:
-                continue
-            jobdesc = 'cteflat'
-            prow, int_id = make_exposure_prow(flat_erow, int_id, calibjobs,
-                                          jobdesc=jobdesc)
-            prow, ptable = create_submit_add_and_save(prow, ptable)
+    jobdesc = 'cteflat'
+    for cte_erow in ctes:
+        if cte_erow['EXPID'] in processed_cal_expids:
+            continue
+        prow, int_id = make_exposure_prow(cte_erow, int_id, calibjobs,
+                                      jobdesc=jobdesc)
+        prow, ptable = create_submit_add_and_save(prow, ptable)
             
     return ptable, calibjobs, int_id
 
