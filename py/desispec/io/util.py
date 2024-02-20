@@ -975,6 +975,7 @@ def addkeys(hdr1, hdr2, skipkeys=None):
                and not key.startswith('TTYPE') \
                and not key.startswith('TFORM') \
                and not key.startswith('TUNIT') \
+               and not key.startswith('TNULL') \
                and key not in hdr1:
             log.debug('Adding %s', key)
             hdr1[key] = hdr2[key]
