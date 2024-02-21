@@ -86,12 +86,3 @@ class TestLite(unittest.TestCase):
             self.assertTrue(os.path.exists(outfile))
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-if __name__ == '__main__':
-    unittest.main()
