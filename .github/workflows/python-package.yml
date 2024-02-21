@@ -117,7 +117,7 @@ jobs:
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed fitsio
                 python -m pip install git+https://github.com/desihub/desiutil.git
-                python -m pip install git+https://github.com/desihub/destarget.git
+                python -m pip install git+https://github.com/desihub/desitarget.git
             - name: Run just the lite env test
               run: pytest py/desispec/test/test_lite.py
 
