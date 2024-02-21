@@ -23,8 +23,6 @@ from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
 from desiutil.names import radec_to_desiname
-from desimodel.focalplane import get_tile_radius_deg
-from desimodel.io import load_focalplane
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile

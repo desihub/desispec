@@ -30,7 +30,6 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
-import desispec.correct_cte
 
 def get_amp_ids(header):
     '''
@@ -1343,6 +1342,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if no_cte_corr:
         log.info("CTE correction disabled")
     else:
+        # import only if needed to simplify required dependencies
+        import desispec.correct_cte
         if cte_params_filename is None:
             if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):
                 mess = "No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction.  Run with --no-cte-corr to skip."
