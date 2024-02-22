@@ -423,7 +423,10 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         # AR    so it s ok if it s only approximate to few pixels
         # AR    after the trimming
         for amp in ["a", "b", "c", "d"]:
-            mydict["ampsec{}".format(amp)] = image_hdr["AMPSEC{}".format(amp.upper())]
+            key = "AMPSEC{}".format(amp.upper())
+            # 2-amp readout only has 2 amps, so check
+            if key in image_hdr:
+                mydict[key.lower()] = image_hdr[key]
         # AR trimming
         shape_orig = d.shape
         if shape_orig[0] % binning != 0:
@@ -661,11 +664,14 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                         im = ax.imshow(img, cmap=cmap, vmin=clim[0], vmax=clim[1])
                         # AR amp labels
                         for amp in ["a", "b", "c", "d"]:
-                            ampsec = mydict["ampsec{}".format(amp)]
-                            ampsecx, ampsecy = ampsec.replace("[", "").replace("]", "").split(",")
-                            ampsecx = np.mean([int(_) for _ in ampsecx.split(":")]) / binning
-                            ampsecy = np.mean([int(_) for _ in ampsecy.split(":")]) / binning
-                            ax.text(ampsecx, ampsecy, amp.upper(), fontweight="bold", ha="center", va="center")
+                            key = "ampsec{}".format(amp)
+                            # 2-amp readout only has 2 amps, so check
+                            if key in mydict:
+                                ampsec = mydict[key]
+                                ampsecx, ampsecy = ampsec.replace("[", "").replace("]", "").split(",")
+                                ampsecx = np.mean([int(_) for _ in ampsecx.split(":")]) / binning
+                                ampsecy = np.mean([int(_) for _ in ampsecy.split(":")]) / binning
+                                ax.text(ampsecx, ampsecy, amp.upper(), fontweight="bold", ha="center", va="center")
                         # AR flip the y-axis to have y coords increasing towars up
                         # AR    (e.g. see Guy+2023 Fig.4)
                         ax.set_ylim(ax.get_ylim()[::-1])
@@ -909,7 +915,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 # AR     stored in format like "12:24,1700:1900"
                 for amp in ["A", "B", "C", "D"]:
                     for key in ["OFFCOLS{}".format(amp) , "CTECOLS{}".format(amp)] :
-                        if mydict[key] is not None:
+                        if key in mydict and mydict[key] is not None:
                             for colrange in mydict[key].split(","):
                                 colmin, colmax = int(colrange.split(":")[0]), int(colrange.split(":")[1])
                                 ax1d.annotate("", xy=(colmax, yoffcols[amp]), xytext=(colmin, yoffcols[amp]), arrowprops=dict(arrowstyle="<->", lw="3", color=colors[amp]))
