@@ -673,7 +673,7 @@ def autocalib_fiberflat(fiberflats):
     return output_fiberflats
 
 
-def gradient_correction(fiberflats, ref_fiberflats):
+def gradient_correction(fiberflats, ref_fiberflats, iterations=5):
     '''
     Apply gradient correction for the fiber flats.
 
@@ -686,6 +686,8 @@ def gradient_correction(fiberflats, ref_fiberflats):
         Same as the fiberflats input but with gradient-removed fiberflat attribute
     '''
     from astropy.table import Table, vstack
+    nmad = lambda x: 1.4826 * np.median(np.abs(x-np.median(x)))  # normalized median absolute deviation
+
     log=get_logger()
 
     ffall = []
@@ -696,7 +698,17 @@ def gradient_correction(fiberflats, ref_fiberflats):
         ff['FF_RATIO'] = np.mean(fiberflat.fiberflat, axis=1) / np.mean(refflat.fiberflat, axis=1)
         ffall.append(ff)
     ff = vstack(ffall)
-    intercept, y_slope, x_slope = poly_fit_2d(ff['FIBERASSIGN_X'], ff['FIBERASSIGN_Y'], ff['FF_RATIO'], order=1, rlm=True, t=0.1)
+
+    # Iteratively reject outliers
+    mask_outlier = (ff['FF_RATIO']<0.9) | (ff['FF_RATIO']>1.1)  # initial outlier rejection
+    log.info('initial outlier fiber count: {}'.format(np.sum(mask_outlier)))
+    for iteration in range(iterations):
+        intercept, y_slope, x_slope = poly_fit_2d(ff['FIBERASSIGN_X'][~mask_outlier], ff['FIBERASSIGN_Y'][~mask_outlier], ff['FF_RATIO'][~mask_outlier], order=1)
+        ff_ratio_corr = ff['FF_RATIO'] / poly_val_2d(ff['FIBERASSIGN_X'], ff['FIBERASSIGN_Y'], [intercept, y_slope, x_slope])
+        rms = nmad(ff_ratio_corr)
+        mask_outlier = (ff_ratio_corr<1-4*rms) | (ff_ratio_corr>1+4*rms)  # 4-sigma clipping
+    log.info('final outlier fibers count: {}'.format(np.sum(mask_outlier)))
+
     amp = np.sqrt(x_slope**2+y_slope**2)
     edge_to_edge = amp*407.5*100.
     angle = np.degrees(np.arctan2(x_slope, y_slope))
@@ -714,15 +726,13 @@ def gradient_correction(fiberflats, ref_fiberflats):
     return fiberflats
 
 
-def poly_fit_2d(x, y, z, order=1, rlm=False, t=1.5):
+def poly_fit_2d(x, y, z, order=1):
     '''
     2D polynomial fit. Given x, y and z arrays, calculate the 2D polynomial fit of arbitrary order.
 
     Args:
     x, y and z: 1D arrays
     order: order of the polynomial fit
-    rlm: use robust linear model, HuberT
-    t: HuberT tunning parameter;
 
     Returns:
     Array of parameters of the polynomial [a0, a1, a2 ...]
@@ -735,8 +745,6 @@ def poly_fit_2d(x, y, z, order=1, rlm=False, t=1.5):
     z = a0 + a1*y + a2*y**2 + a3*x + a4*x*y + a5*x**2
     '''
 
-    import statsmodels.api as sm
-
     ncols = (order+2)*(order+1)//2
     a = np.zeros((x.size, ncols))
     k=0
@@ -744,11 +752,8 @@ def poly_fit_2d(x, y, z, order=1, rlm=False, t=1.5):
         for j in range(order-i+1):
             a[:, k] = x**i * y**j
             k+=1
-    if rlm:
-        res = sm.RLM(z, a, M=sm.robust.norms.HuberT(t=t)).fit()
-    else:
-        res = sm.OLS(z, a).fit()
-    m = res.params
+    res = np.linalg.lstsq(a, z, rcond=None)
+    m = res[0]
     return m
 
 
