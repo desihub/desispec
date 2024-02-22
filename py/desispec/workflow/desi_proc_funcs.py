@@ -381,10 +381,8 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         ncameras (int): number of cameras to be processed
         jobdesc (str): type of data being processed
         nexps (int, optional): the number of exposures processed in this step
-        force_runtime (int, optional): the amount of runtime in minutes to allow for the script. Should be left
-            to default heuristics unless needed for some reason.
-        system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
         queue (str, optional): the Slurm queue to be submitted to. Currently not used.
+        system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
         tuple: A tuple containing:

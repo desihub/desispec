@@ -104,8 +104,8 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         return cleaned_table[exptypes!='cteflat']
     
     def _test_tables_equal(self, tab1, tab2):
-        self.assertTrue(len(tab1) == len(tab2) and np.all(
-                np.array(tab1['EXPID']) == np.array(tab2['EXPID'])))
+        self.assertTrue(len(tab1) == len(tab2))
+        self.assertTrue(np.all(np.array(tab1['EXPID']) == np.array(tab2['EXPID'])))
 
     def test_find_best_arc_flat_sets(self):
         from desispec.workflow.calibration_selection import \
