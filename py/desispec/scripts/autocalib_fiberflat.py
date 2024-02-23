@@ -22,6 +22,7 @@ def parse(options=None):
     parser.add_argument('--night', type = str, required=False, default=None)
     parser.add_argument('--arm', type = str, required=False, default=None, help="b, r or z")
     parser.add_argument('--average-per-program', action="store_true",help="first average per spectro and program name")
+    parser.add_argument('--solve-gradient', action="store_true", help='apply gradient correction')
     parser.add_argument('--gradient-ref-night', type=str, required=False, default=None, help='reference night for gradient correction')
 
     args = parser.parse_args(options)
@@ -113,11 +114,19 @@ def main(args=None) :
 
     fiberflats = autocalib_fiberflat(inputs)
 
-    if args.gradient_ref_night is not None:
+    if args.solve_gradient or args.gradient_ref_night is not None:
         ref_fiberflats = {}
-        for spectro in fiberflats.keys():
-            ref_filename = findfile('fiberflatnight', night=args.gradient_ref_night, camera="{}{}".format(args.arm, spectro))
-            ref_fiberflats[spectro] = read_fiberflat(ref_filename)
+        if args.gradient_ref_night is None:
+            #- find default fiberflats to use as reference
+            from desispec.calibfinder import CalibFinder
+            for spectro, fiberflat in fiberflats.items():
+                cf = CalibFinder([fiberflat.header,])
+                ref_fiberflats[spectro] = cf.find('FIBERFLAT')
+        else:
+            #- use fiberflats from given night as reference
+            for spectro in fiberflats.keys():
+                ref_filename = findfile('fiberflatnight', night=args.gradient_ref_night, camera="{}{}".format(args.arm, spectro))
+                ref_fiberflats[spectro] = read_fiberflat(ref_filename)
         fiberflats = gradient_correction(fiberflats, ref_fiberflats)
 
     for spectro in fiberflats.keys() :
