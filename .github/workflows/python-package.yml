@@ -112,7 +112,7 @@ jobs:
             - name: Install Python dependencies
               run: |
                 python -m pip install --upgrade pip setuptools wheel
-                python -m pip install astropy scipy numba
+                python -m pip install astropy scipy numba "numpy<2.0"
                 python -m pip install pytest
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed fitsio
