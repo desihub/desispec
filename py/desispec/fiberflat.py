@@ -673,7 +673,7 @@ def autocalib_fiberflat(fiberflats):
     return output_fiberflats
 
 
-def gradient_correction(fiberflats, ref_fiberflats, iterations=5):
+def gradient_correction(fiberflats, ref_fiberflats, iterations=5, max_gradient=0.2):
     '''
     Apply gradient correction for the fiber flats.
 
@@ -681,6 +681,8 @@ def gradient_correction(fiberflats, ref_fiberflats, iterations=5):
         fiberflats: a dictionary of desispec.FiberFlat objects, one per spectrograph,
             e.g., output from autocalib_fiberflat
         ref_fiberflats: same as fiberflats but for the reference night
+        iterations: number of iterations for the outlier rejection; default is 5
+        max_gradient: maximum gradient defined as center-to-edge difference; default is 0.2
 
     Returns:
         Same as the fiberflats input but with gradient-removed fiberflat attribute
@@ -709,13 +711,15 @@ def gradient_correction(fiberflats, ref_fiberflats, iterations=5):
         mask_outlier = (ff_ratio_corr<1-4*rms) | (ff_ratio_corr>1+4*rms)  # 4-sigma clipping
     log.info('final outlier fibers count: {}'.format(np.sum(mask_outlier)))
 
-    amp = np.sqrt(x_slope**2+y_slope**2)
-    edge_to_edge = amp*407.5*100.
+    amp = np.sqrt(x_slope**2+y_slope**2)  # amplitude of the gradient in units of mm^-1
+    center_to_edge = amp * 407.5  # gradient center-to-edge difference; 407.5 is the maximum distance (in mm) between a fiber and the focal plane center
     angle = np.degrees(np.arctan2(x_slope, y_slope))
-    log.info('intercept = {:.4f} x_slope = {:.4f} y_slope = {:.4f} gradient angle = {:.1f} amplitude = {:.3e} edge-to-edge variation = +-{:.1f}%'.format(
-        intercept, x_slope, y_slope, angle, amp, edge_to_edge))
-    if edge_to_edge>20:
-        log.error('Gradient edge-to-edge variation larger than +-20% !')
+    log.info('intercept = {:.4f} x_slope = {:.4f} y_slope = {:.4f} gradient angle = {:.1f} amplitude = {:.3e} center-to-edge difference = {:.1f}%'.format(
+        intercept, x_slope, y_slope, angle, amp, 100.*center_to_edge))
+    if center_to_edge>max_gradient:
+        msg = 'gradient center-to-edge difference larger than {:.1f}% !'.format(100.*max_gradient)
+        log.critical(msg)
+        raise RuntimeError(msg)
 
     for spectro in fiberflats.keys():
         x, y = fiberflats[spectro].fibermap['FIBERASSIGN_X'], fiberflats[spectro].fibermap['FIBERASSIGN_Y']
