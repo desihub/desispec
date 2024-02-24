@@ -287,8 +287,9 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                         for arc in arcs:
                             if arc['LASTSTEP'][0] == 'all':
                                 complete_arc_set['ngood'] += 1
-                                nbadcams += len(decode_camword(arc['BADCAMWORD'][0]))
-                                nbadcams += len(parse_badamps(arc['BADAMPS'][0]))
+                                badcams = all_impacted_cameras(arc['BADCAMWORD'][0],
+                                                               arc['BADAMPS'][0])
+                                nbadcams += len(badcams)
                         ## find average number of bad cameras only among good
                         ## exposures in the set
                         complete_arc_set['meanbadcams'] = float(nbadcams)/float(complete_arc_set['ngood'])
