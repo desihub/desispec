@@ -3,6 +3,7 @@ desispec.scripts.submit_night
 =============================
 
 """
+from desispec.workflow.science_selection import get_completed_tiles
 from desiutil.log import get_logger
 import numpy as np
 import os
@@ -529,51 +530,3 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')
 
-
-def get_completed_tiles(specstatus_path=None, complete_tiles_thrunight=None):
-    """
-    Uses a tiles-specstatus.ecsv file and selection criteria to determine
-    what tiles have beeen completed. Takes an optional argument to point
-    to a custom specstatus file. Returns an array of TILEID's.
-
-    Args:
-        specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
-            Location of the surveyops specstatus table.
-        complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
-            on or before the supplied YYYYMMDD are considered
-            completed and will be processed. All complete
-            tiles are submitted if None.
-
-    Returns:
-        array-like. The tiles from the specstatus file determined by the
-        selection criteria to be completed.
-    """
-    log = get_logger()
-    if specstatus_path is None:
-        if 'DESI_SURVEYOPS' not in os.environ:
-            raise ValueError("DESI_SURVEYOPS is not defined in your environment. " +
-                             "You must set it or specify --specstatus-path explicitly.")
-        specstatus_path = os.path.join(os.environ['DESI_SURVEYOPS'], 'ops',
-                                       'tiles-specstatus.ecsv')
-        log.info(f"specstatus_path not defined, setting default to {specstatus_path}.")
-    if not os.path.exists(specstatus_path):
-        raise IOError(f"Couldn't find {specstatus_path}.")
-    specstatus = Table.read(specstatus_path)
-
-    ## good tile selection
-    iszdone = (specstatus['ZDONE'] == 'true')
-    isnotmain = (specstatus['SURVEY'] != 'main')
-    enoughfraction = 0.1  # 10% rather than specstatus['MINTFRAC']
-    isenoughtime = (specstatus['EFFTIME_SPEC'] >
-                    specstatus['GOALTIME'] * enoughfraction)
-    ## only take the approved QA tiles in main
-    goodtiles = iszdone
-    ## not all special and cmx/SV tiles have zdone set, so also pass those with enough time
-    goodtiles |= (isenoughtime & isnotmain)
-    ## main backup also don't have zdone set, so also pass those with enough time
-    goodtiles |= (isenoughtime & (specstatus['FAPRGRM'] == 'backup'))
-
-    if complete_tiles_thrunight is not None:
-        goodtiles &= (specstatus['LASTNIGHT'] <= complete_tiles_thrunight)
-
-    return np.array(specstatus['TILEID'][goodtiles])

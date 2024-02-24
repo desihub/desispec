@@ -840,6 +840,28 @@ def validate_badamps(badamps,joinsymb=','):
         log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}')
     return newbadamps
 
+def all_impacted_cameras(badcamword, badamps):
+    """
+    Checks badcamword string and badamps string (badamps joined by ',') and
+    returns the number of unique cameras impacted.
+
+    Args:
+        badcamword, str. The camword of all cameras.
+        badamps, str. A string of {camera}{petal}{amp} entries separated by
+            symbol given with joinsymb (comma by default). I.e. [brz][0-9][ABCD].
+            Example: 'b7D,z8A'.
+
+    Returns:
+        badcamset, set. The set of unique cameras mentioned in either badcams
+            or badamps.
+
+    """
+    badcamset = set(decode_camword(badcamword))
+    for (band, camnum, amp) in parse_badamps(badamps):
+        badcamset.add(f'{band}{camnum}')
+    return badcamset
+
+
 def get_speclog(nights, rawdir=None):
     """
     Scans raw data headers to return speclog of observations. Slow.

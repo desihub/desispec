@@ -413,7 +413,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     if require_cals and calibjobs['linkcal'] is None \
             and calibjobs['nightlyflat'] is None:
         err = (f"Required to have at least psf calibrations via override link"
-               + f" or psfnight")
+               + f" or nightlyflat")
         log.error(err)
         sys.exit(1)
 

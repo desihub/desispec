@@ -119,10 +119,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
-    if night is not None:
-        month = str(night)[:-2]
-    else:
-        month = None
     location = dict(
         #
         # Raw data.
@@ -134,9 +130,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # Top level
         exposure_table = '{specprod_dir}/exposure_tables/{month}/exposure_table_{night}.csv',
+        override='{specprod_dir}/exposure_tables/{month}/override_{night}.yaml',
         processing_table = '{specprod_dir}/processing_tables/processing_table_{specprod}-{night}.csv',
         unprocessed_table = '{specprod_dir}/processing_tables/unprocessed_table_{specprod}-{night}.csv',
-        override = '{specprod_dir}/exposure_tables/{month}/override_{night}.yaml',
         exposures = '{specprod_dir}/exposures-{specprod}.fits',
         tiles = '{specprod_dir}/tiles-{specprod}.fits',
         exposures_csv = '{specprod_dir}/exposures-{specprod}.csv',
@@ -207,7 +203,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-
         #
         # spectra- single exp tile based
         #
@@ -249,6 +244,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
     location['exptable'] = location['exposure_table']
     location['proctable'] = location['processing_table']
     location['unproctable'] = location['unprocessed_table']
+
+    ## Define the month if night is specified
+    if night is not None:
+        month = str(night)[:-2]
+    else:
+        month = None
 
     #- default group is "cumulative" for tile-based files
     if groupname is None and tile is not None and filetype in (
