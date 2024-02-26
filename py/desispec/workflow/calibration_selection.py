@@ -352,7 +352,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                                           erow, exptable.colnames, log.debug)
                         flats[calibnum] = [erow]
             else:
-                ## If not the fist flat in a sequence then it should be the next
+                ## If not the first flat in a sequence then it should be the next
                 ## in the sequence and one exp id away from the last expoure.
                 if len(flats[calibnum]) == erow['SEQNUM']-1   \
                        and flats[calibnum][-1]['SEQNUM'] == erow['SEQNUM']-1  \
@@ -361,7 +361,8 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                     ## If the 4th calibration lamp and the last flat in the
                     ## sequence, check the accumulated set to see if it is
                     ## usable or not
-                    if calibnum == 3 and len(flats[calibnum]) == nflatsequence:
+                    if calibnum == 3 and \
+                            np.sum([erow['SEQNUM'] for erow in flats[calibnum]]) == flat_sequence_sum:
                         print_row_message(f"Found a complete flat set",
                                           erow, exptable.colnames, log.info)
                         callist = arcs.copy()
