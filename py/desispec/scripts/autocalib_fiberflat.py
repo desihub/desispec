@@ -121,7 +121,7 @@ def main(args=None) :
             from desispec.calibfinder import CalibFinder
             for spectro, fiberflat in fiberflats.items():
                 cf = CalibFinder([fiberflat.header,])
-                ref_fiberflats[spectro] = cf.find('FIBERFLAT')
+                ref_fiberflats[spectro] = read_fiberflat(cf.findfile('FIBERFLAT'))
         else:
             #- use fiberflats from given night as reference
             for spectro in fiberflats.keys():
