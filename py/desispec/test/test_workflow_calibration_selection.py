@@ -291,3 +291,66 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
+
+    def test_extra_badcals(self):
+        """
+        Test case where extra cals exist but are flagged as bad
+        """
+        from desispec.workflow.calibration_selection import \
+            find_best_arc_flat_sets
+        goodset = self._make_arcflatset_etable()
+        badset = self._make_arcflatset_etable()
+        badset['LASTSTEP'] = 'ignore'
+        badarcs = badset[badset['OBSTYPE'] == 'arc']
+        badflats = badset[badset['OBSTYPE'] == 'flat']
+        expected = self._get_cleaned_table(goodset)
+
+        # good before bad
+        testset = vstack([goodset, badset])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+        # bad before good
+        testset = vstack([badset, goodset])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+        # bad arcs before good set
+        testset = vstack([badarcs, goodset])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+        # bad arcs after good set
+        testset = vstack([goodset, badarcs])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+        # bad flats before good set
+        testset = vstack([badflats, goodset])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+        # bad flats after good set
+        testset = vstack([goodset, badflats])
+        testset['EXPID'] = 100+np.arange(len(testset))
+        best = find_best_arc_flat_sets(testset)
+        if len(best) == len(expected):
+            expected['EXPID'] = best['EXPID']
+        self._test_tables_equal(expected, best)
+
+

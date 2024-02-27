@@ -267,7 +267,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
             elif len(arcs) > 0 and erow['EXPID'] == arcs[-1]['EXPID']+1 and erow['SEQNUM'] == arcs[-1]['SEQNUM']+1:
                 ## if not the first arc, make sure this arc is compatible with
                 ## the last arc. If so, add it
-                print_row_message(f"Identified the start of a new arc sequence:",
+                print_row_message(f"Identified additional arc in sequence:",
                                   erow, exptable.colnames, log.debug)
                 arcs.append(erow)
                 if len(arcs) == narcsequence and erow['SEQNUM'] == erow['SEQTOT']:
@@ -292,10 +292,11 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                                 nbadcams += len(badcams)
                         ## find average number of bad cameras only among good
                         ## exposures in the set
-                        complete_arc_set['meanbadcams'] = float(nbadcams)/float(complete_arc_set['ngood'])
+
                         if complete_arc_set['ngood'] >= ngoodarcthreshold:
                             ## If the number of good exposures is above threshold
                             ## then save the current set as a valid option
+                            complete_arc_set['meanbadcams'] = float(nbadcams)/float(complete_arc_set['ngood'])
                             if complete_arc_set['calib_arcs'] and complete_arc_set['meanbadcams'] == 0 \
                                     and complete_arc_set['ngood'] == narcsequence:
                                 log.info(f"Found ideal arc set.")
