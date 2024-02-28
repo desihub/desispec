@@ -29,7 +29,7 @@ def parse_args():  # options=None):
     parser.add_argument("--surveys", type=str, required=False, default=None,
                         help="Comma separated list of surveys to include (e.g. sv1,sv3 or main); "+
                              "use --proc-obstypes to filter out arcs/flats if desired")
-    parser.add_argument("--science_laststeps", type=str, required=False, default=None,
+    parser.add_argument("--laststeps", type=str, required=False, default=None,
                         help="Comma separated list of LASTSTEP's to process "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
                              + "by default we only process 'all'.")

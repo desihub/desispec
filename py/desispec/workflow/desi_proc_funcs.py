@@ -133,7 +133,7 @@ def add_desi_proc_tilenight_terms(parser):
     """
     parser.add_argument("-t", "--tileid", type=str, help="Tile ID")
     parser.add_argument("-d", "--dryrun", action="store_true", help="show commands only, do not run")
-    parser.add_argument("--science_laststeps", type=str, default=None,
+    parser.add_argument("--laststeps", type=str, default=None,
                         help="Comma separated list of LASTSTEP values "
                              + "(e.g. all, skysub, fluxcalib, ignore); "
                              + "by default, exposures with LASTSTEP "
@@ -1039,7 +1039,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         mpistdstars: bool. Whether to use MPI for stdstar fitting.
         use_specter: bool. Use classic specter instead of gpu_specter for extractions
         no_gpu: bool. Do not use GPU even if available
-        science_laststeps: list of str. A list of science_laststeps to pass as the science_laststeps argument to tilenight
+        laststeps: list of str. A list of laststeps to pass as the laststeps argument to tilenight
         cameras: str, must be camword.
 
     Returns:
@@ -1129,7 +1129,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         elif use_specter:
             cmd += f' --use-specter'
         if laststeps is not None:
-            cmd += f' --science_laststeps="{",".join(laststeps)}"'
+            cmd += f' --science-laststeps="{",".join(laststeps)}"'
 
         cmd += f' --timingfile {timingfile}'
 

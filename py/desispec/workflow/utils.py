@@ -127,7 +127,7 @@ def load_override_file(filepathname=None, night=None):
             overrides = yaml.safe_load(override_file)
     else:
         log.warning(f"Override file {filepathname} doesn't exist. Returning"
-                    + " and empty dictionary.")
+                    + " an empty dictionary.")
     return overrides
 
 def define_variable_from_environment(env_name, var_descr):

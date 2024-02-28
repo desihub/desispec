@@ -158,7 +158,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     elif dry_run_level > 0:
         dry_run = True
 
-    ## exp_obstypes must contain all the types used in processing
+    ## expobstypes must contain all the types used in processing
     for typ in procobstypes:
         if typ not in expobstypes:
             expobstypes.append(typ)

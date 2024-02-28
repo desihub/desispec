@@ -240,7 +240,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated to reflect
@@ -384,7 +384,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
@@ -1377,7 +1377,7 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
             remaining cameras not found to exist.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
 
     Returns:
         tuple: A tuple containing:
@@ -1765,7 +1765,7 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry
             exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
-        laststeps (list of str, optional): A list of science_laststeps to pass as the science_laststeps argument to tilenight.
+        laststeps (list of str, optional): A list of laststeps to pass as the laststeps argument to tilenight.
     Returns:
         tuple: A tuple containing:
 
