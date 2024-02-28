@@ -175,10 +175,9 @@ def matches_exptime(val_or_array, exptime, exptime_tolerance=1.):
     exptime, exptime_tolerance = float(exptime), float(exptime_tolerance)
     return np.abs(val_or_array - exptime) <= exptime_tolerance
 
-def print_row_message(message, dictlike, keys=None, print_func=print):
+def format_row_message(message, dictlike, keys=None):
     """
-    Helper function that prints a subset of values from a dict or astropy table
-    in a user friendly way with the option to use print or desi logger.
+    Standardize formatting for messages about rows of tables.
 
     Args:
         message (str): Message to be printed verbatim before the key:val pairs
@@ -187,8 +186,8 @@ def print_row_message(message, dictlike, keys=None, print_func=print):
             function.
         keys (list or np.array): iterable of strings that when passed to
             the dictlike object return values.
-        print_func (function): the function used to return or display the
-            information.
+
+    Returns formatted string to pass to print, log.debug, log.info, etc.
     """
     ## If no keys given, use these
     if keys is None:
@@ -199,8 +198,8 @@ def print_row_message(message, dictlike, keys=None, print_func=print):
     ## input message
     for col in keys:
         string += f'  {col}:{dictlike[col]}'
-    ## print/log that message
-    print_func(string)
+
+    return string
 
 
 def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
@@ -257,21 +256,19 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
     ## 5 short arcs, 5 long arcs, 4 sets of 3 flats each with different lamp
     log.info(f"Looping over {len(exptable)} rows")
     for erow in exptable:
-        print_row_message("Processing erow", erow,
-                          keys=['EXPID','OBSTYPE','SEQNUM','SEQTOT','EXPTIME','LASTSTEP','BADCAMWORD','BADAMPS'],
-                          print_func=log.debug )
+        log.debug(format_row_message("Processing erow", erow))
         if erow['OBSTYPE'] == 'arc':
             if erow['SEQNUM'] == 1:
                 ## if the first arc then we are at the start of a new sequence
                 ## remove anything saved and register this as the first arc
-                print_row_message(f"Identified the start of a new arc sequence:",
-                                  erow, exptable.colnames, log.debug)
+                log.debug(format_row_message(f"Identified the start of a new arc sequence:",
+                                             erow, exptable.colnames))
                 arcs, flats = [erow], {0:[], 1:[], 2:[], 3:[]}
             elif len(arcs) > 0 and erow['EXPID'] == arcs[-1]['EXPID']+1 and erow['SEQNUM'] == arcs[-1]['SEQNUM']+1:
                 ## if not the first arc, make sure this arc is compatible with
                 ## the last arc. If so, add it
-                print_row_message(f"Identified additional arc in sequence:",
-                                  erow, exptable.colnames, log.debug)
+                log.debug(format_row_message(f"Identified additional arc in sequence:",
+                                             erow, exptable.colnames))
                 arcs.append(erow)
                 if len(arcs) == narcsequence and erow['SEQNUM'] == erow['SEQTOT']:
                     if np.sum([erow['SEQNUM'] for erow in arcs]) == arc_sequence_sum:
@@ -338,34 +335,34 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                 ## be flatflatexpdiff away from previous lamp
                 if calibnum == 0:
                     if len(arcs) != narcsequence:
-                        print_row_message(f"Identified the start of a new flat sequence:" \
-                                          + f"but wrong number of arcs {len(arcs)} != {narcsequence}",
-                                           erow, exptable.colnames, log.debug)
+                        log.debug(format_row_message(f"Identified the start of a new flat sequence:" \
+                                                   + f"but wrong number of arcs {len(arcs)} != {narcsequence}",
+                                                     erow, exptable.colnames))
                         arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
                     elif erow['EXPID'] - arcs[-1]['EXPID'] > arcflatexpdiff:
                         expid_arc = int(arcs[-1]['EXPID'])
                         expid_flat = int(erow['EXPID'])
                         expid_diff = expid_flat - expid_arc
-                        print_row_message(f"Identified the start of a new flat sequence:" \
-                                          + f"but {expid_diff=} > {arcflatexpdiff}",
-                                           erow, exptable.colnames, log.debug)
+                        log.debug(format_row_message(f"Identified the start of a new flat sequence:" \
+                                                   + f"but {expid_diff=} > {arcflatexpdiff}",
+                                                      erow, exptable.colnames))
                         dt = 24*60*(erow['MJD-OBS'] - arcs[-1]['MJD-OBS'])
                         log.warning(f'arc {expid_arc} to flat {expid_flat} -> {dt:.1f} minutes')
                         arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
                     else:
-                        print_row_message(f"Identified the start of a new flat sequence:",
-                                          erow, exptable.colnames, log.debug)
+                        log.debug(format_row_message(f"Identified the start of a new flat sequence:",
+                                                     erow, exptable.colnames))
                         flats = {0: [erow], 1: [], 2: [], 3: []}
                 else:
                     if len(flats[calibnum-1]) != nflatsequence \
                             or erow['EXPID'] - flats[calibnum-1][-1]['EXPID'] > flatflatexpdiff:
-                        print_row_message(f"Identified the start of a new flat lamp sequence:" \
-                                          + "but no valid previous lamps",
-                                          erow, exptable.colnames, log.debug)
+                        log.debug(format_row_message(f"Identified the start of a new flat lamp sequence:" \
+                                                    + "but no valid previous lamps",
+                                                     erow, exptable.colnames))
                         arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
                     else:
-                        print_row_message(f"Identified the start of a new flat lamp sequence:",
-                                          erow, exptable.colnames, log.debug)
+                        log.debug(format_row_message(f"Identified the start of a new flat lamp sequence:",
+                                                     erow, exptable.colnames))
                         flats[calibnum] = [erow]
             else:
                 ## If not the first flat in a sequence then it should be the next
@@ -379,8 +376,8 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                     ## usable or not
                     if calibnum == 3 and \
                             np.sum([erow['SEQNUM'] for erow in flats[calibnum]]) == flat_sequence_sum:
-                        print_row_message(f"Found a complete flat set",
-                                          erow, exptable.colnames, log.info)
+                        log.info(format_row_message(f"Found a complete flat set",
+                                                    erow, exptable.colnames))
                         callist = arcs.copy()
                         ngoodarcs = np.sum([arc['LASTSTEP']=='all' for arc in arcs])
                         ngoodflats = 0
@@ -430,8 +427,8 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                     arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
         else:
             ## if obstype isn't arc or flat, ignore it and reset the sets
-            print_row_message(f"OBSTYPE wasn't arc or flat:",
-                              erow, exptable.colnames, log.debug)
+            log.debug(format_row_message(f"OBSTYPE wasn't arc or flat:",
+                                         erow, exptable.colnames))
             arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
 
     log.debug(complete_sets)
