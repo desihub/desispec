@@ -77,7 +77,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             remaining cameras not found to exist.
         tiles (array-like, optional): Only submit jobs for these TILEIDs.
         surveys (array-like, optional): Only submit science jobs for these surveys (lowercase)
-        laststeps (array-like, optional): Only submit jobs for exposures with LASTSTEP in these science_laststeps (lowercase)
+        laststeps (array-like, optional): Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
         use_tilenight (bool, optional): Default is False. If True, use desi_proc_tilenight for prestdstar, stdstar,
             and poststdstar steps for science exposures.
         all_tiles (bool, optional): Default is False. Set to NOT restrict to completed tiles as defined by
