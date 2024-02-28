@@ -23,8 +23,6 @@ from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
 from desiutil.names import radec_to_desiname
-from desimodel.focalplane import get_tile_radius_deg
-from desimodel.io import load_focalplane
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
@@ -210,6 +208,9 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
     :class:`~astropy.table.Table`
         An empty Table.
     """
+
+    #- import desimodel only if needed
+    from desimodel.io import load_focalplane
 
     assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
     columns = _set_fibermap_columns(survey)
@@ -530,6 +531,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     :class:`astropy.io.fits.HDUList`
         A representation of a fibermap FITS file.
     """
+
+    #- import desimodel only if needed
+    from desimodel.focalplane import get_tile_radius_deg
 
     log = get_logger()
 

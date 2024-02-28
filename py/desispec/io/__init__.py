@@ -17,7 +17,6 @@ warnings.filterwarnings('ignore', message=r".*'10\*\*6 arcsec.* did not parse as
 # from .download import download, filepath2url
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
-from .filters import load_filter,load_legacy_survey_filter
 from .fluxcalibration import (read_stdstar_templates, write_stdstar_models,
                               read_stdstar_models, read_flux_calibration,
                               write_flux_calibration, read_average_flux_calibration)
@@ -47,6 +46,9 @@ from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles,
                    healpix_subdirectory, replace_prefix)
 
-# Why is this even here?
-# Commented out by JXP as this causes a circular import on Python 3.7
-#from desispec.preproc import read_bias, read_pixflat, read_mask
+# import if dependecies are installed
+try:
+    # requires speclite
+    from .filters import load_filter,load_legacy_survey_filter
+except ModuleNotFoundError:
+    pass

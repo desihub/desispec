@@ -23,7 +23,6 @@ from astropy.stats import sigma_clipped_stats
 from scipy.optimize import least_squares
 from desispec.image_model import compute_image_model
 from astropy.table import Table
-import specter.psf
 from desispec.qproc import qfiberflat, qsky, rowbyrowextract
 import copy
 from scipy.ndimage import median_filter
@@ -711,6 +710,9 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
     np.ndarray
     Model image.
     """
+    # load specter only if needed to simplify required dependencies
+    import specter.psf
+
     meta = preproc.meta
     cfinder = CalibFinder([meta])
     if fibermap is None and hasattr(preproc, 'fibermap'):
