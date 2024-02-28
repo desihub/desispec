@@ -168,7 +168,7 @@ if __name__ == '__main__':
                              z_submit_types=args.z_submit_types,
                              tab_filetype=args.table_file_type, camword=camword,
                              badcamword=badcamword, badamps=args.badamps, queue=args.queue,
-                            dry_run_level=args.dry_run_level, dry_run=args.dry_run, no_redshifts=args.no_redshifts,
+                             dry_run_level=args.dry_run_level, dry_run=args.dry_run, no_redshifts=args.no_redshifts,
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,
                              continue_looping_debug=args.continue_looping_debug,
                              data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,

@@ -152,7 +152,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
-    ## If science_laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
+    ## If laststeps not defined, default is only LASTSTEP=='all' exposures for non-tilenight runs
     tilenight_laststeps = laststeps
     if laststeps is None:
         laststeps = ['all',]
@@ -160,7 +160,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         laststep_options = get_last_step_options()
         for laststep in laststeps:
             if laststep not in laststep_options:
-                raise ValueError(f"Couldn't understand laststep={laststep} in science_laststeps={laststeps}.")
+                raise ValueError(f"Couldn't understand laststep={laststep} in laststeps={laststeps}.")
     print(f"Processing exposures with the following LASTSTEP's: {laststeps}")
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
