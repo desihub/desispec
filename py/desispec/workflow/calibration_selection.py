@@ -257,6 +257,9 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
     ## 5 short arcs, 5 long arcs, 4 sets of 3 flats each with different lamp
     log.info(f"Looping over {len(exptable)} rows")
     for erow in exptable:
+        print_row_message("Processing erow", erow,
+                          keys=['EXPID','OBSTYPE','SEQNUM','SEQTOT','EXPTIME','LASTSTEP','BADCAMWORD','BADAMPS'],
+                          print_func=log.debug )
         if erow['OBSTYPE'] == 'arc':
             if erow['SEQNUM'] == 1:
                 ## if the first arc then we are at the start of a new sequence
@@ -276,23 +279,25 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                         ## sequence are present, do more processing to verify
                         ## this is a good set
                         log.info(f"Identified a complete set of {narcsequence} arcs")
-                        complete_arc_set = {'table':vstack(arcs), 'ngood': 0, 'meanbadcams': 0}
+
+                        ## vstack separate list of rows to avoid astropy #16119 bug modifying inputs.
+                        ## This keeps arcs as a list of Rows instead of becoming a list of Tables
+                        complete_arc_set = {'table':vstack(list(arcs)), 'ngood': 0, 'meanbadcams': 0}
                         ## calib_arcs True if all PROGRAM's indicate that they
                         ## are calib short arcs
                         complete_arc_set['calib_arcs'] = np.all(['calib short arcs all'
-                                                                 in arc['PROGRAM'][0].lower()
+                                                                 in arc['PROGRAM'].lower()
                                                                  for arc in arcs])
                         ## count the number of bad cameras in the set
                         nbadcams = 0
                         for arc in arcs:
-                            if arc['LASTSTEP'][0] == 'all':
+                            if arc['LASTSTEP'] == 'all':
                                 complete_arc_set['ngood'] += 1
-                                badcams = all_impacted_cameras(arc['BADCAMWORD'][0],
-                                                               arc['BADAMPS'][0])
+                                badcams = all_impacted_cameras(arc['BADCAMWORD'],
+                                                               arc['BADAMPS'])
                                 nbadcams += len(badcams)
                         ## find average number of bad cameras only among good
                         ## exposures in the set
-
                         if complete_arc_set['ngood'] >= ngoodarcthreshold:
                             ## If the number of good exposures is above threshold
                             ## then save the current set as a valid option
@@ -306,6 +311,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                         else:
                             ## If there aren't enough good arcs then it isn't
                             ## a valid set so negate it and move on
+                            log.info(f"Skipping arc set ngood={complete_arc_set['ngood']} < {ngoodarcthreshold};")
                             arcs, flats = [], {0: [], 1: [], 2: [], 3: []}
             else:
                 log.info("Arc wasn't the first in a sequence or next sequentially so " \
@@ -331,11 +337,20 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                 ## away from the last arc, if another lamp it will
                 ## be flatflatexpdiff away from previous lamp
                 if calibnum == 0:
-                    if len(arcs) != narcsequence \
-                            or erow['EXPID'] - arcs[-1]['EXPID'] > arcflatexpdiff:
+                    if len(arcs) != narcsequence:
                         print_row_message(f"Identified the start of a new flat sequence:" \
-                                          + "but no valid arcs",
+                                          + f"but wrong number of arcs {len(arcs)} != {narcsequence}",
                                            erow, exptable.colnames, log.debug)
+                        arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
+                    elif erow['EXPID'] - arcs[-1]['EXPID'] > arcflatexpdiff:
+                        expid_arc = int(arcs[-1]['EXPID'])
+                        expid_flat = int(erow['EXPID'])
+                        expid_diff = expid_flat - expid_arc
+                        print_row_message(f"Identified the start of a new flat sequence:" \
+                                          + f"but {expid_diff=} > {arcflatexpdiff}",
+                                           erow, exptable.colnames, log.debug)
+                        dt = 24*60*(erow['MJD-OBS'] - arcs[-1]['MJD-OBS'])
+                        log.warning(f'arc {expid_arc} to flat {expid_flat} -> {dt:.1f} minutes')
                         arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
                     else:
                         print_row_message(f"Identified the start of a new flat sequence:",
@@ -367,14 +382,14 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                         print_row_message(f"Found a complete flat set",
                                           erow, exptable.colnames, log.info)
                         callist = arcs.copy()
-                        ngoodarcs = np.sum([arc['LASTSTEP'][0]=='all' for arc in arcs])
+                        ngoodarcs = np.sum([arc['LASTSTEP']=='all' for arc in arcs])
                         ngoodflats = 0
                         ## for each lamp, find the number of good flats and
                         ## add the flats to the list of expoures
                         for calflatlist in flats.values():
                             ngoodflats += np.sum([flat['LASTSTEP']=='all' for flat in calflatlist])
                             callist.extend(calflatlist)
-                        caltable = vstack(callist)
+                        caltable = vstack(list(callist))  # list wrapper in case astropy changes inputs
                         del callist
 
                         complete_set = {'table': caltable.copy(),
@@ -390,7 +405,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
                             ## even more quantities including the mean number
                             ## of bad cameras on valid exposures
                             complete_set['calib_arcs'] = np.all(
-                                ['calib' in arc['PROGRAM'][0] for arc in arcs])
+                                ['calib' in arc['PROGRAM'] for arc in arcs])
                             nbadcams = 0
                             for cal in caltable:
                                 badcams = all_impacted_cameras(cal['BADCAMWORD'],
