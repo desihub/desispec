@@ -20,7 +20,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    def _make_arcset_etable(self, narcsperset=5, expid_offset=0):
+    def _make_arcset_etable(self, narcsperset=5, expid_offset=0, mjd=55555.0):
         ntotalarcs = 2 * narcsperset
         arcset = Table()
 
@@ -50,11 +50,12 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
 
         obs = ['arc'] * ntotalarcs
         arcset['OBSTYPE'] = obs
+        arcset['MJD-OBS'] = mjd + np.cumsum(arcset['EXPTIME']+60.0) / (24*3600)
 
         return arcset
 
     def _make_flatset_etable(self, nflatsperset=3, nflatsets=4,
-                            flatflatgap=3, expid_offset=0):
+                            flatflatgap=3, expid_offset=0, mjd=55555.0):
         flatset = Table()
         ncte = 3
         nexps = nflatsperset * nflatsets + ncte
@@ -81,6 +82,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         flatset['BADAMPS'] = ['b0123456789r0123456789'] * nexps
         flatset['BADAMPS'][:] = ''
         flatset['OBSTYPE'] = ['flat'] * nexps
+        flatset['MJD-OBS'] = mjd + np.cumsum(flatset['EXPTIME']+60.0) / (24*3600)
 
         return flatset
 
@@ -89,10 +91,12 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         arcset = self._make_arcset_etable(narcsperset=narcsperset,
                                     expid_offset=expid_offset)
         flat_offset = int(np.max(arcset['EXPID']) + arcflatgap)
+        flat_mjd_start = np.max(arcset['MJD-OBS']) + 5.0/(24*60)
         flatset = self._make_flatset_etable(nflatsperset=nflatsperset,
                                       nflatsets=nflatsets,
                                       flatflatgap=flatflatgap,
-                                      expid_offset=flat_offset)
+                                      expid_offset=flat_offset,
+                                      mjd=flat_mjd_start)
         arcflatset = vstack([arcset, flatset])
         arcflatset.sort(['EXPID'])
         return arcflatset
@@ -353,4 +357,54 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
             expected['EXPID'] = best['EXPID']
         self._test_tables_equal(expected, best)
 
+    def test_arcflat_timing(self):
+        """
+        Test big expid between arcs and flats, but still close in time
+
+        Example: 20201217
+        """
+        from desispec.workflow.calibration_selection import \
+            find_best_arc_flat_sets
+        goodset1 = self._make_arcflatset_etable()
+        goodset2 = self._make_arcflatset_etable()
+
+        self._test_tables_equal(goodset1, goodset2)
+
+        # confirm test has arcs and flats close in time
+        isarc = goodset1['OBSTYPE'] == 'arc'
+        isflat = goodset1['OBSTYPE'] == 'flat'
+        arc_end_mjd = np.max(goodset1['MJD-OBS'][isarc])
+        flat_start_mjd = np.min(goodset1['MJD-OBS'][isflat])
+        self.assertLess(flat_start_mjd, arc_end_mjd+30./(24*60))
+
+        # add expid offset for FLATs, but leave MJDs alone
+        goodset2['EXPID'][isflat] += 100
+
+        best1 = find_best_arc_flat_sets(goodset1)
+        best2 = find_best_arc_flat_sets(goodset2)
+
+        self.assertEqual(len(best1), len(best2))
+
+    def test_arcflat_order(self):
+        """
+        Test that arc/flat sequence order doesn't matter
+
+        Examples: 20210205, 20210206 arcs after flats
+        """
+        from desispec.workflow.calibration_selection import \
+            find_best_arc_flat_sets
+        arcs = self._make_arcset_etable()
+        flats = self._make_flatset_etable()
+
+        normalset = vstack([arcs,flats])
+        normalset['EXPID'] = 100+np.arange(len(normalset))
+        normalset['MJD-OBS'] = 55555.0 + np.cumsum(normalset['EXPTIME']+60) / (24*60*60)
+
+        reverseset = vstack([flats, arcs])
+        reverseset['EXPID'] = 100+np.arange(len(reverseset))
+        reverseset['MJD-OBS'] = 55555.0 + np.cumsum(reverseset['EXPTIME']+60) / (24*60*60)
+
+        normalbest = find_best_arc_flat_sets(normalset)
+        reversebest = find_best_arc_flat_sets(reverseset)
+        self.assertEqual(len(normalbest), len(reversebest))
 
