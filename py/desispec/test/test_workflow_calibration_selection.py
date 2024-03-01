@@ -417,3 +417,21 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         reversebest = find_best_arc_flat_sets(reverseset)
         self.assertEqual(len(normalbest), len(reversebest))
 
+    def test_missing_cals(self):
+        """
+        Test case where all cals are bad, e.g. 20220911
+        """
+        from desispec.workflow.calibration_selection import \
+            determine_calibrations_to_proc
+        badset = self._make_arcflatset_etable()
+
+        # existing, but bad
+        badset['LASTSTEP'] = 'ignore'
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 0)   # or None?
+
+        # no existing at all
+        badset['LASTSTEP'] = 'all'
+        badset['OBSTYPE'] = 'science'
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 0)   # or None?
