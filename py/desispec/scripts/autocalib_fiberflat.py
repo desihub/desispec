@@ -76,13 +76,13 @@ def main(args=None) :
             common_expid=None
             for c in ucam :
                 expid_per_program_and_camera =  expid[(program==p)&(camera==c)]
-                print("expids with camera={} for program={} : {}".format(c,p,expid_per_program_and_camera))
+                log.info("expids with camera={} for program={} : {}".format(c,p,expid_per_program_and_camera))
                 if common_expid is None :
                     common_expid = expid_per_program_and_camera
                 else :
                     common_expid = np.intersect1d(common_expid,expid_per_program_and_camera)
 
-            print("expids with all cameras for program={} : {}".format(p,common_expid))
+            log.info("expids with all cameras for program={} : {}".format(p,common_expid))
 
             for c in ucam :
                 fflat_to_average = []
@@ -99,13 +99,13 @@ def main(args=None) :
         common_expid=None
         for c in ucam :
             expid_per_camera =  expid[(camera==c)]
-            print("expids with camera={} : {}".format(c,expid_per_camera))
+            log.info("expids with camera={} : {}".format(c,expid_per_camera))
             if common_expid is None :
                 common_expid = expid_per_camera
             else :
                 common_expid = np.intersect1d(common_expid,expid_per_camera)
 
-        print("expids with all cameras : {}".format(common_expid))
+        log.info("expids with all cameras : {}".format(common_expid))
         fflat_to_average = []
         for e in common_expid :
             ii = np.where((expid==e))[0]
@@ -117,13 +117,17 @@ def main(args=None) :
     if args.solve_gradient or args.gradient_ref_night is not None:
         ref_fiberflats = {}
         if args.gradient_ref_night is None:
+            log.info('Solving fiberflat gradient using default fiberflats from $DESI_SPECTRO_CALIB')
             #- find default fiberflats to use as reference
             from desispec.calibfinder import CalibFinder
             for spectro, fiberflat in fiberflats.items():
                 cf = CalibFinder([fiberflat.header,])
-                ref_fiberflats[spectro] = read_fiberflat(cf.findfile('FIBERFLAT'))
+                filename = cf.findfile('FIBERFLAT')
+                log.debug('Reference fiberflat %s %s', spectro, filename)
+                ref_fiberflats[spectro] = read_fiberflat(filename)
         else:
             #- use fiberflats from given night as reference
+            log.info(f'Solving fiberflat gradient using reference night {args.gradient_ref_night}')
             for spectro in fiberflats.keys():
                 ref_filename = findfile('fiberflatnight', night=args.gradient_ref_night, camera="{}{}".format(args.arm, spectro))
                 ref_fiberflats[spectro] = read_fiberflat(ref_filename)
