@@ -13,7 +13,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Submit data for processing "
                                                  "with the DESI data pipeline.")
 
-    parser.add_argument("-n","--night", type=int, required=True, help="The night you want processed.")
+    parser.add_argument("-n","--night", type=int, default=None, help="The night you want processed.")
     parser.add_argument("--daily", action="store_true", help="If set the "
                         + "the pipeline operates in daily mode, updating"
                         + " the exposure_table, not submitting the last"

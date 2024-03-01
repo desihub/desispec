@@ -172,7 +172,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Set a flag to determine whether to process the last tile in the exposure table
     ## or not. This is used in daily mode when processing and exiting mid-night.
-    ignore_last_tile = False
+    still_acquiring = False
     
     ## If running in daily mode, change a bunch of defaults
     if daily:
@@ -186,7 +186,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             night = true_night
 
         if during_operating_hours(dry_run=dry_run) and (true_night == night):
-            ignore_last_tile = True
+            still_acquiring = True
 
         update_exptable = True    
         append_to_proc_table = True
@@ -358,7 +358,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     if calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
-                                                    still_acquiring=ignore_last_tile)
+                                                    still_acquiring=still_acquiring)
 
     ## Determine the appropriate science exposures
     sci_etable, tiles_to_proc = determine_science_to_proc(
@@ -366,7 +366,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                         surveys=surveys, laststeps=science_laststeps,
                                         processed_tiles=np.unique(ptable['TILEID']),
                                         all_tiles=all_tiles,
-                                        ignore_last_tile=ignore_last_tile,
+                                        ignore_last_tile=still_acquiring,
                                         complete_tiles_thrunight=complete_tiles_thrunight,
                                         specstatus_path=specstatus_path)
 
@@ -412,10 +412,21 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Require some minimal level of calibrations to process science exposures
     if require_cals and calibjobs['linkcal'] is None \
             and calibjobs['nightlyflat'] is None:
-        err = (f"Required to have at least psf calibrations via override link"
+        err = (f"Required to have at least flat calibrations via override link"
                + f" or nightlyflat")
         log.error(err)
-        sys.exit(1)
+        ## If still acquiring new data in daily mode, don't exit with error code
+        ## But do exit
+        if still_acquiring:
+            if len(ptable) > 0:
+                processed = np.isin(full_etable['EXPID'],
+                                    np.unique(np.concatenate(ptable['EXPID'])))
+                unproc_table = full_etable[~processed]
+            else:
+                unproc_table = full_etable
+            return ptable, unproc_table
+        else:
+            sys.exit(1)
 
     ## Process Sciences
     ## Loop over new tiles and process them
@@ -494,9 +505,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         log.info(f"\nn{ptable=}")
         log.info(f"\n{unproc_table=}")
 
-    if ignore_last_tile:
+    if still_acquiring:
         log.info(f"Current submission of exposures "
-                 + f"for {night=} are complete.\n\n\n\n")
+                 + f"for {night=} are complete except for last tile.\n\n\n\n")
     else:
         log.info(f"All done: Completed submission of exposures for night {night}.\n")
         

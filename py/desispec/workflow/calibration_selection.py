@@ -11,14 +11,14 @@ from desiutil.log import get_logger
 from desispec.io.util import decode_camword, parse_badamps, all_impacted_cameras
 
 
-def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
+def determine_calibrations_to_proc(etable, do_cte_flats=True,
                                    still_acquiring=False):
     """
      Selects the calibration exposures that should be processed from a
      populated exposure table.
 
     Args:
-        full_etable (astropy.table.Table): A DESI exposure_table.
+        etable (astropy.table.Table): A DESI exposure_table.
         do_cte_flats (bool, optional): Default is True. If True, cte flats
             are used if available to correct for cte effects.
         still_acquiring (bool): Whether data is still being acquired or the
@@ -29,20 +29,20 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
             calibration exposures that should be processed.
      """
     log = get_logger()
-    etable = full_etable.copy()
+    full_etable = etable.copy()
 
     ## Selecting cals, so remove science exposures
-    if len(etable) > 0:
-        etable = etable[etable['OBSTYPE'] != 'science']
+    if len(full_etable) > 0:
+        cal_etable = full_etable[full_etable['OBSTYPE'] != 'science']
 
     ## If no rows, stop here
-    if len(etable) == 0:
-        return etable[[]]
+    if len(cal_etable) == 0:
+        return cal_etable[[]]
 
     ## Use OBSTYPE, PROGRAM, and EXPTIME to select exposures that match
     ## calibration exposures for those fields
     ## Note even arcs with LASTSTEP='ignore' are retained here
-    valid_etable, exptypes = select_valid_calib_exposures(etable)
+    valid_etable, exptypes = select_valid_calib_exposures(cal_etable)
 
     ## If 1 dark, 5 arcs, 12 flats, and 3 ctes then we have a candidate set,
     ## so return that it. Otherwise if no new data is coming in we should try
@@ -64,7 +64,9 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
 
     ## Run a more detailed algorithm to ensure we have a complete set of
     ## arcs and a complete set of 3 flats for each of 4 lamps
-    best_arcflat_set = find_best_arc_flat_sets(valid_etable)
+    ## Note this gets all calibrations without exposure_time cut, as it
+    ## does it's own selection
+    best_arcflat_set = find_best_arc_flat_sets(cal_etable)
 
     ## Create the output table with all zeros, the first valid dark,
     ## the best set of arcs and flats, and all cte flats
@@ -75,15 +77,11 @@ def determine_calibrations_to_proc(full_etable, do_cte_flats=True,
     if do_cte_flats:
         out_table = vstack([out_table, valid_etable[exptypes == 'cteflat'][:3]])
 
-    ## Since the arc set can include LASTSTEP=='ignore', cut those out now
-    if len(out_table) > 0:
-        out_table = out_table[out_table['LASTSTEP']=='all']
-
     return out_table
 
 
 
-def select_valid_calib_exposures(etable):
+def select_valid_calib_exposures(etable, allow_any_laststep=None):
     """
      Selects the calibration exposures from a populated exposure table
      that pass consistency requirements on exposure time and have
@@ -92,6 +90,8 @@ def select_valid_calib_exposures(etable):
 
     Args:
         etable (astropy.table.Table): A DESI exposure_table
+        allow_any_laststep (list or np.array): List of obstype strings for
+            which to allow exposures of any LASTSTEP.
 
     Returns:
         astropy.table.Table: A DESI exposure_table only containing the
@@ -102,8 +102,12 @@ def select_valid_calib_exposures(etable):
             obseration types include CTE information and aren't redundant with
             column 'OBSTYPE'.
      """
-    ## Select only good exposures, except for arcs where we keep anything for now
-    etable = etable[((etable['OBSTYPE'] == 'arc') | (etable['LASTSTEP'] == 'all'))]
+    ## Select only good exposures, except for obstypes in allow_any_laststep
+    laststep_mask = (etable['LASTSTEP'] == 'all')
+    if allow_any_laststep is not None:
+        for obstype in allow_any_laststep:
+            laststep_mask |= (etable['OBSTYPE'] == obstype)
+    etable = etable[laststep_mask]
 
     ## For each exposure, determine if the exptime and obstype are consistent
     ## with a calibration exposure. For arcs and flats also check PROGRAM
@@ -201,31 +205,54 @@ def format_row_message(message, dictlike, keys=None):
 
     return string
 
-
-def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
-                       nflatsequence=3, nflatlamps=4,
-                       arcflatexpdiff=15, flatflatexpdiff=3):
+def is_complete_set(explist):
     """
-     Selects the calibration exposures from a populated exposure table
-     that pass consistency requirements on exposure time and have
-     LASTSTEP=='all', except for arcs which keep all LASTSTEPS for the time
-     being do to how the arc sets are selected later on.
+     Function that takes a list of exposure rows (or etable) and identifies
+     whether they are consistent with a complete set of calibrations of
+     a particular type (either arcs or a single flat lamp) based on SEQNUM
+     and SEQTOT
+
+    Args:
+        explist (list): A list of DESI exposure_table rows for what is expected
+            to be a single calibration set with SEQNUM's ranging from 1 to
+            SEQTOT in any order.
+
+    Returns:
+        (bool): True if the explist has all SEQNUM's up to SEQTOT and all
+            SEQTOT's are consistent and the list is the appropriate length.
+    """
+
+    if len(explist) == 0:
+        return False
+    else:
+        seqnums, seqtots = [], []
+        ## Get all seqnums and seqtots
+        for erow in explist:
+            seqnums.append(erow['SEQNUM'])
+            seqtots.append(erow['SEQTOT'])
+        ## this is equal to sum of 1+2+...+SEQTOT
+        expected_sum = int(seqtots[0]*(1+seqtots[0])/2)
+        ## A full sequence should add up to the expected total, have consistent
+        ## SEQTOT, have length of SEQTOT, and have max SEQNUM of SEQTOT
+        return (np.all(np.array(seqtots)==seqtots[0])
+                and len(explist) == seqtots[0]
+                and np.max(seqnums) == seqtots[0]
+                and np.sum(seqnums) == expected_sum)
+
+def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
+                            arcflattimediff=20.):
+    """
+     Selects the calibration exposures from a populated exposure table.
 
     Args:
         etable (astropy.table.Table): A DESI exposure_table.
         ngoodarcthreshold (int): Number of good arcs in a single sequence
             necessary to be considered a complete set.
-        narcsequence (int): Number of arcs in a single arc sequence.
-        nflatsequence (int): Number of flats in a single flat sequence for
-            a single lamp configuration.
         nflatlamps (int): Number of lamp configurations in a single
             set for flat calibrations.
-        arcflatexpdiff (int): Numeric difference in exposure ID between
-            the final arc exposure and the first flat exposure in a standard
-            calibration sequence.
-        flatflatexpdiff (int): Numeric difference in exposure ID between
-            the final flat exposure of one lamp and the first flat exposure
-            of the next lamp in a standard calibration sequence.
+        arcflattimediff (float): Time difference in minutes between
+            the final arc exposure and the first flat exposure or the final
+            flat exposure and the first arc exposure
 
     Returns:
         None or astropy.table.Table: A DESI exposure_table containing only
@@ -237,204 +264,204 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
     log = get_logger()
 
     ## Verify only exposures that pass sanity checks are checked
-    exptable, exptypes = select_valid_calib_exposures(etable=exptable)
+    exptable, exptypes = select_valid_calib_exposures(etable=exptable,
+                                                      allow_any_laststep=['arc'])
 
     ## Make sure they are in chronologial order
     exptable.sort(['EXPID'])
 
-    ## Calculate sum of an arc and flat sequence for quick-checking that all
-    ## sequence numbers are present
-    arc_sequence_sum = int(narcsequence*(1+narcsequence)/2)
-    flat_sequence_sum = int(nflatsequence*(1+nflatsequence)/2)
-
     ## Initialize variables to save our sets
-    arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
-    complete_arc_sets, complete_sets = [], []
+    arcs, flats = [], {lamp:[] for lamp in range(nflatlamps)}
+    complete_arc_sets, complete_flat_sets = [], []
 
     ## Loop over exposures and if an arc or flat, check to see if it fits into
     ## the pattern for a valid calibration sequence of:
-    ## 5 short arcs, 5 long arcs, 4 sets of 3 flats each with different lamp
+    ## Sequential SEQNUMs leading up to SEQTOT for arcs with
+    ## PROGRAM='calib short arcs all' and nflatlamps
+    ## independent sets of SEQNUMs leading up to SEQTOT for flats
+    ## differentiated by PROGRAM="calib desi-calib-0? leds only"
     log.info(f"Looping over {len(exptable)} rows")
     for erow in exptable:
+        obstype, program = str(erow['OBSTYPE']).lower(), str(erow['PROGRAM']).lower()
+        seqnum, seqtot = int(erow['SEQNUM']), int(erow['SEQTOT'])
         log.debug(format_row_message("Processing erow", erow))
-        if erow['OBSTYPE'] == 'arc':
-            if erow['SEQNUM'] == 1:
+        if obstype == 'arc' and program == 'calib short arcs all':
+            flats = {lamp:[] for lamp in range(nflatlamps)}
+            if seqnum == 1:
                 ## if the first arc then we are at the start of a new sequence
                 ## remove anything saved and register this as the first arc
                 log.debug(format_row_message(f"Identified the start of a new arc sequence:",
                                              erow, exptable.colnames))
-                arcs, flats = [erow], {0:[], 1:[], 2:[], 3:[]}
-            elif len(arcs) > 0 and erow['EXPID'] == arcs[-1]['EXPID']+1 and erow['SEQNUM'] == arcs[-1]['SEQNUM']+1:
+                arcs = [erow]
+            elif len(arcs) > 0 and seqnum == arcs[-1]['SEQNUM']+1:
                 ## if not the first arc, make sure this arc is compatible with
                 ## the last arc. If so, add it
                 log.debug(format_row_message(f"Identified additional arc in sequence:",
                                              erow, exptable.colnames))
                 arcs.append(erow)
-                if len(arcs) == narcsequence and erow['SEQNUM'] == erow['SEQTOT']:
-                    if np.sum([erow['SEQNUM'] for erow in arcs]) == arc_sequence_sum:
-                        ## if the last arc in the sequence and all exps in the
-                        ## sequence are present, do more processing to verify
-                        ## this is a good set
-                        log.info(f"Identified a complete set of {narcsequence} arcs")
+                if seqnum == seqtot and is_complete_set(arcs):
+                    ## if the last arc in the sequence and all exps in the
+                    ## sequence are present, do more processing to verify
+                    ## this is a good set
+                    log.info(f"Identified a complete set of {seqtot} arcs")
 
-                        ## vstack separate list of rows to avoid astropy #16119 bug modifying inputs.
-                        ## This keeps arcs as a list of Rows instead of becoming a list of Tables
-                        complete_arc_set = {'table':vstack(list(arcs)), 'ngood': 0, 'meanbadcams': 0}
-                        ## calib_arcs True if all PROGRAM's indicate that they
-                        ## are calib short arcs
-                        complete_arc_set['calib_arcs'] = np.all(['calib short arcs all'
-                                                                 in arc['PROGRAM'].lower()
-                                                                 for arc in arcs])
-                        ## count the number of bad cameras in the set
-                        nbadcams = 0
-                        for arc in arcs:
-                            if arc['LASTSTEP'] == 'all':
-                                complete_arc_set['ngood'] += 1
-                                badcams = all_impacted_cameras(arc['BADCAMWORD'],
-                                                               arc['BADAMPS'])
-                                nbadcams += len(badcams)
+                    ## vstack separate list of rows to avoid astropy #16119 bug modifying inputs.
+                    ## This keeps arcs as a list of Rows instead of becoming a list of Tables
+                    arctable = vstack(list(arcs))
+
+                    ## count the number of good exposures
+                    arctable = arctable[arctable['LASTSTEP']=='all']
+
+                    ## If the number of good exposures is above threshold
+                    ## then save the current set as a valid option
+                    if len(arctable) >= ngoodarcthreshold:
                         ## find average number of bad cameras only among good
                         ## exposures in the set
-                        if complete_arc_set['ngood'] >= ngoodarcthreshold:
-                            ## If the number of good exposures is above threshold
-                            ## then save the current set as a valid option
-                            complete_arc_set['meanbadcams'] = float(nbadcams)/float(complete_arc_set['ngood'])
-                            if complete_arc_set['calib_arcs'] and complete_arc_set['meanbadcams'] == 0 \
-                                    and complete_arc_set['ngood'] == narcsequence:
-                                log.info(f"Found ideal arc set.")
-                            else:
-                                log.info(f"Arc set has at least one issue..")
-                            complete_arc_sets.append(complete_arc_set)
-                        else:
-                            ## If there aren't enough good arcs then it isn't
-                            ## a valid set so negate it and move on
-                            log.info(f"Skipping arc set ngood={complete_arc_set['ngood']} < {ngoodarcthreshold};")
-                            arcs, flats = [], {0: [], 1: [], 2: [], 3: []}
+                        narcbadcams = []
+                        for arc in arctable:
+                            badcams = all_impacted_cameras(arc['BADCAMWORD'],
+                                                           arc['BADAMPS'])
+                            narcbadcams.append(len(badcams))
+
+                        ## Create bundled "arcset" with useful comparative
+                        ## information
+                        arcset = {'table': arctable,
+                                  'nbadcams': narcbadcams,
+                                  'meanbadcams': np.mean(narcbadcams)}
+                        complete_arc_sets.append(arcset)
+                    else:
+                        ## If there aren't enough good arcs then it isn't
+                        ## a valid set so negate it and move on
+                        log.info(f"Skipping arc set ngood="
+                                 + f"{len(arctable)} < {ngoodarcthreshold}")
+                    ## After saving arcset, reset arc and flat builders
+                    arcs = []
+                elif seqnum == seqtot:
+                    log.info("Arc was last in sequence but the set wasn't valid." \
+                             + " Removing any exposures in current exposure list,"
+                             + " ignoring current exposure, and moving on.")
+                    arcs = []
             else:
                 log.info("Arc wasn't the first in a sequence or next sequentially so " \
                         + "the sequence wasn't complete. Removing any exposures in "
                         + "current exposure list, ignoring current exposure, and moving on.")
-                arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
-        elif erow['OBSTYPE'] == 'flat':
+                arcs = []
+        elif obstype == 'flat' and program.startswith('calib desi-calib-') \
+                and program.endswith(' leds only'):
+            arcs = []
             ## If it's a flat try to parse the PROGRAM name to identify
             ## the lamp used
             try:
-                calibnum = int(str(erow['PROGRAM']).split('desi-calib-')[1][:2])
+                lampnum = int(program.split('desi-calib-')[1][:2])
             except IndexError:
-                calibnum = None
+                lampnum = None
             ## if lamp not listed then it isn't a calibration flat, so
-            ## restart the search
-            if calibnum is None:
-                arcs, flats = [], {0: [], 1: [], 2: [], 3: []}
-                continue
-            elif erow['SEQNUM'] == 1:
-                ## If first flat in sequence then check things
-                ## about number of exposure ID's it is away from the last
-                ## exposure. If first lamp it should be arcflatexpdiff
-                ## away from the last arc, if another lamp it will
-                ## be flatflatexpdiff away from previous lamp
-                if calibnum == 0:
-                    if len(arcs) != narcsequence:
-                        log.debug(format_row_message(f"Identified the start of a new flat sequence:" \
-                                                   + f"but wrong number of arcs {len(arcs)} != {narcsequence}",
-                                                     erow, exptable.colnames))
-                        arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
-                    elif erow['EXPID'] - arcs[-1]['EXPID'] > arcflatexpdiff:
-                        expid_arc = int(arcs[-1]['EXPID'])
-                        expid_flat = int(erow['EXPID'])
-                        expid_diff = expid_flat - expid_arc
-                        log.debug(format_row_message(f"Identified the start of a new flat sequence:" \
-                                                   + f"but {expid_diff=} > {arcflatexpdiff}",
-                                                      erow, exptable.colnames))
-                        dt = 24*60*(erow['MJD-OBS'] - arcs[-1]['MJD-OBS'])
-                        log.warning(f'arc {expid_arc} to flat {expid_flat} -> {dt:.1f} minutes')
-                        arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
-                    else:
-                        log.debug(format_row_message(f"Identified the start of a new flat sequence:",
-                                                     erow, exptable.colnames))
-                        flats = {0: [erow], 1: [], 2: [], 3: []}
-                else:
-                    if len(flats[calibnum-1]) != nflatsequence \
-                            or erow['EXPID'] - flats[calibnum-1][-1]['EXPID'] > flatflatexpdiff:
-                        log.debug(format_row_message(f"Identified the start of a new flat lamp sequence:" \
-                                                    + "but no valid previous lamps",
-                                                     erow, exptable.colnames))
-                        arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
-                    else:
-                        log.debug(format_row_message(f"Identified the start of a new flat lamp sequence:",
-                                                     erow, exptable.colnames))
-                        flats[calibnum] = [erow]
+            ## restart the builders
+            if lampnum is None:
+                ## if obstype isn't arc or flat, ignore it and reset the builders
+                log.debug(format_row_message(f"PROGRAM wasn't correct:",
+                                             erow, exptable.colnames))
+                flats = {lamp:[] for lamp in range(nflatlamps)}
+            elif seqnum != len(flats[lampnum])+1 \
+                    or ( len(flats[lampnum]) > 0 and seqnum != flats[lampnum][-1]['SEQNUM']+1 ):
+                ## If current seqnum isn't compatible with what is already
+                ## in the flat structure for that lamp number, then reset
+                ## the entire flat builder
+                log.debug(format_row_message(f"flat {seqnum=} but exposures "
+                                             + f"already present for "
+                                             + f"{lampnum=}: {flats[lampnum]}. "
+                                             + f"Resetting flat sequence",
+                                             erow, exptable.colnames))
+                flats = {lamp:[] for lamp in range(nflatlamps)}
+                ## If first in the sequence, start add it and keep searching
+                ## If in the middle of the sequence don't add it since it's
+                ## clearly not the start of a sequence
+                if seqnum == 1:
+                    log.debug(format_row_message(f"Identified the start of a "
+                                                 + f"new flat lamp sequence:",
+                                                 erow, exptable.colnames))
+                    flats[lampnum].append(erow)
             else:
                 ## If not the first flat in a sequence then it should be the next
                 ## in the sequence and one exp id away from the last expoure.
-                if len(flats[calibnum]) == erow['SEQNUM']-1   \
-                       and flats[calibnum][-1]['SEQNUM'] == erow['SEQNUM']-1  \
-                       and flats[calibnum][-1]['EXPID'] == erow['EXPID']-1:
-                    flats[calibnum].append(erow)
-                    ## If the 4th calibration lamp and the last flat in the
-                    ## sequence, check the accumulated set to see if it is
-                    ## usable or not
-                    if calibnum == 3 and \
-                            np.sum([erow['SEQNUM'] for erow in flats[calibnum]]) == flat_sequence_sum:
-                        log.info(format_row_message(f"Found a complete flat set",
-                                                    erow, exptable.colnames))
-                        callist = arcs.copy()
-                        ngoodarcs = np.sum([arc['LASTSTEP']=='all' for arc in arcs])
-                        ngoodflats = 0
-                        ## for each lamp, find the number of good flats and
-                        ## add the flats to the list of expoures
-                        for calflatlist in flats.values():
-                            ngoodflats += np.sum([flat['LASTSTEP']=='all' for flat in calflatlist])
-                            callist.extend(calflatlist)
-                        caltable = vstack(list(callist))  # list wrapper in case astropy changes inputs
-                        del callist
+                flats[lampnum].append(erow)
 
-                        complete_set = {'table': caltable.copy(),
-                                        'ngoodarcs': ngoodarcs,
-                                        'ngoodflats': ngoodflats,
-                                        'meanbadcams': 0}
-                        caltable = caltable[caltable['LASTSTEP'] == 'all']
-                        ## make sure all flat are valid, otherwise don't save set
-                        if ngoodflats != nflatsequence*nflatlamps:
-                            log.debug(f"At least one bad flat found: {caltable}")
-                        else:
-                            ## if the appropriate number of flats, calculate
-                            ## even more quantities including the mean number
-                            ## of bad cameras on valid exposures
-                            complete_set['calib_arcs'] = np.all(
-                                ['calib' in arc['PROGRAM'] for arc in arcs])
-                            nbadcams = 0
-                            for cal in caltable:
-                                badcams = all_impacted_cameras(cal['BADCAMWORD'],
-                                                               cal['BADAMPS'])
-                                nbadcams += len(badcams)
-                            complete_set['meanbadcams'] = float(nbadcams) \
-                                                          / float(len(caltable))
-                            if complete_set['ngoodarcs'] >= ngoodarcthreshold:
-                                if complete_set['calib_arcs'] \
-                                        and complete_set['ngoodarcs'] == narcsequence \
-                                        and complete_set['meanbadcams'] == 0:
-                                    log.info(f"Found ideal arc-flat set.")
-                                else:
-                                    log.info(f"Set has at least one issue so continuing the search.")
-                                complete_sets.append(complete_set)
-                        ## whether valid or not, this was the last in a sequence
-                        ## so reset the sets. If valid it was added to
-                        ## complete_sets above
-                        arcs, flats = [], {0: [], 1: [], 2: [], 3: []}
-                else:
-                    ## if flat isn't next in the sequence, then reset the sets
-                    arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
+                ## If all lamps have the appropriate number of exposures and
+                ## the seqnums matched, then save as a valid series of flats
+                is_complete = False
+                if seqnum == seqtot:
+                    is_complete = np.all([is_complete_set(explist) for explist
+                                          in flats.values()])
+
+                if is_complete:
+                    log.info(format_row_message(f"Found a complete flat set",
+                                                erow, exptable.colnames))
+                    callist = []
+                    ## for each lamp, find the number of good flats and
+                    ## add the flats to the list of expoures
+                    for calflatlist in flats.values():
+                        callist.extend(calflatlist)
+                    flattable = vstack(callist)  # list wrapper in case astropy changes inputs
+                    del callist
+
+                    ## make sure all flat are valid, otherwise don't save set
+                    ## Note this shouldn't as of 20240301 as we already cut
+                    ## on LASTSTEP for flats before this point
+                    if not np.all(flattable['LASTSTEP'] == 'all'):
+                        log.debug(f"At least one bad flat found: {flattable}")
+                    else:
+                        ## if the appropriate number of flats,
+                        ## add as complete flat set
+                        flattable = flattable[flattable['LASTSTEP'] == 'all']
+                        complete_flat_sets.append(flattable)
+                    ## whether valid or not, this was the last in a sequence
+                    ## so reset the sets. If valid it was added to
+                    ## complete_sets above
+                    flats = {lamp:[] for lamp in range(nflatlamps)}
         else:
-            ## if obstype isn't arc or flat, ignore it and reset the sets
-            log.debug(format_row_message(f"OBSTYPE wasn't arc or flat:",
-                                         erow, exptable.colnames))
-            arcs, flats = [], {0:[], 1:[], 2:[], 3:[]}
+            log.debug("Either wasn't an arc or flat or the programs were not " \
+                    + "consistent with a calibration exposure. Resetting the "
+                    + "arc and flat builders.")
+            arcs = []
+            flats = {lamp:[] for lamp in range(nflatlamps)}
 
-    log.debug(complete_sets)
     log.debug(len(complete_arc_sets))
-    log.debug(len(complete_sets))
+    log.debug(len(complete_flat_sets))
 
+    ## Loop over arc sets and flat sets and see which ones are compatible in
+    ## time to be paired together
+    complete_sets = []
+    mjd_dt = float(arcflattimediff) / (24.*60.)
+    for arcset in complete_arc_sets:
+        arctable = arcset['table']
+        arcstart, arcend = np.min(arctable['MJD-OBS']), np.max(arctable['MJD-OBS'])
+        narcbadcams = arcset['nbadcams']
+        for flattable in complete_flat_sets:
+            flatstart, flatend = np.min(flattable['MJD-OBS']), np.max(flattable['MJD-OBS'])
+            ## Only proceed with the arc-flat set if the time difference is less
+            ## than the specified difference
+            if np.abs(arcstart-flatend) < mjd_dt or np.abs(flatstart-arcend) < mjd_dt:
+                ## If time difference is valid, it is a valid set so
+                ## continue to produce info about set
+                ## start based on the existing list of badcam numbers from arcs
+                ## and add number of bad cameras for the flats
+                nbadcams = narcbadcams.copy()
+                for flat in flattable:
+                    badcams = all_impacted_cameras(flat['BADCAMWORD'],
+                                                   flat['BADAMPS'])
+                    nbadcams.append(len(badcams))
+                complete_set = {'table': vstack([arctable, flattable]),
+                                'meanbadcams': np.mean(nbadcams)}
+                complete_sets.append(complete_set)
+                arcs = complete_set['table'][complete_set['table']['OBSTYPE'] == 'arc']
+                if complete_set['meanbadcams'] == 0 \
+                        and len(arcs) == arcs['SEQTOT'][0]:
+                    log.info(f"Found ideal arc-flat set.")
+                else:
+                    log.info(f"Found an arc-flat set but with at least one issue.")
+
+    ## If there are no complete_sets, then fall back to just arc sets
+    ## if there are no arc sets either, then immediately return None
     setlist = complete_sets
     if len(complete_sets) == 0:
         if len(complete_arc_sets) == 0:
@@ -442,18 +469,22 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, narcsequence=5,
         else:
             setlist = complete_arc_sets
 
+    ## Select the best set by selecting the one with the fewest meanbadcams
+    ## If two tie in meanbadcams, then select the one with more
+    ## LASTSTEP='all' arc exposures. If those tie, choose the first set.
     bestset = setlist[0]
     if len(setlist) > 1:
         for calset in setlist[1:]:
             if calset['meanbadcams'] < bestset['meanbadcams']:
-                log.info(f"Found arcset with {calset['meanbadcams']} mean bad cameras" \
+                log.info(f"Found calset with {calset['meanbadcams']} mean bad cameras" \
                         + f" which is less than previous best {bestset['meanbadcams']}")
                 bestset = calset
             elif calset['meanbadcams'] == bestset['meanbadcams'] \
-                    and calset['ngoodarcs'] > bestset['ngoodarcs']:
-                log.info(f"Found arcset with same {calset['meanbadcams']} mean bad cameras" \
-                        + f" but more good exposures than previous best " \
-                        + f"{calset['ngoodarcs']} > {bestset['meanbadcams']}")
+                    and len(calset['table']) > len(bestset['table']):
+                log.info(f"Found set with same {calset['meanbadcams']} mean bad " \
+                        + f"cameras but more good exposures than previous best " \
+                        + f"{len(calset['table'])} > {len(bestset['table'])}")
                 bestset = calset
 
+    ## return the exposure table with the best selection of arcs and flats
     return bestset['table']
