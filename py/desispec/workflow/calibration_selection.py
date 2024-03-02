@@ -37,13 +37,17 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
 
     ## If no rows, stop here
     if len(cal_etable) == 0:
-        return cal_etable[[]]
+        return full_etable[[]]
 
     ## Use OBSTYPE, PROGRAM, and EXPTIME to select exposures that match
     ## calibration exposures for those fields
     ## Note even arcs with LASTSTEP='ignore' are retained here
     valid_etable, exptypes = select_valid_calib_exposures(cal_etable)
 
+    ## If no rows, stop here
+    if len(valid_etable) == 0:
+        return full_etable[[]]
+    
     ## If 1 dark, 5 arcs, 12 flats, and 3 ctes then we have a candidate set,
     ## so return that it. Otherwise if no new data is coming in we should try
     ## to calibrate with what we have. If still taking data and no complete set,
