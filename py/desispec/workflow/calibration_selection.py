@@ -257,7 +257,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
     Returns:
         None or astropy.table.Table: A DESI exposure_table containing only
             the exposures corresponding to the 'best' set of available
-            arc+flat calibrations given the input table. Can return None
+            arc+flat calibrations given the input table. Can return empty table
             if no set is available or just arcs if no valid flat set is
             available.
     """
@@ -461,11 +461,11 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
                     log.info(f"Found an arc-flat set but with at least one issue.")
 
     ## If there are no complete_sets, then fall back to just arc sets
-    ## if there are no arc sets either, then immediately return None
+    ## if there are no arc sets either, then immediately return empty table
     setlist = complete_sets
     if len(complete_sets) == 0:
         if len(complete_arc_sets) == 0:
-            return None
+            return exptable[[]]
         else:
             setlist = complete_arc_sets
 

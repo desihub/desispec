@@ -428,14 +428,14 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         # existing, but bad
         badset['LASTSTEP'] = 'ignore'
         result = find_best_arc_flat_sets(badset)
-        self.assertEqual(result, None)
+        self.assertEqual(len(result), 0)
         result = determine_calibrations_to_proc(badset)
-        self.assertEqual(result, None)
+        self.assertEqual(len(result), 0)
 
         # not existing at all
         badset['LASTSTEP'] = 'all'
         badset['OBSTYPE'] = 'science'
         result = find_best_arc_flat_sets(badset)
-        self.assertEqual(result, None)
+        self.assertEqual(len(result), 0)
         result = determine_calibrations_to_proc(badset)
-        self.assertEqual(result, None)
+        self.assertEqual(len(result), 0)
