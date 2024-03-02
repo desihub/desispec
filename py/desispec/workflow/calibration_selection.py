@@ -72,8 +72,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     ## the best set of arcs and flats, and all cte flats
     zeros = valid_etable[exptypes=='zero']
     out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
-    if best_arcflat_set is not None:
-        out_table = vstack([out_table, best_arcflat_set])
+    out_table = vstack([out_table, best_arcflat_set])
     if do_cte_flats:
         out_table = vstack([out_table, valid_etable[exptypes == 'cteflat'][:3]])
 
