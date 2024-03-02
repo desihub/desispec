@@ -422,16 +422,20 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         Test case where all cals are bad, e.g. 20220911
         """
         from desispec.workflow.calibration_selection import \
-            determine_calibrations_to_proc
+            find_best_arc_flat_sets, determine_calibrations_to_proc
         badset = self._make_arcflatset_etable()
 
         # existing, but bad
         badset['LASTSTEP'] = 'ignore'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(result, None)
         result = determine_calibrations_to_proc(badset)
-        self.assertEqual(len(result), 0)   # or None?
+        self.assertEqual(result, None)
 
-        # no existing at all
+        # not existing at all
         badset['LASTSTEP'] = 'all'
         badset['OBSTYPE'] = 'science'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(result, None)
         result = determine_calibrations_to_proc(badset)
-        self.assertEqual(len(result), 0)   # or None?
+        self.assertEqual(result, None)
