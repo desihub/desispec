@@ -243,7 +243,7 @@ def is_complete_set(explist):
                 and np.sum(seqnums) == expected_sum)
 
 def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
-                            arcflattimediff=20.):
+                            arcflattimediff=80.):
     """
      Selects the calibration exposures from a populated exposure table.
 
