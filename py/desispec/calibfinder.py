@@ -419,10 +419,10 @@ class CalibFinder() :
 
         #temperature tolerance to be used in K
         #only applicable for R,Z as B stores 850 deg throughout
-        #temperature tolerance set to 2.5K for the moment, this should be large enough
+        #temperature tolerance set to 3K for the moment, this should be large enough
         #to reduce all relevant data without choking (the largest outlier currently being r9 on
-        #20210610 with ~2.3K)
-        temperature_tolerance = 2.5
+        #20210610 with ~2.3K at the start and ~2.7K at the end of the night)
+        temperature_tolerance = 3.
 
         #- Should only be called if $DESI_SPECTRO_DARK is set, but check that
         #- to avoid accidentally creating paths like "None/dark_table.csv"
