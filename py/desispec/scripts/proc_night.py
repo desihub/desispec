@@ -79,8 +79,10 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         update_exptable (bool): If true then the exposure table is updated.
             The default is False.
         dry_run_level (int, optional): If nonzero, this is a simulated run.
-            If dry_run=1 the scripts will be written but not submitted.
-            If dry_run=2, the scripts will not be written nor submitted.
+            If dry_run_level=1 the scripts will be written but not submitted.
+            If dry_run_level=2, the scripts will not be written nor submitted
+            but the processing_table is still created.
+            If dry_run_level=3, no output files are written.
             Logging will remain the same for testing as though scripts are
             being submitted. Default is 0 (false).
         dry_run (bool, optional): When to run without submitting scripts or
