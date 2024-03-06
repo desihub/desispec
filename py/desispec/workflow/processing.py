@@ -486,6 +486,16 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
 
+_fake_qid = int(time.time() - 1.7e9)
+def _get_fake_qid():
+    """
+    Return fake slurm queue jobid to use for dry-run testing
+    """
+    # Note: not implemented as a yield generator so that this returns a
+    # genuine int, not a generator object
+    global _fake_qid
+    _fake_qid += 1
+    return _fake_qid
 
 def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=False):
     """
@@ -572,9 +582,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     batch_params.append(f'{script_path}')
 
     if dry_run:
-        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
-        current_qid = int(time.time() - 1.6e9)
-        time.sleep(1)
+        current_qid = _get_fake_qid()
     else:
         #- sbatch sometimes fails; try several times before giving up
         max_attempts = 3
