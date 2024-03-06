@@ -25,10 +25,6 @@ def parse_args():
                         help="The group types of redshifts that should be submitted with each exposure. If not "+
                              "specified, default  is 'cumulative'. If "+
                              "'false' or 'None' then no redshifts are submitted")
-    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
-                        help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
-                             "If level=2, the scripts will not be written or submitted. Logging will remain the same "+
-                             "for testing as though scripts are being submitted. Default is 0 (false).")
     parser.add_argument("--tiles", type=str, required=False, default=None,
                         help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
     parser.add_argument("--surveys", type=str, required=False, default=None,
@@ -64,6 +60,13 @@ def parse_args():
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
                         "dry-run-level is defined as nonzero.")
+    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
+                        help="""If nonzero, this is a simulated run.
+                                If level=1 the scripts will be written but not submitted.
+                                If level=2, scripts will not be written or submitted but processing_table is created.
+                                if level=3, no output files are written at all.
+                                Logging will remain the same for testing as though scripts are being submitted.
+                                Default is 0 (false).""")
     parser.add_argument("--no-redshifts", action="store_true",
                         help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--ignore-proc-table-failures", action="store_true",

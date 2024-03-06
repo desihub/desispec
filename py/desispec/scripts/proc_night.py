@@ -170,6 +170,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                  f" being entered into the exposure_table, not all exposures"
                  f" to be processed.")
 
+    ## Reconcile the dry_run and dry_run_level
+    if dry_run and dry_run_level == 0:
+        dry_run_level = 2
+    elif dry_run_level > 0:
+        dry_run = True
+
     ## Set a flag to determine whether to process the last tile in the exposure table
     ## or not. This is used in daily mode when processing and exiting mid-night.
     still_acquiring = False
@@ -233,7 +239,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     if proc_table_pathname is None:
         proc_table_pathname = findfile('processing_table', night=night)
     proc_table_path = os.path.dirname(proc_table_pathname)
-    os.makedirs(proc_table_path, exist_ok=True)
+    if dry_run_level < 3:
+        os.makedirs(proc_table_path, exist_ok=True)
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = replace_prefix(proc_table_pathname, 'processing', 'unprocessed')
@@ -272,12 +279,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 raise ValueError(f"Couldn't understand ztype={ztype} "
                                  + f"in z_submit_types={z_submit_types}.")
         log.info(f"Redshift fitting with redshift group types: {z_submit_types}")
-
-    ## Reconcile the dry_run and dry_run_level
-    if dry_run and dry_run_level == 0:
-        dry_run_level = 2
-    elif dry_run_level > 0:
-        dry_run = True
 
     ## Identify OBSTYPES to process
     if proc_obstypes is None:
