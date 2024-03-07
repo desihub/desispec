@@ -188,6 +188,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
         global _allexp
         if _allexp is None:
+            log.info(f'Reading all exposure_tables from all nights')
             _allexp = read_minimal_exptables_columns()
         keep = np.in1d(_allexp['TILEID'], tileids)
         exptable = _allexp[keep]
