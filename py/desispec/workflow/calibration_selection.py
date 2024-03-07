@@ -503,7 +503,9 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
                         + f"cameras but more good exposures than previous best " \
                         + f"{len(calset['table'])} > {len(bestset['table'])}")
                 bestset = calset
-            elif calset['mjd_dt'] < bestset['mjd_dt']:
+            ## last tie-breaker is time difference, which only applies to complete sets not
+            ## arc sets, so make sure dict has 'mjd_dt'
+            elif ('mjd_dt' in calset) and ('mjd_dt' in bestset) and (calset['mjd_dt'] < bestset['mjd_dt']):
                 bestset = calset
 
     ## return the exposure table with the best selection of arcs and flats
