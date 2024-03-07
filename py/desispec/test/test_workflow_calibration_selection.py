@@ -305,6 +305,14 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)
 
+        ## Two sets of equivalent only arcs, no flats
+        ## Should just pick the first
+        set1 = self._make_arcset_etable()
+        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=240.)
+        expected = self. _get_cleaned_table(set1)
+        best = find_best_arc_flat_sets(vstack([set1, set2]))
+        self._test_tables_equal(expected, best)
+
     def test_extra_badcals(self):
         """
         Test case where extra cals exist but are flagged as bad
