@@ -452,7 +452,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             sciences.append(prow)
             
         # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
-        cur_z_submit_types = z_submit_types.copy()
+        if z_submit_types is None:
+            curr_z_submit_types = None
+        else:
+            cur_z_submit_types = z_submit_types.copy()
+
         if ((z_submit_types is not None) and ('cumulative' in z_submit_types)
             and (tile not in tiles_cumulative)):
             cur_z_submit_types.remove('cumulative')
@@ -460,7 +464,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## No longer need to return sciences since this is always the
         ## full set of exposures, but will keep for now for backward
         ## compatibility
-        ptable, sciences, internal_id = submit_tilenight_and_redshifts(
+        ptable, sciences, int_id = submit_tilenight_and_redshifts(
                                     ptable, sciences, calibjobs, int_id,
                                     dry_run=dry_run_level, queue=queue,
                                     reservation=reservation,
