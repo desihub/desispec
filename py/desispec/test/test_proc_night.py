@@ -31,6 +31,7 @@ class TestProcNight(unittest.TestCase):
         cls.origenv = os.environ.copy()
         os.environ['DESI_SPECTRO_REDUX'] = cls.reduxdir
         os.environ['SPECPROD'] = cls.specprod
+        os.environ['NERSC_HOST'] = 'perlmutter'  # pretend to be on Perlmutter for testing
 
         os.makedirs(cls.proddir)
         expdir = importlib.resources.files('desispec').joinpath('test', 'data', 'exposure_tables')
@@ -52,7 +53,7 @@ class TestProcNight(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.reduxdir)
-        for key in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
+        for key in ('DESI_SPECTRO_REDUX', 'SPECPROD', 'NERSC_HOST'):
             if key in cls.origenv:
                 os.environ[key] = cls.origenv[key]
             else:
