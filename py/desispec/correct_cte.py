@@ -839,8 +839,8 @@ def correct_image_via_model(image, niter=5, cte_params_filename=None):
 
             cteimage[ampreg] = apply_multiple_cte_effects(
                 imamp[:, ::sign], locations=ctelocs,
-                ctefuns=individual_ctefuns)
-            correction_amp = imamp[:, ::sign] - cteimage[ampreg]
+                ctefuns=individual_ctefuns)[:, ::sign]
+            correction_amp = imamp - cteimage[ampreg]
             mn, med, rms = sigma_clipped_stats(correction_amp)
             log.info(
                 f'Correcting CTE, iteration {i}, correction rms {rms:6.3f}')
