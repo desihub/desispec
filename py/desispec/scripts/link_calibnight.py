@@ -10,6 +10,46 @@ from desispec.io.util import parse_cameras, decode_camword, relsymlink
 calibnight_prefixes = ('badcolumns','biasnight','fiberflatnight','psfnight','ctecorr')
 _prefixstr = ','.join(calibnight_prefixes)
 
+def derive_include_exclude(input_include, input_exclude):
+    """
+    Take the defined include or exclude list and produces the
+
+    Args:
+        input_include, str or None. Comma separated prefixes of calibnight
+            files to create links.
+        input_exclude, str or None. Comma separated prefixes of calibnight
+            files to exclude from links'
+    Returns:
+        include, set. Complete set of strings of calibration files that
+            should be linked.
+        exclude, set. Complete set of strings of calibration files that
+            should not be linked.
+    """
+    if input_include is not None and input_exclude is not None:
+        raise ValueError('include and exclude cannot both be defined: '
+                         + f'{input_include=}, {input_exclude=}')
+
+    include, exclude = None, None
+    if input_include is not None:
+        include = set([x.strip() for x in input_include.split(',')])
+    else:
+        include = set(calibnight_prefixes)
+
+    # --include and --exclude are mutually exclusive, so if --exclude is set,
+    # then --include is default value; remove --exclude options from that
+    if input_exclude is not None:
+        exclude = set([x.strip() for x in input_exclude.split(',')])
+        extras = exclude - include
+        if len(extras) > 0:
+            raise ValueError(f'--exclude has values not found in default --include: {extras}')
+
+        include -= exclude
+
+    ## Now include is completely consistent with inputs. Next let's make exclude
+    ## also consistent
+    exclude = set(calibnight_prefixes) - include
+    return include, exclude
+
 def parse(options=None):
     """parse options from sys.argv or input list of options"""
     p = argparse.ArgumentParser()
@@ -31,21 +71,7 @@ def parse(options=None):
 
     args = p.parse_args(options)
 
-    if args.include is not None:
-        args.include = set([x.strip() for x in args.include.split(',')])
-    else:
-        args.include = set(calibnight_prefixes)
-
-    # --include and --exclude are mutually exclusive, so if --exclude is set,
-    # then --include is default value; remove --exclude options from that
-    if args.exclude is not None:
-        args.exclude = set([x.strip() for x in args.exclude.split(',')])
-        extras = args.exclude - args.include
-        if len(extras) > 0:
-            raise ValueError(f'--exclude has values not found in default --include: {extras}')
-
-        args.include -= args.exclude
-
+    args.include, args.exclude = derive_include_exclude(args.include, args.exclude)
     args.cameras = decode_camword(parse_cameras(args.cameras, loglevel='WARNING'))
 
     return args

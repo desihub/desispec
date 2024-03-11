@@ -47,14 +47,19 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     ## If no rows, stop here
     if len(valid_etable) == 0:
         return full_etable[[]]
-    
+
+    ## Find if a valid 1s CTE flat
+    is_cte_1s = (exptypes=='cteflat'
+                 & np.round(valid_etable['EXPTIME']).astype(int)==1)
+
     ## If 1 dark, 5 arcs, 12 flats, and 3 ctes then we have a candidate set,
     ## so return that it. Otherwise if no new data is coming in we should try
     ## to calibrate with what we have. If still taking data and no complete set,
     ## return nothing so that we swiftly exit and wait for more data.
     if np.sum(exptypes == 'dark') >= 1 and np.sum(exptypes == 'arc') >= 5 \
             and np.sum(exptypes == 'flat') >= 12 \
-            and (np.sum(exptypes == 'cteflat') >= 3 or not do_cte_flats):
+            and (np.sum(exptypes == 'cteflat') >= 3 or not do_cte_flats
+                 or (np.sum(is_cte_1s) >= 1 and not still_acquiring)):
         log.info(f"Found at least one possible calibration set to test.")
     elif still_acquiring:
         log.info(f"Only found {Counter(exptypes)} calibrations "
@@ -63,8 +68,8 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
         return etable[[]]
     else:
         log.error(f"Only found {Counter(exptypes)} calibrations "
-                  + "and not acquiring new data, so this may be fatal. "
-                  + "You may want to consider using an override night.")
+                  + "and not acquiring new data, so this may be fatal "
+                  + "if you aren't using an override file.")
 
     ## Run a more detailed algorithm to ensure we have a complete set of
     ## arcs and a complete set of 3 flats for each of 4 lamps
@@ -78,7 +83,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
     out_table = vstack([out_table, best_arcflat_set])
     if do_cte_flats:
-        out_table = vstack([out_table, valid_etable[exptypes == 'cteflat'][:3]])
+        out_table = vstack([out_table, valid_etable[exptypes == 'cteflat']])
 
     return out_table
 

@@ -4,6 +4,7 @@ desispec.scripts.proc_night
 
 """
 from desispec.io import findfile
+from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.workflow.calibration_selection import \
     determine_calibrations_to_proc
 from desispec.workflow.science_selection import determine_science_to_proc, \
@@ -26,11 +27,12 @@ from desispec.workflow.exptable import get_last_step_options
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
     erow_to_prow, default_prow, table_row_to_dict
 from desispec.workflow.processing import define_and_assign_dependency, \
-                                         create_and_submit, \
-                                         submit_tilenight_and_redshifts, \
-                                         generate_calibration_dict, \
-                                         night_to_starting_iid, make_joint_prow, \
-                                         set_calibrator_flag, make_exposure_prow
+    create_and_submit, \
+    submit_tilenight_and_redshifts, \
+    generate_calibration_dict, \
+    night_to_starting_iid, make_joint_prow, \
+    set_calibrator_flag, make_exposure_prow, get_file_to_jobdesc_map, \
+    update_calibjobs_with_linking, all_calibs_submitted
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix
@@ -45,7 +47,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                tiles=None, surveys=None, science_laststeps=None,
                all_tiles=False, specstatus_path=None, use_specter=False,
-               do_cte_flats=False, complete_tiles_thrunight=None,
+               do_cte_flats=True, complete_tiles_thrunight=None,
                all_cumulatives=False,
                daily=False, specprod=None, path_to_data=None, exp_obstypes=None,
                camword=None, badcamword=None, badamps=None,
@@ -223,6 +225,13 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     resubmit_partial_complete = (not dont_resubmit_partial_jobs)
     require_cals = (not dont_require_cals)
 
+    ## cte flats weren't available before 20211130 so hardcode that in
+    if do_cte_flats and night < 20211130:
+        log.warning("Asked to do cte flat correction but before 20211130 no "
+                    + "no cte flats are available to do the correction. "
+                    + "Setting do_cte_flats to False.")
+        do_cte_flats = False
+
     ###################
     ## Set filenames ##
     ###################
@@ -341,7 +350,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                      + "nothing to run. Exiting")
             return ptable
         int_id = np.max(ptable['INTID'])+1
-
     else:
         int_id = night_to_starting_iid(night=night)
 
@@ -352,13 +360,25 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
 
-    ## Generate the calibration dictionary
-    calibjobs = generate_calibration_dict(ptable)
+    ## Determine calibrations that will be linked
+    if 'linkcal' in cal_override:
+        files_to_link, files_not_linked = None, None
+        if 'include' in  cal_override['linkcal']:
+            files_to_link = cal_override['linkcal']['include']
+        if 'exclude' in  cal_override['linkcal']:
+            files_not_linked = cal_override['linkcal']['exclude']
+        files_to_link, files_not_linked = derive_include_exclude(files_to_link,
+                                                                 files_not_linked)
+    else:
+        files_to_link = set()
+
+    ## Identify what calibrations have been done
+    calibjobs = generate_calibration_dict(ptable, files_to_link)
 
     ## Determine the appropriate set of calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
     cal_etable = None
-    if calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
+    if not all_calibs_submitted(calibjobs['completed']):
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
                                                     still_acquiring=still_acquiring)
@@ -382,7 +402,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Process Calibrations
     ## For now assume that a linkcal job links all files and we therefore
     ## don't need to submit anything more.
-    def create_submit_add_and_save(prow, proctable, check_outputs=check_for_outputs):
+    def create_submit_add_and_save(prow, proctable, check_outputs=check_for_outputs,
+                                   extra_job_args=None):
         log.info(f"\nProcessing: {prow}\n")
         prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                  reservation=reservation,
@@ -390,11 +411,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                  check_for_outputs=check_outputs,
                                  resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name,
-                                 use_specter=use_specter)
-        if 'REFNIGHT' in prow:
-            if isinstance(prow, Table.Row):
-                prow = table_row_to_dict(prow)
-            del prow['REFNIGHT']
+                                 use_specter=use_specter,
+                                 extra_job_args=extra_job_args)
         ## Add the processing row to the processing table
         proctable.add_row(prow)
         if len(proctable) > 0 and dry_run_level < 3:
@@ -406,15 +424,14 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Actually process the calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
-    if calibjobs['linkcal'] is None and calibjobs['nightlyflat'] is None:
+    if not all_calibs_submitted(calibjobs['completed']):
         ptable, calibjobs, int_id = submit_calibrations(cal_etable, ptable,
                                                 cal_override, calibjobs,
-                                                int_id, night,
+                                                int_id, night, files_to_link,
                                                 create_submit_add_and_save)
 
     ## Require some minimal level of calibrations to process science exposures
-    if require_cals and calibjobs['linkcal'] is None \
-            and calibjobs['nightlyflat'] is None:
+    if require_cals and not all_calibs_submitted(calibjobs['completed']):
         err = (f"Required to have at least flat calibrations via override link"
                + f" or nightlyflat")
         log.error(err)
@@ -460,6 +477,14 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## No longer need to return sciences since this is always the
         ## full set of exposures, but will keep for now for backward
         ## compatibility
+        extra_job_args = {}
+        if 'tilenight' in overrides['science']:
+            extra_job_args = overrides['science']['tilenight']
+        else:
+            extra_job_args = {}
+
+        extra_job_args['z_submit_types'] = cur_z_submit_types
+        extra_job_args['laststeps'] = science_laststeps
         ptable, sciences, internal_id = submit_tilenight_and_redshifts(
                                     ptable, sciences, calibjobs, int_id,
                                     dry_run=dry_run_level, queue=queue,
@@ -469,8 +494,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                     resubmit_partial_complete=resubmit_partial_complete,
                                     system_name=system_name,
                                     use_specter=use_specter,
-                                    z_submit_types=cur_z_submit_types,
-                                    laststeps=science_laststeps)
+                                    extra_job_args=extra_job_args)
 
         if len(ptable) > 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
@@ -517,18 +541,21 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     return ptable, unproc_table
 
 
-
-
 def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
-                        curnight, create_submit_add_and_save):
+                        curnight, files_to_link, create_submit_add_and_save):
     log = get_logger()
     if len(ptable) > 0:
-        processed_cal_expids = np.unique(np.concatenate(ptable['EXPID']).astype(int))
+        ## we use this to check for individual jobs rather than combination
+        ## jobs, so only check for scalar jobs where JOBDESC == OBSTYPE
+        ## ex. dark, zero, arc, and flat
+        explists = ptable['EXPID'][ptable['JOBDESC']==ptable['OBSTYPE']]
+        processed_cal_expids = np.unique(np.concatenate(explists).astype(int))
     else:
         processed_cal_expids = np.array([]).astype(int)
 
     ######## Submit caliblink if requested ########
-    if 'refnight' in cal_override and calibjobs['linkcal'] is None:
+
+    if 'linkcal' in cal_override and calibjobs['linkcal'] is None:
         log.warning(f"Only using refnight from the override file for cals.")
         prow = default_prow()
         prow['INTID'] = int_id
@@ -537,14 +564,15 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow['OBSTYPE'] = 'link'
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = curnight
-        ## REFNIGHT will be removed before appending to the processing table
-        prow['REFNIGHT'] = cal_override['refnight']
+        ## create dictionary to carry linking information
+        linkcalargs = cal_override['linkcal']
         prow, ptable = create_submit_add_and_save(prow, ptable,
-                                                  check_outputs=False)
+                                                  check_outputs=False,
+                                                  extra_job_args=linkcalargs)
         calibjobs[prow['JOBDESC']] = prow.copy()
+        calibjobs = update_calibjobs_with_linking(calibjobs, files_to_link)
 
-        return ptable, calibjobs, int_id
-    elif len(cal_etable) == 0:
+    if len(cal_etable) == 0:
         return ptable, calibjobs, int_id
 
     ## Otherwise proceed with submitting the calibrations
@@ -553,17 +581,22 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
     arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'dark' in cal_etable['OBSTYPE']:
-        dark_erow = cal_etable[cal_etable['OBSTYPE']=='dark'][0]
+        darks = cal_etable[cal_etable['OBSTYPE']=='dark']
     if 'flat' in cal_etable['OBSTYPE']:
         allflats = cal_etable[cal_etable['OBSTYPE']=='flat']
         is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
         flats = allflats[~is_cte]
         ctes = allflats[is_cte]
+        cte1s = ctes[np.abs(ctes['EXPTIME']-1.)<0.1]
 
-    ## If just starting out and no dark, do the nightlybias
-    if len(dark_erow) == 0 and len(zeros) > 0 and calibjobs['nightlybias'] is None:
-        log.info("\nNo dark found. Submitting nightlybias before processing "
-                 "exposures.\n")
+    do_bias = (len(zeros) > 0 and 'biasnight' not in files_to_link
+               and not calibjobs['complete']['nightlybias'])
+    do_badcol = len(darks) > 0 and 'badcolumns' not in files_to_link
+    do_cte = (len(cte1s) > 0 and len(flats) > 0) and 'ctecorr' not in files_to_link
+    ## If no dark or ctes, do the nightlybias
+    if do_bias and not do_badcol and not do_cte and not calibjobs['complete']['ccdcalib']:
+        log.info("\nNo dark or cte found. Submitting nightlybias before "
+                 "processing exposures.\n")
         prow = erow_to_prow(zeros[0])
         prow['INTID'] = int_id
         int_id += 1
@@ -578,24 +611,40 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow['PROCCAMWORD'] = create_camword(list(cams))
         prow = define_and_assign_dependency(prow, calibjobs)
         prow, ptable = create_submit_add_and_save(prow, ptable)
-        calibjobs['nightlybias'] = prow.copy()
-    elif len(dark_erow) > 0:
-        ######## Submit dark or ccdcalib ########
+        calibjobs[prow['JOBDESC']] = prow.copy()
+        calibjobs['completed'][prow['JOBDESC']] = True
+    elif (do_badcol or do_cte) and not calibjobs['complete']['ccdcalib']:
+        ######## Submit ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
         ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
-        if len(zeros) == 0 and len(ctes) == 0:
-            jobdesc = 'badcol'
-        else:
-            jobdesc = 'ccdcalib'
+        jobdesc = 'ccdcalib'
 
         if calibjobs[jobdesc] is None:
-            prow, int_id = make_exposure_prow(dark_erow, int_id, calibjobs, jobdesc=jobdesc)
+            ccdcalib_erows = []
+            if do_badcol:
+                ## first exposure is a 300s dark
+                ccdcalib_erows.append(darks[0])
+            if do_cte:
+                ## second exposure is a 1s cte flat
+                ccdcalib_erows.append(cte1s[0])
+                ## third exposure is a 120s flat
+                ccdcalib_erows.append(flats[-1])
+
+            prow, int_id = make_exposure_prow(ccdcalib_erows[0], int_id,
+                                              calibjobs, jobdesc=jobdesc)
+            prow['EXPID'] = np.array([erow['EXPID'] for erow in ccdcalib_erows])
             prow['CALIBRATOR'] = 1
-            prow, ptable = create_submit_add_and_save(prow, ptable)
+
+            extra_job_args = {'nightlybias': do_bias,
+                              'nightlycte': do_cte,
+                              'erows': ccdcalib_erows}
+            prow, ptable = create_submit_add_and_save(prow, ptable,
+                                                      extra_job_args=extra_job_args)
             calibjobs[prow['JOBDESC']] = prow.copy()
+            calibjobs['completed'][prow['JOBDESC']] = True
 
     ######## Submit arcs and psfnight ########
-    if calibjobs['psfnight'] is None and len(arcs)>0:
+    if len(arcs)>0 and not calibjobs['completed']['psfnight']:
         arc_prows = []
         for arc_erow in arcs:
             if arc_erow['EXPID'] in processed_cal_expids:
@@ -609,12 +658,13 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                              internal_id=int_id)
         ptable = set_calibrator_flag(arc_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
-        calibjobs['psfnight'] = joint_prow.copy()
+        calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
+        calibjobs['completed'][joint_prow['JOBDESC']] = True
 
 
     ######## Submit flats and nightlyflat ########
     ## If nightlyflat defined we don't need to process more normal flats
-    if calibjobs['nightlyflat'] is None and len(flats) > 0:
+    if len(flats) > 0 and not calibjobs['completed']['nightlyflat'] is None:
         flat_prows = []
         for flat_erow in flats:
             if flat_erow['EXPID'] in processed_cal_expids:
@@ -630,7 +680,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                              internal_id=int_id)
         ptable = set_calibrator_flag(flat_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
-        calibjobs['nightlyflat'] = joint_prow.copy()
+        calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
+        calibjobs['completed'][joint_prow['JOBDESC']] = True
         
     ######## Submit cte flats ########
     jobdesc = 'cteflat'
@@ -642,7 +693,3 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow, ptable = create_submit_add_and_save(prow, ptable)
             
     return ptable, calibjobs, int_id
-
-
-
-
