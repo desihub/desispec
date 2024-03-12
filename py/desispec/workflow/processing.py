@@ -161,7 +161,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     log = get_logger()
 
     if prow['JOBDESC'] in ['linkcal', 'ccdcalib']:
-        log.log(f"jobdesc={prow['JOBDESC']} has indeterminated outputs, so "
+        log.info(f"jobdesc={prow['JOBDESC']} has indeterminated outputs, so "
                 + "not checking for files on disk.")
         return prow
 
@@ -362,7 +362,7 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
         if use_specter:
             cmd += ' --use-specter'
 
-    elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
+    elif prow['JOBDESC'] in ['nightlybias']:
         cmd += ' --nightlybias'
     elif prow['JOBDESC'] in ['flat', 'prestdstar'] and use_specter:
         cmd += ' --use-specter'

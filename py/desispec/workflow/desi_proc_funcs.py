@@ -892,7 +892,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
                     inparams.append(subparam)
         else:
             inparams = list(cmdline)
-        for parameter in ['--queue', '-q', '--batch-opts']:
+        for parameter in ['--queue', '-q', '--batch-opts', '--cte-expids']:
             ## If a parameter is in the list, remove it and its argument
             ## Elif it is a '--' command, it might be --option=value, which won't be split.
             ##      check for that and remove the whole "--option=value"
@@ -910,6 +910,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
 
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
+        cmd = cmd.replace(' --nightlycte', ' ')
         if '--mpi' not in cmd:
             cmd += ' --mpi'
 

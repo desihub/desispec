@@ -47,7 +47,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                tiles=None, surveys=None, science_laststeps=None,
                all_tiles=False, specstatus_path=None, use_specter=False,
-               do_cte_flats=True, complete_tiles_thrunight=None,
+               no_cte_flats=False, complete_tiles_thrunight=None,
                all_cumulatives=False,
                daily=False, specprod=None, path_to_data=None, exp_obstypes=None,
                camword=None, badcamword=None, badamps=None,
@@ -118,7 +118,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             surveyops specstatus table.
         use_specter (bool, optional): Default is False. If True, use specter,
             otherwise use gpu_specter by default.
-        do_cte_flats (bool, optional): Default is True. If True, cte flats
+        no_cte_flats (bool, optional): Default is False. If False, cte flats
             are used if available to correct for cte effects.
         complete_tiles_thrunight (int, optional): Default is None. Only tiles
             completed on or before the supplied YYYYMMDD are considered
@@ -224,12 +224,13 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     check_for_outputs = (not dont_check_job_outputs)
     resubmit_partial_complete = (not dont_resubmit_partial_jobs)
     require_cals = (not dont_require_cals)
-
+    do_cte_flats = (not no_cte_flats)
+    
     ## cte flats weren't available before 20211130 so hardcode that in
     if do_cte_flats and night < 20211130:
         log.warning("Asked to do cte flat correction but before 20211130 no "
                     + "no cte flats are available to do the correction. "
-                    + "Setting do_cte_flats to False.")
+                    + "Code will NOT perform cte flat corrections.")
         do_cte_flats = False
 
     ###################
@@ -329,10 +330,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             write_table(ptable, tablename=proc_table_pathname)
         if any_jobs_not_complete(ptable['STATUS']):
             if not ignore_proc_table_failures:
-                log.error("Some jobs have an incomplete job status. This script "
-                      + "will not fix them. You should remedy those first. "
-                      + "To proceed anyway use '--ignore-proc-table-failures'. Exiting.")
-                raise AssertionError
+                err = "Some jobs have an incomplete job status. This script " \
+                      + "will not fix them. You should remedy those first. " \
+                      + "To proceed anyway use '--ignore-proc-table-failures'. Exiting."
+                log.error(err)
+                raise AssertionError(err)
             else:
                 log.warning("Some jobs have an incomplete job status, but "
                       + "you entered '--ignore-proc-table-failures'. This "
@@ -482,7 +484,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## full set of exposures, but will keep for now for backward
         ## compatibility
         extra_job_args = {}
-        if 'tilenight' in overrides['science']:
+        if 'science' in overrides and 'tilenight' in overrides['science']:
             extra_job_args = overrides['science']['tilenight']
         else:
             extra_job_args = {}
@@ -594,11 +596,11 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         cte1s = ctes[np.abs(ctes['EXPTIME']-1.)<0.1]
 
     do_bias = (len(zeros) > 0 and 'biasnight' not in files_to_link
-               and not calibjobs['complete']['nightlybias'])
+               and not calibjobs['completed']['nightlybias'])
     do_badcol = len(darks) > 0 and 'badcolumns' not in files_to_link
     do_cte = (len(cte1s) > 0 and len(flats) > 0) and 'ctecorr' not in files_to_link
     ## If no dark or ctes, do the nightlybias
-    if do_bias and not do_badcol and not do_cte and not calibjobs['complete']['ccdcalib']:
+    if do_bias and not do_badcol and not do_cte and not calibjobs['completed']['ccdcalib']:
         log.info("\nNo dark or cte found. Submitting nightlybias before "
                  "processing exposures.\n")
         prow = erow_to_prow(zeros[0])
@@ -617,7 +619,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow, ptable = create_submit_add_and_save(prow, ptable)
         calibjobs[prow['JOBDESC']] = prow.copy()
         calibjobs['completed'][prow['JOBDESC']] = True
-    elif (do_badcol or do_cte) and not calibjobs['complete']['ccdcalib']:
+    elif (do_badcol or do_cte) and not calibjobs['completed']['ccdcalib']:
         ######## Submit ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
         ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
@@ -636,12 +638,15 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
             prow, int_id = make_exposure_prow(ccdcalib_erows[0], int_id,
                                               calibjobs, jobdesc=jobdesc)
-            prow['EXPID'] = np.array([erow['EXPID'] for erow in ccdcalib_erows])
+            if len(ccdcalib_erows) > 1:
+                prow['EXPID'] = np.array([erow['EXPID'] for erow in ccdcalib_erows])
+                cte_expids = prow['EXPID'][1:]
+
             prow['CALIBRATOR'] = 1
 
             extra_job_args = {'nightlybias': do_bias,
                               'nightlycte': do_cte,
-                              'erows': ccdcalib_erows}
+                              'cte_expids': cte_expids}
             prow, ptable = create_submit_add_and_save(prow, ptable,
                                                       extra_job_args=extra_job_args)
             calibjobs[prow['JOBDESC']] = prow.copy()
@@ -688,7 +693,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         calibjobs['completed'][joint_prow['JOBDESC']] = True
         
     ######## Submit cte flats ########
-    jobdesc = 'cteflat'
+    jobdesc = 'flat'
     for cte_erow in ctes:
         if cte_erow['EXPID'] in processed_cal_expids:
             continue

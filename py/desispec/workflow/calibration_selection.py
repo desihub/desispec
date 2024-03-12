@@ -31,9 +31,12 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     log = get_logger()
     full_etable = etable.copy()
 
+    ## If no rows, stop here
+    if len(full_etable) == 0:
+        return full_etable[[]]
+    
     ## Selecting cals, so remove science exposures
-    if len(full_etable) > 0:
-        cal_etable = full_etable[full_etable['OBSTYPE'] != 'science']
+    cal_etable = full_etable[full_etable['OBSTYPE'] != 'science']
 
     ## If no rows, stop here
     if len(cal_etable) == 0:
@@ -49,7 +52,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
         return full_etable[[]]
 
     ## Find if a valid 1s CTE flat
-    is_cte_1s = (exptypes=='cteflat'
+    is_cte_1s = ((exptypes=='cteflat')
                  & np.round(valid_etable['EXPTIME']).astype(int)==1)
 
     ## If 1 dark, 5 arcs, 12 flats, and 3 ctes then we have a candidate set,
