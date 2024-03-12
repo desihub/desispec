@@ -261,7 +261,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## First complete with bad exposure, second only arcs
         ## Should select first set since one bad arc is acceptable and has flats
         set1 = self._make_arcflatset_etable()
-        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=120.)
+        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=240.)
         set1['LASTSTEP'][2] = 'ignore'
         expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
@@ -270,7 +270,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## First complete with first two short arcs bad, second only arc set
         ## Should select first set since can use as few as 3 arcs for fit
         set1 = self._make_arcflatset_etable()
-        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=120.)
+        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=240.)
         set1['LASTSTEP'][:2] = 'ignore'
         expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
@@ -279,7 +279,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## First complete with first three short arcs bad, second only arc set
         ## Should select second set since 2 short arcs aren't enough
         set1 = self._make_arcflatset_etable()
-        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=120.)
+        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=240.)
         set1['LASTSTEP'][:3] = 'ignore'
         expected = self. _get_cleaned_table(set2)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
@@ -288,7 +288,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## First just flats, second full set but with issues
         ## Should select second set since can use 4 arcs and one bad amp is okay
         set1 = self._make_flatset_etable()
-        set2 = self._make_arcflatset_etable(expid_offset=50, minutes_offset=120.)
+        set2 = self._make_arcflatset_etable(expid_offset=50, minutes_offset=240.)
         set2['LASTSTEP'][2] = 'ignore'
         set2['BADAMPS'][14] = 'b3A'
         expected = self. _get_cleaned_table(set2)
@@ -298,9 +298,17 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         ## First full set with issues, second just flat
         ## Should select first set since 4 good arcs is fine and one badamp is okay
         set1 = self._make_arcflatset_etable()
-        set2 = self._make_flatset_etable(expid_offset=50, minutes_offset=120.)
+        set2 = self._make_flatset_etable(expid_offset=50, minutes_offset=240.)
         set1['LASTSTEP'][2] = 'ignore'
         set1['BADAMPS'][14] = 'b3A'
+        expected = self. _get_cleaned_table(set1)
+        best = find_best_arc_flat_sets(vstack([set1, set2]))
+        self._test_tables_equal(expected, best)
+
+        ## Two sets of equivalent only arcs, no flats
+        ## Should just pick the first
+        set1 = self._make_arcset_etable()
+        set2 = self._make_arcset_etable(expid_offset=50, minutes_offset=240.)
         expected = self. _get_cleaned_table(set1)
         best = find_best_arc_flat_sets(vstack([set1, set2]))
         self._test_tables_equal(expected, best)

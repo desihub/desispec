@@ -439,7 +439,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
     ## Loop over arc sets and flat sets and see which ones are compatible in
     ## time to be paired together
     complete_sets = []
-    mjd_dt = float(arcflattimediff) / (24.*60.)
+    max_mjd_dt = float(arcflattimediff) / (24.*60.)
     for arcset in complete_arc_sets:
         arctable = arcset['table']
         arcstart, arcend = np.min(arctable['MJD-OBS']), np.max(arctable['MJD-OBS'])
@@ -448,7 +448,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
             flatstart, flatend = np.min(flattable['MJD-OBS']), np.max(flattable['MJD-OBS'])
             ## Only proceed with the arc-flat set if the time difference is less
             ## than the specified difference
-            if np.abs(arcstart-flatend) < mjd_dt or np.abs(flatstart-arcend) < mjd_dt:
+            if np.abs(arcstart-flatend) < max_mjd_dt or np.abs(flatstart-arcend) < max_mjd_dt:
                 ## If time difference is valid, it is a valid set so
                 ## continue to produce info about set
                 ## start based on the existing list of badcam numbers from arcs
@@ -458,8 +458,22 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
                     badcams = all_impacted_cameras(flat['BADCAMWORD'],
                                                    flat['BADAMPS'])
                     nbadcams.append(len(badcams))
+
+                if arcend < flatstart:
+                    mjd_dt = flatstart - arcend
+                elif flatend < arcstart:
+                    mjd_dt = arcstart - flatend
+                else:
+                    ## arcs and flats overlap in time, which is surprising but not necessarily fatal
+                    ## could happend if multiple partial sets were taken but combined they are good
+                    arc_expids = sorted(arctable['EXPID'])
+                    flat_expids = sorted(flattable['EXPID'])
+                    log.error(f'Overlapping arc/flat sequences? {arc_expids=} {flat_expids=}')
+                    mjd_dt = 0.0
+
                 complete_set = {'table': vstack([arctable, flattable]),
-                                'meanbadcams': np.mean(nbadcams)}
+                                'meanbadcams': np.mean(nbadcams),
+                                'mjd_dt': mjd_dt}
                 complete_sets.append(complete_set)
                 arcs = complete_set['table'][complete_set['table']['OBSTYPE'] == 'arc']
                 if complete_set['meanbadcams'] == 0 \
@@ -479,7 +493,8 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
 
     ## Select the best set by selecting the one with the fewest meanbadcams
     ## If two tie in meanbadcams, then select the one with more
-    ## LASTSTEP='all' arc exposures. If those tie, choose the first set.
+    ## LASTSTEP='all' arc exposures. If a tie, pick set with smallest
+    ## timediff between arcs and flats. If still a tie, choose the first set.
     bestset = setlist[0]
     if len(setlist) > 1:
         for calset in setlist[1:]:
@@ -492,6 +507,10 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
                 log.info(f"Found set with same {calset['meanbadcams']} mean bad " \
                         + f"cameras but more good exposures than previous best " \
                         + f"{len(calset['table'])} > {len(bestset['table'])}")
+                bestset = calset
+            ## last tie-breaker is time difference, which only applies to complete sets not
+            ## arc sets, so make sure dict has 'mjd_dt'
+            elif ('mjd_dt' in calset) and ('mjd_dt' in bestset) and (calset['mjd_dt'] < bestset['mjd_dt']):
                 bestset = calset
 
     ## return the exposure table with the best selection of arcs and flats

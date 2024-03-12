@@ -60,6 +60,10 @@ def main(args=None):
     num_error = len(failed_jobs)
     sys.exit(num_error)
 
+# _allexp is cache of all exposure tables stacked so that we don't have to read all
+# of them every time we call generate_tile_redshift_scripts()
+_allexp = None
+
 def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
                                    spectrographs=None, camword=None,
                                    max_gpuprocs=None, no_gpu=False,
@@ -182,9 +186,12 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
     # - NOTE: this may not scale well several years into the survey
     if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-        allexp = read_minimal_exptables_columns()
-        keep = np.in1d(allexp['TILEID'], tileids)
-        exptable = allexp[keep]
+        global _allexp
+        if _allexp is None:
+            log.info(f'Reading all exposure_tables from all nights')
+            _allexp = read_minimal_exptables_columns()
+        keep = np.in1d(_allexp['TILEID'], tileids)
+        exptable = _allexp[keep]
         ## Ensure we only include data for nights up to and including specified nights
         if nights is not None:
             lastnight = int(np.max(nights))

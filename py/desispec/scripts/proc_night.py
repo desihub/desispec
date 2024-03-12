@@ -25,14 +25,14 @@ from desispec.workflow.utils import sleep_and_report, \
 from desispec.workflow.timing import what_night_is_it, during_operating_hours
 from desispec.workflow.exptable import get_last_step_options
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
-    erow_to_prow, default_prow, table_row_to_dict
+    erow_to_prow, default_prow
 from desispec.workflow.processing import define_and_assign_dependency, \
     create_and_submit, \
     submit_tilenight_and_redshifts, \
     generate_calibration_dict, \
     night_to_starting_iid, make_joint_prow, \
-    set_calibrator_flag, make_exposure_prow, get_file_to_jobdesc_map, \
-    update_calibjobs_with_linking, all_calibs_submitted
+    set_calibrator_flag, make_exposure_prow, \
+update_calibjobs_with_linking, all_calibs_submitted
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix
@@ -469,7 +469,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             sciences.append(prow)
             
         # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
-        cur_z_submit_types = z_submit_types.copy()
+        if z_submit_types is None:
+            curr_z_submit_types = None
+        else:
+            cur_z_submit_types = z_submit_types.copy()
+
         if ((z_submit_types is not None) and ('cumulative' in z_submit_types)
             and (tile not in tiles_cumulative)):
             cur_z_submit_types.remove('cumulative')
@@ -485,7 +489,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
         extra_job_args['z_submit_types'] = cur_z_submit_types
         extra_job_args['laststeps'] = science_laststeps
-        ptable, sciences, internal_id = submit_tilenight_and_redshifts(
+        ptable, sciences, int_id = submit_tilenight_and_redshifts(
                                     ptable, sciences, calibjobs, int_id,
                                     dry_run=dry_run_level, queue=queue,
                                     reservation=reservation,
