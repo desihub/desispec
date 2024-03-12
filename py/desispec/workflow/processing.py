@@ -361,9 +361,6 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
 
         if use_specter:
             cmd += ' --use-specter'
-
-    elif prow['JOBDESC'] in ['nightlybias']:
-        cmd += ' --nightlybias'
     elif prow['JOBDESC'] in ['flat', 'prestdstar'] and use_specter:
         cmd += ' --use-specter'
     pcamw = str(prow['PROCCAMWORD'])
@@ -491,7 +488,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 log.error(err)
                 raise ValueError(err)
 
-            cmd = desi_link_calibnight_command(prow, refnight, include, exclude)
+            cmd = desi_link_calibnight_command(prow, refnight, include)
             log.info(f"Running: {cmd.split()}")
             scriptpathname = create_linkcal_batch_script(newnight=prow['NIGHT'],
                                                         cameras=prow['PROCCAMWORD'],
@@ -503,6 +500,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             nightlybias, nightlycte, cte_expids = False, False, None
             if 'nightlybias' in extra_job_args:
                 nightlybias = extra_job_args['nightlybias']
+            elif prow['JOBDESC'].lower() == 'nightlybias':
+                nightlybias = True
             if 'nightlycte' in extra_job_args:
                 nightlycte = extra_job_args['nightlycte']
             if 'cte_expids' in extra_job_args:
@@ -547,8 +546,10 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                                                                system_name=system_name,
                                                                laststeps=laststeps)
             else:
+                if expids is not None and len(expids) > 1:
+                    expids = expids[:1]
                 log.info("Running: {}".format(cmd.split()))
-                scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=expids[0],
+                scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=expids,
                                                                cameras=prow['PROCCAMWORD'],
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
@@ -1010,15 +1011,19 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
             calibration job.
     """
     log = get_logger()
+    
     file_job_map = get_file_to_jobdesc_map()
     for fil in files_to_link:
         if fil in file_job_map:
             calibjobs['completed'][file_job_map[fil]] = True
+        elif fil in ['biasnight', 'badcolumns', 'ctecorr']:
+            continue
         else:
             err = f"Filetype {fil} doesn't map to a known job description: "
             err += f"{file_job_map=}"
             log.error(err)
             raise ValueError(err)
+        
     if 'biasnight' in files_to_link and 'badcolumns' in files_to_link \
             and 'ctecorr' in files_to_link:
         calibjobs['completed']['ccdcalib'] = True

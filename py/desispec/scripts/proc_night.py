@@ -604,6 +604,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         log.info("\nNo dark or cte found. Submitting nightlybias before "
                  "processing exposures.\n")
         prow = erow_to_prow(zeros[0])
+        prow['EXPID'] = np.array([])
         prow['INTID'] = int_id
         int_id += 1
         prow['JOBDESC'] = 'nightlybias'
@@ -631,16 +632,21 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                 ## first exposure is a 300s dark
                 ccdcalib_erows.append(darks[0])
             if do_cte:
+                cte_expids = []
                 ## second exposure is a 1s cte flat
                 ccdcalib_erows.append(cte1s[0])
+                cte_expids.append(cte1s[0]['EXPID'])
                 ## third exposure is a 120s flat
                 ccdcalib_erows.append(flats[-1])
-
+                cte_expids.append(flats[-1]['EXPID'])
+                cte_expids = np.array(cte_expids)
+            else:
+                cte_expids = None
+                
             prow, int_id = make_exposure_prow(ccdcalib_erows[0], int_id,
                                               calibjobs, jobdesc=jobdesc)
             if len(ccdcalib_erows) > 1:
                 prow['EXPID'] = np.array([erow['EXPID'] for erow in ccdcalib_erows])
-                cte_expids = prow['EXPID'][1:]
 
             prow['CALIBRATOR'] = 1
 
@@ -673,7 +679,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
     ######## Submit flats and nightlyflat ########
     ## If nightlyflat defined we don't need to process more normal flats
-    if len(flats) > 0 and not calibjobs['completed']['nightlyflat'] is None:
+    if len(flats) > 0 and not calibjobs['completed']['nightlyflat']:
         flat_prows = []
         for flat_erow in flats:
             if flat_erow['EXPID'] in processed_cal_expids:

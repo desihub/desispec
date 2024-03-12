@@ -830,9 +830,12 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
         elif '--nightlycte' in sys.argv:
             nightlycte = True
 
-    # - nightlycte jobs add time to the job
+    ## nightlycte jobs add time to the job
+    ## hardcoding a runtime for nightlycte, as it matures this
+    ## should be moved into determine_resources()
     if nightlycte:
-        runtime += bias_runtime
+        cte_runtime = 5
+        runtime += cte_runtime
 
     #- arc fits require 3.2 GB of memory per bundle, so increase nodes as needed
     if jobdesc.lower() == 'arc':
