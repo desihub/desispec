@@ -23,7 +23,8 @@ def parse(options=None):
     parser.add_argument('-c','--cameras', type = str, default = 'r0123456789z0123456789', required=False,
                         help = 'list of cameras to process')
     parser.add_argument('-e','--expids', type = str, default = None, required=False,
-                        help = 'comma separated list of flat expids to use')
+                        help = 'comma separated list of flat expids to use'
+                        + ' the cte should be first followed by a 120s flat')
     parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'path of output cvs table (default is the calibnight directory of the prod)')
     parser.add_argument('--ncpu', type=int, default=default_nproc,

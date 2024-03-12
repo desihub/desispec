@@ -90,9 +90,9 @@ def parse_args():
                              "$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv")
     parser.add_argument("--use-specter", action="store_true",
                         help="Use specter. Default is to use gpu_specter")
-    parser.add_argument("--do-cte-flats", action="store_true",
+    parser.add_argument("--no-cte-flats", action="store_true",
                         help="If flag set then cte flat exposures are "
-                             + "processed for cte identification.")
+                             + "not processed for cte identification.")
     parser.add_argument("--dont-require-cals", action="store_true",
                         help="If set then the code requires either a valid set "
                              + "of calibrations or a valid override file to link"
