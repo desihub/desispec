@@ -152,6 +152,36 @@ def add_cte(img, cte_transfer_func=None, **cteparam):
         out[:, i] += transfer_amount
     return out
 
+def needs_ctecorr(header=None, cfinder=None):
+    """
+    Return True/False for whether this CCD needs CTE corrections
+
+    Args:
+        header: dict-like header from raw data HDU for this CCD
+        cfinder: CalibFinder object for this CCD
+
+    Returns True/False
+
+    Must provide header or cfinder but not both; providing a pre-generated
+    cfinder avoids re-reading the $DESI_SPECTRO_CALIB yaml file.
+    """
+    if cfinder is not None and header is not None:
+        raise ValueError('provide header or cfinder but not both')
+
+    if cfinder is None:
+        cfinder = CalibFinder([header])
+    else:
+        header = cfinder.header
+
+    docte = False
+    for amp in desispec.preproc.get_amp_ids(header):
+        key = "CTECOLS"+amp.upper()
+        if cfinder.haskey(key):
+            docte = True
+            break
+
+    return docte
+
 def get_amp_regions_to_cte_correct(header):
     """
     Get CTE corrections parameters for amps on this image
