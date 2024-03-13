@@ -1003,7 +1003,7 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
             "psfnight", "nightlyflat", "linkcal", and "completed". Each key corresponds to a
             Table.Row or None. The table.Row() values are for the corresponding
             calibration job.
-        files_to_link, set
+        files_to_link: set
             Set of filenames that the linkcal job will link.
 
     Returns
