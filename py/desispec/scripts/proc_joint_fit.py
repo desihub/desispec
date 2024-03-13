@@ -341,6 +341,11 @@ def main(args=None, comm=None):
 
         log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
         for camera_arm in ["b", "r", "z"][rank::size]:
+            if len(flats_for_arm[camera_arm]) == 0:
+                log.info(f"Rank {rank} assigned to autocalibrate across spectro for "
+                         + f"camera arm {camera_arm}, but no data to calibrate: "
+                         + f"{flats_for_arm[camera_arm]=}")
+                continue
             log.info(f"Rank {rank} autocalibrating across spectro for camera arm {camera_arm}")
             cmd = []
             cmd.append(f"desi_autocalib_fiberflat")
