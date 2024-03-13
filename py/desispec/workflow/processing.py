@@ -954,9 +954,8 @@ def parse_previous_tables(etable, ptable, night):
 def generate_calibration_dict(ptable, files_to_link=None):
     """
     This takes in a processing table and regenerates the working memory calibration
-    dictionary for dependency tracking
-
-    Used by the daily processing to define most of its state-ful variables into working memory.
+    dictionary for dependency tracking. Used by the daily processing to define 
+    most of its state-ful variables into working memory.
     If the processing table is empty, these are simply declared and returned for use.
     If the code had previously run and exited (or crashed), however, this will all the code to
     re-establish itself by redefining these values.
@@ -1036,13 +1035,12 @@ def all_calibs_submitted(completed):
     calibration jobs have been submitted for calibration.
 
     Args:
-        completed, dict: Dictionary with keys corresponding to the calibration
-            job descriptions and values of True or False
+        completed, dict, Dictionary with keys corresponding to the calibration
+            job descriptions and values of True or False.
 
     Returns:
         bool, True if all necessary calibrations have been submitted or handled,
             False otherwise.
-
     """
     ccdlevel_completed = (completed['nightlybias'] or completed['badcol']
                          or completed['ccdcalib'])
@@ -1885,8 +1883,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
 def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
-                                  system_name=None,use_specter=False, z_submit_types=None,
-                                  extra_job_args=None):
+                                  system_name=None,use_specter=False, extra_job_args=None):
     """
     Takes all the state-ful data from daily processing and determines whether a tilenight job needs to be submitted.
 
@@ -1911,8 +1908,6 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry
         resubmit_partial_complete (bool, optional): Default is True. Must be used with check_for_outputs=True. If this flag is True,
             jobs with some prior data are pruned using PROCCAMWORD to only process the
             remaining cameras not found to exist.
-        z_submit_types (list of str, optional): The "group" types of redshifts that should be submitted with each
-            exposure. If not specified or None, then no redshifts are submitted.
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
         extra_job_args (dict, optional): Dictionary with key-value pairs that specify additional
@@ -1936,6 +1931,10 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry
                                              system_name=system_name,use_specter=use_specter,
                                              extra_job_args=extra_job_args)
 
+    z_submit_types = None
+    if 'z_submit_types'  in extra_job_args:
+        z_submit_types = extra_job_args['z_submit_types']
+        
     ptable, internal_id = submit_redshifts(ptable, sciences, tnight, internal_id,
                                     queue=queue, reservation=reservation,
                                     dry_run=dry_run, strictly_successful=strictly_successful,
