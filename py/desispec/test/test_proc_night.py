@@ -98,5 +98,25 @@ class TestProcNight(unittest.TestCase):
         self.assertEqual(len(prodfiles), 1)
         self.assertTrue(prodfiles[0].endswith('exposure_tables'))
 
+    def test_proc_night_noz(self):
+        """Test that z_submit_types=None doesn't submit any redshift jobs"""
 
+        #- subset of tiles
+        ntiles = 2
+        tiles = np.unique(self.etable[self.etable['OBSTYPE']=='science']['TILEID'])[0:ntiles]
 
+        proctable, unproctable = proc_night(self.night, z_submit_types=None,
+                                            tiles=tiles,
+                                            dry_run_level=1, sub_wait_time=0.0)
+
+        #- tilenight but not zproc batch scripts exist
+        for tileid in tiles:
+            batchscript = get_desi_proc_tilenight_batch_file_pathname(self.night, tileid) + '.slurm'
+            self.assertTrue(os.path.exists(batchscript), f'Missing {batchscript}')
+
+            zbatchscript = get_ztile_script_pathname(tileid=tileid, group='cumulative', night=self.night)
+            self.assertFalse(os.path.exists(zbatchscript), f'Unexpected {batchscript}')
+
+        #- Check that only the subset of tiles were processed
+        proctiles = proctable['TILEID'][proctable['OBSTYPE'] == 'science']
+        self.assertEqual(len(np.unique(proctiles)), ntiles)

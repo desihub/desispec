@@ -472,7 +472,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             
         # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
         if z_submit_types is None:
-            curr_z_submit_types = None
+            cur_z_submit_types = None
         else:
             cur_z_submit_types = z_submit_types.copy()
 
