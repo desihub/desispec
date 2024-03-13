@@ -996,15 +996,20 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
     based on the files_to_link, which are assumed to have already been linked
     such that those files already exist on disk and don't need ot be generated.
 
-    Args:
-        calibjobs, dict. Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
-            'psfnight', 'nightlyflat', 'linkcal', and 'completed'. Each key corresponds to a
+    Parameters
+    ----------
+        calibjobs: dict
+            Dictionary containing "nightlybias", "badcol", "ccdcalib",
+            "psfnight", "nightlyflat", "linkcal", and "completed". Each key corresponds to a
             Table.Row or None. The table.Row() values are for the corresponding
             calibration job.
-        files_to_link, set, Set of filenames that the linkcal job will link.
+        files_to_link, set
+            Set of filenames that the linkcal job will link.
 
-    Returns:
-        calibjobs, dict. Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
+    Returns
+    -------
+        calibjobs, dict
+            Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
             'psfnight', 'nightlyflat', 'linkcal', and 'completed'. Each key corresponds to a
             Table.Row or None. The table.Row() values are for the corresponding
             calibration job.
@@ -1035,12 +1040,10 @@ def all_calibs_submitted(completed):
     calibration jobs have been submitted for calibration.
 
     Args:
-        completed, dict, Dictionary with keys corresponding to the calibration
-            job descriptions and values of True or False.
+        completed, dict, Dictionary with keys corresponding to the calibration job descriptions and values of True or False.
 
     Returns:
-        bool, True if all necessary calibrations have been submitted or handled,
-            False otherwise.
+        bool, True if all necessary calibrations have been submitted or handled, False otherwise.
     """
     ccdlevel_completed = (completed['nightlybias'] or completed['badcol']
                          or completed['ccdcalib'])
