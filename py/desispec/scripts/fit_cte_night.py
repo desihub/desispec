@@ -62,7 +62,8 @@ def main(args=None, comm=None):
         args.outfile = findfile("ctecorrnight", night=args.night, specprod_dir=args.specprod_dir)
 
     #- Create output directory if needed
-    os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+    if comm is None or comm.rank == 0:
+        os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
     #- Assemble options to pass for each camera
     #- so that they can be optionally parallelized
