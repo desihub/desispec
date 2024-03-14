@@ -371,6 +371,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
+        ## Fiberflatnights need to be generated with psfs from same time, so
+        ## can't link psfs without also linking fiberflatnight
+        if 'psfnight' in files_to_link and not 'fiberflatnight' in files_to_link:
+            err = "Must link fiberflatnight if linking psfnight"
+            log.error(err)
+            raise ValueError(err)
     else:
         files_to_link = set()
 

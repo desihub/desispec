@@ -476,6 +476,12 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         if 'exclude' in extra_job_args:
             exclude = extra_job_args['exclude']
         include, exclude = derive_include_exclude(include, exclude)
+        ## Fiberflatnights need to be generated with psfs from same time, so
+        ## can't link psfs without also linking fiberflatnight
+        if 'psfnight' in include and not 'fiberflatnight' in include:
+            err = "Must link fiberflatnight if linking psfnight"
+            log.error(err)
+            raise ValueError(err)
         if dry_run > 1:
             scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))

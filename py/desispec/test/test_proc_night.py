@@ -152,10 +152,15 @@ class TestProcNight(unittest.TestCase):
         for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
             self.assertTrue(job not in proctable['JOBDESC'])
 
-        # ## Test no psfnight but still fiberflatnight -- should raise error
-        # testdict = base_override_dict.copy()
-        # testdict['calibration']['linkcal']['include'] = 'psfnight'
-        # proctable, unproctable = self._override_write_run_delete(testdict)
+        ## Test no psfnight but still fiberflatnight -- should raise error
+        testdict = base_override_dict.copy()
+        testdict['calibration']['linkcal']['include'] = 'psfnight'
+        with open(self.override_file, 'w') as fil:
+            yaml.safe_dump(testdict, fil)
+        with self.assertRaises(ValueError):
+            proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                dry_run_level=3)
+        os.remove(self.override_file)
 
         ## Test link fiberflatnight
         testdict = base_override_dict.copy()
@@ -239,11 +244,16 @@ class TestProcNight(unittest.TestCase):
         for job in ['nightlybias', 'psfnight', 'nightlyflat']:
             self.assertTrue(job not in proctable['JOBDESC'])
 
-        # ## Test link everything except fiberflatnight -- should raise error
-        # calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
-        # testdict = base_override_dict.copy()
-        # testdict['calibration']['linkcal']['include'] = calib_files
-        # proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+        ## Test link everything except fiberflatnight -- should raise error
+        calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+        testdict = base_override_dict.copy()
+        testdict['calibration']['linkcal']['include'] = calib_files
+        with open(self.override_file, 'w') as fil:
+            yaml.safe_dump(testdict, fil)
+        with self.assertRaises(ValueError):
+            proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                dry_run_level=3)
+        os.remove(self.override_file)
 
         ## Test link everything except psfnight
         calib_files = 'biasnight,badcolumns,ctecorrnight,fiberflatnight'
