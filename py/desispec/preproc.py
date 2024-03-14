@@ -30,7 +30,6 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
-from desispec.correct_cte import needs_ctecorr
 
 def get_amp_ids(header):
     '''
@@ -851,6 +850,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- Fail early if we need to CTE correct but don't have enough info
     do_cte_corr = not no_cte_corr
     if do_cte_corr:
+        from desispec.correct_cte import needs_ctecorr
         if needs_ctecorr(cfinder=cfinder):
             log.info(f'Camera {camera} needs CTE corrections')
             if cte_params_filename is None:

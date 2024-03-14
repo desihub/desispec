@@ -10,9 +10,11 @@ import multiprocessing as mp
 import numpy as np
 from desiutil.log import get_logger
 import desispec.correct_cte
-from desispec.io.util import decode_camword, parse_cameras, get_tempfilename
+from desispec.io.util import decode_camword, camword_union, difference_camwords, parse_cameras
+from desispec.io.util import get_tempfilename
 from desispec.io import findfile
 from desispec.parallel import default_nproc
+from desispec.workflow.tableio import load_table
 from astropy.table import Table,vstack
 
 def parse(options=None):
@@ -64,6 +66,25 @@ def main(args=None, comm=None):
     #- Create output directory if needed
     if comm is None or comm.rank == 0:
         os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+
+    #- Check what cameras are actually needed by science exposures
+    if args.expids is None:
+        etablefile = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                          os.environ['SPECPROD'],
+                          'exposure_tables', str(args.night // 100),
+                          f'exposure_table_{args.night}.csv')
+        etable = load_table(etablefile, tabletype='exptable')
+        keep = etable['OBSTYPE'] == 'science'
+        sci_etable = etable[keep]
+        if len(sci_etable) == 0:
+            log.warning(f'No science exposures on {args.night}, but calculating CTE corrections anyway...')
+        else:
+            camword = parse_cameras(args.cameras)
+            goodcamwords = [difference_camwords(camword, badcamword) for badcamword in sci_etable['BADCAMWORD']]
+            anygoodcamword = camword_union(goodcamwords)
+            if camword != anygoodcamword:
+                log.warning(f'Trimming {camword} to {anygoodcamword} needed by science exposures')
+                args.cameras = decode_camword(anygoodcamword)
 
     #- Assemble options to pass for each camera
     #- so that they can be optionally parallelized

@@ -10,11 +10,6 @@ import os
 import numpy as np
 import fitsio
 from desispec.calibfinder import CalibFinder
-import desispec.io
-import desispec.io.util
-from desispec.io.util import decode_camword
-import desispec.io.xytraceset
-import desispec.io.fiberflat
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 import desispec.preproc
 from desiutil.log import get_logger
@@ -232,7 +227,7 @@ def get_amp_regions_to_cte_correct(header):
             nvals = len(vals)
             if nvals != 2 :
                 mess = "cannot decode {}={}".format(key, value)
-                log.error(mess)
+                log.critical(mess)
                 raise KeyError(mess)
 
             start, stop = int(vals[0]), int(vals[1])
@@ -282,6 +277,8 @@ def get_cte_params(header, cte_params_filename=None):
 
     Returns pair of empty dictionaries if there are no amps needing CTE corrections.
     """
+    import desispec.io   # inside func to avoid circular import
+
     log = get_logger()
 
     amp_regions, cte_regions = get_amp_regions_to_cte_correct(header)
@@ -572,10 +569,21 @@ def get_cte_images(night, camera, expids=None):
     -------
     List of preprocessed Images without CTE correction applied
     """
+    # inside func to avoid circular import
+    import desispec.io
+    import desispec.io.util
 
     log = get_logger()
 
-    if expids is None:
+    if expids is not None:
+        filename = desispec.io.findfile('raw', night, expids[0])
+        header   = fitsio.read_header(filename, camera.upper())
+        if not needs_ctecorr(header):
+            log.info(f"No CTE correction needed for {night} {camera}")
+            return None
+
+    else:
+        #- Look up exposures in production exposure table
         exptablefn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                                   os.environ['SPECPROD'],
                                   'exposure_tables', str(night // 100),
@@ -583,50 +591,54 @@ def get_cte_images(night, camera, expids=None):
 
         if not os.path.isfile(exptablefn) :
             mess = f"Cannot find exposure table file '{exptablefn}'. Because of that the flat exposures needed for the CTE correction modeling cannot be identified. Maybe check env. variables DESI_SPECTRO_REDUX and SPECPROD?"
-            log.error(mess)
+            log.critical(mess)
             raise RuntimeError(mess)
 
-        #- Read exptable and apply quality cuts to flats
+        #- Read exptable and keep just the good flats
         exptable = Table.read(exptablefn)
         keep = exptable['OBSTYPE'] == 'flat'
         keep &= exptable['LASTSTEP'] != 'ignore'
         exptable = exptable[keep]
 
+        #- First check 1 sec flat header to see if we even need to do CTE corr
+        selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1)
+        if np.sum(selection)<1 :
+            mess = f"No 1 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
+            log.critical(mess)
+            raise RuntimeError(mess)
+
+        filename = desispec.io.findfile('raw', night, exptable['EXPID'][selection][0])
+        header   = fitsio.read_header(filename, camera.upper())
+        if not needs_ctecorr(header):
+            log.info(f"No CTE correction needed for {night} {camera}")
+            return None
+
+        #- CTE correction is needed, so also filter by CAMWORD and BADCAMWORD
         keep = np.ones(len(exptable), dtype=bool)
         for i in range(len(keep)):
-            if camera not in decode_camword(str(exptable['CAMWORD'][i])):
+            if camera not in desispec.io.util.decode_camword(str(exptable['CAMWORD'][i])):
                 keep[i] = False
-            elif camera in decode_camword(str(exptable['BADCAMWORD'][i])):
+            elif camera in desispec.io.util.decode_camword(str(exptable['BADCAMWORD'][i])):
                 keep[i] = False
 
         exptable = exptable[keep]
 
-        selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1) & (exptable['OBSTYPE'] == 'flat')
+        #- Refilter for 1 sec flat and 120 sec flat (might have been dropped due to BADCAMWORD)
+        selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1)
         if np.sum(selection)<1 :
-            mess = f"No flat exposure of approx. 1s found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
-            log.error(mess)
+            mess = f"No good {camera} 1 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
+            log.critical(mess)
             raise RuntimeError(mess)
         index1 = np.where(selection)[0][0]
 
-        selection = (np.abs(exptable['EXPTIME'] - 120) < 10) & (exptable['OBSTYPE'] == 'flat')
+        selection = (np.abs(exptable['EXPTIME'] - 120) < 10)
         if np.sum(selection)<1 :
-            mess = f"No flat exposure of approx. 120s found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
-            log.error(mess)
+            mess = f"No good {camera} 120 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
+            log.critical(mess)
             raise RuntimeError(mess)
         index2 = np.where(selection)[0][-1]
 
         expids = list(exptable['EXPID'][ [index1, index2] ])
-
-    # first use the calibration finder to see if there is any CTE issue with this camera
-    # so that we don't preprocess exposures for nothing
-
-    # get header and primary header of image
-    filename  = desispec.io.findfile('raw', night, expids[0])
-    header    = fitsio.read_header(filename, camera.upper())
-    amp, cte = get_amp_regions_to_cte_correct(header)
-    if len(cte)==0 :
-        log.info(f"No CTE correction to compute for {night} {camera}")
-        return None
 
     log.info(f"Will use exposures {expids} for {night} {camera} CTE corrections")
 
@@ -635,8 +647,8 @@ def get_cte_images(night, camera, expids=None):
         preproc_filename = desispec.io.findfile('preproc_for_cte', night, expid, camera)
         if not os.path.isfile(preproc_filename) :
             log.info(f"Computing {preproc_filename}")
-            infile = desispec.io.findfile('raw',night,expid)
-            image  = desispec.io.read_raw(infile, camera, no_cte_corr = True)
+            infile = desispec.io.findfile('raw', night, expid)
+            image  = desispec.io.read_raw(infile, camera, no_cte_corr=True)
             tmpfile = desispec.io.util.get_tempfilename(preproc_filename)
             desispec.io.write_image(tmpfile,image)
             os.rename(tmpfile, preproc_filename)
@@ -687,6 +699,11 @@ def get_image_model(preproc, psf=None):
     np.ndarray
     Model image
     """
+    # inside func to avoid circular import
+    import desispec.io
+    import desispec.io.xytraceset
+    import desispec.io.fiberflat
+
     meta = preproc.meta
     cfinder = CalibFinder([meta])
     psf_filename = cfinder.findfile("PSF")
@@ -742,6 +759,7 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
     """
     # load specter only if needed to simplify required dependencies
     import specter.psf
+    import desispec.io   # inside func to avoid circular import
 
     meta = preproc.meta
     cfinder = CalibFinder([meta])
