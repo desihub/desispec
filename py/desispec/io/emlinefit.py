@@ -69,6 +69,7 @@ def read_emlines_inputs(
     targetids=None,
     rr_keys="TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2",
     fm_keys="TARGET_RA,TARGET_DEC,OBJTYPE",
+    ebvmax=2.,
     log=None,
 ):
     """
@@ -84,6 +85,7 @@ def read_emlines_inputs(
         targetids (optional, defaults to None): list of TARGETIDs to restrict to (int, list, or numpy array)
         rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
         fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)
+        ebvmax (optional, defaults to 2): spectra with ebv >= ebvmax will be masked (ivar=0 for all pixels) (float)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
@@ -97,6 +99,8 @@ def read_emlines_inputs(
         * We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
         * If keys in rr_keys or fm_keys are not present in the redrock, those will be ignored.
         * If both bitnames and targetids are provided, we take the overlap of the two.
+        * Mar. 2024: addition of ebvmax=2. argument, to avoid too long computing time
+            on some backup tiles (https://github.com/desihub/desispec/issues/2186)
     """
     # AR log
     if log is None:
@@ -247,6 +251,21 @@ def read_emlines_inputs(
         waves = np.append(waves, tmpw)
         fluxes = np.append(fluxes, tmpfl, axis=1)
         ivars = np.append(ivars, tmpiv, axis=1)
+
+    # AR set ivar=0 for ebv >= ebvmax spectra
+    sel = ebvs >= ebvmax
+    ivars[sel, :] = 0
+    for tid, ebv in zip(rr["TARGETID"][sel], ebvs[sel]):
+        log.warning(
+            "set ivar=0 for all pixels of TARGETID={} (EBV={:.2f} >= {})".format(
+                tid, ebv, ebvmax,
+            )
+        )
+    log.info(
+        "we set ivar=0 for {}/{} spectra with EBV >= {}".format(
+            sel.sum(), nspec, ebvmax
+        )
+    )
 
     return rr, fm, waves, fluxes, ivars
 
