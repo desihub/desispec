@@ -545,7 +545,11 @@ def parse_cameras(cameras, loglevel='INFO'):
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
         raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
-    log.info(f"Converted input cameras={cameras} to camword={camword}")
+    if not isinstance(cameras, str) or cameras != camword:
+        log.info(f"Converted input cameras={cameras} to camword={camword}")
+    else:
+        log.debug(f"Converted input cameras={cameras} to camword={camword}")
+
     return camword
 
 def difference_camwords(fullcamword,badcamword,suppress_logging=False):

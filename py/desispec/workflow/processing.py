@@ -479,7 +479,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         if dry_run > 1:
             scriptpathname = batch_script_name(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
-            cmd = desi_link_calibnight_command(prow, refnight, include, exclude)
+            cmd = desi_link_calibnight_command(prow, refnight, include)
             log.info("Command to be run: {}".format(cmd.split()))
         else:
             if refnight == -99:
@@ -1020,7 +1020,7 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
     for fil in files_to_link:
         if fil in file_job_map:
             calibjobs['completed'][file_job_map[fil]] = True
-        elif fil in ['biasnight', 'badcolumns', 'ctecorr']:
+        elif fil in ['biasnight', 'badcolumns', 'ctecorrnight']:
             continue
         else:
             err = f"Filetype {fil} doesn't map to a known job description: "
@@ -1029,7 +1029,7 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
             raise ValueError(err)
         
     if 'biasnight' in files_to_link and 'badcolumns' in files_to_link \
-            and 'ctecorr' in files_to_link:
+            and 'ctecorrnight' in files_to_link:
         calibjobs['completed']['ccdcalib'] = True
 
     return calibjobs

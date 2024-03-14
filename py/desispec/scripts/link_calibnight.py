@@ -7,7 +7,7 @@ from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword, relsymlink
 
-calibnight_prefixes = ('badcolumns','biasnight','fiberflatnight','psfnight','ctecorr')
+calibnight_prefixes = ('badcolumns','biasnight','fiberflatnight','psfnight','ctecorrnight')
 _prefixstr = ','.join(calibnight_prefixes)
 
 def derive_include_exclude(input_include, input_exclude):
@@ -134,7 +134,7 @@ def main(args=None):
 
         #- special case: ctecorr is per-night, not per-camera,
         #- and allow it to be missing (revisit after PR #2163 is merged)
-        if prefix == 'ctecorr':
+        if prefix == 'ctecorrnight':
             reffile = findfile(prefix, night=args.refnight)
             newfile = findfile(prefix, night=args.newnight)
 

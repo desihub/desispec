@@ -1001,10 +1001,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
                 cmd = f'desi_fit_cte_night -n {night} -c {camword}'
                 if cte_expids is not None:
                     cmd += f' -e ' + ','.join(np.atleast_1d(cte_expids).astype(str))
-
-                fx.write(f'if [ -f $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/'
-                         + f'{night}/ctecorr-{night}.csv ]; then\n')
-                fx.write(f'  echo Already have ctecorr-{night}.csv\n')
+                ctecorrfile = findfile('ctecorrnight', night=night)
+                fname = os.path.basename(ctecorrfile)
+                fx.write(f'if [ -f {ctecorrfile} ]; then\n')
+                fx.write(f'  echo Already have {fname}\n')
                 fx.write(f'else\n')
                 fx.write(f'  echo running {cmd}\n')
                 fx.write(f'  {cmd}\n')

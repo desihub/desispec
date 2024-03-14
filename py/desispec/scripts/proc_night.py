@@ -421,7 +421,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             write_table(proctable, tablename=proc_table_pathname)
         sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
-                         dry_run=dry_run)
+                         dry_run=dry_run, logfunc=log.info)
         return prow, proctable
 
     ## Actually process the calibrations
@@ -507,7 +507,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
         sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
-                         dry_run=dry_run)
+                         dry_run=dry_run, logfunc=log.info)
 
         ## Flush the outputs
         sys.stdout.flush()
@@ -562,7 +562,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     ######## Submit caliblink if requested ########
 
     if 'linkcal' in cal_override and calibjobs['linkcal'] is None:
-        log.warning(f"Only using refnight from the override file for cals.")
+        log.info("Linking calibration files listed in override files: "
+                 + f"{files_to_link}")
         prow = default_prow()
         prow['INTID'] = int_id
         int_id += 1
@@ -598,7 +599,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     do_bias = (len(zeros) > 0 and 'biasnight' not in files_to_link
                and not calibjobs['completed']['nightlybias'])
     do_badcol = len(darks) > 0 and 'badcolumns' not in files_to_link
-    do_cte = (len(cte1s) > 0 and len(flats) > 0) and 'ctecorr' not in files_to_link
+    do_cte = (len(cte1s) > 0 and len(flats) > 0) and 'ctecorrnight' not in files_to_link
     ## If no dark or ctes, do the nightlybias
     if do_bias and not do_badcol and not do_cte and not calibjobs['completed']['ccdcalib']:
         log.info("\nNo dark or cte found. Submitting nightlybias before "
@@ -620,6 +621,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow, ptable = create_submit_add_and_save(prow, ptable)
         calibjobs[prow['JOBDESC']] = prow.copy()
         calibjobs['completed'][prow['JOBDESC']] = True
+        log.info("Performed nightly bias as no dark or cte passed cuts.")
     elif (do_badcol or do_cte) and not calibjobs['completed']['ccdcalib']:
         ######## Submit ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
@@ -657,6 +659,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                                       extra_job_args=extra_job_args)
             calibjobs[prow['JOBDESC']] = prow.copy()
             calibjobs['completed'][prow['JOBDESC']] = True
+            log.info(f"Submitted ccdcalib job with {do_bias=}, "
+                     + f"{do_badcol=}, {do_cte=}")
 
     ######## Submit arcs and psfnight ########
     if len(arcs)>0 and not calibjobs['completed']['psfnight']:
@@ -665,7 +669,6 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
             if arc_erow['EXPID'] in processed_cal_expids:
                 continue
             prow, int_id = make_exposure_prow(arc_erow, int_id, calibjobs)
-            log.info(f"\nProcessing: {prow}\n")
             prow, ptable = create_submit_add_and_save(prow, ptable)
             arc_prows.append(prow)
 

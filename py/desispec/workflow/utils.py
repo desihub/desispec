@@ -267,12 +267,14 @@ def sleep_and_report(sleep_duration, message_suffix="", logfunc=print, dry_run=F
         logfunc: func. Default is print. The function used to serve the message to the user.
         dry_run: bool. Default is False. Whether to perform the action (dry_run=False) or pretend (True).
     """
+    logfunc("\n\n")
     message = f"Sleeping {sleep_duration}s {message_suffix}"
     if dry_run:
-        logfunc(f"\n\nDry run, not sleeping instead of: '{message}'\n\n")
+        logfunc(f"Dry run, not sleeping instead of: '{message}'")
     else:
-        logfunc(f"\n\n{message}")
+        logfunc(f"{message}")
         if sleep_duration > 10:
             sys.stdout.flush()
         time.sleep(sleep_duration)
-        logfunc(f"Resuming...\n\n")
+        logfunc(f"Resuming...")
+    logfunc("\n\n")
