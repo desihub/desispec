@@ -62,7 +62,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         night (int): The night of data to be processed. Exposure table must exist.
         proc_obstypes (list or np.array, optional): A list of exposure OBSTYPE's
             that should be processed (and therefore added to the processing table).
-        z_submit_types (list of str or comma-separated list of str, optional):
+        z_submit_types (list of str):
             The "group" types of redshifts that should be submitted with each
             exposure. If not specified, default for daily processing is
             ['cumulative', 'pernight-v0']. If false, 'false', or [], then no
@@ -197,6 +197,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 log.info(f"True night is {true_night}, but running for {night=}")
         else:
             night = true_night
+
+        if science_laststeps is None:
+            science_laststeps = ['all', 'skysub', 'fluxcal']
+
+        if z_submit_types is None and not no_redshifts:
+            z_submit_types = ['cumulatives']
 
         if during_operating_hours(dry_run=dry_run) and (true_night == night):
             still_acquiring = True
@@ -581,6 +587,9 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow['OBSTYPE'] = 'link'
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = curnight
+        if 'refnight' in cal_override['linkcal']:
+            refnight = int(cal_override['linkcal']['refnight'])
+            prow = define_and_assign_dependency(prow, calibjobs, refnight=refnight)
         ## create dictionary to carry linking information
         linkcalargs = cal_override['linkcal']
         prow, ptable = create_submit_add_and_save(prow, ptable,

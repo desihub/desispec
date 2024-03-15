@@ -27,7 +27,7 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname,
     create_desi_proc_tilenight_batch_script, create_linkcal_batch_script
 from desispec.workflow.utils import pathjoin, sleep_and_report, \
     load_override_file
-from desispec.workflow.tableio import write_table
+from desispec.workflow.tableio import write_table, load_table
 from desispec.workflow.proctable import table_row_to_dict, erow_to_prow
 from desiutil.log import get_logger
 
@@ -701,7 +701,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
+def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
+                                 refnight=None):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -720,6 +721,7 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
         use_tilenight, bool. Default is False. If True, use desi_proc_tilenight
             for prestdstar, stdstar,and poststdstar steps for
             science exposures.
+        refnight, int. The reference night for linking jobs
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except
@@ -778,6 +780,22 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False):
             dependency = calibjobs['badcol']
         else:
             dependency = calibjobs['linkcal']
+    elif prow['JOBDESC'] == 'linkcal' and refnight is not None:
+        dependency = None
+        ## For link cals only, enable cross-night dependencies if available
+        refproctable = findfile('proctable', night=refnight)
+        if os.path.exists(refproctable):
+            ptab = load_table(tablename=refproctable, tabletype='proctable')
+            ## This isn't perfect because we may depend on jobs that aren't
+            ## actually being linked
+            ## Also allows us to proceed even if jobs don't exist yet
+            deps = []
+            for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                if job in ptab['JOBDESC']:
+                    ## add prow to dependencies
+                    deps.append(ptab[ptab['JOBDESC']==job][0])
+            if len(deps) > 0:
+                dependency = deps
     else:
         dependency = None
 
@@ -1156,6 +1174,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         all_valid_states = list(resubmission_states.copy())
         all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','COMPLETED'])
         for idep in np.sort(np.atleast_1d(ideps)):
+            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
+                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
+                            + "This is expected since it's from another day. "
+                            + f" This dependency will not be checked or "
+                            + "resubmitted")
+                continue
             if proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
                 log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
@@ -1167,6 +1191,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                 return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
+            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
+                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
+                            + "This is expected since it's from another day. "
+                            + f" This dependency will not be checked or "
+                            + "resubmitted")
+                continue
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
                 proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
                                                               proc_table, submits,

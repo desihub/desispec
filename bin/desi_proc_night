@@ -120,14 +120,12 @@ def parse_args():
         args.science_laststeps = [laststep.strip().lower() for laststep in
                                   args.science_laststeps.split(',')]
 
-    if args.z_submit_types is None:
-        pass
+    if args.z_submit_types.lower() in ['false', 'none']:
+        args.z_submit_types = None
+        args.no_redshifts = True
     else:
-        if args.z_submit_types.lower() in ['false', 'none']:
-            args.z_submit_types = None
-        else:
-            args.z_submit_types = [ztype.strip().lower() for ztype in
-                                   args.z_submit_types.split(',')]
+        args.z_submit_types = [ztype.strip().lower() for ztype in
+                               args.z_submit_types.split(',')]
 
     return args
 
