@@ -10,8 +10,9 @@ import multiprocessing as mp
 import numpy as np
 from desiutil.log import get_logger
 import desispec.correct_cte
-from desispec.io.util import decode_camword, camword_union, difference_camwords, parse_cameras
-from desispec.io.util import get_tempfilename
+from desispec.io.util import (decode_camword, camword_union, camword_intersection,
+                              difference_camwords, parse_cameras, erow_to_goodcamword,
+                              get_tempfilename)
 from desispec.io import findfile
 from desispec.parallel import default_nproc
 from desispec.workflow.tableio import load_table
@@ -79,12 +80,22 @@ def main(args=None, comm=None):
         if len(sci_etable) == 0:
             log.warning(f'No science exposures on {args.night}, but calculating CTE corrections anyway...')
         else:
-            camword = parse_cameras(args.cameras)
-            goodcamwords = [difference_camwords(camword, badcamword) for badcamword in sci_etable['BADCAMWORD']]
-            anygoodcamword = camword_union(goodcamwords)
-            if camword != anygoodcamword:
-                log.warning(f'Trimming {camword} to {anygoodcamword} needed by science exposures')
-                args.cameras = decode_camword(anygoodcamword)
+            #- List of good camwords per exposure
+            all_goodcamwords = [erow_to_goodcamword(row, suppress_logging=True) for row in etable]
+
+            #- union = camword of any camera that was good on any exposure
+            any_goodcamword = camword_union(all_goodcamwords)
+            log.debug('any_goodcamword = %s', any_goodcamword)
+
+            #- trim to just the ones we are asking for in args
+            args_camword = parse_cameras(args.cameras, loglevel='WARNING')
+            final_camword = camword_intersection([args_camword, any_goodcamword])
+            log.debug('args_camword=%s x any_goodcamword=%s -> final_camword=%s',
+                      args_camword, any_goodcamword, final_camword)
+
+            if args_camword != final_camword:
+                log.warning(f'Trimming {args_camword} to {anygoodcamword} needed by science exposures')
+                args.cameras = decode_camword(final_camword)
 
     #- Assemble options to pass for each camera
     #- so that they can be optionally parallelized

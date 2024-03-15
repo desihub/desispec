@@ -5,23 +5,25 @@ desispec.correct_cte
 Methods to fit CTE effects and remove them from images.
 """
 
-from copy import deepcopy
 import os
+import copy
+from functools import partial
+
 import numpy as np
+from scipy.optimize import least_squares
+from scipy.ndimage import median_filter
+from astropy.stats import sigma_clipped_stats
+from astropy.table import Table
 import fitsio
+
+from desiutil.log import get_logger
+
+import desispec.preproc
 from desispec.calibfinder import CalibFinder
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
-import desispec.preproc
-from desiutil.log import get_logger
-from functools import partial
-from astropy.stats import sigma_clipped_stats
-from scipy.optimize import least_squares
-from desispec.image_model import compute_image_model
-from astropy.table import Table
 from desispec.qproc import qfiberflat, qsky, rowbyrowextract
-import copy
-from scipy.ndimage import median_filter
-
+from desispec.image_model import compute_image_model
+from desispec.workflow.tableio import load_table
 
 def apply_multiple_cte_effects(amp, locations, ctefuns):
     """Apply a series of traps to an amp.
@@ -571,12 +573,12 @@ def get_cte_images(night, camera, expids=None):
     """
     # inside func to avoid circular import
     import desispec.io
-    import desispec.io.util
+    from desispec.io.util import decode_camword, erow_to_goodcamword, get_tempfilename
 
     log = get_logger()
 
     if expids is not None:
-        filename = desispec.io.findfile('raw', night, expids[0])
+        filename = desispec.io.findfile('raw', night=night, expid=expids[0], readonly=True)
         header   = fitsio.read_header(filename, camera.upper())
         if not needs_ctecorr(header):
             log.info(f"No CTE correction needed for {night} {camera}")
@@ -594,36 +596,32 @@ def get_cte_images(night, camera, expids=None):
             log.critical(mess)
             raise RuntimeError(mess)
 
-        #- Read exptable and keep just the good flats
-        exptable = Table.read(exptablefn)
-        keep = exptable['OBSTYPE'] == 'flat'
-        keep &= exptable['LASTSTEP'] != 'ignore'
-        exptable = exptable[keep]
+        #- Read the exposure table and trim to just the good exposures covering this camera
+        exptable = load_table(exptablefn, tabletype='exptable')
+        keep = np.ones(len(exptable), dtype=bool)
+        for i, erow in enumerate(exptable):
+            if ((erow['LASTSTEP'] == 'ignore') or
+                (camera not in decode_camword(erow_to_goodcamword(erow, suppress_logging=True)))):
+                keep[i] = False
 
-        #- First check 1 sec flat header to see if we even need to do CTE corr
-        selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1)
-        if np.sum(selection)<1 :
-            mess = f"No 1 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
-            log.critical(mess)
-            raise RuntimeError(mess)
+        if np.sum(keep) == 0:
+            log.info(f'No good exposures on {night} for {camera}, so no CTE correction needed')
+            return None
+        else:
+            exptable = exptable[keep]
 
-        filename = desispec.io.findfile('raw', night, exptable['EXPID'][selection][0])
+        #- check the first exp of any OBSTYPE covering this camera to see if CTE corr is needed
+        filename = desispec.io.findfile('raw', night=night, expid=exptable['EXPID'][0], readonly=True)
         header   = fitsio.read_header(filename, camera.upper())
         if not needs_ctecorr(header):
             log.info(f"No CTE correction needed for {night} {camera}")
             return None
 
-        #- CTE correction is needed, so also filter by CAMWORD and BADCAMWORD
-        keep = np.ones(len(exptable), dtype=bool)
-        for i in range(len(keep)):
-            if camera not in desispec.io.util.decode_camword(str(exptable['CAMWORD'][i])):
-                keep[i] = False
-            elif camera in desispec.io.util.decode_camword(str(exptable['BADCAMWORD'][i])):
-                keep[i] = False
-
+        #- CTE correction is needed, so trim to OBSTYPE=flat
+        keep = exptable['OBSTYPE'] == 'flat'
         exptable = exptable[keep]
 
-        #- Refilter for 1 sec flat and 120 sec flat (might have been dropped due to BADCAMWORD)
+        #- Find a 1sec and 120sec flat
         selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1)
         if np.sum(selection)<1 :
             mess = f"No good {camera} 1 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
@@ -644,12 +642,12 @@ def get_cte_images(night, camera, expids=None):
 
     images = list()
     for expid in expids:
-        preproc_filename = desispec.io.findfile('preproc_for_cte', night, expid, camera)
+        preproc_filename = desispec.io.findfile('preproc_for_cte', night=night, expid=expid, camera=camera)
         if not os.path.isfile(preproc_filename) :
             log.info(f"Computing {preproc_filename}")
-            infile = desispec.io.findfile('raw', night, expid)
+            infile = desispec.io.findfile('raw', night=night, expid=expid, readonly=True)
             image  = desispec.io.read_raw(infile, camera, no_cte_corr=True)
-            tmpfile = desispec.io.util.get_tempfilename(preproc_filename)
+            tmpfile = get_tempfilename(preproc_filename)
             desispec.io.write_image(tmpfile,image)
             os.rename(tmpfile, preproc_filename)
             log.info(f"Wrote {preproc_filename}")
@@ -856,7 +854,7 @@ def correct_image_via_model(image, niter=5, cte_params_filename=None):
         log.info("No CTE correction to do for this image, return original")
         return image
 
-    outimage = deepcopy(image)
+    outimage = copy.deepcopy(image)
 
     previous_rms = 0.
     for i in range(niter):
