@@ -98,6 +98,10 @@ def parse_args():
                              + "of calibrations or a valid override file to link"
                              + " to calibrations in order to proceed with "
                              + "science processing.")
+    parser.add_argument("--psf-linking-without-fflat", action="store_true",
+                        help="If set then the code will NOT raise an error "
+                             + "if asked to link psfnight calibrations "
+                             + "without fiberflatnight calibrations.")
 
     args = parser.parse_args()
 

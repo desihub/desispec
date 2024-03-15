@@ -162,6 +162,18 @@ class TestProcNight(unittest.TestCase):
                                                 dry_run_level=3)
         os.remove(self.override_file)
 
+        ## Test no psfnight but still fiberflatnight and flag set to allow
+        testdict = base_override_dict.copy()
+        testdict['calibration']['linkcal']['include'] = 'psfnight'
+        proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                 dry_run_level=3,
+                                                                 psf_linking_without_fflat=True)
+        for job in ['linkcal', 'ccdcalib', 'nightlyflat']:
+            self.assertTrue(job in proctable['JOBDESC'])
+        for job in ['nightlybias', 'psfnight']:
+            self.assertTrue(job not in proctable['JOBDESC'])
+
+
         ## Test link fiberflatnight
         testdict = base_override_dict.copy()
         testdict['calibration']['linkcal']['include'] = 'fiberflatnight'
@@ -254,6 +266,18 @@ class TestProcNight(unittest.TestCase):
             proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
                                                 dry_run_level=3)
         os.remove(self.override_file)
+
+        ## Test link everything except fiberflatnight with flag set to allow
+        calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+        testdict = base_override_dict.copy()
+        testdict['calibration']['linkcal']['include'] = calib_files
+        proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                 dry_run_level=3,
+                                                                 psf_linking_without_fflat=True)
+        for job in ['linkcal', 'nightlyflat']:
+            self.assertTrue(job in proctable['JOBDESC'])
+        for job in ['nightlybias', 'ccdcalib', 'psfnight']:
+            self.assertTrue(job not in proctable['JOBDESC'])
 
         ## Test link everything except psfnight
         calib_files = 'biasnight,badcolumns,ctecorrnight,fiberflatnight'

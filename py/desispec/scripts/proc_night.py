@@ -52,7 +52,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                daily=False, specprod=None, path_to_data=None, exp_obstypes=None,
                camword=None, badcamword=None, badamps=None,
                exps_to_ignore=None, sub_wait_time=0.5, verbose=False,
-               dont_require_cals=False):
+               dont_require_cals=False, psf_linking_without_fflat=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
     night, or used to process data currently available on a given night using
@@ -156,6 +156,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         dont_require_cals: bool. Default False. If set then the code doesn't
             require either a valid set of calibrations or a valid override file
             to link to calibrations in order to proceed with science processing.
+        psf_linking_without_fflat: bool. Default False. If set then the code
+            will NOT raise an error if asked to link psfnight calibrations
+            without fiberflatnight calibrations.
     """
     ## Get logger
     log = get_logger()
@@ -373,7 +376,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                                                  files_not_linked)
         ## Fiberflatnights need to be generated with psfs from same time, so
         ## can't link psfs without also linking fiberflatnight
-        if 'psfnight' in files_to_link and not 'fiberflatnight' in files_to_link:
+        if 'psfnight' in files_to_link and not 'fiberflatnight' in files_to_link \
+                and not psf_linking_without_fflat:
             err = "Must link fiberflatnight if linking psfnight"
             log.error(err)
             raise ValueError(err)
