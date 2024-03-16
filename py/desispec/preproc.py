@@ -855,7 +855,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.info(f'Camera {camera} needs CTE corrections')
             if cte_params_filename is None:
                 if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):
-                    mess = "No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data, so cannot do a CTE correction.  Run with --no-cte-corr to skip."
+                    mess = f"No DESI_SPECTRO_REDUX or no SPECPROD defined, and no external specified with option --cte-params.  Cannot find calibration data for {camera}, so cannot do a CTE correction.  Run with --no-cte-corr to skip."
                     log.critical(mess)
                     raise RuntimeError(mess)
                 else:
