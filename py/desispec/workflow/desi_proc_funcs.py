@@ -1160,7 +1160,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         elif use_specter:
             cmd += f' --use-specter'
         if laststeps is not None:
-            cmd += f' --science-laststeps="{",".join(laststeps)}"'
+            cmd += f' --laststeps="{",".join(laststeps)}"'
 
         cmd += f' --timingfile {timingfile}'
 
