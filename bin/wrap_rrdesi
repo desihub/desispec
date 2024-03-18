@@ -49,20 +49,6 @@ if args.input_dir is not None:
 cpu_per_task = args.cpu_per_task
 overwrite = args.overwrite
 
-##Find args to pass to redrock
-#args_to_pass = sys.argv[1:]
-#args_with_val = ['-i', '-o', '--input-dir', '--input', '--output', '--cpu-per-task']
-#args_without_val = ['--gpu', '--overwrite', '--gpuonly']
-#for a in args_with_val:
-#    if args_to_pass.count(a) > 0:
-#        x = args_to_pass.index(a)
-#        args_to_pass.pop(x)
-#        if x < len(a):
-#            args_to_pass.pop(x)
-#for a in args_without_val:
-#    if args_to_pass.count(a) > 0:
-#        args_to_pass.remove(a)
-
 #- global communicator across all nodes
 comm = MPI.COMM_WORLD
 comm_rank = comm.rank
