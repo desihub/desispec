@@ -40,13 +40,28 @@ parser.add_argument("--cpu-per-task", type=int, default=32,
         required=False, help="Maximum number of CPUs to use on each input file")
 parser.add_argument("--gpuonly", action="store_true",
         required=False, help="Use ONLY GPUs")
-args = parser.parse_args()
+#Gather args and any unrecognized args are to be passed to redrock
+args, args_to_pass = parser.parse_known_args()
 inputdir = None
 outdir = args.output
 if args.input_dir is not None:
     inputdir = args.input_dir
 cpu_per_task = args.cpu_per_task
 overwrite = args.overwrite
+
+##Find args to pass to redrock
+#args_to_pass = sys.argv[1:]
+#args_with_val = ['-i', '-o', '--input-dir', '--input', '--output', '--cpu-per-task']
+#args_without_val = ['--gpu', '--overwrite', '--gpuonly']
+#for a in args_with_val:
+#    if args_to_pass.count(a) > 0:
+#        x = args_to_pass.index(a)
+#        args_to_pass.pop(x)
+#        if x < len(a):
+#            args_to_pass.pop(x)
+#for a in args_without_val:
+#    if args_to_pass.count(a) > 0:
+#        args_to_pass.remove(a)
 
 #- global communicator across all nodes
 comm = MPI.COMM_WORLD
@@ -129,6 +144,8 @@ if myhost < ncomm:
                     print ("Error: "+str(outfile)+" exists.  Skipping.")
                 continue
         opts = ['-i', infile, '-o', outfile]
+        if args_to_pass is not None:
+            opts.extend(args_to_pass)
         if use_gpu:
             opts.append('--gpu')
         desi.rrdesi(opts, comm=subcomm)
