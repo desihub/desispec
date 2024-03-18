@@ -214,6 +214,10 @@ class CalibFinder() :
                         # it happens with the current version of fitsio
                         # if the value = 'None'.
                         pass
+
+        # save header in object for reference
+        self.header = header
+
         if "CAMERA" not in header :
             log.error("no 'CAMERA' keyword in header, cannot find calib")
             log.error("header is:")
