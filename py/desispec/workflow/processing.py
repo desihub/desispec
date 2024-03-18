@@ -514,7 +514,9 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 nightlycte = extra_job_args['nightlycte']
             if 'cte_expids' in extra_job_args:
                 cte_expids = extra_job_args['cte_expids']
-            if joint:
+            ## run known joint jobs as joint even if unspecified
+            ## in the future we can eliminate the need for "joint"
+            if joint or prow['JOBDESC'].lower() in ['psfnight', 'nightlyflat']:
                 cmd = desi_proc_joint_fit_command(prow, queue=queue)
             else:
                 cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)

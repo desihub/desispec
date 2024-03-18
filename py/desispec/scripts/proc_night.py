@@ -33,7 +33,7 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     night_to_starting_iid, make_joint_prow, \
     set_calibrator_flag, make_exposure_prow, \
 update_calibjobs_with_linking, all_calibs_submitted
-from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
+from desispec.workflow.queue import update_from_queue, any_jobs_failed
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix
 
@@ -48,11 +48,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                tiles=None, surveys=None, science_laststeps=None,
                all_tiles=False, specstatus_path=None, use_specter=False,
                no_cte_flats=False, complete_tiles_thrunight=None,
-               all_cumulatives=False,
-               daily=False, specprod=None, path_to_data=None, exp_obstypes=None,
-               camword=None, badcamword=None, badamps=None,
-               exps_to_ignore=None, sub_wait_time=0.5, verbose=False,
-               dont_require_cals=False, psf_linking_without_fflat=False):
+               all_cumulatives=False, daily=False, specprod=None,
+               path_to_data=None, exp_obstypes=None, camword=None,
+               badcamword=None, badamps=None, exps_to_ignore=None,
+               sub_wait_time=0.5, verbose=False, dont_require_cals=False,
+               psf_linking_without_fflat=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
     night, or used to process data currently available on a given night using
@@ -311,13 +311,14 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## If running in daily mode, or requested, then update the exposure table
     ## This reads in and writes out the exposure table to disk
     if update_exptable:
+        log.info("Running update_exposure_table.")
         update_exposure_table(night=night, specprod=specprod,
                               exp_table_pathname=exp_table_pathname,
                               path_to_data=path_to_data, exp_obstypes=exp_obstypes,
                               camword=camword, badcamword=badcamword, badamps=badamps,
                               exps_to_ignore=exps_to_ignore,
                               dry_run_level=dry_run_level, verbose=verbose)
-
+        log.info("Done with update_exposure_table.\n\n")
     ## Combine the table names and types for easier passing to io functions
     table_pathnames = [exp_table_pathname, proc_table_pathname]
     table_types = ['exptable', 'proctable']
@@ -337,13 +338,17 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
-        if any_jobs_not_complete(ptable['STATUS']):
+        if any_jobs_failed(ptable['STATUS']):
             if not ignore_proc_table_failures:
                 err = "Some jobs have an incomplete job status. This script " \
-                      + "will not fix them. You should remedy those first. " \
-                      + "To proceed anyway use '--ignore-proc-table-failures'. Exiting."
+                      + "will not fix them. You should remedy those first. "
                 log.error(err)
-                raise AssertionError(err)
+                ## if the failures are in calibrations, then crash since
+                ## we need them for any new jobs
+                if any_jobs_failed(ptable['STATUS'][ptable['CALIBRATOR'] > 0]):
+                    err += "To proceed anyway use "
+                    err += "'--ignore-proc-table-failures'. Exiting."
+                    raise AssertionError(err)
             else:
                 log.warning("Some jobs have an incomplete job status, but "
                       + "you entered '--ignore-proc-table-failures'. This "
