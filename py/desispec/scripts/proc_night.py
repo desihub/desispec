@@ -613,7 +613,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
     ## Otherwise proceed with submitting the calibrations
     ## Define objects to process
-    dark_erow, flats, ctes, cte1s = list(), list(), list(), list()
+    darks, flats, ctes, cte1s = list(), list(), list(), list()
     zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
     arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'dark' in cal_etable['OBSTYPE']:
