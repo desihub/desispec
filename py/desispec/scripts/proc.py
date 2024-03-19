@@ -112,6 +112,7 @@ def main(args=None, comm=None):
         thisfile=os.path.dirname(os.path.abspath(__file__))
         thistime=datetime.datetime.fromtimestamp(start_imports).isoformat()
         log.info(f'rank 0 started {thisfile} at {thistime}')
+
     #- Start timer; only print log messages from rank 0 (others are silent)
     timer = desiutil.timer.Timer(silent=(rank>0))
 

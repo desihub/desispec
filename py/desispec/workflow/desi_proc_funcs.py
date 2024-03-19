@@ -704,7 +704,7 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
         fx.write(f'# {jobdesc} with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
-        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
         # fx.write("export OMP_NUM_THREADS=1\n")
 
         fx.write(f'\n# Link refnight to new night\n')
@@ -933,7 +933,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
-        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
 
         mps_wrapper=''
         if jobdesc.lower() == 'arc':
@@ -1167,7 +1167,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
-        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
 
         mps_wrapper=''
         if system_name == 'perlmutter-gpu':

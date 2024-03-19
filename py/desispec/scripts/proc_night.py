@@ -15,6 +15,7 @@ import os
 import sys
 import time
 import re
+from socket import gethostname
 from astropy.table import Table, vstack
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
@@ -162,6 +163,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     """
     ## Get logger
     log = get_logger()
+    log.info(f'----- Processing {night} at {time.asctime()} -----')
+    log.info(f"SLURM_JOB_ID={os.getenv('SLURM_JOB_ID')} on {gethostname()}")
 
     ## Inform user of how some parameters will be used
     if camword is not None:
@@ -456,10 +459,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Require some minimal level of calibrations to process science exposures
     if require_cals and not all_calibs_submitted(calibjobs['completed']):
         err = (f"Required to have at least flat calibrations via override link"
-               + f" or nightlyflat")
+               + f" or nightlyflat before proceeding.")
         log.error(err)
         ## If still acquiring new data in daily mode, don't exit with error code
         ## But do exit
+        log.info(f'Stopping at {time.asctime()}\n')
         if still_acquiring:
             if len(ptable) > 0:
                 processed = np.isin(full_etable['EXPID'],
@@ -467,6 +471,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 unproc_table = full_etable[~processed]
             else:
                 unproc_table = full_etable
+
             return ptable, unproc_table
         else:
             sys.exit(1)
@@ -561,9 +566,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     if still_acquiring:
         log.info(f"Current submission of exposures "
-                 + f"for {night=} are complete except for last tile.\n\n\n\n")
+                 + f"for {night=} are complete except for last tile at {time.asctime()}.\n\n\n\n")
     else:
-        log.info(f"All done: Completed submission of exposures for night {night}.\n")
+        log.info(f"All done: Completed submission of exposures for night {night} at {time.asctime()}.\n")
         
     return ptable, unproc_table
 
