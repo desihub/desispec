@@ -153,9 +153,14 @@ def main(args=None):
     if spectra.meta is None:
         spectra.meta = dict()
 
-    for i, filename in enumerate(foundframefiles):
+    max_header_names = 1000
+    # we can't write the keywords for more files
+    nframefiles = len(foundframefiles)
+    for i, filename in enumerate(foundframefiles[:max_header_names]):
         spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
-
+    if nframefiles > max_header_names:
+        spectra.meta['INFILNUM'] = nframefiles
+        
     #- Add healpix provenance keywords
     if args.healpix:
         spectra.meta['SPGRP'] = 'healpix'
