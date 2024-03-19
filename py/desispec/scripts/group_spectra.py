@@ -159,6 +159,7 @@ def main(args=None):
     for i, filename in enumerate(foundframefiles[:max_header_names]):
         spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
     if nframefiles > max_header_names:
+        log.warning(f'There were more than {max_header_names} input files. Only {max_header_names} filenames were written into the header')
         spectra.meta['INFILNUM'] = nframefiles
         
     #- Add healpix provenance keywords
