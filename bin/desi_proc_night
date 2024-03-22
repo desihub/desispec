@@ -102,6 +102,10 @@ def parse_args():
                         help="If set then the code will NOT raise an error "
                              + "if asked to link psfnight calibrations "
                              + "without fiberflatnight calibrations.")
+    parser.add_argument("--still-acquiring", action=argparse.BooleanOptionalAction,
+                        help="in --daily mode, assume more data is still coming even if "
+                             + "outside of normal observing hours. "
+                             + "Use --no-still-acquiring to flag as done obtaining data.")
 
     args = parser.parse_args()
 
