@@ -64,6 +64,13 @@ def main(args=None):
 # of them every time we call generate_tile_redshift_scripts()
 _allexp = None
 
+def reset_allexp_cache():
+    """
+    Utility script to reset the _allexp cache to ensure it is re-read from disk
+    """
+    global _allexp
+    _allexp = None
+
 def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
                                    spectrographs=None, camword=None,
                                    max_gpuprocs=None, no_gpu=False,
