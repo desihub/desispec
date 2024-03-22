@@ -16,7 +16,6 @@ import numpy as np
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.redshifts import get_ztile_script_pathname
 from desispec.workflow.desi_proc_funcs import get_desi_proc_tilenight_batch_file_pathname
-from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.io import findfile
 from desispec.test.util import link_rawdata
 
@@ -331,14 +330,18 @@ class TestProcNight(unittest.TestCase):
                                                     dry_run_level=1, sub_wait_time=0.0)
 
 
-                etable = load_table(get_exposure_table_pathname(self.dailynight))
+                etable = load_table(findfile('exposure_table', self.dailynight))
+                keep = etable['LASTSTEP'] != 'ignore'
+                etable = etable[keep]
 
                 ## if 1sec flat has arrived, cals should be submitted, otherwise nothing processed yet
                 has_1secflat = np.any((etable['OBSTYPE']=='flat') & (np.abs(etable['EXPTIME']-1)<0.1))
                 if has_1secflat:
-                    ## if 1sec flat has arrived, cals should be submitted
-                    # for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
-                    #     self.assertIn(jobdesc, proctable['JOBDESC'])
+                    ## if 1sec flat has arrived, cals should be submitted.
+                    ## Note: this could be different if we switch to testing a daily night with
+                    ## and override file, in which case e.g. it could have linkcal instead of nightlyflat
+                    for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
+                        self.assertIn(jobdesc, proctable['JOBDESC'])
                     pass
                 else:
                     self.assertEqual(len(proctable), 0)

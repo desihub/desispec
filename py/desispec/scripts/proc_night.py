@@ -54,7 +54,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                badcamword=None, badamps=None, exps_to_ignore=None,
                sub_wait_time=0.5, verbose=False, dont_require_cals=False,
                psf_linking_without_fflat=False,
-               still_acquiring=None):
+               still_acquiring=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
     night, or used to process data currently available on a given night using
@@ -162,8 +162,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             will NOT raise an error if asked to link psfnight calibrations
             without fiberflatnight calibrations.
         still_acquiring: bool. If True, assume more data might be coming, e.g.
-            wait for additional exposures of latest tile.  If None, auto-derive
-            True/False based upon night and current time.
+            wait for additional exposures of latest tile.  If False, auto-derive
+            True/False based upon night and current time. Primarily for testing.
     """
     ## Get logger
     log = get_logger()
@@ -190,31 +190,30 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     elif dry_run_level > 0:
         dry_run = True
 
-    ## What night are we running on?
-    true_night = what_night_is_it()
-    if night is not None:
-        night = int(night)
-    else:
-        night = true_night
-
-    ## Set a flag to determine whether to process the last tile in the exposure table
-    ## or not. This is used in daily mode when processing and exiting mid-night.
-    if still_acquiring is None:
-        if daily and during_operating_hours(dry_run=dry_run) and (true_night == night):
-            still_acquiring = True
-        else:
-            still_acquiring = False
-
     ## If running in daily mode, change a bunch of defaults
     if daily:
-        if true_night != night:
-            log.info(f"True night is {true_night}, but running daily for {night=}")
+        ## What night are we running on?
+        true_night = what_night_is_it()
+        if night is not None:
+            night = int(night)
+            if true_night != night:
+                log.info(f"True night is {true_night}, but running daily for {night=}")
+        else:
+            night = true_night
 
         if science_laststeps is None:
             science_laststeps = ['all', 'skysub', 'fluxcal']
 
         if z_submit_types is None and not no_redshifts:
             z_submit_types = ['cumulatives']
+
+        ## still_acquiring is flag to determine whether to process the last tile in the exposure table
+        ## or not. This is used in daily mode when processing and exiting mid-night.
+        ## override still_acquiring==False if daily mode during observing hours
+        if during_operating_hours(dry_run=dry_run) and (true_night == night):
+            if still_acquiring is False:
+                log.info(f'Daily mode during observing hours on current night, so assuming that more data might arrive and setting still_acquiring=True')
+            still_acquiring = True
 
         update_exptable = True    
         append_to_proc_table = True
