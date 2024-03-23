@@ -451,6 +451,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             #- run zmtl for cumulative redshifts but not others
             run_zmtl = (prow['JOBDESC'] == 'cumulative')
             no_afterburners = False
+            print(f"entering tileredshiftscript: {prow}")
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
                                                                      nights=[prow['NIGHT']], expids=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,
@@ -915,8 +916,9 @@ def parse_previous_tables(etable, ptable, night):
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
-    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None, 'psfnight': None,
-                 'nightlyflat': None}
+    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
+                 'psfnight': None, 'nightlyflat': None, 'linkcal': None,
+                 'completed': dict()}
     curtype,lasttype = None,None
     curtile,lasttile = None,None
 
