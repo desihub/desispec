@@ -342,7 +342,6 @@ class TestProcNight(unittest.TestCase):
                     ## and override file, in which case e.g. it could have linkcal instead of nightlyflat
                     for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
                         self.assertIn(jobdesc, proctable['JOBDESC'])
-                    pass
                 else:
                     self.assertEqual(len(proctable), 0)
 
