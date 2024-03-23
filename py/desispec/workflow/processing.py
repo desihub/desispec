@@ -466,8 +466,13 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 log.error(f"More than one redshifts returned for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
                           f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
                 log.info(f"Returned scriptnames were {scripts}")
+            elif len(scripts) == 0:
+                msg = f'No scripts were generated for {prow=}'
+                log.critical(prow)
+                raise ValueError(msg)
             else:
                 scriptpathname = scripts[0]
+
     elif prow['JOBDESC'] == 'linkcal':
         refnight, include, exclude = -99, None, None
         if 'refnight' in extra_job_args:

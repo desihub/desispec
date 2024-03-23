@@ -13,28 +13,45 @@ import yaml
 
 import numpy as np
 
-from desispec.workflow.tableio import load_table
+from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.redshifts import get_ztile_script_pathname
 from desispec.workflow.desi_proc_funcs import get_desi_proc_tilenight_batch_file_pathname
 from desispec.io import findfile
+from desispec.test.util import link_rawdata
 
 from desispec.scripts.proc_night import proc_night
+import desispec.scripts.tile_redshifts
 from desiutil.log import get_logger
+
+## directory with real raw data for testing at NERSC
+_dailynight = 20230915
+_real_rawdir = os.path.expandvars(f'$DESI_ROOT/spectro/data')
+_real_rawnight_dir = os.path.join(_real_rawdir, str(_dailynight))
 
 class TestProcNight(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.night = 20230914
+        cls.dailynight = _dailynight
+
         cls.reduxdir = tempfile.mkdtemp()
+        cls.test_rawdir = tempfile.mkdtemp()
+        cls.test_rawnight_dir = os.path.join(cls.test_rawdir, str(cls.dailynight))
+        os.makedirs(cls.test_rawnight_dir)
+
+        cls.real_rawdir = _real_rawdir
+        cls.real_rawnight_dir = _real_rawnight_dir
+
         cls.specprod = 'test'
         cls.proddir = os.path.join(cls.reduxdir, cls.specprod)
-        cls.night = 20230914
 
         cls.origenv = os.environ.copy()
         os.environ['DESI_SPECTRO_REDUX'] = cls.reduxdir
+        os.environ['DESI_SPECTRO_DATA'] = cls.test_rawdir
         os.environ['SPECPROD'] = cls.specprod
         os.environ['NERSC_HOST'] = 'perlmutter'  # pretend to be on Perlmutter for testing
-        os.environ['DESI_LOGLEVEL'] = 'WARNING' # reduce output from all the proc_night calls
+        ### os.environ['DESI_LOGLEVEL'] = 'WARNING' # reduce output from all the proc_night calls
 
         os.makedirs(cls.proddir)
         expdir = importlib.resources.files('desispec').joinpath('test', 'data', 'exposure_tables')
@@ -44,9 +61,8 @@ class TestProcNight(unittest.TestCase):
         cls.etable = load_table(cls.etable_file)
         cls.override_file = findfile('override', cls.night) # these are created in function
 
-
     def tearDown(self):
-        # remove everything from prod except exposure_tables
+        # remove everything from prod except exposure_table for self.night
         for path in glob.glob(self.proddir+'/*'):
             if os.path.basename(path) == 'exposure_tables':
                 pass
@@ -54,17 +70,23 @@ class TestProcNight(unittest.TestCase):
                 os.remove(path)
             elif os.path.isdir(path):
                 shutil.rmtree(path)
+
         # remove override_file if leftover from failed test
         if os.path.isfile(self.override_file):
             os.remove(self.override_file)
 
+        # remove rawdir/dailynight contents
+        for explink in glob.glob(f'{self.test_rawnight_dir}/*'):
+            os.remove(explink)
+
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.reduxdir)
+        shutil.rmtree(cls.test_rawdir)
         for key in ('DESI_SPECTRO_REDUX', 'SPECPROD', 'NERSC_HOST', 'DESI_LOGLEVEL'):
             if key in cls.origenv:
                 os.environ[key] = cls.origenv[key]
-            else:
+            elif key in os.environ:
                 del os.environ[key]
 
     def test_proc_night(self):
@@ -288,3 +310,60 @@ class TestProcNight(unittest.TestCase):
             self.assertTrue(job in proctable['JOBDESC'])
         for job in ['nightlybias', 'ccdcalib', 'nightlyflat']:
             self.assertTrue(job not in proctable['JOBDESC'])
+
+    @unittest.skipUnless(os.path.isdir(_real_rawnight_dir), f'{_real_rawnight_dir} not available')
+    def test_proc_night_daily(self):
+        """
+        Test proc_night daily mode on nights with partial data
+
+        Requires being at NERSC to inspect input raw data
+        """
+
+        while True:
+            num_newlinks = link_rawdata(self.real_rawnight_dir, self.test_rawnight_dir, numexp=10)
+            desispec.scripts.tile_redshifts.reset_allexp_cache()
+            if num_newlinks == 0:
+                break
+            else:
+                proctable, unproctable = proc_night(self.dailynight, daily=True, still_acquiring=True,
+                                                    z_submit_types=['cumulative',],
+                                                    dry_run_level=1, sub_wait_time=0.0)
+
+
+                etable = load_table(findfile('exposure_table', self.dailynight))
+                keep = etable['LASTSTEP'] != 'ignore'
+                etable = etable[keep]
+
+                ## if 1sec flat has arrived, cals should be submitted, otherwise nothing processed yet
+                has_1secflat = np.any((etable['OBSTYPE']=='flat') & (np.abs(etable['EXPTIME']-1)<0.1))
+                if has_1secflat:
+                    ## if 1sec flat has arrived, cals should be submitted.
+                    ## Note: this could be different if we switch to testing a daily night with
+                    ## and override file, in which case e.g. it could have linkcal instead of nightlyflat
+                    for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
+                        self.assertIn(jobdesc, proctable['JOBDESC'])
+                else:
+                    self.assertEqual(len(proctable), 0)
+
+                ## count science tiles processed
+                if np.any(etable['OBSTYPE'] == 'science'):
+                    proctiles = set(proctable['TILEID'][ proctable['OBSTYPE'] == 'science' ])
+                    exptiles = set(etable['TILEID'][ etable['OBSTYPE'] == 'science' ])
+
+                    ## if last exposure is a science, we should not have processed that tile yet
+                    ## since still_acquiring=True means we'll wait for more data from that tile
+                    if etable['OBSTYPE'][-1] == 'science':
+                        self.assertEqual(len(proctiles), len(exptiles)-1)
+                    ## otherwise we've moved on to non-science, and will have processed all tiles
+                    else:
+                        self.assertEqual(len(proctiles), len(exptiles))
+
+
+        ## Final pass with still_acquiring=False to finish last tile
+        proctable, unproctable = proc_night(self.dailynight, daily=True, still_acquiring=False,
+                                                z_submit_types=['cumulative',],
+                                                dry_run_level=1, sub_wait_time=0.0)
+        proctiles = set(proctable['TILEID'][ proctable['OBSTYPE'] == 'science' ])
+        exptiles = set(etable['TILEID'][ etable['OBSTYPE'] == 'science' ])
+        self.assertEqual(len(proctiles), len(exptiles))
+

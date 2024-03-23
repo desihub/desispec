@@ -97,7 +97,7 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
         last_ind = np.argmax(full_etable['EXPID'])
         if full_etable['OBSTYPE'][last_ind] == 'science':
             last_tile = full_etable['TILEID'][last_ind]
-            log.log(f"Ignoring exposures assosciated with tile {last_tile} since it"
+            log.info(f"Ignoring exposures associated with tile {last_tile} since it"
                     + f" was the last exposure observed and {ignore_last_tile=}")
             sci_etable = sci_etable[sci_etable['TILEID'] != last_tile]
 

@@ -1,6 +1,9 @@
 """
 Utility functions for desispec.tests
 """
+from glob import glob
+import os.path
+
 import numpy as np
 
 from desispec.resolution import Resolution
@@ -165,4 +168,35 @@ def get_blank_spectra(nspec):
 
     return sp
 
+def link_rawdata(real_rawdata_dir, test_rawdata_dir, numexp=1):
+    """
+    Link numexp new expids from real_rawdata_dir in test_rawdata_dir
+
+    Args:
+        real_rawdata_dir (str): path to real raw data dir for night, e.g. $DESI_ROOT/spectro/data/NIGHT
+        test_rawdata_dir (str): path to test raw data dir, where expid-level links will be made
+
+    Options:
+        numexp (int): number of additional expid links to add
+
+    Returns number of new links created
+
+    Compares real_rawdata_dir to test_rawdata_dir, and adds up to
+    numexp new links from test -> real.  This is intended to be used
+    to mimic raw data arriving throughout the night.
+    """
+    real_expdirs = sorted(glob(f'{real_rawdata_dir}/*'))
+    test_expdirs = sorted(glob(f'{test_rawdata_dir}/*'))
+    count = 0
+    for expdir in real_expdirs:
+        expid = os.path.basename(expdir)
+        testdir = f'{test_rawdata_dir}/{expid}'
+        if not os.path.exists(testdir):
+            os.symlink(expdir, testdir)
+            count += 1
+
+        if count == numexp:
+            break
+
+    return count
 
