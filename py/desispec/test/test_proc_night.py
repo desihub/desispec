@@ -34,6 +34,7 @@ class TestProcNight(unittest.TestCase):
     def setUpClass(cls):
         cls.night = 20230914
         cls.dailynight = _dailynight
+        cls.basicnight = 20211129  #- early data without 1s CTE flat or end-of-night zeros/darks
 
         cls.reduxdir = tempfile.mkdtemp()
         cls.test_rawdir = tempfile.mkdtemp()
@@ -72,8 +73,10 @@ class TestProcNight(unittest.TestCase):
                 shutil.rmtree(path)
 
         # remove override_file if leftover from failed test
-        if os.path.isfile(self.override_file):
-            os.remove(self.override_file)
+        for night in (self.night, self.dailynight, self.basicnight):
+            override_file = findfile('override', night=night)
+            if os.path.isfile(override_file):
+                os.remove(override_file)
 
         # remove rawdir/dailynight contents
         for explink in glob.glob(f'{self.test_rawnight_dir}/*'):
@@ -151,12 +154,17 @@ class TestProcNight(unittest.TestCase):
         proctiles = proctable['TILEID'][proctable['OBSTYPE'] == 'science']
         self.assertEqual(len(np.unique(proctiles)), ntiles)
 
-    def _override_write_run_delete(self, override_dict, **kwargs):
+    def _override_write_run_delete(self, override_dict, night=None, **kwargs):
         """Write override, run proc_night, remove override file, and return outputs"""
-        with open(self.override_file, 'w') as fil:
+        if night is None:
+            night = self.night
+
+        override_file = findfile('override', night=night)
+
+        with open(override_file, 'w') as fil:
             yaml.safe_dump(override_dict, fil)
-        proctable, unproctable = proc_night(self.night, sub_wait_time=0.0, **kwargs)
-        os.remove(self.override_file)
+        proctable, unproctable = proc_night(night, sub_wait_time=0.0, **kwargs)
+        os.remove(override_file)
         return proctable, unproctable
 
     def test_proc_night_linking_and_ccdcalib(self):
@@ -311,6 +319,18 @@ class TestProcNight(unittest.TestCase):
         for job in ['nightlybias', 'ccdcalib', 'nightlyflat']:
             self.assertTrue(job not in proctable['JOBDESC'])
 
+        ## Test linking an earlier night without 1s CTE flat
+        testdict = base_override_dict.copy()
+        testnight = self.basicnight
+        testdict['calibration']['linkcal']['refnight'] = testnight-1
+        testdict['calibration']['linkcal']['include'] = 'biasnight,badcolumns'
+        proctable, unproctable = self._override_write_run_delete(testdict, night=testnight, dry_run_level=3)
+        for job in ['linkcal', 'psfnight', 'nightlyflat', 'tilenight']:
+            self.assertIn(job, set(proctable['JOBDESC']))
+        for job in ['nightlybias', 'ccdcalib']:
+            self.assertNotIn(job, set(proctable['JOBDESC']))
+
+    @unittest.skipIf('SKIP_PROC_NIGHT_DAILY_TEST' in os.environ, 'Skipping test_proc_night_daily because $SKIP_PROC_NIGHT_DAILY_TEST is set')
     @unittest.skipUnless(os.path.isdir(_real_rawnight_dir), f'{_real_rawnight_dir} not available')
     def test_proc_night_daily(self):
         """
