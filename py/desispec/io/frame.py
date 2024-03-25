@@ -18,7 +18,7 @@ from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 
 from ..frame import Frame
-from .fibermap import read_fibermap
+from .fibermap import read_fibermap, annotate_fibermap
 from .meta import findfile, get_nights, get_exposures
 from .util import fitsheader, native_endian, makepath, checkgzip
 from .util import get_tempfilename
@@ -90,10 +90,15 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         add_dependencies(fibermap.meta)
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
+        fmhdu = fits.convenience.table_to_hdu(fibermap)
+        fmhdu = annotate_fibermap(fmhdu)
+        hdus.append( fmhdu )
     elif frame.fibermap is not None:
         fibermap = Table(frame.fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
-        hdus.append( fits.convenience.table_to_hdu(fibermap) )
+        fmhdu = fits.convenience.table_to_hdu(fibermap)
+        fmhdu = annotate_fibermap(fmhdu)
+        hdus.append( fmhdu )
     elif frame.spectrograph is not None:
         x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
     else:

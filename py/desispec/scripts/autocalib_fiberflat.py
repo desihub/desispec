@@ -9,7 +9,7 @@ import time
 import numpy as np
 from desiutil.log import get_logger
 from desispec.io import read_fiberflat,write_fiberflat
-from desispec.fiberflat import autocalib_fiberflat,average_fiberflat
+from desispec.fiberflat import autocalib_fiberflat, average_fiberflat, gradient_correction
 from desispec.io import findfile
 
 import argparse
@@ -22,6 +22,8 @@ def parse(options=None):
     parser.add_argument('--night', type = str, required=False, default=None)
     parser.add_argument('--arm', type = str, required=False, default=None, help="b, r or z")
     parser.add_argument('--average-per-program', action="store_true",help="first average per spectro and program name")
+    parser.add_argument('--solve-gradient', action="store_true", help='apply gradient correction')
+    parser.add_argument('--gradient-ref-night', type=str, required=False, default=None, help='reference night for gradient correction')
 
     args = parser.parse_args(options)
 
@@ -74,13 +76,13 @@ def main(args=None) :
             common_expid=None
             for c in ucam :
                 expid_per_program_and_camera =  expid[(program==p)&(camera==c)]
-                print("expids with camera={} for program={} : {}".format(c,p,expid_per_program_and_camera))
+                log.info("expids with camera={} for program={} : {}".format(c,p,expid_per_program_and_camera))
                 if common_expid is None :
                     common_expid = expid_per_program_and_camera
                 else :
                     common_expid = np.intersect1d(common_expid,expid_per_program_and_camera)
 
-            print("expids with all cameras for program={} : {}".format(p,common_expid))
+            log.info("expids with all cameras for program={} : {}".format(p,common_expid))
 
             for c in ucam :
                 fflat_to_average = []
@@ -97,13 +99,13 @@ def main(args=None) :
         common_expid=None
         for c in ucam :
             expid_per_camera =  expid[(camera==c)]
-            print("expids with camera={} : {}".format(c,expid_per_camera))
+            log.info("expids with camera={} : {}".format(c,expid_per_camera))
             if common_expid is None :
                 common_expid = expid_per_camera
             else :
                 common_expid = np.intersect1d(common_expid,expid_per_camera)
 
-        print("expids with all cameras : {}".format(common_expid))
+        log.info("expids with all cameras : {}".format(common_expid))
         fflat_to_average = []
         for e in common_expid :
             ii = np.where((expid==e))[0]
@@ -111,6 +113,26 @@ def main(args=None) :
         inputs = fflat_to_average
 
     fiberflats = autocalib_fiberflat(inputs)
+
+    if args.solve_gradient or args.gradient_ref_night is not None:
+        ref_fiberflats = {}
+        if args.gradient_ref_night is None:
+            log.info('Solving fiberflat gradient using default fiberflats from $DESI_SPECTRO_CALIB')
+            #- find default fiberflats to use as reference
+            from desispec.calibfinder import CalibFinder
+            for spectro, fiberflat in fiberflats.items():
+                cf = CalibFinder([fiberflat.header,])
+                filename = cf.findfile('FIBERFLAT')
+                log.debug('Reference fiberflat %s %s', spectro, filename)
+                ref_fiberflats[spectro] = read_fiberflat(filename)
+        else:
+            #- use fiberflats from given night as reference
+            log.info(f'Solving fiberflat gradient using reference night {args.gradient_ref_night}')
+            for spectro in fiberflats.keys():
+                ref_filename = findfile('fiberflatnight', night=args.gradient_ref_night, camera="{}{}".format(args.arm, spectro))
+                ref_fiberflats[spectro] = read_fiberflat(ref_filename)
+        fiberflats = gradient_correction(fiberflats, ref_fiberflats)
+
     for spectro in fiberflats.keys() :
         if args.prefix :
             ofilename="{}{}-autocal.fits".format(args.prefix,spectro)

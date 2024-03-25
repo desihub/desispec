@@ -7,8 +7,8 @@ desispec Change Log
 
 Major API/functional changes:
 
-* Dark missing from DESI_SPECTRO_DARK is now a fatal error unless
-  preproc with --fallback-on-dark-not-found (PR `#2162`_).
+* Dark missing from ``DESI_SPECTRO_DARK`` is now a fatal error unless
+  preproc with ``--fallback-on-dark-not-found`` (PR `#2162`_).
 * New CTE modeling on selected CCDs; requires matching DESI_SPECTRO_CALIB
   update post 0.5.1 (PR `#2163`_).
 
@@ -18,6 +18,7 @@ Smaller items and new features:
 * Add desi_link_calibnight script (PR `#2165`_).
 * Fix redrock API change templates_dir vs. template_path (PR `#2168`_).
 * Add read_spectra_parallel (PR `#2169`_).
+* Propagate units and comments in ``FIBERMAP`` HDUs (PR `#2176`_).
 
 .. _`#2160`: https://github.com/desihub/desispec/pull/2160
 .. _`#2162`: https://github.com/desihub/desispec/pull/2162
@@ -25,6 +26,7 @@ Smaller items and new features:
 .. _`#2165`: https://github.com/desihub/desispec/pull/2165
 .. _`#2168`: https://github.com/desihub/desispec/pull/2168
 .. _`#2169`: https://github.com/desihub/desispec/pull/2169
+.. _`#2176`: https://github.com/desihub/desispec/pull/2176
 
 0.61.0 (2024-01-15)
 -------------------

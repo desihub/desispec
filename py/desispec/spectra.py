@@ -534,16 +534,22 @@ class Spectra(object):
             nold = len(self.fibermap)
             newfmap = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.fibermap.dtype))
+            if hasattr(self.fibermap, 'meta'):
+                newfmap.meta.update(self.fibermap.meta)
 
         newscores = None
         if self.scores is not None:
             newscores = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.scores.dtype))
+            if hasattr(self.scores, 'meta'):
+                newscores.meta.update(self.scores.meta)
 
         newextra_catalog = None
         if self.extra_catalog is not None:
             newextra_catalog = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.extra_catalog.dtype))
+            if hasattr(self.extra_catalog, 'meta'):
+                newextra_catalog.meta.update(self.extra_catalog.meta)
 
         newwave = {}
         newflux = {}

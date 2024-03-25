@@ -22,7 +22,7 @@ jobs:
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.6
+            DESIUTIL_VERSION: 3.4.2
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -60,7 +60,7 @@ jobs:
                 fitsio-version: ['<2']  # latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.2.6
+            DESIUTIL_VERSION: 3.4.2
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
@@ -91,6 +91,35 @@ jobs:
                 COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: coveralls
+
+    desilite:
+        name: Test minimal env
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: true
+            matrix:
+                os: [ubuntu-latest]
+                python-version: ['3.10']
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                fetch-depth: 0
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v2
+              with:
+                python-version: ${{ matrix.python-version }}
+            - name: Install Python dependencies
+              run: |
+                python -m pip install --upgrade pip setuptools wheel
+                python -m pip install astropy scipy numba "numpy<2.0"
+                python -m pip install pytest
+                python -m pip cache remove fitsio
+                python -m pip install --no-deps --force-reinstall --ignore-installed fitsio
+                python -m pip install git+https://github.com/desihub/desiutil.git
+                python -m pip install git+https://github.com/desihub/desitarget.git
+            - name: Run just the lite env test
+              run: pytest py/desispec/test/test_lite.py
 
     docs:
         name: Doc test
@@ -169,5 +198,6 @@ jobs:
               # This is equivalent to an allowed falure.
               continue-on-error: true
               run: pycodestyle --count py/desispec
+
 
 # SAVE

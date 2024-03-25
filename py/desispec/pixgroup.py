@@ -21,7 +21,7 @@ from desiutil.log import get_logger
 import desiutil.depend
 
 from . import io
-from .io.util import get_tempfilename
+from .io.util import get_tempfilename, addkeys
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -184,6 +184,12 @@ class FrameLite(object):
             mask = fx['MASK'].read()
             resolution_data = fx['RESOLUTION'].read()
             fibermap = fx['FIBERMAP'].read()
+            fmhdr = fx['FIBERMAP'].read_header()
+
+            for col in ['SURVEY', 'PROGRAM']:
+                if col in fmhdr and col not in header:
+                    header[col] = fmhdr[col]
+
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
                 if 'TARGETID' not in scores.dtype.names:
@@ -205,10 +211,12 @@ class FrameLite(object):
         else:
             mjd = np.zeros(nspec, dtype='f8')-1
 
-        fibermap = np.lib.recfunctions.append_fields(
-            fibermap, ['NIGHT', 'EXPID', 'MJD', 'TILEID'],
-            [night, expid, mjd, tileid],
-            usemask=False)
+        fibermap = Table(fibermap)
+        fibermap['NIGHT'] = night
+        fibermap['EXPID'] = expid
+        fibermap['MJD'] = mjd
+        fibermap['TILEID'] = tileid
+        addkeys(fibermap.meta, fmhdr)
 
         fr = FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores)
         fr.filename = filename
@@ -349,8 +357,7 @@ class SpectraLite(object):
             mask[band] = np.vstack([self.mask[band], other.mask[band]])
             resolution_data[band] = np.vstack([self.resolution_data[band], other.resolution_data[band]])
 
-        #- Note: tables use np.hstack not np.vstack
-        fibermap = np.hstack([self.fibermap, other.fibermap])
+        fibermap = vstack([self.fibermap, other.fibermap])
         if self.scores is not None:
             scores = np.hstack([self.scores, other.scores])
         else:
@@ -717,7 +724,7 @@ def frames2spectra(frames, pix=None, nside=64):
             merged_over_cams_fmaps[i] = merged_over_cams_fmaps[i][colnames]
 
     #- Combine all the individual fibermaps from the exposures and spectrographs
-    fibermap = np.hstack(merged_over_cams_fmaps)
+    fibermap = vstack(merged_over_cams_fmaps)
 
     #- assemble_fibermap now sets NaN to 0,
     #- but reset here too if combining older data
@@ -734,7 +741,6 @@ def frames2spectra(frames, pix=None, nside=64):
             n = np.sum(ii)
             log.warning(f'Setting {n} {col} NaN to 0.0')
             fibermap[col][ii] = 0.0
-
 
     return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
             fibermap, scores=scores)

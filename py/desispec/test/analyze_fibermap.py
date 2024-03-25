@@ -10,7 +10,7 @@ Guidelines for picking exposures to test:
 
 1. Test nights/exposures that are already specifically special-cased in
    assemble_fibermap()
-2. Otherwise, just test one exposure per night that appears in ``everest``.
+2. Otherwise, just test one exposure per night that appears in ``iron``.
 
 Invocation::
 
@@ -25,7 +25,7 @@ from argparse import ArgumentParser
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
-from desispec.io.fibermap import assemble_fibermap, _set_fibermap_columns
+from desispec.io.fibermap import assemble_fibermap, empty_fibermap
 from desispec.io.meta import faflavor2program
 from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger, DEBUG
@@ -65,7 +65,6 @@ def main():
     log.debug('DESISPEC=%s', os.environ['DESISPEC'])
     log.debug('SPECPROD=%s', os.environ['SPECPROD'])
     preproc = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'preproc')
-    analyze_columns = _set_fibermap_columns()
     #
     # Load exposures catalog.
     #
@@ -104,8 +103,7 @@ def main():
             survey_program = "{0}-{1}".format(exposures['SURVEY'][exposures_row], program[exposures_row])
         except IndexError:
             log.error("Could not find %08d/%08d in exposures catalog!", night, expid)
-            exposures_row = None
-            survey_program = "UNKNOWN"
+            continue
         outfile = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                                os.environ['USER'],
                                'preproc',
@@ -117,12 +115,16 @@ def main():
             log.debug("os.makedirs('%s', exist_ok=True)", os.path.dirname(outfile))
             os.makedirs(os.path.dirname(outfile), exist_ok=True)
             log.debug("fibermap = assemble_fibermap(%d, %d)", night, expid)
-            fibermap = assemble_fibermap(night, expid)
-            tmpfile = get_tempfilename(outfile)
-            log.debug("fibermap.writeto('%s', output_verify='fix+warn, overwrite=True, checksum=True')", tmpfile)
-            fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=True, checksum=True)
-            log.debug("os.rename('%s', '%s')", tmpfile, outfile)
-            os.rename(tmpfile, outfile)
+            try:
+                fibermap = assemble_fibermap(night, expid)
+            except FileNotFoundError as err:
+                log.error("Skipping, message was: %s.", str(err))
+            else:
+                tmpfile = get_tempfilename(outfile)
+                log.debug("fibermap.writeto('%s', output_verify='fix+warn, overwrite=True, checksum=True')", tmpfile)
+                fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=True, checksum=True)
+                log.debug("os.rename('%s', '%s')", tmpfile, outfile)
+                os.rename(tmpfile, outfile)
         if options.analyze:
             log.info("Analyzing %s, survey-program = %s.", outfile, survey_program)
             fibermap = Table.read(outfile, "FIBERMAP")
@@ -134,13 +136,13 @@ def main():
                     break
             if 'CMX_TARGET' in fibermap.colnames:
                 survey = 'cmx'
-            analyze_columns_colnames = [x[0] for x in analyze_columns[survey]]
-            if fibermap.colnames == analyze_columns_colnames:
+            analyze_columns = empty_fibermap(5000, survey=survey)
+            if fibermap.colnames == analyze_columns.colnames:
                 log.debug("Column names match %s standard for %s.", survey, outfile)
             else:
                 for i in range(len(fibermap.colnames)):
                     if fibermap.colnames[i] != analyze_columns[survey][i]:
-                        log.error('FIBERMAP table column mismatch at index %d ("%s" != "%s")!', i, fibermap.colnames[i], analyze_columns_colnames[i])
+                        log.error('FIBERMAP table column mismatch at index %d ("%s" != "%s")!', i, fibermap.colnames[i], analyze_columns.colnames[i])
                         break
     return 0
 

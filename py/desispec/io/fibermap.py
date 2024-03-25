@@ -22,8 +22,7 @@ from desitarget.targetmask import desi_mask
 from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
-from desimodel.focalplane import get_tile_radius_deg
-from desimodel.io import load_focalplane
+from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
@@ -38,117 +37,162 @@ from desispec.maskbits import fibermask
 # different columns for other surveys, but these will also be coerced into
 # a pre-defined order.
 #
-fibermap_columns = {'main': [('TARGETID',              'i8',                 '', 'Unique target ID'),
-                             ('PETAL_LOC',             'i2',                 '', 'Petal location [0-9]'),
-                             ('DEVICE_LOC',            'i4',                 '', 'Device location on focal plane [0-523]'),
-                             ('LOCATION',              'i8',                 '', 'FP location PETAL_LOC*1000 + DEVICE_LOC'),
-                             ('FIBER',                 'i4',                 '', 'Fiber ID on the CCDs [0-4999]'),
-                             ('FIBERSTATUS',           'i4',                 '', 'Fiber status; 0=good'),
-                             ('TARGET_RA',             'f8',           'degree', 'Target Right Ascension [degrees]'),
-                             ('TARGET_DEC',            'f8',           'degree', 'Target declination [degrees]'),
-                             ('PMRA',                  'f4',     'marcsec/year', 'PM in +RA dir (already incl cos(dec))'),
-                             ('PMDEC',                 'f4',     'marcsec/year', 'Proper motion in +dec direction'),
-                             ('REF_EPOCH',             'f4',                 '', 'proper motion reference epoch'),
-                             ('LAMBDA_REF',            'f4',         'Angstrom', 'Wavelength at which fiber was centered'),
-                             ('FA_TARGET',             'i8',                 '', ''),
-                             ('FA_TYPE',               'u1',                 '', 'Internal fiberassign target type'),
-                             ('OBJTYPE',           (str, 3),                 '', 'SKY, TGT, NON'),
-                             ('FIBERASSIGN_X',         'f4',               'mm', 'Expected CS5 X on focal plane'),
-                             ('FIBERASSIGN_Y',         'f4',               'mm', 'Expected CS5 Y on focal plane'),
-                             ('PRIORITY',              'i4',                 '', 'Assignment priority; larger=higher priority'),
-                             ('SUBPRIORITY',           'f8',                 '', 'Assignment subpriority [0-1)'),
-                             ('OBSCONDITIONS',         'i4',                 '', 'bitmask of allowable observing conditions'),
-                             ('RELEASE',               'i2',                 '', 'imaging surveys release ID'),
-                             ('BRICKNAME',         (str, 8),                 '', 'Imaging Surveys brick name'),
-                             ('BRICKID',               'i8',                 '', 'Imaging Surveys brick ID'),
-                             ('BRICK_OBJID',           'i8',                 '', 'Imaging Surveys OBJID on that brick'),
-                             ('MORPHTYPE',         (str, 4),                 '', 'Imaging Surveys morphological type'),
-                             ('EBV',                   'f4',                 '', 'Galactic extinction E(B-V) reddening from SFD98'),
-                             ('FLUX_G',                'f4',      'nanomaggies', 'g-band flux'),
-                             ('FLUX_R',                'f4',      'nanomaggies', 'r-band flux'),
-                             ('FLUX_Z',                'f4',      'nanomaggies', 'z-band flux'),
-                             ('FLUX_W1',               'f4',      'nanomaggies', 'WISE W1-band flux'),
-                             ('FLUX_W2',               'f4',      'nanomaggies', 'WISE W2-band flux'),
-                             ('FLUX_IVAR_G',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_G'),
-                             ('FLUX_IVAR_R',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_R'),
-                             ('FLUX_IVAR_Z',           'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_Z'),
-                             ('FLUX_IVAR_W1',          'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W1'),
-                             ('FLUX_IVAR_W2',          'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W2'),
-                             ('FIBERFLUX_G',           'f4',      'nanomaggies', 'g-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERFLUX_R',           'f4',      'nanomaggies', 'r-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERFLUX_Z',           'f4',      'nanomaggies', 'z-band model flux 1" seeing, 1.5" dia fiber'),
-                             ('FIBERTOTFLUX_G',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('FIBERTOTFLUX_R',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('FIBERTOTFLUX_Z',        'f4',      'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-                             ('MASKBITS',              'i2',                 '', 'Photometry mask bits'),
-                             ('SERSIC',                'f4',                 '', 'Power-law index for the Sersic profile model'),
-                             ('SHAPE_R',               'f4',           'arcsec', 'Half-light radius of galaxy model'),
-                             ('SHAPE_E1',              'f4',                 '', 'Ellipticity component 1 for galaxy model'),
-                             ('SHAPE_E2',              'f4',                 '', 'Ellipticity component 2 for galaxy model'),
-                             ('REF_ID',                'i8',                 '', 'Astrometric cat refID (Gaia SOURCE_ID)'),
-                             ('REF_CAT',           (str, 2),                 '', 'astrometry reference catalog'),
-                             ('GAIA_PHOT_G_MEAN_MAG',  'f4',              'mag', 'Gaia G band mag'),
-                             ('GAIA_PHOT_BP_MEAN_MAG', 'f4',              'mag', 'Gaia BP band mag'),
-                             ('GAIA_PHOT_RP_MEAN_MAG', 'f4',              'mag', 'Gaia RP band mag'),
-                             ('PARALLAX',              'f4',          'marcsec', 'Parallax'),
-                             ('PHOTSYS',           (str, 1),                 '', 'N for BASS/MzLS, S for DECam'),
-                             ('PRIORITY_INIT',         'i8',                 '', 'initial priority'),
-                             ('NUMOBS_INIT',           'i8',                 '', 'initial number of requested observations'),
-                             ('DESI_TARGET',           'i8',                 '', 'Dark survey + calibration targeting bits'),
-                             ('BGS_TARGET',            'i8',                 '', 'Bright Galaxy Survey targeting bits'),
-                             ('MWS_TARGET',            'i8',                 '', 'Milky Way Survey targeting bits'),
-                             ('SCND_TARGET',           'i8',                 '', 'Secondary program targeting bits'),
-                             ('PLATE_RA',              'f8',           'degree', 'Right Ascension for Platemaker to use [degrees]'),
-                             ('PLATE_DEC',             'f8',           'degree', 'declination for Platemaker to use [degrees]'),
-                             ('NUM_ITER',              'i8',                 '', 'Number of positioner iterations'),
-                             ('FIBER_X',               'f8',               'mm', 'CS5 X location requested by PlateMaker'),
-                             ('FIBER_Y',               'f8',               'mm', 'CS5 Y location requested by PlateMaker'),
-                             ('DELTA_X',               'f8',               'mm', 'CS5 X diff requested and actual position'),
-                             ('DELTA_Y',               'f8',               'mm', 'CS5 Y diff requested and actual position'),
-                             ('FIBER_RA',              'f8',           'degree', 'RA of actual fiber position'),
-                             ('FIBER_DEC',             'f8',           'degree', 'DEC of actual fiber position'),
-                             ('EXPTIME',               'f8',                's', 'Exposure time'),]}
-
-fibermap_comments = {'main': dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['main']])}
+# Data types, units and descriptions should be kept in sync with
+# column_descriptions.csv in desidatamodel, although the descriptions here are
+# shortened due to limitations on FITS header keyword comments.
 #
-# This doesn't appear to be used.
+# The "columns" in the list correspond to column name, data type, units (if any),
+# column description, provenance.
 #
-# fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
+# The "provenance" tells functions such as empty_fibermap and assemble_fibermap
+# that these columns belong in a "base" or "empty" fibermap file, hence
+# "empty" (which is shorter than "assemble"). Other provenances are provided for
+# informational purposes.
+#
+# The utility function _set_fibermap_columns(survey) handles differences between
+# 'cmx', 'sv1', 'sv2', 'sv3'. We assume that 'special' has identical columns to 'main'.
+#
+fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique DESI target ID',                        'empty'),
+                    ('PETAL_LOC',                  'i2',             '', 'Petal location [0-9]',                         'empty'),
+                    ('DEVICE_LOC',                 'i4',             '', 'Device location on focal plane [0-523]',       'empty'),
+                    ('LOCATION',                   'i8',             '', 'FP location PETAL_LOC*1000 + DEVICE_LOC',      'empty'),
+                    ('FIBER',                      'i4',             '', 'Fiber ID on the CCDs [0-4999]',                'empty'),
+                    ('FIBERSTATUS',                'i4',             '', 'Fiber status mask. 0=good',                    'empty'),
+                    ('TARGET_RA',                  'f8',          'deg', 'Barycentric right ascension in ICRS',          'empty'),
+                    ('TARGET_DEC',                 'f8',          'deg', 'Barycentric declination in ICRS',              'empty'),
+                    ('DESINAME',              (str, 22),             '', 'Human readable identifier of a sky location',  'empty'),
+                    ('PMRA',                       'f4',    'mas yr^-1', 'Proper motion in the +RA direction',           'empty'),
+                    ('PMDEC',                      'f4',    'mas yr^-1', 'Proper motion in the +Dec direction',          'empty'),
+                    ('REF_EPOCH',                  'f4',           'yr', 'Reference epoch for Gaia/Tycho astrometry',    'empty'),
+                    ('LAMBDA_REF',                 'f4',     'Angstrom', 'Wavelength at which fiber was centered',       'empty'),
+                    ('FA_TARGET',                  'i8',             '', 'Fiberassign internal target bitmask',          'empty'),
+                    ('FA_TYPE',                    'u1',             '', 'Fiberassign internal target type',             'empty'),
+                    ('OBJTYPE',                (str, 3),             '', 'Object type: TGT, SKY, NON, BAD',              'empty'),
+                    ('FIBERASSIGN_X',              'f4',           'mm', 'Expected CS5 X location on focal plane',       'empty'),
+                    ('FIBERASSIGN_Y',              'f4',           'mm', 'Expected CS5 Y location on focal plane',       'empty'),
+                    ('PRIORITY',                   'i4',             '', 'Target current priority',                      'empty'),
+                    ('SUBPRIORITY',                'f8',             '', 'Assignment subpriority [0-1)',                 'empty'),
+                    ('OBSCONDITIONS',              'i4',             '', 'Bitmask of allowed observing conditions',      'empty'),
+                    ('RELEASE',                    'i2',             '', 'Imaging surveys release ID',                   'empty'),
+                    ('BRICKNAME',              (str, 8),             '', 'Brick name from tractor input',                'empty'),
+                    ('BRICKID',                    'i4',             '', 'Brick ID from tractor input',                  'empty'),
+                    ('BRICK_OBJID',                'i4',             '', 'Imaging Surveys OBJID on that brick',          'empty'),
+                    ('MORPHTYPE',              (str, 4),             '', 'Imaging Surveys morphological type',           'empty'),
+                    ('EBV',                        'f4',          'mag', 'Galactic extinction E(B-V) reddening',         'empty'),
+                    ('FLUX_G',                     'f4',    'nanomaggy', 'Flux in the Legacy Survey g-band (AB)',        'empty'),
+                    ('FLUX_R',                     'f4',    'nanomaggy', 'Flux in the Legacy Survey r-band (AB)',        'empty'),
+                    ('FLUX_Z',                     'f4',    'nanomaggy', 'Flux in the Legacy Survey z-band (AB)',        'empty'),
+                    ('FLUX_W1',                    'f4',    'nanomaggy', 'WISE flux in W1 (AB)',                         'empty'),
+                    ('FLUX_W2',                    'f4',    'nanomaggy', 'WISE flux in W2 (AB)',                         'empty'),
+                    ('FLUX_IVAR_G',                'f4', 'nanomaggy^-2', 'Inverse variance of FLUX_G (AB)',              'empty'),
+                    ('FLUX_IVAR_R',                'f4', 'nanomaggy^-2', 'Inverse variance of FLUX_R (AB)',              'empty'),
+                    ('FLUX_IVAR_Z',                'f4', 'nanomaggy^-2', 'Inverse variance of FLUX_Z (AB)',              'empty'),
+                    ('FLUX_IVAR_W1',               'f4', 'nanomaggy^-2', 'Inverse variance of FLUX_W1 (AB)',             'empty'),
+                    ('FLUX_IVAR_W2',               'f4', 'nanomaggy^-2', 'Inverse variance of FLUX_W2 (AB)',             'empty'),
+                    ('FIBERFLUX_G',                'f4',    'nanomaggy', 'Predicted g-band flux in 1.5" fiber',          'empty'),
+                    ('FIBERFLUX_R',                'f4',    'nanomaggy', 'Predicted r-band flux in 1.5" fiber',          'empty'),
+                    ('FIBERFLUX_Z',                'f4',    'nanomaggy', 'Predicted z-band flux in 1.5" fiber',          'empty'),
+                    ('FIBERTOTFLUX_G',             'f4',    'nanomaggy', 'g-band flux in 1.5" fiber from all sources',   'empty'),
+                    ('FIBERTOTFLUX_R',             'f4',    'nanomaggy', 'r-band flux in 1.5" fiber from all sources',   'empty'),
+                    ('FIBERTOTFLUX_Z',             'f4',    'nanomaggy', 'z-band flux in 1.5" fiber from all sources',   'empty'),
+                    ('MASKBITS',                   'i2',             '', 'Bitmask for photometry issues',                'empty'),
+                    ('SERSIC',                     'f4',             '', "Power-law index for the Sersic profile model", 'empty'),
+                    ('SHAPE_R',                    'f4',       'arcsec', 'Half-light radius of galaxy model (>0)',       'empty'),
+                    ('SHAPE_E1',                   'f4',             '', 'Ellipticity component 1 of galaxy model',      'empty'),
+                    ('SHAPE_E2',                   'f4',             '', 'Ellipticity component 2 of galaxy model',      'empty'),
+                    ('REF_ID',                     'i8',             '', "Astrometric cat refID (Gaia SOURCE_ID)",       'empty'),
+                    ('REF_CAT',                (str, 2),             '', "Reference catalog source for star",            'empty'),
+                    ('GAIA_PHOT_G_MEAN_MAG',       'f4',          'mag', 'Gaia G band magnitude',                        'empty'),
+                    ('GAIA_PHOT_BP_MEAN_MAG',      'f4',          'mag', 'Gaia BP band magnitude',                       'empty'),
+                    ('GAIA_PHOT_RP_MEAN_MAG',      'f4',          'mag', 'Gaia RP band magnitude',                       'empty'),
+                    ('PARALLAX',                   'f4',          'mas', 'Reference catalog parallax',                   'empty'),
+                    ('PHOTSYS',                (str, 1),             '', "N for BASS/MzLS, S for DECam",                 'empty'),
+                    ('PRIORITY_INIT',              'i8',             '', 'Target initial priority',                      'empty'),
+                    ('NUMOBS_INIT',                'i8',             '', 'Initial number of observations for target',    'empty'),
+                    ('CMX_TARGET',                 'i8',             '', 'Target selection bitmask for commissioning',   'empty:cmx'),
+                    ('SV1_DESI_TARGET',            'i8',             '', 'DESI target selection bitmask for SV1',        'empty:sv1'),
+                    ('SV2_DESI_TARGET',            'i8',             '', 'DESI target selection bitmask for SV1',        'empty:sv2'),
+                    ('SV3_DESI_TARGET',            'i8',             '', 'DESI target selection bitmask for SV3',        'empty:sv3'),
+                    ('SV1_BGS_TARGET',             'i8',             '', 'BGS target selection bitmask for SV1',         'empty:sv1'),
+                    ('SV2_BGS_TARGET',             'i8',             '', 'BGS target selection bitmask for SV2',         'empty:sv2'),
+                    ('SV3_BGS_TARGET',             'i8',             '', 'BGS target selection bitmask for SV3',         'empty:sv3'),
+                    ('SV1_MWS_TARGET',             'i8',             '', 'MWS target selection bitmask for SV1',         'empty:sv1'),
+                    ('SV2_MWS_TARGET',             'i8',             '', 'MWS target selection bitmask for SV2',         'empty:sv2'),
+                    ('SV3_MWS_TARGET',             'i8',             '', 'MWS target selection bitmask for SV3',         'empty:sv3'),
+                    ('SV1_SCND_TARGET',            'i8',             '', 'Secondary target selection bitmask for SV1',   'empty:sv1'),
+                    ('SV2_SCND_TARGET',            'i8',             '', 'Secondary target selection bitmask for SV2',   'empty:sv2'),
+                    ('SV3_SCND_TARGET',            'i8',             '', 'Secondary target selection bitmask for SV3',   'empty:sv3'),
+                    ('DESI_TARGET',                'i8',             '', 'DESI target selection bitmask',                'empty'),
+                    ('BGS_TARGET',                 'i8',             '', 'BGS target selection bitmask',                 'empty'),
+                    ('MWS_TARGET',                 'i8',             '', 'Milky Way Survey targeting bits',              'empty'),
+                    ('SCND_TARGET',                'i8',             '', 'Secondary target selection bitmask',           'empty'),
+                    ('PLATE_RA',                   'f8',          'deg', 'Right Ascension to be used by PlateMaker',     'empty'),
+                    ('PLATE_DEC',                  'f8',          'deg', 'Declination to be used by PlateMaker',         'empty'),
+                    ('NUM_ITER',                   'i8',             '', 'Number of positioner iterations',              'empty'),
+                    ('FIBER_X',                    'f8',           'mm', 'CS5 X location requested by PlateMaker',       'empty'),
+                    ('FIBER_Y',                    'f8',           'mm', 'CS5 Y location requested by PlateMaker',       'empty'),
+                    ('DELTA_X',                    'f8',           'mm', 'CS5 X requested minus actual position',        'empty'),
+                    ('DELTA_Y',                    'f8',           'mm', 'CS5 Y requested minus actual position',        'empty'),
+                    ('FIBER_RA',                   'f8',          'deg', 'RA of actual fiber position',                  'empty'),
+                    ('FIBER_DEC',                  'f8',          'deg', 'DEC of actual fiber position',                 'empty'),
+                    ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
+                    ('PSF_TO_FIBER_SPECFLUX',      'f8',             '', 'Fraction of light captured by a fiber',        'cframe'),
+                    ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
+                    ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
+                    ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),
+                    ('TILEID',                     'i4',             '', 'Unique DESI tile ID',                          'spectra'),
+                    ('COADD_FIBERSTATUS',          'i4',             '', 'Bitwise-AND of input FIBERSTATUS',             'coadd'),
+                    ('COADD_NUMEXP',               'i2',             '', 'Number of exposures in coadd',                 'coadd'),
+                    ('COADD_EXPTIME',              'f4',            's', 'Summed exposure time for coadd',               'coadd'),
+                    ('COADD_NUMNIGHT',             'i2',             '', 'Number of nights in coadd',                    'coadd'),
+                    ('COADD_NUMTILE',              'i2',             '', 'Number of tiles in coadd',                     'coadd'),
+                    ('MEAN_DELTA_X',               'f4',           'mm', 'Mean (over exposures) fiber difference in X',  'coadd'),
+                    ('RMS_DELTA_X',                'f4',           'mm', 'RMS (over exposures) fiber difference in X',   'coadd'),
+                    ('MEAN_DELTA_Y',               'f4',           'mm', 'Mean (over exposures) fiber difference in Y',  'coadd'),
+                    ('RMS_DELTA_Y',                'f4',           'mm', 'RMS (over exposures) difference in Y',         'coadd'),
+                    ('MEAN_FIBER_RA',              'f8',          'deg', 'Mean (over exposures) RA of fiber position',   'coadd'),
+                    ('STD_FIBER_RA',               'f4',          'deg', 'Standard deviation (over exposures) of RA',    'coadd'),
+                    ('MEAN_FIBER_DEC',             'f8',          'deg', 'Mean (over exposures) DEC of fiber position',  'coadd'),
+                    ('STD_FIBER_DEC',              'f4',          'deg', 'Standard deviation (over exposures) of DEC',   'coadd'),
+                    ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean of PSF_TO_FIBER_SPECFLUX',                'coadd'),
+                    ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
+                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
 
+# dict to allow unit tests etc that augment fibermaps to look up the
+# correct dtype based upon the column name
+fibermap_dtype = dict([(tmp[0], tmp[1]) for tmp in fibermap_columns])
 
-def _set_fibermap_columns():
+def _set_fibermap_columns(survey='main'):
     """Prepare survey-specific list of columns.
+
+    Always call this function to get the list of columns. ``fibermap_columns``
+    itself should be regarded as immutable.
+
+    Parameters
+    ----------
+    survey : :class:`string`, optional
+        Define columns for this survey; default 'main'.
 
     Returns
     -------
-    :class:`dict`
-        As a convenience, return the full set of survey-specific columns.
+    :class:`list`
+        Return the full set of survey-specific columns.
     """
-    global fibermap_columns, fibermap_comments
-    for sv in (1, 2, 3):
-        survey = f'sv{sv:d}'
-        fibermap_columns[survey] = fibermap_columns['main'].copy()
-        for t in ('DESI', 'BGS', 'MWS', 'SCND'):
-            index_columns = [x[0] for x in fibermap_columns[survey]]
-            i = index_columns.index('{0}_TARGET'.format(t))
-            row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '',
-                   fibermap_columns[survey][i][3])
-            fibermap_columns[survey].insert(index_columns.index('DESI_TARGET'), row)
-        index_columns = [x[0] for x in fibermap_columns[survey]]
-        del fibermap_columns[survey][index_columns.index('SCND_TARGET')]
-        fibermap_comments[survey] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns[survey]])
-    fibermap_columns['cmx'] = fibermap_columns['main'].copy()
-    index_columns = [x[0] for x in fibermap_columns['cmx']]
-    row = ('CMX_TARGET', 'i8', '', 'Targeting bits for instrument commissioning')
-    fibermap_columns['cmx'].insert(index_columns.index('DESI_TARGET'), row)
-    index_columns = [x[0] for x in fibermap_columns['cmx']]
-    del fibermap_columns['cmx'][index_columns.index('SCND_TARGET')]
-    fibermap_comments['cmx'] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['cmx']])
-    return fibermap_columns
+    working_columns = list(fibermap_columns).copy()
+    if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
+        survey_index = f"empty:{survey}"
+        return [row for row in working_columns
+                if ((row[4] == survey_index) or (row[4] == 'empty' and row[0] != 'SCND_TARGET'))]
+    else:
+        return [row for row in working_columns if row[4] == 'empty']
 
 
 def empty_fibermap(nspec, specmin=0, survey='main'):
     """Return an empty fibermap Table to be filled in.
+
+    This function should primarily be used for testing. The intention
+    is to exactly reproduce the columns output by :func:`~desispec.io.fibermap.assemble_fibermap`.
+    Use in other contexts with caution.
 
     Parameters
     ----------
@@ -165,21 +209,21 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
         An empty Table.
     """
 
-    assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
-    try:
-        columns = fibermap_columns[survey]
-    except KeyError:
-        columns = _set_fibermap_columns()[survey]
+    #- import desimodel only if needed
+    from desimodel.io import load_focalplane
 
+    assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
+    columns = _set_fibermap_columns(survey)
+    #
+    # The comment and provenance columns are not used here.
+    #
     fibermap = Table()
-    for (name, dtype, unit, comment) in columns:
+    for (name, dtype, unit, _comment, _provenance) in columns:
         c = Column(name=name, dtype=dtype, unit=unit, length=nspec)
         fibermap.add_column(c)
 
     #- Fill in some values
     fibermap['FIBER'][:] = np.arange(specmin, specmin+nspec)
-    fibers_per_spectrograph = 500
-    ### fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = load_focalplane()[0]
     fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
@@ -193,22 +237,23 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
     fibermap['LAMBDA_REF'][:]  = 5400.0
     fibermap['NUM_ITER'][:] = 2
-    #- Set MW_TRANSMISSION_* to be slightly less than 1 to trigger dust correction code for testing
-    ### fibermap['MW_TRANSMISSION_G'][:] = 0.999
-    ### fibermap['MW_TRANSMISSION_R'][:] = 0.999
-    ### fibermap['MW_TRANSMISSION_Z'][:] = 0.999
     fibermap['EBV'][:] = 0.001
     fibermap['PHOTSYS'][:] = 'S'
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
+    fibermap.meta['SURVEY'] = survey
 
-    assert set(fibermap.keys()) == set([x[0] for x in columns])
+    assert set(fibermap.colnames) == set([x[0] for x in columns])
 
     return fibermap
 
 
 def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERMAP'):
     """Write fibermap binary table to outfile.
+
+    This function is provided for tests but is currently not used in downstream
+    pipeline code. For example :command:`desi_assemble_fibermap` bypasses
+    this function.
 
     Args:
         outfile (str): output filename
@@ -233,31 +278,13 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
 
     add_dependencies(hdr)
 
-    #
-    # Detect the survey.
-    #
-    if 'CMX_TARGET' in fibermap.colnames:
-        survey = 'cmx'
-    elif 'SV1_DESI_TARGET' in fibermap.colnames:
-        survey = 'sv1'
-    elif 'SV2_DESI_TARGET' in fibermap.colnames:
-        survey = 'sv2'
-    elif 'SV3_DESI_TARGET' in fibermap.colnames:
-        survey = 'sv3'
-    else:
-        survey = 'main'
+    fibermap_hdu = fits.BinTableHDU(fibermap)
+    fibermap_hdu.header.extend(hdr, update=True)
+    fibermap_hdu = annotate_fibermap(fibermap_hdu)
 
-    try:
-        fc = fibermap_comments[survey]
-    except KeyError:
-        _set_fibermap_columns()
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        t0 = time.time()
-        write_bintable(outfile, fibermap, hdr, comments=fibermap_comments[survey],
-                       extname=extname, clobber=clobber)
-        duration = time.time() - t0
+    t0 = time.time()
+    write_bintable(outfile, fibermap_hdu, clobber=clobber)
+    duration = time.time() - t0
 
     log.info(iotime.format('write', outfile, duration))
 
@@ -479,6 +506,7 @@ def update_survey_keywords(hdr):
 
     return updates
 
+
 def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                       force=False, allow_svn_override=True):
     """Create a fibermap for a given `night` and `expid`.
@@ -503,6 +531,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     :class:`astropy.io.fits.HDUList`
         A representation of a fibermap FITS file.
     """
+
+    #- import desimodel only if needed
+    from desimodel.focalplane import get_tile_radius_deg
 
     log = get_logger()
 
@@ -637,6 +668,11 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     # desitarget.targets.main_cmx_or_sv(), but can be much faster.
     # As a bonus, a freeze_iers() call can be avoided.
     #
+    # This value of 'survey' is used to select the final set of columns that will
+    # be written out.  It is not necessarily the same as the SURVEY header
+    # keyword in the fiberassign or other raw data files. In particular,
+    # survey == 'main' and survey == 'special' are effectively equivalent here.
+    #
     # survey = main_cmx_or_sv(fa)[2]
     survey = 'main'
     notmain = [name.split('_')[0] for name in fa.colnames
@@ -688,6 +724,10 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     if 'PLATE_DEC' not in fa.colnames:
         log.debug("Adding PLATE_DEC column.")
         fa['PLATE_DEC'] = fa['TARGET_DEC']
+
+    if 'DESINAME' not in fa.colnames:
+        log.debug("Adding DESINAME column.")
+        fa['DESINAME'] = radec_to_desiname(fa['TARGET_RA'], fa['TARGET_DEC'])
 
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
@@ -1145,12 +1185,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #
     # Coerce into final column order
     #
-    try:
-        final_columns = fibermap_columns[survey]
-    except KeyError:
-        final_columns = _set_fibermap_columns()[survey]
+    final_columns = _set_fibermap_columns(survey)
 
-    fibermap = fibermap[ [ c[0] for c in final_columns ] ]
+    fibermap = fibermap[ [ c[0] for c in final_columns] ]
 
     #
     # Don't propagate fibermap.meta; we'd rather keep the comments from the
@@ -1159,11 +1196,101 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     fibermap.meta.clear()
     fibermap_hdu = fits.BinTableHDU(fibermap)
     fibermap_hdu.header.extend(fibermap_header, update=True)
+    fibermap_hdu = annotate_fibermap(fibermap_hdu)
     fibermap_hdulist = fits.HDUList([fits.PrimaryHDU(), fibermap_hdu])
 
     return fibermap_hdulist
 
 
+def annotate_fibermap(fibermap):
+    """Add units and column descriptions to a fibermap HDU.
+
+    There may be some conceptual code overlap with :func:`desiutil.annotate.annotate_fits`,
+    but that is for annotating existing files, whereas here we want to modify
+    a HDU that hasn't been written out to a file at all.
+
+    Parameters
+    ----------
+    fibermap : :class:`~astropy.io.fits.BinTableHDU`
+        A fibermap HDU that has all data added except for units and column descriptions.
+
+    Returns
+    -------
+    :class:`~astropy.io.fits.BinTableHDU`
+        `fibermap` will be modified by this function, but it is also returned as a convenience.
+
+    Raises
+    ------
+    ValueError
+        If `fibermap` is not a :class:`~astropy.io.fits.BinTableHDU`.
+    """
+    if not isinstance(fibermap, fits.BinTableHDU):
+        raise ValueError("Input fibermap has unexpected type!")
+    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8'}
+    log = get_logger()
+    column_names = [row[0] for row in fibermap_columns]
+    fh = fibermap.header
+    fhc = fibermap.header.comments
+    for column_index in range(fh['TFIELDS']):
+        ttype = f"TTYPE{column_index + 1:d}"
+        tform = f"TFORM{column_index + 1:d}"
+        tunit = f"TUNIT{column_index + 1:d}"
+        col = fh[ttype]
+        try:
+            row = fibermap_columns[column_names.index(col)]
+        except ValueError:
+            log.error("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
+            continue
+        coltype = fh[tform]
+        try:
+            colunit = fh[tunit]
+        except KeyError:
+            colunit = None
+        if coltype in tforms:
+            if tforms[coltype] == row[1]:
+                log.debug("Expected data type, %s, for column %s found.",
+                          row[1], col)
+            else:
+                log.error("Unexpected data type, %s != %s, for column %s!",
+                          tforms[coltype], row[1], col)
+        elif coltype.endswith('A'):
+            if int(coltype.replace('A', '')) == row[1][1]:
+                log.debug("Expected string length, %d, for column %s found.", row[1][1], col)
+            else:
+                log.error("Unexpected string length, %d != %d, for column %s found.",
+                          int(coltype.replace('A', '')), row[1][1], col)
+        else:
+            log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
+                      coltype, col)
+        if row[2]:
+            if colunit:
+                if colunit == row[2]:
+                    log.debug('Units for column %s match expected fibermap columns.', col)
+                else:
+                    log.warning("Overriding units for column '%s': '%s' -> '%s'.",
+                                col, colunit.strip(), row[2])
+                    fh[tunit] = (row[2], col + ' units')
+            else:
+                log.debug("Setting units for column %s to '%s'.", col, row[2])
+                fh.insert(tform, (tunit, row[2], col + ' units'), after=True)
+        else:
+            log.debug("Column %s is not supposed to have units, skipping.", col)
+        if ttype in fhc:
+            if fhc[ttype] == row[3]:
+                log.debug('Comment for column %s matches expected fibermap columns.', col)
+            else:
+                log.warning('Overriding comment for column %s!', col)
+                fh[ttype] = (col, row[3])
+        else:
+            log.debug('Setting comment for column %s.', col)
+            fh[ttype] = (col, row[3])
+    fibermap.add_checksum()
+    return fibermap
+
+
+#
+# This does not appear to be used anywhere in desispec.
+#
 def fibermap_new2old(fibermap):
     '''Converts new format fibermap into old format fibermap
 
