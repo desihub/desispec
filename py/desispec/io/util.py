@@ -466,7 +466,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras, loglevel='INFO'):
+def parse_cameras(cameras, loglevel=None):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -485,7 +485,12 @@ def parse_cameras(cameras, loglevel='INFO'):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger(loglevel)
+    ## Change loglevel if requested but otherwise use the global default
+    if loglevel is not None:
+        log = get_logger(loglevel)
+    else:
+        log = get_logger()
+
     if cameras is None:
         camword = None
     elif type(cameras) is str:
@@ -549,7 +554,7 @@ def parse_cameras(cameras, loglevel='INFO'):
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
         raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
-    if not isinstance(cameras, str) or cameras != camword:
+    if cameras != camword:
         log.info(f"Converted input cameras={cameras} to camword={camword}")
     else:
         log.debug(f"Converted input cameras={cameras} to camword={camword}")

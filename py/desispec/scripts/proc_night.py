@@ -245,7 +245,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     
     ## cte flats weren't available before 20211130 so hardcode that in
     if do_cte_flats and night < 20211130:
-        log.warning("Asked to do cte flat correction but before 20211130 no "
+        log.info("Asked to do cte flat correction but before 20211130 no "
                     + "no cte flats are available to do the correction. "
                     + "Code will NOT perform cte flat corrections.")
         do_cte_flats = False
@@ -391,9 +391,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Determine calibrations that will be linked
     if 'linkcal' in cal_override:
         files_to_link, files_not_linked = None, None
-        if 'include' in  cal_override['linkcal']:
+        if 'include' in cal_override['linkcal']:
             files_to_link = cal_override['linkcal']['include']
-        if 'exclude' in  cal_override['linkcal']:
+        if 'exclude' in cal_override['linkcal']:
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
@@ -413,7 +413,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Determine the appropriate set of calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
     cal_etable = None
-    if not all_calibs_submitted(calibjobs['completed']):
+    if not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
                                                     still_acquiring=still_acquiring)
@@ -459,16 +459,16 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Actually process the calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
-    if not all_calibs_submitted(calibjobs['completed']):
+    if not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
         ptable, calibjobs, int_id = submit_calibrations(cal_etable, ptable,
                                                 cal_override, calibjobs,
                                                 int_id, night, files_to_link,
                                                 create_submit_add_and_save)
 
     ## Require some minimal level of calibrations to process science exposures
-    if require_cals and not all_calibs_submitted(calibjobs['completed']):
-        err = (f"Required to have at least flat calibrations via override link"
-               + f" or nightlyflat before proceeding.")
+    if require_cals and not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
+        err = (f"Exiting because not all calibration files accounted for "
+               + f"with links or submissions and require_cals is True.")
         log.error(err)
         ## If still acquiring new data in daily mode, don't exit with error code
         ## But do exit
@@ -488,7 +488,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Process Sciences
     ## Loop over new tiles and process them
     for tile in tiles_to_proc:
-        log.info(f'\n\n##################### {tile} #########################')
+        log.info(f'\n\n################# Submitting {tile} #####################')
 
         ## Identify the science exposures for the given tile
         tile_etable = sci_etable[sci_etable['TILEID'] == tile]
@@ -634,33 +634,14 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         ctes = allflats[is_cte]
         cte1s = ctes[np.abs(ctes['EXPTIME']-1.)<0.1]
 
-    do_bias = (len(zeros) > 0 and 'biasnight' not in files_to_link
-               and not calibjobs['completed']['nightlybias'])
-    do_badcol = len(darks) > 0 and 'badcolumns' not in files_to_link
-    do_cte = (len(cte1s) > 0 and len(flats) > 0) and 'ctecorrnight' not in files_to_link
-    ## If no dark or ctes, do the nightlybias
-    if do_bias and not do_badcol and not do_cte and not calibjobs['completed']['ccdcalib']:
-        log.info("\nNo dark or cte found. Submitting nightlybias before "
-                 "processing exposures.\n")
-        prow = erow_to_prow(zeros[0])
-        prow['EXPID'] = np.array([])
-        prow['INTID'] = int_id
-        int_id += 1
-        prow['JOBDESC'] = 'nightlybias'
-        prow['CALIBRATOR'] = 1
-        cams = set(decode_camword('a0123456789'))
-        for zero in zeros:
-            if 'calib' in zero['PROGRAM']:
-                proccamword = difference_camwords(zero['CAMWORD'],
-                                                  zero['BADCAMWORD'])
-                cams = cams.intersection(set(decode_camword(proccamword)))
-        prow['PROCCAMWORD'] = create_camword(list(cams))
-        prow = define_and_assign_dependency(prow, calibjobs)
-        prow, ptable = create_submit_add_and_save(prow, ptable)
-        calibjobs[prow['JOBDESC']] = prow.copy()
-        calibjobs['completed'][prow['JOBDESC']] = True
-        log.info("Performed nightly bias as no dark or cte passed cuts.")
-    elif (do_badcol or do_cte) and not calibjobs['completed']['ccdcalib']:
+    have_flats_for_cte = len(cte1s) > 0 and len(flats) > 0
+    do_bias = len(zeros) > 0 and not calibjobs['accounted_for']['biasnight']
+    do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
+    do_cte = have_flats_for_cte and not calibjobs['accounted_for']['ctecorrnight']
+
+    ## if do badcol or cte, then submit a ccdcalib job, otherwise submit a
+    ## nightlybias job
+    if do_badcol or do_cte:
         ######## Submit ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
         ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
@@ -696,12 +677,38 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
             prow, ptable = create_submit_add_and_save(prow, ptable,
                                                       extra_job_args=extra_job_args)
             calibjobs[prow['JOBDESC']] = prow.copy()
-            calibjobs['completed'][prow['JOBDESC']] = True
             log.info(f"Submitted ccdcalib job with {do_bias=}, "
                      + f"{do_badcol=}, {do_cte=}")
+    elif do_bias:
+        log.info("\nNo dark or cte found. Submitting nightlybias before "
+                 "processing exposures.\n")
+        prow = erow_to_prow(zeros[0])
+        prow['EXPID'] = np.array([])
+        prow['INTID'] = int_id
+        int_id += 1
+        prow['JOBDESC'] = 'nightlybias'
+        prow['CALIBRATOR'] = 1
+        cams = set(decode_camword('a0123456789'))
+        for zero in zeros:
+            if 'calib' in zero['PROGRAM']:
+                proccamword = difference_camwords(zero['CAMWORD'],
+                                                  zero['BADCAMWORD'])
+                cams = cams.intersection(set(decode_camword(proccamword)))
+        prow['PROCCAMWORD'] = create_camword(list(cams))
+        prow = define_and_assign_dependency(prow, calibjobs)
+        prow, ptable = create_submit_add_and_save(prow, ptable)
+        calibjobs[prow['JOBDESC']] = prow.copy()
+        log.info("Performed nightly bias as no dark or cte passed cuts.")
+
+    if do_bias:
+        calibjobs['accounted_for']['biasnight'] = True
+    if do_badcol:
+        calibjobs['accounted_for']['badcolumns'] = True
+    if do_cte:
+        calibjobs['accounted_for']['ctecorrnight'] = True
 
     ######## Submit arcs and psfnight ########
-    if len(arcs)>0 and not calibjobs['completed']['psfnight']:
+    if len(arcs)>0 and not calibjobs['accounted_for']['psfnight']:
         arc_prows = []
         for arc_erow in arcs:
             if arc_erow['EXPID'] in processed_cal_expids:
@@ -715,12 +722,12 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         ptable = set_calibrator_flag(arc_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
         calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
-        calibjobs['completed'][joint_prow['JOBDESC']] = True
+        calibjobs['accounted_for']['psfnight'] = True
 
 
     ######## Submit flats and nightlyflat ########
     ## If nightlyflat defined we don't need to process more normal flats
-    if len(flats) > 0 and not calibjobs['completed']['nightlyflat']:
+    if len(flats) > 0 and not calibjobs['accounted_for']['fiberflatnight']:
         flat_prows = []
         for flat_erow in flats:
             if flat_erow['EXPID'] in processed_cal_expids:
@@ -737,7 +744,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         ptable = set_calibrator_flag(flat_prows, ptable)
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
         calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
-        calibjobs['completed'][joint_prow['JOBDESC']] = True
+        calibjobs['accounted_for']['fiberflatnight'] = True
         
     ######## Submit cte flats ########
     jobdesc = 'flat'

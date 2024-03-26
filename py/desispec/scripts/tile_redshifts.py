@@ -199,7 +199,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         newexptable = _allexp[keep]
         if exptable is not None:
             expids = exptable['EXPID']
-            missing_exps = np.array([expid not in newexptable for expid in expids])
+            missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
             if np.any(missing_exps):
                 latest_exptable = read_minimal_exptables_columns(nights=np.unique(exptable['NIGHT'][missing_exps]))
                 keep = np.in1d(latest_exptable['EXPID'], expids[missing_exps])

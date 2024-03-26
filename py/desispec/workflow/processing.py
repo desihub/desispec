@@ -923,7 +923,7 @@ def parse_previous_tables(etable, ptable, night):
     arcs, flats, sciences = [], [], []
     calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
                  'psfnight': None, 'nightlyflat': None, 'linkcal': None,
-                 'completed': dict()}
+                 'accounted_for': dict()}
     curtype,lasttype = None,None
     curtile,lasttile = None,None
 
@@ -1007,23 +1007,44 @@ def generate_calibration_dict(ptable, files_to_link=None):
     """
     log = get_logger()
     job_to_file_map = get_jobdesc_to_file_map()
+    accounted_for = {'biasnight': False, 'badcolumns': False,
+                     'ctecorrnight': False, 'psfnight': False,
+                     'fiberflatnight': False}
     calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
-                 'psfnight': None, 'nightlyflat': None, 'linkcal': None,
-                 'completed': dict()}
+                 'psfnight': None, 'nightlyflat': None, 'linkcal': None}
+
     ptable_jobtypes = ptable['JOBDESC']
 
     for jobtype in calibjobs.keys():
-        calibjobs["completed"][jobtype] = False
         if jobtype in ptable_jobtypes:
             calibjobs[jobtype] = table_row_to_dict(ptable[ptable_jobtypes==jobtype][0])
             log.info(f"Located {jobtype} job in exposure table: {calibjobs[jobtype]}")
-            calibjobs["completed"][jobtype] = True
+            if jobtype == 'linkcal':
+                if files_to_link is not None and len(files_to_link) > 0:
+                    log.info(f"Assuming existing linkcal job processed "
+                             + f"{files_to_link} since given in override file.")
+                    calibjobs = update_calibjobs_with_linking(calibjobs, files_to_link)
+                else:
+                    err = f"linkcal job exists but no files given: {files_to_link=}"
+                    log.error(err)
+                    raise ValueError(err)
+            elif jobtype == 'ccdcalib':
+                possible_ccd_files = set(['biasnight', 'badcolumns', 'ctecorrnight'])
+                if files_to_link is None:
+                    files_accounted_for = possible_ccd_files
+                else:
+                    files_accounted_for = possible_ccd_files.difference(files_to_link)
+                    ccd_files_linked = possible_ccd_files.intersection(files_to_link)
+                    log.info(f"Assuming existing ccdcalib job processed "
+                             + f"{files_accounted_for} since {ccd_files_linked} "
+                             + f"are linked.")
+                for fil in files_accounted_for:
+                    accounted_for[fil] = True
+            else:
+                accounted_for[job_to_file_map[jobtype]] = True
 
-    if calibjobs["completed"]['linkcal'] and files_to_link is not None:
-        calibjobs = update_calibjobs_with_linking(calibjobs, files_to_link)
-
+    calibjobs['accounted_for'] = accounted_for
     return calibjobs
-
 
 def update_calibjobs_with_linking(calibjobs, files_to_link):
     """
@@ -1035,7 +1056,7 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
     ----------
         calibjobs: dict
             Dictionary containing "nightlybias", "badcol", "ccdcalib",
-            "psfnight", "nightlyflat", "linkcal", and "completed". Each key corresponds to a
+            "psfnight", "nightlyflat", "linkcal", and "accounted_for". Each key corresponds to a
             Table.Row or None. The table.Row() values are for the corresponding
             calibration job.
         files_to_link: set
@@ -1045,44 +1066,41 @@ def update_calibjobs_with_linking(calibjobs, files_to_link):
     -------
         calibjobs, dict
             Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
-            'psfnight', 'nightlyflat', 'linkcal', and 'completed'. Each key corresponds to a
+            'psfnight', 'nightlyflat', 'linkcal', and 'accounted_for'. Each key corresponds to a
             Table.Row or None. The table.Row() values are for the corresponding
             calibration job.
     """
     log = get_logger()
     
-    file_job_map = get_file_to_jobdesc_map()
     for fil in files_to_link:
-        if fil in file_job_map:
-            calibjobs['completed'][file_job_map[fil]] = True
-        elif fil in ['biasnight', 'badcolumns', 'ctecorrnight']:
-            continue
+        if fil in calibjobs['accounted_for']:
+            calibjobs['accounted_for'][fil] = True
         else:
-            err = f"Filetype {fil} doesn't map to a known job description: "
-            err += f"{file_job_map=}"
+            err = f"{fil} doesn't match an expected filetype: "
+            err += f"{calibjobs['accounted_for'].keys()}"
             log.error(err)
             raise ValueError(err)
-        
-    if 'biasnight' in files_to_link and 'badcolumns' in files_to_link \
-            and 'ctecorrnight' in files_to_link:
-        calibjobs['completed']['ccdcalib'] = True
 
     return calibjobs
 
-def all_calibs_submitted(completed):
+def all_calibs_submitted(accounted_for, do_cte_flats):
     """
     Function that returns the boolean logic to determine if the necessary
     calibration jobs have been submitted for calibration.
 
     Args:
-        completed, dict, Dictionary with keys corresponding to the calibration job descriptions and values of True or False.
+        accounted_for, dict, Dictionary with keys corresponding to the calibration
+            filenames and values of True or False.
+        do_cte_flats, bool, whether ctecorrnight files are expected or not.
 
     Returns:
         bool, True if all necessary calibrations have been submitted or handled, False otherwise.
     """
-    ccdlevel_completed = (completed['nightlybias'] or completed['badcol']
-                         or completed['ccdcalib'])
-    return ccdlevel_completed and completed['psfnight'] and completed['nightlyflat']
+    test_dict = accounted_for.copy()
+    if not do_cte_flats:
+        test_dict.pop('ctecorrnight')
+
+    return np.all(list(test_dict.values()))
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
