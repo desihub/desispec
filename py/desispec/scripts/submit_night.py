@@ -3,6 +3,7 @@ desispec.scripts.submit_night
 =============================
 
 """
+from desispec.workflow.science_selection import get_completed_tiles
 from desiutil.log import get_logger
 import numpy as np
 import os
@@ -19,7 +20,7 @@ from desispec.workflow.exptable import get_exposure_table_path, \
 from desispec.workflow.proctable import default_obstypes_for_proctable, get_processing_table_path, \
                                         get_processing_table_name, erow_to_prow, table_row_to_dict, \
                                         default_prow
-from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
+from desispec.workflow.processing import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, \
                                         checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
@@ -397,17 +398,19 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             # If done with science exposures for a tile and use_tilenight==True, use
             # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
             if use_tilenight and lasttype == 'science' and len(sciences)>0:
+                extra_job_args = {}
+                extra_job_args['z_submit_types'] = cur_z_submit_types
+                extra_job_args['laststeps'] = ['all','fluxcalib','skysub']
                 ptable, sciences, internal_id \
-                    = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                    = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id,
                                                     dry_run=dry_run_level,
                                                     queue=queue,
                                                     reservation=reservation,
                                                     strictly_successful=True,
                                                     check_for_outputs=check_for_outputs,
                                                     resubmit_partial_complete=resubmit_partial_complete,
-                                                    z_submit_types=cur_z_submit_types,
                                                     system_name=system_name,use_specter=use_specter,
-                                                    laststeps=tilenight_laststeps)
+                                                    extra_job_args=extra_job_args)
             else:
                 ## If running redshifts and there is a future exposure of the same tile
                 ## then only run per exposure redshifts until then
@@ -501,17 +504,19 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             cur_z_submit_types = z_submit_types
 
         if use_tilenight and len(sciences)>0:
+            extra_job_args = {}
+            extra_job_args['z_submit_types'] = cur_z_submit_types
+            extra_job_args['laststeps'] = ['all','fluxcalib','skysub']
             ptable, sciences, internal_id \
-                = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id,
                                                 dry_run=dry_run_level,
                                                 queue=queue,
                                                 reservation=reservation,
                                                 strictly_successful=True,
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
-                                                z_submit_types=cur_z_submit_types,
                                                 system_name=system_name,use_specter=use_specter,
-                                                laststeps=tilenight_laststeps)
+                                                extra_job_args=extra_job_args)
         else:
             ptable, calibjobs, sciences, internal_id \
                 = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
@@ -529,51 +534,3 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')
 
-
-def get_completed_tiles(specstatus_path=None, complete_tiles_thrunight=None):
-    """
-    Uses a tiles-specstatus.ecsv file and selection criteria to determine
-    what tiles have beeen completed. Takes an optional argument to point
-    to a custom specstatus file. Returns an array of TILEID's.
-
-    Args:
-        specstatus_path, str, optional. Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
-            Location of the surveyops specstatus table.
-        complete_tiles_thrunight, int, optional. Default is None. Only tiles completed
-            on or before the supplied YYYYMMDD are considered
-            completed and will be processed. All complete
-            tiles are submitted if None.
-
-    Returns:
-        array-like. The tiles from the specstatus file determined by the
-        selection criteria to be completed.
-    """
-    log = get_logger()
-    if specstatus_path is None:
-        if 'DESI_SURVEYOPS' not in os.environ:
-            raise ValueError("DESI_SURVEYOPS is not defined in your environment. " +
-                             "You must set it or specify --specstatus-path explicitly.")
-        specstatus_path = os.path.join(os.environ['DESI_SURVEYOPS'], 'ops',
-                                       'tiles-specstatus.ecsv')
-        log.info(f"specstatus_path not defined, setting default to {specstatus_path}.")
-    if not os.path.exists(specstatus_path):
-        raise IOError(f"Couldn't find {specstatus_path}.")
-    specstatus = Table.read(specstatus_path)
-
-    ## good tile selection
-    iszdone = (specstatus['ZDONE'] == 'true')
-    isnotmain = (specstatus['SURVEY'] != 'main')
-    enoughfraction = 0.1  # 10% rather than specstatus['MINTFRAC']
-    isenoughtime = (specstatus['EFFTIME_SPEC'] >
-                    specstatus['GOALTIME'] * enoughfraction)
-    ## only take the approved QA tiles in main
-    goodtiles = iszdone
-    ## not all special and cmx/SV tiles have zdone set, so also pass those with enough time
-    goodtiles |= (isenoughtime & isnotmain)
-    ## main backup also don't have zdone set, so also pass those with enough time
-    goodtiles |= (isenoughtime & (specstatus['FAPRGRM'] == 'backup'))
-
-    if complete_tiles_thrunight is not None:
-        goodtiles &= (specstatus['LASTNIGHT'] <= complete_tiles_thrunight)
-
-    return np.array(specstatus['TILEID'][goodtiles])

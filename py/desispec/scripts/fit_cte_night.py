@@ -26,7 +26,8 @@ def parse(options=None):
     parser.add_argument('-c','--cameras', type = str, default = 'r0123456789z0123456789', required=False,
                         help = 'list of cameras to process')
     parser.add_argument('-e','--expids', type = str, default = None, required=False,
-                        help = 'comma separated list of flat expids to use')
+                        help = 'comma separated list of flat expids to use'
+                        + ' the cte should be first followed by a 120s flat')
     parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'path of output cvs table (default is the calibnight directory of the prod)')
     parser.add_argument('--ncpu', type=int, default=default_nproc,
@@ -78,23 +79,27 @@ def main(args=None, comm=None):
         keep = etable['OBSTYPE'] == 'science'
         sci_etable = etable[keep]
         if len(sci_etable) == 0:
-            log.warning(f'No science exposures on {args.night}, but calculating CTE corrections anyway...')
+            if comm is None or comm.rank == 0:
+                log.warning(f'No science exposures on {args.night}, but calculating CTE corrections anyway...')
         else:
             #- List of good camwords per exposure
             all_goodcamwords = [erow_to_goodcamword(row, suppress_logging=True) for row in etable]
 
             #- union = camword of any camera that was good on any exposure
             any_goodcamword = camword_union(all_goodcamwords)
-            log.debug('any_goodcamword = %s', any_goodcamword)
+            if comm is None or comm.rank == 0:
+                log.debug('any_goodcamword = %s', any_goodcamword)
 
             #- trim to just the ones we are asking for in args
             args_camword = parse_cameras(args.cameras, loglevel='WARNING')
             final_camword = camword_intersection([args_camword, any_goodcamword])
-            log.debug('args_camword=%s x any_goodcamword=%s -> final_camword=%s',
-                      args_camword, any_goodcamword, final_camword)
+            if comm is None or comm.rank == 0:
+                log.debug('args_camword=%s x any_goodcamword=%s -> final_camword=%s',
+                          args_camword, any_goodcamword, final_camword)
 
             if args_camword != final_camword:
-                log.warning(f'Trimming {args_camword} to {anygoodcamword} needed by science exposures')
+                if comm is None or comm.rank == 0:
+                    log.warning(f'Trimming {args_camword} to {anygoodcamword} needed by science exposures')
                 args.cameras = decode_camword(final_camword)
 
     #- Assemble options to pass for each camera

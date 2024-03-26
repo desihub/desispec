@@ -23,8 +23,8 @@ def parse(options=None):
     parser.add_argument("-n", "--nights", type=int, nargs='+', help="YEARMMDD nights")
     parser.add_argument("-t", "--tileid", type=int, help="Tile ID")
     parser.add_argument("-e", "--expids", type=int, nargs='+', help="exposure IDs")
-    parser.add_argument("-s", "--spectrographs", type=str,
-            help="spectrographs to include, e.g. 0-4,9; includes final number in range")
+    #parser.add_argument("-s", "--spectrographs", type=str,
+    #        help="spectrographs to include, e.g. 0-4,9; includes final number in range")
     parser.add_argument("-g", "--group", type=str, required=True,
                    help="cumulative, pernight, perexp, or a custom name")
     parser.add_argument("--run_zmtl", action="store_true",
@@ -60,9 +60,19 @@ def main(args=None):
     num_error = len(failed_jobs)
     sys.exit(num_error)
 
+# _allexp is cache of all exposure tables stacked so that we don't have to read all
+# of them every time we call generate_tile_redshift_scripts()
+_allexp = None
+
+def reset_allexp_cache():
+    """
+    Utility script to reset the _allexp cache to ensure it is re-read from disk
+    """
+    global _allexp
+    _allexp = None
+
 def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
-                                   spectrographs=None, camword=None,
-                                   max_gpuprocs=None, no_gpu=False,
+                                   camword=None, max_gpuprocs=None, no_gpu=False,
                                    run_zmtl=False, no_afterburners=False,
                                    batch_queue='regular', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
@@ -76,7 +86,6 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         tileid (int): Tile ID.
         expids (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
-        spectrographs (str or list of int): spectrographs to include
         camword (str): camword of cameras to include
         max_gpuprocs (int): Number of gpu processes
         no_gpu (bool): Default false. If true it doesn't use GPU's even if available.
@@ -163,13 +172,13 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         log.critical(f'No exposures left after filtering by tileid/nights/expids')
         sys.exit(1)
 
-    if (spectrographs is not None) and (camword is not None):
-        msg = f'Give {spectrographs=} OR {camword=} but not both'
-        log.error(msg)
-        raise ValueError(msg)
+    #if (spectrographs is not None) and (camword is not None):
+    #    msg = f'Give {spectrographs=} OR {camword=} but not both'
+    #    log.error(msg)
+    #    raise ValueError(msg)
 
-    if spectrographs is not None:
-        camword = spectro_to_camword(spectrographs)
+    #if spectrographs is not None:
+    #    camword = spectro_to_camword(spectrographs)
 
     if camword is not None:
         if isinstance(camword, str):
@@ -182,9 +191,23 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
     # - NOTE: this may not scale well several years into the survey
     if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-        allexp = read_minimal_exptables_columns()
-        keep = np.in1d(allexp['TILEID'], tileids)
-        exptable = allexp[keep]
+        global _allexp
+        if _allexp is None:
+            log.info(f'Reading all exposure_tables from all nights')
+            _allexp = read_minimal_exptables_columns()
+        keep = np.in1d(_allexp['TILEID'], tileids)
+        newexptable = _allexp[keep]
+        if exptable is not None:
+            expids = exptable['EXPID']
+            missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
+            if np.any(missing_exps):
+                latest_exptable = read_minimal_exptables_columns(nights=np.unique(exptable['NIGHT'][missing_exps]))
+                keep = np.in1d(latest_exptable['EXPID'], expids[missing_exps])
+                latest_exptable = latest_exptable[keep]
+                newexptable = vstack([newexptable, latest_exptable])
+
+        newexptable.sort(['EXPID'])
+        exptable = newexptable
         ## Ensure we only include data for nights up to and including specified nights
         if nights is not None:
             lastnight = int(np.max(nights))

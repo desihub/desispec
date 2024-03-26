@@ -32,7 +32,7 @@ class TestLinkCalibNight(unittest.TestCase):
         cls.prefixes = tuple(link_calibnight.calibnight_prefixes)
         for night in (cls.refnight, cls.altrefnight):
             for prefix in cls.prefixes:
-                if prefix == 'ctecorr':
+                if prefix == 'ctecorrnight':
                     filename = findfile(prefix, night=night)
                     with open(filename, 'w') as fx:
                         fx.write(os.path.basename(filename))
@@ -80,7 +80,7 @@ class TestLinkCalibNight(unittest.TestCase):
         options = f'--refnight {self.refnight} --newnight {self.newnight} --c a12'.split()
         link_calibnight.main(options)
         for prefix in self.prefixes:
-            if prefix == 'ctecorr':
+            if prefix == 'ctecorrnight':
                 #- ctecorr always is made, regardless of cameras option
                 newfile = findfile(prefix, night=self.newnight, camera=camera)
                 self.assertTrue(os.path.islink(newfile), f'Missing link {newfile}')

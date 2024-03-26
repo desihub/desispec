@@ -68,6 +68,42 @@ def get_termination_states():
     """
     return ['COMPLETED', 'CANCELLED', 'FAILED']
 
+def get_failed_states():
+    """ 
+    Defines what Slurm job states should be considered failed or problematic
+
+    All possible values that Slurm returns are:
+        BF BOOT_FAIL Job terminated due to launch failure, typically due to a hardware failure (e.g. unable to boot the node or block and the job can not be requeued).
+        CA CANCELLED Job was explicitly cancelled by the user or system administrator. The job may or may not have been initiated.
+        CD COMPLETED Job has terminated all processes on all nodes with an exit code of zero.
+        CF CONFIGURING Job has been allocated resources, but are waiting for them to become ready for use (e.g. booting).
+        CG COMPLETING Job is in the process of completing. Some processes on some nodes may still be active.
+        DL DEADLINE Job terminated on deadline.
+        F FAILED Job terminated with non-zero exit code or other failure condition.
+        NF NODE_FAIL Job terminated due to failure of one or more allocated nodes.
+        OOM OUT_OF_MEMORY Job experienced out of memory error.
+        PD PENDING Job is awaiting resource allocation.
+        PR PREEMPTED Job terminated due to preemption.
+        R RUNNING Job currently has an allocation.
+        RD RESV_DEL_HOLD Job is being held after requested reservation was deleted.
+        RF REQUEUE_FED Job is being requeued by a federation.
+        RH REQUEUE_HOLD Held job is being requeued.
+        RQ REQUEUED Completing job is being requeued.
+        RS RESIZING Job is about to change size.
+        RV REVOKED Sibling was removed from cluster due to other cluster starting the job.
+        SI SIGNALING Job is being signaled.
+        SE SPECIAL_EXIT The job was requeued in a special state. This state can be set by users, typically in EpilogSlurmctld, if the job has terminated with a particular exit value.
+        SO STAGE_OUT Job is staging out files.
+        ST STOPPED Job has an allocation, but execution has been stopped with SIGSTOP signal. CPUS have been retained by this job.
+        S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
+        TO TIMEOUT Job terminated upon reaching its time limit.
+    
+    Returns:
+        list. A list of strings outlining the job states that are considered to be
+            failed or problematic.
+    """
+    return ['BOOT_FAIL', 'CANCELLED', 'DEADLINE', 'FAILED', 'NODE_FAIL',
+            'OUT_OF_MEMORY', 'PREEMPTED', 'REVOKED', 'SUSPENDED', 'TIMEOUT']
 
 
 def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
@@ -300,3 +336,26 @@ def any_jobs_not_complete(statuses, termination_states=None):
     if termination_states is None:
         termination_states = get_termination_states()
     return np.any([status not in termination_states for status in statuses])
+
+def any_jobs_failed(statuses, failed_states=None):
+    """
+    Returns True if any of the job statuses in the input column of the
+    processing table, statuses, are not complete (as based on the list of
+    acceptable final states, termination_states, given as an argument. These
+    should be states that are viewed as final, as opposed to job states
+    that require resubmission.
+
+    Args:
+        statuses, Table.Column or list or np.array. The statuses in the
+            processing table "STATUS". Each element should be a string.
+        failed_states, list or np.array. Each element should be a string
+            signifying a state that is returned by the Slurm scheduler that
+            should be consider failing or problematic.
+
+    Returns:
+        bool. True if any of the statuses of the jobs given in statuses are 
+            a member of the failed_states.
+    """
+    if failed_states is None:
+        failed_states = get_failed_states()
+    return np.any([status in failed_states for status in statuses])

@@ -564,7 +564,7 @@ def get_cte_images(night, camera, expids=None):
     Options
     -------
     expids : array-like
-        list of exposure IDs to use;
+        list of exposure IDs to use; cte first, 120s flat second
         if None, determine from exposure table
 
     Returns

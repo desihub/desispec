@@ -1294,6 +1294,27 @@ class TestIO(unittest.TestCase):
         self.assertEqual(cx(['b012', 'a012']), 'b012')
         self.assertEqual(cx(['a2', '', 'a2']), '')
 
+    def test_all_impacted_cameras(self):
+        """Test desispec.io.util.all_impacted_cameras
+        """
+        from ..io.util import all_impacted_cameras
+        self.assertEqual(all_impacted_cameras('', ''), set())
+        self.assertEqual(all_impacted_cameras('b1', ''), {'b1'})
+        self.assertEqual(all_impacted_cameras('a3', ''),
+                         {'b3', 'r3', 'z3'})
+        self.assertEqual(all_impacted_cameras('', 'b3D,b1D,r3A'),
+                         {'b1', 'b3', 'r3'})
+        self.assertEqual(all_impacted_cameras('b1', 'b3D,b1D,r3A'),
+                         {'b1', 'b3', 'r3'})
+        self.assertEqual(all_impacted_cameras('a3', 'b3D,b1D,r3A'),
+                         {'b1', 'b3', 'r3', 'z3'})
+        self.assertEqual(all_impacted_cameras('', 'b3D,b3A,r3A'),
+                         {'b3', 'r3'})
+        self.assertEqual(all_impacted_cameras('b1', 'b3D,b3A,r3A'),
+                         {'b1', 'b3', 'r3'})
+        self.assertEqual(all_impacted_cameras('a3', 'b3D,b3A,r3A'),
+                         {'b3', 'r3', 'z3'})
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """

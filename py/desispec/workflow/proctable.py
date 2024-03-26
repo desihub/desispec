@@ -52,7 +52,8 @@ from desiutil.log import get_logger
 #                     were made because of node failures or any other issues that were later resolved (or not resolved).
 ##################################################
 
-def get_processing_table_column_defs(return_default_values=False, overlap_only=False, unique_only=False):
+def get_processing_table_column_defs(return_default_values=False,
+                                     overlap_only=False, unique_only=False):
     """
     Contains the column names, data types, and default row values for a DESI processing table. It returns
     the names and datatypes with the defaults being given with an optional flag. Returned as 2 (or 3) lists.
@@ -65,7 +66,8 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     Returns:
         colnames, list. List of column names for an processing table.
         coldtypes, list. List of column datatypes for the names in colnames.
-        coldeflts, list. Optionally returned if return_default_values is True. List of default values for the corresponding colnames.
+        coldeflts, list. Optionally returned if return_default_values is
+        True. List of default values for the corresponding colnames.
     """
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
@@ -90,34 +92,30 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     coltypes2 += [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
     coldeflt2 += [np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int)]
 
-    colnames = colnames1 + colnames2
-    coldtypes = coltypes1 + coltypes2
-    coldeflts = coldeflt1 + coldeflt2
+    if overlap_only:
+        colnames, coldtypes, coldeflts = colnames1, coltypes1, coldeflt1
+    elif unique_only:
+        colnames, coldtypes, coldeflts = colnames2, coltypes2, coldeflt2
+    else:
+        colnames = colnames1 + colnames2
+        coldtypes = coltypes1 + coltypes2
+        coldeflts = coldeflt1 + coldeflt2
 
     if return_default_values:
-        if overlap_only:
-            return colnames1, coltypes1, coldeflt1
-        elif unique_only:
-            return colnames2, coltypes2, coldeflt2
-        else:
-            return colnames, coldtypes, coldeflts
+        return colnames, coldtypes, coldeflts
     else:
-        if overlap_only:
-            return colnames1, coltypes1
-        elif unique_only:
-            return colnames2, coltypes2
-        else:
-            return colnames, coldtypes
+        return colnames, coldtypes
 
 def default_obstypes_for_proctable():
     """
-    Defines the exposure types to be recognized by the workflow and saved in the processing table by default.
+    Defines the exposure types to be recognized by the workflow and saved in
+    the processing table by default.
 
     Returns:
         list. A list of default obstypes to be included in a processing table.
     """
     ## Define the science types to be included in the exposure table (case insensitive)
-    return ['bias', 'dark', 'arc', 'flat', 'science', 'twilight', 'sci', 'dither']
+    return ['zero', 'dark', 'arc', 'flat', 'science']
 
 def get_processing_table_name(specprod=None, prodmod=None, extension='csv'):
     """
@@ -286,14 +284,15 @@ def exptable_to_proctable(input_exptable, obstypes=None):
 
     return processing_table, unprocessed_table
 
-def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joinsymb='|'):
+def erow_to_prow(erow):
     """
     Converts an exposure table row to a processing table row. The columns unique to a processing table
     are filled with default values. If comments are made in COMMENTS or HEADERERR, those are ignored.
 
     Args:
-        erow, Table.Row or dict. An exposure table row. The row will be converted to a row of an processing table.
-            If comments are made in COMMENTS or HEADERERR, those are ignored.
+        erow, Table.Row or dict. An exposure table row. The row will be
+            converted to a row of an processing table. If comments are made in
+            COMMENTS or HEADERERR, those are ignored.
 
     Returns:
         prow, dict. The output processing table row.
