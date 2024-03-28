@@ -182,6 +182,8 @@ def get_dark_night_expid(night, prod):
                 )
             )
         else:
+            ## ccdcalib jobs can have more than one exposure if also doing cte
+            ## corrections. The first is expected to be the dark, so take that one
             expstr = str(d["EXPID"][sel][0])
             if '|' in expstr:
                 expid = int(expstr.split('|')[0])
