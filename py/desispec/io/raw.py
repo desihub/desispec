@@ -256,7 +256,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
 
         ## Mask fibers
-        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=True)
+        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
         fibers  = fibermap['FIBER'].data
         for k in ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"] :
             log.debug("{}={}".format(k,cfinder.badfibers([k])))
@@ -283,7 +283,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
         log.info("Propagate ccdmask.BADREADNOISE to fibermap FIBERSTATUS")
 
         if cfinder is None :
-            cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=True)
+            cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
 
         psf_filename = cfinder.findfile("PSF")
         tset = desispec.io.read_xytraceset(psf_filename)
