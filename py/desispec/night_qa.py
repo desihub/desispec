@@ -182,7 +182,11 @@ def get_dark_night_expid(night, prod):
                 )
             )
         else:
-            expid = int(str(d["EXPID"][sel][0]).strip("|"))
+            expstr = str(d["EXPID"][sel][0])
+            if '|' in expstr:
+                expid = int(expstr.split('|')[0])
+            else:
+                expid = int(expstr)
             log.info(
                 "found EXPID={} as the 300s DARK for NIGHT={}".format(
                     expid, night,
