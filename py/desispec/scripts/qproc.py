@@ -155,7 +155,7 @@ def main(args=None):
 
     if args.psf is None :
         if cfinder is None :
-            cfinder = CalibFinder([image.meta,primary_header])
+            cfinder = CalibFinder([image.meta,primary_header],fallback_on_dark_not_found=args.fallback_on_dark_not_found)
         args.psf = cfinder.findfile("PSF")
         log.info(" Using PSF {}".format(args.psf))
 
@@ -272,7 +272,7 @@ def main(args=None):
 
         if args.input_fiberflat is None :
             if cfinder is None :
-                cfinder = CalibFinder([image.meta,primary_header])
+                cfinder = CalibFinder([image.meta,primary_header],fallback_on_dark_not_found=args.fallback_on_dark_not_found)
             try :
                 args.input_fiberflat = cfinder.findfile("FIBERFLAT")
             except KeyError as e :
@@ -294,7 +294,7 @@ def main(args=None):
 
     if args.fluxcalib :
         if cfinder is None :
-            cfinder = CalibFinder([image.meta,primary_header])
+            cfinder = CalibFinder([image.meta,primary_header],fallback_on_dark_not_found=args.fallback_on_dark_not_found)
         # check for flux calib
         if cfinder.haskey("FLUXCALIB") :
             fluxcalib_filename = cfinder.findfile("FLUXCALIB")
