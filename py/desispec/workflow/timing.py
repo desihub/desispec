@@ -45,9 +45,9 @@ def get_nightly_end_time():
     """
     month = time.localtime().tm_mon
     if np.abs(month - 6) > 2:
-        end_night = 8
+        end_night = 8 # 7:23 is latest sunrise
     else:
-        end_night = 7
+        end_night = 7 # 5:15 is earliest sunrise
     return end_night  # local Tucson time the following morning
 
 
