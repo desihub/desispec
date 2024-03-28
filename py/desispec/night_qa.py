@@ -522,7 +522,15 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             d = Table.read(proctable_fn)
             sel = d["OBSTYPE"] == "dark"
             d = d[sel]
-            proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+            ## for ccdcalib jobs, the EXPID can sometimes be a list of
+            ## [DARK, FLAT, FLAT], so split and take just the first for the dark
+            proc_expids = list()
+            for expstr in d["EXPID"]:
+                if '|' in expstr:
+                    expid = int(expstr.split('|')[0])
+                else:
+                    expid = int(expstr)
+                proc_expids.append(expid)
             if dark_expid not in proc_expids:
                 run_preproc = True
             else:
