@@ -822,8 +822,8 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
     """Compare preprocessed dark images based on different dark models
 
     Args:
-        preprocfile1: filepath to bias model made from OBSTYPE=ZERO exposures
-        preprocfile2: filepath to bias model made from OBSTYPE=ZERO exposures
+        preprocfile1: filepath to preprocessed (i.e. dark subtracted) DARK image
+        preprocfile2: filepath to preprocessed (i.e. dark subtracted) DARK image
 
     Options:
         ny (even int): number of patches in y (row) direction
@@ -850,10 +850,22 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
         log.critical(msg)
         raise ValueError(msg)
 
-    #- calculate differences per-amp, thus //2
-    ny_groups = ny//2
-    nx_groups = nx//2
-
+    #- calculate differences per-amp
+    readout_mode = get_readout_mode(preprochdr1)
+    if readout_mode == '4Amp':
+        ny_groups = ny//2
+        nx_groups = nx//2
+    elif readout_mode == '2AmpLeftRight':
+        ny_groups = ny
+        nx_groups = nx//2
+    elif readout_mode == '2AmpUpDown':
+        ny_groups = ny//2
+        nx_groups = nx
+    else:
+        msg = f'Unknown {readout_mode=}'
+        log.critical(msg)
+        raise ValueError(msg)
+    
     median_diff1 = list()
     median_diff2 = list()
 
@@ -884,8 +896,16 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
     #- put back into 2D array by amp
     d1 = median_diff1
     d2 = median_diff2
-    mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
-    mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+
+    if readout_mode == '4Amp':
+        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
+        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+    elif readout_mode == '2AmpLeftRight':
+        mdiff1 = np.hstack([d1[0], d1[1]])
+        mdiff2 = np.hstack([d2[0], d2[1]])
+    elif readout_mode == '2AmpUpDown':
+        mdiff1 = np.vstack([d1[0], d1[1]])
+        mdiff2 = np.vstack([d2[0], d2[1]])
 
     assert mdiff1.shape == (ny,nx)
     assert mdiff2.shape == (ny,nx)
