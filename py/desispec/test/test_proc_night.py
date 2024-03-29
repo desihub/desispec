@@ -338,7 +338,7 @@ class TestProcNight(unittest.TestCase):
         ## Test if flag appears when we request it
         testdict = base_override_dict.copy()
         flag = "--autocal-ff-solve-grad"
-        testdict['calibration']['nightlyflat'] = {'flags': [flag]}
+        testdict['calibration']['nightlyflat'] = {'extra_cmd_args': [flag]}
         proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=1)
         for job in ['ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
             self.assertTrue(job in proctable['JOBDESC'])

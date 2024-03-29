@@ -527,8 +527,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 ## For consistency with how we edit the other commands, do them
                 ## here, but future TODO would be to move these into the command
                 ## generation itself
-                if 'flags' in extra_job_args:
-                    cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['flags']))
+                if 'extra_cmd_args' in extra_job_args:
+                    cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['extra_cmd_args']))
             else:
                 cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)
                 if nightlybias:
