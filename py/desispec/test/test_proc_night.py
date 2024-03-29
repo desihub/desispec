@@ -15,7 +15,8 @@ import numpy as np
 
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.redshifts import get_ztile_script_pathname
-from desispec.workflow.desi_proc_funcs import get_desi_proc_tilenight_batch_file_pathname
+from desispec.workflow.desi_proc_funcs import \
+    get_desi_proc_tilenight_batch_file_pathname, get_desi_proc_batch_file_path
 from desispec.io import findfile
 from desispec.test.util import link_rawdata
 
@@ -329,6 +330,46 @@ class TestProcNight(unittest.TestCase):
             self.assertIn(job, set(proctable['JOBDESC']))
         for job in ['nightlybias', 'ccdcalib']:
             self.assertNotIn(job, set(proctable['JOBDESC']))
+    def test_proc_night_override_flag_setting(self):
+        """Test if override file linking is working"""
+        ## Setup the basic dictionary for the override file
+        base_override_dict = {'calibration': {}}
+
+        ## Test if flag appears when we request it
+        testdict = base_override_dict.copy()
+        flag = "--autocal-ff-solve-grad"
+        testdict['calibration']['nightlyflat'] = {'extra_cmd_args': [flag]}
+        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=1)
+        for job in ['ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
+            self.assertTrue(job in proctable['JOBDESC'])
+        for job in ['linkcal', 'nightlybias']:
+            self.assertTrue(job not in proctable['JOBDESC'])
+        scriptdir = get_desi_proc_batch_file_path(self.night, reduxdir=self.proddir)
+        script = glob.glob(os.path.join(scriptdir, 'nightlyflat*.slurm'))[0]
+        with open(script, 'r') as fil:
+            for line in fil.readlines():
+                if 'desi_proc_joint_fit' in line:
+                    self.assertTrue(flag in line)
+        ## Remove outputs of the last dry-run-level=1
+        if os.path.isdir(scriptdir):
+            shutil.rmtree(scriptdir)
+        proctabledir = os.path.dirname(findfile('proctable', night=self.night))
+        if os.path.isdir(proctabledir):
+            shutil.rmtree(proctabledir)
+
+        ## Now check that it doesn't have that string if we don't specify it
+        flag = "--autocal-ff-solve-grad"
+        testdict['calibration'] = {}
+        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=1)
+        for job in ['ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
+            self.assertTrue(job in proctable['JOBDESC'])
+        for job in ['linkcal', 'nightlybias']:
+            self.assertTrue(job not in proctable['JOBDESC'])
+        script = glob.glob(os.path.join(scriptdir, 'nightlyflat*.slurm'))[0]
+        with open(script, 'r') as fil:
+            for line in fil.readlines():
+                if 'desi_proc_joint_fit' in line:
+                    self.assertFalse(flag in line)
 
     @unittest.skipIf('SKIP_PROC_NIGHT_DAILY_TEST' in os.environ, 'Skipping test_proc_night_daily because $SKIP_PROC_NIGHT_DAILY_TEST is set')
     @unittest.skipUnless(os.path.isdir(_real_rawnight_dir), f'{_real_rawnight_dir} not available')

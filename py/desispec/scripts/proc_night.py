@@ -742,7 +742,12 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         joint_prow, int_id = make_joint_prow(flat_prows, descriptor='nightlyflat',
                                              internal_id=int_id)
         ptable = set_calibrator_flag(flat_prows, ptable)
-        joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
+        if 'nightlyflat' in cal_override:
+            extra_args = cal_override['nightlyflat']
+        else:
+            extra_args = None
+        joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable,
+                                                        extra_job_args=extra_args)
         calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
         calibjobs['accounted_for']['fiberflatnight'] = True
         

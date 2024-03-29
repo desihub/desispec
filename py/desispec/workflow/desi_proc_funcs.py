@@ -129,6 +129,9 @@ def add_desi_proc_joint_fit_terms(parser):
     #parser.add_argument("-n", "--nights", type=str, help="YEARMMDD nights")
     parser.add_argument("-e", "--expids", type=str, help="Exposure IDs")
     parser.add_argument("-i", "--inputs", type=str, help="input raw data files")
+    parser.add_argument("--autocal-ff-solve-grad", action="store_true",
+                        help="Perform a spatial gradient correction to the fiber flat"
+                             + " by running desi_autocalib_fiberflat with --solve-gradient")
     return parser
 
 def add_desi_proc_tilenight_terms(parser):
@@ -831,8 +834,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
             nightlycte = True
 
     ## nightlycte jobs add time to the job
-    ## hardcoding a runtime for nightlycte, as it matures this
-    ## should be moved into determine_resources()
+    ## hardcoding a runtime for nightlycte.
+    ## TODO should be moved into determine_resources()
     if nightlycte:
         cte_runtime = 5
         runtime += cte_runtime

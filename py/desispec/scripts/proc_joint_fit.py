@@ -356,6 +356,8 @@ def main(args=None, comm=None):
             cmd.append(f"-i")
             for flat in flats_for_arm[camera_arm]:
                 cmd.append(f"{flat}")
+            if args.autocal_ff_solve_grad:
+                cmd.append("--solve-gradient")
             num_cmd += 1
             cmdargs = cmd[1:]
 
