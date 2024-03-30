@@ -112,6 +112,7 @@ def main(args=None, comm=None):
         thisfile=os.path.dirname(os.path.abspath(__file__))
         thistime=datetime.datetime.fromtimestamp(start_imports).isoformat()
         log.info(f'rank 0 started {thisfile} at {thistime}')
+
     #- Start timer; only print log messages from rank 0 (others are silent)
     timer = desiutil.timer.Timer(silent=(rank>0))
 
@@ -191,9 +192,8 @@ def main(args=None, comm=None):
     #- Create and submit a batch job if requested
 
     if args.batch:
-
-        if args.nightlycte:
-            log.critical("don't know what to do in batch for nightlycte!")
+        if args.nightlycte and args.obstype != 'DARK' and not args.nightlybias:
+            log.critical("don't know what to do in batch for just nightlycte!")
             sys.exit(1)
 
         #exp_str = '{:08d}'.format(args.expid)
@@ -225,7 +225,10 @@ def main(args=None, comm=None):
                                                    runtime=args.runtime,
                                                    batch_opts=args.batch_opts,
                                                    timingfile=args.timingfile,
-                                                   system_name=args.system_name)
+                                                   system_name=args.system_name,
+                                                   nightlybias=args.nightlybias,
+                                                   nightlycte=args.nightlycte,
+                                                   cte_expids=args.cte_expids)
         err = 0
         if not args.nosubmit:
             err = subprocess.call(['sbatch', scriptfile])
@@ -251,6 +254,9 @@ def main(args=None, comm=None):
 
         camword = create_camword(args.cameras)
         cmd = f"desi_compute_nightly_bias -n {args.night} -c {camword}"
+
+        # if args.bias_expids is not None:
+        #     cmd += f" -e {args.bias_expids}"
 
         if rank == 0:
             log.info(f'RUNNING {cmd}')
@@ -290,6 +296,9 @@ def main(args=None, comm=None):
 
         camword = create_camword(args.cameras)
         cmd = f"desi_fit_cte_night -n {args.night} -c {camword}"
+
+        if args.cte_expids is not None:
+            cmd += f" -e {args.cte_expids}"
 
         ctecorrnightfile = findfile('ctecorrnight', args.night)
 

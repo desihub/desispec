@@ -21,7 +21,7 @@ from desispec.workflow.proctable import default_obstypes_for_proctable, \
                                         get_processing_table_path, \
                                         get_processing_table_name, \
                                         erow_to_prow, default_prow
-from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
+from desispec.workflow.processing import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job, \
                                         submit_tilenight_and_redshifts
@@ -237,7 +237,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     arcs, flats, sciences, calibjobs, curtype, lasttype, \
     curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
     do_bias = ('bias' in procobstypes or 'dark' in procobstypes)
-
+    
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):
@@ -364,16 +364,17 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 # If done with science exposures for a tile and use_tilenight==True, use
                 # submit_tilenight_and_redshifts, otherwise use checkfor_and_submit_joint_job
                 if use_tilenight and lasttype == 'science' and len(sciences)>0:
+                    extra_job_args = {}
+                    extra_job_args['z_submit_types'] = z_submit_types
+                    extra_job_args['laststeps'] = ['all','fluxcalib','skysub']
                     ptable, sciences, internal_id \
-                        = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+                        = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id,
                                                         dry_run=dry_run_level,
                                                         queue=queue,
                                                         strictly_successful=True,
                                                         check_for_outputs=check_for_outputs,
                                                         resubmit_partial_complete=resubmit_partial_complete,
-                                                        z_submit_types=z_submit_types,
-                                                        use_specter=use_specter,
-                                                        laststeps = ['all','fluxcalib','skysub'])
+                                                         use_specter=use_specter, extra_job_args=extra_job_args)
                 else:
                     ptable, calibjobs, sciences, internal_id \
                         = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
@@ -458,16 +459,18 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
     if use_tilenight and len(sciences)>0:
+        extra_job_args = {}
+        extra_job_args['z_submit_types'] = z_submit_types
+        extra_job_args['laststeps'] = ['all','fluxcalib','skysub']
         ptable, sciences, internal_id \
-            = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, lasttype, internal_id,
+            = submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id,
                                             dry_run=dry_run_level,
                                             queue=queue,
                                             strictly_successful=True,
                                             check_for_outputs=check_for_outputs,
                                             resubmit_partial_complete=resubmit_partial_complete,
-                                            z_submit_types=z_submit_types,
                                             use_specter=use_specter,
-                                            laststeps = ['all','fluxcalib','skysub'])
+                                            extra_job_args=extra_job_args)
     else:
         ptable, calibjobs, sciences, internal_id \
             = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,

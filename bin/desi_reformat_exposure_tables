@@ -4,12 +4,12 @@
 import argparse
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.scripts.updateexptables import update_exposure_tables
+from desispec.scripts.reformat_exptables import update_exposure_tables
 
 
 def get_parser():
     """
-    Creates an arguments parser for the desi_update_exposure_tables script
+    Creates an arguments parser for the desi_reformat_exposure_tables script
     """
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("-n", "--nights", type=str,  default=None, help="nights as comma separated string")

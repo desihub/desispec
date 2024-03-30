@@ -466,7 +466,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras, loglevel='INFO'):
+def parse_cameras(cameras, loglevel=None):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -485,7 +485,12 @@ def parse_cameras(cameras, loglevel='INFO'):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger(loglevel)
+    ## Change loglevel if requested but otherwise use the global default
+    if loglevel is not None:
+        log = get_logger(loglevel)
+    else:
+        log = get_logger()
+
     if cameras is None:
         camword = None
     elif type(cameras) is str:
@@ -549,7 +554,11 @@ def parse_cameras(cameras, loglevel='INFO'):
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
         raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
-    log.info(f"Converted input cameras={cameras} to camword={camword}")
+    if cameras != camword:
+        log.info(f"Converted input cameras={cameras} to camword={camword}")
+    else:
+        log.debug(f"Converted input cameras={cameras} to camword={camword}")
+
     return camword
 
 def difference_camwords(fullcamword,badcamword,suppress_logging=False):
@@ -843,6 +852,28 @@ def validate_badamps(badamps,joinsymb=','):
     else:
         log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}')
     return newbadamps
+
+def all_impacted_cameras(badcamword, badamps):
+    """
+    Checks badcamword string and badamps string (badamps joined by ',') and
+    returns the number of unique cameras impacted.
+
+    Args:
+        badcamword, str. The camword of all cameras.
+        badamps, str. A string of {camera}{petal}{amp} entries separated by
+            symbol given with joinsymb (comma by default). I.e. [brz][0-9][ABCD].
+            Example: 'b7D,z8A'.
+
+    Returns:
+        badcamset, set. The set of unique cameras mentioned in either badcams
+            or badamps.
+
+    """
+    badcamset = set(decode_camword(badcamword))
+    for (band, camnum, amp) in parse_badamps(badamps):
+        badcamset.add(f'{band}{camnum}')
+    return badcamset
+
 
 def get_speclog(nights, rawdir=None):
     """

@@ -182,7 +182,13 @@ def get_dark_night_expid(night, prod):
                 )
             )
         else:
-            expid = int(str(d["EXPID"][sel][0]).strip("|"))
+            ## ccdcalib jobs can have more than one exposure if also doing cte
+            ## corrections. The first is expected to be the dark, so take that one
+            expstr = str(d["EXPID"][sel][0])
+            if '|' in expstr:
+                expid = int(expstr.split('|')[0])
+            else:
+                expid = int(expstr)
             log.info(
                 "found EXPID={} as the 300s DARK for NIGHT={}".format(
                     expid, night,
@@ -516,7 +522,15 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             d = Table.read(proctable_fn)
             sel = d["OBSTYPE"] == "dark"
             d = d[sel]
-            proc_expids = [int(expid.strip("|")) for expid in d["EXPID"]]
+            ## for ccdcalib jobs, the EXPID can sometimes be a list of
+            ## [DARK, FLAT, FLAT], so split and take just the first for the dark
+            proc_expids = list()
+            for expstr in d["EXPID"]:
+                if '|' in expstr:
+                    expid = int(expstr.split('|')[0])
+                else:
+                    expid = int(expstr)
+                proc_expids.append(expid)
             if dark_expid not in proc_expids:
                 run_preproc = True
             else:

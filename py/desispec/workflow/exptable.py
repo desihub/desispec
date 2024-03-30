@@ -94,7 +94,7 @@ def default_obstypes_for_exptable():
         list: A list of default obstypes to be included in an exposure table.
     """
     ## Define the science types to be included in the exposure table (case insensitive)
-    return ['arc','flat','twilight','science','dark','zero']
+    return ['zero', 'dark', 'arc', 'flat', 'science']
 
 def get_exposure_flags():
     """

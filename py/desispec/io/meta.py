@@ -129,6 +129,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # Top level
+        exposure_table = '{specprod_dir}/exposure_tables/{month}/exposure_table_{night}.csv',
+        override='{specprod_dir}/exposure_tables/{month}/override_{night}.yaml',
+        processing_table = '{specprod_dir}/processing_tables/processing_table_{specprod}-{night}.csv',
+        unprocessed_table = '{specprod_dir}/processing_tables/unprocessed_table_{specprod}-{night}.csv',
         exposures = '{specprod_dir}/exposures-{specprod}.fits',
         tiles = '{specprod_dir}/tiles-{specprod}.fits',
         exposures_csv = '{specprod_dir}/exposures-{specprod}.csv',
@@ -199,7 +203,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-
         #
         # spectra- single exp tile based
         #
@@ -236,7 +239,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
         ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
         ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
     )
+    ## aliases
     location['desi'] = location['raw']
+    location['exptable'] = location['exposure_table']
+    location['proctable'] = location['processing_table']
+    location['unproctable'] = location['unprocessed_table']
+
+    ## Define the month if night is specified
+    if night is not None:
+        month = str(night)[:-2]
+    else:
+        month = None
 
     #- default group is "cumulative" for tile-based files
     if groupname is None and tile is not None and filetype in (
@@ -349,7 +362,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph, 'nightprefix':nightprefix,
+        'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }
 
     #- survey and faprogram should be lower, but don't trip on None

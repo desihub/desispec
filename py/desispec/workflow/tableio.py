@@ -37,7 +37,7 @@ def ensure_scalar(val, joinsymb='|',comma_replacement=';'):
             The output string which is a scalar quantity capable of being
             written to a single table cell (in a csv or fits file, for example).
     """
-    if type(val) in [str, np.str, np.str_]:
+    if type(val) in [str, np.str_]:
         if ',' in val:
             val = val.replace(',', comma_replacement)
         return val
@@ -72,7 +72,7 @@ def split_str(val, joinsymb='|',comma_replacement=';'):
     -------
     val or split_list, any datatype or np.array.
     """
-    if type(val) in [str, np.str, np.str_]:
+    if type(val) in [str, np.str_]:
         if val.isnumeric():
             if '.' in val:
                 return float(val)
@@ -179,7 +179,7 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
                 else:
                     col = Table.Column(name=nam, data=col)
                 table.replace_column(nam, col)
-            elif type(table[nam][0]) in [str, np.str, np.str_]:
+            elif type(table[nam][0]) in [str, np.str_]:
                 col = [row.replace(',', comma_replacement) for row in table[nam]]
                 if type(table[nam]) is Table.MaskedColumn:
                     col = Table.MaskedColumn(name=nam, data=col)
@@ -420,7 +420,7 @@ def guess_default_by_dtype(typ):
         return -99
     elif typ in [float, np.float32, np.float64]:
         return -99.0
-    elif typ in [str, np.str, np.str_]:
+    elif typ in [str, np.str_]:
         return 'unknown'
     elif typ == list:
         return []
@@ -493,8 +493,8 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
     firsttype = type(first)
 
     if verbose:
-        log.debug(first, firsttype, firsttype in [str, np.str, np.str_])
-    if process_mixins and firsttype in [str, np.str, np.str_] and joinsymb in first:
+        log.debug(first, firsttype, firsttype in [str, np.str_])
+    if process_mixins and firsttype in [str, np.str_] and joinsymb in first:
         do_split_str = True
         if typ not in [list, np.array, np.ndarray]:
             log.warning("Found mixin column with scalar datatype:")
@@ -512,7 +512,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             col.append(split_str(rowdat, joinsymb=joinsymb))
         elif array_like:
             col.append(np.array([rowdat]))
-        elif type(rowdat) in [str, np.str, np.str_] and comma_replacement in rowdat:
+        elif type(rowdat) in [str, np.str_] and comma_replacement in rowdat:
             col.append(rowdat.replace(comma_replacement, ','))
         else:
             col.append(rowdat)

@@ -13,10 +13,8 @@ import fitsio
 import desispec.io
 import desiutil
 from desispec.io import findfile
-from desispec.io.meta import get_desi_root_readonly
-from desispec.io.util import create_camword, decode_camword, parse_cameras, \
-    get_tempfilename
-# from desispec.calibfinder import findcalibfile
+from desispec.io.util import decode_camword, \
+    parse_cameras, get_tempfilename
 from desiutil.log import get_logger
 
 from . import batch
@@ -117,7 +115,11 @@ def add_desi_proc_singular_terms(parser):
     parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
     parser.add_argument("--nightlybias", action="store_true", help="Create nightly bias model from ZEROs")
+    # parser.add_argument("--bias-expids", type=str, default=None,
+    #                     help="Explicitly name expids of ZEROs to use for nightly bias model")
     parser.add_argument("--nightlycte", action="store_true", help="Fit CTE model from LED exposures")
+    parser.add_argument("--cte-expids", type=str, default=None,
+                        help="Explicitly name expids of a cte flat and flat to use for cte model")
     return parser
 
 def add_desi_proc_joint_fit_terms(parser):
@@ -127,6 +129,9 @@ def add_desi_proc_joint_fit_terms(parser):
     #parser.add_argument("-n", "--nights", type=str, help="YEARMMDD nights")
     parser.add_argument("-e", "--expids", type=str, help="Exposure IDs")
     parser.add_argument("-i", "--inputs", type=str, help="input raw data files")
+    parser.add_argument("--autocal-ff-solve-grad", action="store_true",
+                        help="Perform a spatial gradient correction to the fiber flat"
+                             + " by running desi_autocalib_fiberflat with --solve-gradient")
     return parser
 
 def add_desi_proc_tilenight_terms(parser):
@@ -144,6 +149,7 @@ def add_desi_proc_tilenight_terms(parser):
                              + "will not be processed at all.")
 
     return parser
+
 
 def assign_mpi(do_mpi, do_batch, log):
     """
@@ -373,7 +379,7 @@ def log_timer(timer, timingfile=None, comm=None):
             tmax = steptiming['duration.max']
             log.info(f'  {stepname:16s} {tmax:.2f}')
 
-def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, system_name=None):
+def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=None, system_name=None):
     """
     Determine the resources that should be assigned to the batch script given what
     desi_proc needs for the given input information.
@@ -381,11 +387,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     Args:
         ncameras (int): number of cameras to be processed
         jobdesc (str): type of data being processed
-        queue (str): the queue at NERSC to be submitted to. 'realtime' will force
-            restrictions on number of nodes.
         nexps (int, optional): the number of exposures processed in this step
-        force_runtime (int, optional): the amount of runtime in minutes to allow for the script. Should be left
-            to default heuristics unless needed for some reason.
+        queue (str, optional): the Slurm queue to be submitted to. Currently not used.
         system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
@@ -461,6 +464,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         nodes = 1
         runtime = 100
         ncores = nodes * config['cores_per_node']
+    elif jobdesc == 'LINKCAL':
+        nodes, ncores = 1, 1
+        runtime = 5.
     else:
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
@@ -558,7 +564,9 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
         pathname: str, the default script name for a desi_proc batch script file
     """
     camword = parse_cameras(cameras)
-    if type(exp) is not str:
+    if jobdesc.lower() == 'linkcal':
+        expstr = ""
+    elif type(exp) is not str:
         if exp is None:
             expstr = 'none'
         elif np.isscalar(exp):
@@ -568,10 +576,15 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
             expstr = '{:08d}'.format(exp[0])
     else:
         expstr = exp
-    jobname = '{}-{}-{}-{}'.format(jobdesc.lower(), night, expstr, camword)
+
+    if expstr != "":
+        expstr = "-" + expstr
+
+    jobname = f'{jobdesc.lower()}-{night}{expstr}-{camword}'
     return jobname
 
-def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=None):
+def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras,
+                                      reduxdir=None):
     """
     Returns the default directory location to store a batch script file given a night
 
@@ -585,7 +598,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     Returns:
         pathname: str, the default location and script name for a desi_proc batch script file
     """
-    path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
+    path = get_desi_proc_batch_file_path(night, reduxdir=reduxdir)
     name = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
     return os.path.join(path, name)
 
@@ -605,9 +618,120 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     name = get_desi_proc_tilenight_batch_file_name(night,tileid)
     return os.path.join(path, name)
 
-def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,
-                                  timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None,
-                                  use_specter=False, no_gpu=False):
+def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
+                                batch_opts=None, timingfile=None,
+                                batchdir=None, jobname=None, cmd=None,
+                                system_name=None):
+    """
+    Generate a batch script to be submitted to the slurm scheduler to run
+    desi_link_calibnight.
+
+    Args:
+        newnight (str or int): The night in calibnight where the links will
+        queue (str): Queue to be used.
+        cameras (str or list of str): List of cameras to include in the processing.
+        runtime (str, optional): Timeout wall clock time.
+        batch_opts (str, optional): Other options to give to the slurm batch scheduler (written into the script).
+        timingfile (str, optional): Specify the name of the timing file.
+        batchdir (str, optional): Specify where the batch file will be written.
+        jobname (str, optional): Specify the name of the slurm script written.
+        cmd (str, optional): Complete command as would be given in terminal to
+            run desi_link_calibnight.
+        system_name (str, optional): name of batch system, e.g. cori-haswell, cori-knl
+
+    Returns:
+        scriptfile: the full path name for the script written.
+
+    Note:
+        batchdir and jobname can be used to define an alternative pathname, but may not work with assumptions in desi_proc.
+        These optional arguments should be used with caution and primarily for debugging.
+    """
+    jobdesc = 'linkcal'
+
+    if cameras is None or np.isscalar(cameras):
+        camword = cameras
+        cameras = decode_camword(camword)
+
+    if batchdir is None:
+        batchdir = get_desi_proc_batch_file_path(newnight)
+
+    os.makedirs(batchdir, exist_ok=True)
+
+    if jobname is None:
+        jobname = get_desi_proc_batch_file_name(night=newnight, exp="",
+                                                jobdesc=jobdesc, cameras=cameras)
+
+    if timingfile is None:
+        timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        timingfile = os.path.join(batchdir, timingfile)
+
+    scriptfile = os.path.join(batchdir, jobname + '.slurm')
+
+    ## If system name isn't specified, pick it based upon jobdesc
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=jobdesc)
+
+    batch_config = batch.get_config(system_name)
+    threads_per_core = batch_config['threads_per_core']
+    gpus_per_node = batch_config['gpus_per_node']
+    ncameras = len(cameras)
+
+
+    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(),
+                                                 forced_runtime=runtime,
+                                                 system_name=system_name)
+
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
+
+    with open(scriptfile, 'w') as fx:
+        fx.write('#!/bin/bash -l\n\n')
+        fx.write('#SBATCH -N {}\n'.format(nodes))
+        fx.write('#SBATCH --qos {}\n'.format(queue))
+        for opts in batch_config['batch_opts']:
+            fx.write('#SBATCH {}\n'.format(opts))
+        if batch_opts is not None:
+            fx.write('#SBATCH {}\n'.format(batch_opts))
+        if system_name == 'perlmutter-gpu':
+            # perlmutter-gpu requires projects name with "_g" appended
+            fx.write('#SBATCH --account desi_g\n')
+        else:
+            fx.write('#SBATCH --account desi\n')
+        fx.write('#SBATCH --job-name {}\n'.format(jobname))
+        fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
+        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
+        #fx.write('#SBATCH --exclusive\n')
+
+        fx.write('\n')
+
+        fx.write(f'# {jobdesc} with {ncameras} cameras\n')
+        fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
+
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
+        # fx.write("export OMP_NUM_THREADS=1\n")
+
+        fx.write(f'\n# Link refnight to new night\n')
+        fx.write(f'echo Running {cmd}\n')
+        fx.write(f'{cmd}\n')
+
+        fx.write('\nif [ $? -eq 0 ]; then\n')
+        fx.write('  echo SUCCESS: done at $(date)\n')
+        fx.write('else\n')
+        fx.write('  echo FAILED: done at $(date)\n')
+        fx.write('  exit 1\n')
+        fx.write('fi\n')
+
+    print('Wrote {}'.format(scriptfile))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
+
+    return scriptfile
+
+def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
+                                  runtime=None, batch_opts=None, timingfile=None,
+                                  batchdir=None, jobname=None, cmdline=None,
+                                  system_name=None, use_specter=False,
+                                  no_gpu=False, nightlybias=None,
+                                  nightlycte=None, cte_expids=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -631,6 +755,9 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         system_name (str, optional): name of batch system, e.g. cori-haswell, cori-knl
         use_specter (bool, optional): Use classic specter instead of gpu_specter for extractions
         no_gpu (bool, optional): Do not use GPU even if available
+        nightlybias (bool): Create nightly bias model from ZEROs
+        nightlycte (bool): Fit CTE model from LED exposures
+        cte_expids (list): Explicitly name expids of the cte flat and flat to use for cte model
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -639,6 +766,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         batchdir and jobname can be used to define an alternative pathname, but may not work with assumptions in desi_proc.
         These optional arguments should be used with caution and primarily for debugging.
     """
+    log = get_logger()
     if np.isscalar(cameras):
         camword = cameras
         cameras = decode_camword(camword)
@@ -673,13 +801,15 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
-    #- derive from cmdline or sys.argv whether this is a nightlybias job
-    nightlybias = False
-    if cmdline is not None:
-        if '--nightlybias' in cmdline:
+    ## derive from cmdline or sys.argv whether this is a nightlybias job
+    ## if not explicitly defined
+    if nightlybias is None:
+        nightlybias = False
+        if cmdline is not None:
+            if '--nightlybias' in cmdline:
+                nightlybias = True
+        elif '--nightlybias' in sys.argv:
             nightlybias = True
-    elif '--nightlybias' in sys.argv:
-        nightlybias = True
 
     #- nightlybias jobs are memory limited, so throttle number of ranks
     if nightlybias:
@@ -692,6 +822,23 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         nodes = max(nodes, bias_nodes)
         runtime += bias_runtime
+
+    ## derive from cmdline or sys.argv whether this is a nightlycte job
+    ## if not explicitly defined
+    if nightlycte is None:
+        nightlycte = False
+        if cmdline is not None:
+            if '--nightlycte' in cmdline:
+                nightlycte = True
+        elif '--nightlycte' in sys.argv:
+            nightlycte = True
+
+    ## nightlycte jobs add time to the job
+    ## hardcoding a runtime for nightlycte.
+    ## TODO should be moved into determine_resources()
+    if nightlycte:
+        cte_runtime = 5
+        runtime += cte_runtime
 
     #- arc fits require 3.2 GB of memory per bundle, so increase nodes as needed
     if jobdesc.lower() == 'arc':
@@ -751,7 +898,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                     inparams.append(subparam)
         else:
             inparams = list(cmdline)
-        for parameter in ['--queue', '-q', '--batch-opts']:
+        for parameter in ['--queue', '-q', '--batch-opts', '--cte-expids']:
             ## If a parameter is in the list, remove it and its argument
             ## Elif it is a '--' command, it might be --option=value, which won't be split.
             ##      check for that and remove the whole "--option=value"
@@ -769,6 +916,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
+        cmd = cmd.replace(' --nightlycte', ' ')
         if '--mpi' not in cmd:
             cmd += ' --mpi'
 
@@ -788,7 +936,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
-        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
 
         mps_wrapper=''
         if jobdesc.lower() == 'arc':
@@ -830,7 +978,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
             if ' -e ' in cmd or ' --expid ' in cmd:
                 fx.write('\n# Process exposure\n')
-                cmd = cmd.replace('--nightlybias', '')
+                cmd = cmd.replace(' --nightlybias', '')
+                cmd = cmd.replace(' --nightlycte', '')
                 srun=(f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
                     +mps_wrapper+f' {cmd}')
                 fx.write('echo Running {}\n'.format(srun))
@@ -848,12 +997,17 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('  exit 1\n')
                 fx.write('fi\n')
 
+            if nightlycte:
                 #- then proceed with desi_fit_cte_night command
-                camword = create_camword(cameras)
+                camword = parse_cameras(cameras)
                 fx.write('\n# Fit CTE parameters from flats if needed\n')
                 cmd = f'desi_fit_cte_night -n {night} -c {camword}'
-                fx.write(f'if [ -f $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/{night}/ctecorr-{night}.csv ]; then\n')
-                fx.write(f'  echo Already have ctecorr-{night}.csv\n')
+                if cte_expids is not None:
+                    cmd += f' -e ' + ','.join(np.atleast_1d(cte_expids).astype(str))
+                ctecorrfile = findfile('ctecorrnight', night=night)
+                fname = os.path.basename(ctecorrfile)
+                fx.write(f'if [ -f {ctecorrfile} ]; then\n')
+                fx.write(f'  echo Already have {fname}\n')
                 fx.write(f'else\n')
                 fx.write(f'  echo running {cmd}\n')
                 fx.write(f'  {cmd}\n')
@@ -1016,7 +1170,7 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         fx.write(f'# running a tile-night\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
-        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
 
         mps_wrapper=''
         if system_name == 'perlmutter-gpu':
