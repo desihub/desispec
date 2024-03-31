@@ -11,6 +11,8 @@ import numpy as np
 
 from redrock.utils import nersc_login_node, getGPUCountMPI
 from redrock.external import desi
+from desispec.util import runcmd
+from desispec.scripts import qsoqn, qsomgii, emlinefit
 
 # MPI environment availability
 have_mpi = None
@@ -37,7 +39,9 @@ parser.add_argument("--gpu", action="store_true",
 parser.add_argument("--overwrite", action="store_true",
         required=False, help="Overwrite existing output files")
 parser.add_argument("--rrdetails", action="store_true",
-        required=False, help="Write out the rrdetails file.")
+        required=False, help="Write out the rrdetails files.")
+parser.add_argument("--afterburners", action="store_true",
+        required=False, help="Run all after-burners.")
 parser.add_argument("--cpu-per-task", type=int, default=32,
         required=False, help="Maximum number of CPUs to use on each input file")
 parser.add_argument("--gpuonly", action="store_true",
@@ -51,6 +55,7 @@ if args.input_dir is not None:
 cpu_per_task = args.cpu_per_task
 overwrite = args.overwrite
 rrdetails = args.rrdetails
+afterburners = args.afterburners
 
 #- global communicator across all nodes
 comm = MPI.COMM_WORLD
@@ -123,22 +128,39 @@ if comm.rank == 0:
 if myhost < ncomm:
     myfiles = np.array_split(inputfiles, ncomm)[myhost]
     for infile in myfiles:
-        outfile = os.path.join(outdir, os.path.basename(infile).replace('coadd-', 'redrock-'))
-        if (os.access(outfile, os.F_OK)):
-            if overwrite:
-                if (subcomm.rank == 0):
-                    print ("Warning: overwriting existing file "+str(outfile))
-            else:
-                if (subcomm.rank == 0):
-                    print ("Error: "+str(outfile)+" exists.  Skipping.")
-                continue
-        opts = ['-i', infile, '-o', outfile]
-        if rrdetails:
-            h5file = os.path.join(outdir, os.path.basename(infile).replace('coadd-', 'rrdetails-').replace('.fits', '.h5'))
-            opts += ['-d', h5file]
-            
-        if args_to_pass is not None:
-            opts.extend(args_to_pass)
-        if use_gpu:
-            opts.append('--gpu')
-        desi.rrdesi(opts, comm=subcomm)
+        redrockfile = os.path.join(outdir, os.path.basename(infile).replace('coadd-', 'redrock-'))
+        if os.path.isfile(redrockfile) and not overwrite:
+            if subcomm.rank == 0:
+                print(f'Warning: skipping existing Redrock file {redrockfile}.')
+        else:
+            if os.path.isfile(redrockfile) and subcomm.rank == 0:
+                print(f'Warning: overwriting existing Redrock file {redrockfile}.')
+                
+            opts = ['-i', infile, '-o', redrockfile]
+            if rrdetails:
+                h5file = os.path.join(outdir, os.path.basename(infile).replace('coadd-', 'rrdetails-').replace('.fits', '.h5'))
+                opts += ['-d', h5file]
+                
+            if args_to_pass is not None:
+                opts.extend(args_to_pass)
+            if use_gpu:
+                opts.append('--gpu')
+            desi.rrdesi(opts, comm=subcomm)
+
+        # optionally run all the afterburners
+        if afterburners:
+            for prefix, afterburn, maincmd in zip(['qso_qn', 'qso_mgii', 'emline'],
+                                                  ['qso_qn', 'qso_mgii', 'emlinefit'],
+                                                  [qsoqn.main, qsomgii.main, emlinefit.main]):
+                afterfile = os.path.join(outdir, os.path.basename(infile).replace('coadd-', f'{prefix}-'))
+                if os.path.isfile(afterfile) and not overwrite:
+                    if subcomm.rank == 0:
+                        print(f'Warning: skipping existing afterburner file {afterfile}.')
+                else:
+                    if os.path.isfile(afterfile) and subcomm.rank == 0:
+                        print(f'Warning: overwriting existing afterburner file {afterfile}.')
+                        
+                    cmd = f'desi_{afterburn}_afterburner --coadd {infile} --redrock {redrockfile} --output {afterfile}'
+                    if 'qso_' in prefix:
+                        cmd += ' --target_selection all --save_target all'
+                    runcmd(maincmd, args=cmd.split()[1:], inputs=[infile, redrockfile], outputs=[afterfile])
