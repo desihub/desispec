@@ -163,4 +163,7 @@ if myhost < ncomm:
                     cmd = f'desi_{afterburn}_afterburner --coadd {infile} --redrock {redrockfile} --output {afterfile}'
                     if 'qso_' in prefix:
                         cmd += ' --target_selection all --save_target all'
-                    runcmd(maincmd, args=cmd.split()[1:], inputs=[infile, redrockfile], outputs=[afterfile], comm=subcomm)
+                    if prefix == 'qso_qn':
+                        runcmd(maincmd, args=cmd.split()[1:], inputs=[infile, redrockfile], outputs=[afterfile], comm=subcomm)
+                    else:
+                        runcmd(maincmd, args=cmd.split()[1:], inputs=[infile, redrockfile], outputs=[afterfile])
