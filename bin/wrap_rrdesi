@@ -74,7 +74,7 @@ if args.gpu:
     gpu_per_node = os.getenv('SLURM_GPUS_PER_NODE')
     if gpu_per_node is None:
         #Use utils.getGPUCountMPI which will look at /proc/driver/nvidia/gpus/
-        gpu_per_node = getGPUCountMPI()
+        gpu_per_node = getGPUCountMPI(comm)
     else:
         gpu_per_node = int(gpu_per_node)
     ngpu = gpu_per_node*nhosts
