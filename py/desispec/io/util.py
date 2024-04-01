@@ -6,6 +6,7 @@ Utility functions for desispec IO.
 """
 import os
 import glob
+import re
 import time
 import datetime
 import subprocess
@@ -852,6 +853,45 @@ def validate_badamps(badamps,joinsymb=','):
     else:
         log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}')
     return newbadamps
+
+def get_amps_for_camera(camera_amps, camera=None):
+    """
+    Return just the amplifier IDs for a given camera
+
+    Parameters
+    ----------
+    camera_amps : str
+        Either comma-separted camera+amps like "b7A,z3B,b2C"
+        or just the amplifier letters like "A" or "CD"
+    camera : str, optional
+        Camera like b7 or z3.  Must be specified if camera_amps
+        is full comma-separated camera+amps list.
+
+    Returns
+    -------
+    amps : str
+        String of amplifiers like 'A' or 'BC'.
+        Unique, sorted, uppercase string of amps like 'A' or 'BC'
+    """
+    log = get_logger()
+    #- if no number in camera_amps, interpret just as ABCD not r7A,b2C,z1D
+    if re.match(r'.*\d.*', camera_amps) is None:
+        result = ''.join(sorted(camera_amps.strip().replace(',','')))
+    elif camera is None:
+        msg = f'Must specify camera to filter {camera_amps=}'
+        log.error(msg)
+        raise ValueError(msg)
+    else:
+        camera = camera.lower()
+        amps = list()
+        for (cam, pet, amp) in parse_badamps(camera_amps):
+            thiscam = f'{cam}{pet}'.lower()
+            if camera == thiscam:
+                amps.append(amp)
+
+        result = ''.join(sorted(set(amps)))
+
+    return result.upper()
 
 def all_impacted_cameras(badcamword, badamps):
     """
