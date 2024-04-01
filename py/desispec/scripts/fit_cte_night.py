@@ -71,10 +71,7 @@ def main(args=None, comm=None):
 
     #- Check what cameras are actually needed by science exposures
     if args.expids is None:
-        etablefile = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                          os.environ['SPECPROD'],
-                          'exposure_tables', str(args.night // 100),
-                          f'exposure_table_{args.night}.csv')
+        etablefile = findfile('exptable', night=args.night)
         etable = load_table(etablefile, tabletype='exptable')
         keep = etable['OBSTYPE'] == 'science'
         sci_etable = etable[keep]
@@ -99,7 +96,7 @@ def main(args=None, comm=None):
 
             if args_camword != final_camword:
                 if comm is None or comm.rank == 0:
-                    log.warning(f'Trimming {args_camword} to {anygoodcamword} needed by science exposures')
+                    log.warning(f'Trimming {args_camword} to {any_goodcamword} needed by science exposures')
                 args.cameras = decode_camword(final_camword)
 
     #- Assemble options to pass for each camera

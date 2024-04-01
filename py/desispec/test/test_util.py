@@ -16,13 +16,35 @@ import desispec.parallel as dpl
 
 class TestNight(unittest.TestCase):
     
-    def test_night(self):
+    def test_ymd2night(self):
+        """
+        test util.ymd2night
+        """
         self.assertEqual(util.ymd2night(2015, 1, 2), '20150102')
+
+    def test_ymd2night(self):
+        """
+        test util.night2ymd
+        """
         self.assertEqual(util.night2ymd('20150102'), (2015, 1, 2))
         self.assertRaises(ValueError, util.night2ymd, '20150002')
         self.assertRaises(ValueError, util.night2ymd, '20150100')
         self.assertRaises(ValueError, util.night2ymd, '20150132')
         self.assertRaises(ValueError, util.night2ymd, '20151302')
+        self.assertRaises(ValueError, util.night2ymd, '03302024')
+        self.assertRaises(ValueError, util.night2ymd, '30032024')
+
+    def test_difference_nights(self):
+        """
+        test util.difference_nights which should return absolute number of nights
+        between two YEARMMDD's
+        """
+        night2 = 20240101
+        self.assertEqual(util.difference_nights('20240103', night2), 2)
+        self.assertEqual(util.difference_nights(20231231, night2), 1)
+        night2 = '20230218'
+        self.assertEqual(util.difference_nights('20240103', night2), 319)
+        self.assertEqual(util.difference_nights(20211231, night2), 414)
 
     def test_mask32(self):
         for dtype in (

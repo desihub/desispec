@@ -16,6 +16,8 @@ from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 import fitsio
 
+from desispec.io import findfile
+from desispec.util import difference_nights
 from desiutil.log import get_logger
 
 import desispec.preproc
@@ -302,11 +304,18 @@ def get_cte_params(header, cte_params_filename=None):
     # and columns FUNC AMPLITUDE FRACLEAK with CTE parameters
     ctecorrnight_table = Table.read(cte_params_filename)
 
+    ## For each row of the input table, check if the row data was derived from
+    ## a night within 2 weeks of the current night, otherwise it isn't valid
+    valid_night = np.array([difference_nights(rownight, night) < 14 for
+                            rownight in ctecorrnight_table["NIGHT"]])
+    ## Check for rows that match the camera we want
+    valid_camera = (ctecorrnight_table["CAMERA"] == camera)
+
     #- augment cte_regions with CTE correction parameters
     for amp in cte_regions:
-        selection = (ctecorrnight_table["NIGHT"] == night) & \
-                    (ctecorrnight_table["CAMERA"] == camera) & \
-                    (ctecorrnight_table["AMPLIFIER"] == amp)
+        ## check for rows that are from a valid not and on the desired camera
+        ## and amplifier
+        selection = valid_night & valid_camera & (ctecorrnight_table["AMPLIFIER"] == amp)
         if np.sum(selection)==0 :
             # we do expect a set of CTE parameter for the amplifier because we know the effect is there and
             # we asked for the parameters, this is an error
@@ -586,10 +595,7 @@ def get_cte_images(night, camera, expids=None):
 
     else:
         #- Look up exposures in production exposure table
-        exptablefn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                                  os.environ['SPECPROD'],
-                                  'exposure_tables', str(night // 100),
-                                  f'exposure_table_{night}.csv')
+        exptablefn = findfile('exptable', night=night)
 
         if not os.path.isfile(exptablefn) :
             mess = f"Cannot find exposure table file '{exptablefn}'. Because of that the flat exposures needed for the CTE correction modeling cannot be identified. Maybe check env. variables DESI_SPECTRO_REDUX and SPECPROD?"

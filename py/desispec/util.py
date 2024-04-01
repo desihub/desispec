@@ -11,8 +11,10 @@ import os
 import sys
 import errno
 import time
+import datetime
 import collections
 import numbers
+import datetime
 
 import numpy as np
 
@@ -398,17 +400,35 @@ def night2ymd(night):
     parse night YEARMMDD string into tuple of integers (year, month, day)
     """
     assert isinstance(night, str), 'night is not a string'
-    assert len(night) == 8, 'invalid YEARMMDD night string '+night
+    assert len(night) == 8, f'invalid YEARMMDD night string {night=}'
 
     year = int(night[0:4])
     month = int(night[4:6])
     day = int(night[6:8])
+
     if month < 1 or 12 < month:
-        raise ValueError('YEARMMDD month should be 1-12, not {}'.format(month))
+        raise ValueError('MM month should be 1-12, not {}'.format(month))
     if day < 1 or 31 < day:
-        raise ValueError('YEARMMDD day should be 1-31, not {}'.format(day))
+        raise ValueError('DD day should be 1-31, not {}'.format(day))
 
     return (year, month, day)
+
+def night2dateobj(night):
+    """
+    parse night YEARMMDD string into a datetime.datetime object
+    """
+    year, mm, dd = night2ymd(night)
+    return datetime.date(year=year, month=mm, day=dd)
+
+def difference_nights(firstnight, secondnight):
+    """
+    parse two YEARMMDD nights (ints or strings) and determine the number of
+    days between them
+    """
+    dt1 = night2dateobj(str(firstnight))
+    dt2 = night2dateobj(str(secondnight))
+    difference = dt1 - dt2
+    return np.abs(difference.days)
 
 def ymd2night(year, month, day):
     """
