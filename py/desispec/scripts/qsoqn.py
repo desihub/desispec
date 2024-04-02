@@ -424,6 +424,8 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 
 def main(args=None, comm=None):
+    from desispec.io.util import replace_prefix
+    
     log = get_logger()
 
     if not isinstance(args, argparse.Namespace):
@@ -444,15 +446,15 @@ def main(args=None, comm=None):
     param_RR = {'templates_filename': args.templates}
 
     if args.filename_priors is None:
-        param_RR['filename_priors'] = args.coadd.replace('coadd', 'priors-tmp')
+        param_RR['filename_priors'] = replace_prefix(args.coadd, 'coadd', 'priors-tmp')
     else:
         param_RR['filename_priors'] = args.filename_priors
     if args.filename_output_rerun_RR is None:
-        param_RR['filename_output_rerun_RR'] = args.coadd.replace('coadd', 'rrdetails-tmp')
+        param_RR['filename_output_rerun_RR'] = replace_prefix(args.coadd, 'coadd', 'rrdetails-tmp')
     else:
         param_RR['filename_output_rerun_RR'] = args.filename_output_rerun_RR
     if (args.filename_redrock_rerun_RR is None):
-        param_RR['filename_redrock_rerun_RR'] = args.coadd.replace('coadd', 'redrock-tmp')
+        param_RR['filename_redrock_rerun_RR'] = replace_prefix(args.coadd, 'coadd', 'redrock-tmp')
     else:
         param_RR['filename_redrock_rerun_RR'] = args.filename_redrock_rerun_RR
     param_RR['delete_RR_output'] = args.delete_RR_output
