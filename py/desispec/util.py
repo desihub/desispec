@@ -415,7 +415,7 @@ def night2ymd(night):
 
 def night2dateobj(night):
     """
-    parse night YEARMMDD string into a datetime.datetime object
+    parse night YEARMMDD string into a datetime.date object
     """
     year, mm, dd = night2ymd(night)
     return datetime.date(year=year, month=mm, day=dd)
