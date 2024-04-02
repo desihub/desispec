@@ -306,7 +306,7 @@ def get_cte_params(header, cte_params_filename=None):
 
     ## For each row of the input table, check if the row data was derived from
     ## a night within 2 weeks of the current night, otherwise it isn't valid
-    valid_night = np.array([difference_nights(rownight, night) < 14 for
+    valid_night = np.array([np.abs(difference_nights(rownight, night)) < 14 for
                             rownight in ctecorrnight_table["NIGHT"]])
     ## Check for rows that match the camera we want
     valid_camera = (ctecorrnight_table["CAMERA"] == camera)

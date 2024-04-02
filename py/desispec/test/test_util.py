@@ -40,10 +40,10 @@ class TestNight(unittest.TestCase):
         between two YEARMMDD's
         """
         night2 = 20240101
-        self.assertEqual(util.difference_nights('20240103', night2), 2)
+        self.assertEqual(util.difference_nights('20240103', night2), -2)
         self.assertEqual(util.difference_nights(20231231, night2), 1)
         night2 = '20230218'
-        self.assertEqual(util.difference_nights('20240103', night2), 319)
+        self.assertEqual(util.difference_nights('20240103', night2), -319)
         self.assertEqual(util.difference_nights(20211231, night2), 414)
 
     def test_mask32(self):

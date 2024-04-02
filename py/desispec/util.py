@@ -423,12 +423,12 @@ def night2dateobj(night):
 def difference_nights(firstnight, secondnight):
     """
     parse two YEARMMDD nights (ints or strings) and determine the number of
-    days between them
+    days between them, returning secondnight-firstnight
     """
     dt1 = night2dateobj(str(firstnight))
     dt2 = night2dateobj(str(secondnight))
-    difference = dt1 - dt2
-    return np.abs(difference.days)
+    difference = dt2 - dt1
+    return difference.days
 
 def ymd2night(year, month, day):
     """
