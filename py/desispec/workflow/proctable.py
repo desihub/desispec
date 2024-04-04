@@ -331,19 +331,23 @@ def erow_to_prow(erow):
         else:
             prow[nam] = defval
 
+    ## NOTE: previously code excluded badamp exposure for non-science OBSTYPES
+    ## Now we want to keep these.  Just commenting out the code for now until
+    ## we are sure about the badamp workflow.
+
     ## For obstypes that aren't science, BADAMPS loses it's relevance. For processing,
     ## convert those into bad cameras in BADCAMWORD, so the cameras aren't processed.
     ## Otherwise we'll have nightly calibrations with only half the fibers useful.
-    if prow['OBSTYPE'] != 'science' and prow['BADAMPS'] != '':
-        badcams = []
-        for (camera, petal, amplifier) in parse_badamps(prow['BADAMPS']):
-            badcams.append(f'{camera}{petal}')
-        newbadcamword = create_camword(badcams)
-        log.info("For nonsscience exposure: {}, converting BADAMPS={} to bad cameras={}.".format( erow['EXPID'],
-                                                                                                  prow['BADAMPS'],
-                                                                                                  newbadcamword    ) )
-        prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],newbadcamword)
-        prow['BADAMPS'] = ''
+    #   if prow['OBSTYPE'] != 'science' and prow['BADAMPS'] != '':
+    #       badcams = []
+    #       for (camera, petal, amplifier) in parse_badamps(prow['BADAMPS']):
+    #           badcams.append(f'{camera}{petal}')
+    #       newbadcamword = create_camword(badcams)
+    #       log.info("For nonsscience exposure: {}, converting BADAMPS={} to bad cameras={}.".format( erow['EXPID'],
+    #                                                                                                 prow['BADAMPS'],
+    #                                                                                                 newbadcamword    ) )
+    #       prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],newbadcamword)
+    #       prow['BADAMPS'] = ''
 
     return prow
 
