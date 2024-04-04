@@ -415,7 +415,6 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     select_zeros=exptable['OBSTYPE']=='zero'
     bad = select_zeros & (exptable['LASTSTEP']!='all')
     badcam = select_zeros & (exptable['BADCAMWORD']!='')
-    badamp = select_zeros & (exptable['BADAMPS']!='')
     notallcams = select_zeros & (exptable['CAMWORD']!='a0123456789')
 
     expdicts = dict()
@@ -436,9 +435,9 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             log.info(f'Dropping {ndrop} bad {zerotype} ZEROs: {drop_expids}')
             expids = expids[~drop]
 
-        if np.any(badcam|badamp|notallcams):
+        if np.any(badcam|notallcams):
             #do the by spectrograph evaluation of bad spectra
-            drop = np.isin(expids, exptable['EXPID'][badcam|badamp|notallcams])
+            drop = np.isin(expids, exptable['EXPID'][badcam|notallcams])
             ndrop = np.sum(drop)
             drop_expids = expids[drop]
             expids = expids[~drop]
@@ -447,20 +446,19 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             if len(expids) >= nzeros:
                 #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
                 log.info(f'Additionally dropped {ndrop} partially bad {zerotype} ZEROs for'
-                         + f' all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+                         + f' all cams because of BADCAM/CAMWORD: {drop_expids}')
             else:
                 #in this case we want to recover as many as possible
                 log.info(f'additionally dropped {ndrop} bad {zerotype} ZEROs for some cams'
-                         + f'because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+                         + f'because of BADCAM/CAMWORD: {drop_expids}')
 
                 for expid in drop_expids:
                     select_exp=exptable['EXPID']==expid
-                    badampstring=exptable['BADAMPS'][select_exp][0]
                     goodcamword=difference_camwords(exptable['CAMWORD'][select_exp][0],
                                                     exptable['BADCAMWORD'][select_exp][0])
                     goodcamlist=decode_camword(goodcamword)
                     for camera in goodcamlist:
-                        if camera in cameras and camera not in badampstring:
+                        if camera in cameras:
                             expdict[camera].append(expid)
         else:
             expdict={f'{cam}': expids for cam in cameras}
