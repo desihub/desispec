@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+from desispec.scripts.createoverride import create_override_file
+
+def get_parser():
+    """
+    Creates an arguments parser for the desi_create_override_file script
+    """
+    parser = argparse.ArgumentParser(usage="{prog} [options]")
+    parser.add_argument("-n", "--night", type=int, default=None,
+                        required=False,
+                        help="Night that the override file should be create for.")
+    parser.add_argument("--linkcal", type=str, default=None, required=False,
+                        help="If True then caliblink will be added to the override file with "
+                             + " prompts obtaining relevant information.")
+    parser.add_argument("--ff-solve-grad", type=str, default=None,
+                        required=False,
+                        help="If true '--autocal-ff-solve-grad' will be added to the nightlyflat job.")
+    return parser
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+    create_override_file(args)
