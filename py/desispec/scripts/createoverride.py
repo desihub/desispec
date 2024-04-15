@@ -103,7 +103,7 @@ def create_override_file(args):
         good_psf = is_yes("Are there valid arcs for psf generation? ")
         good_flats = is_yes("Are there valid flats for "
                             + "fiberflatnight generation? ")
-        if not good_psf:
+        if not good_psf and good_flats:
             print("Since good_psf is False, we cannot use the flats. "
                   + "Setting good_flats to False")
             good_flats = False
@@ -160,6 +160,10 @@ def create_override_file(args):
               + "file, so not creating one.")
     else:
         pathname = findfile('override', night=night)
+        dirname = os.path.dirname(pathname)
+        if not os.path.exists(dirname):
+            print(f"{dirname} doesn't exist. Creating directory.")
+            os.makedirs(dirname)
         if os.path.exists(pathname):
             timestamp = time.strftime('%Y%m%d_%Hh%Mm')
             archivepathname = pathname.replace('.yaml', f".{timestamp}.yaml")
@@ -167,7 +171,7 @@ def create_override_file(args):
             print(f"\nWARNING: {pathname} exists. Moving that to "
                   + f"{archivepathname}.\n")
         with open(pathname, 'w') as fil:
-            fil.write(f"## DESI override file for {night} ##\n")
+            fil.write(f"# DESI override file for {night}\n")
             if linkcal:
                 goodstr = ','.join(goods)
                 badstr = ','.join(bads)
@@ -177,6 +181,9 @@ def create_override_file(args):
 
             fil.write("\n")
             ## Write out the yaml portion in proper format
-            ## default_flow_style is set to None to get bracketed list ([]) but
-            ## no dictionary brackets ({})
-            yaml.safe_dump(outdict, fil, default_flow_style=None)
+            ## default_flow_style is set to None to get bracketed list ([]) but that also does
+            ## curly brackets in linkcal, so avoid that if doing linkcal
+            if linkcal:
+                yaml.safe_dump(outdict, fil)
+            else:
+                yaml.safe_dump(outdict, fil, default_flow_style=None)

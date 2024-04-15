@@ -458,6 +458,9 @@ desispec API
 .. automodule:: desispec.scripts.compute_tsnr_ensemble
     :members:
 
+.. automodule:: desispec.scripts.createoverride
+    :members:
+       
 .. automodule:: desispec.scripts.daily_processing
     :members:
 
