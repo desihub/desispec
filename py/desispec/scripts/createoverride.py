@@ -23,10 +23,13 @@ def valid_night(night):
 
     NOTE: Theres a Y2K-esque bug here for dates before 2013 and after 2033
     """
-    return night.isnumeric() \
+    isvalid = night.isnumeric() \
         and np.abs(int(night[:4]) - 2023) < 10 \
         and np.abs(int(night[4:6]) - 6.5) < 6 \
         and np.abs(int(night[6:]) - 16) < 15
+    if not isvalid:
+        print(f"--> Received invalid response: '{night}'. Must be YEARMMDD.")
+    return isvalid
 
 def valid_yes_no(string):
     """
@@ -39,8 +42,10 @@ def valid_yes_no(string):
         bool, True if input string starts with 'y' or 'n'.
     """
     string = string.lower()
-    return len(string) > 0 and string[0] in ['y', 'n']
-
+    isvalid = len(string) > 0 and string[0] in ['y', 'n']
+    if not isvalid:
+        print(f"--> Received invalid response: '{string}'. Must be 'y' or 'n'.")
+    return isvalid
 
 def get_response(input_question, validation_func):
     """
@@ -56,14 +61,12 @@ def get_response(input_question, validation_func):
         response, str, the string provided by the user that passes validation.
     """
     good_format = False
+    response = None
     while not good_format:
         response = input(input_question)
-        if validation_func(response):
-            print(f"--> Received valid response: {response}")
-            good_format = True
-        else:
-            print(
-                f"--> Format of response {response} was incorrect, please try again")
+        good_format = validation_func(response)
+
+    print(f"--> Received valid response: {response}")
     return response
 
 def get_night(prompt):
@@ -94,7 +97,7 @@ def create_override_file(args):
     if args.linkcal is None:
         linkcal = is_yes("Does this night require cal linking? ")
     else:
-        linkcal = args.linkcal.lower() == 'true'
+        linkcal = args.linkcal
     if linkcal:
         refnight = get_night("What is the reference night? ")
         good_bias = is_yes("Are there valid zeros for biases? ")
@@ -145,13 +148,13 @@ def create_override_file(args):
                                                  'include': linkcal_include}
 
     if args.ff_solve_grad is None:
-        ff_solve_grad = is_yes("Do we need to set solve_gradient in autocalib_fiberflat? ")
+        ff_solve_grad = is_yes("Do we need to set --solve-gradient in autocalib_fiberflat? ")
     else:
-        ff_solve_grad = args.ff_solve_grad.lower() == 'true'
+        ff_solve_grad = args.ff_solve_grad
 
     if ff_solve_grad:
-        print("\nNOTE: Remember to set the reference night in "
-              + "desi_spectro_calib\n")
+        print("\nNOTE: Check that reference fiberflats in $DESI_SPECTRO_CALIB"
+              + f" are valid for use in gradient correction on {night}.\n")
         outdict['calibration']['nightlyflat'] = {'extra_cmd_args':
                                                       ['--autocal-ff-solve-grad']}
 
@@ -167,9 +170,9 @@ def create_override_file(args):
         if os.path.exists(pathname):
             timestamp = time.strftime('%Y%m%d_%Hh%Mm')
             archivepathname = pathname.replace('.yaml', f".{timestamp}.yaml")
-            os.rename(pathname, archivepathname)
             print(f"\nWARNING: {pathname} exists. Moving that to "
                   + f"{archivepathname}.\n")
+            os.rename(pathname, archivepathname)
         with open(pathname, 'w') as fil:
             fil.write(f"# DESI override file for {night}\n")
             if linkcal:
@@ -187,3 +190,4 @@ def create_override_file(args):
                 yaml.safe_dump(outdict, fil)
             else:
                 yaml.safe_dump(outdict, fil, default_flow_style=None)
+        print(f"\nWrote override file to: {pathname}")

@@ -12,12 +12,13 @@ def get_parser():
     parser.add_argument("-n", "--night", type=int, default=None,
                         required=False,
                         help="Night that the override file should be create for.")
-    parser.add_argument("--linkcal", type=str, default=None, required=False,
-                        help="If True then caliblink will be added to the override file with "
-                             + " prompts obtaining relevant information.")
-    parser.add_argument("--ff-solve-grad", type=str, default=None,
-                        required=False,
-                        help="If true '--autocal-ff-solve-grad' will be added to the nightlyflat job.")
+    parser.add_argument("--linkcal", action=argparse.BooleanOptionalAction,
+                        help="Set to define whether to do linkcal override or not. "
+                             + "If not set the user will be prompted for that information.")
+    parser.add_argument("--ff-solve-grad", action=argparse.BooleanOptionalAction,
+                        help="Set to define whether to to use '--autocal-ff-solve-grad' "
+                             + "in the nightlyflat job. If not set the user will be prompted"
+                             + " to give that information.")
     return parser
 
 
