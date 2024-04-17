@@ -10,7 +10,11 @@ Major API/functional changes:
 * Dark missing from ``DESI_SPECTRO_DARK`` is now a fatal error unless
   preproc with ``--fallback-on-dark-not-found`` (PR `#2162`_).
 * New CTE modeling on selected CCDs; requires matching DESI_SPECTRO_CALIB
-  update post 0.5.1 (PR `#2163`_).
+  update post 0.5.1 (PR `#2163`_, `#2192`_, `#2194`_).
+* Add fiberflat gradient correction option (PR `#2180`_, `#2190`_, `#2208`_).
+* New desi_proc_night unified daily/production processing script with options
+  to override default calibrations with config files
+  (PR `#2187`_, `#2201`_, `#2213`_, `#2214`_).
 
 Smaller items and new features:
 
@@ -19,6 +23,17 @@ Smaller items and new features:
 * Fix redrock API change templates_dir vs. template_path (PR `#2168`_).
 * Add read_spectra_parallel (PR `#2169`_).
 * Propagate units and comments in ``FIBERMAP`` HDUs (PR `#2176`_).
+* Update dashboard for CTE flats (PR `#2177`_).
+* Preproc interpolate overscan if active region entirely masked (PR `#2178`_).
+* Simplify installation requirements (PR `#2183`_).
+* Night QA support CCD 2amp mode (PR `#2184`_).
+* Expand zcatalog "minimal" column set (PR `#2185`_).
+* Increase dark model temperature difference acceptance window (PR `#2188`_).
+* emlinefit do not fit EBV>2 spectra (PR `#2195`_).
+* New wrap_rrdesi script to run Redrock on many input files (PR `#2196`_).
+* Fix desi_group_spectra metadata with more than 1000 input files (PR `#2199`_).
+* Fix qproc fallback on dark file not found (PR `#2205`_).
+* Improve nightqa dark selection robustness (PR `#2206`_, `#2207`_).
 
 .. _`#2160`: https://github.com/desihub/desispec/pull/2160
 .. _`#2162`: https://github.com/desihub/desispec/pull/2162
@@ -27,6 +42,28 @@ Smaller items and new features:
 .. _`#2168`: https://github.com/desihub/desispec/pull/2168
 .. _`#2169`: https://github.com/desihub/desispec/pull/2169
 .. _`#2176`: https://github.com/desihub/desispec/pull/2176
+.. _`#2177`: https://github.com/desihub/desispec/pull/2177
+.. _`#2178`: https://github.com/desihub/desispec/pull/2178
+.. _`#2180`: https://github.com/desihub/desispec/pull/2180
+.. _`#2183`: https://github.com/desihub/desispec/pull/2183
+.. _`#2184`: https://github.com/desihub/desispec/pull/2184
+.. _`#2185`: https://github.com/desihub/desispec/pull/2185
+.. _`#2187`: https://github.com/desihub/desispec/pull/2187
+.. _`#2188`: https://github.com/desihub/desispec/pull/2188
+.. _`#2190`: https://github.com/desihub/desispec/pull/2190
+.. _`#2192`: https://github.com/desihub/desispec/pull/2192
+.. _`#2194`: https://github.com/desihub/desispec/pull/2194
+.. _`#2195`: https://github.com/desihub/desispec/pull/2195
+.. _`#2196`: https://github.com/desihub/desispec/pull/2196
+.. _`#2199`: https://github.com/desihub/desispec/pull/2199
+.. _`#2201`: https://github.com/desihub/desispec/pull/2201
+.. _`#2205`: https://github.com/desihub/desispec/pull/2205
+.. _`#2206`: https://github.com/desihub/desispec/pull/2206
+.. _`#2207`: https://github.com/desihub/desispec/pull/2207
+.. _`#2208`: https://github.com/desihub/desispec/pull/2208
+.. _`#2213`: https://github.com/desihub/desispec/pull/2213
+.. _`#2214`: https://github.com/desihub/desispec/pull/2214
+
 
 0.61.0 (2024-01-15)
 -------------------
