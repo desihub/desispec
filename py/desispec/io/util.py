@@ -6,6 +6,7 @@ Utility functions for desispec IO.
 """
 import os
 import glob
+import re
 import time
 import datetime
 import subprocess
@@ -660,7 +661,7 @@ def camword_intersection(camwords, full_spectros_only=False):
     return camword
 
 
-def erow_to_goodcamword(erow, suppress_logging=False):
+def erow_to_goodcamword(erow, suppress_logging=False, exclude_badamps=False):
     """
     Takes a dictionary-like object with at minimum keys for
     OBSTYPE (type str), CAMWORD (type str), BADCAMWORD (type str),
@@ -670,7 +671,7 @@ def erow_to_goodcamword(erow, suppress_logging=False):
         erow (dict-like): the exposure table row with columns OBSTYPE, CAMWORD,
                           BADCAMWORD, and BADAMPS.
         suppress_logging (bool), whether to suppress logging messages. Default False.
-
+        exclude_badamps (bool), if True, discard cameras with a badamp set
 
     Returns:
         goodcamword (str): Camword for that observation given the obstype and
@@ -680,11 +681,12 @@ def erow_to_goodcamword(erow, suppress_logging=False):
                                   badcamword=erow['BADCAMWORD'],
                                   badamps=erow['BADAMPS'],
                                   obstype=erow['OBSTYPE'],
-                                  suppress_logging=suppress_logging)
+                                  suppress_logging=suppress_logging,
+                                  exclude_badamps=exclude_badamps)
 
 
 def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
-                           suppress_logging=False):
+                           suppress_logging=False, exclude_badamps=False):
     """
     Takes a camera information and obstype and returns the correct camword
     of good cameras for that type of observation.
@@ -695,13 +697,14 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
         badamps (str): comma seperated list of bad amplifiers [brz][0-9][A-D]
         obstype (str), obstype of exposure
         suppress_logging (bool), whether to suppress logging messages. Default False.
+        exclude_badamps (bool), if True, discard cameras with a badamp set
 
     Returns:
         goodcamword (str): Camword for that observation given the obstype and
                            input camera information.
     """
     log = get_logger()
-    if not suppress_logging:
+    if exclude_badamps and not suppress_logging:
         if badamps is None:
             log.info("No badamps given, proceeding without badamp removal")
         elif obstype is None:
@@ -711,14 +714,13 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
 
     goodcamword = difference_camwords(camword, badcamword,
                                       suppress_logging=suppress_logging)
-    if badcamword is not None and badamps != '':
-        if obstype is None or obstype != 'science':
-            badampcams = []
-            for (camera, petal, amplifier) in parse_badamps(badamps):
-                badampcams.append(f'{camera}{petal}')
-            badampcamword = create_camword(np.unique(badampcams))
-            goodcamword = difference_camwords(goodcamword, badampcamword,
-                                              suppress_logging=suppress_logging)
+    if exclude_badamps and badamps != '':
+        badampcams = []
+        for (camera, petal, amplifier) in parse_badamps(badamps):
+            badampcams.append(f'{camera}{petal}')
+        badampcamword = create_camword(np.unique(badampcams))
+        goodcamword = difference_camwords(goodcamword, badampcamword,
+                                          suppress_logging=suppress_logging)
 
     return goodcamword
 
@@ -852,6 +854,45 @@ def validate_badamps(badamps,joinsymb=','):
     else:
         log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}')
     return newbadamps
+
+def get_amps_for_camera(camera_amps, camera=None):
+    """
+    Return just the amplifier IDs for a given camera
+
+    Parameters
+    ----------
+    camera_amps : str
+        Either comma-separted camera+amps like "b7A,z3B,b2C"
+        or just the amplifier letters like "A" or "CD"
+    camera : str, optional
+        Camera like b7 or z3.  Must be specified if camera_amps
+        is full comma-separated camera+amps list.
+
+    Returns
+    -------
+    amps : str
+        String of amplifiers like 'A' or 'BC'.
+        Unique, sorted, uppercase string of amps like 'A' or 'BC'
+    """
+    log = get_logger()
+    #- if no number in camera_amps, interpret just as ABCD not r7A,b2C,z1D
+    if re.match(r'.*\d.*', camera_amps) is None:
+        result = ''.join(sorted(camera_amps.strip().replace(',','')))
+    elif camera is None:
+        msg = f'Must specify camera to filter {camera_amps=}'
+        log.error(msg)
+        raise ValueError(msg)
+    else:
+        camera = camera.lower()
+        amps = list()
+        for (cam, pet, amp) in parse_badamps(camera_amps):
+            thiscam = f'{cam}{pet}'.lower()
+            if camera == thiscam:
+                amps.append(amp)
+
+        result = ''.join(sorted(set(amps)))
+
+    return result.upper()
 
 def all_impacted_cameras(badcamword, badamps):
     """

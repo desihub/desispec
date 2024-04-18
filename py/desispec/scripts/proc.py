@@ -430,6 +430,8 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
+            if args.badamps is not None:
+                cmd += f" --badamps {args.badamps}"
 
             inputs = [args.input]
 

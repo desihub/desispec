@@ -125,7 +125,6 @@ def main(args=None, comm=None):
 
     # Now we assign bundles to processes
 
-
     mynbundle = int(nbundle / nproc)
     leftover = nbundle % nproc
     if rank < leftover:
@@ -167,6 +166,15 @@ def main(args=None, comm=None):
     failcount = 0
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
+
+        # TODO: if bundle is entirely on a bad amplifier, don't call
+        # desi_psf_fit but just propagate input -> output for that
+        # bundle.  If bundle partially overlaps a bad amp, do something
+        # more subtle (e.g. perhaps augment --broken-fibers if just a
+        # few fibers overlap, but if most overlap then mask the entire bundle)
+        if 'BADAMPS' in hdr:
+            pass
+
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
         com = ['desi_psf_fit']

@@ -12,7 +12,7 @@ import sys
 import multiprocessing as mp
 import numpy as np
 from desispec import io
-from desispec.io.util import get_tempfilename
+from desispec.io.util import get_tempfilename, get_amps_for_camera
 from desispec.parallel import default_nproc
 from desiutil.log import get_logger
 log = get_logger()
@@ -43,6 +43,10 @@ Must specify --infile OR --night and --expid.
                         help = 'output preprocessed image file')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'comma separated list of cameras')
+    parser.add_argument('--badamps', type=str, default='', required=False,
+                        help = 'comma separated list of bad CCD amps. ' +
+                               'If processing multiple cameras give full b8C,r7A.'
+                               'If processing a single camera can be just amp names (ABCD).')
     parser.add_argument('--bias', type = str, default = None, required=False,
                         help = 'bias image calibration file')
     parser.add_argument('--dark', type = str, default = None, required=False,
@@ -205,7 +209,8 @@ def main(args=None):
                 no_overscan_per_row=args.no_overscan_per_row,
                 no_cte_corr=args.no_cte_correction,
                 cte_params_filename=args.cte_params,
-                fallback_on_dark_not_found=args.fallback_on_dark_not_found
+                fallback_on_dark_not_found=args.fallback_on_dark_not_found,
+                badamps=get_amps_for_camera(args.badamps, camera)
         )
         opts_array.append(opts)
 

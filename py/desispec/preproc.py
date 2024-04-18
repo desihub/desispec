@@ -704,7 +704,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
             no_cte_corr=False,cte_params_filename=None,
-            fallback_on_dark_not_found=False):
+            fallback_on_dark_not_found=False,
+            badamps=''):
     '''
     preprocess image using metadata in header
 
@@ -755,6 +756,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional disabling of overscan subtraction per row if no_overscan_per_row=True
 
     Optional disabling of CTE correction if no_cte_corr=True
+
+    Optional `badamps` masks those amplifiers
 
     Returns Image object with member variables:
         pix : 2D preprocessed image in units of electrons per pixel
@@ -817,6 +820,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
+
+    #- Check badamps input and add keyword
+    if badamps != '':
+        if not np.all(np.isin(list(badamps), amp_ids)):
+            msg = f'{badamps=} not in list of {amp_ids=}'
+            log.critical(msg)
+            raise ValueError(msg)
+
+        header['BADAMPS'] = badamps
 
     #- if CAMERA is missing, this will raise an exception in a few lines,
     #- but allows CAMERA logging in the meantime if it is present
@@ -1121,6 +1133,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             row_subtracted_overscan_col = raw_overscan_col - overscan_col[:,None]
             o,r = calc_overscan(row_subtracted_overscan_col)
             rdnoise  = np.repeat(r,nrows)
+
+        #- Mask bad amplifiers
+        if amp.upper() in badamps.upper():
+            log.warning(f'Masking {camera} amplifier {amp} as BADAMP')
+            mask[kk] |= ccdmask.BADAMP
+
         if bias is not False :
             # the master bias noise is already in the raw data
             # (because we already subtracted the bias)
