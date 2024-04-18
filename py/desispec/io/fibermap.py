@@ -991,8 +991,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             old_col = fibermap[val]
             fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
 
-    # ADM if we have NaN values in TARGET_RA/TARGET_DEC, replace with
-    # ADM the FIBER_RA/FIBER_DEC values.
+    # ADM if we have NaN values in TARGET_RA/TARGET_DEC,
+    # ADM e.g. from stuck positioners and early fiberassign like night 20210422 expid 86004,
+    # ADM replace with the FIBER_RA/FIBER_DEC values from platemaker.
     fmcols = ["TARGET_RA", "TARGET_DEC"]
     pmcols = ["FIBER_RA", "FIBER_DEC"]
     for fmcol, pmcol in zip(fmcols, pmcols):
