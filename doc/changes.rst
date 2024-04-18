@@ -18,6 +18,7 @@ Major API/functional changes:
 
 Smaller items and new features:
 
+* Replace NaN ``TARGET_RA/DEC`` values with ``FIBER`` values (PR `#2216`_).
 * Better handling of copyprod links (PR `#2160`_).
 * Add desi_link_calibnight script (PR `#2165`_).
 * Fix redrock API change templates_dir vs. template_path (PR `#2168`_).
@@ -63,6 +64,7 @@ Smaller items and new features:
 .. _`#2208`: https://github.com/desihub/desispec/pull/2208
 .. _`#2213`: https://github.com/desihub/desispec/pull/2213
 .. _`#2214`: https://github.com/desihub/desispec/pull/2214
+.. _`#2216`: https://github.com/desihub/desispec/pull/2216
 
 
 0.61.0 (2024-01-15)
