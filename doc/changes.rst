@@ -34,6 +34,7 @@ Smaller items and new features:
 * Fix desi_group_spectra metadata with more than 1000 input files (PR `#2199`_).
 * Fix qproc fallback on dark file not found (PR `#2205`_).
 * Improve nightqa dark selection robustness (PR `#2206`_, `#2207`_).
+* Add 5 missing columns to the fibermap (PR `#2219`_).
 
 .. _`#2160`: https://github.com/desihub/desispec/pull/2160
 .. _`#2162`: https://github.com/desihub/desispec/pull/2162
@@ -63,6 +64,7 @@ Smaller items and new features:
 .. _`#2208`: https://github.com/desihub/desispec/pull/2208
 .. _`#2213`: https://github.com/desihub/desispec/pull/2213
 .. _`#2214`: https://github.com/desihub/desispec/pull/2214
+.. _`#2219`: https://github.com/desihub/desispec/pull/2219
 
 
 0.61.0 (2024-01-15)
