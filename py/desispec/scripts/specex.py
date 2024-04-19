@@ -292,7 +292,7 @@ def main(args=None, comm=None):
 
             log.info('done merging')
 
-            if failcount == -1:
+            if failcount == 0:
                 # only remove the per-bundle files if the merge was good
                 for f in inputs :
                     if os.path.isfile(f):
