@@ -536,7 +536,6 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     :class:`astropy.io.fits.HDUList`
         A representation of a fibermap FITS file.
     """
-
     #- import desimodel only if needed
     from desimodel.focalplane import get_tile_radius_deg
 
@@ -996,6 +995,16 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         for val	in ['LOCATION','NUM_ITER']:
             old_col = fibermap[val]
             fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
+
+    # ADM if we have NaN values in TARGET_RA/TARGET_DEC,
+    # ADM e.g. from stuck positioners and early fiberassign like night 20210422 expid 86004,
+    # ADM replace with the FIBER_RA/FIBER_DEC values from platemaker.
+    fmcols = ["TARGET_RA", "TARGET_DEC"]
+    pmcols = ["FIBER_RA", "FIBER_DEC"]
+    for fmcol, pmcol in zip(fmcols, pmcols):
+        ii = np.isnan(fibermap[fmcol])
+        fibermap[fmcol][ii] = fibermap[pmcol][ii]
+        log.info(f"Switching {np.sum(ii)} NaNs from {fmcol}->{pmcol} value")
 
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
