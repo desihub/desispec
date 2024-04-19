@@ -22,6 +22,8 @@ from astropy.io import fits
 from desiutil.log import get_logger
 
 from desispec.io.util import get_tempfilename
+from desispec.preproc import parse_sec_keyword
+from desispec.io.xytraceset import read_xytraceset
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -134,6 +136,8 @@ def main(args=None, comm=None):
         myfirstbundle = bundles[0] + ((mynbundle + 1) * leftover) + \
             (mynbundle * (rank - leftover))
 
+    bundles_to_merge = []
+
     if rank == 0:
         # Print parameters
         log.info("specex:  using {} processes".format(nproc))
@@ -165,42 +169,81 @@ def main(args=None, comm=None):
 
     failcount = 0
 
+    tset=None # spectal trace set, read only if necessary
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
 
-        # TODO: if bundle is entirely on a bad amplifier, don't call
-        # desi_psf_fit but just propagate input -> output for that
-        # bundle.  If bundle partially overlaps a bad amp, do something
-        # more subtle (e.g. perhaps augment --broken-fibers if just a
-        # few fibers overlap, but if most overlap then mask the entire bundle)
+        first_fiber = bspecmin[b]
+        last_fiber  = bspecmin[b]+bnspec[b]-1
+        allfibers   = np.arange(first_fiber,last_fiber+1)
+        badfibers   = []
+        skip_this_bundle = False
+
         if 'BADAMPS' in hdr:
-            pass
 
-        outbundle = "{}_{:02d}".format(outroot, b)
-        outbundlefits = "{}.fits".format(outbundle)
-        com = ['desi_psf_fit']
-        com.extend(['-a', imgfile])
-        com.extend(['--in-psf', inpsffile])
-        com.extend(['--out-psf', outbundlefits])
-        com.extend(['--lamp-lines', lamp_lines_file])
-        com.extend(['--first-bundle', "{}".format(b)])
-        com.extend(['--last-bundle', "{}".format(b)])
-        com.extend(['--first-fiber', "{}".format(bspecmin[b])])
-        com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
-        if band == "z" :
-            com.extend(['--legendre-deg-wave', "{}".format(3)])
-            com.extend(['--fit-continuum'])
+            badamps=hdr["BADAMPS"].split(",")
+            for badamp in badamps :
+                # get the CCD area that is concerned
+                ii=parse_sec_keyword(hdr["CCDSEC"+badamp])
+                yslice,xslice=ii[0],ii[1]
+                yb=yslice.start
+                ye=yslice.stop
+                xb=xslice.start
+                xe=xslice.stop
+                if rank==0 :
+                    log.info(f"BADAMP {badamp} [{yb}:{ye},{xb}:{xe}]")
+                if tset is None :
+                    tset = read_xytraceset(inpsffile)
+                nsample = 50 # number of values to test along the fiber trace length
+                yy = np.linspace(yb+1,ye-1,nsample) # y range across the amplifier, avoiding the edge pixels
+                for fiber in allfibers :
+                    xx = np.array(tset.x_vs_y(fiber,yy))
+                    frac_bad = np.sum((xx>=xb)&(xx<xe)&(yy>=yb)&(yy<ye))/float(nsample)
+                    if frac_bad > 0.1 :
+                        badfibers.append(fiber)
+
+            badfibers   = np.unique(badfibers) # in case we count them several times
+            selection   = ~np.in1d(allfibers,badfibers)
+            ngoodfibers = np.sum(selection)
+            if ngoodfibers<2 :
+                log.warning("Dont fit fiber bundle {} with {} fibers in bad amp {}".format(b,len(badfibers),badamp))
+                skip_this_bundle = True
+            else :
+                goodfibers  = allfibers[selection]
+                first_fiber = np.min(goodfibers)
+                last_fiber  = np.max(goodfibers)
+
+        if skip_this_bundle :
+            log.info("proc {}, do not fit bundle {}".format(rank,b))
+            retval = 0
         else :
-            com.extend(['--legendre-deg-wave', "{}".format(1)])
-        if args.broken_fibers :
-            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
-        if args.debug :
-            com.extend(['--debug'])
+            bundles_to_merge.append(b)
+            outbundle = "{}_{:02d}".format(outroot, b)
+            outbundlefits = "{}.fits".format(outbundle)
 
-        com.extend(optarray)
+            com = ['desi_psf_fit']
+            com.extend(['-a', imgfile])
+            com.extend(['--in-psf', inpsffile])
+            com.extend(['--out-psf', outbundlefits])
+            com.extend(['--lamp-lines', lamp_lines_file])
+            com.extend(['--first-bundle', "{}".format(b)])
+            com.extend(['--last-bundle', "{}".format(b)])
+            com.extend(['--first-fiber', "{}".format(first_fiber)])
+            com.extend(['--last-fiber', "{}".format(last_fiber)])
+            if band == "z" :
+                com.extend(['--legendre-deg-wave', "{}".format(3)])
+                com.extend(['--fit-continuum'])
+            else :
+                com.extend(['--legendre-deg-wave', "{}".format(1)])
+            if args.broken_fibers :
+                com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
+            if args.debug :
+                com.extend(['--debug'])
 
-        log.info("proc {} calling {}".format(rank, " ".join(com)))
+            com.extend(optarray)
 
-        retval = run_specex(com)
+            log.info("proc {} calling {}".format(rank, " ".join(com)))
+
+            retval = run_specex(com)
 
         if retval != 0:
             comstr = " ".join(com)
@@ -215,6 +258,8 @@ def main(args=None, comm=None):
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
+        bundles_to_merge = np.hstack(comm.gather(bundles_to_merge, root=0)).astype(int)
+        log.info("will merge the following bundles {}".format(bundles_to_merge))
 
     if failcount > 0:
         # all processes throw
@@ -223,7 +268,10 @@ def main(args=None, comm=None):
     if rank == 0:
         outfits = "{}.fits".format(outroot)
 
-        inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
+        inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles_to_merge ]
+
+        log.info("will merge the following inputs {}".format(inputs))
+
 
         if args.disable_merge :
             log.info("don't merge")
@@ -244,7 +292,7 @@ def main(args=None, comm=None):
 
             log.info('done merging')
 
-            if failcount == 0:
+            if failcount == -1:
                 # only remove the per-bundle files if the merge was good
                 for f in inputs :
                     if os.path.isfile(f):
