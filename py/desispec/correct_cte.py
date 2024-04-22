@@ -697,7 +697,7 @@ def get_cte_images(night, camera, expids=None):
         indices = []
         for length in lengths:
             selection = (np.abs(exptable['EXPTIME'] - length) < 0.1) & (exptable['OBSTYPE'] == 'flat')
-            if np.sum(selection)<1 :
+            if np.sum(selection)<1 and length not in [3, 10]:
                 mess = f"No flat exposure of approx. {length} found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
                 log.error(mess)
                 raise RuntimeError(mess)
