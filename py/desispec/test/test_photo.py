@@ -37,6 +37,7 @@ class TestPhoto(unittest.TestCase):
         tractorphot['FLUX_R'] = np.array([0.0, 22.768417, 0.4996462, 2.0220177, 0.3754208, 4.8209643]).astype('f4')
         tractorphot['FLUX_IVAR_W1'] = np.array([0.0, 2.6306653, 2.2135038, 2.3442872, 6.2124352, 2.5682714]).astype('f4')
         tractorphot['LS_ID'] = np.array([0, 9906610122001627, 9906622040377206, 9906617989139688, 9907735053993854, 9906622022814265]).astype(np.int64)
+        tractorphot['RELEASE'] = np.array([0, 9010, 9010, 9010, 9011, 9010])
         self.tractorphot = tractorphot
 
         # tractorphot DR10 results
@@ -97,6 +98,17 @@ class TestPhoto(unittest.TestCase):
         tractorphot = gather_tractorphot(self.input_cat)
         for col in self.tractorphot.colnames:
             self.assertTrue(np.all(tractorphot[col] == self.tractorphot[col]))
+
+    @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
+    def test_gather_tractorphot_restrict_region(self):
+        """Test that we get the correct Tractor photometry for an input set of objects
+        after specifying the region.
+
+        """
+        tractorphot = gather_tractorphot(self.input_cat, restrict_region='south')
+        S = self.tractorphot['RELEASE'] == 'S'
+        for col in self.tractorphot.colnames:
+            self.assertTrue(np.all(tractorphot[S][col] == self.tractorphot[S][col]))
 
     @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_tractorphot_dr10(self):
