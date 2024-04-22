@@ -219,6 +219,10 @@ def get_amp_regions_to_cte_correct(header):
             continue
 
         value = cfinder.value(key)
+        if cfinder.haskey("CTEFUNC"+amp):
+            ctefunc = cfinder.value("CTEFUNC"+amp)
+        else:
+            ctefunc = "simplified_regnault"
 
         amp_sec = desispec.preproc.parse_sec_keyword(header["CCDSEC"+amp])
 
@@ -240,7 +244,8 @@ def get_amp_regions_to_cte_correct(header):
             xe = min(amp_sec[1].stop, stop)
             sector = [yb, ye, xb, xe]
 
-            cteparam={"ctecols":ctecols, "start":start, "stop":stop}
+            cteparam={"ctecols":ctecols, "start":start, "stop":stop,
+                      "ctefunc":ctefunc}
             cte_regions_in_amp.append(cteparam)
 
         # only add if we have a model for it
@@ -333,13 +338,40 @@ def get_cte_params(header, cte_params_filename=None):
 
             #- Having identified which row we want, add params to cte_regions
             entry=np.where(selection2)[0][0]
-            for k in ["FUNC","AMPLITUDE","FRACLEAK"] :
+            for k in ctecorrnight_table.keys():
+                if k in ['NIGHT', 'CAMERA', 'AMPLIFIER', 'SECTOR', 'CHI2PDF']:
+                    continue
                 cte_regions[amp][i][k] = ctecorrnight_table[k][entry]
 
             cteparam = cte_regions[amp][i]
             log.info(f"CTE correction in amplifier {amp}, sector {ctecols}, {cteparam}")
 
     return amp_regions, cte_regions
+
+
+def cte_transfer_amount_regnault(pixel, in_trap, alpha, beta,
+                                 cmax, fin, fout):
+    # leak out
+    transfer_amount = np.clip(fout*cmax*(in_trap/cmax)**alpha, 0, in_trap)
+    # leak in
+    maxin = np.minimum(pixel, cmax - in_trap)
+    alpha = np.clip(alpha, 0, np.inf)
+    beta = np.clip(beta, 0, np.inf)
+    transfer_amount -= np.clip(
+        fin*(1 - in_trap/cmax)**alpha * pixel**beta,
+        0, maxin)
+    return transfer_amount
+
+
+def chi_regnault(param, cleantraces=None, ctetraces=None, uncertainties=None):
+    """Chi loss function for a Regnault transfer function."""
+    models = [add_cte(trace, cmax=param[0], fin=param[1], fout=param[2], alpha=param[3], beta=param[4],
+                      cte_transfer_func=cte_transfer_amount_regnault)
+              for trace in cleantraces]
+    res = np.array([
+        (m - c)/u for (m, c, u) in zip(models, ctetraces, uncertainties)])
+    return res.reshape(-1)
+
 
 
 def simplified_regnault(pixval, in_trap, amplitude, fracleak):
@@ -386,18 +418,50 @@ def chi_simplified_regnault(param, cleantraces=None, ctetraces=None,
     return res.reshape(-1)
 
 
-def get_transfer_function(function_name) :
-    """Returns a CTE correction function from its name.
+def get_transfer_function(entry) :
+    """Returns a CTE correction function from its record.
 
     This maps the FUNC name in $DESI_SPECTRO_CALIB yaml files to the
     Python function that should be called.
-
-    Only 'simplified_regnault' so far.
     """
-    if function_name == "simplified_regnault" :
-        return simplified_regnault
+    if entry['FUNC'] == "simplified_regnault" :
+        return partial(add_cte, cte_transfer_func=simplified_regnault,
+                       amplitude=entry['PARAM1'], fracleak=entry['PARAM2'])
+    elif entry['FUNC'] == 'regnault':
+        return partial(add_cte, cte_transfer_func=cte_transfer_amount_regnault,
+                       cmax=entry['PARAM1'], fin=entry['PARAM2'],
+                       fout=entry['PARAM3'],
+                       alpha=entry['PARAM4'], beta=entry['PARAM5'])
     else :
-        raise KeyError(f"No transfer function called '{function_name}'")
+        raise KeyError(f"No transfer function called '{entry['FUNC']}'")
+
+
+def get_transfer_function_chi_guess_diff(name):
+    """Return information needed for fitting CTE.
+
+    Parameters
+    ----------
+    name : str
+        The name of the CTE transfer function, regnault or simplified_regnault
+
+    Returns
+    -------
+    (chi, guess, diff) tuple
+
+    chi: the function that returns the scaled residuals given the model
+         parameters
+    guess: the initial guess to make for the parameter values, excluding
+         the trap capacity for which a few different guesses are made
+    diff: the step sizes to make in the different parameters, including
+         in the trap capacity.
+    """
+    if name == "simplified_regnault":
+        return (chi_simplified_regnault, [0.2], [0.2, 0.01])
+    elif name == "regnault":
+        return (chi_regnault, [0.2, 0.2, 1, 1],
+                [0.2, 0.01, 0.01, 0.01, 0.01])
+    else:
+        raise KeyError(f"No transfer function called '{name}'.")
 
 
 def fit_cte(images):
@@ -449,8 +513,9 @@ def fit_cte(images):
     log = get_logger()
     log.debug("begin fit_cte")
 
-    keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC","AMPLITUDE","FRACLEAK","CHI2PDF"]
-    dtypes = [int,str,str,str,str,float,float,float]
+    keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR",
+            "FUNC","PARAM1","PARAM2","PARAM3","PARAM4","PARAM5","CHI2PDF"]
+    dtypes = [int,str,str,str,str,float,float,float,float,float,float]
 
     if images is None or len(images)==0:
         # nothing to do
@@ -499,7 +564,7 @@ def fit_cte(images):
             ampbd = ampreg[0].stop
         else:
             ampbd = ampreg[0].start
-        npix = 11
+        npix = 31
         need_to_reverse = ampreg[1].stop == image.pix.shape[1]
         start, stop = tcte['start'], tcte['stop']
 
@@ -526,28 +591,29 @@ def fit_cte(images):
                 keepdims=True))
             for im in images]
 
-        chi = partial(chi_simplified_regnault,
+        chi_function, guess, diff_step = get_transfer_function_chi_guess_diff(
+            tcte['ctefunc'])
+        chi = partial(chi_function,
                       cleantraces=cleantraces,
                       ctetraces=ctetraces,
                       uncertainties=uncertainties)
         startguesses = [1, 20, 50, 100]
-        chiguesses = np.array([chi([g, 0.2]) for g in startguesses])
+        chiguesses = np.array([chi([g] + guess) for g in startguesses])
         bestguess = np.argmin(np.sum(chiguesses**2, axis=1))
-        par = least_squares(chi, [startguesses[bestguess], 0.2],
-                            diff_step=[0.2, 0.01], loss='huber')
-        amplitude = par.x[0]
-        fracleak = par.x[1]
+        par = least_squares(chi, [startguesses[bestguess], *guess],
+                            diff_step=diff_step, loss='huber',
+                            f_scale=5)
         offcols = f'{tcte["start"]}:{tcte["stop"]}'
         chi2dof = par.cost / len(par.fun)
-        log.info(f'CTE fit {night} {camera} {amplitude=:.3f} {fracleak=:.3f} chi^2/dof={chi2dof:5.2f}')
+        log.info(f'CTE fit {night} {camera} {par.x=} chi^2/dof={chi2dof:5.2f}')
 
         res["NIGHT"].append(night)
         res["CAMERA"].append(camera)
         res["AMPLIFIER"].append(ampname)
         res["SECTOR"].append(offcols)
-        res["FUNC"].append("simplified_regnault")
-        res["AMPLITUDE"].append(amplitude)
-        res["FRACLEAK"].append(fracleak)
+        res["FUNC"].append(tcte['ctefunc'])
+        for i, val in enumerate(par.x):
+            res[f"PARAM{i+1}"].append(val)
         res["CHI2PDF"].append(chi2dof)
 
     table = Table()
@@ -627,22 +693,17 @@ def get_cte_images(night, camera, expids=None):
         keep = exptable['OBSTYPE'] == 'flat'
         exptable = exptable[keep]
 
-        #- Find a 1sec and 120sec flat
-        selection = (np.abs(exptable['EXPTIME'] - 1) < 0.1)
-        if np.sum(selection)<1 :
-            mess = f"No good {camera} 1 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
-            log.critical(mess)
-            raise RuntimeError(mess)
-        index1 = np.where(selection)[0][0]
+        lengths = [1, 3, 10, 120]
+        indices = []
+        for length in lengths:
+            selection = (np.abs(exptable['EXPTIME'] - length) < 0.1) & (exptable['OBSTYPE'] == 'flat')
+            if np.sum(selection)<1 :
+                mess = f"No flat exposure of approx. {length} found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
+                log.error(mess)
+                raise RuntimeError(mess)
+            indices.append(np.where(selection)[0][0])
 
-        selection = (np.abs(exptable['EXPTIME'] - 120) < 10)
-        if np.sum(selection)<1 :
-            mess = f"No good {camera} 120 sec flat for {night} (in {exptablefn}), needed for CTE correction model fit"
-            log.critical(mess)
-            raise RuntimeError(mess)
-        index2 = np.where(selection)[0][-1]
-
-        expids = list(exptable['EXPID'][ [index1, index2] ])
+        expids = list(exptable['EXPID'][indices])
 
     log.info(f"Will use exposures {expids} for {night} {camera} CTE corrections")
 
@@ -735,7 +796,7 @@ def get_image_model(preproc, psf=None):
 
 def get_rowbyrow_image_model(preproc, fibermap=None,
                              spectral_smoothing_sigma_length=31,
-                             nspec=500, psf=None):
+                             nspec=500, psf=None, return_frame=False):
     """Compute row-by-row image model.
 
     This model uses a simultaneous PSF fit in each row to get better
@@ -795,14 +856,21 @@ def get_rowbyrow_image_model(preproc, fibermap=None,
         fqframe, fiberflat, return_flat=True)
     sfqframe = copy.deepcopy(fqframe)
     sky = qsky.qproc_sky_subtraction(sfqframe, return_skymodel=True)
-    sfflux = median_filter(
-        sfqframe.flux, size=(1, spectral_smoothing_sigma_length),
-        mode='nearest')
+    if spectral_smoothing_sigma_length > 0:
+        sfflux = median_filter(
+            sfqframe.flux, size=(1, spectral_smoothing_sigma_length),
+            mode='nearest')
+    else:
+        sfflux = sfqframe.flux.copy()
     modflux = (sfflux + sky) * flat
     mframe = copy.deepcopy(sfqframe)
     mframe.flux = modflux
-    return rowbyrowextract.model(mframe, profile, profilepix,
-                                 preproc.pix.shape)
+    mframe.sky = sky
+    model = rowbyrowextract.model(mframe, profile, profilepix,
+                                  preproc.pix.shape)
+    if return_frame:
+        model = (model, mframe)
+    return model
 
 
 def correct_image_via_model(image, niter=5, cte_params_filename=None):
@@ -884,11 +952,7 @@ def correct_image_via_model(image, niter=5, cte_params_filename=None):
             ctelocs = [sign * (x[field] - offset) for x in cteamp]
             individual_ctefuns = []
             for entry in cteamp :
-                individual_ctefuns.append(partial( add_cte,
-                                                   cte_transfer_func=get_transfer_function(entry['FUNC']),
-                                                   amplitude=entry['AMPLITUDE'],
-                                                   fracleak=entry['FRACLEAK']))
-
+                individual_ctefuns.append(get_transfer_function(entry))
             cteimage[ampreg] = apply_multiple_cte_effects(
                 imamp[:, ::sign], locations=ctelocs,
                 ctefuns=individual_ctefuns)[:, ::sign]
