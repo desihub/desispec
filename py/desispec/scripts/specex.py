@@ -212,14 +212,14 @@ def main(args=None, comm=None):
                 first_fiber = np.min(goodfibers)
                 last_fiber  = np.max(goodfibers)
 
+        outbundle = "{}_{:02d}".format(outroot, b)
+        outbundlefits = "{}.fits".format(outbundle)
+
         if skip_this_bundle :
-            log.info("proc {}, do not fit bundle {}".format(rank,b))
+            log.info("rank #{}, do not fit bundle {}".format(rank,b))
             retval = 0
         else :
             bundles_to_merge.append(b)
-            outbundle = "{}_{:02d}".format(outroot, b)
-            outbundlefits = "{}.fits".format(outbundle)
-
             com = ['desi_psf_fit']
             com.extend(['-a', imgfile])
             com.extend(['--in-psf', inpsffile])
@@ -258,8 +258,12 @@ def main(args=None, comm=None):
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
-        bundles_to_merge = np.hstack(comm.gather(bundles_to_merge, root=0)).astype(int)
-        log.info("will merge the following bundles {}".format(bundles_to_merge))
+        bundles_to_merge = comm.gather(bundles_to_merge, root=0)
+        if rank == 0 : # it's a list of lists only for rank 0, so we flatten it only for this rank
+            if len(bundles_to_merge)>0 :
+                bundles_to_merge = np.hstack(bundles_to_merge).astype(int)
+            log.info("will merge the following bundles {}".format(bundles_to_merge))
+            sys.stdout.flush()
 
     if failcount > 0:
         # all processes throw
