@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.62.0 (unreleased)
+0.62.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.62.0 (2024-04-24)
 -------------------
 
 Major API/functional changes:
