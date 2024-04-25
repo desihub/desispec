@@ -223,7 +223,7 @@ def main(args=None):
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_lsf_sigma = True
 
-        elif obstype == "FLAT" or obstype == "TESTFLAT" :
+        elif obstype == "FLAT" or obstype == "TESTFLAT" or obstype == "OTHER" :
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
