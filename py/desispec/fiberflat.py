@@ -12,7 +12,7 @@ from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
-from desispec.maskbits import specmask
+from desispec.maskbits import specmask, fibermask
 from desispec.maskedmedian import masked_median
 from desispec import util
 import scipy,scipy.sparse
@@ -323,7 +323,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     # reset ivar
     ivar = frame.ivar.copy()
 
-    fiberflat_mask=12 # place holder for actual mask bit when defined
+    fiberflat_mask=specmask.BADFIBERFLAT
 
     nsig_for_mask=nsig_clipping # only mask out N sigma outliers
 
@@ -347,7 +347,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
             except (ValueError, TypeError) as e :
                 print("error in spline_fit")
-                mask[fiber] += fiberflat_mask
+                mask[fiber] |= fiberflat_mask
                 fiberflat_ivar[fiber] = 0.
                 break
 
@@ -360,7 +360,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                     ii=np.argsort(chi2[bad])
                     bad=bad[ii[-nbadmax:]]
 
-                mask[fiber,bad] += fiberflat_mask
+                mask[fiber,bad] |= fiberflat_mask
                 fiberflat_ivar[fiber,bad] = 0.
                 nbad_tot += bad.size
             else :
@@ -444,6 +444,10 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     log.info("add a systematic error of 0.0035 to fiberflat variance (calibrated on sims)")
     fiberflat_ivar = (fiberflat_ivar>0)/( 1./ (fiberflat_ivar+(fiberflat_ivar==0) ) + 0.0035**2)
+
+    # update mask based upon final ivar=0
+    bad = fiberflat_ivar == 0
+    mask[bad] |= fiberflat_mask
 
     fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
@@ -655,11 +659,22 @@ def autocalib_fiberflat(fiberflats):
         ivar      = (var>0)/(var+(var==0))
         fiberflat /= ii.size
         meanspec /= ii.size
+
+        # set tiny ivars back to 0; leftover from not propagaging inf, 1/inf, nan...
+        ivar[ivar<1e-8] = 0.0
+        mask[ivar == 0.0] |= specmask.BADFIBERFLAT
+
+        # set a FIBERSTATUS mask bit for fibers with more than 25% of their pixels masked
+        fibermap = fflat0.fibermap.copy()
+        fraction_masked = np.sum(mask != 0, axis=1) / mask.shape[1]
+        bad = fraction_masked > 0.25
+        fibermap['FIBERSTATUS'][bad] |= fibermask.BADFLAT
+
         fflat = FiberFlat(fflat0.wave,fiberflat,ivar,mask,
                           meanspec=meanspec,
                           header=fflat0.header,
                           fibers=fflat0.fibers,
-                          fibermap=fflat0.fibermap,
+                          fibermap=fibermap,
                           spectrograph=fflat0.spectrograph)
         output_fiberflats[spec] = fflat
         mflat.append(np.median(fiberflat,axis=0))
