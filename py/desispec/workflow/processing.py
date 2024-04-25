@@ -1713,19 +1713,9 @@ def make_joint_prow(prows, descriptor, internal_id):
         joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
                                                   full_spectros_only=True)
     else:
-        ## For arcs and flats, a BADAMP takes out the camera, so remove those
-        ## cameras from the proccamword
-        pcamwords = []
-        for prow in prows:
-            if len(prow['BADAMPS']) > 0:
-                badcams = []
-                for (camera, petal, amplifier) in parse_badamps(prow['BADAMPS']):
-                    badcams.append(f'{camera}{petal}')
-                badampcamword = create_camword(list(set(badcams)))
-                pcamword = difference_camwords(prow['PROCCAMWORD'], badampcamword)
-            else:
-                pcamword = prow['PROCCAMWORD']
-            pcamwords.append(pcamword)
+        ## UPDATE 2024-04-24: badamps are now included in arc/flat joint fits,
+        ## so grab all PROCCAMWORDs instead of filtering out BADAMP cameras
+        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
 
         ## For flats we want any camera that exists in all 12 exposures
         ## For arcs we want any camera that exists in at least 3 exposures
