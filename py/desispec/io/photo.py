@@ -16,6 +16,7 @@ from astropy.coordinates import SkyCoord
 
 from desispec.io.meta import get_desi_root_readonly
 from desitarget.io import desitarget_resolve_dec
+from desitarget import geomask
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
@@ -513,7 +514,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
         # sort explicitly in order to ensure order
         I = np.where(np.isin(out1['TARGETID'], photo['TARGETID']))[0]
-        srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out1['TARGETID'][I]])
+        srt = geomask.match_to(photo['TARGETID'], out1['TARGETID'][I])
             
         out1[I] = photo[srt]
         out[M] = out1
@@ -959,7 +960,8 @@ def tractorphot_datamodel(from_file=False, datarelease='dr9'):
 
     return datamodel 
 
-def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racolumn, deccolumn, datamodel):
+def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racolumn, deccolumn,
+                                 datamodel, restrict_region):
     """Support routine for gather_tractorphot."""
 
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
@@ -1017,7 +1019,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
         tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
         # sort explicitly in order to ensure order
-        srt = np.hstack([np.where(objid == tractor_dr9['OBJID'])[0] for objid in input_cat['BRICK_OBJID'][idr9]])
+        srt = geomask.match_to(tractor_dr9['OBJID'], input_cat['BRICK_OBJID'][idr9])
         tractor_dr9 = tractor_dr9[srt]
         assert(np.all((tractor_dr9['BRICKID'] == input_cat['BRICKID'][idr9])*(tractor_dr9['OBJID'] == input_cat['BRICK_OBJID'][idr9])))
 
@@ -1031,20 +1033,25 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
     if len(ipos) > 0:
         rad = radius_match * u.arcsec
 
-        # resolve north/south
-        tractorfile_north = os.path.join(legacysurveydir, 'north', 'tractor', brick[:3], f'tractor-{brick}.fits')
-        tractorfile_south = os.path.join(legacysurveydir, 'south', 'tractor', brick[:3], f'tractor-{brick}.fits')
-        if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
-            tractorfile = tractorfile_north
-        elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
-            tractorfile = tractorfile_south
-        elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
-            if np.median(input_cat[deccolumn][ipos]) < desitarget_resolve_dec():
-                tractorfile = tractorfile_south
-            else:
+        # resolve north/south unless restrict region is set
+        if restrict_region is not None:
+            tractorfile = os.path.join(legacysurveydir, restrict_region, 'tractor', brick[:3], f'tractor-{brick}.fits')
+            if not os.path.isfile(tractorfile):
+                return out
+        else:
+            tractorfile_north = os.path.join(legacysurveydir, 'north', 'tractor', brick[:3], f'tractor-{brick}.fits')
+            tractorfile_south = os.path.join(legacysurveydir, 'south', 'tractor', brick[:3], f'tractor-{brick}.fits')
+            if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
                 tractorfile = tractorfile_north
-        elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
-            return out
+            elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+                tractorfile = tractorfile_south
+            elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+                if np.median(input_cat[deccolumn][ipos]) < desitarget_resolve_dec():
+                    tractorfile = tractorfile_south
+                else:
+                    tractorfile = tractorfile_north
+            elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
+                return out
                 
         _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
         iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
@@ -1081,8 +1088,8 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
     return out
 
 def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
-                       legacysurveydir=None, dr9dir=None, radius_match=1.0, columns=None,
-                       verbose=False):
+                       legacysurveydir=None, dr9dir=None, radius_match=1.0,
+                       restrict_region=None, columns=None, verbose=False):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick).
 
     Args:
@@ -1093,6 +1100,9 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         legacysurveydir (str): full path to the location of the Tractor catalogs
         dr9dir (str): relegated keyword; please use `legacysurveydir`
         radius_match (float, arcsec): matching radius (default, 1 arcsec)
+        restrict_region (str): when positional matching, restrict the region to
+          check for photometry, otherwise check both 'north' and 'south'
+          (default None)
         columns (str array): return this subset of columns
 
     Returns a table of Tractor photometry. Matches are identified either using
@@ -1149,6 +1159,12 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
         log.warning(errmsg)
         datarelease = 'dr9'
 
+    if restrict_region is not None:
+        if restrict_region not in ['north', 'south']:
+            errmsg = f"Optional input restrict_region must be either 'north' or 'south'."
+            log.critical(errmsg)
+            raise ValueError(errmsg)
+
     ## Some secondary programs (e.g., 39632961435338613, 39632966921487347)
     ## have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Unpack those here
     ## using decode_targetid.
@@ -1177,7 +1193,8 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
     for onebrickname in set(bricknames):
         I = np.where(onebrickname == bricknames)[0]
-        out[I] = _gather_tractorphot_onebrick(input_cat[I], legacysurveydir, radius_match, racolumn, deccolumn, datamodel)
+        out[I] = _gather_tractorphot_onebrick(input_cat[I], legacysurveydir, radius_match, racolumn,
+                                              deccolumn, datamodel, restrict_region)
 
     if 'RELEASE' in input_cat.colnames:
         _, _, check_release, _, _, _ = decode_targetid(input_cat['TARGETID'])
@@ -1192,7 +1209,8 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
             bugout = Table(np.hstack(np.repeat(datamodel, len(bug))))
             for onebrickname in set(input_cat['BRICKNAME'][bug]):
                 I = np.where(onebrickname == input_cat['BRICKNAME'][bug])[0]
-                bugout[I] = _gather_tractorphot_onebrick(input_cat[bug][I], legacysurveydir, radius_match, racolumn, deccolumn, datamodel)
+                bugout[I] = _gather_tractorphot_onebrick(input_cat[bug][I], legacysurveydir, radius_match, racolumn, deccolumn,
+                                                         datamodel, restrict_region)
             
     if columns is not None:
         if type(columns) is not list:
