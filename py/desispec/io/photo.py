@@ -16,6 +16,7 @@ from astropy.coordinates import SkyCoord
 
 from desispec.io.meta import get_desi_root_readonly
 from desitarget.io import desitarget_resolve_dec
+from desitarget import geomask
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
@@ -513,7 +514,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
         # sort explicitly in order to ensure order
         I = np.where(np.isin(out1['TARGETID'], photo['TARGETID']))[0]
-        srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out1['TARGETID'][I]])
+        srt = geomask.match_to(photo['TARGETID'], out1['TARGETID'][I])
             
         out1[I] = photo[srt]
         out[M] = out1
@@ -1018,7 +1019,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
         tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
         # sort explicitly in order to ensure order
-        srt = np.hstack([np.where(objid == tractor_dr9['OBJID'])[0] for objid in input_cat['BRICK_OBJID'][idr9]])
+        srt = geomask.match_to(tractor_dr9['OBJID'], input_cat['BRICK_OBJID'][idr9])
         tractor_dr9 = tractor_dr9[srt]
         assert(np.all((tractor_dr9['BRICKID'] == input_cat['BRICKID'][idr9])*(tractor_dr9['OBJID'] == input_cat['BRICK_OBJID'][idr9])))
 
