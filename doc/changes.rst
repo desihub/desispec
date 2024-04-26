@@ -5,7 +5,13 @@ desispec Change Log
 0.62.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Remove redundant assemble_fibermap script (PR `#2222`_).
+* Enable qproc on obstype="other" for tests (PR `#2223`_).
+* Optionally gather Tractor phot from just north or south (PR `#2224`_).
+
+.. _`#2222`: https://github.com/desihub/desispec/pull/2222
+.. _`#2223`: https://github.com/desihub/desispec/pull/2223
+.. _`#2224`: https://github.com/desihub/desispec/pull/2224
 
 0.62.0 (2024-04-24)
 -------------------
