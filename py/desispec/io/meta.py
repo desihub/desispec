@@ -187,6 +187,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
+        rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
         spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{healpix}.fits.gz',
         redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{healpix}.fits',
         qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
@@ -198,6 +199,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
+        rrmodel_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrmodel-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits.gz',
         redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
@@ -208,6 +210,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
+        rrmodel_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrmodel-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits.gz',
         redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         qso_mgii_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/qso_mgii-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
@@ -253,8 +256,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     #- default group is "cumulative" for tile-based files
     if groupname is None and tile is not None and filetype in (
-            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
-            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
+            'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
+            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
             ):
         groupname = 'cumulative'
 

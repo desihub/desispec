@@ -561,9 +561,10 @@ def main(args=None, comm=None):
         coaddfile = findfile('coadd', **findfileopts)
         rrfile = findfile('redrock', **findfileopts)
         rdfile = findfile('rrdetails', **findfileopts)
+        rmfile = findfile('rrmodel', **findfileopts)
         rrlog = findfile('redrock', logfile=True, **findfileopts)
 
-        cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile}"
+        cmd = f"rrdesi_mpi -i {coaddfile} -o {rrfile} -d {rdfile} --model {rmfile}"
         if not args.no_gpu:
             cmd += f' --gpu --max-gpuprocs {args.max_gpuprocs}'
 
@@ -574,7 +575,7 @@ def main(args=None, comm=None):
         else:
             with stdouterr_redirected(rrlog, comm=comm):
                 result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
-                                         inputs=[coaddfile], outputs=[rrfile, rdfile])
+                                         inputs=[coaddfile], outputs=[rrfile, rdfile, rmfile])
 
         ## Since all ranks running redrock, only count failure/success once
         if rank == 0 and not success:
