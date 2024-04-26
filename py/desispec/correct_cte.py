@@ -513,6 +513,7 @@ def fit_cte(images):
     log = get_logger()
     log.debug("begin fit_cte")
 
+    nmaxparam = 5
     keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR",
             "FUNC","PARAM1","PARAM2","PARAM3","PARAM4","PARAM5","CHI2PDF"]
     dtypes = [int,str,str,str,str,float,float,float,float,float,float]
@@ -612,7 +613,10 @@ def fit_cte(images):
         res["AMPLIFIER"].append(ampname)
         res["SECTOR"].append(offcols)
         res["FUNC"].append(tcte['ctefunc'])
-        for i, val in enumerate(par.x):
+
+        xx = np.zeros(nmaxparam, dtype='f4')
+        xx[:len(par.x)] = par.x
+        for i, val in enumerate(xx):
             res[f"PARAM{i+1}"].append(val)
         res["CHI2PDF"].append(chi2dof)
 
@@ -697,10 +701,13 @@ def get_cte_images(night, camera, expids=None):
         indices = []
         for length in lengths:
             selection = (np.abs(exptable['EXPTIME'] - length) < 0.1) & (exptable['OBSTYPE'] == 'flat')
-            if np.sum(selection)<1 and length not in [3, 10]:
-                mess = f"No flat exposure of approx. {length} found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
-                log.error(mess)
-                raise RuntimeError(mess)
+            if np.sum(selection)<1:
+                if length not in [3, 10]:
+                    mess = f"No flat exposure of approx. {length} found for night {night} (in {exptablefn}). It's a requirement for the CTE correction model fit"
+                    log.error(mess)
+                    raise RuntimeError(mess)
+                else:
+                    continue
             indices.append(np.where(selection)[0][0])
 
         expids = list(exptable['EXPID'][indices])
