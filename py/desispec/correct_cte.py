@@ -349,22 +349,75 @@ def get_cte_params(header, cte_params_filename=None):
     return amp_regions, cte_regions
 
 
-def cte_transfer_amount_regnault(pixel, in_trap, alpha, beta,
+def cte_transfer_amount_regnault(pixval, in_trap, alpha, beta,
                                  cmax, fin, fout):
+    """CTE transfer function of Regnault+.
+
+    The model is
+    transfer = leak_out - leak in
+    leak_out = fout * cmax * (pixval / cmax)**alpha
+    leak_in = fin * (1 - in_trap / cmax)**alpha * pixval**beta
+    with slight elaborations to prevent more electrons than exist
+    from entering or leaving the trap.
+
+    Values of fin tend to be large: the trap effectively steals
+    electrons, and fout small; the trap leaks out slowly.  The
+    alpha and beta parameters change the effective stickiness
+    of the trap wrt how full it is.
+
+    Parameters
+    ----------
+    pixval : float
+        value of uncorrupted image
+    in_trap : float
+        number of electrons presently in trap
+    alpha : float
+        power law index for how quickly electrons leave the trap
+    beta : float
+        power law index for how quickly electrons enter the trap
+    cmax : float
+        trap capacity
+    fin : float
+        ~attraction strength of trap from pixel
+    fout : float
+        ~attraction strength of pixel from trap
+
+    Returns
+    -------
+    int
+    number of electrons that leak out of the trap into the pixel
+    """
     # leak out
     transfer_amount = np.clip(fout*cmax*(in_trap/cmax)**alpha, 0, in_trap)
     # leak in
-    maxin = np.minimum(pixel, cmax - in_trap)
+    maxin = np.minimum(pixval, cmax - in_trap)
     alpha = np.clip(alpha, 0, np.inf)
     beta = np.clip(beta, 0, np.inf)
     transfer_amount -= np.clip(
-        fin*(1 - in_trap/cmax)**alpha * pixel**beta,
+        fin*(1 - in_trap/cmax)**alpha * pixval**beta,
         0, maxin)
     return transfer_amount
 
 
 def chi_regnault(param, cleantraces=None, ctetraces=None, uncertainties=None):
-    """Chi loss function for a Regnault transfer function."""
+    """Chi loss function for a Regnault transfer function.
+
+    Parameters
+    ----------
+    param : list
+        parameters of model: [cmax, fin, fout, alpha, beta]
+    cleantraces : ndarray
+        CTE-unaffected cross-dispersion traces
+    ctetraces : ndarray
+        CTE-affected cross-dispersion traces
+    uncertainties : ndarray
+        statistical uncertainty in cleantraces - ctetraces.
+
+    Returns
+    -------
+    chi : ndarray
+        (model - data) / uncertainty
+    """
     models = [add_cte(trace, cmax=param[0], fin=param[1], fout=param[2], alpha=param[3], beta=param[4],
                       cte_transfer_func=cte_transfer_amount_regnault)
               for trace in cleantraces]
