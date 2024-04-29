@@ -46,10 +46,6 @@ parser.add_argument('--coadds-per-mask', type = int, default = 5, required = Fal
 parser.add_argument('--threshold', type = float, default = 70., required = False,
                     help = 'threshold for mask (in counts per 1200s exp)')
 
-parser.add_argument('--mask', type = str, default = None, required = False,
-                    help = 'Path to a previous mask file. If given, the output is the bitwise OR of the input mask and the mask created by this script.')
-
-
 #maybe those 2 options would be useful as well
 parser.add_argument('--savestat', type = bool, default = False, required = False,
                     help = 'Whether to save the intermediate dark frame statistics')
