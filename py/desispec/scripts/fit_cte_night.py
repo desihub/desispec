@@ -67,7 +67,8 @@ def main(args=None, comm=None):
 
     #- Create output directory if needed
     if comm is None or comm.rank == 0:
-        os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+        outdir = os.path.dirname(os.path.abspath(args.outfile))
+        os.makedirs(outdir, exist_ok=True)
 
     #- Check what cameras are actually needed by science exposures
     if args.expids is None:

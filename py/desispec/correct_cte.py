@@ -306,8 +306,11 @@ def get_cte_params(header, cte_params_filename=None):
         log.critical(msg)
         raise RuntimeError(msg)
 
-    # CTE table has columns NIGHT CAMERA AMPLIFIER SECTOR to identify regions
-    # and columns FUNC AMPLITUDE FRACLEAK with CTE parameters
+    # CTE correction files have list of dicts with entries
+    # NIGHT CAMERA AMPLIFIER SECTOR to identify regions,
+    # FUNC to identify functional form of correction, and
+    # CTE parameters like AMPLITUDE FRACLEAK (depends upon FUNC value).
+    # If no amps need CTE corrections, file will be a blank (length 0) list.
     ctecorrnight_dicts = yaml.safe_load(open(cte_params_filename, 'r'))
 
     ## For each row of the input table, check if the row data was derived from
