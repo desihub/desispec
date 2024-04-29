@@ -33,7 +33,8 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     generate_calibration_dict, \
     night_to_starting_iid, make_joint_prow, \
     set_calibrator_flag, make_exposure_prow, \
-update_calibjobs_with_linking, all_calibs_submitted
+    update_calibjobs_with_linking, all_calibs_submitted, \
+    update_and_recurvsively_submit
 from desispec.workflow.queue import update_from_queue, any_jobs_failed
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix
@@ -52,7 +53,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                all_cumulatives=False, daily=False, specprod=None,
                path_to_data=None, exp_obstypes=None, camword=None,
                badcamword=None, badamps=None, exps_to_ignore=None,
-               sub_wait_time=0.5, verbose=False, dont_require_cals=False,
+               sub_wait_time=0.1, verbose=False, dont_require_cals=False,
                psf_linking_without_fflat=False,
                still_acquiring=False):
     """
@@ -151,7 +152,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             only true for new exposures being added to the
             exposure_table in 'daily' mode.
         sub_wait_time: int. Wait time in seconds between submission loops.
-            Default 0.5 seconds.
+            Default 0.1 seconds.
         verbose: bool. True if you want more verbose output, false otherwise.
             Current not propagated to lower code, so it is only used in the
             main daily_processing script itself.
@@ -347,7 +348,18 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
         if any_jobs_failed(ptable['STATUS']):
-            if not ignore_proc_table_failures:
+            ## Try up to two times to resubmit failures, afterwards give up
+            ## unless explicitly told to proceed with the failures
+            ## Note after 2 resubmissions, the code won't resubmit anymore even
+            ## if given ignore_proc_table_failures
+            if np.max([len(qids) for qids in ptable['ALL_QIDS']]) < 3:
+                log.info("Job failures were detected. Resubmitting those jobs "
+                         + "before continuing with new submissions.")
+                ptable, nsubmits = update_and_recurvsively_submit(ptable,
+                                                                  ptab_name=proc_table_pathname,
+                                                                  dry_run=dry_run,
+                                                                  reservation=reservation)
+            elif not ignore_proc_table_failures:
                 err = "Some jobs have an incomplete job status. This script " \
                       + "will not fix them. You should remedy those first. "
                 log.error(err)
@@ -362,10 +374,10 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                       + "you entered '--ignore-proc-table-failures'. This "
                       + "script will not fix them. "
                       + "You should have fixed those first. Proceeding...")
-        if np.sum(ptable['OBSTYPE']=='science')>0:
-            ptable_expids = set(np.unique(np.concatenate(
+        if np.sum(ptable['OBSTYPE']=='science') > 0:
+            ptable_expids = set(np.concatenate(
                                 ptable['EXPID'][ptable['OBSTYPE']=='science']
-                            )))
+                            ))
         else:
             ptable_expids = set()
         etable_expids = set(etable['EXPID'][etable['OBSTYPE']=='science'])

@@ -54,7 +54,7 @@ def parse_args():
                         help="Only tiles completed on or before the supplied YYYYMMDD are "
                         +"considered complete and will be processed. None will process "
                         +"all completed tiles.")
-    parser.add_argument("--sub-wait-time", type=float, required=False, default=0.5,
+    parser.add_argument("--sub-wait-time", type=float, required=False, default=0.1,
                         help="Time to wait between submissions.")
     # Code Flags
     parser.add_argument("--dry-run", action="store_true",

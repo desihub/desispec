@@ -18,7 +18,8 @@ from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
                                         get_ztile_relpath, \
                                         get_ztile_script_suffix
-from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
+from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
+    queue_info_from_qids, get_queue_states_from_qids
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
     create_desi_proc_batch_script, \
@@ -623,14 +624,19 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    # workaround for sbatch --dependency bug not tracking completed jobs correctly
+    ## With desi_proc_night we now either resubmit failed jobs or exit, so this
+    ## should no longer be necessary in the normal workflow.
+    # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
     if len(dep_qids) > 0 and not dry_run:
-        dep_table = queue_info_from_qids(np.asarray(dep_qids), columns='jobid,state')
-        for row in dep_table:
-            if row['STATE'] == 'COMPLETED':
-                log.info(f"removing completed jobid {row['JOBID']}")
-                dep_qids = np.delete(dep_qids, np.argwhere(dep_qids==row['JOBID']))
+        state_dict = get_queue_states_from_qids(dep_qids, dry_run=0, use_cache=True)
+        still_depids = []
+        for depid in dep_qids:
+            if depid in state_dict.keys() and state_dict[int(depid)] == 'COMPLETED':
+                log.info(f"removing completed jobid {depid}")
+            else:
+                still_depids.append(depid)
+        dep_qids = np.array(still_depids)
 
     if len(dep_qids) > 0:
         jobtype = prow['JOBDESC']
@@ -1146,10 +1152,10 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     log.info("Updated processing table queue information:")
     cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
             'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
-    print(np.array(cols))
+    log.info(np.array(cols))
     for row in proc_table:
-        print(np.array(row[cols]))
-    print("\n")
+        log.info(np.array(row[cols]))
+    log.info("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
@@ -1157,6 +1163,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
                                                           id_to_row_map, ptab_name,
                                                           resubmission_states,
                                                           reservation, dry_run)
+    proc_table = update_from_queue(proc_table)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -1211,8 +1218,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                             + "This is expected since it's from another day. "
                             + f" This dependency will not be checked or "
                             + "resubmitted")
-                continue
-            if proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
+            elif proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
                 log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
                             f" but that exposure has state" +
@@ -1229,7 +1235,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                             + f" This dependency will not be checked or "
                             + "resubmitted")
                 continue
-            if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
+            elif proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
                 proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
                                                               proc_table, submits,
                                                               id_to_row_map,
@@ -1248,20 +1254,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     submits += 1
 
     if not dry_run:
-        sleep_and_report(1, message_suffix=f"after submitting job to queue")
-        if submits % 10 == 0:
-            if ptab_name is None:
-                write_table(proc_table, tabletype='processing', overwrite=True)
-            else:
-                write_table(proc_table, tablename=ptab_name, overwrite=True)
-            sleep_and_report(2, message_suffix=f"after writing to disk")
-        if submits % 100 == 0:
-            proc_table = update_from_queue(proc_table)
-            if ptab_name is None:
-                write_table(proc_table, tabletype='processing', overwrite=True)
-            else:
-                write_table(proc_table, tablename=ptab_name, overwrite=True)
-            sleep_and_report(10, message_suffix=f"after updating queue and writing to disk")
+        if ptab_name is None:
+            write_table(proc_table, tabletype='processing', overwrite=True)
+        else:
+            write_table(proc_table, tablename=ptab_name, overwrite=True)
+        sleep_and_report(0.1 + 0.1*(submits % 10 == 0),
+                         message_suffix=f"after submitting job to queue and writing proctable")
     return proc_table, submits
 
 
