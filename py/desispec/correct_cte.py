@@ -13,6 +13,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.ndimage import median_filter
 from astropy.stats import sigma_clipped_stats
+import yaml
 from astropy.table import Table
 import fitsio
 
@@ -307,20 +308,22 @@ def get_cte_params(header, cte_params_filename=None):
 
     # CTE table has columns NIGHT CAMERA AMPLIFIER SECTOR to identify regions
     # and columns FUNC AMPLITUDE FRACLEAK with CTE parameters
-    ctecorrnight_table = Table.read(cte_params_filename)
+    ctecorrnight_dicts = yaml.safe_load(open(cte_params_filename, 'r'))
 
     ## For each row of the input table, check if the row data was derived from
     ## a night within 2 weeks of the current night, otherwise it isn't valid
-    valid_night = np.array([np.abs(difference_nights(rownight, night)) < 14 for
-                            rownight in ctecorrnight_table["NIGHT"]])
+    valid_night = np.array([
+        np.abs(difference_nights(row['NIGHT'], night)) < 14
+        for row in ctecorrnight_dicts])
     ## Check for rows that match the camera we want
-    valid_camera = (ctecorrnight_table["CAMERA"] == camera)
+    valid_camera = np.array([row['CAMERA'] == camera for row in ctecorrnight_dicts])
 
     #- augment cte_regions with CTE correction parameters
     for amp in cte_regions:
         ## check for rows that are from a valid not and on the desired camera
         ## and amplifier
-        selection = valid_night & valid_camera & (ctecorrnight_table["AMPLIFIER"] == amp)
+        valid_amp = np.array([row['AMPLIFIER'] == amp for row in ctecorrnight_dicts])
+        selection = valid_night & valid_camera & valid_amp
         if np.sum(selection)==0 :
             # we do expect a set of CTE parameter for the amplifier because we know the effect is there and
             # we asked for the parameters, this is an error
@@ -330,7 +333,8 @@ def get_cte_params(header, cte_params_filename=None):
 
         for i in range(len(cte_regions[amp])):
             ctecols = cte_regions[amp][i]['ctecols']
-            selection2 = selection & (ctecorrnight_table["SECTOR"] == ctecols)
+            valid_sector = np.array([row['SECTOR'] == ctecols for row in ctecorrnight_dicts])
+            selection2 = selection & valid_sector
             if np.sum(selection2)==0 :
                 mess = f"No CTE correction in {cte_params_filename} for night {night} camera {camera} amplifier {amp} sector {ctecols}"
                 log.critical(mess)
@@ -338,10 +342,10 @@ def get_cte_params(header, cte_params_filename=None):
 
             #- Having identified which row we want, add params to cte_regions
             entry=np.where(selection2)[0][0]
-            for k in ctecorrnight_table.keys():
+            for k in ctecorrnight_dicts[entry].keys():
                 if k in ['NIGHT', 'CAMERA', 'AMPLIFIER', 'SECTOR', 'CHI2PDF']:
                     continue
-                cte_regions[amp][i][k] = ctecorrnight_table[k][entry]
+                cte_regions[amp][i][k] = ctecorrnight_dicts[entry][k]
 
             cteparam = cte_regions[amp][i]
             log.info(f"CTE correction in amplifier {amp}, sector {ctecols}, {cteparam}")
@@ -479,17 +483,17 @@ def get_transfer_function(entry) :
     """
     if entry['FUNC'] == "simplified_regnault" :
         return partial(add_cte, cte_transfer_func=simplified_regnault,
-                       amplitude=entry['PARAM1'], fracleak=entry['PARAM2'])
+                       amplitude=entry['AMPLITUDE'], fracleak=entry['FRACLEAK'])
     elif entry['FUNC'] == 'regnault':
         return partial(add_cte, cte_transfer_func=cte_transfer_amount_regnault,
-                       cmax=entry['PARAM1'], fin=entry['PARAM2'],
-                       fout=entry['PARAM3'],
-                       alpha=entry['PARAM4'], beta=entry['PARAM5'])
+                       cmax=entry['CMAX'], fin=entry['FIN'],
+                       fout=entry['FOUT'],
+                       alpha=entry['ALPHA'], beta=entry['BETA'])
     else :
         raise KeyError(f"No transfer function called '{entry['FUNC']}'")
 
 
-def get_transfer_function_chi_guess_diff(name):
+def get_transfer_function_chi_names_guess_diff(name):
     """Return information needed for fitting CTE.
 
     Parameters
@@ -499,19 +503,24 @@ def get_transfer_function_chi_guess_diff(name):
 
     Returns
     -------
-    (chi, guess, diff) tuple
+    (chi, names, guess, diff) tuple
 
     chi: the function that returns the scaled residuals given the model
          parameters
+    names: the names of the parameters being optimized
     guess: the initial guess to make for the parameter values, excluding
          the trap capacity for which a few different guesses are made
     diff: the step sizes to make in the different parameters, including
          in the trap capacity.
+    names: the names of the
     """
     if name == "simplified_regnault":
-        return (chi_simplified_regnault, [0.2], [0.2, 0.01])
+        return (chi_simplified_regnault, ['AMPLITUDE', 'FRACLEAK'],
+                [0.2], [0.2, 0.01])
     elif name == "regnault":
-        return (chi_regnault, [0.2, 0.2, 1, 1],
+        return (chi_regnault,
+                ['CMAX', 'FIN', 'FOUT', 'ALPHA', 'BETA'],
+                [0.2, 0.2, 1, 1],
                 [0.2, 0.01, 0.01, 0.01, 0.01])
     else:
         raise KeyError(f"No transfer function called '{name}'.")
@@ -542,14 +551,14 @@ def fit_cte(images):
 
     Returns
     -------
-    astropy.Table with columns "NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC",
-                               "AMPLITUDE","FRACLEAK","CHI2PDF"
+    list of dicts with fields "NIGHT","CAMERA","AMPLIFIER","SECTOR","FUNC",
+                              "CHI2PDF" and parameter names
 
       "NIGHT","CAMERA","AMPLIFIER" are properties of the image
       "SECTOR" is a string of the form 'BEGIN:END' defining a range of CCD cols.
       "FUNC" is a transfer function, only 'simplified_regnault' implemented for now.
-      "AMPLITUDE","FRACLEAK" are parameters of the transfer function
       "CHI2PDF" is the reduced chi2 of the fit
+      Other keys are parameters of the transfer function
     """
     # take a bunch of preproc images on one camera
     # these should all be flats and the same device
@@ -566,15 +575,9 @@ def fit_cte(images):
     log = get_logger()
     log.debug("begin fit_cte")
 
-    nmaxparam = 5
-    keys = ["NIGHT","CAMERA","AMPLIFIER","SECTOR",
-            "FUNC","PARAM1","PARAM2","PARAM3","PARAM4","PARAM5","CHI2PDF"]
-    dtypes = [int,str,str,str,str,float,float,float,float,float,float]
-
     if images is None or len(images)==0:
         # nothing to do
-        empty_table = Table(names=keys, dtype=dtypes)
-        return empty_table
+        return list()
 
     assert len(images) > 0
     night = desispec.preproc.header2night(images[0].meta)
@@ -596,9 +599,7 @@ def fit_cte(images):
     }
     amp, cte = get_amp_regions_to_cte_correct(images[0].meta)
 
-    res = dict()
-    for k in keys :
-        res[k]=list()
+    res = list()
 
     for ampname in amp:
         tcte = cte[ampname]
@@ -645,8 +646,8 @@ def fit_cte(images):
                 keepdims=True))
             for im in images]
 
-        chi_function, guess, diff_step = get_transfer_function_chi_guess_diff(
-            tcte['ctefunc'])
+        chi_function, names, guess, diff_step = (
+            get_transfer_function_chi_names_guess_diff(tcte['ctefunc']))
         chi = partial(chi_function,
                       cleantraces=cleantraces,
                       ctetraces=ctetraces,
@@ -660,23 +661,13 @@ def fit_cte(images):
         offcols = f'{tcte["start"]}:{tcte["stop"]}'
         chi2dof = par.cost / len(par.fun)
         log.info(f'CTE fit {night} {camera} {par.x=} chi^2/dof={chi2dof:5.2f}')
-
-        res["NIGHT"].append(night)
-        res["CAMERA"].append(camera)
-        res["AMPLIFIER"].append(ampname)
-        res["SECTOR"].append(offcols)
-        res["FUNC"].append(tcte['ctefunc'])
-
-        xx = np.zeros(nmaxparam, dtype='f4')
-        xx[:len(par.x)] = par.x
-        for i, val in enumerate(xx):
-            res[f"PARAM{i+1}"].append(val)
-        res["CHI2PDF"].append(chi2dof)
-
-    table = Table()
-    for k, dt in zip(keys, dtypes):
-        table[k] = np.array(res[k], dtype=dt)
-    return table
+        out = dict(NIGHT=night, CAMERA=camera, AMPLIFIER=ampname,
+                   SECTOR=offcols, FUNC=tcte['ctefunc'],
+                   CHI2PDF=float(chi2dof))
+        for name, value in zip(names, par.x):
+            out[name] = float(value)
+        res.append(out)
+    return res
 
 
 def get_cte_images(night, camera, expids=None):
