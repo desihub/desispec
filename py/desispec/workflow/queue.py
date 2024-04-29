@@ -185,9 +185,7 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
         queue_info_table.rename_column(col, col.upper())
 
     ## Update the cached states of these jobids if we have that info to update
-    if 'JOBID' in queue_info_table.colnames and 'STATE' in queue_info_table.colnames:
-        for row in queue_info_table:
-            _cached_slurm_states[int(row['JOBID'])] = row['STATE']
+    update_queue_state_cache_from_table(queue_info_table)
 
     return queue_info_table
 
@@ -271,9 +269,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         queue_info_table.rename_column(col, col.upper())
 
     ## Update the cached states of these jobids if we have that info to update
-    if 'JOBID' in queue_info_table.colnames and 'STATE' in queue_info_table.colnames:
-        for row in queue_info_table:
-            _cached_slurm_states[int(row['JOBID'])] = row['STATE']
+    update_queue_state_cache_from_table(queue_info_table)
 
     return queue_info_table
 
@@ -298,6 +294,7 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
     Dict
         Dictionary with the keys as jobids and values as the slurm state of the job.
     """
+    global _cached_slurm_states
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
 
@@ -314,6 +311,45 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
         for row in outtable:
             outdict[int(row['JOBID'])] = row['STATE']
     return outdict
+
+def update_queue_state_cache_from_table(queue_info_table):
+    """
+    Takes a Slurm jobid and updates the queue id cache with the supplied state
+
+    Parameters
+    ----------
+    queue_info_table : astropy.table.Table
+        Table returned by an sacct query. Should contain at least JOBID and STATE
+        columns
+
+    Returns
+    -------
+    Nothing
+
+    """
+    ## Update the cached states of these jobids if we have that info to update
+    if 'JOBID' in queue_info_table.colnames and 'STATE' in queue_info_table.colnames:
+        for row in queue_info_table:
+            update_queue_state_cache(qid=row['JOBID'], state=row['STATE'])
+
+def update_queue_state_cache(qid, state):
+    """
+    Takes a Slurm jobid and updates the queue id cache with the supplied state
+
+    Parameters
+    ----------
+    qid : int
+        Slurm QID at NERSC
+    state: str
+        The current job status of the Slurm jobid
+
+    Returns
+    -------
+    Nothing
+
+    """
+    global _cached_slurm_states
+    _cached_slurm_states[int(qid)] = state
 
 def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     """

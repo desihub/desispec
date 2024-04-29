@@ -19,7 +19,7 @@ from desispec.workflow.redshifts import get_ztile_script_pathname, \
                                         get_ztile_relpath, \
                                         get_ztile_script_suffix
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
-    queue_info_from_qids, get_queue_states_from_qids
+    queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
     create_desi_proc_batch_script, \
@@ -709,10 +709,14 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     log.info(batch_params)
     log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
 
+    ## Update prow with new information
     prow['LATEST_QID'] = current_qid
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
     prow['STATUS'] = 'SUBMITTED'
     prow['SUBMIT_DATE'] = int(time.time())
+
+    ## Update the Slurm jobid cache of job states
+    update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
     return prow
 
