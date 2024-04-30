@@ -194,7 +194,7 @@ min_image = np.min(np.abs(images), axis=2)
 if args.savestat:
     for night,expid,fnames,mimage in zip(nights,expids,filenames_used,min_image):
         
-        log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'_{night[0][0]}.fits')} ...")
+        log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'-{night[0][0]}.fits')} ...")
         #need to think about which further stats to output, not doing anything here yet
 
         hdulist=pyfits.HDUList([pyfits.PrimaryHDU()]+[pyfits.ImageHDU(mimage, name=f"MINABS_{n[0]}_{e[0]}") for n,e in zip(night,expid)])
@@ -208,7 +208,7 @@ if args.savestat:
         hdulist[0].header["CAMERA"]=args.camera
         hdulist[0].header["NFRAMES"]=(args.coadds_per_mask,'number of frames used for minimum absolute')
 
-        hdulist.writeto(args.outfilestat.replace('.fits',f'_{night[0][0]}.fits'), overwrite=True)
+        hdulist.writeto(args.outfilestat.replace('.fits',f'-{night[0][0]}.fits'), overwrite=True)
         log.info("Done writing statistics file")
 
 
@@ -282,11 +282,11 @@ if args.mask!=None:
 log.info("write outputs")
 for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
     
-    log.info(f"writing {args.outfile.replace('.fits',f'_{n[0][0]}.fits')}")
+    log.info(f"writing {args.outfile.replace('.fits',f'-{n[0][0]}.fits')}")
     mask_percent = np.sum(m>0)*100/np.product(m.shape)
     #Write fits file with header info
 
-    hdu = pyfits.PrimaryHDU(mask.astype("int16"))
+    hdu = pyfits.PrimaryHDU(m.astype("int16"))
     hdu.header["NFRAMES"] = (args.frames_per_coadd, 'number of frames used for minimum absolute')
     hdu.header["NMASKS"] = (args.coadds_per_mask, 'number of masks combined with or')
     hdu.header["COLFRAC"] = (args.colfrac, 'Bad pixel fraction for blocked column in amp')
@@ -303,5 +303,5 @@ for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
     hdu.header["BUNIT"] = ""
     
     #add the night of first frame used to the filename
-    hdu.writeto(args.outfile.replace('.fits',f'_{n[0][0]}.fits'), overwrite=True)
+    hdu.writeto(args.outfile.replace('.fits',f'-{n[0][0]}.fits'), overwrite=True)
     log.info("Saved masks file")
