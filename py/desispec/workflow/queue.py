@@ -10,6 +10,8 @@ import subprocess
 from desiutil.log import get_logger
 import time, datetime
 
+global _cached_slurm_states
+_cached_slurm_states = dict()
 
 def get_resubmission_states():
     """
@@ -181,15 +183,17 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
 
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
+
+    ## Update the cached states of these jobids if we have that info to update
+    update_queue_state_cache_from_table(queue_info_table)
+
     return queue_info_table
 
-
 def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
-                         'eligible,start,end,elapsed,state,exitcode',
-                         dry_run=0):
+                         'eligible,start,end,elapsed,state,exitcode', dry_run=0):
     """
-    Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
-    window of all jobs submitted or executed during that time.
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information about specific jobs based on their jobids.
 
     Parameters
     ----------
@@ -210,7 +214,9 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         Table with the columns defined by the input variable 'columns' and information relating
         to all jobs submitted by the specified user in the specified time frame.
     """
+    qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
+
     ## Turn the queue id's into a list
     ## this should work with str or int type also, though not officially supported
     qid_str = ','.join(np.atleast_1d(qids).astype(str)).replace(' ','')
@@ -220,49 +226,127 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     if dry_run:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
-        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
-        string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
+        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode'
+        for jobid, expid in zip(qids, 100000+np.arange(len(qids))):
+            string += f'\n{jobid},arc-20211102-{expid:08d}-a0123456789,realtime,2021-11-02'\
                   +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
-                  +'18:48:32,COMPLETED,0:0' + '\n'
-        string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T'\
-                  +'18:57:02,COMPLETED,0:0' + '\n'
-        string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T'\
-                  +'19:06:17,COMPLETED,0:0' + '\n'
-        string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T'\
-                  +'19:13:59,COMPLETED,0:0' + '\n'
-        string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
-                  +'19:24:49,COMPLETED,0:0'
+                  +'18:48:32,COMPLETED,0:0'
+
+        # create command to run to exercise subprocess -> stdout parsing
         cmd_as_list = ['echo', string]
-        table_as_string = subprocess.check_output(cmd_as_list, text=True,
-                                      stderr=subprocess.STDOUT)
     else:
         log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
 
-        #- sacct sometimes fails; try several times before giving up
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                table_as_string = subprocess.check_output(cmd_as_list, text=True,
-                                              stderr=subprocess.STDOUT)
-                break
-            except subprocess.CalledProcessError as err:
-                log.error(f'{qid_str} job query via sacct failure at {datetime.datetime.now()}')
-                log.error(f'{qid_str} {cmd_as_list}')
-                log.error(f'{qid_str} {err.output=}')
-        else:  #- for/else happens if loop doesn't succeed
-            msg = f'{qid_str} job query via sacct failed {max_attempts} times; exiting'
-            log.critical(msg)
-            raise RuntimeError(msg)
+    #- sacct sometimes fails; try several times before giving up
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                          stderr=subprocess.STDOUT)
+            break
+        except subprocess.CalledProcessError as err:
+            log.error(f'{qid_str} job query via sacct failure at {datetime.datetime.now()}')
+            log.error(f'{qid_str} {cmd_as_list}')
+            log.error(f'{qid_str} {err.output=}')
+    else:  #- for/else happens if loop doesn't succeed
+        msg = f'{qid_str} job query via sacct failed {max_attempts} times; exiting'
+        log.critical(msg)
+        raise RuntimeError(msg)
 
     queue_info_table = Table.read(table_as_string, format='ascii.csv')
-
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
+
+    ## Update the cached states of these jobids if we have that info to update
+    update_queue_state_cache_from_table(queue_info_table)
+
     return queue_info_table
+
+def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information on the job STATE. If use_cache is set and all qids have cached
+    values from a previous query, those cached states will be returned instead.
+
+    Parameters
+    ----------
+    jobids : list or array of ints
+        Slurm QID's at NERSC that you want to return information about.
+    dry_run : int
+        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
+        table that doesn't query the Slurm scheduler.
+    use_cache, bool. If True the code first looks for a cached status
+        for the qid. If unavailable, then it queries Slurm. Default is False.
+
+    Returns
+    -------
+    Dict
+        Dictionary with the keys as jobids and values as the slurm state of the job.
+    """
+    global _cached_slurm_states
+    qids = np.atleast_1d(qids).astype(int)
+    log = get_logger()
+
+    ## Only use cached values if all are cahced, since the time is dominated
+    ## by the call itself rather than the number of jobids, so we may as well
+    ## get updated information from all of them if we're submitting a query anyway
+    outdict = dict()
+    if use_cache and np.all(np.isin(qids, list(_cached_slurm_states.keys()))):
+        log.info(f"All Slurm {qids=} are cached. Using cached values.")
+        for qid in qids:
+            outdict[qid] = _cached_slurm_states[qid]
+    else:
+        outtable = queue_info_from_qids(qids, columns='jobid,state', dry_run=dry_run)
+        for row in outtable:
+            outdict[int(row['JOBID'])] = row['STATE']
+    return outdict
+
+def update_queue_state_cache_from_table(queue_info_table):
+    """
+    Takes a Slurm jobid and updates the queue id cache with the supplied state
+
+    Parameters
+    ----------
+    queue_info_table : astropy.table.Table
+        Table returned by an sacct query. Should contain at least JOBID and STATE
+        columns
+
+    Returns
+    -------
+    Nothing
+
+    """
+    ## Update the cached states of these jobids if we have that info to update
+    if 'JOBID' in queue_info_table.colnames and 'STATE' in queue_info_table.colnames:
+        for row in queue_info_table:
+            update_queue_state_cache(qid=row['JOBID'], state=row['STATE'])
+
+def update_queue_state_cache(qid, state):
+    """
+    Takes a Slurm jobid and updates the queue id cache with the supplied state
+
+    Parameters
+    ----------
+    qid : int
+        Slurm QID at NERSC
+    state: str
+        The current job status of the Slurm jobid
+
+    Returns
+    -------
+    Nothing
+
+    """
+    global _cached_slurm_states
+    _cached_slurm_states[int(qid)] = state
+
+def clear_queue_state_cache():
+    """
+    Remove all entries from the queue state cache
+    """
+    global _cached_slurm_states
+    _cached_slurm_states.clear()
+
 
 def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     """
