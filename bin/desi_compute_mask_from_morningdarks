@@ -25,7 +25,7 @@ description="Compute a mask using dark images",
  epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are fully preprocessed then for sets of N darks the min absolute value is computed as a first guess of the mask. From M such guesses an or operation is performed, finally binary_closing fills in gaps and columns with more than a certain fraction of masking will be filtered''')
 
 parser.add_argument('-i','--image', type = str, default = None, required = False, nargs="*",
-                    help = 'paths to raw dark image fits files')
+                    help = 'paths to raw dark image fits files (either this or --firstnight/--lastnight needs to be set)')
 #could be changed to use particular night range, but not yet done
 
 parser.add_argument('-f','--firstnight', type = str, default = None, required = False,
@@ -33,7 +33,7 @@ parser.add_argument('-f','--firstnight', type = str, default = None, required = 
 parser.add_argument('-l','--lastnight', type = str, default = None, required = False,
                     help = 'last night to use for automatic discovery')
 
-parser.add_argument('--use-existing-preproc', type = str, action='store_true',
+parser.add_argument('--use-existing-preproc', action='store_true',
                     help = 'use existing preproc files instead of recomputing them')
 parser.add_argument('--preproc-basedir', type = str, default = None, required = False, 
                     help = 'look for preproc-files in here instead of the usual directory structure')
