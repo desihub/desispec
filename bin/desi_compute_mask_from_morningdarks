@@ -85,7 +85,7 @@ if (args.firstnight is not None) & (args.lastnight is not None) & (args.image is
     if not args.use_existing_preproc:
         filenames=[io.findfile('raw', night=n, expid=e) for n,e in zip(nights,expids)]
     else:
-        filenames=[io.findfile('preproc', night=n, expid=e, camera=args.camera, specprod=args.preproc_basedir) for n,e in zip(nights,expids)]
+        filenames=[io.findfile('preproc', night=n, expid=e, camera=args.camera, specprod=args.preproc_basedir+'/') for n,e in zip(nights,expids)]
 elif  args.image is not None:
     if (args.firstnight is not None) | (args.lastnight is not None):
         log.critical("Need to supplied both --firstnight/--lastnight and --image, using explicit files given by --image")
@@ -152,16 +152,17 @@ for filename in filenames :
                         pixflat=False,
                         nocrosstalk=True,
                         ccd_calibration_filename=False)
+        img=img.pix
     else:
         with pyfits.open(filename) as fitsfile:
             img=fitsfile['IMAGE'].data
 
-    shape=img.pix.shape
+    shape=img.shape
     log.info(f"adding dark {filename} divided by exposure time {exptime} s")
     expids.append(primary_header['EXPID'])
     nights.append(primary_header['NIGHT'])
     filenames_used.append(filename)
-    images.append(img.pix/exptime)
+    images.append(img/exptime)
 
 
 nights=np.array(nights)
