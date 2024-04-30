@@ -216,7 +216,7 @@ log.info("combine masks via or operation ...")
 
 mask   = np.zeros(min_image.shape, dtype=np.int32)
 above_threshold=min_image>args.threshold
-mask[mask] = ccdmask.BAD
+mask[above_threshold] |= ccdmask.BAD
 combined_mask=(mask[:,0,...])
 
 for i in range(1,mask.shape[1]):
