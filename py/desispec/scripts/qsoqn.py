@@ -29,7 +29,7 @@ from redrock.templates import find_templates
 from redrock.external.desi import rrdesi
 
 from quasarnp.io import load_model, load_desi_coadd
-from quasarnp.utils import process_preds
+from quasarnp.utils import process_preds, wave, linear_wave
 
 
 def parse(options=None):
@@ -277,9 +277,19 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
                 "$DESI_ROOT is not set in the current environment. Please set it before running this code.")
             raise KeyError("QN_MODEL_FILE and DESI_ROOT are not set in the current environment.")
 
+    # Whether we should use linear weighting or not
+    # If a future QN weights file breaks the convention that a linear weights
+    # file should use "linear" in the name then this won't work...
+    if "linear" in model_QN_path:
+        linear_weights = True
+        wave_to_use = linear_wave
+    else: # logarithmic grid
+        linear_weights = False
+        wave_to_use = wave
+
     model_QN = load_model(model_QN_path)
 
-    data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN)
+    data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN, linear=linear_weights)
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
         sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
@@ -287,7 +297,8 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         c_line, z_line, z_QN = np.array([]), np.array([]), np.array([])
     else:
         p = model_QN.predict(data[:, :, None])
-        c_line, z_line, z_QN, c_line_bal, z_line_bal = process_preds(p, lines, lines_bal, verbose=False)  # c_line.size = index_with_QN.size and not index_to_QN !!
+        c_line, z_line, z_QN, c_line_bal, z_line_bal = process_preds(p, lines, lines_bal,
+                                                                     verbose=False, wave=wave_to_use)  # c_line.size = index_with_QN.size and not index_to_QN !!
 
         # Selection QSO with QN :
         # sel_index_with_QN.size = z_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
@@ -425,7 +436,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 def main(args=None, comm=None):
     from desispec.io.util import replace_prefix
-    
+
     log = get_logger()
 
     if not isinstance(args, argparse.Namespace):
