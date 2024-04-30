@@ -159,7 +159,11 @@ for raw_filename in raw_filenames :
                 raise TypeError(f"Morning darks should be exptime=1200s, but found {exptime}s")
 
         extname=f'{(args.camera)}'.upper()
-        cam_header=fitsfile[extname].header
+        try :
+            cam_header=fitsfile[extname].header
+        except KeyError as e :
+            log.warning(f"No {args.camera} in {raw_filename}")
+            continue
 
         #this is a check on 2amp/4amp detector modes
         if readout_mode is None:
@@ -223,6 +227,21 @@ nights=np.array(nights)
 images=np.array(images)
 expids=np.array(expids)
 filenames_used=np.array(filenames_used)
+
+nexpids=expids.size
+if args.coadds_per_mask > nexpids//args.frames_per_coadd :
+    args.coadds_per_mask = nexpids//args.frames_per_coadd
+    log.warning(f"Reducing number of coadds per mask to {args.coadds_per_mask}")
+    if args.coadds_per_mask == 0 :
+        log.error(f"Not enough data to compute a mask")
+        sys.exit(12)
+    if (args.coadds_per_mask * args.frames_per_coadd) < nexpids :
+        nexpids = (args.coadds_per_mask * args.frames_per_coadd)
+        nights=nights[:nexpids]
+        images=images[:nexpids]
+        expids=expids[:nexpids]
+        filenames_used=filenames_used[:nexpids]
+
 expids.shape=[ args.coadds_per_mask,args.frames_per_coadd]
 nights.shape=[args.coadds_per_mask,args.frames_per_coadd]
 filenames_used.shape=[args.coadds_per_mask,args.frames_per_coadd]
