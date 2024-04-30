@@ -187,7 +187,7 @@ images.shape=[-1, args.coadds_per_mask,args.frames_per_coadd,images.shape[1],ima
 
 
 log.info("compute min(abs(preprocessed dark)) image ...")
-min_image = np.min(np.abs(images, axis=2))
+min_image = np.min(np.abs(images), axis=2)
 
 
 
