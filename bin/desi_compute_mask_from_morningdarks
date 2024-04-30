@@ -199,8 +199,8 @@ if args.savestat:
 
         hdulist=pyfits.HDUList([pyfits.PrimaryHDU()]+[pyfits.ImageHDU(mimage, name=f"MINABS_{n[0]}_{e[0]}") for n,e in zip(night,expid)])
         for n,e,hdu in zip(night,expid,hdulist[1:]):
-            hdu.header["NIGHT"]=" ".join(n)
-            hdu.header["EXPID"]=" ".join(e)
+            hdu.header["NIGHT"]=" ".join(f"{n:d}")
+            hdu.header["EXPID"]=" ".join(f"{e:d}")
 
         #Write header info
         for i, filename in enumerate(fnames) :
