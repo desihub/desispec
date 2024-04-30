@@ -208,13 +208,14 @@ if args.savestat:
         hdulist[0].header["CAMERA"]=args.camera
         hdulist[0].header["NFRAMES"]=(args.coadds_per_mask,'number of frames used for minimum absolute')
 
-        hdulist.writeto(args.outfilestat.replace('.fits',f'{night[0][0]}.fits'), overwrite=True)
+        hdulist.writeto(args.outfilestat.replace('.fits',f'_{night[0][0]}.fits'), overwrite=True)
         log.info("Done writing statistics file")
 
 
 log.info("combine masks via or operation ...")
 
-mask=min_image>args.threshold
+mask   = np.zeros(min_image.shape, dtype=np.int32)
+above_threshold=min_image>args.threshold
 mask[mask] = ccdmask.BAD
 combined_mask=(mask[:,0,...])
 
@@ -224,7 +225,7 @@ mask=combined_mask
 
 log.info("close gaps via binary closing ...")
 
-closed_mask=mask.copy()
+closed_mask=mask
 for i,m in enumerate(closed_mask):
     #Close incompletely blocked regions
     closed_mask[i,...] = binary_closing(m, iterations=args.closeiter, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
