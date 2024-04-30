@@ -234,8 +234,8 @@ mask|=closed_mask
 log.info("add first/last valid mask to first/last few rows")
 for i,m in enumerate(mask):
     any_masked=np.any(m,axis=1).nonzero()
-    m[:any_masked[0][0],:]=closed_mask[[any_masked[0][0]],:]
-    m[any_masked[0][-1]:,:]=closed_mask[[any_masked[0][-1]],:]
+    m[:any_masked[0][0],:]=m[[any_masked[0][0]],:]
+    m[any_masked[0][-1]:,:]=m[[any_masked[0][-1]],:]
     mask[i,...]|=m
 
 
