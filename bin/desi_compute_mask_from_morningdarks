@@ -286,8 +286,8 @@ for n,e,fnames,mask in zip(nights,expids,filenames_used,closed_mask):
     hdu.header["NIGHTSS"] = (" ".join(np.unique(n.astype(str)).flatten()), 'NIGHTS included')
     hdu.header["EXPIDS"] = (" ".join(e.astype(str).flatten()), 'EXPIDs included')
 
-        for i, filename in enumerate(fnames.flatten()) :
-            hdu.header[f"INPUT{i:03d}"] = filename
+    for i, filename in enumerate(fnames.flatten()) :
+        hdu.header[f"INPUT{i:03d}"] = filename
     hdu.header["EXTNAME"] = "MASK"
     hdu.header["BUNIT"] = ""
     
