@@ -194,13 +194,13 @@ min_image = np.min(np.abs(images), axis=2)
 if args.savestat:
     for night,expid,fnames,mimage in zip(nights,expids,filenames_used,min_image):
         
-        log.info("writing output to %s ..."%args.outfile)
+        log.info(f"writing stats output to {args.outfilestat} ...")
         #need to think about which further stats to output, not doing anything here yet
 
         hdulist=pyfits.HDUList([pyfits.PrimaryHDU()]+[pyfits.ImageHDU(mimage, name=f"MINABS_{n[0]}_{e[0]}") for n,e in zip(night,expid)])
         for n,e,hdu in zip(night,expid,hdulist[1:]):
-            hdu.header["NIGHT"]=" ".join(f"{n:d}")
-            hdu.header["EXPID"]=" ".join(f"{e:d}")
+            hdu.header["NIGHT"]=" ".join(n.astype(str))
+            hdu.header["EXPID"]=" ".join(e.astype(str))
 
         #Write header info
         for i, filename in enumerate(fnames) :
@@ -239,7 +239,7 @@ for i,m in enumerate(closed_mask):
 
 #the loop starting here goes over individual mesks, everything before should work on all masks to be processed
 log.info("check which columns have a large fraction masked")
-for n,e,mask in zip(nights,expids,closed_mask):
+for n,e,f,mask in zip(nights,expids,filenames_used,closed_mask):
     print(readout_mode)
     amp_ids=get_amp_ids(cam_header)
 
@@ -283,7 +283,9 @@ for n,e,mask in zip(nights,expids,closed_mask):
     hdu.header["CLOSEITER"] = (args.closeiter, 'binary cloing iterations')
     hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels masked')
     hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
-    hdu.header["EXPIDS"] = (" ".join(e.flatten()), 'paths to raw darks')
+    hdu.header["NIGHTSS"] = (" ".join(np.unique(n.astype(str)).flatten()), 'NIGHTS included')
+    hdu.header["EXPIDS"] = (" ".join(e.astype(str).flatten()), 'EXPIDs included')
+    hdu.header["INPUT01"] = (" ".join(f), 'filenames included')
     hdu.header["EXTNAME"] = "MASK"
     hdu.header["BUNIT"] = ""
     
