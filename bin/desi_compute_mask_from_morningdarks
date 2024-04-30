@@ -69,10 +69,7 @@ args = parser.parse_args()
 log  = get_logger()
 
 #search for files
-if ((args.firstnight is None) | (args.lastnight is None)) & (args.image is None):
-    log.critical("Need to supply either --firstnight and --lastnight or a list of images in --image")
-    raise ValueError("Need to supply either --firstnight and --lastnight or a list of images in --image")
-elif args.firstnight is not None & args.lastnight is not None:
+if (args.firstnight is not None) & (args.lastnight is not None) & (args.image is None):
     dt_firstnight=datetime.datetime.strptime(f"{args.firstnight}","%Y%m%d")
     dt_lastnight=datetime.datetime.strptime(f"{args.lastnight}","%Y%m%d")
     datearr=np.arange(dt_firstnight,dt_lastnight+datetime.timedelta(days=1),datetime.timedelta(days=1),dtype='datetime64[D]')
@@ -89,10 +86,15 @@ elif args.firstnight is not None & args.lastnight is not None:
         filenames=[io.findfile('raw', night=n, expid=e) for n,e in zip(nights,expids)]
     else:
         filenames=[io.findfile('preproc', night=n, expid=e, camera=args.camera, specprod=args.preproc_basedir) for n,e in zip(nights,expids)]
-
 elif  args.image is not None:
+    if (args.firstnight is not None) | (args.lastnight is not None):
+        log.critical("Need to supplied both --firstnight/--lastnight and --image, using explicit files given by --image")
+
     filenames=args.image
     filenames.sort()
+else:
+    log.critical("Need to supply either --firstnight and --lastnight or a list of images in --image")
+    raise ValueError("Need to supply either --firstnight and --lastnight or a list of images in --image")
 
 
 
