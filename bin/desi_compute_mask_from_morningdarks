@@ -56,7 +56,7 @@ parser.add_argument('--frames-per-coadd', type = int, default = 4, required = Fa
 parser.add_argument('--coadds-per-mask', type = int, default = 5, required = False,
                     help = 'number of masks to combine via or')
 
-parser.add_argument('--threshold', type = float, default = 70./1200, required = False,
+parser.add_argument('--threshold', type = float, default = 0.007, required = False,
                     help = 'threshold for mask (in counts per s, default 70 counts / 1200s exposure )')
 
 #maybe those 2 options would be useful as well
