@@ -203,8 +203,8 @@ if args.savestat:
             hdu.header["EXPID"]=" ".join(e.astype(str))
 
         #Write header info
-        for i, filename in enumerate(fnames) :
-            hdulist[0].header["INPUT%03d"%i]=filename
+        for i, filename in enumerate(fnames.flatten()) :
+            hdulist[0].header[f"INPUT{i:03d}"]=filename
         hdulist[0].header["CAMERA"]=args.camera
         hdulist[0].header["NFRAMES"]=(args.coadds_per_mask,'number of frames used for minimum absolute')
 
@@ -239,7 +239,7 @@ for i,m in enumerate(closed_mask):
 
 #the loop starting here goes over individual mesks, everything before should work on all masks to be processed
 log.info("check which columns have a large fraction masked")
-for n,e,f,mask in zip(nights,expids,filenames_used,closed_mask):
+for n,e,fnames,mask in zip(nights,expids,filenames_used,closed_mask):
     print(readout_mode)
     amp_ids=get_amp_ids(cam_header)
 
@@ -285,7 +285,9 @@ for n,e,f,mask in zip(nights,expids,filenames_used,closed_mask):
     hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
     hdu.header["NIGHTSS"] = (" ".join(np.unique(n.astype(str)).flatten()), 'NIGHTS included')
     hdu.header["EXPIDS"] = (" ".join(e.astype(str).flatten()), 'EXPIDs included')
-    hdu.header["INPUT01"] = (" ".join(f), 'filenames included')
+
+        for i, filename in enumerate(fnames.flatten()) :
+            hdu.header[f"INPUT{i:03d}"] = filename
     hdu.header["EXTNAME"] = "MASK"
     hdu.header["BUNIT"] = ""
     
