@@ -194,7 +194,7 @@ min_image = np.min(np.abs(images), axis=2)
 if args.savestat:
     for night,expid,fnames,mimage in zip(nights,expids,filenames_used,min_image):
         
-        log.info(f"writing stats output to {args.outfilestat} ...")
+        log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'{night[0][0]}.fits')} ...")
         #need to think about which further stats to output, not doing anything here yet
 
         hdulist=pyfits.HDUList([pyfits.PrimaryHDU()]+[pyfits.ImageHDU(mimage, name=f"MINABS_{n[0]}_{e[0]}") for n,e in zip(night,expid)])
@@ -234,39 +234,44 @@ for i,m in enumerate(closed_mask):
     any_masked=np.any(closed_mask,axis=1).nonzero()
     closed_mask[:any_masked[0][0],:]=closed_mask[[any_masked[0][0]],:]
     closed_mask[any_masked[0][-1]:,:]=closed_mask[[any_masked[0][-1]],:]
+
+closed_mask[closed_mask] = ccdmask.BAD
 mask|=closed_mask
 
 
 
 #the loop starting here goes over individual mesks, everything before should work on all masks to be processed
 log.info("check which columns have a large fraction masked")
-for n,e,fnames,mask in zip(nights,expids,filenames_used,closed_mask):
+for i,m in enumerate(mask):
     print(readout_mode)
     amp_ids=get_amp_ids(cam_header)
 
     if readout_mode=="4Amp" or readout_mode=="2AmpUpDown":
         #Block entire columns above a certain threshold per amplifier
-        bad_pix = (mask>0)
+        bad_pix = (m>0)
         bad_pix_upper = bad_pix[0:bad_pix.shape[0]//2,:]
         bad_pix_lower = bad_pix[bad_pix.shape[0]//2:bad_pix.shape[0],:]
         bad_frac_upper = np.sum(bad_pix_upper, axis=0)/(bad_pix.shape[0]//2)
         bad_frac_lower = np.sum(bad_pix_lower, axis=0)/(bad_pix.shape[0]//2)
         bad_cols_upper = np.where(bad_frac_upper>=args.colfrac)
         bad_cols_lower = np.where(bad_frac_lower>=args.colfrac)
-        mask[0:bad_pix.shape[0]//2,bad_cols_upper] |= ccdmask.BAD
-        mask[bad_pix.shape[0]//2:bad_pix.shape[0],bad_cols_lower] |= ccdmask.BAD
+        m[0:bad_pix.shape[0]//2,bad_cols_upper] |= ccdmask.BAD
+        m[bad_pix.shape[0]//2:bad_pix.shape[0],bad_cols_lower] |= ccdmask.BAD
     elif readout_mode=="2AmpLeftRight":
         #Block entire columns above a certain threshold per amplifier
         bad_pix = (mask>0)
         bad_pix_all = bad_pix[0:bad_pix.shape[0],:]
         bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]   
         bad_cols_all = np.where(bad_frac_all>=args.colfrac)
-        mask[0:bad_pix.shape[0],bad_cols_all] |= ccdmask.BAD
+        m[0:bad_pix.shape[0],bad_cols_all] |= ccdmask.BAD
     else:
         msg = f'Unknown {readout_mode=}'
         log.critical(msg)
         raise ValueError(msg)
+    mask[i,...]=m
 
+log.info("encorporate previous mask")
+for i,m in enumerate(mask):
     #Incorporate a previously created mask using a bitwise OR
     if args.mask!=None:
         mask_old = pyfits.open(args.mask)[0].data
@@ -274,6 +279,12 @@ for n,e,fnames,mask in zip(nights,expids,filenames_used,closed_mask):
         log.info("Taken bitwise OR of input mask and the generated mask")
 
     mask_percent = np.sum(mask>0)*100/np.product(mask.shape)
+
+log.info("write outputs")
+for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
+    
+    log.info(f"writing {args.outfile.replace('.fits',f'_{n[0][0]}.fits')}")
+
     #Write fits file with header info
 
     hdu = pyfits.PrimaryHDU(mask.astype("int16"))
