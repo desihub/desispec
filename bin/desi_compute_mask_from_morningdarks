@@ -194,7 +194,7 @@ min_image = np.min(np.abs(images), axis=2)
 if args.savestat:
     for night,expid,fnames,mimage in zip(nights,expids,filenames_used,min_image):
         
-        log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'{night[0][0]}.fits')} ...")
+        log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'_{night[0][0]}.fits')} ...")
         #need to think about which further stats to output, not doing anything here yet
 
         hdulist=pyfits.HDUList([pyfits.PrimaryHDU()]+[pyfits.ImageHDU(mimage, name=f"MINABS_{n[0]}_{e[0]}") for n,e in zip(night,expid)])
