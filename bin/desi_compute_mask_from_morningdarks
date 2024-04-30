@@ -17,22 +17,21 @@ from desiutil.log import get_logger
 from desispec.preproc import parse_sec_keyword, get_readout_mode, get_amp_ids
 from desispec.maskbits import ccdmask
 from desispec.workflow.tableio import load_table, load_tables
-
+from desispec.calibfinder import CalibFinder
 
 #Parser to take arguments from command line
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a mask using dark images",
  epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are fully preprocessed then for sets of N darks the min absolute value is computed as a first guess of the mask. From M such guesses an or operation is performed, finally binary_closing fills in gaps and columns with more than a certain fraction of masking will be filtered''')
 
-parser.add_argument('-i','--images', type = str, default = None, required = False, nargs="*",
-                    help = 'paths to raw dark image fits files (either this or --firstnight/--lastnight needs to be set)')
-#could be changed to use particular night range, but not yet done
-
 parser.add_argument('-f','--firstnight', type = str, default = None, required = False,
                     help = 'first night to use for automatic discovery')
 
 parser.add_argument('-l','--lastnight', type = str, default = None, required = False,
                     help = 'last night to use for automatic discovery')
+
+parser.add_argument('-i','--images', type = str, default = None, required = False, nargs="*",
+                    help = 'paths to raw dark image fits files (either this or --firstnight/--lastnight needs to be set)')
 
 parser.add_argument('--input-specprod', type = str, default = None, required = False,
                     help = 'use this specific specprod to read the exposure tables (default is $SPECPROD)')
@@ -51,10 +50,10 @@ parser.add_argument('--camera',type = str, required = True,
 
 parser.add_argument('--colfrac', type = float, default=0.4, required=False,
                     help='If more than this fraction of pixels are blocked in a column, the whole column in that amplifier is blocked.')
-parser.add_argument('--closeiter', type = int, default=10, required=False,
+parser.add_argument('--closeiter', type = int, default=15, required=False,
                     help='Number of iterations for the binary closing operation')
 
-parser.add_argument('--mask', type = str, default = None, required = False,
+parser.add_argument('--old-mask', type = str, default = None, required = False,
                     help = 'Path to a previous mask file. If given, the output is the bitwise OR of the input mask and the mask created by this script.')
 
 parser.add_argument('--frames-per-coadd', type = int, default = 4, required = False,
@@ -78,8 +77,8 @@ if "SPECPROD" not in os.environ and args.input_specprod is None :
     log.error("Need either the env. variable SPECPROD set or the optional argument --input-specprod SPECPROD to get the exposure tables")
     sys.exit(12)
 
-#searchargs.images is None for files
-if args.images is None : #search for files
+
+if args.images is None : # search for files
 
     if (args.firstnight is None) or (args.lastnight is None) :
         log.critical("Need to supply either --firstnight and --lastnight or a list of images in --images")
@@ -113,7 +112,7 @@ elif  (args.firstnight is not None) | (args.lastnight is not None):
 
 number_of_images_needed = args.frames_per_coadd*args.coadds_per_mask
 if len( args.images ) < number_of_images_needed :
-    log.error(f"Found {args.images} images but need at least {args.frames_per_coadd}x{args.coadds_per_mask}={number_of_images_needed}")
+    log.error(f"Found {len(args.images)} images but need at least {args.frames_per_coadd}x{args.coadds_per_mask}={number_of_images_needed}")
     sys.exit(12)
 args.images = args.images[:number_of_images_needed]
 
@@ -136,6 +135,10 @@ images=[]
 nights=[]
 expids=[]
 filenames_used=[]
+pixflat_filenames=[]
+
+hardware_and_readout=dict()
+
 for raw_filename in raw_filenames :
 
     log.info(f"Reading file {raw_filename}")
@@ -156,19 +159,36 @@ for raw_filename in raw_filenames :
                 raise TypeError(f"Morning darks should be exptime=1200s, but found {exptime}s")
 
         extname=f'{(args.camera)}'.upper()
+        cam_header=fitsfile[extname].header
 
         #this is a check on 2amp/4amp detector modes
         if readout_mode is None:
-            cam_header=fitsfile[extname].header
             readout_mode = get_readout_mode(cam_header)
         else:
-            readout_mode2=get_readout_mode(fitsfile[extname].header)
+            readout_mode2=get_readout_mode(cam_header)
             if readout_mode2 != readout_mode:
                 log.critical("A set of spectra with different readout modes was submitted")
                 raise TypeError("A set of spectra with different readout modes was submitted")
 
         night = primary_header["NIGHT"]
         expid = primary_header["EXPID"]
+
+        # get pixflat
+        cfinder = CalibFinder([primary_header,cam_header])
+        if cfinder.haskey("PIXFLAT") :
+            pixflat_filenames.append(cfinder.findfile("PIXFLAT"))
+
+
+        for k in ["DETECTOR","CCDCFG","CCDTMING","CCDTEMP"] :
+            if k not in hardware_and_readout.keys() :
+                hardware_and_readout[k]=cam_header[k]
+            else :
+                if k == "CCDTEMP" :
+                    assert(np.abs(hardware_and_readout[k]-cam_header[k])<5.)
+                else :
+                    assert(hardware_and_readout[k]==cam_header[k])
+
+
         preproc_filename = io.findfile('preproc', night=night, expid=expid, camera=args.camera, specprod_dir=args.specprod_dir)
 
     if os.path.isfile(preproc_filename) :
@@ -203,28 +223,14 @@ nights=np.array(nights)
 images=np.array(images)
 expids=np.array(expids)
 filenames_used=np.array(filenames_used)
-
-'''
-#truncate number of images to simplify things for later
-if images.shape[0]%(args.frames_per_coadd*args.coadds_per_mask) !=0:
-    log.warning("number of images not divisable by args.frames_per_coadd*args.coadds_per_mask, discarding the last few")
-    nimages=images.shape[0]//(args.frames_per_coadd*args.coadds_per_mask)
-    nimages*=(args.frames_per_coadd*args.coadds_per_mask)
-    nights=nights[:nimages]
-    expids=expids[:nimages]
-    filenames_used=filenames_used[:nimages]
-    images=images[:nimages,...]
-'''
-
-expids.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
-nights.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
-filenames_used.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
-images.shape=[-1, args.coadds_per_mask,args.frames_per_coadd,images.shape[1],images.shape[2]]
+expids.shape=[ args.coadds_per_mask,args.frames_per_coadd]
+nights.shape=[args.coadds_per_mask,args.frames_per_coadd]
+filenames_used.shape=[args.coadds_per_mask,args.frames_per_coadd]
+images.shape=[args.coadds_per_mask,args.frames_per_coadd,images.shape[1],images.shape[2]]
 
 
 log.info("compute min(abs(preprocessed dark)) image ...")
-min_image = np.min(np.abs(images), axis=2)
-
+min_image = np.min(np.abs(images), axis=1)
 
 
 if args.savestat:
@@ -253,89 +259,99 @@ log.info("combine masks via or operation ...")
 mask   = np.zeros(min_image.shape, dtype=np.int32)
 above_threshold=min_image>args.threshold
 mask[above_threshold] |= ccdmask.BAD
-combined_mask=(mask[:,0,...])
 
-for i in range(1,mask.shape[1]):
-    combined_mask|=mask[:,i,...]
+combined_mask=mask[0]
+for i in range(1,mask.shape[0]):
+    combined_mask|=mask[i]
 mask=combined_mask
+
+
+mask[0,:] |= mask[1,:] # first row inherit the mask from the second
+mask[-1,:] |= mask[-2,:] # last row inherit the mask from the next to last
+
+
 
 log.info("close gaps via binary closing ...")
 
-closed_mask=mask
-for i,m in enumerate(closed_mask):
-    #Close incompletely blocked regions
-    closed_mask[i,...] = binary_closing(m, iterations=args.closeiter, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
-mask|=closed_mask
+# need a margin for this to work with edges
+margin=50
+larger_mask = np.ones((mask.shape[0]+2*margin,mask.shape[1]+2*margin),dtype=np.int32)
+for loop in range(1):
+    larger_mask[margin:-margin,margin:-margin] = mask
+    closed_mask = binary_closing(larger_mask, iterations=args.closeiter, structure=np.ones([2, 2]).astype(np.int32))
+    assert(closed_mask.shape==larger_mask.shape)
+    mask|=closed_mask[margin:-margin,margin:-margin]
 
-log.info("add first/last valid mask to first/last few rows")
-for i,m in enumerate(mask):
-    any_masked=np.any(m,axis=1).nonzero()
-    m[:any_masked[0][0],:]=m[[any_masked[0][0]],:]
-    m[any_masked[0][-1]:,:]=m[[any_masked[0][-1]],:]
-    mask[i,...]|=m
-
+#closed_mask = binary_closing(mask, iterations=args.closeiter, structure=np.ones([4,2]).astype(np.int32)) #returns binary array
+#mask|=closed_mask
 
 #the loop starting here goes over individual mesks, everything before should work on all masks to be processed
 log.info("check which columns have a large fraction masked")
-for i,m in enumerate(mask):
-    print(readout_mode)
-    amp_ids=get_amp_ids(cam_header)
-    bad_pix = (m>0)
-    if readout_mode=="4Amp" or readout_mode=="2AmpUpDown":
-        #Block entire columns above a certain threshold per amplifier
-        bad_pix_upper = bad_pix[0:bad_pix.shape[0]//2,:]
-        bad_pix_lower = bad_pix[bad_pix.shape[0]//2:bad_pix.shape[0],:]
-        bad_frac_upper = np.sum(bad_pix_upper, axis=0)/(bad_pix.shape[0]//2)
-        bad_frac_lower = np.sum(bad_pix_lower, axis=0)/(bad_pix.shape[0]//2)
-        bad_cols_upper = np.where(bad_frac_upper>=args.colfrac)
-        bad_cols_lower = np.where(bad_frac_lower>=args.colfrac)
-        m[0:bad_pix.shape[0]//2,bad_cols_upper] |= ccdmask.BAD
-        m[bad_pix.shape[0]//2:bad_pix.shape[0],bad_cols_lower] |= ccdmask.BAD
-    elif readout_mode=="2AmpLeftRight":
-        #Block entire columns above a certain threshold per amplifier
-        bad_pix_all = bad_pix[0:bad_pix.shape[0],:]
-        bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]
-        bad_cols_all = np.where(bad_frac_all>=args.colfrac)
-        m[0:bad_pix.shape[0],bad_cols_all] |= ccdmask.BAD
-    else:
-        msg = f'Unknown {readout_mode=}'
-        log.critical(msg)
-        raise ValueError(msg)
-    mask[i,...]|=m
+print(readout_mode)
+amp_ids=get_amp_ids(cam_header)
+bad_pix = (mask>0)
+if readout_mode=="4Amp" or readout_mode=="2AmpUpDown":
+    #Block entire columns above a certain threshold per amplifier
+    bad_pix_upper = bad_pix[0:bad_pix.shape[0]//2,:]
+    bad_pix_lower = bad_pix[bad_pix.shape[0]//2:bad_pix.shape[0],:]
+    bad_frac_upper = np.sum(bad_pix_upper, axis=0)/(bad_pix.shape[0]//2)
+    bad_frac_lower = np.sum(bad_pix_lower, axis=0)/(bad_pix.shape[0]//2)
+    bad_cols_upper = np.where(bad_frac_upper>=args.colfrac)
+    bad_cols_lower = np.where(bad_frac_lower>=args.colfrac)
+    mask[0:bad_pix.shape[0]//2,bad_cols_upper] |= ccdmask.BAD
+    mask[bad_pix.shape[0]//2:bad_pix.shape[0],bad_cols_lower] |= ccdmask.BAD
+elif readout_mode=="2AmpLeftRight":
+    #Block entire columns above a certain threshold per amplifier
+    bad_pix_all = bad_pix[0:bad_pix.shape[0],:]
+    bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]
+    bad_cols_all = np.where(bad_frac_all>=args.colfrac)
+    mask[0:bad_pix.shape[0],bad_cols_all] |= ccdmask.BAD
+else:
+    msg = f'Unknown {readout_mode=}'
+    log.critical(msg)
+    raise ValueError(msg)
 
-log.info("encorporate previous mask")
+log.info("flat field threshold")
+if len(pixflat_filenames)>0 :
+    for pixflat_filename in np.unique(pixflat_filenames) :
+        print(f"Reading {pixflat_filename}")
+        with pyfits.open(pixflat_filename) as fitsfile :
+            flat = fitsfile[0].data
+            badlow=(flat<0.5)
+            badhigh=(flat>1.15) # means it's a bad pixels
+            mask[badlow]  |= ccdmask.PIXFLATLOW
+            mask[badhigh] |= ccdmask.BAD
+
+log.info("incorporate previous mask")
 #Incorporate a previously created mask using a bitwise OR
-if args.mask!=None:
-    with pyfits.open(args.mask) as f:
+if args.old_mask!=None:
+    with pyfits.open(args.old_mask) as f:
         mask_old = f[0].data
-    for i,m in enumerate(mask):
-        mask[i] |= mask_old
+        mask |= mask_old
         log.info("Taken bitwise OR of input mask and the generated mask")
 
 
-log.info("write outputs")
-for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
+log.info(f"writing {args.outfile}")
+mask_percent = np.sum(mask>0)*100/np.product(mask.shape)
 
-    log.info(f"writing {args.outfile.replace('.fits',f'-{n[0][0]}.fits')}")
-    mask_percent = np.sum(m>0)*100/np.product(m.shape)
-    #Write fits file with header info
+#Write fits file with header info
+hdu = pyfits.PrimaryHDU(mask.astype("int16"))
+for k in hardware_and_readout.keys() :
+    hdu.header[k]=hardware_and_readout[k]
+hdu.header["NFRAMES"] = (args.frames_per_coadd, 'number of frames used for minimum absolute')
+hdu.header["NMASKS"] = (args.coadds_per_mask, 'number of masks combined with or')
+hdu.header["COLFRAC"] = (args.colfrac, 'Bad pixel fraction for blocked column in amp')
+hdu.header["CAMERA"] = (args.camera, 'header HDU (int or string)')
+hdu.header["CLOSEITER"] = (args.closeiter, 'binary cloing iterations')
+hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels masked')
+if args.old_mask is not None :
+    hdu.header["OLDMASK"] = (args.old_mask, 'Path to input mask')
+hdu.header["NIGHTS"] = (" ".join(np.unique(nights.astype(str)).flatten()), 'NIGHTS included')
+hdu.header["EXPIDS"] = (" ".join(expids.astype(str).flatten()), 'EXPIDs included')
+for i, filename in enumerate(filenames_used.flatten()):
+    hdu.header[f"INPUT{i:03d}"] = os.path.basename(filename)
+hdu.header["EXTNAME"] = "MASK"
+hdu.header["BUNIT"] = ""
 
-    hdu = pyfits.PrimaryHDU(m.astype("int16"))
-    hdu.header["NFRAMES"] = (args.frames_per_coadd, 'number of frames used for minimum absolute')
-    hdu.header["NMASKS"] = (args.coadds_per_mask, 'number of masks combined with or')
-    hdu.header["COLFRAC"] = (args.colfrac, 'Bad pixel fraction for blocked column in amp')
-    hdu.header["CAMERA"] = (args.camera, 'header HDU (int or string)')
-    hdu.header["CLOSEITER"] = (args.closeiter, 'binary cloing iterations')
-    hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels masked')
-    hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
-    hdu.header["NIGHTSS"] = (" ".join(np.unique(n.astype(str)).flatten()), 'NIGHTS included')
-    hdu.header["EXPIDS"] = (" ".join(e.astype(str).flatten()), 'EXPIDs included')
-
-    for i, filename in enumerate(fnames.flatten()) :
-        hdu.header[f"INPUT{i:03d}"] = filename
-    hdu.header["EXTNAME"] = "MASK"
-    hdu.header["BUNIT"] = ""
-
-    #add the night of first frame used to the filename
-    hdu.writeto(args.outfile.replace('.fits',f'-{n[0][0]}.fits'), overwrite=True)
-    log.info("Saved masks file")
+hdu.writeto(args.outfile, overwrite=True)
+log.info(f"Saved mask")
