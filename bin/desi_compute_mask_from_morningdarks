@@ -174,11 +174,10 @@ filenames_used=np.array(filenames_used)
 if images.shape[0]%(args.frames_per_coadd*args.coadds_per_mask) !=0:
     log.warning("number of images not divisable by args.frames_per_coadd*args.coadds_per_mask, discarding the last few")
     nimages=images.shape[0]//(args.frames_per_coadd*args.coadds_per_mask)
+    nimages*=(args.frames_per_coadd*args.coadds_per_mask)
     nights=nights[:nimages]
     expids=expids[:nimages]
     filenames_used=filenames_used[:nimages]
-
-
     images=images[:nimages,...]
 
 expids.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
