@@ -6,7 +6,7 @@ import astropy.io.fits as pyfits
 import argparse
 import numpy as np
 from scipy.stats import iqr
-from scipy.ndimage.morphology import binary_closing
+from scipy.ndimage import binary_closing
 
 from desispec import io
 from desiutil.log import get_logger
