@@ -24,22 +24,28 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 description="Compute a mask using dark images",
  epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are fully preprocessed then for sets of N darks the min absolute value is computed as a first guess of the mask. From M such guesses an or operation is performed, finally binary_closing fills in gaps and columns with more than a certain fraction of masking will be filtered''')
 
-parser.add_argument('-i','--image', type = str, default = None, required = False, nargs="*",
+parser.add_argument('-i','--images', type = str, default = None, required = False, nargs="*",
                     help = 'paths to raw dark image fits files (either this or --firstnight/--lastnight needs to be set)')
 #could be changed to use particular night range, but not yet done
 
 parser.add_argument('-f','--firstnight', type = str, default = None, required = False,
                     help = 'first night to use for automatic discovery')
+
 parser.add_argument('-l','--lastnight', type = str, default = None, required = False,
                     help = 'last night to use for automatic discovery')
 
-parser.add_argument('--use-existing-preproc', action='store_true',
-                    help = 'use existing preproc files instead of recomputing them')
-parser.add_argument('--preproc-basedir', type = str, default = None, required = False, 
-                    help = 'look for preproc-files in here instead of the usual directory structure')
+parser.add_argument('--input-specprod', type = str, default = None, required = False,
+                    help = 'use this specific specprod to read the exposure tables (default is $SPECPROD)')
+
+parser.add_argument('--specprod-dir', type = str, default = None, required = True,
+                    help = 'use this specific specprod dir for the preprocessed files (has to be different from main processing)')
+
+parser.add_argument('--save-preproc', action = 'store_true',
+                    help = 'save preproc file (default is false)')
 
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output mask filename')
+
 parser.add_argument('--camera',type = str, required = True,
                     help = 'header HDU (int or string)')
 
@@ -57,7 +63,7 @@ parser.add_argument('--coadds-per-mask', type = int, default = 5, required = Fal
                     help = 'number of masks to combine via or')
 
 parser.add_argument('--threshold', type = float, default = 0.007, required = False,
-                    help = 'threshold for mask (in counts per s, default 70 counts / 1200s exposure )')
+                    help = 'threshold for mask (in counts per s, absolute value)')
 
 #maybe those 2 options would be useful as well
 parser.add_argument('--savestat', action='store_true', required = False,
@@ -68,34 +74,55 @@ parser.add_argument('--outfilestat', type = str, default = None, required = Fals
 args = parser.parse_args()
 log  = get_logger()
 
-#search for files
-if (args.firstnight is not None) & (args.lastnight is not None) & (args.image is None):
+if "SPECPROD" not in os.environ and args.input_specprod is None :
+    log.error("Need either the env. variable SPECPROD set or the optional argument --input-specprod SPECPROD to get the exposure tables")
+    sys.exit(12)
+
+#searchargs.images is None for files
+if args.images is None : #search for files
+
+    if (args.firstnight is None) or (args.lastnight is None) :
+        log.critical("Need to supply either --firstnight and --lastnight or a list of images in --images")
+        raise ValueError("Need to supply either --firstnight and --lastnight or a list of images in --images")
+
     dt_firstnight=datetime.datetime.strptime(f"{args.firstnight}","%Y%m%d")
     dt_lastnight=datetime.datetime.strptime(f"{args.lastnight}","%Y%m%d")
     datearr=np.arange(dt_firstnight,dt_lastnight+datetime.timedelta(days=1),datetime.timedelta(days=1),dtype='datetime64[D]')
     datearr=np.datetime_as_string(datearr)
     datearr=np.char.replace(datearr,'-','')
-    exptab_names=[io.findfile('exptable', d) for d in datearr]
+    exptab_names=[io.findfile('exptable', d, specprod=args.input_specprod) for d in datearr]
+
+    if len(exptab_names)==0 :
+        log.error("Empty list of exposure tables")
+        sys.exit(12)
+
     exptab=t.vstack(load_tables(exptab_names))
+
     select=exptab['OBSTYPE']=='dark'
     select&=exptab['PROGRAM']=='morning darks'
     exptab=exptab[select]
     nights=exptab['NIGHT']
     expids=exptab['EXPID']
-    if not args.use_existing_preproc:
-        filenames=[io.findfile('raw', night=n, expid=e) for n,e in zip(nights,expids)]
-    else:
-        filenames=[io.findfile('preproc', night=n, expid=e, camera=args.camera, specprod=args.preproc_basedir+'/') for n,e in zip(nights,expids)]
-elif  args.image is not None:
-    if (args.firstnight is not None) | (args.lastnight is not None):
-        log.critical("Need to supplied both --firstnight/--lastnight and --image, using explicit files given by --image")
 
-    filenames=args.image
-    filenames.sort()
-else:
-    log.critical("Need to supply either --firstnight and --lastnight or a list of images in --image")
-    raise ValueError("Need to supply either --firstnight and --lastnight or a list of images in --image")
+    args.images  = [io.findfile('raw', night=n, expid=e) for n,e in zip(nights,expids)]
 
+
+
+elif  (args.firstnight is not None) | (args.lastnight is not None):
+    log.warning("Will ignore--firstnight/--lastnight because input images provided with --images")
+
+number_of_images_needed = args.frames_per_coadd*args.coadds_per_mask
+if len( args.images ) < number_of_images_needed :
+    log.error(f"Found {args.images} images but need at least {args.frames_per_coadd}x{args.coadds_per_mask}={number_of_images_needed}")
+    sys.exit(12)
+args.images = args.images[:number_of_images_needed]
+
+raw_filenames=args.images
+raw_filenames.sort()
+
+print("Images to read:")
+for filename in raw_filenames :
+    print(filename)
 
 
 log.info("read images ...")
@@ -109,16 +136,16 @@ images=[]
 nights=[]
 expids=[]
 filenames_used=[]
-for filename in filenames :
+for raw_filename in raw_filenames :
 
-    log.info(f"Reading file {filename}")
+    log.info(f"Reading file {raw_filename}")
 
     # collect header data
-    if not os.path.exists(filename):
-        log.warning(f"{filename} not found, continuing")
+    if not os.path.exists(raw_filename):
+        log.warning(f"{raw_filename} not found, continuing")
         continue
-        
-    with pyfits.open(filename) as fitsfile:
+
+    with pyfits.open(raw_filename) as fitsfile:
         primary_header = fitsfile[0].header
         if not "EXPTIME" in primary_header :
             primary_header = fitsfile[1].header
@@ -128,10 +155,8 @@ for filename in filenames :
                 log.critical(f"Morning darks should be exptime=1200s, but found {exptime}s")
                 raise TypeError(f"Morning darks should be exptime=1200s, but found {exptime}s")
 
-        if not args.use_existing_preproc:
-            extname=f'{(args.camera)}'.upper()
-        else:
-            extname='IMAGE'
+        extname=f'{(args.camera)}'.upper()
+
         #this is a check on 2amp/4amp detector modes
         if readout_mode is None:
             cam_header=fitsfile[extname].header
@@ -141,31 +166,36 @@ for filename in filenames :
             if readout_mode2 != readout_mode:
                 log.critical("A set of spectra with different readout modes was submitted")
                 raise TypeError("A set of spectra with different readout modes was submitted")
-        
-        #maybe add additional checks if e.g. the config and camera used are actually the same
 
-    # read raw data and preprocess them
-    #@JG: maybe change those params as needed, e.g. to the default preproc settings
-    if not args.use_existing_preproc:
-        img = io.read_raw(filename, args.camera,
-                        bias=True,
-                        nogain=False,
-                        nocosmic=True,
-                        mask=False,
-                        dark=True,
-                        pixflat=False,
-                        nocrosstalk=True,
-                        ccd_calibration_filename=False)
-        img=img.pix
-    else:
-        with pyfits.open(filename) as fitsfile:
-            img=fitsfile['IMAGE'].data 
+        night = primary_header["NIGHT"]
+        expid = primary_header["EXPID"]
+        preproc_filename = io.findfile('preproc', night=night, expid=expid, camera=args.camera, specprod_dir=args.specprod_dir)
+
+    if os.path.isfile(preproc_filename) :
+        log.info(f"Read existing file {preproc_filename}")
+        with pyfits.open(preproc_filename) as fitsfile:
+            img=fitsfile['IMAGE'].data
+    else :
+        log.info(f"Preprocess {preproc_filename}")
+        image = io.read_raw(raw_filename, args.camera,
+                            bias=True,
+                            nogain=False,
+                            nocosmic=True,
+                            mask=False,
+                            dark=True,
+                            pixflat=False,
+                            nocrosstalk=True,
+                            ccd_calibration_filename=False)
+        img=image.pix
+        if args.save_preproc :
+            io.write_image(preproc_filename,image)
+            log.info(f"wrote {preproc_filename}")
 
     shape=img.shape
     log.info(f"adding dark {filename} divided by exposure time {exptime} s")
-    expids.append(primary_header['EXPID'])
-    nights.append(primary_header['NIGHT'])
-    filenames_used.append(filename)
+    expids.append(expid)
+    nights.append(night)
+    filenames_used.append(preproc_filename)
     images.append(img/exptime)
 
 
@@ -174,6 +204,7 @@ images=np.array(images)
 expids=np.array(expids)
 filenames_used=np.array(filenames_used)
 
+'''
 #truncate number of images to simplify things for later
 if images.shape[0]%(args.frames_per_coadd*args.coadds_per_mask) !=0:
     log.warning("number of images not divisable by args.frames_per_coadd*args.coadds_per_mask, discarding the last few")
@@ -183,6 +214,7 @@ if images.shape[0]%(args.frames_per_coadd*args.coadds_per_mask) !=0:
     expids=expids[:nimages]
     filenames_used=filenames_used[:nimages]
     images=images[:nimages,...]
+'''
 
 expids.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
 nights.shape=[-1, args.coadds_per_mask,args.frames_per_coadd]
@@ -197,7 +229,7 @@ min_image = np.min(np.abs(images), axis=2)
 
 if args.savestat:
     for night,expid,fnames,mimage in zip(nights,expids,filenames_used,min_image):
-        
+
         log.info(f"writing stats output to {args.outfilestat.replace('.fits',f'-{night[0][0]}.fits')} ...")
         #need to think about which further stats to output, not doing anything here yet
 
@@ -225,7 +257,7 @@ combined_mask=(mask[:,0,...])
 
 for i in range(1,mask.shape[1]):
     combined_mask|=mask[:,i,...]
-mask=combined_mask    
+mask=combined_mask
 
 log.info("close gaps via binary closing ...")
 
@@ -262,7 +294,7 @@ for i,m in enumerate(mask):
     elif readout_mode=="2AmpLeftRight":
         #Block entire columns above a certain threshold per amplifier
         bad_pix_all = bad_pix[0:bad_pix.shape[0],:]
-        bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]   
+        bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]
         bad_cols_all = np.where(bad_frac_all>=args.colfrac)
         m[0:bad_pix.shape[0],bad_cols_all] |= ccdmask.BAD
     else:
@@ -283,7 +315,7 @@ if args.mask!=None:
 
 log.info("write outputs")
 for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
-    
+
     log.info(f"writing {args.outfile.replace('.fits',f'-{n[0][0]}.fits')}")
     mask_percent = np.sum(m>0)*100/np.product(m.shape)
     #Write fits file with header info
@@ -303,7 +335,7 @@ for i,(m,n,e,fnames) in enumerate(zip(mask,nights,expids,filenames_used)):
         hdu.header[f"INPUT{i:03d}"] = filename
     hdu.header["EXTNAME"] = "MASK"
     hdu.header["BUNIT"] = ""
-    
+
     #add the night of first frame used to the filename
     hdu.writeto(args.outfile.replace('.fits',f'-{n[0][0]}.fits'), overwrite=True)
     log.info("Saved masks file")
