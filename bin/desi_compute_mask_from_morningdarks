@@ -248,10 +248,9 @@ log.info("check which columns have a large fraction masked")
 for i,m in enumerate(mask):
     print(readout_mode)
     amp_ids=get_amp_ids(cam_header)
-
+    bad_pix = (m>0)
     if readout_mode=="4Amp" or readout_mode=="2AmpUpDown":
         #Block entire columns above a certain threshold per amplifier
-        bad_pix = (m>0)
         bad_pix_upper = bad_pix[0:bad_pix.shape[0]//2,:]
         bad_pix_lower = bad_pix[bad_pix.shape[0]//2:bad_pix.shape[0],:]
         bad_frac_upper = np.sum(bad_pix_upper, axis=0)/(bad_pix.shape[0]//2)
@@ -262,7 +261,6 @@ for i,m in enumerate(mask):
         m[bad_pix.shape[0]//2:bad_pix.shape[0],bad_cols_lower] |= ccdmask.BAD
     elif readout_mode=="2AmpLeftRight":
         #Block entire columns above a certain threshold per amplifier
-        bad_pix = (mask>0)
         bad_pix_all = bad_pix[0:bad_pix.shape[0],:]
         bad_frac_all = np.sum(bad_pix_all, axis=0)/bad_pix.shape[0]   
         bad_cols_all = np.where(bad_frac_all>=args.colfrac)
