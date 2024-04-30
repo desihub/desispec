@@ -226,43 +226,32 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     if dry_run:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
-        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
-        string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
+        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode'
+        for jobid, expid in zip(qids, 100000+np.arange(len(qids))):
+            string += f'\n{jobid},arc-20211102-{expid:08d}-a0123456789,realtime,2021-11-02'\
                   +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
-                  +'18:48:32,COMPLETED,0:0' + '\n'
-        string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T'\
-                  +'18:57:02,COMPLETED,0:0' + '\n'
-        string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T'\
-                  +'19:06:17,COMPLETED,0:0' + '\n'
-        string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T'\
-                  +'19:13:59,COMPLETED,0:0' + '\n'
-        string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
-                  +'19:24:49,COMPLETED,0:0'
+                  +'18:48:32,COMPLETED,0:0'
+
+        # create command to run to exercise subprocess -> stdout parsing
         cmd_as_list = ['echo', string]
-        table_as_string = subprocess.check_output(cmd_as_list, text=True,
-                                      stderr=subprocess.STDOUT)
     else:
         log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
 
-        #- sacct sometimes fails; try several times before giving up
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                table_as_string = subprocess.check_output(cmd_as_list, text=True,
-                                              stderr=subprocess.STDOUT)
-                break
-            except subprocess.CalledProcessError as err:
-                log.error(f'{qid_str} job query via sacct failure at {datetime.datetime.now()}')
-                log.error(f'{qid_str} {cmd_as_list}')
-                log.error(f'{qid_str} {err.output=}')
-        else:  #- for/else happens if loop doesn't succeed
-            msg = f'{qid_str} job query via sacct failed {max_attempts} times; exiting'
-            log.critical(msg)
-            raise RuntimeError(msg)
+    #- sacct sometimes fails; try several times before giving up
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                          stderr=subprocess.STDOUT)
+            break
+        except subprocess.CalledProcessError as err:
+            log.error(f'{qid_str} job query via sacct failure at {datetime.datetime.now()}')
+            log.error(f'{qid_str} {cmd_as_list}')
+            log.error(f'{qid_str} {err.output=}')
+    else:  #- for/else happens if loop doesn't succeed
+        msg = f'{qid_str} job query via sacct failed {max_attempts} times; exiting'
+        log.critical(msg)
+        raise RuntimeError(msg)
 
     queue_info_table = Table.read(table_as_string, format='ascii.csv')
     for col in queue_info_table.colnames:
@@ -350,6 +339,14 @@ def update_queue_state_cache(qid, state):
     """
     global _cached_slurm_states
     _cached_slurm_states[int(qid)] = state
+
+def clear_queue_state_cache():
+    """
+    Remove all entries from the queue state cache
+    """
+    global _cached_slurm_states
+    _cached_slurm_states.clear()
+
 
 def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     """
