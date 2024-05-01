@@ -660,6 +660,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
             if do_cte:
                 cte_expids = np.array([flats[-1]['EXPID'], *ctes['EXPID']])
                 all_expids.extend(cte_expids)
+            else:
+                cte_expids = None
 
             prow, int_id = make_exposure_prow(job_erow, int_id,
                                               calibjobs, jobdesc=jobdesc)
