@@ -49,6 +49,7 @@ ccdmask:
     - [PIXFLATLOW,      6, "pixflat < 0.1"]
     - [HIGHVAR,         7, "High variability in pixel value"]
     - [BADREADNOISE,    8, "Very high CCD amplifier read noise"]
+    - [BADAMP,          9, "Bad CCD amplifier"]
 
 #- Mask bits that apply to an entire fiber
 #- Note: some of these are informational and aren't necessarily bad
@@ -103,7 +104,7 @@ try:
     specmask = BitMask('specmask', _bitdefs)
     ccdmask = BitMask('ccdmask', _bitdefs)
     fibermask = BitMask('fibermask', _bitdefs)
-    extractmaskval = ccdmask.mask("BAD|HOT|DEAD|SATURATED|COSMIC|PIXFLATZERO|PIXFLATLOW|HIGHVAR")
+    extractmaskval = ccdmask.mask("BAD|HOT|DEAD|SATURATED|COSMIC|PIXFLATZERO|PIXFLATLOW|HIGHVAR|BADAMP")
 
 except TypeError:
     #

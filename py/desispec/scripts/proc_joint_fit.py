@@ -291,8 +291,8 @@ def main(args=None, comm=None):
             if len(inflats) < 3 * 4 * len(args.cameras):
                 log.critical("Fewer than 3 exposures with 4 lamps were available. Can't perform joint fit. Exiting...")
                 enough_inputs = False
-            elif len(args.cameras) < 6:
-                log.critical("Fewer than 6 cameras were available, so couldn't perform joint fit. Exiting ...")
+            elif len(args.cameras) < 4:
+                log.critical("Fewer than 4 cameras were available, so couldn't perform joint fit. Exiting ...")
                 enough_inputs = False
 
         if comm is not None:

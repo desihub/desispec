@@ -21,6 +21,7 @@ from ..fiberflat import FiberFlat
 from .meta import findfile
 from .util import fitsheader, native_endian, makepath, checkgzip
 from .util import get_tempfilename
+from .fibermap import read_fibermap
 from . import iotime
 
 def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
@@ -112,7 +113,7 @@ def read_fiberflat(filename):
         meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
         wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
         if 'FIBERMAP' in fx:
-            fibermap = fx['FIBERMAP'].data
+            fibermap = read_fibermap(fx)
         else:
             fibermap = None
 

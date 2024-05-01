@@ -22,6 +22,9 @@ from astropy.io import fits
 from desiutil.log import get_logger
 
 from desispec.io.util import get_tempfilename
+from desispec.preproc import parse_sec_keyword
+from desispec.io.xytraceset import read_xytraceset
+from desispec.xytraceset import get_badamp_fibers
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -125,7 +128,6 @@ def main(args=None, comm=None):
 
     # Now we assign bundles to processes
 
-
     mynbundle = int(nbundle / nproc)
     leftover = nbundle % nproc
     if rank < leftover:
@@ -134,6 +136,8 @@ def main(args=None, comm=None):
     else:
         myfirstbundle = bundles[0] + ((mynbundle + 1) * leftover) + \
             (mynbundle * (rank - leftover))
+
+    bundles_to_merge = []
 
     if rank == 0:
         # Print parameters
@@ -166,33 +170,63 @@ def main(args=None, comm=None):
 
     failcount = 0
 
+    tset=None # spectal trace set, read only if necessary
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
+
+        first_fiber = bspecmin[b]
+        last_fiber  = bspecmin[b]+bnspec[b]-1
+        allfibers   = np.arange(first_fiber,last_fiber+1)
+        badfibers   = []
+        skip_this_bundle = False
+
+        if 'BADAMPS' in hdr:
+            if tset is None :
+                tset = read_xytraceset(inpsffile)
+
+            badfibers = get_badamp_fibers(hdr, tset, verbose=(rank==0))
+            selection   = ~np.in1d(allfibers,badfibers)
+            ngoodfibers = np.sum(selection)
+            if ngoodfibers<2 :
+                badamps = hdr['BADAMPS']
+                log.warning("Dont fit fiber bundle {} with {} fibers on {} bad amps {}".format(b,len(badfibers), cam, badamps))
+                skip_this_bundle = True
+            else :
+                goodfibers  = allfibers[selection]
+                first_fiber = np.min(goodfibers)
+                last_fiber  = np.max(goodfibers)
+
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
-        com = ['desi_psf_fit']
-        com.extend(['-a', imgfile])
-        com.extend(['--in-psf', inpsffile])
-        com.extend(['--out-psf', outbundlefits])
-        com.extend(['--lamp-lines', lamp_lines_file])
-        com.extend(['--first-bundle', "{}".format(b)])
-        com.extend(['--last-bundle', "{}".format(b)])
-        com.extend(['--first-fiber', "{}".format(bspecmin[b])])
-        com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
-        if band == "z" :
-            com.extend(['--legendre-deg-wave', "{}".format(3)])
-            com.extend(['--fit-continuum'])
+
+        if skip_this_bundle :
+            log.info("rank #{}, do not fit bundle {} {}".format(rank,cam,b))
+            retval = 0
         else :
-            com.extend(['--legendre-deg-wave', "{}".format(1)])
-        if args.broken_fibers :
-            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
-        if args.debug :
-            com.extend(['--debug'])
+            bundles_to_merge.append(b)
+            com = ['desi_psf_fit']
+            com.extend(['-a', imgfile])
+            com.extend(['--in-psf', inpsffile])
+            com.extend(['--out-psf', outbundlefits])
+            com.extend(['--lamp-lines', lamp_lines_file])
+            com.extend(['--first-bundle', "{}".format(b)])
+            com.extend(['--last-bundle', "{}".format(b)])
+            com.extend(['--first-fiber', "{}".format(first_fiber)])
+            com.extend(['--last-fiber', "{}".format(last_fiber)])
+            if band == "z" :
+                com.extend(['--legendre-deg-wave', "{}".format(3)])
+                com.extend(['--fit-continuum'])
+            else :
+                com.extend(['--legendre-deg-wave', "{}".format(1)])
+            if args.broken_fibers :
+                com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
+            if args.debug :
+                com.extend(['--debug'])
 
-        com.extend(optarray)
+            com.extend(optarray)
 
-        log.info("proc {} calling {}".format(rank, " ".join(com)))
+            log.info("proc {} calling {}".format(rank, " ".join(com)))
 
-        retval = run_specex(com)
+            retval = run_specex(com)
 
         if retval != 0:
             comstr = " ".join(com)
@@ -207,15 +241,24 @@ def main(args=None, comm=None):
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
+        bundles_to_merge = comm.gather(bundles_to_merge, root=0)
+        if rank == 0 : # it's a list of lists only for rank 0, so we flatten it only for this rank
+            if len(bundles_to_merge)>0 :
+                bundles_to_merge = np.hstack(bundles_to_merge).astype(int)
+            log.info("will merge the following {} bundles {}".format(cam, bundles_to_merge))
+            sys.stdout.flush()
 
     if failcount > 0:
         # all processes throw
-        raise RuntimeError("some bundles failed desi_psf_fit")
+        raise RuntimeError(f"some {cam} bundles failed desi_psf_fit")
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)
 
-        inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
+        bundlefiles = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles_to_merge ]
+
+        log.info("will merge the following {} bundle files {}".format(cam, bundlefiles))
+
 
         if args.disable_merge :
             log.info("don't merge")
@@ -228,7 +271,7 @@ def main(args=None, comm=None):
             time.sleep(5.)
 
             try:
-                merge_psf(inputs,outfits)
+                merge_psf(inpsffile, bundlefiles, outfits)
             except Exception as e:
                 log.error(e)
                 log.error("merging failed for {}".format(outfits))
@@ -238,7 +281,7 @@ def main(args=None, comm=None):
 
             if failcount == 0:
                 # only remove the per-bundle files if the merge was good
-                for f in inputs :
+                for f in bundlefiles :
                     if os.path.isfile(f):
                         os.remove(f)
 
@@ -365,12 +408,13 @@ def compatible(head1, head2) :
     return True
 
 
-def merge_psf(inputs, output):
+def merge_psf(inpsffile, inputs, output):
     """
     Merge individual per-bundle PSF files into full PSF
 
     Args:
-        inputs: list of input PSF filenames
+        inpsffile: reference input PSF as default for unfit fibers
+        inputs: list of fitted input PSF filenames
         output: output filename
     """
 
@@ -379,10 +423,11 @@ def merge_psf(inputs, output):
     npsf = len(inputs)
     log.info("Will merge {} PSFs in {}".format(npsf,output))
 
-    # we will add/change data to the first PSF
-    psf_hdulist=fits.open(inputs[0])
-    for input_filename in inputs[1:] :
-        log.info("merging {} into {}".format(input_filename,inputs[0]))
+    # we will add/change data to the first PSF but write it to a different file
+    psf_hdulist=fits.open(inpsffile, mode='readonly')
+
+    for input_filename in inputs :
+        log.info("merging {} into {}".format(input_filename, inpsffile))
         other_psf_hdulist=fits.open(input_filename)
 
         # look at what fibers where actually fit

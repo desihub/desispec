@@ -326,6 +326,43 @@ class TestIO(unittest.TestCase):
             (nddata['z'] == z).all()
             self.assertEqual(ex.exception.args[0], 'no field of name z')
 
+    def test_get_camera_badamps(self):
+        """Test desispec.io.util.get_camera_badamps
+        """
+        from ..io.util import get_amps_for_camera
+
+        #- speciying just badamps; camera option is ignored
+        self.assertEqual(get_amps_for_camera('AB','b0'), 'AB')
+        self.assertEqual(get_amps_for_camera('CD','r7'), 'CD')
+        self.assertEqual(get_amps_for_camera('DB'),      'BD')
+        self.assertEqual(get_amps_for_camera('A,C'),     'AC')
+
+        #- cameraAMP list
+        self.assertEqual(get_amps_for_camera('b7C,r2A', 'r2'), 'A')
+        self.assertEqual(get_amps_for_camera('b7C,r2A', 'b7'), 'C')
+        self.assertEqual(get_amps_for_camera('b7C,r2A', 'z3'), '')
+        self.assertEqual(get_amps_for_camera('z1B', 'z1'),     'B')
+        self.assertEqual(get_amps_for_camera('z1B', 'z2'),     '')
+
+        #- duplicates -> sorted unique
+        self.assertEqual(get_amps_for_camera('r2A,b7C,r2A', 'r2'), 'A')
+        self.assertEqual(get_amps_for_camera('r2D,b7C,r2A', 'r2'), 'AD')
+        self.assertEqual(get_amps_for_camera('r2D,b7C,r2A', 'b7'), 'C')
+
+        #- other corner cases
+        self.assertEqual(get_amps_for_camera('', 'z3'), '')
+        self.assertEqual(get_amps_for_camera(''), '')
+        self.assertEqual(get_amps_for_camera('z3A', 'Z3'), 'A')
+        self.assertEqual(get_amps_for_camera('R3b', 'r3'), 'B')
+
+        with self.assertRaises(ValueError):
+            get_amps_for_camera('z3A,r2B', camera=None)
+
+        #- due to using parse_badamps, currently only ABCD is allowed
+        with self.assertRaises(ValueError):
+            self.assertEqual(get_amps_for_camera('R3q', 'r3'), 'Q')
+
+
     def test_fitsheader(self):
         """Test desispec.io.util.fitsheader.
         """
