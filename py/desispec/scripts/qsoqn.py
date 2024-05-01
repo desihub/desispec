@@ -31,12 +31,26 @@ from redrock.external.desi import rrdesi
 from quasarnp.io import load_model, load_desi_coadd
 from quasarnp.utils import process_preds
 
+def get_default_qso_templates():
+    """Return list of default Redrock QSO template filenames to use"""
+    log = get_logger()
+    all_templates = find_templates()
+    qso_templates = list()
+    for filename in all_templates:
+        if os.path.basename(filename).startswith('rrtemplate-QSO-'):
+            qso_templates.append(filename)
+
+    #- Expect HIZ and LOZ but not more than that
+    #- otherwise log error but don't actually crash
+    if len(qso_templates) != 2:
+        log.error(f'Unexpected number of QSO templates found: {qso_templates}')
+    else:
+        log.debug('Using Redrock templates %s', qso_templates)
+
+    return qso_templates
+
 
 def parse(options=None):
-    # LOAD ONLY QSO templates to RE-RUN redrock
-    templates_default_qso = glob.glob(os.path.join(os.path.dirname(find_templates()[0]),
-                                                   'rrtemplate-qso*.fits'))
-
     parser = argparse.ArgumentParser(description="Run QN and rerun RR (only for SPECTYPE != QSO or for SPECTYPE == QSO && |z_QN - z_RR| > 0.05) on a coadd file to find true quasars with correct redshift")
 
     parser.add_argument("--coadd", type=str, required=True,
@@ -63,9 +77,9 @@ def parse(options=None):
                         help="For QN: is_qso_QN =  np.sum(c_line > c_thresh, axis=0) >= n_thresh")
 
     # for RR
-    parser.add_argument("--templates", type=str, nargs='+', required=False, default=templates_default_qso,
+    parser.add_argument("--templates", type=str, nargs='+', required=False,
                         help="give the templates used during the new run of RR\
-                              By default use the templates from redrock of the form rrtemplate-qso*.fits")
+                              By default use the templates from redrock of the form rrtemplate-QSO-*.fits")
     parser.add_argument("--filename_priors", type=str, required=False, default=None,
                         help="filename for the RR prior file, by default use the directory of coadd file")
     parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default=None,
@@ -79,6 +93,9 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
+
+    if args.templates is None:
+        args.templates = get_default_qso_templates()
 
     return args
 
@@ -179,6 +196,11 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
 
     # define the output
     redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
+
+    if len(param_RR['templates_filename']) == 0:
+        msg = 'No Redrock templates provided'
+        log.critical(msg)
+        raise ValueError(msg)
 
     # make an independant run for each quasar templates to circumvent some problem from redrock:
     # 1] cannot give two templates in redrock as input, only one or a directory
