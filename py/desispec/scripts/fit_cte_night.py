@@ -16,7 +16,7 @@ from desispec.io.util import (decode_camword, camword_union, camword_intersectio
 from desispec.io import findfile
 from desispec.parallel import default_nproc
 from desispec.workflow.tableio import load_table
-from astropy.table import Table,vstack
+import yaml
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit charge transfer efficiency (CTE) model for a given night")
@@ -53,8 +53,8 @@ def _fit_cte_night_kwargs_wrapper(opts):
     used with multiprocessing.Pool.map
     """
 
-    table = desispec.correct_cte.fit_cte_night(night=opts["night"],camera=opts["camera"],expids=opts["expids"])
-    return table
+    out = desispec.correct_cte.fit_cte_night(night=opts["night"],camera=opts["camera"],expids=opts["expids"])
+    return out
 
 def main(args=None, comm=None):
 
@@ -67,7 +67,8 @@ def main(args=None, comm=None):
 
     #- Create output directory if needed
     if comm is None or comm.rank == 0:
-        os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+        outdir = os.path.dirname(os.path.abspath(args.outfile))
+        os.makedirs(outdir, exist_ok=True)
 
     #- Check what cameras are actually needed by science exposures
     if args.expids is None:
@@ -112,41 +113,44 @@ def main(args=None, comm=None):
             log.info(f'Processing {num_cameras} cameras with MPI')
 
         with MPICommExecutor(comm, root=0) as pool:
-            cte_tables = pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
+            cte_dicts = pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
 
     elif args.ncpu > 1 and num_cameras>1:
         n = min(args.ncpu, num_cameras)
         log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
         with mp.Pool(n) as pool:
-            cte_tables = pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
+            cte_dicts = pool.map(_fit_cte_night_kwargs_wrapper, opts_array)
 
     else:
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
-        cte_tables = list()
+        cte_dicts = list()
         for opts in opts_array:
-            cte_tables.append(_fit_cte_night_kwargs_wrapper(opts))
+            cte_dicts.append(_fit_cte_night_kwargs_wrapper(opts))
 
     #- Write output with rank 0
     if comm is None or comm.rank == 0:
         #- filter for None just in case, then stack into one table
-        cte_tables = [t for t in cte_tables if t is not None]
-        cte_table = vstack(cte_tables)
+        cte_dicts = [t for t in cte_dicts if t is not None]
+        cte_dicts = sum(cte_dicts, [])
 
         if os.path.isfile(args.outfile):
             if args.append:
                 log.info(f'Merging CTE params with existing results in {args.outfile}')
-                orig_cte_table = Table.read(args.outfile)
+                orig_cte_dicts = yaml.safe_load(args.outfile)
                 keys = ['NIGHT', 'CAMERA', 'AMPLIFIER', 'SECTOR']
-                only_in_orig = np.isin(orig_cte_table[keys], cte_table[keys], invert=True)
-                cte_table = vstack([orig_cte_table[only_in_orig], cte_table])
+                orig_tuples = [(x[k] for k in keys) for x in orig_cte_dicts]
+                tuples = [(x[k] for k in keys) for x in cte_dicts]
+                only_in_orig = np.isin(orig_tuples, tuples, invert=True)
+                cte_dicts = ([orig_cte_dicts[i] for i in only_in_orig] +
+                             cte_dicts)
             else:
                 log.warning(f'Overwriting pre-existing {args.outfile}')
 
         tmpfile = get_tempfilename(args.outfile)
-        cte_table.write(tmpfile)
+        with open(tmpfile, 'w') as f:
+            f.write(yaml.dump(cte_dicts))
         os.rename(tmpfile, args.outfile)
         log.info(f"wrote {args.outfile}")
 
     if comm is not None:
         comm.barrier()
-

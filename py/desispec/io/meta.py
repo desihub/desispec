@@ -179,8 +179,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
-        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.csv',
-        ctecorr      = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.csv', #- alias, same file
+        ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.yaml',
+        ctecorr      = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.yaml', #- alias, same file
         #
         # spectra- healpix based
         #
