@@ -632,9 +632,8 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
         flats = allflats[~is_cte]
         ctes = allflats[is_cte]
-        cte1s = ctes[np.abs(ctes['EXPTIME']-1.)<0.1]
 
-    have_flats_for_cte = len(cte1s) > 0 and len(flats) > 0
+    have_flats_for_cte = len(ctes) > 0 and len(flats) > 0
     do_bias = len(zeros) > 0 and not calibjobs['accounted_for']['biasnight']
     do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
     do_cte = have_flats_for_cte and not calibjobs['accounted_for']['ctecorrnight']
@@ -648,26 +647,24 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         jobdesc = 'ccdcalib'
 
         if calibjobs[jobdesc] is None:
-            ccdcalib_erows = []
+            ## Define which erow to use to create the processing table row
+            all_expids = []
             if do_badcol:
                 ## first exposure is a 300s dark
-                ccdcalib_erows.append(darks[0])
-            if do_cte:
-                cte_expids = []
-                ## second exposure is a 1s cte flat
-                ccdcalib_erows.append(cte1s[0])
-                cte_expids.append(cte1s[0]['EXPID'])
-                ## third exposure is a 120s flat
-                ccdcalib_erows.append(flats[-1])
-                cte_expids.append(flats[-1]['EXPID'])
-                cte_expids = np.array(cte_expids)
+                job_erow = darks[0]
+                all_expids.append(job_erow['EXPID'])
             else:
-                cte_expids = None
-                
-            prow, int_id = make_exposure_prow(ccdcalib_erows[0], int_id,
+                job_erow = ctes[-1]
+            ## if doing cte correction, create expid list of last 120s flat
+            ## and all ctes provided by the calibration selection function
+            if do_cte:
+                cte_expids = np.array([flats[-1]['EXPID'], *ctes['EXPID']])
+                all_expids.extend(cte_expids)
+
+            prow, int_id = make_exposure_prow(job_erow, int_id,
                                               calibjobs, jobdesc=jobdesc)
-            if len(ccdcalib_erows) > 1:
-                prow['EXPID'] = np.array([erow['EXPID'] for erow in ccdcalib_erows])
+            if len(all_expids) > 1:
+                prow['EXPID'] = np.array(all_expids)
 
             prow['CALIBRATOR'] = 1
 

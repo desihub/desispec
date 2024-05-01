@@ -53,7 +53,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
 
     ## Find if a valid 1s CTE flat
     is_cte_1s = ((exptypes=='cteflat')
-                 & np.round(valid_etable['EXPTIME']).astype(int)==1)
+                 & matches_exptime(valid_etable['EXPTIME'], exptime=1.))
 
     ## If 1 dark, 5 arcs, 12 flats, and 3 ctes then we have a candidate set,
     ## so return that it. Otherwise if no new data is coming in we should try
@@ -84,8 +84,30 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     zeros = valid_etable[exptypes=='zero']
     out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
     out_table = vstack([out_table, best_arcflat_set])
+
+    ## If doing cte flats, select one of each exptime based on proximity to the
+    ## last 120s flat
     if do_cte_flats:
-        out_table = vstack([out_table, valid_etable[exptypes == 'cteflat']])
+        ## identify the time of the last 120s flat
+        lastflattime = np.max(best_arcflat_set['MJD-OBS'][best_arcflat_set['OBSTYPE']=='flat'])
+        ## select the cte exposures
+        ctes = valid_etable[exptypes == 'cteflat']
+        ## loop over exposure times and if any ctes of that time exist,
+        ## add the nearest exposure to the last flat
+        selected_ctes = []
+        for exptime in [10., 3., 1.]:
+            ## boolean array, True if exposure time matches
+            match_exptime = matches_exptime(ctes['EXPTIME'], exptime=exptime)
+            ## if any matches, proceed
+            if np.any(match_exptime):
+                ## take matches and find the closest one in time to the 120s flat
+                matched_ctes = ctes[match_exptime]
+                closest = np.argmin(np.abs(matched_ctes['MJD-OBS']-lastflattime))
+                selected_ctes.append(matched_ctes[closest])
+        ## if we found any ctes, stack them into the table (note selected_ctes
+        ## is a list of rows, so need to unpack into the vstack list)
+        if len(selected_ctes) > 0:
+            out_table = vstack([out_table, *selected_ctes])
 
     return out_table
 
@@ -168,7 +190,7 @@ def select_valid_calib_exposures(etable, allow_any_laststep=None):
                                            + "should be the same length")
     return outtable, exptype
 
-def matches_exptime(val_or_array, exptime, exptime_tolerance=1.):
+def matches_exptime(val_or_array, exptime, exptime_tolerance=0.5):
     """
     For a scalar or array it does an elementwise comparison of that value or
     values with the given exposure time to test whether it is within a given
