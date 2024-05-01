@@ -224,12 +224,14 @@ def load_qn_model(model_filename):
         An array of the emission line names to be used for quasarnp.process_preds().
     :class:`~numpy.array`
         An array of the BAL emission line names to be used by quasarnp.process_preds().
+    :class:`~numpy.array`
+        The wavelength grid to be used by quasarnp.process_preds().
     """
     lines = ['LYA', 'CIV(1548)', 'CIII(1909)', 'MgII(2796)', 'Hbeta', 'Halpha']
     lines_bal = ['CIV(1548)']
-    model = load_model(model_filename)
+    model, qnet_grid = load_model(model_filename)
 
-    return model, lines, lines_bal
+    return model, lines, lines_bal, qnet_grid
 
 def add_tileqa_data(zmtl, tileqafile):
     """Modifies zmtl['ZWARN'] in-place to add tile QA flags
@@ -273,7 +275,7 @@ def add_tileqa_data(zmtl, tileqafile):
 
     return badfiber | badpetal
 
-def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal):
+def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal, qnp_grid):
     """Apply the QuasarNP model to the input zmtl and add data to columns.
 
     Parameters
@@ -291,6 +293,8 @@ def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal):
     qnp_lines_bal : :class:`list`
         A list containing the names of the emission lines to check
         for BAL troughs.
+    qnp_grid : :class:`~numpy.array`
+        The wavelength grid to be used by quasarnp.process_preds()
 
     Returns
     -------
@@ -303,11 +307,11 @@ def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal):
     """
     tmark('    Adding QuasarNP data')
 
-    data, w = load_desi_coadd(coaddname)
+    data, w = load_desi_coadd(coaddname, out_grid=qnp_grid)
     data = data[:, :, None]
     p = qnp_model.predict(data)
     c_line, z_line, redrock, *_ = process_preds(p, qnp_lines, qnp_lines_bal,
-                                              verbose=False)
+                                              verbose=False, wave=qnp_grid)
 
     cbest = np.array(c_line[c_line.argmax(axis=0), np.arange(len(redrock))])
     c_thresh = 0.5
@@ -735,7 +739,7 @@ def write_zmtl(zmtl, outputname,
 
 def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
                 qn_flag=False, qnp_model=None, qnp_model_file=None,
-                qnp_lines=None, qnp_lines_bal=None,
+                qnp_lines=None, qnp_lines_bal=None, qnp_grid=None,
                 sq_flag=False, squeze_model=None, squeze_model_file=None,
                 abs_flag=False, zcomb_flag=False):
     """This will create a single zmtl file from a set of user inputs.
@@ -776,6 +780,8 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
         The list of lines to use in the QuasarNP model to test against.
     qnp_lines_bal : :class:`list`, optional
         The list of BAL lines to use for QuasarNP to identify BALs.
+    qnp_grid : :class:`~numpy.array`, optional
+        The wavelength grid to be used by QuasarNP when identifying quasars.
     sq_flag : :class:`bool`, optional
         Flag to add SQUEzE data (or not) to the zmtl file.
     squeze_model : :class:`numpy.array`, optional
@@ -798,7 +804,7 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
     # ADM load the model files, if needed.
     if qn_flag and qnp_model is None:
         tmark('    Loading QuasarNP Model file and lines of interest')
-        qnp_model, qnp_lines, qnp_lines_bal = load_qn_model(qnp_model_file)
+        qnp_model, qnp_lines, qnp_lines_bal, qnp_grid = load_qn_model(qnp_model_file)
         tmark('      QNP model file loaded')
     if sq_flag and squeze_model is None:
         tmark('    Loading SQUEzE Model file')
@@ -856,7 +862,7 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
         add_tileqa_data(zmtl, tileqafn)
 
         if qn_flag:
-            zmtl = add_qn_data(zmtl, coaddfn, qnp_model, qnp_lines, qnp_lines_bal)
+            zmtl = add_qn_data(zmtl, coaddfn, qnp_model, qnp_lines, qnp_lines_bal, qnp_grid)
         if sq_flag:
             zmtl = add_sq_data(zmtl, coaddfn, squeze_model)
         if abs_flag:
