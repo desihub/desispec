@@ -125,10 +125,10 @@ def main(args=None):
     # EBL Load the QuasarNP model file if QuasarNP is activated.
     if add_quasarnp:
         tmark('    Loading QuasarNP Model file and lines of interest')
-        qnp_model, qnp_lines, qnp_lines_bal = load_qn_model(args.qn_model_file)
+        qnp_model, qnp_lines, qnp_lines_bal, qnp_grid = load_qn_model(args.qn_model_file)
         tmark('      QNP model file loaded')
     else:
-        qnp_model, qnp_lines, qnp_lines_bal = None, None, None
+        qnp_model, qnp_lines, qnp_lines_bal, qnp_grid = None, None, None, None
 
     if args.add_squeze:
         tmark('    Loading SQUEzE Model file')
@@ -148,6 +148,7 @@ def main(args=None):
         create_zmtl(args.input_file, args.output_file, tile=tile,
                     qn_flag=add_quasarnp, qnp_model=qnp_model,
                     qnp_model_file=args.qn_model_file, qnp_lines=qnp_lines,
+                    qnp_grid=qnp_grid,
                     qnp_lines_bal=qnp_lines_bal, sq_flag=args.add_squeze,
                     squeze_model=sq_model, squeze_model_file=args.sq_model_file,
                     abs_flag=args.add_mgii, zcomb_flag=args.add_zcomb)
