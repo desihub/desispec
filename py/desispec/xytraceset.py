@@ -124,7 +124,7 @@ def get_badamp_fibers(header, tset, threshold=0.1, nsample=50, verbose=False):
 
     log = get_logger()
     badfibers = list()
-    badamps = header["BADAMPS"].split(",")
+    badamps = list(header["BADAMPS"].replace(',',''))
     for badamp in badamps :
         # get the CCD area that is concerned
         yslice, xslice = parse_sec_keyword(header["CCDSEC"+badamp])
