@@ -2,16 +2,42 @@
 desispec Change Log
 ===================
 
-0.62.1 (unreleased)
+0.63.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.63.0 (2024-05-03)
+-------------------
+
+Used for Jura. Requires QuasarNP >=2.x and Redrock >=20.x
 
 * Remove redundant assemble_fibermap script (PR `#2222`_).
 * Enable qproc on obstype="other" for tests (PR `#2223`_).
 * Optionally gather Tractor phot from just north or south (PR `#2224`_).
+* Add rrdesi --model option to pre-generate model files (PR `#2226`_).
+* Reduce submission time with lower sleep and slurm state caching (PR `#2228`_).
+* New CCD pixmask generation algorithm (PR `#2229`_).
+* Use new QuasarNET model trained on DESI data (PR `#2230`_).
+* Update QuasarNET afterburner to use new redrock template structure
+  (PR `#2232`_).
+* Fix badamp processing (PR `#2233`_).
+* Only count bad readnoise on amps not already flagged as bad (PR `#2234`_).
+* Add reservation parsing for CPUs vs. GPUs (PR `#2235`_).
+* Move nightlyflat to gpu job (PR `#2236`_).
 
 .. _`#2222`: https://github.com/desihub/desispec/pull/2222
 .. _`#2223`: https://github.com/desihub/desispec/pull/2223
 .. _`#2224`: https://github.com/desihub/desispec/pull/2224
+.. _`#2226`: https://github.com/desihub/desispec/pull/2226
+.. _`#2228`: https://github.com/desihub/desispec/pull/2228
+.. _`#2229`: https://github.com/desihub/desispec/pull/2229
+.. _`#2230`: https://github.com/desihub/desispec/pull/2230
+.. _`#2232`: https://github.com/desihub/desispec/pull/2232
+.. _`#2233`: https://github.com/desihub/desispec/pull/2233
+.. _`#2234`: https://github.com/desihub/desispec/pull/2234
+.. _`#2235`: https://github.com/desihub/desispec/pull/2235
+.. _`#2236`: https://github.com/desihub/desispec/pull/2236
 
 0.62.0 (2024-04-24)
 -------------------
