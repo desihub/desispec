@@ -1,5 +1,5 @@
 """
-Test desispec.workflow.calibration_selection
+Test desispec.workflow.queue
 """
 
 import os

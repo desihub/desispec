@@ -26,6 +26,7 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname,
     get_desi_proc_batch_file_path, \
     get_desi_proc_tilenight_batch_file_pathname, \
     create_desi_proc_tilenight_batch_script, create_linkcal_batch_script
+from desispec.workflow.batch import parse_reservation
 from desispec.workflow.utils import pathjoin, sleep_and_report, \
     load_override_file
 from desispec.workflow.tableio import write_table, load_table
@@ -680,8 +681,11 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     batch_params = ['sbatch', '--parsable']
     if dep_str != '':
         batch_params.append(f'{dep_str}')
+
+    reservation = parse_reservation(reservation, prow['JOBDESC'])
     if reservation is not None:
         batch_params.append(f'--reservation={reservation}')
+
     batch_params.append(f'{script_path}')
 
     if dry_run:
