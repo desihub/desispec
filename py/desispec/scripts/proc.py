@@ -689,16 +689,20 @@ def main(args=None, comm=None):
 
             #- Check if a noisy amp might have corrupted this PSF;
             #- if so, rename to *.badreadnoise
+            #- Only do this for amps not already pre-flagged as bad
             #- Currently the data is flagged per amp (25% of pixels), but do
             #- more generic test for 12.5% of pixels (half of one amp)
             log.info(f'Rank {rank} checking for noisy input CCD amps')
             preprocfile = findfile('preproc', args.night, args.expid, camera, readonly=True)
             mask = fitsio.read(preprocfile, 'MASK')
-            noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
+            pix_goodamp = (mask & ccdmask.BADAMP) == 0
+            pix_badnoise = (mask & ccdmask.BADREADNOISE) != 0
+            noisyfrac = np.sum(pix_badnoise & pix_goodamp) / np.sum(pix_goodamp)
             if noisyfrac > 0.25*0.5:
                 log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
                 if os.path.exists(inpsf):
                     os.rename(inpsf, inpsf+'.badreadnoise')
+                error_count += 1
                 continue
 
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')

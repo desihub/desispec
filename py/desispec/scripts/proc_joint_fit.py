@@ -227,7 +227,7 @@ def main(args=None, comm=None):
                         log.error(f'Rank {rank} failed to create {psfnightfile}')
                         num_err += 1
                 else:
-                    log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
+                    log.error(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
                     num_cmd += 1
                     num_err += 1
 
