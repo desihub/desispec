@@ -5,7 +5,10 @@ desispec Change Log
 0.63.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Change ordering of ``DESINAME`` computation in :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#2239`_).
+
+.. _`#2239`: https://github.com/desihub/desispec/pull/2239
+
 
 0.63.0 (2024-05-03)
 -------------------
