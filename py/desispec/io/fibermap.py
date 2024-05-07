@@ -729,10 +729,6 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.debug("Adding PLATE_DEC column.")
         fa['PLATE_DEC'] = fa['TARGET_DEC']
 
-    if 'DESINAME' not in fa.colnames:
-        log.debug("Adding DESINAME column.")
-        fa['DESINAME'] = radec_to_desiname(fa['TARGET_RA'], fa['TARGET_DEC'])
-
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
     if 'OUTDIR' in fa_hdr0:
@@ -1005,6 +1001,13 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         ii = np.isnan(fibermap[fmcol])
         fibermap[fmcol][ii] = fibermap[pmcol][ii]
         log.info(f"Switching {np.sum(ii)} NaNs from {fmcol}->{pmcol} value")
+
+    #
+    # Compute this after NaN have been replaced in TARGET_RA, TARGET_DEC.
+    #
+    if 'DESINAME' not in fibermap.colnames:
+        log.debug("Adding DESINAME column.")
+        fibermap['DESINAME'] = radec_to_desiname(fibermap['TARGET_RA'], fibermap['TARGET_DEC'])
 
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
