@@ -6,7 +6,7 @@ desispec.trace_shifts
 
 from __future__ import absolute_import, division
 
-
+import os
 import sys
 import argparse
 import time
@@ -19,6 +19,7 @@ from scipy.ndimage import median_filter
 import numba
 
 from desispec.io import read_image
+from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
@@ -105,7 +106,10 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
             psf_fits["PSF"].header[k] = xytraceset.meta[k]
 
 
-    psf_fits.writeto(output_psf_filename,overwrite=True)
+    tmpfile = get_tempfilename(output_psf_filename)
+    psf_fits.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output_psf_filename)
+
     log.info("wrote traces and psf in %s"%output_psf_filename)
 
 
