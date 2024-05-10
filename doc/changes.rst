@@ -2,13 +2,22 @@
 desispec Change Log
 ===================
 
-0.63.1 (unreleased)
+0.63.2 (unreleased)
 -------------------
 
-* Change ordering of ``DESINAME`` computation in :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#2239`_).
+* No changes yet.
+
+0.63.1 (2024-05-10)
+-------------------
+
+Used for Jura.
+
+* Change ordering of ``DESINAME`` computation in :func:`~desispec.io.fibermap.assemble_fibermap`
+  to after fixing NaN RA/Dec (PR `#2239`_).
+* Adjust job timing for Jura run (PR `#2242`_).
 
 .. _`#2239`: https://github.com/desihub/desispec/pull/2239
-
+.. _`#2242`: https://github.com/desihub/desispec/pull/2242
 
 0.63.0 (2024-05-03)
 -------------------
