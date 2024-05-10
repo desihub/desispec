@@ -5,7 +5,7 @@ desispec.workflow.queue
 """
 import os
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, vstack
 import subprocess
 from desiutil.log import get_logger
 import time, datetime
@@ -216,6 +216,15 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     """
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
+
+    ## If qids is too long, recursively call self and stack tables; otherwise sacct hangs
+    nmax = 100
+    if len(qids) > nmax:
+        results = list()
+        for i in range(0, len(qids), nmax):
+            results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns, dry_run=dry_run))
+        results = vstack(results)
+        return results
 
     ## Turn the queue id's into a list
     ## this should work with str or int type also, though not officially supported

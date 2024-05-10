@@ -419,7 +419,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
             ncores = 20 * nspectro
     elif jobdesc == 'TILENIGHT':
         runtime  = int(60. / 140. * ncameras * nexps) # 140 frames per node hour
-        runtime += 30                                 # overhead
+        runtime += 40                                 # overhead
         ncores = config['cores_per_node']
         if not system_name.startswith('perlmutter'):
             msg = 'tilenight cannot run on system_name={}'.format(system_name)
