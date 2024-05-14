@@ -6,15 +6,47 @@ Routines to determine the survey progress
 and tiles completion.
 """
 
-import os,sys
+import os
 import numpy as np
-import yaml
 import glob
-from astropy.table import Table,vstack
+from astropy.table import Table, vstack
 
-from desispec.io.util import checkgzip
+from desispec.io import read_table
 
 from desiutil.log import get_logger
+
+
+def read_gfa_data(gfa_proc_dir):
+    """Find the most recent GFA summary file in `gfa_proc_dir`.
+
+    See documentation here: https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files.
+
+    Parameters
+    ----------
+    gfa_proc_dir : :class:`str`
+        The GFA directory. Usually this will be ``/global/cfs/cdirs/desi/survey/GFA/``.
+
+    Returns
+    -------
+    :class:`~astropy.table.Table`
+        The summary data read from HDU2 of the file.
+    """
+    log = get_logger()
+    filenames = glob.glob(os.path.join(gfa_proc_dir, 'offline_matched_coadd_ccds_*-thru_????????.fits'))
+    if len(filenames) == 0:
+        mess = "did not find any file offline_matched_coadd_ccds_*-thru_????????.fits in %s"
+        log.critical(mess, gfa_proc_dir)
+        raise RuntimeError(mess % gfa_proc_dir)
+    #
+    # Sort the filenames by night, independently of any other label.
+    #
+    night_filename = dict([(os.path.basename(f).split('_')[-1].split('.')[0], f) for f in filenames])
+    last_night = sorted(night_filename.keys())[-1]
+    filename = night_filename[last_night]
+    log.info("Reading %s", filename)
+    table = read_table(filename, 2)  # HDU2 is average over frames during spectro exposure and median across CCDs.
+    log.info('%d GFA table entries', len(table))
+    return table
 
 
 def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames,min_number_of_petals=8) :
