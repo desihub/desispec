@@ -87,7 +87,9 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
 
     ## If doing cte flats, select one of each exptime based on proximity to the
     ## last 120s flat
-    if do_cte_flats:
+    ## Since we require a 120s flat, only proceed if we have a valid 120s flat
+    if do_cte_flats and len(best_arcflat_set) > 0 \
+            and np.sum(best_arcflat_set['OBSTYPE']=='flat')>0:
         ## identify the time of the last 120s flat
         lastflattime = np.max(best_arcflat_set['MJD-OBS'][best_arcflat_set['OBSTYPE']=='flat'])
         ## select the cte exposures

@@ -440,6 +440,41 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         result = determine_calibrations_to_proc(badset)
         self.assertEqual(len(result), 0)
 
+        # existing, all bad but 1 arc and 1 flat
+        badset['LASTSTEP'] = 'all'
+        badset['LASTSTEP'][1:-1] = 'ignore'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(len(result), 0)
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 0)
+
+        # existing, all bad but 4 arcs and 1 flat
+        # only expect the 4 arcs to be returned
+        badset['LASTSTEP'] = 'all'
+        badset['LASTSTEP'][4:-1] = 'ignore'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(len(result), 4)
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 4)
+
+        # existing, 4 arcs and 11 flats good
+        # only expect the 4 arcs to be returned
+        badset['LASTSTEP'] = 'all'
+        badset['LASTSTEP'][4:-11] = 'ignore'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(len(result), 4)
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 4)
+
+        # existing, 5 arcs good and all flats bad
+        # only expect the 5 arcs to be returned
+        badset['LASTSTEP'] = 'all'
+        badset['LASTSTEP'][7:] = 'ignore'
+        result = find_best_arc_flat_sets(badset)
+        self.assertEqual(len(result), 5)
+        result = determine_calibrations_to_proc(badset)
+        self.assertEqual(len(result), 5)
+
         # not existing at all
         badset['LASTSTEP'] = 'all'
         badset['OBSTYPE'] = 'science'
