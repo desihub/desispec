@@ -206,7 +206,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             science_laststeps = ['all', 'skysub', 'fluxcal']
 
         if z_submit_types is None and not no_redshifts:
-            z_submit_types = ['cumulatives']
+            z_submit_types = ['cumulative']
 
         ## still_acquiring is flag to determine whether to process the last tile in the exposure table
         ## or not. This is used in daily mode when processing and exiting mid-night.
