@@ -2,10 +2,24 @@
 desispec Change Log
 ===================
 
-0.63.2 (unreleased)
+0.63.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.63.2 (2024-05-16)
+-------------------
+
+Bugfixes for Jura.
+
+* Update desispec.module for post-Jura desi_spectro_dark/v2405 (Jura env
+  retains v2209) (PR `#2245`_).
+* select_calib_darks picks first dark with most cameras (PR `#2253`_).
+* Only select CTE in proc_night if a good 120s flat exists (PR `#2254`_)
+
+.. _`#2245`: https://github.com/desihub/desispec/pull/2245
+.. _`#2253`: https://github.com/desihub/desispec/pull/2253
+.. _`#2254`: https://github.com/desihub/desispec/pull/2254
 
 0.63.1 (2024-05-10)
 -------------------
