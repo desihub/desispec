@@ -40,6 +40,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
 
         arcset['LASTSTEP'] = ['ignore'] * ntotalarcs
         arcset['LASTSTEP'][:] = 'all'
+        arcset['CAMWORD'] = 'a0123456789'
         arcset['BADCAMWORD'] = ['b0123456789r0123456789'] * ntotalarcs
         arcset['BADCAMWORD'][:] = ''
         arcset['BADAMPS'] = ['b0123456789r0123456789'] * ntotalarcs
@@ -82,6 +83,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
 
         flatset['LASTSTEP'] = ['ignore'] * nexps
         flatset['LASTSTEP'][:] = 'all'
+        flatset['CAMWORD'] = 'a0123456789'
         flatset['BADCAMWORD'] = ['b0123456789r0123456789'] * nexps
         flatset['BADCAMWORD'][:] = ''
         flatset['BADAMPS'] = ['b0123456789r0123456789'] * nexps
@@ -482,3 +484,75 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         self.assertEqual(len(result), 0)
         result = determine_calibrations_to_proc(badset)
         self.assertEqual(len(result), 0)
+
+    def test_dark_selection(self):
+        """
+        Test selection of which dark to use
+        """
+        from desispec.workflow.calibration_selection import \
+                determine_calibrations_to_proc
+        etable = self._make_arcflatset_etable()
+
+        # start dark EXPIDs at 100 for test comparison simplicity
+        etable.add_row(dict(
+            EXPID=100, SEQNUM=1, SEQTOT=3, LASTSTEP='all',
+            CAMWORD='a0123456789',
+            BADCAMWORD='a23', EXPTIME=300.1,
+            PROGRAM='calib dark 5min', OBSTYPE='dark'))
+
+        etable.add_row(dict(
+            EXPID=101, SEQNUM=2, SEQTOT=3, LASTSTEP='all',
+            CAMWORD='a0123456789',
+            BADCAMWORD='', EXPTIME=300.1,
+            PROGRAM='calib dark 5min', OBSTYPE='dark'))
+
+        etable.add_row(dict(
+            EXPID=102, SEQNUM=3, SEQTOT=3, LASTSTEP='all',
+            CAMWORD='a0123456789',
+            BADCAMWORD='', EXPTIME=300.1,
+            PROGRAM='calib dark 5min', OBSTYPE='dark'))
+
+        # should pick second 300s dark with BADCAMWORD='' instead of 'a23'
+        cal_etable = determine_calibrations_to_proc(etable)
+
+        idark = np.where(cal_etable['OBSTYPE'] == 'dark')[0][0]
+        self.assertEqual(cal_etable['EXPID'][idark], 101)
+
+
+    def test_select_calib_dark(self):
+        """Test workflow.calibration_selection.select_calib_dark"""
+        from desispec.workflow.calibration_selection import select_calib_darks
+        etable = Table()
+        etable['EXPID'] = [0,1,2,3]
+        etable['OBSTYPE'] = 'dark'
+        etable['EXPTIME'] = 300.1
+        etable['LASTSTEP'] = 'ignore'  # to get size right
+        etable['LASTSTEP'][:] = 'all'  # then reset to all good
+        etable['CAMWORD'] = 'a0123456789'
+        etable['BADCAMWORD'] = ['a234', '', '', '']
+        etable['BADAMPS'] = ''
+
+        #- make a copy for testing that original isn't modified
+        orig_etable = etable.copy()
+
+        # EXPID 0 has bad cameras, so should pick EXPID 1
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 1)
+        self.assertTrue(np.all(etable == orig_etable))
+
+        # ... but not if EXPID1 is ignored, then EXPID 2
+        etable['LASTSTEP'][1] = 'ignore'
+        orig_etable = etable.copy()
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 2)
+        self.assertTrue(np.all(etable == orig_etable))
+
+        # ... but not if EXPID 2 has more bad cameras than EXPID 3
+        etable['BADCAMWORD'][2] = 'a78'
+        etable['BADCAMWORD'][3] = 'a1'
+        orig_etable = etable.copy()
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 3)
+        self.assertTrue(np.all(etable == orig_etable))
+
+

@@ -8,7 +8,48 @@ from astropy.table import Table, vstack
 from collections import Counter
 
 from desiutil.log import get_logger
-from desispec.io.util import decode_camword, parse_badamps, all_impacted_cameras
+from desispec.io.util import decode_camword, parse_badamps, all_impacted_cameras, erow_to_goodcamword
+
+
+def select_calib_darks(etable):
+    """
+    Returns subset of etable row(s) with darks to use for badcolumn calibration
+
+    Args:
+        etable (astropy.table.Table): a DESI exposure_table
+
+    Returns:
+        dark_etable (astropy.table.Table): table of darks to use
+
+    Currently this returns a table of length-1 with a single dark, but in the
+    future it could return more than one dark if we found that useful.
+
+    If no good darks are found, return a length-0 table with the same columns
+    so that it can still be vstacked with other etable entries.
+    """
+    # copy input so that we can sort without modifying original
+    etable = etable.copy()
+
+    keep = np.where((etable['OBSTYPE']=='dark') & (etable['LASTSTEP'] != 'ignore'))[0]
+    etable = etable[keep]
+
+    if len(etable) == 0:
+        log = get_logger()
+        log.warning('No good dark exposures found in etable')
+        return etable
+
+    # count good cameras per row
+    num_goodcam = np.zeros(len(etable))
+    for i in range(len(etable)):
+        cameras = decode_camword(erow_to_goodcamword(etable[i]))
+        num_goodcam[i] = len(cameras)
+
+    # sort by number of missing cameras $while preserving EXPID order for ties
+    num_missing_cam = np.max(num_goodcam) - num_goodcam
+    sorted_indices = np.argsort(num_missing_cam, kind='stable')
+    i = sorted_indices[0]
+
+    return etable[i:i+1]  #- Table of length 1, not Row object
 
 
 def determine_calibrations_to_proc(etable, do_cte_flats=True,
@@ -79,11 +120,11 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     ## does it's own selection
     best_arcflat_set = find_best_arc_flat_sets(cal_etable)
 
-    ## Create the output table with all zeros, the first valid dark,
+    ## Create the output table with all zeros, the best selected dark,
     ## the best set of arcs and flats, and all cte flats
     zeros = valid_etable[exptypes=='zero']
-    out_table = vstack([zeros, valid_etable[exptypes == 'dark'][:1]])
-    out_table = vstack([out_table, best_arcflat_set])
+    darks = select_calib_darks(valid_etable)
+    out_table = vstack([zeros, darks, best_arcflat_set])
 
     ## If doing cte flats, select one of each exptime based on proximity to the
     ## last 120s flat
