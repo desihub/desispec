@@ -11,23 +11,23 @@ from desiutil.log import get_logger
 from desispec.io.util import decode_camword, parse_badamps, all_impacted_cameras, erow_to_goodcamword
 
 
-def select_calib_dark(etable):
+def select_calib_darks(etable):
     """
-    Returns index of first dark with most available cameras for badcolumn calibration
+    Returns subset of etable row(s) with darks to use for badcolumn calibration
 
     Args:
         etable (astropy.table.Table): a DESI exposure_table
 
     Returns:
-        index (int) of which row to use
+        dark_etable (astropy.table.Table): table of darks to use
 
     Raises ValueError if no good darks are available.
-    """
-    # make copy so we can add utility columns and sort without modifying original
-    etable = etable.copy()
 
-    # add ROW so that after filtering and sorting we can still get original index
-    etable['ROW'] = np.arange(len(etable))
+    Currently this returns a table of length-1 with a single dark, but in the
+    future it could return more than one dark if we found that useful.
+    """
+    # copy input so that we can sort without modifying original
+    etable = etable.copy()
 
     keep = np.where((etable['OBSTYPE']=='dark') & (etable['LASTSTEP'] != 'ignore'))[0]
     if len(keep) == 0:
@@ -36,20 +36,17 @@ def select_calib_dark(etable):
     etable = etable[keep]
 
     # count good cameras per row
-    etable['NUM_GOODCAM'] = 0
+    num_goodcam = np.zeros(len(etable))
     for i in range(len(etable)):
         cameras = decode_camword(erow_to_goodcamword(etable[i]))
-        etable['NUM_GOODCAM'][i] = len(cameras)
+        num_goodcam[i] = len(cameras)
 
-    etable['NUM_MISSING_CAMERAS'] = np.max(etable['NUM_GOODCAM']) - etable['NUM_GOODCAM']
+    # sort by number of missing cameras $while preserving EXPID order for ties
+    num_missing_cam = np.max(num_goodcam) - num_goodcam
+    sorted_indices = np.argsort(num_missing_cam, kind='stable')
+    i = sorted_indices[0]
 
-    # sort by decreasing number of missing cameras and increasing exposure time
-    etable.sort( ('NUM_MISSING_CAMERAS', 'EXPID') )
-
-    print(etable)
-
-    # original row index of first entry should be best
-    return etable['ROW'][0]
+    return etable[i:i+1]  #- Table of length 1, not Row object
 
 
 def determine_calibrations_to_proc(etable, do_cte_flats=True,
@@ -123,9 +120,8 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     ## Create the output table with all zeros, the best selected dark,
     ## the best set of arcs and flats, and all cte flats
     zeros = valid_etable[exptypes=='zero']
-    idark = select_calib_dark(valid_etable)
-    out_table = vstack([zeros, valid_etable[idark:idark+1]])
-    out_table = vstack([out_table, best_arcflat_set])
+    darks = select_calib_darks(valid_etable)
+    out_table = vstack([zeros, darks, best_arcflat_set])
 
     ## If doing cte flats, select one of each exptime based on proximity to the
     ## last 120s flat

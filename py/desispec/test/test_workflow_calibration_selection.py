@@ -486,7 +486,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
 
     def test_select_calib_dark(self):
         """Test workflow.calibration_selection.select_calib_dark"""
-        from desispec.workflow.calibration_selection import select_calib_dark
+        from desispec.workflow.calibration_selection import select_calib_darks
         etable = Table()
         etable['EXPID'] = [0,1,2,3]
         etable['OBSTYPE'] = 'dark'
@@ -497,16 +497,27 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         etable['BADCAMWORD'] = ['a234', '', '', '']
         etable['BADAMPS'] = ''
 
+        #- make a copy for testing that original isn't modified
+        orig_etable = etable.copy()
+
         # EXPID 0 has bad cameras, so should pick EXPID 1
-        self.assertEqual(select_calib_dark(etable), 1)
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 1)
+        self.assertTrue(np.all(etable == orig_etable))
 
         # ... but not if EXPID1 is ignored, then EXPID 2
         etable['LASTSTEP'][1] = 'ignore'
-        self.assertEqual(select_calib_dark(etable), 2)
+        orig_etable = etable.copy()
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 2)
+        self.assertTrue(np.all(etable == orig_etable))
 
         # ... but not if EXPID 2 has more bad cameras than EXPID 3
         etable['BADCAMWORD'][2] = 'a78'
         etable['BADCAMWORD'][3] = 'a1'
-        self.assertEqual(select_calib_dark(etable), 3)
+        orig_etable = etable.copy()
+        dark_expid = select_calib_darks(etable)['EXPID'][0]
+        self.assertEqual(dark_expid, 3)
+        self.assertTrue(np.all(etable == orig_etable))
 
 
