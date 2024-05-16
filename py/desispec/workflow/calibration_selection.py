@@ -21,19 +21,22 @@ def select_calib_darks(etable):
     Returns:
         dark_etable (astropy.table.Table): table of darks to use
 
-    Raises ValueError if no good darks are available.
-
     Currently this returns a table of length-1 with a single dark, but in the
     future it could return more than one dark if we found that useful.
+
+    If no good darks are found, return a length-0 table with the same columns
+    so that it can still be vstacked with other etable entries.
     """
     # copy input so that we can sort without modifying original
     etable = etable.copy()
 
     keep = np.where((etable['OBSTYPE']=='dark') & (etable['LASTSTEP'] != 'ignore'))[0]
-    if len(keep) == 0:
-        raise ValueError('No good dark exposures exptime>295 found in etable')
-
     etable = etable[keep]
+
+    if len(etable) == 0:
+        log = get_logger()
+        log.warning('No good dark exposures found in etable')
+        return etable
 
     # count good cameras per row
     num_goodcam = np.zeros(len(etable))
