@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.63.3 (unreleased)
+0.63.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.63.3 (2024-05-17)
+-------------------
+
+Bugfixes for Jura.
+
+* Support linkcal overrides for subset of cameras (PR `#2257`_).
+* Processing dashboard fix for nights with badamps (PR `#2258`_).
+
+.. _`#2257`: https://github.com/desihub/desispec/pull/2257
+.. _`#2258`: https://github.com/desihub/desispec/pull/2258
 
 0.63.2 (2024-05-16)
 -------------------
