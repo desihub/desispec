@@ -28,7 +28,8 @@ from desispec.workflow.proctable import get_processing_table_pathname, \
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_intersection
+    difference_camwords, parse_badamps, create_camword, camword_intersection, \
+    erow_to_goodcamword
 
 
 def parse(options):
@@ -228,16 +229,16 @@ def populate_night_info(night, check_on_disk=False,
                 for expid in expids:
                     if expid in exptab['EXPID']:
                         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+                        pcamword = ''
                         if 'BADCAMWORD' in erow:
-                            pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+                            if 'BADAMPS' in erow:
+                                pcamword = erow_to_goodcamword(erow,
+                                                               suppress_logging=True,
+                                                               exclude_badamps=False)
+                            else:
+                                pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
                         else:
                             pcamword = erow['CAMWORD']
-                        if len(erow['BADAMPS']) > 0:
-                            badcams = []
-                            for (camera, petal, amplifier) in parse_badamps(erow['BADAMPS']):
-                                badcams.append(f'{camera}{petal}')
-                            badampcamword = create_camword(list(set(badcams)))
-                            pcamword = difference_camwords(pcamword, badampcamword)
                         pcamwords.append(pcamword)
 
                 if len(pcamwords) == 0:
@@ -328,15 +329,17 @@ def populate_night_info(night, check_on_disk=False,
             tileid_str = '----'
 
         exptime = np.round(row['EXPTIME'], decimals=1)
-        proccamword = row['CAMWORD']
-        if 'BADCAMWORD' in exptab.colnames:
-            proccamword = difference_camwords(proccamword, row['BADCAMWORD'])
-        if obstype != 'science' and 'BADAMPS' in exptab.colnames and row['BADAMPS'] != '':
-            badcams = []
-            for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
-                badcams.append(f'{camera}{petal}')
-            badampcamword = create_camword(list(set(badcams)))
-            proccamword = difference_camwords(proccamword, badampcamword)
+
+        if 'BADCAMWORD' in erow:
+            if 'BADAMPS' in erow:
+                proccamword = erow_to_goodcamword(row,
+                                                  suppress_logging=True,
+                                                  exclude_badamps=False)
+            else:
+                proccamword = difference_camwords(row['CAMWORD'],
+                                                  row['BADCAMWORD'])
+        else:
+            proccamword = row['CAMWORD']
 
         cameras = decode_camword(proccamword)
         nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
