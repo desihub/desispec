@@ -37,7 +37,7 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     update_and_recurvsively_submit
 from desispec.workflow.queue import update_from_queue, any_jobs_failed
 from desispec.io.util import decode_camword, difference_camwords, \
-    create_camword, replace_prefix
+    create_camword, replace_prefix, erow_to_goodcamword, camword_union
 
 
 def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
@@ -440,6 +440,15 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                         complete_tiles_thrunight=complete_tiles_thrunight,
                                         specstatus_path=specstatus_path)
 
+    ## if camword isn't defined in the file, derive the cameras needed
+    ## to process the current night's etable
+    if 'linkcal' in cal_override and 'camword' not in cal_override['linkcal']:
+        log.info(f"Linkcal in override file doesn't define camword. Setting "
+                 + f"as the union of goodcamwords for all good exposures.")
+        goodcamwords = [erow_to_goodcamword(erow, suppress_logging=True)
+                           for erow in vstack([cal_etable, sci_etable])]
+        cal_override['linkcal']['camword'] = camword_union(goodcamwords)
+
     ## For cumulative redshifts, identify tiles for which this is the last
     ## night that they were observed
     tiles_cumulative = get_tiles_cumulative(sci_etable, z_submit_types,
@@ -621,6 +630,9 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         if 'refnight' in cal_override['linkcal']:
             refnight = int(cal_override['linkcal']['refnight'])
             prow = define_and_assign_dependency(prow, calibjobs, refnight=refnight)
+        if 'camword' in cal_override['linkcal']:
+            prow['PROCCAMWORD'] = cal_override['linkcal']['camword']
+
         ## create dictionary to carry linking information
         linkcalargs = cal_override['linkcal']
         prow, ptable = create_submit_add_and_save(prow, ptable,
