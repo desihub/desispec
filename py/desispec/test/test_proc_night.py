@@ -330,6 +330,27 @@ class TestProcNight(unittest.TestCase):
             self.assertIn(job, set(proctable['JOBDESC']))
         for job in ['nightlybias', 'ccdcalib']:
             self.assertNotIn(job, set(proctable['JOBDESC']))
+
+    def test_proc_night_camword_linking(self):
+        """Test if setting camword in override file linking is working"""
+        ## Setup the basic dictionary for the override file
+        base_override_dict = {'calibration':
+                                {'linkcal':
+                                    {'refnight': self.night-1}}}
+
+        ## Test basic case where we link everything
+        testdict = base_override_dict.copy()
+        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+        procrow = proctable[proctable['JOBDESC']=='linkcal']
+        self.assertEqual(procrow['PROCCAMWORD'], 'a0123456789')
+
+        ## Test custom camword
+        testdict = base_override_dict.copy()
+        testdict['calibration']['linkcal']['camword'] = 'a012'
+        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+        procrow = proctable[proctable['JOBDESC']=='linkcal']
+        self.assertEqual(procrow['PROCCAMWORD'], 'a012')
+
     def test_proc_night_override_flag_setting(self):
         """Test if override file linking is working"""
         ## Setup the basic dictionary for the override file
