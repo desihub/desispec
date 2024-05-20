@@ -330,8 +330,8 @@ def populate_night_info(night, check_on_disk=False,
 
         exptime = np.round(row['EXPTIME'], decimals=1)
 
-        if 'BADCAMWORD' in row:
-            if 'BADAMPS' in row:
+        if 'BADCAMWORD' in row.colnames:
+            if 'BADAMPS' in row.colnames:
                 proccamword = erow_to_goodcamword(row,
                                                   suppress_logging=True,
                                                   exclude_badamps=False)
