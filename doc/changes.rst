@@ -2,10 +2,22 @@
 desispec Change Log
 ===================
 
-0.63.4 (unreleased)
+0.63.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.63.4 (2024-05-20)
+-------------------
+
+Bugfixes for Jura.
+
+* Dashboard bugfix (PR `#2259`_, followup to `#2258`_).
+* Bugfixes for resubmitting single tiles on partially processed nights
+  (PR `#2261`_).
+
+.. _`#2259`: https://github.com/desihub/desispec/pull/2259
+.. _`#2261`: https://github.com/desihub/desispec/pull/2261
 
 0.63.3 (2024-05-17)
 -------------------
