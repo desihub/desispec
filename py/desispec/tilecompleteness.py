@@ -32,6 +32,20 @@ def read_gfa_data(gfa_proc_dir):
         The summary data read from HDU2 of the file.
     """
     log = get_logger()
+    #
+    # First read the SV1 file, there should be only one at this point.
+    #
+    filenames = glob.glob(os.path.join(gfa_proc_dir, 'offline_matched_coadd_ccds_SV1-thru_????????.fits'))
+    if len(filenames) == 1:
+        log.info("Reading SV1 file: %s", filenames[0])
+        tables = [read_table(filenames[0], 2)]
+        log.info('%d GFA SV1 table entries', len(tables[0]))
+    else:
+        log.warning("Could not find a SV1 file, skipping!")
+        tables = []
+    #
+    # Find the most recent file, independently of label.
+    #
     filenames = glob.glob(os.path.join(gfa_proc_dir, 'offline_matched_coadd_ccds_*-thru_????????.fits'))
     if len(filenames) == 0:
         mess = "did not find any file offline_matched_coadd_ccds_*-thru_????????.fits in %s"
@@ -43,9 +57,14 @@ def read_gfa_data(gfa_proc_dir):
     night_filename = dict([(os.path.basename(f).split('_')[-1].split('.')[0], f) for f in filenames])
     last_night = sorted(night_filename.keys())[-1]
     filename = night_filename[last_night]
-    log.info("Reading %s", filename)
-    table = read_table(filename, 2)  # HDU2 is average over frames during spectro exposure and median across CCDs.
-    log.info('%d GFA table entries', len(table))
+    log.info("Reading most recent file: %s", filename)
+    tables.append(read_table(filename, 2))  # HDU2 is average over frames during spectro exposure and median across CCDs.
+    log.info('%d GFA table entries', len(tables[1]))
+    #
+    # Merge the tables.
+    #
+    table = vstack(tables)
+    log.info('%d GFA merged table entries', len(table))
     return table
 
 
