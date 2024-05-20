@@ -424,7 +424,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Determine the appropriate set of calibrations
     ## Only run if we haven't already linked or done fiberflatnight's
-    cal_etable = None
+    cal_etable = etable[[]]
     if not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
