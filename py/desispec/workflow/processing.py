@@ -1042,7 +1042,8 @@ def generate_calibration_dict(ptable, files_to_link=None):
                 if files_to_link is not None and len(files_to_link) > 0:
                     log.info(f"Assuming existing linkcal job processed "
                              + f"{files_to_link} since given in override file.")
-                    calibjobs = update_calibjobs_with_linking(calibjobs, files_to_link)
+                    accounted_for = update_accounted_for_with_linking(accounted_for,
+                                                                  files_to_link)
                 else:
                     err = f"linkcal job exists but no files given: {files_to_link=}"
                     log.error(err)
@@ -1065,42 +1066,41 @@ def generate_calibration_dict(ptable, files_to_link=None):
     calibjobs['accounted_for'] = accounted_for
     return calibjobs
 
-def update_calibjobs_with_linking(calibjobs, files_to_link):
+def update_accounted_for_with_linking(accounted_for, files_to_link):
     """
-    This takes in a dictionary summarizing the calibration jobs and updates it
-    based on the files_to_link, which are assumed to have already been linked
-    such that those files already exist on disk and don't need ot be generated.
+    This takes in a dictionary summarizing the calibration files accounted for
+     and updates it based on the files_to_link, which are assumed to have
+     already been linked such that those files already exist on disk and
+     don't need ot be generated.
 
     Parameters
     ----------
-        calibjobs: dict
-            Dictionary containing "nightlybias", "badcol", "ccdcalib",
-            "psfnight", "nightlyflat", "linkcal", and "accounted_for". Each key corresponds to a
-            Table.Row or None. The table.Row() values are for the corresponding
-            calibration job.
+        accounted_for: dict
+            Dictionary containing 'biasnight', 'badcolumns', 'ctecorrnight',
+            'psfnight', and 'fiberflatnight'. Each value is True if file is
+            accounted for and False if it is not.
         files_to_link: set
             Set of filenames that the linkcal job will link.
 
     Returns
     -------
-        calibjobs, dict
-            Dictionary containing 'nightlybias', 'badcol', 'ccdcalib',
-            'psfnight', 'nightlyflat', 'linkcal', and 'accounted_for'. Each key corresponds to a
-            Table.Row or None. The table.Row() values are for the corresponding
-            calibration job.
+        accounted_for: dict
+            Dictionary containing 'biasnight', 'badcolumns', 'ctecorrnight',
+            'psfnight', and 'fiberflatnight'. Each value is True if file is
+            accounted for and False if it is not.
     """
     log = get_logger()
     
     for fil in files_to_link:
-        if fil in calibjobs['accounted_for']:
-            calibjobs['accounted_for'][fil] = True
+        if fil in accounted_for:
+            accounted_for[fil] = True
         else:
             err = f"{fil} doesn't match an expected filetype: "
-            err += f"{calibjobs['accounted_for'].keys()}"
+            err += f"{accounted_for.keys()}"
             log.error(err)
             raise ValueError(err)
 
-    return calibjobs
+    return accounted_for
 
 def all_calibs_submitted(accounted_for, do_cte_flats):
     """

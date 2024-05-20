@@ -33,8 +33,8 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     generate_calibration_dict, \
     night_to_starting_iid, make_joint_prow, \
     set_calibrator_flag, make_exposure_prow, \
-    update_calibjobs_with_linking, all_calibs_submitted, \
-    update_and_recurvsively_submit
+    all_calibs_submitted, \
+    update_and_recurvsively_submit, update_accounted_for_with_linking
 from desispec.workflow.queue import update_from_queue, any_jobs_failed
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix, erow_to_goodcamword, camword_union
@@ -639,7 +639,9 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
                                                   check_outputs=False,
                                                   extra_job_args=linkcalargs)
         calibjobs[prow['JOBDESC']] = prow.copy()
-        calibjobs = update_calibjobs_with_linking(calibjobs, files_to_link)
+        calibjobs['accounted_for'] = \
+            update_accounted_for_with_linking(calibjobs['accounted_for'],
+                                              files_to_link)
 
     if len(cal_etable) == 0:
         return ptable, calibjobs, int_id
