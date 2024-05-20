@@ -19,7 +19,13 @@ from desiutil.log import get_logger
 def read_gfa_data(gfa_proc_dir):
     """Find the most recent GFA summary file in `gfa_proc_dir`.
 
-    See documentation here: https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files.
+    In addition, this function will read an "SV1" file to get earlier EXPIDs.
+    The "SV1" file will be concatenated with the most recent summary to produce
+    the returned table. There is some duplication of rows in this process, but
+    because survey phases did overlap, it's not really possible to separate the
+    summaries into distinct phases anyway.
+
+    See also documentation here: https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files.
 
     Parameters
     ----------
@@ -29,7 +35,7 @@ def read_gfa_data(gfa_proc_dir):
     Returns
     -------
     :class:`~astropy.table.Table`
-        The summary data read from HDU2 of the file.
+        The summary data read from HDU2 of the files.
     """
     log = get_logger()
     #
@@ -347,31 +353,3 @@ def merge_tile_completeness_table(previous_table,new_table) :
     res = res[ii]
 
     return res
-
-def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
-
-    log=get_logger()
-    nok=0
-    for spectro in range(10) :
-
-        # coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        coadd_filename, exists = findfile('coadd', night=night, tile=tileid,
-                spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, return_exists=True)
-        if not exists:
-            if warn: log.warning("missing {}".format(coadd_filename))
-            continue
-
-        # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        redrock_filename, exists = findfile('redrock', night=night, tile=tileid,
-                spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, return_exists=True)
-        if not exists:
-            if warn : log.warning("missing {}".format(redrock_filename))
-            continue
-
-        # do more tests
-
-        nok+=1
-
-    return nok
