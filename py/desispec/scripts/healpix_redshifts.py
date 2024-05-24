@@ -47,6 +47,11 @@ def parse(options=None):
             help="Number of nodes per redrock call (default 1)")
     p.add_argument("--redrock-cores-per-rank", type=int, default=1,
             help="cores per rank for redrock; use >1 for more memory per rank")
+    p.add_argument("--dry-run-level", type=int, default=0, required=False,
+            help="""If nonzero, this is a simulated run.
+                    if level>=3, no output files are written at all.
+                    Logging will remain the same for testing as though scripts are being submitted.
+                    Default is 0 (false).""")
 
     args = p.parse_args(options)
     return args
@@ -55,6 +60,7 @@ def main(args):
 
     log = get_logger()
 
+    log.info(f"Dry run set: {args.dry_run_level=}")
     if args.expfile is None:
         args.expfile = io.findfile('exposures')
         if not os.path.exists(args.expfile):
@@ -80,11 +86,18 @@ def main(args):
             #- outdir is relative to specprod
             rrfile = io.findfile('redrock', healpix=healpix, survey=args.survey, faprogram=args.program)
             outdir = os.path.dirname(rrfile)
-            os.makedirs(outdir, exist_ok=True)
-
+            ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+            if args.dry_run_level < 3:
+                os.makedirs(outdir, exist_ok=True)
+            else:
+                log.info(f"Dry run so not making directory: {outdir}")
             ii = exppix['HEALPIX'] == healpix
             hpixexpfile = f'{outdir}/hpixexp-{args.survey}-{args.program}-{healpix}.csv'
-            exppix[ii].write(hpixexpfile, overwrite=True)
+            ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+            if args.dry_run_level < 3:
+                exppix[ii].write(hpixexpfile, overwrite=True)
+            else:
+                log.info(f"Dry run so not making the hpiexp file: {hpixexpfile}")
             ntilepetals += len(set(list(zip(exppix['TILEID'][ii], exppix['SPECTRO'][ii]))))
             hpixexpfiles.append(hpixexpfile)
 
@@ -102,7 +115,9 @@ def main(args):
         #- very roughly, one minute per input tile-petal with min/max applied
         runtime = max(20, min(ntilepetals, 120))
 
-        batchscript = create_desi_zproc_batch_script(
+        ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+        if args.dry_run_level < 2:
+            batchscript = create_desi_zproc_batch_script(
                 group='healpix',
                 healpix=healpixels,
                 survey=args.survey,
@@ -111,18 +126,23 @@ def main(args):
                 system_name=args.system_name,
                 cmdline=cmdline,
                 runtime=runtime,
-                )
+            )
+        else:
+            batchscript = get_zpix_redshift_script_pathname(healpixels, args.survey,
+                                                            args.program)
+            log.info(f"Dry run so not creating the batch script: {batchscript}"
+                     + f"\tfor {healpixels=}, {args.survey=}, {args.program=}")
 
-        if not args.nosubmit:
-            cmd = ['sbatch' ,]
-            if args.batch_reservation:
-                cmd.extend(['--reservation', args.batch_reservation])
-            if args.batch_dependency:
-                cmd.extend(['--dependency', args.batch_dependency])
+        cmd = ['sbatch' ,]
+        if args.batch_reservation:
+            cmd.extend(['--reservation', args.batch_reservation])
+        if args.batch_dependency:
+            cmd.extend(['--dependency', args.batch_dependency])
 
-            # - sbatch requires the script to be last, after all options
-            cmd.append(batchscript)
+        # - sbatch requires the script to be last, after all options
+        cmd.append(batchscript)
 
+        if not args.nosubmit and args.dry_run_level == 0:
             err = subprocess.call(cmd)
             basename = os.path.basename(batchscript)
             if err == 0:
@@ -131,3 +151,5 @@ def main(args):
                 log.error(f'Error {err} submitting {basename}')
 
             time.sleep(0.1)
+        else:
+            log.info(f"Dry run so not submitting command: {cmd=}")
