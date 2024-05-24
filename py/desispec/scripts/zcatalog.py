@@ -12,7 +12,8 @@ substantially updated Fall 2023
 
 from __future__ import absolute_import, division, print_function
 
-import sys, os, glob
+import sys, os, glob, time
+import itertools
 import argparse
 import importlib.resources
 import multiprocessing as mp
@@ -300,6 +301,10 @@ def main(args=None):
         tilefile = args.tiles if args.tiles is not None else io.findfile('tiles')
         indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
+        #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        if indir.startswith('/global/cfs/cdirs'):
+            indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
+
         log.info(f'Loading tiles from {tilefile}')
         tiles = Table.read(tilefile)
         if args.survey is not None:
@@ -317,15 +322,28 @@ def main(args=None):
                 sys.exit(1)
 
         tileids = tiles['TILEID']
+        log.info(f'Searching disk for redrock*.fits files from {len(tileids)} tiles')
 
         redrockfiles = list()
-        for tileid in tileids:
-            tmp = sorted(io.iterfiles(f'{indir}/{tileid}', prefix='redrock', suffix='.fits'))
+        t0 = t1 = time.time()
+        for i, tileid in enumerate(tileids):
+            if i%500 == 0:
+                tnow = time.time()
+                dt0 = tnow - t0
+                dt1 = tnow - t1
+                t1 = tnow
+                log.info(f'{i}/{len(tileids)}  +{dt1:.1f} sec {dt0:.1f} total elapsed')
+
+            ### globbing is faster than iterfiles if the directory pattern level is known
+            # tmp = sorted(io.iterfiles(f'{indir}/{tileid}', prefix='redrock', suffix='.fits'))
+            tmp = sorted(glob.glob(f'{indir}/{tileid}/*/redrock-*.fits'))
             if len(tmp) > 0:
-                redrockfiles.extend(tmp)
+                redrockfiles.append(tmp)
             else:
                 log.error(f'no redrock files found in {indir}/{tileid}')
 
+        #- convert list of lists -> list
+        redrockfiles = list(itertools.chain.from_iterable(redrockfiles))
 
     nfiles = len(redrockfiles)
     if nfiles == 0:
