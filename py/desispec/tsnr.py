@@ -404,6 +404,7 @@ class template_ensemble(object):
 
         log.info('Successfully written to '+filename)
 
+_tsnr_ensembles = None
 def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
     '''
     Function that takes a frame object and a bitmask and
@@ -421,6 +422,10 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
         is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high
         frequency residual for the ensemble.  See doc. 4723.
     '''
+
+    global _tsnr_ensembles
+    if _tsnr_ensembles is not None:
+        return _tsnr_ensembles
 
     t0 = time.time()
 
@@ -461,9 +466,10 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
         ensembles[tracer] = Spectra(bands, wave, flux, ivar)
         ensembles[tracer].meta = dat[0].header
 
+    _tsnr_ensembles = ensembles
+
     duration = time.time() - t0
 
-    log=get_logger()
     log.info(iotime.format('read',"tsnr ensemble", duration))
 
     return  ensembles
@@ -1170,6 +1176,6 @@ def tsnr2_to_efftime(tsnr2,target_type) :
         return np.zeros_like(tsnr2)
 
     slope = tsnr_ensembles[tracer].meta["SNR2TIME"]
-    log.info("for tracer {} SNR2TIME={:f}".format(tracer,slope))
+    log.debug("for tracer %s SNR2TIME=%.2f", tracer, slope)
 
     return slope*tsnr2
