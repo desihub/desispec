@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.63.5 (unreleased)
+0.63.6 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.63.5 (2024-04-28)
+-------------------
+
+Additional features for Jura healpix redshifts.
+
+* I/O optimizations for creating exposures and tiles files (PR `#2265`_).
+* Add ``desi_healpix_redshifts --dry-run-level N`` option (PR `#2266`_).
+
+.. _`#2265`: https://github.com/desihub/desispec/pull/2265
+.. _`#2266`: https://github.com/desihub/desispec/pull/2266
 
 0.63.4 (2024-05-20)
 -------------------
