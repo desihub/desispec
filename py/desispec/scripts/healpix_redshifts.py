@@ -47,13 +47,24 @@ def parse(options=None):
             help="Number of nodes per redrock call (default 1)")
     p.add_argument("--redrock-cores-per-rank", type=int, default=1,
             help="cores per rank for redrock; use >1 for more memory per rank")
+    p.add_argument("--dry-run-level", type=int, default=0, required=False,
+            help="""If nonzero, this is a simulated run with no jobs submitted.
+                    If level>=3, no output files are written at all.
+                    Lower non-zero levels will create files but not submit jobs.
+                    Logging will remain the same for testing as though scripts are being submitted.
+                    Default is 0 (i.e. not dry run, submit jobs).""")
 
     args = p.parse_args(options)
     return args
 
 def main(args):
 
+    t0 = time.time()
     log = get_logger()
+
+    log.info(f'Starting {args.survey} {args.program} healpix job submission at {time.asctime()}')
+    if args.dry_run_level > 0:
+        log.info(f"Dry run set: {args.dry_run_level=}; no actual jobs will be submitted")
 
     if args.expfile is None:
         args.expfile = io.findfile('exposures')
@@ -68,9 +79,10 @@ def main(args):
     if args.healpix is not None:
         allpixels = [int(p) for p in args.healpix.split(',')]
     else:
-        allpixels = np.unique(exppix['HEALPIX'])
+        allpixels = np.unique(np.asarray(exppix['HEALPIX']))
 
     npix = len(allpixels)
+    nscripts = 0
     log.info(f'Submitting jobs for {npix} healpix')
     for i in range(0, len(allpixels), args.bundle_healpix):
         healpixels = allpixels[i:i+args.bundle_healpix]
@@ -80,11 +92,18 @@ def main(args):
             #- outdir is relative to specprod
             rrfile = io.findfile('redrock', healpix=healpix, survey=args.survey, faprogram=args.program)
             outdir = os.path.dirname(rrfile)
-            os.makedirs(outdir, exist_ok=True)
-
+            ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+            if args.dry_run_level < 3:
+                os.makedirs(outdir, exist_ok=True)
+            else:
+                log.info(f"Dry run so not making directory: {outdir}")
             ii = exppix['HEALPIX'] == healpix
             hpixexpfile = f'{outdir}/hpixexp-{args.survey}-{args.program}-{healpix}.csv'
-            exppix[ii].write(hpixexpfile, overwrite=True)
+            ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+            if args.dry_run_level < 3:
+                exppix[ii].write(hpixexpfile, overwrite=True)
+            else:
+                log.info(f"Dry run so not making the hpixexp file: {hpixexpfile}")
             ntilepetals += len(set(list(zip(exppix['TILEID'][ii], exppix['SPECTRO'][ii]))))
             hpixexpfiles.append(hpixexpfile)
 
@@ -102,7 +121,9 @@ def main(args):
         #- very roughly, one minute per input tile-petal with min/max applied
         runtime = max(20, min(ntilepetals, 120))
 
-        batchscript = create_desi_zproc_batch_script(
+        ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
+        if args.dry_run_level < 2:
+            batchscript = create_desi_zproc_batch_script(
                 group='healpix',
                 healpix=healpixels,
                 survey=args.survey,
@@ -111,18 +132,24 @@ def main(args):
                 system_name=args.system_name,
                 cmdline=cmdline,
                 runtime=runtime,
-                )
+            )
+        else:
+            batchscript = get_zpix_redshift_script_pathname(healpixels, args.survey,
+                                                            args.program)
+            log.info(f"Dry run so not creating the batch script: {batchscript}"
+                     + f"\tfor {healpixels=}, {args.survey=}, {args.program=}")
 
-        if not args.nosubmit:
-            cmd = ['sbatch' ,]
-            if args.batch_reservation:
-                cmd.extend(['--reservation', args.batch_reservation])
-            if args.batch_dependency:
-                cmd.extend(['--dependency', args.batch_dependency])
+        cmd = ['sbatch' ,]
+        if args.batch_reservation:
+            cmd.extend(['--reservation', args.batch_reservation])
+        if args.batch_dependency:
+            cmd.extend(['--dependency', args.batch_dependency])
 
-            # - sbatch requires the script to be last, after all options
-            cmd.append(batchscript)
+        # - sbatch requires the script to be last, after all options
+        cmd.append(batchscript)
+        nscripts += 1
 
+        if not args.nosubmit and args.dry_run_level == 0:
             err = subprocess.call(cmd)
             basename = os.path.basename(batchscript)
             if err == 0:
@@ -131,3 +158,13 @@ def main(args):
                 log.error(f'Error {err} submitting {basename}')
 
             time.sleep(0.1)
+        else:
+            log.info(f"Dry run so not submitting command: {cmd=}")
+
+    if not args.nosubmit and args.dry_run_level == 0:
+        log.info(f'Submitted {nscripts} batch scripts')
+    else:
+        log.info(f'Dry run: would have submitted {nscripts} batch scripts')
+
+    dt = time.time() - t0
+    log.info(f'All done at {time.asctime()}; duration {dt/60:.2f} minutes')
