@@ -48,19 +48,24 @@ def parse(options=None):
     p.add_argument("--redrock-cores-per-rank", type=int, default=1,
             help="cores per rank for redrock; use >1 for more memory per rank")
     p.add_argument("--dry-run-level", type=int, default=0, required=False,
-            help="""If nonzero, this is a simulated run.
-                    if level>=3, no output files are written at all.
+            help="""If nonzero, this is a simulated run with no jobs submitted.
+                    If level>=3, no output files are written at all.
+                    Lower non-zero levels will create files but not submit jobs.
                     Logging will remain the same for testing as though scripts are being submitted.
-                    Default is 0 (false).""")
+                    Default is 0 (i.e. not dry run, submit jobs).""")
 
     args = p.parse_args(options)
     return args
 
 def main(args):
 
+    t0 = time.time()
     log = get_logger()
 
-    log.info(f"Dry run set: {args.dry_run_level=}")
+    log.info(f'Starting {args.survey} {args.program} healpix job submission at {time.asctime()}')
+    if args.dry_run_level > 0:
+        log.info(f"Dry run set: {args.dry_run_level=}; no actual jobs will be submitted")
+
     if args.expfile is None:
         args.expfile = io.findfile('exposures')
         if not os.path.exists(args.expfile):
@@ -74,9 +79,10 @@ def main(args):
     if args.healpix is not None:
         allpixels = [int(p) for p in args.healpix.split(',')]
     else:
-        allpixels = np.unique(exppix['HEALPIX'])
+        allpixels = np.unique(np.asarray(exppix['HEALPIX']))
 
     npix = len(allpixels)
+    nscripts = 0
     log.info(f'Submitting jobs for {npix} healpix')
     for i in range(0, len(allpixels), args.bundle_healpix):
         healpixels = allpixels[i:i+args.bundle_healpix]
@@ -97,7 +103,7 @@ def main(args):
             if args.dry_run_level < 3:
                 exppix[ii].write(hpixexpfile, overwrite=True)
             else:
-                log.info(f"Dry run so not making the hpiexp file: {hpixexpfile}")
+                log.info(f"Dry run so not making the hpixexp file: {hpixexpfile}")
             ntilepetals += len(set(list(zip(exppix['TILEID'][ii], exppix['SPECTRO'][ii]))))
             hpixexpfiles.append(hpixexpfile)
 
@@ -141,6 +147,7 @@ def main(args):
 
         # - sbatch requires the script to be last, after all options
         cmd.append(batchscript)
+        nscripts += 1
 
         if not args.nosubmit and args.dry_run_level == 0:
             err = subprocess.call(cmd)
@@ -153,3 +160,11 @@ def main(args):
             time.sleep(0.1)
         else:
             log.info(f"Dry run so not submitting command: {cmd=}")
+
+    if not args.nosubmit and args.dry_run_level == 0:
+        log.info(f'Submitted {nscripts} batch scripts')
+    else:
+        log.info(f'Dry run: would have submitted {nscripts} batch scripts')
+
+    dt = time.time() - t0
+    log.info(f'All done at {time.asctime()}; duration {dt/60:.2f} minutes')
