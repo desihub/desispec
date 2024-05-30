@@ -163,7 +163,7 @@ def main(args=None):
         spectra.meta['INFILNUM'] = nframefiles
         
     #- Add healpix provenance keywords
-    if args.healpix:
+    if args.healpix is not None:
         spectra.meta['SPGRP'] = 'healpix'
         spectra.meta['SPGRPVAL'] = args.healpix
         spectra.meta['HPXPIXEL'] = args.healpix
