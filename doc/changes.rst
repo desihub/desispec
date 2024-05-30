@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.63.6 (unreleased)
+0.63.7 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.63.6 (2024-05-30)
+-------------------
+
+* Fix healpix=0 keyword propagtion bug (PR `#2271`_).
+
+.. _`#2271`: https://github.com/desihub/desispec/pull/2271
 
 0.63.5 (2024-04-28)
 -------------------
