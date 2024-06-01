@@ -27,7 +27,7 @@ from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
-from desispec.io.util import replace_prefix
+from desispec.io.util import replace_prefix, get_tempfilename
 from desispec.calibfinder import CalibFinder
 from desispec.scripts import preproc
 from desispec.tile_qa_plot import get_tilecov
@@ -482,6 +482,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         we do process it (in a temporary folder), so that we can generate the plots.
     """
 
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     # AR raw exposure
     rawfn = findfile("raw", night, dark_expid)
     if not os.path.isfile(rawfn):
@@ -644,7 +647,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     width_ratios = 0.1 + np.zeros(ncol)
     width_ratios[::2] = 1
     tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    with PdfPages(outpdf) as pdf:
+    with PdfPages(tmp_outpdf) as pdf:
         for petal in petals:
             fig = plt.figure(figsize=(20 * ncol / 6, 10))
             gs = gridspec.GridSpec(2, ncol, wspace=0.1, width_ratios = width_ratios, hspace=0.0, height_ratios = [0.05, 1])
@@ -734,6 +737,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
 
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
+
 
 def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     """
@@ -745,6 +751,10 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         n_previous_nights (optional, defaults to 10): number of previous nights to plot (int)
     """
+
+    # AR temporary output file
+    tmp_outpng = get_tempfilename(outpng)
+
     colors = ["b", "r", "k"]
     # AR grabbing the n_previous_nights previous nights
     nights = np.array(
@@ -802,8 +812,11 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     ax.set_ylabel("N(badcolumn)")
     ax.set_ylim(0, 50)
     ax.grid()
-    plt.savefig(outpng, bbox_inches="tight")
+    plt.savefig(tmp_outpng, bbox_inches="tight")
     plt.close()
+
+    # AR move to final location
+    os.rename(tmp_outpng, outpng)
 
 
 def _read_ctedet(night, prod, ctedet_expid, petal, camera):
@@ -870,6 +883,10 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
         * Credits to S. Bailey.
         * Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     myargs = []
     for petal in petals:
         for camera in cameras:
@@ -890,7 +907,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
     clim = (-5, 5)
     tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     colors = {"A" : tmpcols[1], "B" : tmpcols[1], "C" : tmpcols[0], "D" : tmpcols[0]}
-    with PdfPages(outpdf) as pdf:
+    with PdfPages(tmp_outpdf) as pdf:
         for mydict in mydicts:
             petcam_xmin, petcam_xmax = xmin, xmax
             fig = plt.figure(figsize=(30, 5))
@@ -950,6 +967,9 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 ax1d.grid()
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
+
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
 
 
 def _read_sframesky(night, prod, expid):
@@ -1035,6 +1055,10 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         expids: expids to display (list or np.array)
         nproc: number of processes running at the same time (int)
     """
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     #
     nightdir = os.path.join(prod, "exposures", "{}".format(night))
     # AR sorting the EXPIDs by increasing order
@@ -1053,7 +1077,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
     cmap = matplotlib.cm.Greys_r
-    with PdfPages(outpdf) as pdf:
+    with PdfPages(tmp_outpdf) as pdf:
         for mydict in mydicts:
             if mydict is not None:
                 fig = plt.figure(figsize=(20, 10))
@@ -1102,6 +1126,9 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
 
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
+
 
 def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     """
@@ -1115,6 +1142,10 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
         tileids: tiles to display (list or np.array)
         group (str, optional): tile group "cumulative" or "pernight"
     """
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
     ii = expids.argsort()
@@ -1134,7 +1165,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
         else:
             log.warning("no {}".format(fn))
     # AR creating pdf
-    with PdfPages(outpdf) as pdf:
+    with PdfPages(tmp_outpdf) as pdf:
         for fn in fns:
             fig, ax = plt.subplots()
             img = Image.open(fn)
@@ -1142,6 +1173,9 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
             ax.axis("off")
             pdf.savefig(fig, bbox_inches="tight", dpi=300)
             plt.close()
+
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
 
 
 def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group="cumulative"):
@@ -1160,6 +1194,10 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     Note:
         Work from the ``redrock-*.fits`` files.
     """
+
+    # AR temporary output file
+    tmp_outpng = get_tempfilename(outpng)
+
     # AR safe
     tileids = np.unique(tileids)
     # AR gather all infos from the redrock*fits files
@@ -1252,8 +1290,11 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
         ax.set_yticks(np.log10(0.1 + yticks))
         ax.set_yticklabels(yticks.astype(str))
         ax.legend(loc=2, markerscale=10)
-    plt.savefig(outpng, bbox_inches="tight")
+    plt.savefig(tmp_outpng, bbox_inches="tight")
     plt.close()
+
+    # AR move to final location
+    os.rename(tmp_outpng, outpng)
 
 
 def plot_newlya(
@@ -1402,6 +1443,10 @@ def create_petalnz_pdf(
         * TBD : we query the FAPRGRM of the ``tile-qa-*.fits`` header, not sure that properly works for
           surveys other than main..
     """
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     petals = np.arange(10, dtype=int)
     n_dark_passids = 7
     # AR safe
@@ -1593,7 +1638,7 @@ def create_petalnz_pdf(
         "ELG" : "b",
         "QSO" : "orange",
     }
-    with PdfPages(outpdf) as pdf:
+    with PdfPages(tmp_outpdf) as pdf:
         # AR we need some tiles to plot!
         if ntiles["bright"] + ntiles["dark"] > 0:
             for survey in np.unique(surveys):
@@ -1784,6 +1829,9 @@ def create_petalnz_pdf(
                         pdf.savefig(fig, bbox_inches="tight")
                         plt.close()
 
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
+
 
 def path_full2web(fn):
     """
@@ -1897,8 +1945,12 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     Notes:
         expids, tileids, surveys: fiducial use is that those are the outputs of get_surveys_night_expids()
     """
+
+    # AR temporary output file
+    tmp_outhtml = get_tempfilename(outfns["html"])
+
     # ADM html preamble.
-    html = open(outfns["html"], "w")
+    html = open(tmp_outhtml, "w")
     html.write("<html><body>\n")
     html.write("<h1>Night QA page for {}</h1>\n".format(night))
     html.write("\n")
@@ -2104,3 +2156,6 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     write_html_today(html)
     html.write("</html></body>\n")
     html.close()
+
+    # AR move to final location
+    os.rename(tmp_outhtml, outfns["html"])
