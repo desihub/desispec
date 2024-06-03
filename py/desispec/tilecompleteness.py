@@ -6,15 +6,72 @@ Routines to determine the survey progress
 and tiles completion.
 """
 
-import os,sys
+import os
 import numpy as np
-import yaml
 import glob
-from astropy.table import Table,vstack
+from astropy.table import Table, vstack
 
-from desispec.io.util import checkgzip
+from desispec.io import read_table
 
 from desiutil.log import get_logger
+
+
+def read_gfa_data(gfa_proc_dir):
+    """Find the most recent GFA summary file in `gfa_proc_dir`.
+
+    In addition, this function will read an "SV1" file to get earlier EXPIDs.
+    The "SV1" file will be concatenated with the most recent summary to produce
+    the returned table. There is some duplication of rows in this process, but
+    because survey phases did overlap, it's not really possible to separate the
+    summaries into distinct phases anyway.
+
+    See also documentation here: https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files.
+
+    Parameters
+    ----------
+    gfa_proc_dir : :class:`str`
+        The GFA directory. Usually this will be ``/global/cfs/cdirs/desi/survey/GFA/``.
+
+    Returns
+    -------
+    :class:`~astropy.table.Table`
+        The summary data read from HDU2 of the files.
+    """
+    log = get_logger()
+    #
+    # First read the SV1 file, there should be only one at this point.
+    #
+    filenames = glob.glob(os.path.join(gfa_proc_dir, 'offline_matched_coadd_ccds_SV1-thru_????????.fits'))
+    if len(filenames) == 1:
+        log.info("Reading SV1 file: %s", filenames[0])
+        tables = [read_table(filenames[0], 2)]
+        log.info('%d GFA SV1 table entries', len(tables[0]))
+    else:
+        log.warning("Could not find a SV1 file, skipping!")
+        tables = []
+    #
+    # Find the most recent file, independently of label.
+    #
+    filenames = glob.glob(os.path.join(gfa_proc_dir, 'offline_matched_coadd_ccds_*-thru_????????.fits'))
+    if len(filenames) == 0:
+        mess = "did not find any file offline_matched_coadd_ccds_*-thru_????????.fits in %s"
+        log.critical(mess, gfa_proc_dir)
+        raise RuntimeError(mess % gfa_proc_dir)
+    #
+    # Sort the filenames by night, independently of any other label.
+    #
+    night_filename = dict([(os.path.basename(f).split('_')[-1].split('.')[0], f) for f in filenames])
+    last_night = sorted(night_filename.keys())[-1]
+    filename = night_filename[last_night]
+    log.info("Reading most recent file: %s", filename)
+    tables.append(read_table(filename, 2))  # HDU2 is average over frames during spectro exposure and median across CCDs.
+    log.info('%d GFA table entries', len(tables[1]))
+    #
+    # Merge the tables.
+    #
+    table = vstack(tables)
+    log.info('%d GFA merged table entries', len(table))
+    return table
 
 
 def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames,min_number_of_petals=8) :
@@ -296,31 +353,3 @@ def merge_tile_completeness_table(previous_table,new_table) :
     res = res[ii]
 
     return res
-
-def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
-
-    log=get_logger()
-    nok=0
-    for spectro in range(10) :
-
-        # coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        coadd_filename, exists = findfile('coadd', night=night, tile=tileid,
-                spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, return_exists=True)
-        if not exists:
-            if warn: log.warning("missing {}".format(coadd_filename))
-            continue
-
-        # redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        redrock_filename, exists = findfile('redrock', night=night, tile=tileid,
-                spectrograph=spectro, groupname='cumulative',
-                specprod_dir=specprod_dir, return_exists=True)
-        if not exists:
-            if warn : log.warning("missing {}".format(redrock_filename))
-            continue
-
-        # do more tests
-
-        nok+=1
-
-    return nok
