@@ -2,6 +2,8 @@
 
 
 import astropy.io.fits as pyfits
+import fitsio
+from desispec.calibfinder import CalibFinder
 from astropy.table import Table
 import matplotlib.pyplot as plt
 import numpy as np
@@ -68,7 +70,7 @@ parser.add_argument('--npy',type = int, default = 1,
                     help = 'number of adjacent pixels in a column) to add before computing variance')
 parser.add_argument('--margin',type = int, default = 200,
                     help = 'remove margins around CCD')
-parser.add_argument('--amplifiers',type = str, default="ABCD", help="amplifiers being studied")
+parser.add_argument('--amplifiers',type = str, default=None, help="amplifiers being studied (default is all)")
 parser.add_argument('--deg',type = int, default=3, help="max degree of polynomial fit")
 parser.add_argument('--fix-rdnoise',action='store_true', help="do not refit readnoise")
 parser.add_argument('--plot',action="store_true",help="show the fit")
@@ -117,7 +119,12 @@ for exptime in unique_exposure_times :
         pairs.append( [ filenames[ii[p*2]],filenames[ii[p*2+1]] ] )
 log.info("Pairs of exposures = {}".format(pairs))
 
-
+if args.amplifiers is None :
+    # read one header to get list of amplifiers
+    head = fitsio.read_header(filenames[0])
+    cfinder = CalibFinder([head])
+    args.amplifiers=cfinder.value("AMPLIFIERS")
+    print("amplifiers=",args.amplifiers)
 
 ofile=None
 if args.outfile is not None :
@@ -130,6 +137,9 @@ gain_tbl = Table()
 gain_tbl['AMP'] = [amp for amp in args.amplifiers]
 gain_tbl['GAIN'] = np.zeros(len(gain_tbl))
 gain_tbl['ERRGAIN'] = np.zeros(len(gain_tbl))
+
+
+
 
 for a,amp in enumerate(args.amplifiers) :
 
@@ -150,6 +160,10 @@ for a,amp in enumerate(args.amplifiers) :
 
         img1=h1[0].data[yy,xx]
         img2=h2[0].data[yy,xx]
+        ok = (h1["MASK"].data[yy,xx]==0)*(h1["IVAR"].data[yy,xx]>0)*(h2["MASK"].data[yy,xx]==0)*(h2["IVAR"].data[yy,xx]>0)
+        img1 *= ok
+        img2 *= ok
+
 
         rdnoise1=h1[0].header["OBSRDN%s"%amp]
         rdnoise2=h1[0].header["OBSRDN%s"%amp]
