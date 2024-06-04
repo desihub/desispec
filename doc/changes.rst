@@ -2,8 +2,20 @@
 desispec Change Log
 ===================
 
+0.64.0 (unreleased)
+-------------------
+
+0.64.x and beyond reserved for post-Jura changes.
+
+* Refactor read_gfa_function to support gfa_proc writing main-thruNIGHT
+  files instead of sv3-thruNIGHT files (PR `#2252`_).
+
+.. _`#2252`: https://github.com/desihub/desispec/pull/2252
+
 0.63.7 (unreleased)
 -------------------
+
+0.63.x tags reserved for Jura prods.
 
 * No changes yet.
 

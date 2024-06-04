@@ -36,7 +36,7 @@ from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
-from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+from   desispec.tilecompleteness import read_gfa_data, compute_tile_completeness_table, merge_tile_completeness_table
 from   desispec.skymag import compute_skymag
 from   desispec.efftime import compute_efftime
 from   desispec.parallel import  stdouterr_redirected, use_mpi
@@ -161,35 +161,6 @@ def update_targ_info(entry, targ_in):
         entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
     return entry
-
-
-def read_gfa_data(gfa_proc_dir) :
-    """
-    Read the directory with the offline GFA data reduction (like /global/cfs/cdirs/desi/survey/GFA/),
-    find the latest version of the table files for the various surveys, return the merged table.
-    See documentation here https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files
-    Args:
-      gfa_proc_dir: str, directory path
-    returns astropy.table.Table
-    """
-    log = get_logger()
-    tables=[]
-    for survey in ["SV1","SV2","SV3"] :
-        filenames=sorted(glob.glob("{}/offline_matched_coadd_ccds_{}-thru_????????.fits".format(gfa_proc_dir,survey)))
-        if len(filenames)==0 : continue
-        filename=filenames[-1]
-        log.info(f"Reading {filename}")
-        table=read_table(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
-        tables.append(table)
-    if len(tables)==0 :
-        log=get_logger()
-        mess="did not find any file offline_matched_coadd_ccds_*-thru_????????.fits in {}".format(gfa_proc_dir)
-        log.critical(mess)
-        raise RuntimeError(mess)
-    table=vstack(tables)
-    log.info(f'{len(table)} GFA table entries')
-    return table
-
 
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
