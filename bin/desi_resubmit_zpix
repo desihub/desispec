@@ -54,7 +54,19 @@ def check_zpix_output(survey, program, healpix, allfiles=False, missing_dir_ok=F
 
 def check_slurm_script(filename, survey, program, allfiles=False, missing_dir_ok=False, quiet=False):
     """
-    TODO: document
+    Check for existence of outputs from a zpix slurm script
+
+    Args:
+        filename (str): zpix batch slurm script
+        survey (str): DESI survey (sv1, sv3, main...)
+        program (str): DESI program (dark, bright, ...)
+
+    Options:
+        allfiles (bool): check afterburners too (default just check redrock)
+        missing_dir_ok (bool): if output dir is completely blank, treat that as ok
+        quiet (bool): don't log things that are ok
+
+    Returns list of healpix with missing outputs, empty list if all is fine
     """
     basename = os.path.basename(filename)
 
