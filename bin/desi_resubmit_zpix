@@ -7,6 +7,7 @@ that are completely missing (purposefully removed).
 """
 
 import os, sys, glob, argparse, subprocess
+import multiprocessing
 import numpy as np
 
 import desispec.io
@@ -51,32 +52,10 @@ def check_zpix_output(survey, program, healpix, allfiles=False, missing_dir_ok=F
 
     return ok
 
-#--------------------------------------------------------------------
-p = argparse.ArgumentParser(description='resubmit zpix jobs with missing outputs')
-p.add_argument('-s', '--survey', default='*',
-            help='DESI survey (main, sv1, sv3, ...)')
-p.add_argument('-p', '--program', default='*',
-            help='DESI program (dark, bright, backup, other)')
-p.add_argument('--dry-run', action='store_true',
-            help="print what to do instead of actually resubmitting jobs")
-p.add_argument('--allfiles', action='store_true',
-            help="Full check of all files including afterburners")
-p.add_argument('--missing-dir-ok', action='store_true',
-            help="Skip over completely missing output directories")
-p.add_argument('--quiet', action='store_true',
-            help="Don't report healpix for which no action is needed")
-
-args = p.parse_args()
-
-specprod_dir = desispec.io.specprod_root()
-survey = args.survey
-program = args.program
-
-#- Parse the slurm scripts to know which healpix they intended to create
-slurm_scripts = glob.glob(f'{specprod_dir}/run/scripts/healpix/{survey}/{program}/*/zpix-{survey}-{program}-*.slurm')
-
-num_resubmit = 0
-for filename in slurm_scripts:
+def check_slurm_script(filename, survey, program, allfiles=False, missing_dir_ok=False, quiet=False):
+    """
+    TODO: document
+    """
     basename = os.path.basename(filename)
 
     healpix = list()
@@ -94,35 +73,73 @@ for filename in slurm_scripts:
 
     if len(healpix) == 0:
         print('ERROR: no healpix found in {basename}')
-        continue
+        return []
 
     missing_hpix = list()
     for hpix in healpix:
         if not check_zpix_output(survey, program, hpix,
-                                 allfiles=args.allfiles,
-                                 missing_dir_ok=args.missing_dir_ok):
+                                 allfiles=allfiles,
+                                 missing_dir_ok=missing_dir_ok):
             missing_hpix.append(hpix)
 
     if len(missing_hpix) > 0:
-        num_resubmit += 1
-        print(f'{basename} missing healpix {missing_hpix}')
-        cmd = f'sbatch {filename}'
-        if args.dry_run:
-            print(f"TODO: {cmd}")
-        else:
-            err = subprocess.call(cmd.split())
-            if err == 0:
-                print(f'--> resubmitted {basename}')
-            else:
-                print(f'ERROR: resubmitting {basename}')
-
+        print(f'ERROR: {basename} missing healpix {missing_hpix}')
     else:
-        if not args.quiet:
+        if not quiet:
             print(os.path.basename(filename), '- OK')
 
-if args.dry_run:
-    print(f'{num_resubmit} zpix jobs to resubmit')
-else:
-    print(f'Resubmitted {num_resubmit} zpix jobs')
+    return missing_hpix
 
+#--------------------------------------------------------------------
+def main():
+    p = argparse.ArgumentParser(description='resubmit zpix jobs with missing outputs')
+    p.add_argument('-s', '--survey', default='*',
+                help='DESI survey (main, sv1, sv3, ...)')
+    p.add_argument('-p', '--program', default='*',
+                help='DESI program (dark, bright, backup, other)')
+    p.add_argument('--dry-run', action='store_true',
+                help="print what to do instead of actually resubmitting jobs")
+    p.add_argument('--allfiles', action='store_true',
+                help="Full check of all files including afterburners")
+    p.add_argument('--missing-dir-ok', action='store_true',
+                help="Skip over completely missing output directories")
+    p.add_argument('--quiet', action='store_true',
+                help="Don't report healpix for which no action is needed")
+    p.add_argument('--nproc', type=int, default=16,
+                help='Number of parallel processes to use')
 
+    args = p.parse_args()
+
+    specprod_dir = desispec.io.specprod_root()
+    survey = args.survey
+    program = args.program
+
+#- Parse the slurm scripts to know which healpix they intended to create
+    slurm_scripts = glob.glob(f'{specprod_dir}/run/scripts/healpix/{survey}/{program}/*/zpix-{survey}-{program}-*.slurm')
+
+    fnargs = [(filename, survey, program, args.allfiles, args.missing_dir_ok, args.quiet) for filename in slurm_scripts]
+
+    with multiprocessing.Pool(args.nproc) as pool:
+        missing_healpix = pool.starmap(check_slurm_script, fnargs)
+
+    num_resubmit = 0
+    for i, filename in enumerate(slurm_scripts):
+        if len(missing_healpix[i]) > 0:
+            num_resubmit += 1
+            cmd = f'sbatch {filename}'
+            if args.dry_run:
+                print(f"TODO: {cmd}")
+            else:
+                err = subprocess.call(cmd.split())
+                if err == 0:
+                    print(f'--> resubmitted {basename}')
+                else:
+                    print(f'ERROR: resubmitting {basename}')
+
+    if args.dry_run:
+        print(f'{num_resubmit} zpix jobs to resubmit')
+    else:
+        print(f'Resubmitted {num_resubmit} zpix jobs')
+
+if __name__ == '__main__':
+    main()
