@@ -611,7 +611,12 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         ## jobs, so only check for scalar jobs where JOBDESC == OBSTYPE
         ## ex. dark, zero, arc, and flat
         explists = ptable['EXPID'][ptable['JOBDESC']==ptable['OBSTYPE']]
-        processed_cal_expids = np.unique(np.concatenate(explists).astype(int))
+        if len(explists) == 0:
+            processed_cal_expids = np.array([]).astype(int)
+        elif len(explists) == 1:
+            processed_cal_expids = np.unique(explists[0]).astype(int)
+        else:
+            processed_cal_expids = np.unique(np.concatenate(explists).astype(int))
     else:
         processed_cal_expids = np.array([]).astype(int)
 
