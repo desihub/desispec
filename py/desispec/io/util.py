@@ -610,9 +610,12 @@ def camword_union(camwords, full_spectros_only=False):
     camword = ''
     if np.isscalar(camwords):
         if not isinstance(camwords, str):
-            ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
+            raise ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
         else:
             camword = camwords
+    elif len(camwords) == 0:
+         raise ValueError("camwords must be nonzero length array-like or str:"
+                    + f"{camwords=}, {type(camwords)=}, {len(camwords)=}")
     else:
         cams = set(decode_camword(camwords[0]))
         for camword in camwords[1:]:
@@ -677,6 +680,7 @@ def erow_to_goodcamword(erow, suppress_logging=False, exclude_badamps=False):
         goodcamword (str): Camword for that observation given the obstype and
                            input camera information.
     """
+    log = get_logger()
     return columns_to_goodcamword(camword=erow['CAMWORD'],
                                   badcamword=erow['BADCAMWORD'],
                                   badamps=erow['BADAMPS'],
@@ -745,7 +749,7 @@ def camword_to_spectros(camword, full_spectros_only=False):
             spectros.add(int(char))
         elif full_spectros_only and char in ['b','r','z']:
             break
-    return list(spectros)
+    return sorted(spectros)
 
 def spectros_to_camword(spectros):
     """
@@ -762,7 +766,7 @@ def spectros_to_camword(spectros):
     spectros = sorted(spectros)
     camword = "a" + "".join(str(sp) for sp in spectros)
     check = camword_to_spectros(camword)
-    assert sorted(spectros) == check
+    assert spectros == check
 
     return camword
 
