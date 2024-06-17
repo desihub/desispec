@@ -87,7 +87,9 @@ setenv KMP_AFFINITY disabled
 # OLD:
 # setenv QN_MODEL_FILE $env(DESI_ROOT)/target/catalogs/lya/qn_models/qn_train_coadd_indtrain_0_0_boss10.h5
 # After desispec PR #2230 and QuasarNP PR #7:
-setenv QN_MODEL_FILE $env(DESI_ROOT)/science/lya/qn_models/desi/qn_train_desi_guadalupe_linear.h5
+# setenv QN_MODEL_FILE $env(DESI_ROOT)/science/lya/qn_models/desi/qn_train_desi_guadalupe_linear.h5
+# 2024-06-18: reverting to previous weights while debugging new ones
+setenv QN_MODEL_FILE $env(DESI_ROOT)/target/catalogs/lya/qn_models/qn_train_coadd_indtrain_0_0_boss10.h5
 
 # possible future SQuEZE afterburner
 setenv SQ_MODEL_FILE $env(DESI_ROOT)/target/catalogs/lya/sq_models/BOSS_train_64plates_model.json
