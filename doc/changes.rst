@@ -9,20 +9,28 @@ desispec Change Log
 
 * Refactor read_gfa_function to support gfa_proc writing main-thruNIGHT
   files instead of sv3-thruNIGHT files (PR `#2252`_).
+* night_qa use temporary files for outputs (PR `#2273`_).
+* Adapt desi_compute_gain to 2-amp mode (PR `#2274`_).
+* Revert QN_MODEL_FILE to old weights (PR `#2280`_).
 
 .. _`#2252`: https://github.com/desihub/desispec/pull/2252
+.. _`#2273`: https://github.com/desihub/desispec/pull/2273
+.. _`#2274`: https://github.com/desihub/desispec/pull/2274
+.. _`#2280`: https://github.com/desihub/desispec/pull/2280
 
 0.63.7 (unreleased)
 -------------------
 
-0.63.x tags reserved for Jura prods.
+0.63.x tags reserved for Jura prods, based off of "jura" branch.
 
-* No changes yet.
+* Parallelize zpix check (PR `#2275`_).
+
+.. _`#2275`: https://github.com/desihub/desispec/pull/2275
 
 0.63.6 (2024-05-30)
 -------------------
 
-* Fix healpix=0 keyword propagtion bug (PR `#2271`_).
+* Fix healpix=0 keyword propagation bug (PR `#2271`_).
 
 .. _`#2271`: https://github.com/desihub/desispec/pull/2271
 
