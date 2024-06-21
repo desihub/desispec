@@ -252,8 +252,9 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         proctab = proctab[np.array([job in ['pernight', 'perexp', 'cumulative']
                                     for job in proctab['JOBDESC']])]
         ztypes = np.unique(proctab['JOBDESC'])
-    uniqs_processing = []
 
+    ## Determine what was processed
+    uniqs_processing = []
     for prow in proctab:
         ztype = str(prow['JOBDESC'])
         tileid = str(prow['TILEID'])
@@ -263,6 +264,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         else:
             uniqs_processing.append(f'{tileid}_{ztype}')
 
+    ## Determine what should have been processed but isn't in the processing table
     if 'pernight' in ztypes or 'cumulative' in ztypes:
         etiles = np.unique(exptab['TILEID'])
         ptiles = np.unique(proctab['TILEID'])
@@ -271,22 +273,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             for tileid in missing_tiles:
                 tilematches = exptab[exptab['TILEID']==tileid]
                 first_exp = tilematches[0]
+                prow = erow_to_prow(first_exp)
+                prow['EXPID'] = np.array(list(tilematches['EXPID']))
+                ## pernight and cumulative proccamword will be determined in the main loop
+                proccamword = ''
+                prow['PROCCAMWORD'] = proccamword
                 ## perexp are dealt with separately
                 for ztype in set(ztypes).difference({'perexp'}):
-                    prow = erow_to_prow(first_exp)
                     prow['JOBDESC'] = ztype
-                    prow['EXPID'] = np.array(list(tilematches['EXPID']))
-                    ## cumulative proccamword will be determined in the main loop
-                    if ztype == 'pernight':
-                        proccamwords = []
-                        for camword, bcamword in zip(tilematches['CAMWORD'],tilematches['BADCAMWORD']):
-                            proccamwords = difference_camwords(camword, bcamword)
-                        proccamword = camword_union(proccamwords)
-                    else:
-                        proccamword = ''
-                    prow['PROCCAMWORD'] = proccamword
                     proctab.add_row(prow.copy())
-
     if 'perexp' in ztypes:
         perexp_subset = proctab[proctab['JOBDESC']=='perexp']
         exps = np.array(exparr[0] for exparr in perexp_subset['EXPID'])
@@ -297,6 +292,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 prow['JOBDESC'] = 'perexp'
                 proctab.add_row(prow.copy())
 
+    ## Now that proctable has even missing entries, loop over the proctable
+    ## and summarize the file existance for each entry
     output = dict()
     for row in proctab:
         int_tileid = int(row['TILEID'])
