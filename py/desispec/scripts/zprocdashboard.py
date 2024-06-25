@@ -179,20 +179,35 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                          check_on_disk=False, night_json_zinfo=None,
                          skipd_tileids=None, all_exptabs=None):
     """
-    For a given night, return the file counts and other other information for each exposure taken on that night
-    input: night
-    output: a dictionary containing the statistics with expid as key name
-    FLAVOR: FLAVOR of this exposure
-    OBSTYPE: OBSTYPE of this exposure
-    EXPTIME: Exposure time
-    SPECTROGRAPHS: a list of spectrographs used
-    n_spectrographs: number of spectrographs
-    n_psf: number of PSF files
-    n_ff:  number of fiberflat files
-    n_frame: number of frame files
-    n_sframe: number of sframe files
-    n_cframe: number of cframe files
-    n_sky: number of sky files
+    For a given night, return the file counts and other information
+    for each zproc job (either per-exposure, per-night, or cumulative for
+    each tile on the requested night. Uses cached values supplied in
+    night_json_zinfo and skips tiles listed in skipd_tileids.
+
+    Args:
+        night (int): the night to check the status of the processing for.
+        doem (bool): true if it should expect emline files. Default is True.
+        doqso (bool): true if it should expect qso_qn and qso_mgii files.
+            Default is True.
+        dotileqa (bool): true if it should expect tileqa files. Default is True.
+        check_on_disk (bool): true if it should check on disk for missing
+            exposures and tiles that aren't represented in the exposure tables.
+        night_json_zinfo (dict): A dictionary of dicts where each key is a unique
+            identifier to the row. Each value is a dictionary container the
+            column information in addition to other metadata. Meant to be a
+            way of passing cached values from a previous run of this function.
+        skipd_tileids (list): List of tileids that should be skipped and not
+            listed in the output dashboard.
+        all_exptabs (astropy.table.Table): A stacked exposure table with minimal
+            columns returned from read_minimal_exptables_columns(). Used for
+            cumulative redshifts jobs to identify tile data from previous nights.
+
+    Returns dict:
+        A dictionary of dicts. Each item is information for a row of the output
+            dashboard for a redshift job on the requested night. Each key is a
+            unique identifier to the row. Each value is a dictionary container
+            the column information in addition to other metadata about the state
+            of the processing and file counts.
     """
     log = get_logger()
     
