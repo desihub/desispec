@@ -731,24 +731,36 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
-    Takes a camword as input and returns any spectrograph represented within that camword. By default this includes partial
-    spectrographs (with one or two cameras represented). But if full_spectros_only is set to True, only spectrographs
-    with all cameras represented are given.
+    Takes a camword as input and returns any spectrograph represented 
+    within that camword in a sorted list. By default this includes partial
+    spectrographs (with one or two cameras represented). But if 
+    full_spectros_only is set to True, only spectrographs with all 
+    cameras represented are given.
 
     Args:
         camword, str. The camword of all cameras.
-        full_spectros_only, bool. Default is False. Flag to specify if you want all spectrographs with any cameras existing
-                                  in the camword (the default) or if you only want fully populated spectrographs.
+        full_spectros_only, bool. Default is False. Flag to specify if you 
+                                  want all spectrographs with any cameras 
+                                  existing in the camword (the default) or 
+                                  if you only want fully populated spectrographs.
 
     Returns:
-        spectros, list. A list of integer spectrograph numbers represented in the camword input.
+        spectros, list. A sorted list of integer spectrograph numbers 
+                        represented in the camword input.
     """
+    ## Normalize the camword
+    camword = parse_cameras(decode_camword(camword), loglevel='error')
+    ## look for "a", then start counting spectrographs
     spectros = set()
+    start_counting = False
     for char in camword:
         if char.isnumeric():
-            spectros.add(int(char))
-        elif full_spectros_only and char in ['b','r','z']:
-            break
+            if start_counting:
+                spectros.add(int(char))
+        elif char == 'a' or (not full_spectros_only and char in ['b','r','z']):
+            start_counting = True
+        else:
+            start_counting = False
     return sorted(spectros)
 
 def spectros_to_camword(spectros):
