@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.64.0 (unreleased)
+0.64.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.64.0 (2024-07-01)
 -------------------
 
 0.64.x and beyond reserved for post-Jura changes.
