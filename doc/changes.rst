@@ -12,20 +12,24 @@ desispec Change Log
 * night_qa use temporary files for outputs (PR `#2273`_).
 * Adapt desi_compute_gain to 2-amp mode (PR `#2274`_).
 * Revert QN_MODEL_FILE to old weights (PR `#2280`_).
+* Add cross-night information to zdashboard (PR `#2285`_).
 
 .. _`#2252`: https://github.com/desihub/desispec/pull/2252
 .. _`#2273`: https://github.com/desihub/desispec/pull/2273
 .. _`#2274`: https://github.com/desihub/desispec/pull/2274
 .. _`#2280`: https://github.com/desihub/desispec/pull/2280
+.. _`#2285`: https://github.com/desihub/desispec/pull/2285
 
-0.63.7 (unreleased)
+0.63.7 (2024-07-01)
 -------------------
 
 0.63.x tags reserved for Jura prods, based off of "jura" branch.
 
 * Parallelize zpix check (PR `#2275`_).
+* Fix desi_assemble_tilepix for Jura (PR `#2284`_)
 
 .. _`#2275`: https://github.com/desihub/desispec/pull/2275
+.. _`#2284`: https://github.com/desihub/desispec/pull/2284
 
 0.63.6 (2024-05-30)
 -------------------
