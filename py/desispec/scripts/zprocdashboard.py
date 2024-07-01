@@ -15,6 +15,7 @@ from os import listdir
 import json
 
 # import desispec.io.util
+from desiutil.log import get_logger
 from desispec.workflow.exptable import get_exposure_table_pathname, \
     default_obstypes_for_exptable, \
     get_exposure_table_column_types, \
@@ -26,9 +27,11 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
 from desispec.workflow.proctable import get_processing_table_pathname, \
     erow_to_prow, instantiate_processing_table
 from desispec.workflow.tableio import load_table
+from desispec.workflow.redshifts import read_minimal_exptables_columns
 from desispec.io.meta import specprod_root, rawdata_root, findfile
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_union
+    difference_camwords, parse_badamps, create_camword, camword_union, \
+    columns_to_goodcamword, spectros_to_camword
 
 def parse(options):
     """
@@ -98,6 +101,7 @@ def main(args=None):
     desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     """
+    log = get_logger()
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
@@ -120,11 +124,20 @@ def main(args=None):
     nights_dict, nights = get_nights_dict(args.nights, args.start_night,
                                           args.end_night, prod_dir)
 
-    print(f'Searching {prod_dir} for: {nights}')
-
+    log.info(f'Searching {prod_dir} for: {nights}')
+    
+    ## Get all the exposure tables for cross-night dependencies
+    all_exptabs = read_minimal_exptables_columns(nights=None)
+    ## We don't want future days mixing in
+    all_exptabs = all_exptabs[all_exptabs['NIGHT'] <= np.max(nights)]
+    ## Restrict to only the exptabs relevant to the current dashboard
+    night_selection = np.isin(all_exptabs['NIGHT'],nights)
+    tiles = all_exptabs['TILEID'][night_selection]
+    subset_exptabs = all_exptabs[np.isin(all_exptabs['TILEID'], tiles)]
+    
     monthly_tables = {}
     for month, nights_in_month in nights_dict.items():
-        print("Month: {}, nights: {}".format(month, nights_in_month))
+        log.info("Month: {}, nights: {}".format(month, nights_in_month))
         nightly_tables = {}
         for night in nights_in_month:
             ## Load previous info if any
@@ -135,11 +148,17 @@ def main(args=None):
             if not args.ignore_json_archive:
                 night_json_zinfo = read_json(filename_json=filename_json)
 
+            ## only send table for tiles on the given night
+            tiles = all_exptabs['TILEID'][all_exptabs['NIGHT']==night]
+            subset_exptabs = all_exptabs[np.isin(all_exptabs['TILEID'], tiles)]
+            
             ## get the per exposure info for a night
             night_zinfo = populate_night_zinfo(night, doem, doqso,
                                                dotileqa, args.check_on_disk,
                                                night_json_zinfo=night_json_zinfo,
-                                               skipd_tileids=skipd_tileids)
+                                               skipd_tileids=skipd_tileids,
+                                               all_exptabs=subset_exptabs)
+            
             if len(night_zinfo) == 0:
                 continue
 
@@ -157,24 +176,41 @@ def main(args=None):
 
 
 def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
-                         check_on_disk=False,
-                         night_json_zinfo=None, skipd_tileids=None):
+                         check_on_disk=False, night_json_zinfo=None,
+                         skipd_tileids=None, all_exptabs=None):
     """
-    For a given night, return the file counts and other other information for each exposure taken on that night
-    input: night
-    output: a dictionary containing the statistics with expid as key name
-    FLAVOR: FLAVOR of this exposure
-    OBSTYPE: OBSTYPE of this exposure
-    EXPTIME: Exposure time
-    SPECTROGRAPHS: a list of spectrographs used
-    n_spectrographs: number of spectrographs
-    n_psf: number of PSF files
-    n_ff:  number of fiberflat files
-    n_frame: number of frame files
-    n_sframe: number of sframe files
-    n_cframe: number of cframe files
-    n_sky: number of sky files
+    For a given night, return the file counts and other information
+    for each zproc job (either per-exposure, per-night, or cumulative for
+    each tile on the requested night. Uses cached values supplied in
+    night_json_zinfo and skips tiles listed in skipd_tileids.
+
+    Args:
+        night (int): the night to check the status of the processing for.
+        doem (bool): true if it should expect emline files. Default is True.
+        doqso (bool): true if it should expect qso_qn and qso_mgii files.
+            Default is True.
+        dotileqa (bool): true if it should expect tileqa files. Default is True.
+        check_on_disk (bool): true if it should check on disk for missing
+            exposures and tiles that aren't represented in the exposure tables.
+        night_json_zinfo (dict): A dictionary of dicts where each key is a unique
+            identifier to the row. Each value is a dictionary container the
+            column information in addition to other metadata. Meant to be a
+            way of passing cached values from a previous run of this function.
+        skipd_tileids (list): List of tileids that should be skipped and not
+            listed in the output dashboard.
+        all_exptabs (astropy.table.Table): A stacked exposure table with minimal
+            columns returned from read_minimal_exptables_columns(). Used for
+            cumulative redshifts jobs to identify tile data from previous nights.
+
+    Returns dict:
+        A dictionary of dicts. Each item is information for a row of the output
+            dashboard for a redshift job on the requested night. Each key is a
+            unique identifier to the row. Each value is a dictionary container
+            the column information in addition to other metadata about the state
+            of the processing and file counts.
     """
+    log = get_logger()
+    
     if skipd_tileids is None:
         skipd_tileids = []
     ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
@@ -206,17 +242,17 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'tiles')
 
-    exptab, proctab, \
+    orig_exptab, proctab, \
     unaccounted_for_expids,\
     unaccounted_for_tileids = get_tables(night, check_on_disk=check_on_disk,
                                                 exptab_colnames=None)
 
-    exptab = exptab[((exptab['OBSTYPE'] == 'science')
-                    & (exptab['LASTSTEP'] == 'all'))]
+    exptab = orig_exptab[((orig_exptab['OBSTYPE'] == 'science')
+                    & (orig_exptab['LASTSTEP'] == 'all'))]
 
     if proctab is None:
         if len(exptab) == 0:
-            print(f"No redshiftable exposures found on night {night}. Skipping")
+            log.warning(f"No redshiftable exposures found on night {night}. Skipping")
             ## There is nothing on this night, return blank and move on
             return {}
         else:
@@ -225,14 +261,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 ztypes = ['cumulative']
             else:
                 ztypes = ['cumulative', 'perexp', 'pernight']
-            print(f"No processed data on night {night}. Assuming "
+            log.warning(f"No processed data on night {night}. Assuming "
                   + f"{os.environ['SPECPROD']} implies ztypes={ztypes}")
     else:
         proctab = proctab[np.array([job in ['pernight', 'perexp', 'cumulative']
                                     for job in proctab['JOBDESC']])]
         ztypes = np.unique(proctab['JOBDESC'])
-    uniqs_processing = []
 
+    ## Determine what was processed
+    uniqs_processing = []
     for prow in proctab:
         ztype = str(prow['JOBDESC'])
         tileid = str(prow['TILEID'])
@@ -242,6 +279,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         else:
             uniqs_processing.append(f'{tileid}_{ztype}')
 
+    ## Determine what should have been processed but isn't in the processing table
     if 'pernight' in ztypes or 'cumulative' in ztypes:
         etiles = np.unique(exptab['TILEID'])
         ptiles = np.unique(proctab['TILEID'])
@@ -250,16 +288,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             for tileid in missing_tiles:
                 tilematches = exptab[exptab['TILEID']==tileid]
                 first_exp = tilematches[0]
+                prow = erow_to_prow(first_exp)
+                prow['EXPID'] = np.array(list(tilematches['EXPID']))
+                ## pernight and cumulative proccamword will be determined in the main loop
+                proccamword = ''
+                prow['PROCCAMWORD'] = proccamword
+                ## perexp are dealt with separately
                 for ztype in set(ztypes).difference({'perexp'}):
-                    prow = erow_to_prow(first_exp)
                     prow['JOBDESC'] = ztype
-                    prow['EXPID'] = np.array(list(tilematches['EXPID']))
-                    proccamwords = []
-                    for camword, bcamword in zip(tilematches['CAMWORD'],tilematches['BADCAMWORD']):
-                        proccamwords = difference_camwords(camword, bcamword)
-                    prow['PROCCAMWORD'] = camword_union(proccamwords)
                     proctab.add_row(prow.copy())
-
     if 'perexp' in ztypes:
         perexp_subset = proctab[proctab['JOBDESC']=='perexp']
         exps = np.array(exparr[0] for exparr in perexp_subset['EXPID'])
@@ -270,6 +307,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
                 prow['JOBDESC'] = 'perexp'
                 proctab.add_row(prow.copy())
 
+    ## Now that proctable has even missing entries, loop over the proctable
+    ## and summarize the file existance for each entry
     output = dict()
     for row in proctab:
         int_tileid = int(row['TILEID'])
@@ -279,27 +318,82 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         ztype = str(row['JOBDESC'])
         tileid = str(row['TILEID'])
         zfild_expid = str(row['EXPID'][0]).zfill(8)
+
         ## files and dashboard are per night so these are unique without night
         ## in the key
         if ztype == 'perexp':
             unique_key = f'{zfild_expid}_{ztype}'
-            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                           'ztile-{tileid}-{zexpid}{jobid}.{ext}')
         else:
             unique_key = f'{tileid}_{ztype}'
-            if ztype =='cumulative':
-                logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                           'ztile-{tileid}-thru{night}{jobid}.{ext}')
-            else:
-                # pernight
-                logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
-                                               'ztile-{tileid}-{night}{jobid}.{ext}')
 
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
         if night_json_zinfo is not None and unique_key in night_json_zinfo \
                 and night_json_zinfo[unique_key]["COLOR"] in ['GOOD', 'NULL']:
             output[unique_key] = night_json_zinfo[unique_key]
             continue
+
+        tilematches = exptab[exptab['TILEID'] == int(tileid)]
+        if len(tilematches) == 0:
+            if int(tileid) not in orig_exptab['TILEID']:
+                log.error(f"ERROR: Tile {tileid} found in processing table not present "
+                      + f"in exposure table.")
+                log.info(f"exptab tileids: {np.unique(orig_exptab['TILEID'].data)}!")
+                log.info(f"proctab tileids: {np.unique(proctab['TILEID'].data)}!")
+            else:
+                log.warning(f"Tile {tileid} found in processing table has no valid "
+                      + f"exposures in the exposure table. Skipping this tile.")
+            continue
+        exptab_row = tilematches[0]
+
+        ## Assign or derive proccamword and nspectros
+        if ztype == 'cumulative':
+            spectros = set()
+            sel = ((all_exptabs['TILEID']==int(tileid))
+                   & (all_exptabs['NIGHT']<=int(night)))
+            tilerows = all_exptabs[sel]
+            ## Each night needs to be able to calibrate petal, so treat separate
+            ## then combine complete petals across nights
+            for nit in np.unique(tilerows['NIGHT']):
+                nightrows = tilerows[tilerows['NIGHT']==nit]
+                proccamwords = []
+                for erow in nightrows:
+                    proccamwords.append(columns_to_goodcamword(camword=erow['CAMWORD'],
+                                                               badcamword=erow['BADCAMWORD'],
+                                                               badamps=None, obstype='science',
+                                                               suppress_logging=True))
+                night_pcamword = camword_union(proccamwords)
+                spectros = spectros.union(set(camword_to_spectros(night_pcamword,
+                                                                  full_spectros_only=True)))
+            proccamword = spectros_to_camword(spectros)
+        elif ztype == 'pernight':
+            tilerows = all_exptabs[all_exptabs['TILEID']==int(tileid)]
+            nightrows = tilerows[tilerows['NIGHT']==night]
+            proccamwords = []
+            for erow in nightrows:
+                proccamwords.append(columns_to_goodcamword(camword=erow['CAMWORD'],
+                                                           badcamword=erow['BADCAMWORD'],
+                                                           badamps=None, obstype='science',
+                                                           suppress_logging=True))
+            proccamword = camword_union(proccamwords)
+            spectros = camword_to_spectros(proccamword, full_spectros_only=True)
+        else:
+            proccamword = row['PROCCAMWORD']
+            spectros = camword_to_spectros(proccamword, full_spectros_only=True)
+
+        nspecs = len(spectros)
+
+        ## files and dashboard are per night so these are unique without night
+        ## in the key
+        if ztype == 'perexp':
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+                                           'ztile-{tileid}-{zexpid}{jobid}.{ext}')
+        elif ztype =='cumulative':
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+                                           'ztile-{tileid}-thru{night}{jobid}.{ext}')
+        else:
+            # pernight
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+                                           'ztile-{tileid}-{night}{jobid}.{ext}')
 
         succinct_expid = ''
         if len(row['EXPID']) == 1:
@@ -323,15 +417,15 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
 
         tilematches = exptab[exptab['TILEID'] == int(tileid)]
         if len(tilematches) == 0:
-            print(f"ERROR: Tile {tileid} found in processing table not present "
-                  + f"in exposure table: {np.unique(exptab['TILEID'])}!")
+            log.error(f"Tile {tileid} found in processing table not present "
+                  + f"in exposure table.")
+            log.info(f"exptab tileids: {np.unique(exptab['TILEID'].data)}!")
+            log.info(f"proctab tileids: {np.unique(proctab['TILEID'].data)}!")
             continue
         exptab_row = tilematches[0]
         #exptime = np.round(exptab_row['EXPTIME'], decimals=1)
-        proccamword = row['PROCCAMWORD']
-        nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
-
         # laststep = str(row['LASTSTEP'])
+
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = []
         if ztype == 'perexp' or len(tilematches) == 1:

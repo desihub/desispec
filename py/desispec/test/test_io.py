@@ -1240,7 +1240,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(paths[0], filename)
 
     def test_create_camword(self):
-        """ Test desispec.io.create_camword
+        """ Test desispec.io.util.create_camword
         """
         from ..io.util import create_camword
         # Create some lists to convert
@@ -1263,7 +1263,7 @@ class TestIO(unittest.TestCase):
             self.assertEqual(camword3, 'a01235679b8r48z4')
 
     def test_decode_camword(self):
-        """ Test desispec.io.decode_camword
+        """ Test desispec.io.util.decode_camword
         """
         from ..io.util import decode_camword
         # Create some lists to convert
@@ -1299,7 +1299,7 @@ class TestIO(unittest.TestCase):
             self.assertEqual(diff, truth)
 
     def test_camword_union(self):
-        """ Test desispec.io.camword_union
+        """ Test desispec.io.util.camword_union
         """
         from ..io.util import camword_union
         fcamwords = [['a01b2r2r3', 'a01z2'],
@@ -1316,7 +1316,7 @@ class TestIO(unittest.TestCase):
             self.assertEqual(outcw, truespecw)
 
     def test_camword_intersection(self):
-        """Test desispec.io.camword_intersection"""
+        """Test desispec.io.util.camword_intersection"""
         from ..io.util import camword_intersection as cx
 
         self.assertEqual(cx(['a012', 'a123']), 'a12')
@@ -1331,6 +1331,61 @@ class TestIO(unittest.TestCase):
         self.assertEqual(cx(['b012', 'a012']), 'b012')
         self.assertEqual(cx(['a2', '', 'a2']), '')
 
+    def test_camword_to_spectros(self):
+        """ Test desispec.io.util.camword_to_spectros
+        """
+        from ..io.util import camword_to_spectros
+        # Create some camwords and their expected spectrograph outputs
+        camword = 'a0123456789'
+        allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        completespectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+        
+        camword = 'a01234567b89r89'
+        allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        completespectros = [0, 1, 2, 3, 4, 5, 6, 7]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+        
+        camword = 'a01235679b8r48z4'
+        allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        completespectros = [0, 1, 2, 3, 5, 6, 7, 9]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+
+        # the following three arent officially
+        # supported but should pass this function 
+        camword = 'a01234567b89r89z89'
+        allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        completespectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+        
+        camword = 'b0a12'
+        allspectros = [0, 1, 2]
+        completespectros = [1, 2]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+        
+        camword = 'z9a543b1r2'
+        allspectros = [1, 2, 3, 4, 5, 9]
+        completespectros = [3, 4, 5]
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=False),
+                         allspectros)
+        self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
+                         completespectros)
+        
     def test_all_impacted_cameras(self):
         """Test desispec.io.util.all_impacted_cameras
         """

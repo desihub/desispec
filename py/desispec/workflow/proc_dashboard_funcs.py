@@ -83,13 +83,12 @@ def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
     #    nights.append(str(tonight))
     nights.sort(reverse=True)
 
-    nights = np.array(nights)
+    nights = np.array(nights).astype(int)
 
     if start_night is not None:
-        nights = nights[
-            np.where(int(start_night) <= nights.astype(int))[0]]
+        nights = nights[np.where(int(start_night) <= nights)[0]]
     if end_night is not None:
-        nights = nights[np.where(int(end_night) >= nights.astype(int))[0]]
+        nights = nights[np.where(int(end_night) >= nights)[0]]
 
     if nights_arg is not None and nights_arg.isnumeric() and len(
             nights) >= int(nights_arg):
@@ -101,7 +100,7 @@ def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
 
     nights_dict = dict()
     for night in nights:
-        month = night[:6]
+        month = str(night)[:6]
         if month not in nights_dict.keys():
             nights_dict[month] = [night]
         else:
@@ -432,7 +431,7 @@ def write_json(output_data, filename_json):
     ## write out the night_info to json file
     with open(filename_json, 'w') as json_file:
         try:
-            json.dump(output_data, json_file)
+            json.dump(output_data, json_file, indent='\t')
         except:
             print(f"Error trying to dump {filename_json}, "
                   + "not saving that information.")
