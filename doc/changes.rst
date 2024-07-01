@@ -2,10 +2,16 @@
 desispec Change Log
 ===================
 
-0.63.7 (unreleased)
+0.63.7 (2024-07-01)
 -------------------
 
-* No changes yet.
+0.63.x tags reserved for Jura prods, based off of "jura" branch.
+
+* Parallelize zpix check (PR `#2275`_).
+* Fix desi_assemble_tilepix for Jura (PR `#2284`_)
+
+.. _`#2275`: https://github.com/desihub/desispec/pull/2275
+.. _`#2284`: https://github.com/desihub/desispec/pull/2284
 
 0.63.6 (2024-05-30)
 -------------------
