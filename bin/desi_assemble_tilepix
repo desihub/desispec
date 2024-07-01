@@ -95,7 +95,7 @@ for tileid, i in zip(tileids, firstindex):
 #- filter out petals that don't have frames
 for tileid in tileids:
     ii = frames['TILEID'] == tileid
-    camword = parse_cameras(np.unique(frames['CAMERA'][ii]), loglevel='warning')
+    camword = parse_cameras(list(np.unique(frames['CAMERA'][ii])), loglevel='warning')
     #- should only be complete petals, not individual cameras left
     assert 'b' not in camword
     assert 'r' not in camword
