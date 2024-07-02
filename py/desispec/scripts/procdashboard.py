@@ -194,7 +194,7 @@ def populate_night_info(night, check_on_disk=False,
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
-    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
+    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
 
     exptab, proctab, \
     unaccounted_for_expids,\
