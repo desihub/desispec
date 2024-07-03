@@ -51,6 +51,9 @@ if args.fibers is not None :
 else :
     fibers = np.arange(tset.nspec)
 
+#- shift fibers to [0,500) so that they can be interpreted as indices
+fibers = fibers%500
+
 nw=50
 wave = np.linspace(tset.wavemin,tset.wavemax,nw)
 
