@@ -777,7 +777,7 @@ def update_frame_cache(frames, framekeys, specprod_dir=None):
         if key not in frames.keys():
             night, expid, camera = key
             framefile = io.findfile('cframe', night, expid, camera,
-                    specprod_dir=specprod_dir)
+                    specprod_dir=specprod_dir, readonly=True)
             log.debug('  Reading {}'.format(os.path.basename(framefile)))
             nadd += 1
             frames[key] = FrameLite.read(framefile)

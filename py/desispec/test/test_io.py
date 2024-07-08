@@ -1496,6 +1496,15 @@ class TestIO(unittest.TestCase):
         shortname = shorten_filename(longname)
         self.assertEqual(shortname, longname)
 
+        #- handle $DESI_ROOT and $DESI_ROOT_READONLY prefixes
+        longname_rw = os.path.join(specprod, 'blat/foo.fits')
+        longname_ro = longname_rw.replace(os.environ['DESI_ROOT'],
+                                          os.environ['DESI_ROOT_READONLY'])
+        self.assertNotEqual(longname_rw, longname_ro)
+        shortname_rw = shorten_filename(longname_rw)
+        shortname_ro = shorten_filename(longname_ro)
+        self.assertEqual(shortname_rw, shortname_ro)
+
         #- with and without DESI_SPECTRO_CALIB
         calibdir = os.getenv('DESI_SPECTRO_CALIB')
         longname = os.path.join(calibdir, 'blat/foo.fits')
@@ -1652,6 +1661,11 @@ class TestIO(unittest.TestCase):
                          os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD'))
         self.assertEqual(specprod_root('blat'),
                          os.path.expandvars('$DESI_SPECTRO_REDUX/blat'))
+
+        self.assertEqual(specprod_root(readonly=True),
+                         os.path.expandvars('$DESI_ROOT_READONLY/spectro/redux/$SPECPROD'))
+        self.assertEqual(specprod_root('blat', readonly=True),
+                         os.path.expandvars('$DESI_ROOT_READONLY/spectro/redux/blat'))
 
         self.assertEqual(specprod_root('blat/foo'), 'blat/foo')
         self.assertEqual(specprod_root('/blat/foo'), '/blat/foo')
