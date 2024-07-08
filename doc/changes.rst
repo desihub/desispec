@@ -5,7 +5,9 @@ desispec Change Log
 0.64.1 (unreleased)
 -------------------
 
-* No changes yet.
+* healpix grouping memory and I/O efficiency improvements (PR `#2290`_).
+
+.. _`#2290`: https://github.com/desihub/desispec/pull/2290
 
 0.64.0 (2024-07-01)
 -------------------
