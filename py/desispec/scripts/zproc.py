@@ -482,7 +482,8 @@ def main(args=None, comm=None):
                 for night, expid, spectro in hpixexp['NIGHT', 'EXPID', 'SPECTRO'][ii]:
                     for band in ('b', 'r', 'z'):
                         camera = band+str(spectro)
-                        filename = findfile('cframe', night=night, expid=expid, camera=camera)
+                        filename = findfile('cframe', night=night, expid=expid, camera=camera,
+                                            readonly=True)
                         if os.path.exists(filename):
                             cframes.append(filename)
                         else:
@@ -504,7 +505,8 @@ def main(args=None, comm=None):
                     for camera in cameras:
                         if int(spectro) == int(camera[1]):
                             cframes.append(findfile('cframe', night=night,
-                                                    expid=expid, camera=camera))
+                                                    expid=expid, camera=camera,
+                                                    readonly=True))
 
             spectrafile = findfile('spectra', **findfileopts)
             splog = findfile('spectra', logfile=True, **findfileopts)

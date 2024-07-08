@@ -680,11 +680,16 @@ def shorten_filename(filename):
 
     try:
         specprod = specprod_root()
+        specprod_ro = specprod_root(readonly=True)
     except KeyError:
         specprod = None
+        specprod_ro = None
 
     if specprod is not None and filename.startswith(specprod):
         return filename.replace(specprod, 'SPECPROD', 1)
+
+    if specprod_ro is not None and filename.startswith(specprod_ro):
+        return filename.replace(specprod_ro, 'SPECPROD', 1)
 
     #- no substitutions
     return filename
@@ -699,12 +704,13 @@ def rawdata_root():
     return os.environ['DESI_SPECTRO_DATA']
 
 
-def specprod_root(specprod=None):
+def specprod_root(specprod=None, readonly=False):
     """Return directory root for spectro production, i.e.
     ``$DESI_SPECTRO_REDUX/$SPECPROD``.
 
     Options:
         specprod (str): production name or full path to prodution
+        readonly (bool): replace $DESI_ROOT -> $DESI_ROOT_READONLY if defined
 
     Raises:
         KeyError: if these environment variables aren't set.
@@ -713,15 +719,20 @@ def specprod_root(specprod=None):
     If specprod is None, return $DESI_SPECTRO_REDUX/$SPECPROD.
     Otherwise, treat specprod as production name to override $SPECPROD
     and return $DESI_SPECTRO_REDUX/$SPECPROD
+
+    If readonly=True, also replace $DESI_ROOT -> $DESI_ROOT_READONLY
+    if those variables are defined
     """
     if specprod is None:
         specprod = os.environ['SPECPROD']
 
-    if '/' in specprod:
-        return specprod
-    else:
-        return os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+    if '/' not in specprod:
+        specprod = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
 
+    if readonly:
+        specprod = get_readonly_filepath(specprod)
+
+    return specprod
 
 def qaprod_root(specprod_dir=None):
     """Return directory root for spectro production QA, i.e.

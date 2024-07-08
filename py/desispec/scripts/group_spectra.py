@@ -13,6 +13,7 @@ import argparse
 from astropy.table import Table
 
 from desiutil.log import get_logger
+from desimodel.footprint import radec2pix
 
 from .. import io
 from ..io.meta import shorten_filename
@@ -116,20 +117,33 @@ def main(args=None):
     frames = dict()
     log.info(f'Reading {len(framefiles)} framefiles')
     foundframefiles = list()
-    for filename in framefiles:
+    for fnum, filename in enumerate(framefiles):
         try:
             filename = checkgzip(filename)
         except FileNotFoundError:
-            log.warning(f'Missing {filename} but continueing anyway')
+            log.warning(f'Missing {filename} but continuing anyway')
             continue
 
         foundframefiles.append(filename)
         log.debug('Reading %s', filename)
         frame = FrameLite.read(filename)
+        if args.healpix is not None:
+            ra, dec = frame.fibermap['TARGET_RA'], frame.fibermap['TARGET_DEC']
+            ok = ~np.isnan(ra) & ~np.isnan(dec)
+            ra[~ok] = 0.0
+            dec[~ok] = 0.0
+            allpix = radec2pix(args.nside, ra, dec)
+            ii = np.where((allpix == args.healpix) & ok)[0]
+            if len(ii) == 0:
+                log.warning(f"Frame {filename} had no objects in healpix {args.healpix}. Continuing")
+                continue
+            frame = frame[ii]
         night = frame.meta['NIGHT']
         expid = frame.meta['EXPID']
         camera = frame.meta['CAMERA']
         frames[(night, expid, camera)] = frame
+        if fnum % 50 == 0:
+            log.info(f"Completed reading the {fnum}th frame file.")
 
     if len(frames) == 0:
         log.critical('No input frames found')
@@ -140,7 +154,7 @@ def main(args=None):
 
     if spectra.num_spectra() == 0:
         log.critical(f'No input frame spectra pass nside={args.nside} nested healpix={args.healpix}')
-        from desimodel.footprint import radec2pix
+        #from desimodel.footprint import radec2pix
         input_hpix = set()
         for frame in frames.values():
             ra = frame.fibermap['TARGET_RA']
