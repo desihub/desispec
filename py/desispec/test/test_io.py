@@ -17,6 +17,7 @@ from astropy.utils.exceptions import AstropyUserWarning
 import fitsio
 from ..frame import Frame
 
+import desispec.io.meta
 
 class TestIO(unittest.TestCase):
     """Test desispec.io.
@@ -57,6 +58,10 @@ class TestIO(unittest.TestCase):
             os.environ[e] = cls.testEnv[e]
 
     def setUp(self):
+        #- clear DESI_ROOT_READONLY cache leftover from other tests
+        desispec.io.meta._desi_root_readonly = None
+
+        #- remove data and redux dirs leftover from other tests
         if os.path.isdir(self.datadir):
             rmtree(self.datadir)
         if os.path.isdir(self.reduxdir):
