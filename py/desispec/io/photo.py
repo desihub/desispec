@@ -14,7 +14,7 @@ from astropy.table import Table, vstack
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
-from desispec.io.meta import get_desi_root_readonly
+from desispec.io.meta import get_desi_root_readonly, get_readonly_filepath
 from desitarget.io import desitarget_resolve_dec
 from desitarget import geomask
 
@@ -36,19 +36,22 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     """
     from astropy.io import fits
     from desiutil.log import get_logger, DEBUG
-    
+
     if verbose:
         log = get_logger(DEBUG)
     else:
         log = get_logger()
-    
+
     desi_root = get_desi_root_readonly()
-    desi_target = os.path.join(desi_root, 'target')
-    desi_surveyops = os.path.join(desi_root, 'survey', 'ops', 'surveyops', 'trunk')
+    desi_target = get_readonly_filepath(os.environ['DESI_TARGET'])
+    # desi_target = os.path.join(desi_root, 'target')
+    desi_surveyops = get_readonly_filepath(os.environ['DESI_SURVEYOPS'])
+    # desi_surveyops = os.path.join(desi_root, 'survey', 'ops', 'surveyops', 'trunk')
 
     if fiberassign_dir is None:
-        fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
-    
+        fiberassign_dir = get_readonly_filepath(os.environ['DESI_TILES'])
+        # fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
+
     stileid = f'{tileid:06d}'
     fiberfile = os.path.join(fiberassign_dir, stileid[:3], f'fiberassign-{stileid}.fits.gz')
     if not os.path.isfile(fiberfile):
@@ -83,7 +86,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     if tileid == 80615:
         alltargetdirs += [os.path.join(desi_root, 'target', 'catalogs', 'gaiadr2', '0.47.0', 'targets', 'cmx', 'resolve', 'supp')]
 
-    targetdirs = []    
+    targetdirs = []
     for ii, fn in enumerate(alltargetdirs):
         # Update generic DESIROOT to DESI_SURVEYOPS env.
         fn = fn.replace(
@@ -142,7 +145,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         errmsg = f'No targeting directories found for tile {tileid}!'
         log.critical(errmsg)
         raise IOError(errmsg)
-            
+
     targetdirs = np.sort(np.unique(targetdirs))
 
     return targetdirs
@@ -158,7 +161,7 @@ def targetphot_datamodel(from_file=False):
 
     """
     desi_root = get_desi_root_readonly()
-    
+
     if from_file:
         TARGETINGBITCOLS = [
             'CMX_TARGET',
@@ -169,7 +172,7 @@ def targetphot_datamodel(from_file=False):
             'SCND_TARGET',
             'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
             ]
-        
+
         from importlib import resources
         #datamodel_file = resources.files('desitarget.test').joinpath('t/targets.fits')
         datamodel_file = os.path.join(desi_root, 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
@@ -178,7 +181,7 @@ def targetphot_datamodel(from_file=False):
             errmsg = f'Unable to establish the data model using {datamodel_file}'
             log.critical(errmsg)
             raise IOError(errmsg)
-        
+
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
         for col in datamodel.colnames:
             if '_TARGET' in col:
@@ -187,7 +190,7 @@ def targetphot_datamodel(from_file=False):
                 datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
         for col in TARGETINGBITCOLS:
             datamodel[col] = np.zeros(1, dtype=np.int64)
-        
+
         #for col in datamodel.colnames:
         #    print("('{}', {}, '{}'),".format(col, datamodel[col].shape, datamodel[col].dtype))
     else:
@@ -316,7 +319,7 @@ def targetphot_datamodel(from_file=False):
             ('SV2_SCND_TARGET', (1,), 'int64'),
             ('SV3_SCND_TARGET', (1,), 'int64'),
             ]
-    
+
         datamodel = Table()
         for col in COLS:
             datamodel[col[0]] = np.zeros(shape=col[1], dtype=col[2])
@@ -349,12 +352,12 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
     import astropy
     from desimodel.footprint import radec2pix
     from desiutil.log import get_logger, DEBUG
-    
+
     if verbose:
         log = get_logger(DEBUG)
     else:
         log = get_logger()
-    
+
     if len(input_cat) == 0:
         log.warning('No objects in input catalog.')
         return Table()
@@ -382,7 +385,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
 
         # Get the unique list of targetdirs
         targetdirs = gather_targetdirs(tileid, fiberassign_dir=fiberassign_dir, verbose=verbose)
-        
+
         for targetdir in targetdirs:
             # Handle secondary targets, which have a (very!) different data model.
             if 'secondary' in targetdir:
@@ -410,7 +413,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                         _targetfile = alltargetfiles[0].split('hp-')[0]+f'hp-{pix}.fits' # fragile
                         if os.path.isfile(_targetfile):
                             targetfiles.append(_targetfile)
-    
+
             targetfiles = np.unique(targetfiles)
 
             if len(targetfiles) == 0:
@@ -427,14 +430,14 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                     else:
                         photo_targetid = photocache[targetfile]
                         I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
-                        
+
                     log.debug(f'Matched {len(I)} targets in {targetfile}')
                     if len(I) > 0:
                         if type(photocache[targetfile]) == astropy.table.Table:
                             cachecat = photocache[targetfile][I]
                         else:
                             cachecat = Table(fitsio.read(targetfile, rows=I))
-                        
+
                         _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
                         for col in _photo.colnames: # not all these columns will exist...
                             if col in cachecat.colnames:
@@ -457,7 +460,7 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                         photofiles.append('TOO')
                         photo.append(_photo)
                     continue
-    
+
                 # get the correct extension name or number
                 tinfo = fitsio.FITS(targetfile)
                 for _tinfo in tinfo:
@@ -466,11 +469,11 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
                         break
                 if extname == '':
                     extname = 1
-                    
+
                 # fitsio does not preserve the order of the rows but we'll sort later.
                 photo_targetid = tinfo[extname].read(columns='TARGETID')
                 I = np.where(np.isin(photo_targetid, input_cat1['TARGETID']))[0]
-    
+
                 log.debug(f'Matched {len(I)} targets in {targetfile}')
                 if len(I) > 0:
                     photo1 = tinfo[extname].read(rows=I)
@@ -493,11 +496,11 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
             #errmsg = 'No targeting photometry found.'
             #log.critical(errmsg)
             #raise ValueError(errmsg)
-    
+
         # np.hstack will sometimes complain even if the tables are identical...
         #photo = Table(np.hstack(photo))
         photo = vstack(photo)
-    
+
         # make sure there are no duplicates...?
         _, uindx = np.unique(photo['TARGETID'], return_index=True)
         #if len(uindx) < len(photo):
@@ -508,21 +511,21 @@ def gather_targetphot(input_cat, photocache=None, racolumn='TARGET_RA',
         #    res = np.split(idx_sort, idx_start[1:])
         #    #vals = vals[count > 1]
         #    #res = filter(lambda x: x.size > 1, res)
-        
+
         photo = photo[uindx]
         assert(len(np.unique(photo['TARGETID'])) == len(photo))
 
         # sort explicitly in order to ensure order
         I = np.where(np.isin(out1['TARGETID'], photo['TARGETID']))[0]
         srt = geomask.match_to(photo['TARGETID'], out1['TARGETID'][I])
-            
+
         out1[I] = photo[srt]
         out[M] = out1
         del out1, photo
 
     if columns is not None:
         out = out[columns]
-    
+
     return out
 
 def tractorphot_datamodel(from_file=False, datarelease='dr9'):
@@ -538,14 +541,14 @@ def tractorphot_datamodel(from_file=False, datarelease='dr9'):
     datamodel for the given data release.
 
     """
-    desi_root = get_desi_root_readonly()    
+    desi_root = get_desi_root_readonly()
 
     if from_file:
         datamodel_file = f'{desi_root}/external/legacysurvey/{datarelease}/south/tractor/000/tractor-0001m002.fits'
         datamodel = Table(fitsio.read(datamodel_file, rows=0, upper=True))
         for col in datamodel.colnames:
             datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        
+
         #for col in datamodel.colnames:
         #   print("('{}', {}, '{}'),".format(col, datamodel[col].shape, datamodel[col].dtype))
     else:
@@ -953,12 +956,12 @@ def tractorphot_datamodel(from_file=False, datarelease='dr9'):
             errmsg = f'Unrecognized data release {datarelease}; only dr9 and dr10 currently supported.'
             log.critical(errmsg)
             raise IOError(errmsg)
-            
+
         datamodel = Table()
         for col in COLS:
             datamodel[col[0]] = np.zeros(shape=col[1], dtype=col[2])
 
-    return datamodel 
+    return datamodel
 
 def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racolumn, deccolumn,
                                  datamodel, restrict_region):
@@ -966,7 +969,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
 
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
     brick = input_cat['BRICKNAME'][0]
-    
+
     idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) *
                     (input_cat['BRICK_OBJID'] > 0) * (input_cat['PHOTSYS'] != ''))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
@@ -977,18 +980,18 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
     # DR9 targeting photometry exists
     if len(idr9) > 0:
         assert(np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0]))
-            
+
         # find the catalog
         photsys = input_cat['PHOTSYS'][idr9][0]
-    
+
         if photsys == 'S':
             region = 'south'
         elif photsys == 'N':
             region = 'north'
-    
+
         #raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in input_cat['RA']])
         tractorfile = os.path.join(legacysurveydir, region, 'tractor', brick[:3], f'tractor-{brick}.fits')
-    
+
         if not os.path.isfile(tractorfile):
             errmsg = f'Unable to find Tractor catalog {tractorfile}'
             log.critical(errmsg)
@@ -1013,11 +1016,11 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
         ## Some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e.,
         ## not populated). However, there should always be a match here because
         ## we "repair" brick_objid in the main function.
-        #if len(I) == 0: 
+        #if len(I) == 0:
         #    return Table()
 
         tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
-    
+
         # sort explicitly in order to ensure order
         srt = geomask.match_to(tractor_dr9['OBJID'], input_cat['BRICK_OBJID'][idr9])
         tractor_dr9 = tractor_dr9[srt]
@@ -1028,7 +1031,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
 
         out[idr9] = tractor_dr9
         del tractor_dr9
-        
+
     # use positional matching
     if len(ipos) > 0:
         rad = radius_match * u.arcsec
@@ -1052,7 +1055,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
                     tractorfile = tractorfile_north
             elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
                 return out
-                
+
         _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
         iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
         if len(iprimary) == 0:
@@ -1109,12 +1112,12 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
     BRICKID and BRICK_OBJID or using positional matching (1 arcsec radius).
 
     """
-    from desitarget.targets import decode_targetid    
+    from desitarget.targets import decode_targetid
     from desiutil.brick import brickname
     from desiutil.log import get_logger, DEBUG
 
     desi_root = get_desi_root_readonly()
-    
+
     if verbose:
         log = get_logger(DEBUG)
     else:
@@ -1131,7 +1134,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
             raise ValueError(errmsg)
 
     # If these columns don't exist, add them with blank entries:
-    COLS = [('RELEASE', (1,), '>i2'), ('BRICKID', (1,), '>i4'), 
+    COLS = [('RELEASE', (1,), '>i2'), ('BRICKID', (1,), '>i4'),
             ('BRICKNAME', (1,), '<U8'), ('BRICK_OBJID', (1,), '>i4'),
             ('PHOTSYS', (1,), '<U1')]
     for col in COLS:
@@ -1211,7 +1214,7 @@ def gather_tractorphot(input_cat, racolumn='TARGET_RA', deccolumn='TARGET_DEC',
                 I = np.where(onebrickname == input_cat['BRICKNAME'][bug])[0]
                 bugout[I] = _gather_tractorphot_onebrick(input_cat[bug][I], legacysurveydir, radius_match, racolumn, deccolumn,
                                                          datamodel, restrict_region)
-            
+
     if columns is not None:
         if type(columns) is not list:
             columns = columns.tolist()
