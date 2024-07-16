@@ -25,7 +25,8 @@ from desiutil.depend import add_dependencies, mergedep
 from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
-from desispec.io.meta import rawdata_root, findfile
+from desispec.io.meta import rawdata_root, findfile, get_readonly_filepath
+
 from . import iotime
 from .table import read_table
 
@@ -590,20 +591,22 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.error('Using fiberassign from an earlier exposure %08d/%08d', night, rawfafile_expid)
 
     #- Look for override fiberassign file in svn
-    if allow_svn_override and ('DESI_TARGET' in os.environ):
-        targdir = os.getenv('DESI_TARGET')
-        testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
-        try:
-            fafile = checkgzip(testfile)
-        except FileNotFoundError:
-            # no alternate fiberassign file in svn yet, that's ok
-            pass
+    if allow_svn_override:
+        if 'DESI_TILES' in os.environ:
+            tiles_dir = get_readonly_filepath(os.getenv('DESI_TILES'))
+            testfile = f'{tiles_dir}/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
+            try:
+                fafile = checkgzip(testfile)
+            except FileNotFoundError:
+                # no alternate fiberassign file in svn yet, that's ok
+                pass
 
-        if rawfafile != fafile:
-            log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
+            if rawfafile != fafile:
+                log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
+            else:
+                log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')
         else:
-            log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')
-
+            log.warning('svn override was specified but DESI_TILES was not defined; sticking with raw data fiberassign file')
     #- Find coordinates file in same directory
     dirname, filename = os.path.split(rawfafile)
     globfiles = glob.glob(dirname+'/coordinates-*.fits')
