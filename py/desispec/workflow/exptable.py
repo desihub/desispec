@@ -13,7 +13,7 @@ from desispec.workflow.utils import define_variable_from_environment, get_json_d
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from_raw_data
 from desiutil.log import get_logger
 from desispec.util import header2night
-from desispec.io.util import create_camword, parse_badamps
+from desispec.io.util import create_camword, parse_badamps, checkgzip
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -692,21 +692,22 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             fba_header = {}
             extra_in_fba = False
         else:
-            fbaraw = os.path.join(raw_data_dir, night, expstr,
-                                   f"fiberassign-{tileid:06d}.fits")
+            fbaraw = checkgzip(os.path.join(raw_data_dir, night, expstr,
+                                            f"fiberassign-{tileid:06d}.fits"))
             if os.path.exists(fbaraw+'.gz'):
                 fbaraw = fbaraw+'.gz'
 
-            targdir = os.getenv('DESI_TARGET')
-            fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
-                                    f'{tileid // 1000:03d}',
-                                    f'fiberassign-{tileid:06d}.fits')
+            fbasvn = checkgzip(os.path.join(os.environ['DESI_TILES'],
+                                            f'{tileid // 1000:03d}',
+                                            f'fiberassign-{tileid:06d}.fits'))
+
+            # targdir = os.getenv('DESI_TARGET')
+            # fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
+            #                         f'{tileid // 1000:03d}',
+            #                         f'fiberassign-{tileid:06d}.fits')
 
             fbafinal = fbaraw
             if os.path.exists(fbasvn):
-                fbafinal = fbasvn
-            elif os.path.exists(fbasvn+'.gz'):
-                fbasvn = fbasvn+'.gz'
                 fbafinal = fbasvn
 
             if fbafinal == fbasvn:
