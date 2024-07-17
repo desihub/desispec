@@ -324,7 +324,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
 
         sel_QSO_RR_with_no_z_pb = (redrock['SPECTYPE'] == 'QSO')
         sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(redrock['Z'][sel_QN] - z_QN[sel_index_with_QN]) <= 0.05
-        log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.05 (since even with the prior, RR will give the same result)")
+        log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objects with SPECTYPE==QSO and |z_RR - z_QN| < 0.05 (since even with the prior, RR will give the same result)")
 
         sel_QN &= ~sel_QSO_RR_with_no_z_pb
         index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
