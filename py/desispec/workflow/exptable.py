@@ -14,6 +14,7 @@ from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from
 from desiutil.log import get_logger
 from desispec.util import header2night
 from desispec.io.util import create_camword, parse_badamps, checkgzip
+from desispec.io.meta import findfile
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -692,22 +693,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             fba_header = {}
             extra_in_fba = False
         else:
-            fbaraw = checkgzip(os.path.join(raw_data_dir, night, expstr,
-                                            f"fiberassign-{tileid:06d}.fits"))
-            if os.path.exists(fbaraw+'.gz'):
-                fbaraw = fbaraw+'.gz'
+            fbaraw, raw_exists = findfile('fiberassign', night=night, expid=expstr,
+                                          tile=tileid, return_exists=True)
 
-            fbasvn = checkgzip(os.path.join(os.environ['DESI_TILES'],
-                                            f'{tileid // 1000:03d}',
-                                            f'fiberassign-{tileid:06d}.fits'))
-
-            # targdir = os.getenv('DESI_TARGET')
-            # fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
-            #                         f'{tileid // 1000:03d}',
-            #                         f'fiberassign-{tileid:06d}.fits')
+            fbasvn, svn_exists = findfile('fiberassignsvn',
+                                          tile=tileid, return_exists=True)
 
             fbafinal = fbaraw
-            if os.path.exists(fbasvn):
+            if svn_exists:
                 fbafinal = fbasvn
 
             if fbafinal == fbasvn:

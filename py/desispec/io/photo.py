@@ -14,7 +14,7 @@ from astropy.table import Table, vstack
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
-from desispec.io.meta import get_desi_root_readonly, get_readonly_filepath
+from desispec.io.meta import get_desi_root_readonly, get_readonly_filepath, findfile
 from desitarget.io import desitarget_resolve_dec
 from desitarget import geomask
 
@@ -52,14 +52,12 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
         fiberassign_dir = get_readonly_filepath(os.environ['DESI_TILES'])
         # fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
 
-    stileid = f'{tileid:06d}'
-    fiberfile = os.path.join(fiberassign_dir, stileid[:3], f'fiberassign-{stileid}.fits.gz')
-    if not os.path.isfile(fiberfile):
-        fiberfile = fiberfile.replace('.gz', '')
-        if not os.path.isfile(fiberfile):
-            errmsg = f'Fiber assignment file {fiberfile} not found!'
-            log.critical(errmsg)
-            raise IOError(errmsg)
+    fiberfile, svn_exists = findfile('fiberassignsvn', tiles_dir=fiberassign_dir,
+                                     tile=tileid, readonly=True, return_exists=True)
+    if not svn_exists:
+        errmsg = f'Fiber assignment file {fiberfile} not found!'
+        log.critical(errmsg)
+        raise IOError(errmsg)
 
     log.debug(f'Reading {fiberfile} header.')
     fahdr = fits.getheader(fiberfile, ext=0)

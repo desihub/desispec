@@ -271,7 +271,7 @@ def main(options=None):
         else:
             log.info('Using default surveyops/ops/tiles-specstatus.ecsv')
             args.specstatus = os.path.expandvars(
-                '$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
+                '$DESI_SURVEYOPS/ops/tiles-specstatus.ecsv')
 
     if not os.path.exists(args.specstatus):
         log.critical(f'Missing {args.specstatus}')
