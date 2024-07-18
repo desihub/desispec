@@ -151,9 +151,6 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
             filename_priors (str): name under which the file will be saved
         """
         function = np.array(['tophat'] * z_prior.size)  # need to be the same for every one
-        # sigma = 0.1 * np.ones(z_prior.size)
-        # sigma = 0.0817591488 * (z_prior + 1) # Analytic dynamic redrock prior width
-
         # save
         out = fitsio.FITS(filename_priors, 'rw', clobber=True)
         data, names, extname = [targetid, function, z_qn, z_prior], ['TARGETID', 'FUNCTION', 'Z', 'SIGMA'], 'PRIORS'
