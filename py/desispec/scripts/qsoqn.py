@@ -307,8 +307,19 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
             raise KeyError("QN_MODEL_FILE and DESI_ROOT are not set in the current environment.")
 
     model_QN, wave_to_use = load_model(model_QN_path)
-
     data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN, out_grid=wave_to_use)
+
+    # Code to calculate the scaling constant for the dynamic RR prior
+    l_min = np.log10(wave_to_use[0])
+    l_max = np.log10(wave_to_use[-1])
+
+    # If this changes you must change it here. A future update to QuasarNP
+    # might store nboxes as a model parameter but as of 0.2.0 this is not the case.
+    nboxes = 13
+
+    dl_bins = (l_max - l_min) / nboxes
+    a = 10**(dl_bins) - 1
+    log.info(f"Using {a = } for redrock prior scaling")
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
         sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
@@ -329,7 +340,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         sel_QN[sel_to_QN] = is_qso_QN
 
         sel_QSO_RR_with_no_z_pb = (redrock['SPECTYPE'] == 'QSO')
-        prior = 0.0817591488 * (z_QN + 1) # Analytic prior width from QN box width
+        prior = a * (z_QN + 1) # Analytic prior width from QN box width
         sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(redrock['Z'][sel_QN] - z_QN[sel_index_with_QN]) <= (prior[sel_index_with_QN] / 2)
         log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objects with SPECTYPE==QSO and |z_RR - z_QN| < (prior_width / 2) (since even with the prior, RR will give the same result)")
 
