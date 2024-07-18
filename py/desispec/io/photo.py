@@ -49,7 +49,7 @@ def gather_targetdirs(tileid, fiberassign_dir=None, verbose=False):
     # desi_surveyops = os.path.join(desi_root, 'survey', 'ops', 'surveyops', 'trunk')
 
     if fiberassign_dir is None:
-        fiberassign_dir = get_readonly_filepath(os.environ['DESI_TILES'])
+        fiberassign_dir = get_readonly_filepath(os.environ['FIBER_ASSIGN_DIR'])
         # fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
 
     fiberfile, svn_exists = findfile('fiberassignsvn', tiles_dir=fiberassign_dir,

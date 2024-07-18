@@ -100,7 +100,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         specprod : production name, or full path to production
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
-        tiles_dir : defaults to $DESI_TILES if not provided
+        tiles_dir : defaults to $FIBER_ASSIGN_DIR if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
@@ -353,7 +353,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
     if tiles_dir is None and 'tiles_dir' in required_inputs:
-        tiles_dir = os.environ['DESI_TILES']
+        tiles_dir = os.environ['FIBER_ASSIGN_DIR']
 
     if 'specprod' in required_inputs and specprod is None and outdir is None :
         specprod = os.path.basename(specprod_dir)

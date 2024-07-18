@@ -592,7 +592,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
     #- Look for override fiberassign file in svn
     if allow_svn_override:
-        if 'DESI_TILES' in os.environ:
+        if 'FIBER_ASSIGN_DIR' in os.environ:
             testfile, svn_exists = findfile('fiberassignsvn', tile=tileid, readonly=True, return_exists=True)
             if svn_exists:
                 fafile = testfile
@@ -600,7 +600,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             else:
                 log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')
         else:
-            log.warning('svn override was specified but DESI_TILES was not defined; sticking with raw data fiberassign file')
+            log.warning('svn override was specified but FIBER_ASSIGN_DIR was not defined; sticking with raw data fiberassign file')
     #- Find coordinates file in same directory
     dirname, filename = os.path.split(rawfafile)
     globfiles = glob.glob(dirname+'/coordinates-*.fits')
