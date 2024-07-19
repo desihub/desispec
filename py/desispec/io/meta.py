@@ -73,8 +73,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         healpix=None, nside=64,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
-        rawdata_dir=None, specprod_dir=None, specprod=None,
-        download=False, outdir=None, qaprod_dir=None,
+        rawdata_dir=None, specprod_dir=None, specprod=None, qaprod_dir=None,
+        tiles_dir=None, download=False, outdir=None,
         return_exists=False,
         readonly=False, logfile=False):
     """Returns location where file should be
@@ -100,6 +100,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         specprod : production name, or full path to production
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
+        tiles_dir : defaults to $FIBER_ASSIGN_DIR if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
         return_exists: if True, also return whether the file exists
@@ -128,7 +129,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         fiberassign = '{rawdata_dir}/{night}/{expid:08d}/fiberassign-{tile:06d}.fits.gz',
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
+        # SVN products
+        #
+        fiberassignsvn = '{tiles_dir}/{tile3:03d}/fiberassign-{tile:06d}.fits.gz',
+        #
         # Top level
+        #
         exposure_table = '{specprod_dir}/exposure_tables/{month}/exposure_table_{night}.csv',
         override='{specprod_dir}/exposure_tables/{month}/override_{night}.yaml',
         processing_table = '{specprod_dir}/processing_tables/processing_table_{specprod}-{night}.csv',
@@ -287,9 +293,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
     #- be robust to str vs. int
     if isinstance(healpix, str): healpix = int(healpix)
     if isinstance(night, str):   night = int(night)
-    if isinstance(expid, str):   expid = int(night)
-    if isinstance(tile, str):    tile = int(night)
-    if isinstance(spectrograph, str): spectrogrpah = int(night)
+    if isinstance(expid, str):   expid = int(expid)
+    if isinstance(tile, str):    tile = int(tile)
+    if isinstance(spectrograph, str): spectrograph = int(spectrograph)
 
     loc_copy = location.copy()
     if tile is not None:
@@ -346,6 +352,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
+    if tiles_dir is None and 'tiles_dir' in required_inputs:
+        tiles_dir = os.environ['FIBER_ASSIGN_DIR']
+
     if 'specprod' in required_inputs and specprod is None and outdir is None :
         specprod = os.path.basename(specprod_dir)
         log.debug("Setting specprod = '%s'", specprod)
@@ -362,7 +371,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
-        'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
+        'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
@@ -371,6 +380,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     #- survey and faprogram should be lower, but don't trip on None
     actual_inputs['survey'] = None if survey is None else survey.lower()
     actual_inputs['faprogram'] = None if faprogram is None else faprogram.lower()
+    actual_inputs['tile3'] = None if tile is None else tile // 1000
 
     if 'rawdata_dir' in required_inputs:
         actual_inputs['rawdata_dir'] = rawdata_dir

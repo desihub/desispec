@@ -26,6 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
+
 from . import iotime
 from .table import read_table
 
@@ -590,16 +591,10 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.error('Using fiberassign from an earlier exposure %08d/%08d', night, rawfafile_expid)
 
     #- Look for override fiberassign file in svn
-    if allow_svn_override and ('DESI_TARGET' in os.environ):
-        targdir = os.getenv('DESI_TARGET')
-        testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
-        try:
-            fafile = checkgzip(testfile)
-        except FileNotFoundError:
-            # no alternate fiberassign file in svn yet, that's ok
-            pass
-
-        if rawfafile != fafile:
+    if allow_svn_override:
+        testfile, svn_exists = findfile('fiberassignsvn', tile=tileid, readonly=True, return_exists=True)
+        if svn_exists:
+            fafile = testfile
             log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
         else:
             log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')

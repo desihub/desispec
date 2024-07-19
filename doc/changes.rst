@@ -6,8 +6,13 @@ desispec Change Log
 -------------------
 
 * healpix grouping memory and I/O efficiency improvements (PR `#2290`_).
+* Eliminate hard-coded paths to find fiberassign and surveyops files.
+  Obtain the path to fiberassign files with :func:`~desispec.io.meta.findfile`,
+  which will use :envvar:`FIBER_ASSIGN_DIR`. Use :envvar:`DESI_SURVEYOPS`
+  to find surveyops files (PR `#2294`_).
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
+.. _`#2294`: https://github.com/desihub/desispec/pull/2294
 
 0.64.0 (2024-07-01)
 -------------------
