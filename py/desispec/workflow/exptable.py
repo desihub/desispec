@@ -694,10 +694,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             extra_in_fba = False
         else:
             fbaraw, raw_exists = findfile('fiberassign', night=night, expid=expstr,
-                                          tile=tileid, return_exists=True)
+                                          tile=tileid, readonly=True, return_exists=True)
 
             fbasvn, svn_exists = findfile('fiberassignsvn',
-                                          tile=tileid, return_exists=True)
+                                          tile=tileid, readonly=True, return_exists=True)
 
             fbafinal = fbaraw
             if svn_exists:
