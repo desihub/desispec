@@ -608,7 +608,9 @@ def main(args=None, comm=None):
         qafile = findfile('tileqa', **findfileopts)
         qapng = findfile('tileqapng', **findfileopts)
         qalog = findfile('tileqa', logfile=True, **findfileopts)
+        ## requires all coadd and redrock outputs in addition to exposureqa
         infiles = []
+        infiles.append(findfile('exposureqa', **findfileopts))
         for spectro in all_subgroups:
             findfileopts['spectrograph'] = spectro
             infiles.append(findfile('coadd', **findfileopts))
