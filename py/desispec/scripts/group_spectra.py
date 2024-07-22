@@ -205,7 +205,8 @@ def main(args=None, comm=None):
                 framesdict[(night, expid, camera)] = frame
 
         log0.info(f'Combining into spectra at {time.asctime()}')
-        spectra = frames2spectra(framesdict, pix=args.healpix, nside=args.nside)
+        spectra = frames2spectra(framesdict, pix=args.healpix, nside=args.nside,
+                                 onetile=args.onetile)
 
         #- Record input files
         if spectra.meta is None:

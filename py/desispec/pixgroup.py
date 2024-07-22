@@ -552,7 +552,7 @@ def add_missing_frames(frames):
                 wave[band], flux, ivar, mask, resolution_data,
                 frame.fibermap, header, scores)
 
-def frames2spectra(frames, pix=None, nside=64):
+def frames2spectra(frames, pix=None, nside=64, onetile=False):
     '''
     Combine a dict of FrameLite into a SpectraLite for healpix `pix`
 
@@ -562,10 +562,14 @@ def frames2spectra(frames, pix=None, nside=64):
     Options:
         pix: only include targets in this NESTED healpix pixel number
         nside: Healpix nside, must be power of 2
+        onetile: All frames come from the same tile (impacts keyword propagation)
 
     Returns:
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
+
+    If `onetile` is True, propagate fibermap header keywords that apply
+    to a single tile, e.g. TILEID and fiberassign keywords
     '''
     log = get_logger()
 
@@ -714,6 +718,28 @@ def frames2spectra(frames, pix=None, nside=64):
             else:
                 outmap['FIBERSTATUS'] |= banddict[band]['FIBERSTATUS']
         merged_over_cams_fmaps.append(outmap)
+
+    #- Only keep fibermap keywords that apply to combined spectra, not individual exp
+    keep_keywords = ['SURVEY', 'PROGRAM', 'EXTNAME', 'LONGSTRN',
+                     'INSTRUME', 'OBSERVAT', 'OBS-LAT', 'OBS-LONG', 'OBS-ELEV', 'TELESCOP']
+
+    if onetile:
+        keep_keywords.extend([
+            'TILEID', 'TILERA', 'TILEDEC', 'FIELDROT',
+            'FILEDROT', 'FA_PLAN', 'FA_HA', 'FA_RUN', 'FA_M_GFA',
+            'FA_M_PET', 'FA_M_POS', 'REQRA', 'REQDEC', 'FIELDNUM',
+            'FA_VER', 'FA_SURV', 'FAFLAVOR', 'FAPRGRM', 'DESIROOT',
+            'GFA', 'MTL', 'SCND', 'SCND2', 'SCND3', 'SCNDMTL', 'SKY',
+            'SKYSUPP', 'TARG', 'TOO', 'FAARGS', 'FAOUTDIR',
+            'NOWTIME', 'RUNDATE', 'PMCORR', 'PMTIME', 'MTLTIME',
+            'OBSCON', 'GOALTIME', 'GOALTYPE', 'EBVFAC', 'SBPROF',
+            'MINTFRAC', 'FASCRIPT', 'SVNDM', 'SVNMTL',
+                              ])
+
+    for fm in merged_over_cams_fmaps:
+        for key in list(fm.meta.keys()):
+            if key not in keep_keywords:
+                del fm.meta[key]
 
     #- Convert to Tables to facilitate column add/drop/reorder
     for i, fm in enumerate(merged_over_cams_fmaps):
