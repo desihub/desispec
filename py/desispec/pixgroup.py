@@ -557,7 +557,7 @@ def frames2spectra(frames, pix=None, nside=64):
     Combine a dict of FrameLite into a SpectraLite for healpix `pix`
 
     Args:
-        frames: dict of FrameLight, keyed by (night, expid, camera)
+        frames: list or dict of FrameLight, keyed by (night, expid, camera)
 
     Options:
         pix: only include targets in this NESTED healpix pixel number
@@ -568,6 +568,17 @@ def frames2spectra(frames, pix=None, nside=64):
         the requested healpix pixel `pix`
     '''
     log = get_logger()
+
+    #- support list or tuple instead of dict as input
+    if isinstance(frames, (list, tuple)):
+        framedict = dict()
+        for fr in frames:
+            night = fr.meta['NIGHT']
+            expid = fr.meta['EXPID']
+            camera = fr.meta['CAMERA']
+            framedict[(night, expid, camera)] = fr
+
+        frames = framedict
 
     #- shallow copy of frames dict in case we augment with blank frames
     frames = frames.copy()
