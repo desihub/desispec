@@ -720,11 +720,12 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
         merged_over_cams_fmaps.append(outmap)
 
     #- Only keep fibermap keywords that apply to combined spectra, not individual exp
-    keep_keywords = ['SURVEY', 'PROGRAM', 'EXTNAME', 'LONGSTRN',
-                     'INSTRUME', 'OBSERVAT', 'OBS-LAT', 'OBS-LONG', 'OBS-ELEV', 'TELESCOP']
+    general_keywords = [
+            'SURVEY', 'PROGRAM', 'EXTNAME', 'LONGSTRN',
+            'INSTRUME', 'OBSERVAT', 'OBS-LAT', 'OBS-LONG', 'OBS-ELEV', 'TELESCOP'
+            ]
 
-    if onetile:
-        keep_keywords.extend([
+    tile_keywords = [
             'TILEID', 'TILERA', 'TILEDEC', 'FIELDROT',
             'FILEDROT', 'FA_PLAN', 'FA_HA', 'FA_RUN', 'FA_M_GFA',
             'FA_M_PET', 'FA_M_POS', 'REQRA', 'REQDEC', 'FIELDNUM',
@@ -734,7 +735,12 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             'NOWTIME', 'RUNDATE', 'PMCORR', 'PMTIME', 'MTLTIME',
             'OBSCON', 'GOALTIME', 'GOALTYPE', 'EBVFAC', 'SBPROF',
             'MINTFRAC', 'FASCRIPT', 'SVNDM', 'SVNMTL',
-                              ])
+            ]
+
+    if onetile:
+        keep_keywords = general_keywords + tile_keywords
+    else:
+        keep_keywords = general_keywords
 
     for fm in merged_over_cams_fmaps:
         for key in list(fm.meta.keys()):
