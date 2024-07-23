@@ -124,7 +124,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         filename=findfile("exposureqa",night=exposure_night,expid=expid,specprod_dir=exposure_qa_dir)
         if not os.path.isfile(filename) :
             log.info("running missing exposure qa")
-            exposure_fiberqa_table , exposure_petalqa_table = compute_exposure_qa(exposure_night, expid, specprod_dir)
+            exposure_fiberqa_table , exposure_petalqa_table = compute_exposure_qa(int(exposure_night), expid, specprod_dir)
             if exposure_fiberqa_table is not None :
                 write_exposure_qa(filename, exposure_fiberqa_table , exposure_petalqa_table)
                 log.info("wrote {}".format(filename))

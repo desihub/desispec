@@ -203,8 +203,9 @@ def main(args=None, comm=None):
             log.error(msg)
             raise ValueError(msg)
         else:
-            msg = f"Only using exposures specified with --expids {args.expids}"
-            log.info(msg)
+            if rank == 0:
+                msg = f"Only using exposures specified with --expids {args.expids}"
+                log.info(msg)
 
     if args.groupname in ['perexp', 'pernight'] and args.nights is not None:
         if len(args.nights) > 1:
@@ -610,7 +611,10 @@ def main(args=None, comm=None):
         qalog = findfile('tileqa', logfile=True, **findfileopts)
         ## requires all coadd and redrock outputs in addition to exposureqa
         infiles = []
-        infiles.append(findfile('exposureqa', **findfileopts))
+        for expid, night in zip(expids, nights):
+            findfileopts['expid'] = expid
+            findfileopts['night'] = night
+            infiles.append(findfile('exposureqa', **findfileopts))
         for spectro in all_subgroups:
             findfileopts['spectrograph'] = spectro
             infiles.append(findfile('coadd', **findfileopts))
