@@ -202,6 +202,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 lastnight = int(hdr['NIGHT'])
             except KeyError:
                 # Some daily reductions do not have this set, use the filename.
+                log.warning(f'NIGHT keyword missing from {rrfile}!')
                 lastnight = int(rrfile.split('-')[-1].split('.')[0].replace('thru', ''))
             data.add_column(np.full(nrows, lastnight, dtype=np.int32),
                     index=icol, name='LASTNIGHT')
@@ -222,11 +223,16 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 dtype = np.int64
         else:
             dtype = None
-
-        data.add_column(np.full(nrows, hdr['SPGRPVAL'], dtype=dtype),
-                index=icol, name='SPGRPVAL')
     else:
         log.warning(f'SPGRPVAL keyword missing from {rrfile}')
+        if group == 'cumulative':
+            val = lastnight
+            dtype = np.int32
+        else:
+            # This is temporary. The whole section above could do with some refactoring.
+            raise NotImplementedError(f'No method to reconstruct SPGRPVAL!')
+    data.add_column(np.full(nrows, val, dtype=dtype),
+            index=icol, name='SPGRPVAL')
 
     return data, expfibermap
 
