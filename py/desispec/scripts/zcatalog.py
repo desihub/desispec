@@ -198,7 +198,12 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 index=icol, name='NIGHT')
     elif group == 'cumulative':
         if 'LASTNIGHT' not in data.colnames:
-            data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+            try:
+                lastnight = int(hdr['NIGHT'])
+            except KeyError:
+                # Some daily reductions do not have this set, use the filename.
+                lastnight = int(rrfile.split('-')[-1].split('.')[0].replace('thru', ''))
+            data.add_column(np.full(nrows, lastnight, dtype=np.int32),
                     index=icol, name='LASTNIGHT')
     elif group == 'healpix':
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
