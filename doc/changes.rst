@@ -10,10 +10,15 @@ desispec Change Log
   Obtain the path to fiberassign files with :func:`~desispec.io.meta.findfile`,
   which will use :envvar:`FIBER_ASSIGN_DIR`. Use :envvar:`DESI_SURVEYOPS`
   to find surveyops files (PR `#2294`_).
+* add desi_spcalib_history to print history of changes in configurations in
+  desi_spectro_calib yaml files (PR `2296`_).
+* desi_group_spectra header propagation cleanup (PR `#2302`_).
 * zproc requires exposure-qa files for tileqa step (PR `#2306`_).
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
+.. _`#2296`: https://github.com/desihub/desispec/pull/2296
+.. _`#2302`: https://github.com/desihub/desispec/pull/2302
 .. _`#2306`: https://github.com/desihub/desispec/pull/2306
 
 0.64.0 (2024-07-01)
