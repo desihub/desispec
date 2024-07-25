@@ -209,7 +209,7 @@ for raw_filename in raw_filenames :
                             dark=True,
                             pixflat=False,
                             nocrosstalk=True,
-                            ccd_calibration_filename=False)
+                            ccd_calibration_filename=None)
         img=image.pix
         if args.save_preproc :
             io.write_image(preproc_filename,image)
