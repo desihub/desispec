@@ -23,15 +23,18 @@ from desispec.util import parse_int_args
 
 
 
-def get_ztile_relpath(tileid,group,night=None,expid=None):
+def get_ztile_relpath(tileid, group, night=None, expid=None, subgroup=None):
     """
     Determine the relative output directory of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
     Args:
         tileid (int): Tile ID
         group (str): cumulative, pernight, perexp, or a custom name
+
+    Options:
         night (int): Night
         expid (int): Exposure ID
+        subgroup (str): subgroup name for non-standard group values
 
     Returns:
         outdir (str): the relative path of output directory of the batch script from the specprod/run/scripts
@@ -46,40 +49,49 @@ def get_ztile_relpath(tileid,group,night=None,expid=None):
         outdir = f'tiles/{group}/{tileid}/{expid:08d}'
     elif group == 'pernight-v0':
         outdir = f'tiles/{tileid}/{night}'
+    elif subgroup is not None:
+        outdir = f'tiles/{group}/{tileid}/{subgroup}'
+        log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/*')
     else:
         outdir = f'tiles/{group}/{tileid}'
         log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/*')
     return outdir
 
-def get_ztile_script_pathname(tileid,group,night=None,expid=None):
+def get_ztile_script_pathname(tileid, group, night=None, expid=None, subgroup=None):
     """
     Generate the pathname of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
     Args:
         tileid (int): Tile ID
         group (str): cumulative, pernight, perexp, or a custom name
+
+    Options:
         night (int): Night
         expid (int): Exposure ID
+        subgroup (str): Custom group string to use instead of night or expid
 
     Returns:
         (str): the pathname of the tile redshift batch script
     """
     reduxdir = desispec.io.specprod_root()
-    outdir = get_ztile_relpath(tileid,group,night=night,expid=expid)
+    outdir = get_ztile_relpath(tileid,group,night=night,expid=expid,subgroup=subgroup)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
-    suffix = get_ztile_script_suffix(tileid,group,night=night,expid=expid)
+    suffix = get_ztile_script_suffix(tileid,group,night=night,expid=expid,subgroup=subgroup)
     batchscript = f'ztile-{suffix}.slurm'
     return os.path.join(scriptdir, batchscript)
 
-def get_ztile_script_suffix(tileid,group,night=None,expid=None):
+def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None):
     """
     Generate the suffix of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
     Args:
         tileid (int): Tile ID
         group (str): cumulative, pernight, perexp, or a custom name
+
+    Options:
         night (int): Night
         expid (int): Exposure ID
+        subgroup (str): Custom group string to use instead of night or expid
 
     Returns:
         suffix (str): the suffix of the batch script
@@ -93,6 +105,9 @@ def get_ztile_script_suffix(tileid,group,night=None,expid=None):
         suffix = f'{tileid}-exp{expid:08d}'
     elif group == 'pernight-v0':
         suffix = f'{tileid}-{night}'
+    elif subgroup is not None:
+        suffix = f'{tileid}-{group}-{subgroup}'
+        log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     else:
         suffix = f'{tileid}-{group}'
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
@@ -126,6 +141,7 @@ def get_zpix_redshift_script_pathname(healpix, survey, program):
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
                                    thrunight=None, nights=None, expids=None,
+                                   subgroup=None,
                                    healpix=None, survey=None, program=None,
                                    queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
@@ -144,6 +160,7 @@ def create_desi_zproc_batch_script(group,
         thrunight (int), optional: For group=cumulative, include exposures through this night
         nights (list of int), optional: The nights the data was acquired.
         expids (list of int), optional: The exposure id(s) for the data.
+        subgroup (str): subgroup name for non-standard group values
         healpix (list of int), optional: healpixels to process (group='healpix')
         queue (str), optional: Queue to be used.
         batch_opts (str), optional: Other options to give to the slurm batch scheduler (written into the script).
@@ -197,7 +214,7 @@ def create_desi_zproc_batch_script(group,
         scriptpath = get_zpix_redshift_script_pathname(healpix, survey, program)
     else:
         scriptpath = get_ztile_script_pathname(tileid, group=group,
-                                                   night=night, expid=expid)
+                                               night=night, expid=expid, subgroup=subgroup)
 
     if cameras is None:
         cameras = decode_camword('a0123456789')
@@ -219,9 +236,15 @@ def create_desi_zproc_batch_script(group,
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
+    ## Derive job description name from group
+    jobdesc = group
+    if jobdesc not in ('perexp', 'pernight', 'cumulative'):
+        jobdesc = 'custom_tile'
+        log.warning(f'Unrecognized {group=}, using {jobdesc=}')
+
     ## If system name isn't specified, guess it
     if system_name is None:
-        system_name = batch.default_system(jobdesc=group, no_gpu=no_gpu)
+        system_name = batch.default_system(jobdesc=jobdesc, no_gpu=no_gpu)
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
@@ -287,7 +310,7 @@ def create_desi_zproc_batch_script(group,
         cmd += ' --mpi'
 
     ncores, nodes, runtime = determine_resources(
-            ncameras, group.upper(), queue=queue, nexps=nexps,
+            ncameras, jobdesc=jobdesc, queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
     runtime_hh = int(runtime // 60)
