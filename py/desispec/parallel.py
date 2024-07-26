@@ -381,12 +381,20 @@ def stdouterr_redirected(to=None, comm=None, overwrite=False):
     # The DESI loggers.
     desi_loggers = desiutil.log._desiutil_log_root
 
-    def _rank_filename(base, rank):
+    def _rank_filename(basename, rank):
         """
-        Return standard name for output file of individual rank.
-        Rank can be a wildcard to generate a glob string.
+        Return standard filename for output file of individual rank.
+
+        Args:
+            basename (str): base filename with path of final output log
+            rank (int or str): MPI rank
+
+        Returns:
+            rank_filename (str): filename to use for temporary log of individual rank
+
+        `rank` can be a wildcard '*' to generate a glob string.
         """
-        return f"{base}-rank{rank}"
+        return f"{basename}-rank{rank}"
 
     def _redirect(out_to, err_to):
 
