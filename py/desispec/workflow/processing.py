@@ -16,8 +16,9 @@ import subprocess
 from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
-                                        get_ztile_relpath, \
-                                        get_ztile_script_suffix
+    get_ztile_relpath, \
+    get_ztile_script_suffix, read_minimal_tilenight_proctab_cols, \
+    read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
     queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache
 from desispec.workflow.timing import what_night_is_it
@@ -1546,23 +1547,59 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
 
     if len(zprows) > 0:
         for zsubtype in z_submit_types:
+            log.info(" ")
+            log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.")
             if zsubtype == 'perexp':
                 for zprow in zprows:
-                    log.info(" ")
-                    log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
+                    log.info(f"EXPID: {zprow['EXPID']}.\n")
                     redshift_prow = make_redshift_prow([zprow], tnight, descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
                     redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
                     ptable.add_row(redshift_prow)
-            else:
-                log.info(" ")
-                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.")
+            elif zsubtype == 'cumulative':
+                tileids = np.unique([prow['TILEID'] for prow in zprows])
+                if len(tileids) > 1:
+                    msg = f"Error, more than one tileid provided for cumulative redshift job: {tileids}"
+                    log.critical(msg)
+                    raise ValueError(msg)
+                nights = np.unique([prow['NIGHT'] for prow in zprows])
+                if len(nights) > 1:
+                    msg = f"Error, more than one night provided for cumulative redshift job: {nights}"
+                    log.critical(msg)
+                    raise ValueError(msg)
+                tileid, night = tileids[0], nights[0]
+                ## For cumulative redshifts, get any existing processing rows for tile
+                matched_prows = read_minimal_tilenight_proctab_cols(tileids=tileids)
+                matched_prows = matched_prows[matched_prows['NIGHT']<=night]
+                ## Identify the processing rows that should be assigned as dependecies
+                ## tnight should be first such that the new job inherits the other metadata from it
+                tnights = [tnight]
+                for prow in matched_prows:
+                    if matched_prows['INTID'] != tnight['INTID']:
+                        tnights.append(prow)
+                log.info(f"Internal Processing IDs: {[prow['INTID'] for prow in tnights]}.\n")
+                ## Identify all exposures that should go into the fit
+                expids = [prow['EXPID'][0] for prow in zprows]
+                ## note we can actually get the full list of exposures, but for now
+                ## we'll stay consistent with old processing where we only list exposures
+                ## from the current night
+                ## For cumulative redshifts, get valid expids from exptables
+                #matched_erows = read_minimal_science_exptab_cols(tileids=tileids)
+                #matched_erows = matched_erows[matched_erows['NIGHT']<=night]
+                #expids = list(set([prow['EXPID'][0] for prow in zprows])+set(matched_erows['EXPID']))
+                log.info(f"Expids: {expids}.\n")
+                redshift_prow, internal_id = make_joint_prow(tnights, descriptor=zsubtype, internal_id=internal_id)
+                redshift_prow['EXPID'] = expids
+                redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                               strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                               resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+                ptable.add_row(redshift_prow)
+            else: # pernight
                 expids = [prow['EXPID'][0] for prow in zprows]
                 log.info(f"Expids: {expids}.\n")
-                redshift_prow = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
-                internal_id += 1
+                redshift_prow, internal_id = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
                 redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
@@ -1700,6 +1737,7 @@ def make_joint_prow(prows, descriptor, internal_id):
         dict: Row of a processing table corresponding to the joint fit job.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
+    log = get_logger()
     first_row = table_row_to_dict(prows[0])
     joint_prow = first_row.copy()
 
@@ -1711,38 +1749,41 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['SUBMIT_DATE'] = -99
     joint_prow['STATUS'] = 'U'
     joint_prow['SCRIPTNAME'] = ''
-    joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+    joint_prow['EXPID'] = np.unique(np.concatenate([currow['EXPID'] for currow in prows])).astype(int)
 
     ## Assign the PROCCAMWORD based on the descriptor and the input exposures
-    if descriptor == 'stdstarfit':
-        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
+    ## UPDATE 2024-04-24: badamps are now included in arc/flat joint fits,
+    ## so grab all PROCCAMWORDs instead of filtering out BADAMP cameras
+    ## For flats we want any camera that exists in all 12 exposures
+    ## For arcs we want any camera that exists in at least 3 exposures
+    pcamwords = [prow['PROCCAMWORD'] for prow in prows]
+    if descriptor in 'stdstarfit':
         joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
                                                   full_spectros_only=True)
+    elif descriptor in ['pernight', 'cumulative']:
+        joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
+                                                  full_spectros_only=False)
+    elif descriptor == 'nightlyflat':
+        joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
+                                                         full_spectros_only=False)
+    elif descriptor == 'psfnight':
+        ## Count number of exposures each camera is present for
+        camcheck = {}
+        for camword in pcamwords:
+            for cam in decode_camword(camword):
+                if cam in camcheck:
+                    camcheck[cam] += 1
+                else:
+                    camcheck[cam] = 1
+        ## if exists in 3 or more exposures, then include it
+        goodcams = []
+        for cam,camcount in camcheck.items():
+            if camcount >= 3:
+                goodcams.append(cam)
+        joint_prow['PROCCAMWORD'] = create_camword(goodcams)
     else:
-        ## UPDATE 2024-04-24: badamps are now included in arc/flat joint fits,
-        ## so grab all PROCCAMWORDs instead of filtering out BADAMP cameras
-        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
-
-        ## For flats we want any camera that exists in all 12 exposures
-        ## For arcs we want any camera that exists in at least 3 exposures
-        if descriptor == 'nightlyflat':
-            joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
-                                                             full_spectros_only=False)
-        elif descriptor == 'psfnight':
-            ## Count number of exposures each camera is present for
-            camcheck = {}
-            for camword in pcamwords:
-                for cam in decode_camword(camword):
-                    if cam in camcheck:
-                        camcheck[cam] += 1
-                    else:
-                        camcheck[cam] = 1
-            ## if exists in 3 or more exposures, then include it
-            goodcams = []
-            for cam,camcount in camcheck.items():
-                if camcount >= 3:
-                    goodcams.append(cam)
-            joint_prow['PROCCAMWORD'] = create_camword(goodcams)
+        log.warning("Warning asked to produce joint proc table row for unknown"
+                    + f" job description {descriptor}")
 
     joint_prow = assign_dependency(joint_prow, dependency=prows)
     return joint_prow, internal_id
@@ -1787,11 +1828,11 @@ def make_tnight_prow(prows, calibjobs, internal_id):
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
-    joint_prow = define_and_assign_dependency(joint_prow,calibjobs,use_tilenight=True)
+    joint_prow = define_and_assign_dependency(joint_prow, calibjobs, use_tilenight=True)
 
     return joint_prow
 
-def make_redshift_prow(prows, tnight, descriptor, internal_id):
+def make_redshift_prow(prows, tnights, descriptor, internal_id):
     """
     Given an input list or array of processing table rows and a descriptor, this creates a joint fit processing job row.
     It starts by copying the first input row, overwrites relevant columns, and defines the new dependencies (based on the
@@ -1800,11 +1841,11 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
     Args:
         prows, list or array of dicts. Unsumbitted rows corresponding to the individual prestdstar jobs that are
             the first steps of tilenight.
-        tnight, Table.Row object. Row corresponding to the tilenight job on which the redshift job depends.
+        tnights, list or array of Table.Row objects. Rows corresponding to the tilenight jobs on which the redshift job depends.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        dict: Row of a processing table corresponding to the tilenight job.
+        dict: Row of a processing table corresponding to the tilenight jobs.
     """
     first_row = table_row_to_dict(prows[0])
     redshift_prow = first_row.copy()
@@ -1818,7 +1859,7 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
     redshift_prow['SCRIPTNAME'] = ''
     redshift_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
-    redshift_prow = assign_dependency(redshift_prow,dependency=tnight)
+    redshift_prow = assign_dependency(redshift_prow,dependency=tnights)
 
     return redshift_prow
 

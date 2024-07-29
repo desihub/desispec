@@ -180,7 +180,7 @@ def update_exposure_table(night=None, specprod=None, exp_table_pathname=None,
 
     ## Only write out the table at the end and only if dry_run_level dictates
     if dry_run_level < 3:
-        write_table(etable, tablename=exp_table_pathname)
+        write_table(etable, tablename=exp_table_pathname, tabletype='exptable')
     else:
         log.info(f"{dry_run_level=}, so not saving exposure table.\n{etable=}")
 

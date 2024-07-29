@@ -7,7 +7,8 @@ import os
 import numpy as np
 from astropy.table import Table
 
-
+from desispec.workflow.redshifts import update_science_etab_cache, \
+    update_tilenight_ptab_cache
 ###################################################
 ################  Table Functions #################
 ###################################################
@@ -202,6 +203,12 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     os.rename(temp_name, tablename)
     if verbose:
         log.info("Written table: ", table.info)
+
+    if tabletype is not None:
+        if tabletype == 'exptable':
+            update_science_etab_cache(origtable)
+        elif tabletype == 'proctable':
+            update_tilenight_ptab_cache(origtable)
 
 def standardize_tabletype(tabletype):
     """

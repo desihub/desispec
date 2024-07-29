@@ -403,7 +403,7 @@ class TestProcNight(unittest.TestCase):
 
         while True:
             num_newlinks = link_rawdata(self.real_rawnight_dir, self.test_rawnight_dir, numexp=10)
-            desispec.scripts.tile_redshifts.reset_allexp_cache()
+            desispec.workflow.redshifts.reset_science_etab_cache()
             if num_newlinks == 0:
                 break
             else:

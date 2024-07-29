@@ -27,7 +27,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
 from desispec.workflow.proctable import get_processing_table_pathname, \
     erow_to_prow, instantiate_processing_table
 from desispec.workflow.tableio import load_table
-from desispec.workflow.redshifts import read_minimal_exptables_columns
+from desispec.workflow.redshifts import read_minimal_science_exptab_cols
 from desispec.io.meta import specprod_root, rawdata_root, findfile
 from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, parse_badamps, create_camword, camword_union, \
@@ -127,7 +127,7 @@ def main(args=None):
     log.info(f'Searching {prod_dir} for: {nights}')
     
     ## Get all the exposure tables for cross-night dependencies
-    all_exptabs = read_minimal_exptables_columns(nights=None)
+    all_exptabs = read_minimal_science_exptab_cols(nights=None)
     ## We don't want future days mixing in
     all_exptabs = all_exptabs[all_exptabs['NIGHT'] <= np.max(nights)]
     ## Restrict to only the exptabs relevant to the current dashboard
@@ -199,7 +199,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         skipd_tileids (list): List of tileids that should be skipped and not
             listed in the output dashboard.
         all_exptabs (astropy.table.Table): A stacked exposure table with minimal
-            columns returned from read_minimal_exptables_columns(). Used for
+            columns returned from read_minimal_science_exptab_cols(). Used for
             cumulative redshifts jobs to identify tile data from previous nights.
 
     Returns dict:

@@ -7,6 +7,8 @@ from desispec.io import findfile
 from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.workflow.calibration_selection import \
     determine_calibrations_to_proc
+from desispec.workflow.redshifts import read_minimal_science_exptab_cols, \
+    read_minimal_tilenight_proctab_cols
 from desispec.workflow.science_selection import determine_science_to_proc, \
     get_tiles_cumulative
 from desiutil.log import get_logger
@@ -336,6 +338,15 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
     full_etable = etable.copy()
 
+    ## Pre-populate exposure table and processing table caches of all nights
+    ## if doing cross-night redshifts
+    if 'cumulative' in z_submit_types:
+        ## this shouldn't need to change since we've already updated the exptab
+        read_minimal_science_exptab_cols()
+        ## this would become out of date for the current night except
+        ## write_table will keep it up to date
+        read_minimal_tilenight_proctab_cols()
+
     ## Cut on OBSTYPES
     log.info(f"Processing the following obstypes: {proc_obstypes}")
     good_types = np.isin(np.array(etable['OBSTYPE']).astype(str), proc_obstypes)
@@ -346,7 +357,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     if tableng > 0:
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:
-            write_table(ptable, tablename=proc_table_pathname)
+            write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
         if any_jobs_failed(ptable['STATUS']):
             ## Try up to two times to resubmit failures, afterwards give up
             ## unless explicitly told to proceed with the failures
@@ -472,7 +483,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## Add the processing row to the processing table
         proctable.add_row(prow)
         if len(proctable) > 0 and dry_run_level < 3:
-            write_table(proctable, tablename=proc_table_pathname)
+            write_table(proctable, tablename=proc_table_pathname, tabletype='proctable')
         sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
                          dry_run=dry_run, logfunc=log.info)
@@ -559,7 +570,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                     extra_job_args=extra_job_args)
 
         if len(ptable) > 0 and dry_run_level < 3:
-            write_table(ptable, tablename=proc_table_pathname)
+            write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
 
         sleep_and_report(sub_wait_time,
                          message_suffix=f"to slow down the queue submission rate",
@@ -575,7 +586,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:
-            write_table(ptable, tablename=proc_table_pathname)
+            write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
             ## Now that processing is complete, lets identify what we didn't process
             if len(ptable) > 0:
                 processed = np.isin(full_etable['EXPID'], np.unique(np.concatenate(ptable['EXPID'])))

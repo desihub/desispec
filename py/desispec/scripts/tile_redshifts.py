@@ -11,7 +11,7 @@ import numpy as np
 from astropy.table import Table, vstack
 
 from desispec.io.util import parse_cameras
-from desispec.workflow.redshifts import read_minimal_exptables_columns, \
+from desispec.workflow.redshifts import read_minimal_science_exptab_cols, \
                                         create_desi_zproc_batch_script
 from desiutil.log import get_logger
 
@@ -59,17 +59,6 @@ def main(args=None):
     batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
     num_error = len(failed_jobs)
     sys.exit(num_error)
-
-# _allexp is cache of all exposure tables stacked so that we don't have to read all
-# of them every time we call generate_tile_redshift_scripts()
-_allexp = None
-
-def reset_allexp_cache():
-    """
-    Utility script to reset the _allexp cache to ensure it is re-read from disk
-    """
-    global _allexp
-    _allexp = None
 
 def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None, explist=None,
                                    camword=None, max_gpuprocs=None, no_gpu=False,
@@ -126,7 +115,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
         else:
             log.info(f'Loading production exposure tables for all nights')
 
-        exptable = read_minimal_exptables_columns(nights)
+        exptable = read_minimal_science_exptab_cols(nights)
 
     else:
         log.info(f'Loading exposure list from {explist}')
@@ -190,28 +179,49 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
     # - NOTE: depending upon options, this might re-read all the exptables again
     # - NOTE: this may not scale well several years into the survey
     if group == 'cumulative':
+        if nights is not None:
+            lastnight = int(np.max(nights))
+        elif exptable is not None:
+            lastnight = int(np.max(exptable['NIGHT']))
+        else:
+            lastnight = None
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-        global _allexp
-        if _allexp is None:
-            log.info(f'Reading all exposure_tables from all nights')
-            _allexp = read_minimal_exptables_columns()
-        keep = np.in1d(_allexp['TILEID'], tileids)
-        newexptable = _allexp[keep]
+        log.info(f'Reading all exposure_tables from all nights')
+        newexptable = read_minimal_science_exptab_cols(tileids=tileids)
+        newexptable = newexptable[['EXPID', 'NIGHT', 'TILEID']]
+
         if exptable is not None:
             expids = exptable['EXPID']
             missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
             if np.any(missing_exps):
-                latest_exptable = read_minimal_exptables_columns(nights=np.unique(exptable['NIGHT'][missing_exps]))
-                keep = np.in1d(latest_exptable['EXPID'], expids[missing_exps])
-                latest_exptable = latest_exptable[keep]
-                newexptable = vstack([newexptable, latest_exptable])
+                log.warning(f'Identified {np.sum(missing_exps)} missing exposures '
+                            + f'in the exposure cache. Resetting the cache to acquire'
+                            + f' them from all nights')
+                ## reset_cache will remove cache but it won't be repopulated
+                ## unless we request all nights. So let's request all nights
+                ## then subselect to the nights we want
+                latest_exptable = read_minimal_science_exptab_cols(tileids=tileids,
+                                                                   reset_cache=True)
+                latest_exptable = latest_exptable[['EXPID', 'NIGHT', 'TILEID']]
+                missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
+                if np.any(missing_exps):
+                    log.error(f'Identified {np.sum(missing_exps)} missing exposures '
+                        + f'in the exposure cache even after updating. Using the '
+                        + f'appending the user provided exposures but this may '
+                        + f'indicate a problem.')
+                    newexptable = vstack([latest_exptable, exptable[missing_exps]])
+                else:
+                    newexptable = latest_exptable
 
         newexptable.sort(['EXPID'])
         exptable = newexptable
+
         ## Ensure we only include data for nights up to and including specified nights
-        if nights is not None:
-            lastnight = int(np.max(nights))
+        if lastnight is not None:
+            log.info(f'Selecting only those exposures on nights before or '
+                     + f'during the latest night provided: {lastnight}')
             exptable = exptable[exptable['NIGHT'] <= lastnight]
+
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
 

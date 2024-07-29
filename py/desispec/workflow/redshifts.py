@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 from astropy.table import Table, vstack, Column
 
+from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword
 from desispec.workflow.desi_proc_funcs import determine_resources
 from desiutil.log import get_logger
@@ -21,7 +22,10 @@ from desispec.workflow.tableio import load_table
 from desispec.workflow import batch
 from desispec.util import parse_int_args
 
-
+# processing table row cache for tilenight selection
+_tilenight_ptab_cache = None
+# exposure table row cache for science exposure selection
+_science_etab_cache = None
 
 def get_ztile_relpath(tileid,group,night=None,expid=None):
     """
@@ -360,13 +364,14 @@ def create_desi_zproc_batch_script(group,
     return scriptfile
 
 
-def read_minimal_exptables_columns(nights=None, tileids=None):
+def read_minimal_science_exptab_cols(nights=None, tileids=None, reset_cache=False):
     """
     Read exposure tables while handling evolving formats
 
     Args:
         nights (list of int): nights to include (default all nights found)
         tileids (list of int): tileids to include (default all tiles found)
+        reset_cache (bool): If true, global cache is cleared
 
     Returns exptable with just columns TILEID, NIGHT, EXPID, 'CAMWORD',
         'BADCAMWORD', filtered by science
@@ -375,12 +380,27 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
     Note: the returned table is the full pipeline exposures table. It is trimmed
           to science exposures that have LASTSTEP=='all'
     """
+    global _science_etab_cache
     log = get_logger()
+
+    ## If requested reset the science exposure table cache
+    if reset_cache:
+        reset_science_etab_cache()
+
+    ## If the cache exists, use it speed up the search over tiles and nights
+    if _science_etab_cache is not None:
+        log.info(f'Using cached exposure table rows for science selection')
+        t = _science_etab_cache.copy()
+        if nights is not None:
+            t = t[np.isin(t['NIGHT'], nights)]
+        if tileids is not None:
+            t = t[np.isin(t['TILEID'], tileids)]
+        return t
+
+    ## If not cached, then find all the relevant exposure tables and load them
     if nights is None:
-        exptab_path = get_exposure_table_path(night=None)
-        monthglob = '202???'
-        globname = get_exposure_table_name(night='202?????')
-        etab_files = glob.glob(os.path.join(exptab_path, monthglob, globname))
+        etab_path = findfile('exptable', night='99999999', readonly=True)
+        etab_files = glob.glob(etab_path.replace('99999999', '202?????'))
     else:
         etab_files = list()
         for night in nights:
@@ -393,23 +413,23 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
                 # - these are expected for the daily run, ok
                 log.debug(f"Exposure table missing for night {night}")
 
+    ## Load each relevant exposure table file, subselect valid science's and
+    ## append to the full set
     etab_files = sorted(etab_files)
     exptables = list()
     for etab_file in etab_files:
         ## correct way but slower and we don't need multivalue columns
         #t = load_table(etab_file, tabletype='etable')
         t = Table.read(etab_file, format='ascii.csv')
+
+        ## Subselect only valid science exposures
+        t = _select_sciences_from_etab(t)
+
         ## For backwards compatibility if BADCAMWORD column does not
         ## exist then add a blank one
         if 'BADCAMWORD' not in t.colnames:
             t.add_column(Table.Column(['' for i in range(len(t))], dtype='S36', name='BADCAMWORD'))
-        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-        if 'LASTSTEP' in t.colnames:
-            keep &= (t['LASTSTEP'] == 'all')
-        if tileids is not None:
-            # Default false
-            keep &= np.isin(t['TILEID'], tileids)
-        t = t[keep]
+
         ## Need to ensure that the string columns are consistent
         for col in ['CAMWORD', 'BADCAMWORD']:
             ## Masked arrays need special handling
@@ -425,4 +445,207 @@ def read_minimal_exptables_columns(nights=None, tileids=None):
                 t[col] = Table.Column(t[col], dtype='S36', name=col)
         exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
 
-    return vstack(exptables)
+    outtable = vstack(exptables)
+
+    ## If we've loaded all nights, then cache the result
+    if nights is None:
+        log.info(f'Caching exposure table rows for science selection')
+        set_science_etab_cache(outtable.copy())
+
+    ## If requeted specific tileids, then subselect that
+    if tileids is not None:
+        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
+
+    return outtable
+
+def _select_sciences_from_etab(etab):
+    """
+    takes an exposure table or combination of exposure tables and subselects
+    valid science jobs. Those that pass selection are returned as a table.
+    """
+    t = etab.copy()
+    t = t[((t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0))]
+    if 'LASTSTEP' in t.colnames:
+        t = t[t['LASTSTEP'] == 'all']
+    return t
+
+def reset_science_etab_cache():
+    """
+    reset the global cache of science exposure tables stored in var _science_etab_cache
+    """
+    global _science_etab_cache
+    log = get_logger()
+    log.info(f'Resetting science exposure table row cache')
+    _science_etab_cache = None
+
+def set_science_etab_cache(etab):
+    """
+    sets the global cache of science exposure tables stored in var _science_etab_cache
+    """
+    global _science_etab_cache
+    log = get_logger()
+    log.info(f'Assigning science exposure table row cache to new table')
+    _science_etab_cache = _select_sciences_from_etab(etab)
+
+def update_science_etab_cache(etab):
+    """
+    updates the global cache of science exposure tables stored in var
+    _science_etab_cache.
+
+    Notes: this will remove all current entries for any night in the input
+    """
+    global _science_etab_cache
+    log = get_logger()
+    ## If the cache doesn't exist, don't update it.
+    if _science_etab_cache is None:
+        log.debug(f'Science exptab cache does not exist, so not updating')
+        return
+    cleaned_etab = _select_sciences_from_etab(etab)
+    new_nights = np.unique(cleaned_etab['NIGHT'])
+    log.info(f'Removing all current entries in science exposure '
+             + f'table row cache for nights {new_nights}')
+    conflicting_entries = np.isin(_science_etab_cache['NIGHT'], new_nights)
+    log.info(f"Removing {len(conflicting_entries)} rows and adding {len(cleaned_etab)} rows "
+             + f"to science exposure table row cache.")
+    keep = np.bitwise_not(conflicting_entries)
+    _science_etab_cache = _science_etab_cache[keep]
+    _science_etab_cache = vstack([_science_etab_cache, cleaned_etab])
+
+
+def read_minimal_tilenight_proctab_cols(nights=None, tileids=None, reset_cache=False):
+    """
+    Read processing tables while handling evolving formats
+
+    Args:
+        nights (list of int): nights to include (default all nights found)
+        tileids (list of int): tileids to include (default all tiles found)
+        reset_cache (bool): If true, global cache is cleared
+
+    Returns exptable with just columns EXPID, TILEID, NIGHT, PROCCAMWORD,
+        INTID, LATEST_QID
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+
+    ## If requested reset the tilenight processing table cache
+    if reset_cache:
+        reset_tilenight_ptab_cache()
+
+    ## If the cache exists, use it speed up the search over tiles and nights
+    if _tilenight_ptab_cache is not None:
+        log.info(f'Using cached processing table rows for tilenight selection')
+        t = _tilenight_ptab_cache.copy()
+        if nights is not None:
+            t = t[np.isin(t['NIGHT'], nights)]
+        if tileids is not None:
+            t = t[np.isin(t['TILEID'], tileids)]
+        return t
+
+    ## If not cached, then find all the relevant processing tables and load them
+    if nights is None:
+        ptab_path = findfile('proctable', night='99999999', readonly=True)
+        ptab_files = glob.glob(ptab_path.replace('99999999', '202?????'))
+    else:
+        ptab_files = list()
+        for night in nights:
+            ptab_file = findfile('proctable', night=night)
+            if os.path.exists(ptab_file):
+                ptab_files.append(ptab_file)
+            elif night >= 20201201:
+                log.error(f"Processing table missing for night {night}")
+            else:
+                # - these are expected for the daily run, ok
+                log.debug(f"Processing table missing for night {night}")
+
+    ## Load each relevant processing table file, subselect valid tilenight's and
+    ## append to the full set
+    ptab_files = sorted(ptab_files)
+    ptables = list()
+    for ptab_file in ptab_files:
+        ## correct way but slower and we don't need multivalue columns
+        t = load_table(tablename=ptab_file, tabletype='proctable')
+        t = _select_tilenights_from_ptab(t)
+
+        ## Need to ensure that the string columns are consistent
+        for col in ['PROCCAMWORD']:
+            ## Masked arrays need special handling
+            ## else just reassign with consistent dtype
+            if isinstance(t[col], Table.MaskedColumn):
+                ## If compeltely empty it's loaded as type int
+                ## otherwise fill masked with ''
+                if t[col].dtype == int:
+                    t[col] = Table.Column(['' for i in range(len(t))], dtype='S36', name=col)
+                else:
+                    t[col] = Table.Column(t[col].filled(fill_value=''), dtype='S36', name=col)
+            else:
+                t[col] = Table.Column(t[col], dtype='S36', name=col)
+        ptables.append(t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
+                         'INTID', 'LATEST_QID'])
+
+    outtable = vstack(ptables)
+    ## If we've loaded all nights, then cache the result
+    if nights is None:
+        log.info(f'Caching processing table rows for tilenight selection')
+        set_tilenight_ptab_cache(outtable)
+
+    ## If requested specific tileids, then subselect that
+    if tileids is not None:
+        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
+
+    return outtable
+
+def _select_tilenights_from_ptab(ptab):
+    """
+    takes a processing table or combination of processing tables and subselects
+    valid tilenight jobs. Those that pass selection are returned as a table.
+    """
+    t = ptab.copy()
+    t = t[((t['OBSTYPE'] == 'science') & (t['JOBDESC'] == 'tilenight'))]
+    if 'LASTSTEP' in t.colnames:
+        t = t[t['LASTSTEP'] == 'all']
+    return t
+
+def reset_tilenight_ptab_cache():
+    """
+    reset the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    log.info(f'Resetting processing table row cache for tilenight selection')
+    _tilenight_ptab_cache = None
+
+def set_tilenight_ptab_cache(ptab):
+    """
+    sets the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    log.info(f'Asigning processing table row cache for tilenight selection to new table')
+    _tilenight_ptab_cache = _select_tilenights_from_ptab(ptab)
+    _tilenight_ptab_cache.sort(['INTID'])
+
+def update_tilenight_ptab_cache(ptab):
+    """
+    updates the global cache of tilenight processing tables stored in var
+    _tilenight_ptab_cache.
+
+    Notes: this will remove all current entries for any night in the input
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    ## If the cache doesn't exist, don't update it.
+    if _tilenight_ptab_cache is None:
+        log.debug(f'Science exptab cache does not exist, so not updating')
+        return
+    cleaned_ptab = _select_tilenights_from_ptab(ptab)
+    new_nights = np.unique(cleaned_ptab['NIGHT'])
+    log.info(f'Removing all current entries in processing table tilenight '
+             + f'selection cache for nights {new_nights}')
+    conflicting_entries = np.isin(_tilenight_ptab_cache['NIGHT'], new_nights)
+    log.info(f"Removing {len(conflicting_entries)} rows and adding "
+             + f"{len(cleaned_ptab)} rows "
+             + f"to processing table tilenight cache.")
+    keep = np.bitwise_not(conflicting_entries)
+    _tilenight_ptab_cache = _tilenight_ptab_cache[keep]
+    _tilenight_ptab_cache = vstack([_tilenight_ptab_cache, cleaned_ptab])
+    _tilenight_ptab_cache.sort(['INTID'])
