@@ -340,7 +340,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Pre-populate exposure table and processing table caches of all nights
     ## if doing cross-night redshifts
-    if 'cumulative' in z_submit_types:
+    if z_submit_types is not None and 'cumulative' in z_submit_types:
         ## this shouldn't need to change since we've already updated the exptab
         read_minimal_science_exptab_cols()
         ## this would become out of date for the current night except

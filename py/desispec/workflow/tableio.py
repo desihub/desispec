@@ -7,8 +7,6 @@ import os
 import numpy as np
 from astropy.table import Table
 
-from desispec.workflow.redshifts import update_science_etab_cache, \
-    update_tilenight_ptab_cache
 ###################################################
 ################  Table Functions #################
 ###################################################
@@ -138,6 +136,9 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         If True and tablename not specified and tabletype is exposure table, this looks for the
         table in the SPECPROD rather than the exptab repository. Default is True.
     """
+    ## avoid circular import by importing only in this function that uses it
+    from desispec.workflow.redshifts import update_science_etab_cache, \
+        update_tilenight_ptab_cache
     log = get_logger()
     if tablename is None and tabletype is None:
         log.error("Pathname or type of table is required to save the table")

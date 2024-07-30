@@ -33,7 +33,9 @@ class TestProcNight(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.prenight = 20230913
         cls.night = 20230914
+        cls.repeat_tiles = [7567, 23826]
         cls.dailynight = _dailynight
         cls.basicnight = 20211129  #- early data without 1s CTE flat or end-of-night zeros/darks
 
@@ -64,6 +66,7 @@ class TestProcNight(unittest.TestCase):
         cls.override_file = findfile('override', cls.night) # these are created in function
 
     def tearDown(self):
+        desispec.workflow.redshifts.reset_tilenight_ptab_cache()
         # remove everything from prod except exposure_table for self.night
         for path in glob.glob(self.proddir+'/*'):
             if os.path.basename(path) == 'exposure_tables':
@@ -155,8 +158,41 @@ class TestProcNight(unittest.TestCase):
         proctiles = proctable['TILEID'][proctable['OBSTYPE'] == 'science']
         self.assertEqual(len(np.unique(proctiles)), ntiles)
 
+    def test_proc_night_cross_night_redshifts(self):
+        """Test if crossnight redshifts are submitted properly."""
+        proctable1, unproctable1 = proc_night(self.prenight, sub_wait_time=0.0, dry_run_level=1)
+        desispec.workflow.redshifts.reset_science_etab_cache()
+        desispec.workflow.redshifts.reset_tilenight_ptab_cache()
+        proctable2, unproctable2 = proc_night(self.night, sub_wait_time=0.0,
+                                              dry_run_level=1, z_submit_types=['cumulative'])
+
+        ## Test that cumulative redshift has dependency on previous night's job
+        ## as well as the tilenight job from the second night
+        for tileid in self.repeat_tiles:
+            tilematches1 = proctable1[proctable1['TILEID'] == tileid]
+            tilenight1 = tilematches1[tilematches1['JOBDESC']=='tilenight'][0]
+            tilematches2 = proctable2[proctable2['TILEID'] == tileid]
+            tilenight2 = tilematches2[tilematches2['JOBDESC']=='tilenight'][0]
+            cumulative2 = tilematches2[tilematches2['JOBDESC'] == 'cumulative'][0]
+
+            self.assertTrue(len(cumulative2['INT_DEP_IDS']) == 2)
+            self.assertTrue(tilenight1['INTID'] in cumulative2['INT_DEP_IDS'])
+            self.assertTrue(tilenight2['INTID'] in cumulative2['INT_DEP_IDS'])
+
+            scriptpath = get_ztile_script_pathname(tileid, group='cumulative',
+                                                   night=self.night)
+            with open(scriptpath, 'r') as fil:
+                for line in fil.readlines():
+                    if 'desi_zproc' in line:
+                        self.assertTrue(str(self.prenight) in line)
+                        self.assertTrue(str(tilenight1['EXPID'][0]) in line)
+                        self.assertTrue(str(self.night) in line)
+                        self.assertTrue(str(tilenight2['EXPID'][0]) in line)
+
     def _override_write_run_delete(self, override_dict, night=None, **kwargs):
         """Write override, run proc_night, remove override file, and return outputs"""
+        desispec.workflow.redshifts.reset_tilenight_ptab_cache()
+
         if night is None:
             night = self.night
 
@@ -203,7 +239,6 @@ class TestProcNight(unittest.TestCase):
             self.assertTrue(job in proctable['JOBDESC'])
         for job in ['nightlybias', 'psfnight']:
             self.assertTrue(job not in proctable['JOBDESC'])
-
 
         ## Test link fiberflatnight
         testdict = base_override_dict.copy()
@@ -392,6 +427,7 @@ class TestProcNight(unittest.TestCase):
                 if 'desi_proc_joint_fit' in line:
                     self.assertFalse(flag in line)
 
+
     @unittest.skipIf('SKIP_PROC_NIGHT_DAILY_TEST' in os.environ, 'Skipping test_proc_night_daily because $SKIP_PROC_NIGHT_DAILY_TEST is set')
     @unittest.skipUnless(os.path.isdir(_real_rawnight_dir), f'{_real_rawnight_dir} not available')
     def test_proc_night_daily(self):
@@ -404,6 +440,7 @@ class TestProcNight(unittest.TestCase):
         while True:
             num_newlinks = link_rawdata(self.real_rawnight_dir, self.test_rawnight_dir, numexp=10)
             desispec.workflow.redshifts.reset_science_etab_cache()
+            desispec.workflow.redshifts.reset_tilenight_ptab_cache()
             if num_newlinks == 0:
                 break
             else:

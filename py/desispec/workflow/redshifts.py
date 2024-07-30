@@ -400,7 +400,8 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None, reset_cache=Fals
     ## If not cached, then find all the relevant exposure tables and load them
     if nights is None:
         etab_path = findfile('exptable', night='99999999', readonly=True)
-        etab_files = glob.glob(etab_path.replace('99999999', '202?????'))
+        glob_path = etab_path.replace('99999999', '202?????').replace('999999', '202???')
+        etab_files = glob.glob(glob_path)
     else:
         etab_files = list()
         for night in nights:
@@ -417,6 +418,7 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None, reset_cache=Fals
     ## append to the full set
     etab_files = sorted(etab_files)
     exptables = list()
+
     for etab_file in etab_files:
         ## correct way but slower and we don't need multivalue columns
         #t = load_table(etab_file, tabletype='etable')
@@ -450,7 +452,7 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None, reset_cache=Fals
     ## If we've loaded all nights, then cache the result
     if nights is None:
         log.info(f'Caching exposure table rows for science selection')
-        set_science_etab_cache(outtable.copy())
+        _set_science_etab_cache(outtable.copy())
 
     ## If requeted specific tileids, then subselect that
     if tileids is not None:
@@ -467,6 +469,7 @@ def _select_sciences_from_etab(etab):
     t = t[((t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0))]
     if 'LASTSTEP' in t.colnames:
         t = t[t['LASTSTEP'] == 'all']
+
     return t
 
 def reset_science_etab_cache():
@@ -478,14 +481,18 @@ def reset_science_etab_cache():
     log.info(f'Resetting science exposure table row cache')
     _science_etab_cache = None
 
-def set_science_etab_cache(etab):
+def _set_science_etab_cache(etab):
     """
     sets the global cache of science exposure tables stored in var _science_etab_cache
     """
     global _science_etab_cache
     log = get_logger()
     log.info(f'Assigning science exposure table row cache to new table')
-    _science_etab_cache = _select_sciences_from_etab(etab)
+    if 'OBSTYPE' in etab.colnames:
+        _science_etab_cache = _select_sciences_from_etab(etab)
+    else:
+        _science_etab_cache = etab
+    _science_etab_cache.sort(['EXPID'])
 
 def update_science_etab_cache(etab):
     """
@@ -521,8 +528,9 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None, reset_cache=F
         tileids (list of int): tileids to include (default all tiles found)
         reset_cache (bool): If true, global cache is cleared
 
-    Returns exptable with just columns EXPID, TILEID, NIGHT, PROCCAMWORD,
-        INTID, LATEST_QID
+    Returns None if not proc tables exist or exptable with columns EXPID,
+         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID and rows matching
+         the input selection criteria
     """
     global _tilenight_ptab_cache
     log = get_logger()
@@ -582,11 +590,16 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None, reset_cache=F
         ptables.append(t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
                          'INTID', 'LATEST_QID'])
 
-    outtable = vstack(ptables)
+    if len(ptables) > 0:
+        outtable = vstack(ptables)
+    else:
+        log.info(f"No processing tables found. Returning None.")
+        return None
+
     ## If we've loaded all nights, then cache the result
     if nights is None:
         log.info(f'Caching processing table rows for tilenight selection')
-        set_tilenight_ptab_cache(outtable)
+        _set_tilenight_ptab_cache(outtable)
 
     ## If requested specific tileids, then subselect that
     if tileids is not None:
@@ -614,14 +627,17 @@ def reset_tilenight_ptab_cache():
     log.info(f'Resetting processing table row cache for tilenight selection')
     _tilenight_ptab_cache = None
 
-def set_tilenight_ptab_cache(ptab):
+def _set_tilenight_ptab_cache(ptab):
     """
     sets the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
     """
     global _tilenight_ptab_cache
     log = get_logger()
     log.info(f'Asigning processing table row cache for tilenight selection to new table')
-    _tilenight_ptab_cache = _select_tilenights_from_ptab(ptab)
+    if 'OBSTYPE' in ptab.colnames:
+        _tilenight_ptab_cache = _select_tilenights_from_ptab(ptab)
+    else:
+        _tilenight_ptab_cache = ptab
     _tilenight_ptab_cache.sort(['INTID'])
 
 def update_tilenight_ptab_cache(ptab):

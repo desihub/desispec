@@ -1572,13 +1572,14 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
                 tileid, night = tileids[0], nights[0]
                 ## For cumulative redshifts, get any existing processing rows for tile
                 matched_prows = read_minimal_tilenight_proctab_cols(tileids=tileids)
-                matched_prows = matched_prows[matched_prows['NIGHT']<=night]
                 ## Identify the processing rows that should be assigned as dependecies
                 ## tnight should be first such that the new job inherits the other metadata from it
                 tnights = [tnight]
-                for prow in matched_prows:
-                    if matched_prows['INTID'] != tnight['INTID']:
-                        tnights.append(prow)
+                if matched_prows is not None:
+                    matched_prows = matched_prows[matched_prows['NIGHT'] <= night]
+                    for prow in matched_prows:
+                        if matched_prows['INTID'] != tnight['INTID']:
+                            tnights.append(prow)
                 log.info(f"Internal Processing IDs: {[prow['INTID'] for prow in tnights]}.\n")
                 ## Identify all exposures that should go into the fit
                 expids = [prow['EXPID'][0] for prow in zprows]
