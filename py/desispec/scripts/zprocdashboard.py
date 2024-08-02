@@ -19,7 +19,7 @@ from desiutil.log import get_logger
 from desispec.workflow.exptable import get_exposure_table_pathname, \
     default_obstypes_for_exptable, \
     get_exposure_table_column_types, \
-    get_exposure_table_column_defaults
+    get_exposure_table_column_defaults, read_minimal_science_exptab_cols
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
     get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
@@ -27,7 +27,6 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
 from desispec.workflow.proctable import get_processing_table_pathname, \
     erow_to_prow, instantiate_processing_table
 from desispec.workflow.tableio import load_table
-from desispec.workflow.redshifts import read_minimal_science_exptab_cols
 from desispec.io.meta import specprod_root, rawdata_root, findfile
 from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, parse_badamps, create_camword, camword_union, \

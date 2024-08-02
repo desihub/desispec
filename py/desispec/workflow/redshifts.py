@@ -3,12 +3,8 @@ desispec.workflow.redshifts
 ===========================
 
 """
-import sys, os, glob
-import re
-import subprocess
-import argparse
+import sys, os
 import numpy as np
-from astropy.table import Table, vstack, Column
 
 from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword
@@ -16,18 +12,14 @@ from desispec.workflow.desi_proc_funcs import determine_resources
 from desiutil.log import get_logger
 
 import desispec.io
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, \
-                                       get_exposure_table_pathname
-from desispec.workflow.tableio import load_table
 from desispec.workflow import batch
-from desispec.util import parse_int_args
 
+# full processing table row cache
 # processing table row cache for tilenight selection
-_tilenight_ptab_cache = None
 # exposure table row cache for science exposure selection
-_science_etab_cache = None
 
-def get_ztile_relpath(tileid,group,night=None,expid=None):
+
+def get_ztile_relpath(tileid, group, night=None, expid=None):
     """
     Determine the relative output directory of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -52,10 +44,12 @@ def get_ztile_relpath(tileid,group,night=None,expid=None):
         outdir = f'tiles/{tileid}/{night}'
     else:
         outdir = f'tiles/{group}/{tileid}'
-        log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/*')
+        log.warning(
+            f'Non-standard tile group={group}; writing outputs to {outdir}/*')
     return outdir
 
-def get_ztile_script_pathname(tileid,group,night=None,expid=None):
+
+def get_ztile_script_pathname(tileid, group, night=None, expid=None):
     """
     Generate the pathname of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -69,13 +63,14 @@ def get_ztile_script_pathname(tileid,group,night=None,expid=None):
         (str): the pathname of the tile redshift batch script
     """
     reduxdir = desispec.io.specprod_root()
-    outdir = get_ztile_relpath(tileid,group,night=night,expid=expid)
+    outdir = get_ztile_relpath(tileid, group, night=night, expid=expid)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
-    suffix = get_ztile_script_suffix(tileid,group,night=night,expid=expid)
+    suffix = get_ztile_script_suffix(tileid, group, night=night, expid=expid)
     batchscript = f'ztile-{suffix}.slurm'
     return os.path.join(scriptdir, batchscript)
 
-def get_ztile_script_suffix(tileid,group,night=None,expid=None):
+
+def get_ztile_script_suffix(tileid, group, night=None, expid=None):
     """
     Generate the suffix of the tile redshift batch script for spectra+coadd+redshifts for a tile
 
@@ -99,8 +94,10 @@ def get_ztile_script_suffix(tileid,group,night=None,expid=None):
         suffix = f'{tileid}-{night}'
     else:
         suffix = f'{tileid}-{group}'
-        log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
+        log.warning(
+            f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
+
 
 def get_zpix_redshift_script_pathname(healpix, survey, program):
     """Return healpix-based coadd+redshift+afterburner script pathname
@@ -114,7 +111,7 @@ def get_zpix_redshift_script_pathname(healpix, survey, program):
         zpix_script_pathname
     """
     if np.isscalar(healpix):
-        healpix = [healpix,]
+        healpix = [healpix, ]
 
     hpixmin = np.min(healpix)
     hpixmax = np.max(healpix)
@@ -125,7 +122,8 @@ def get_zpix_redshift_script_pathname(healpix, survey, program):
 
     reduxdir = desispec.io.specprod_root()
     return os.path.join(reduxdir, 'run', 'scripts', 'healpix',
-                        survey, program, str(hpixmin//100), scriptname)
+                        survey, program, str(hpixmin // 100), scriptname)
+
 
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
@@ -134,7 +132,8 @@ def create_desi_zproc_batch_script(group,
                                    queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
-                                   max_gpuprocs=None, no_gpu=False, run_zmtl=False,
+                                   max_gpuprocs=None, no_gpu=False,
+                                   run_zmtl=False,
                                    no_afterburners=False):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -201,7 +200,7 @@ def create_desi_zproc_batch_script(group,
         scriptpath = get_zpix_redshift_script_pathname(healpix, survey, program)
     else:
         scriptpath = get_ztile_script_pathname(tileid, group=group,
-                                                   night=night, expid=expid)
+                                               night=night, expid=expid)
 
     if cameras is None:
         cameras = decode_camword('a0123456789')
@@ -291,8 +290,8 @@ def create_desi_zproc_batch_script(group,
         cmd += ' --mpi'
 
     ncores, nodes, runtime = determine_resources(
-            ncameras, group.upper(), queue=queue, nexps=nexps,
-            forced_runtime=runtime, system_name=system_name)
+        ncameras, group.upper(), queue=queue, nexps=nexps,
+        forced_runtime=runtime, system_name=system_name)
 
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
@@ -312,7 +311,8 @@ def create_desi_zproc_batch_script(group,
             fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
-        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
+        fx.write(
+            '#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
         fx.write('#SBATCH --exclusive\n')
         fx.write('\n')
 
@@ -322,9 +322,9 @@ def create_desi_zproc_batch_script(group,
         # fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         fx.write("export OMP_NUM_THREADS=1\n")
 
-        #- Special case CFS readonly mount at NERSC
-        #- SB 2023-01-27: disable this since Perlmutter might deprecate /dvs_ro;
-        #- inherit it from the environment but don't hardcode into script itself
+        # - Special case CFS readonly mount at NERSC
+        # - SB 2023-01-27: disable this since Perlmutter might deprecate /dvs_ro;
+        # - inherit it from the environment but don't hardcode into script itself
         # if 'DESI_ROOT_READONLY' in os.environ:
         #     readonlydir = os.environ['DESI_ROOT_READONLY']
         # elif os.environ['DESI_ROOT'].startswith('/global/cfs/cdirs'):
@@ -364,304 +364,3 @@ def create_desi_zproc_batch_script(group,
     return scriptfile
 
 
-def read_minimal_science_exptab_cols(nights=None, tileids=None, reset_cache=False):
-    """
-    Read exposure tables while handling evolving formats
-
-    Args:
-        nights (list of int): nights to include (default all nights found)
-        tileids (list of int): tileids to include (default all tiles found)
-        reset_cache (bool): If true, global cache is cleared
-
-    Returns exptable with just columns TILEID, NIGHT, EXPID, 'CAMWORD',
-        'BADCAMWORD', filtered by science
-        exposures with LASTSTEP='all' and TILEID>=0
-
-    Note: the returned table is the full pipeline exposures table. It is trimmed
-          to science exposures that have LASTSTEP=='all'
-    """
-    global _science_etab_cache
-    log = get_logger()
-
-    ## If requested reset the science exposure table cache
-    if reset_cache:
-        reset_science_etab_cache()
-
-    ## If the cache exists, use it speed up the search over tiles and nights
-    if _science_etab_cache is not None:
-        log.info(f'Using cached exposure table rows for science selection')
-        t = _science_etab_cache.copy()
-        if nights is not None:
-            t = t[np.isin(t['NIGHT'], nights)]
-        if tileids is not None:
-            t = t[np.isin(t['TILEID'], tileids)]
-        return t
-
-    ## If not cached, then find all the relevant exposure tables and load them
-    if nights is None:
-        etab_path = findfile('exptable', night='99999999', readonly=True)
-        glob_path = etab_path.replace('99999999', '202?????').replace('999999', '202???')
-        etab_files = glob.glob(glob_path)
-    else:
-        etab_files = list()
-        for night in nights:
-            etab_file = get_exposure_table_pathname(night)
-            if os.path.exists(etab_file):
-                etab_files.append(etab_file)
-            elif night >= 20201201:
-                log.error(f"Exposure table missing for night {night}")
-            else:
-                # - these are expected for the daily run, ok
-                log.debug(f"Exposure table missing for night {night}")
-
-    ## Load each relevant exposure table file, subselect valid science's and
-    ## append to the full set
-    etab_files = sorted(etab_files)
-    exptables = list()
-
-    for etab_file in etab_files:
-        ## correct way but slower and we don't need multivalue columns
-        #t = load_table(etab_file, tabletype='etable')
-        t = Table.read(etab_file, format='ascii.csv')
-
-        ## Subselect only valid science exposures
-        t = _select_sciences_from_etab(t)
-
-        ## For backwards compatibility if BADCAMWORD column does not
-        ## exist then add a blank one
-        if 'BADCAMWORD' not in t.colnames:
-            t.add_column(Table.Column(['' for i in range(len(t))], dtype='S36', name='BADCAMWORD'))
-
-        ## Need to ensure that the string columns are consistent
-        for col in ['CAMWORD', 'BADCAMWORD']:
-            ## Masked arrays need special handling
-            ## else just reassign with consistent dtype
-            if isinstance(t[col], Table.MaskedColumn):
-                ## If compeltely empty it's loaded as type int
-                ## otherwise fill masked with ''
-                if t[col].dtype == int:
-                    t[col] = Table.Column(['' for i in range(len(t))], dtype='S36', name=col)
-                else:
-                    t[col] = Table.Column(t[col].filled(fill_value=''), dtype='S36', name=col)
-            else:
-                t[col] = Table.Column(t[col], dtype='S36', name=col)
-        exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
-
-    outtable = vstack(exptables)
-
-    ## If we've loaded all nights, then cache the result
-    if nights is None:
-        log.info(f'Caching exposure table rows for science selection')
-        _set_science_etab_cache(outtable.copy())
-
-    ## If requeted specific tileids, then subselect that
-    if tileids is not None:
-        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
-
-    return outtable
-
-def _select_sciences_from_etab(etab):
-    """
-    takes an exposure table or combination of exposure tables and subselects
-    valid science jobs. Those that pass selection are returned as a table.
-    """
-    t = etab.copy()
-    t = t[((t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0))]
-    if 'LASTSTEP' in t.colnames:
-        t = t[t['LASTSTEP'] == 'all']
-
-    return t
-
-def reset_science_etab_cache():
-    """
-    reset the global cache of science exposure tables stored in var _science_etab_cache
-    """
-    global _science_etab_cache
-    log = get_logger()
-    log.info(f'Resetting science exposure table row cache')
-    _science_etab_cache = None
-
-def _set_science_etab_cache(etab):
-    """
-    sets the global cache of science exposure tables stored in var _science_etab_cache
-    """
-    global _science_etab_cache
-    log = get_logger()
-    log.info(f'Assigning science exposure table row cache to new table')
-    if 'OBSTYPE' in etab.colnames:
-        _science_etab_cache = _select_sciences_from_etab(etab)
-    else:
-        _science_etab_cache = etab
-    _science_etab_cache.sort(['EXPID'])
-
-def update_science_etab_cache(etab):
-    """
-    updates the global cache of science exposure tables stored in var
-    _science_etab_cache.
-
-    Notes: this will remove all current entries for any night in the input
-    """
-    global _science_etab_cache
-    log = get_logger()
-    ## If the cache doesn't exist, don't update it.
-    if _science_etab_cache is None:
-        log.debug(f'Science exptab cache does not exist, so not updating')
-        return
-    cleaned_etab = _select_sciences_from_etab(etab)
-    new_nights = np.unique(cleaned_etab['NIGHT'])
-    log.info(f'Removing all current entries in science exposure '
-             + f'table row cache for nights {new_nights}')
-    conflicting_entries = np.isin(_science_etab_cache['NIGHT'], new_nights)
-    log.info(f"Removing {len(conflicting_entries)} rows and adding {len(cleaned_etab)} rows "
-             + f"to science exposure table row cache.")
-    keep = np.bitwise_not(conflicting_entries)
-    _science_etab_cache = _science_etab_cache[keep]
-    _science_etab_cache = vstack([_science_etab_cache, cleaned_etab])
-
-
-def read_minimal_tilenight_proctab_cols(nights=None, tileids=None, reset_cache=False):
-    """
-    Read processing tables while handling evolving formats
-
-    Args:
-        nights (list of int): nights to include (default all nights found)
-        tileids (list of int): tileids to include (default all tiles found)
-        reset_cache (bool): If true, global cache is cleared
-
-    Returns None if not proc tables exist or exptable with columns EXPID,
-         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID and rows matching
-         the input selection criteria
-    """
-    global _tilenight_ptab_cache
-    log = get_logger()
-
-    ## If requested reset the tilenight processing table cache
-    if reset_cache:
-        reset_tilenight_ptab_cache()
-
-    ## If the cache exists, use it speed up the search over tiles and nights
-    if _tilenight_ptab_cache is not None:
-        log.info(f'Using cached processing table rows for tilenight selection')
-        t = _tilenight_ptab_cache.copy()
-        if nights is not None:
-            t = t[np.isin(t['NIGHT'], nights)]
-        if tileids is not None:
-            t = t[np.isin(t['TILEID'], tileids)]
-        return t
-
-    ## If not cached, then find all the relevant processing tables and load them
-    if nights is None:
-        ptab_path = findfile('proctable', night='99999999', readonly=True)
-        ptab_files = glob.glob(ptab_path.replace('99999999', '202?????'))
-    else:
-        ptab_files = list()
-        for night in nights:
-            ptab_file = findfile('proctable', night=night)
-            if os.path.exists(ptab_file):
-                ptab_files.append(ptab_file)
-            elif night >= 20201201:
-                log.error(f"Processing table missing for night {night}")
-            else:
-                # - these are expected for the daily run, ok
-                log.debug(f"Processing table missing for night {night}")
-
-    ## Load each relevant processing table file, subselect valid tilenight's and
-    ## append to the full set
-    ptab_files = sorted(ptab_files)
-    ptables = list()
-    for ptab_file in ptab_files:
-        ## correct way but slower and we don't need multivalue columns
-        t = load_table(tablename=ptab_file, tabletype='proctable')
-        t = _select_tilenights_from_ptab(t)
-
-        ## Need to ensure that the string columns are consistent
-        for col in ['PROCCAMWORD']:
-            ## Masked arrays need special handling
-            ## else just reassign with consistent dtype
-            if isinstance(t[col], Table.MaskedColumn):
-                ## If compeltely empty it's loaded as type int
-                ## otherwise fill masked with ''
-                if t[col].dtype == int:
-                    t[col] = Table.Column(['' for i in range(len(t))], dtype='S36', name=col)
-                else:
-                    t[col] = Table.Column(t[col].filled(fill_value=''), dtype='S36', name=col)
-            else:
-                t[col] = Table.Column(t[col], dtype='S36', name=col)
-        ptables.append(t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
-                         'INTID', 'LATEST_QID'])
-
-    if len(ptables) > 0:
-        outtable = vstack(ptables)
-    else:
-        log.info(f"No processing tables found. Returning None.")
-        return None
-
-    ## If we've loaded all nights, then cache the result
-    if nights is None:
-        log.info(f'Caching processing table rows for tilenight selection')
-        _set_tilenight_ptab_cache(outtable)
-
-    ## If requested specific tileids, then subselect that
-    if tileids is not None:
-        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
-
-    return outtable
-
-def _select_tilenights_from_ptab(ptab):
-    """
-    takes a processing table or combination of processing tables and subselects
-    valid tilenight jobs. Those that pass selection are returned as a table.
-    """
-    t = ptab.copy()
-    t = t[((t['OBSTYPE'] == 'science') & (t['JOBDESC'] == 'tilenight'))]
-    if 'LASTSTEP' in t.colnames:
-        t = t[t['LASTSTEP'] == 'all']
-    return t
-
-def reset_tilenight_ptab_cache():
-    """
-    reset the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
-    """
-    global _tilenight_ptab_cache
-    log = get_logger()
-    log.info(f'Resetting processing table row cache for tilenight selection')
-    _tilenight_ptab_cache = None
-
-def _set_tilenight_ptab_cache(ptab):
-    """
-    sets the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
-    """
-    global _tilenight_ptab_cache
-    log = get_logger()
-    log.info(f'Asigning processing table row cache for tilenight selection to new table')
-    if 'OBSTYPE' in ptab.colnames:
-        _tilenight_ptab_cache = _select_tilenights_from_ptab(ptab)
-    else:
-        _tilenight_ptab_cache = ptab
-    _tilenight_ptab_cache.sort(['INTID'])
-
-def update_tilenight_ptab_cache(ptab):
-    """
-    updates the global cache of tilenight processing tables stored in var
-    _tilenight_ptab_cache.
-
-    Notes: this will remove all current entries for any night in the input
-    """
-    global _tilenight_ptab_cache
-    log = get_logger()
-    ## If the cache doesn't exist, don't update it.
-    if _tilenight_ptab_cache is None:
-        log.debug(f'Science exptab cache does not exist, so not updating')
-        return
-    cleaned_ptab = _select_tilenights_from_ptab(ptab)
-    new_nights = np.unique(cleaned_ptab['NIGHT'])
-    log.info(f'Removing all current entries in processing table tilenight '
-             + f'selection cache for nights {new_nights}')
-    conflicting_entries = np.isin(_tilenight_ptab_cache['NIGHT'], new_nights)
-    log.info(f"Removing {len(conflicting_entries)} rows and adding "
-             + f"{len(cleaned_ptab)} rows "
-             + f"to processing table tilenight cache.")
-    keep = np.bitwise_not(conflicting_entries)
-    _tilenight_ptab_cache = _tilenight_ptab_cache[keep]
-    _tilenight_ptab_cache = vstack([_tilenight_ptab_cache, cleaned_ptab])
-    _tilenight_ptab_cache.sort(['INTID'])

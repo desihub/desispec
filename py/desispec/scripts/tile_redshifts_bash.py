@@ -10,9 +10,9 @@ import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
-from desispec.workflow.redshifts import read_minimal_science_exptab_cols, \
-    get_ztile_script_pathname, get_ztile_relpath, \
+from desispec.workflow.redshifts import get_ztile_script_pathname, get_ztile_relpath, \
     get_ztile_script_suffix
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desiutil.log import get_logger
 
 from desispec.workflow import batch

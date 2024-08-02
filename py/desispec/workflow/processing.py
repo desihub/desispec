@@ -17,8 +17,8 @@ from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
     get_ztile_relpath, \
-    get_ztile_script_suffix, read_minimal_tilenight_proctab_cols, \
-    read_minimal_science_exptab_cols
+    get_ztile_script_suffix
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
     queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache
 from desispec.workflow.timing import what_night_is_it
@@ -31,7 +31,9 @@ from desispec.workflow.batch import parse_reservation
 from desispec.workflow.utils import pathjoin, sleep_and_report, \
     load_override_file
 from desispec.workflow.tableio import write_table, load_table
-from desispec.workflow.proctable import table_row_to_dict, erow_to_prow
+from desispec.workflow.proctable import table_row_to_dict, erow_to_prow, \
+    read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
+    update_full_ptab_cache
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -631,7 +633,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
     if len(dep_qids) > 0 and not dry_run:
-        state_dict = get_queue_states_from_qids(dep_qids, dry_run=0, use_cache=True)
+        state_dict = get_queue_states_from_qids(dep_qids, dry_run=dry_run, use_cache=True)
         still_depids = []
         for depid in dep_qids:
             if depid in state_dict.keys() and state_dict[int(depid)] == 'COMPLETED':
@@ -1122,8 +1124,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 
     return np.all(list(test_dict.values()))
 
-def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
-                                   ptab_name=None, dry_run=0,reservation=None):
+def update_and_recursively_submit(proc_table, submits=0, resubmission_states=None,
+                                  ptab_name=None, dry_run=0, reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1157,7 +1159,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
-    proc_table = update_from_queue(proc_table, dry_run=False)
+    proc_table = update_from_queue(proc_table, dry_run=dry_run)
     log.info("Updated processing table queue information:")
     cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
             'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
@@ -1172,7 +1174,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
                                                           id_to_row_map, ptab_name,
                                                           resubmission_states,
                                                           reservation, dry_run)
-    proc_table = update_from_queue(proc_table)
+    proc_table = update_from_queue(proc_table, dry_run=dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -1220,15 +1222,49 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
         all_valid_states = list(resubmission_states.copy())
-        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','COMPLETED'])
+        good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
+        all_valid_states.extend(good_states)
+        othernight_idep_qid_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
-            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
-                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
-                            + "This is expected since it's from another day. "
-                            + f" This dependency will not be checked or "
-                            + "resubmitted")
+            if idep not in id_to_row_map:
+                log.info(idep // 1000)
+                log.info(row['INTID'] // 1000)
+                if idep // 1000 != row['INTID'] // 1000:
+                    log.info(f"Internal ID: {idep} not in id_to_row_map. "
+                             + "This is expected since it's from another day. ")
+                    reference_night = 20000000 + (idep // 1000)
+                    log.info(reference_night)
+                    reftab = read_minimal_full_proctab_cols(nights=[reference_night])
+                    if reftab is None:
+                        msg = f"The dependency is from night={reference_night}" \
+                              + f" but read_minimal_full_proctab_cols couldn't" \
+                              + f" locate that processing table, this is a " \
+                              +  f"fatal error."
+                        log.critical(msg)
+                        raise ValueError(msg)
+                    reftab = update_from_queue(reftab, dry_run=dry_run)
+                    entry = reftab[reftab['INTID'] == idep][0]
+                    if entry['STATUS'] not in good_states:
+                        msg = f"Internal ID: {idep} not in id_to_row_map. " \
+                              + f"Since the dependency is from night={reference_night} " \
+                              + f"and that job isn't in a good state this is an " \
+                              + f"error we can't overcome."
+                        log.error(msg)
+                        proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                        return proc_table, submits
+                    else:
+                        ## otherwise all is good, just update the cache to use this
+                        ## in the next stage
+                        othernight_idep_qid_lookup[idep] = entry['LATEST_QID']
+                        update_full_ptab_cache(reftab)
+                else:
+                    msg = f"Internal ID: {idep} not in id_to_row_map. " \
+                         + f"Since the dependency is from the same night" \
+                         + f" and we can't find it, this is a fatal error."
+                    log.critical(msg)
+                    raise ValueError(msg)
             elif proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
-                log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
+                log.error(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
                             f" but that exposure has state" +
                             f" {proc_table['STATUS'][id_to_row_map[idep]]} that" +
@@ -1238,19 +1274,20 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                 return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
-            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
-                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
-                            + "This is expected since it's from another day. "
-                            + f" This dependency will not be checked or "
-                            + "resubmitted")
-                continue
-            elif proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
-                                                              proc_table, submits,
-                                                              id_to_row_map,
-                                                              reservation=reservation,
-                                                              dry_run=dry_run)
-            qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+            if idep in id_to_row_map:
+                if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
+                    proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
+                                                                  proc_table, submits,
+                                                                  id_to_row_map,
+                                                                  reservation=reservation,
+                                                                  dry_run=dry_run)
+                ## Now that we've resubmitted the dependency if necessary,
+                ## add the most recent QID to the list
+                qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+            else:
+                ## Since we verified above that the cross night QID is still
+                ## either pending or successful, add that to the list of QID's
+                qdeps.append(othernight_idep_qid_lookup[idep])
 
         qdeps = np.atleast_1d(qdeps)
         if len(qdeps) > 0:

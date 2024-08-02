@@ -7,6 +7,7 @@ import os
 import numpy as np
 from astropy.table import Table
 
+from desispec.io import findfile
 ###################################################
 ################  Table Functions #################
 ###################################################
@@ -137,8 +138,8 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         table in the SPECPROD rather than the exptab repository. Default is True.
     """
     ## avoid circular import by importing only in this function that uses it
-    from desispec.workflow.redshifts import update_science_etab_cache, \
-        update_tilenight_ptab_cache
+    from desispec.workflow.exptable import update_science_etab_cache
+    from desispec.workflow.proctable import update_tilenight_ptab_cache
     log = get_logger()
     if tablename is None and tabletype is None:
         log.error("Pathname or type of table is required to save the table")
@@ -148,7 +149,14 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         tabletype = standardize_tabletype(tabletype)
 
     if tablename is None:
-        tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
+        night = None
+        if 'NIGHT' in origtable.colnames:
+            night = np.unique(origtable['NIGHT'].data)[0]
+        else:
+            msg = f'NIGHT must be in table if tablename is not provided.'
+            log.critical(msg)
+            raise ValueError(msg)
+        tablename = findfile(tabletype, night=night)
 
     if not write_empty and len(origtable) == 0:
         log.warning(f'NOT writing zero length table to {tablename}')
@@ -234,39 +242,8 @@ def standardize_tabletype(tabletype):
         tabletype = 'unproctable'
     return tabletype
 
-def translate_type_to_pathname(tabletype, use_specprod=True):
-    """
-    Given the type of table it returns the proper file pathname
 
-    Parameters
-    ----------
-    tabletype : str
-        Allows for a flexible number of input options, but should refer to either the 'exposure',
-        'processing', or 'unprocessed' table types.
-    use_specprod : bool
-        If True and tablename not specified and tabletype is exposure table, this looks for the
-        table in the SPECPROD rather than the exptab repository. Default is True.
-
-    Returns
-    -------
-    tablename : str
-        Full pathname including extension of the table type. Uses environment variables to determine
-        the location.
-    """
-    from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
-    from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
-    tabletype = standardize_tabletype(tabletype)
-    if tabletype == 'exptable':
-        tablename = get_exposure_table_pathname(night=None,usespecprod=use_specprod)
-    elif tabletype == 'proctable':
-        tablename = get_processing_table_pathname()
-    elif tabletype == 'unproctable':
-        tablepath = get_processing_table_path()
-        tablename = get_processing_table_name().replace("processing", 'unprocessed')
-        tablename = pathjoin(tablepath, tablename)
-    return tablename
-
-def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False,
+def load_table(tablename=None, tabletype=None, night=None, joinsymb='|', verbose=False,
                process_mixins=True, use_specprod=True, suppress_logging=False):
     """
     Workflow function to read in exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
@@ -283,6 +260,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False,
     tabletype : str
         'exptable', 'proctable', or 'unproctable'. Used if tablename is None to get the default name
         for the type of table. Also used to get the column datatypes and defaults.
+    night : int or None
+        Must be provided if tablename is not provided. The night of the table you want to open.
     joinsymb : str
         The symbol used to join values in a list/array when saving. Should not be a comma.
     verbose : bool
@@ -313,29 +292,31 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False,
     if tabletype is not None:
         tabletype = standardize_tabletype(tabletype)
 
+    if tablename is None and night is None:
+        log.error("Must specify either tablename or night in load_table()")
+        return None
+    if tabletype is None and tablename is None:
+        log.error("Must specify either tablename or tabletype in load_table()")
+        return None
     if tablename is None:
-        if tabletype is None:
-            log.error("Must specify either tablename or tabletype in load_table()")
-            return None
-        else:
-            tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
-    else:
-        if tabletype is None:
-            if not suppress_logging:
-                log.info("tabletype not given in load_table(), trying to guess based on filename")
-            filename = os.path.split(tablename)[-1]
-            if 'exp' in filename or 'etable' in filename:
-                tabletype = 'exptable'
-            elif 'unproc' in filename:
-                tabletype = 'unproctable'
-            elif 'proc' in filename or 'ptable' in filename:
-                tabletype = 'proctable'
+        tablename = findfile(tabletype, night=night)
 
-            if tabletype is None:
-                log.warning(f"Couldn't identify type based on filename {filename}")
-            else:
-                if not suppress_logging:
-                    log.info(f"Based on filename {filename}, identified type as {tabletype}")
+    if tabletype is None:
+        if not suppress_logging:
+            log.info("tabletype not given in load_table(), trying to guess based on filename")
+        filename = os.path.split(tablename)[-1]
+        if 'exp' in filename or 'etable' in filename:
+            tabletype = 'exptable'
+        elif 'unproc' in filename:
+            tabletype = 'unproctable'
+        elif 'proc' in filename or 'ptable' in filename:
+            tabletype = 'proctable'
+
+        if tabletype is None:
+            log.warning(f"Couldn't identify type based on filename {filename}")
+        else:
+            if not suppress_logging:
+                log.info(f"Based on filename {filename}, identified type as {tabletype}")
 
     if os.path.isfile(tablename):
         if not suppress_logging:

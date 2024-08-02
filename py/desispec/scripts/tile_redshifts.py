@@ -11,8 +11,8 @@ import numpy as np
 from astropy.table import Table, vstack
 
 from desispec.io.util import parse_cameras
-from desispec.workflow.redshifts import read_minimal_science_exptab_cols, \
-                                        create_desi_zproc_batch_script
+from desispec.workflow.redshifts import create_desi_zproc_batch_script
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desiutil.log import get_logger
 
 from desispec.workflow import batch
