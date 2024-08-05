@@ -315,7 +315,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     nboxes = 13
 
     dl_bins = (l_max - l_min) / nboxes
-    a = 10**(dl_bins) - 1
+    a = 2 * (10**(dl_bins) - 1)
     log.info(f"Using {a = } for redrock prior scaling")
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
