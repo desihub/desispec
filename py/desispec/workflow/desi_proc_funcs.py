@@ -455,7 +455,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
-    elif jobdesc in ['PEREXP', 'PERNIGHT', 'CUMULATIVE', 'CUSTOM_TILE']:
+    elif jobdesc in ['PEREXP', 'PERNIGHT', 'CUMULATIVE', 'CUSTOMZTILE']:
         if system_name.startswith('perlmutter'):
             nodes, runtime = 1, 50  #- timefactor will bring time back down
         else:

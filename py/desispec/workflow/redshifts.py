@@ -239,7 +239,7 @@ def create_desi_zproc_batch_script(group,
     ## Derive job description name from group
     jobdesc = group
     if jobdesc not in ('perexp', 'pernight', 'cumulative'):
-        jobdesc = 'custom_tile'
+        jobdesc = 'customztile'
         log.warning(f'Unrecognized {group=}, using {jobdesc=}')
 
     ## If system name isn't specified, guess it

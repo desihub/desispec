@@ -937,12 +937,12 @@ class TestIO(unittest.TestCase):
         tileid = 8888
         refpath = os.path.expandvars(f'$DESI_SPECTRO_DATA/{night}/{expid:08d}/fiberassign-{tileid:06d}.fits.gz')
         for groupname in ('healpix', 'pernight', 'cumulative', 'perexp', 'blatfoo'):
-            testpath = findfile('fiberassign', night=night, expid=expid, tile=tileid, groupname='healpix')
+            testpath = findfile('fiberassign', night=night, expid=expid, tile=tileid, groupname=groupname)
             self.assertEqual(testpath, refpath)
 
         refpath = os.path.expandvars(f'$DESI_SPECTRO_REDUX/$SPECPROD/preproc/{night}/{expid:08d}/tilepix-{tileid}.json')
         for groupname in ('healpix', 'pernight', 'cumulative', 'perexp', 'blatfoo'):
-            testpath = findfile('tilepix', night=night, expid=expid, tile=tileid, groupname='healpix')
+            testpath = findfile('tilepix', night=night, expid=expid, tile=tileid, groupname=groupname)
             self.assertEqual(testpath, refpath)
 
         #- Can't set both tile and healpix
