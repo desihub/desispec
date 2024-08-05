@@ -69,7 +69,7 @@ def get_readonly_filepath(filepath):
     return filepath
 
 def findfile(filetype, night=None, expid=None, camera=None,
-        tile=None, groupname=None,
+        tile=None, groupname=None, subgroup=None,
         healpix=None, nside=64,
         band=None, spectrograph=None,
         survey=None, faprogram=None,
@@ -88,6 +88,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
         groupname : spectral grouping name (e.g. "healpix", "cumulative", "pernight")
+        subgroup : (str) subgrouping name for non-standard groupnames
         healpix : healpix pixel number
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
@@ -203,16 +204,16 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- tile based
         #
-        coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-        rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
-        rrmodel_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrmodel-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits.gz',
-        redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-        qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-        qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
-        emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
+        rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.h5',
+        rrmodel_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/rrmodel-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
+        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits.gz',
+        redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
+        qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
+        qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
+        emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         #
-        # spectra- single exp tile based
+        # spectra- single exp tile based requires cusom formatting for expid:08d
         #
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
@@ -267,12 +268,18 @@ def findfile(filetype, night=None, expid=None, camera=None,
             ):
         groupname = 'cumulative'
 
-    if str(groupname) == "cumulative":
+    if groupname == "cumulative":
         nightprefix = "thru"
-    elif groupname == 'perexp':
-        nightprefix = "exp"
-    else:
+        subgroup = str(night)
+    elif groupname == "pernight":
         nightprefix = ""
+        subgroup = str(night)
+    elif groupname == "perexp":
+        nightprefix = "exp"
+    elif groupname == "healpix":
+        nightprefix = ""
+    else:
+        nightprefix = str(groupname)+'-'
 
     #- backwards compatibility: try interpreting groupname as a healpix number
     if healpix is None and tile is None and groupname is not None:
@@ -297,6 +304,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if isinstance(tile, str):    tile = int(tile)
     if isinstance(spectrograph, str): spectrograph = int(spectrograph)
 
+    #- Determine if this is healpix-based or tile-based objects, and update
+    #- location dict for which flavor of coadd/spectra/redrock/etc is needed,
+    #- removing the _hp, _single, _tile suffixes from the keys
     loc_copy = location.copy()
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
@@ -314,6 +324,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 if key.endswith('_tile'):
                     root_key = key.removesuffix('_tile')
                     location[root_key] = val
+
+        ## cumulative and pernight use night as subgroup
+        if groupname in ('cumulative', 'pernight'):
+            subgroup = night
+
     else:
         ## If not tile based then use the hp naming scheme
         ## Do loop to improve scaling with additional file types
@@ -372,7 +387,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
-        'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
+        'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
+        'groupname':groupname, 'subgroup':subgroup,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }
@@ -385,9 +401,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if 'rawdata_dir' in required_inputs:
         actual_inputs['rawdata_dir'] = rawdata_dir
 
+    #- If any inputs missing, print all missing inputs, then raise single ValueError
+    missing_inputs = False
     for i in required_inputs:
         if actual_inputs[i] is None:
-            raise ValueError("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
+            log.error("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
+            missing_inputs = True
+
+    if missing_inputs:
+        msg = f"Missing inputs for {location[filetype]}"
+        log.critical(msg)
+        raise ValueError(msg)
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     filepath = os.path.normpath(location[filetype].format(**actual_inputs))
