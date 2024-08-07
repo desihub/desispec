@@ -148,7 +148,7 @@ def main():
         morningdark_expid = get_morning_dark_night_expid(args.night, args.prod)
 
     # AR CTE detector expid
-    if "ctedet" in steps_tbd:
+    if np.in1d(["ctedet", "ctedetrowbyrow"], steps_tbd).sum() > 0:
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
     # AR dark
@@ -167,7 +167,7 @@ def main():
             create_badcol_png(outfns["badcol"], args.night, args.prod)
 
     # AR CTE detector
-    if "ctedet" in steps_tbd:
+    if np.in1d(["ctedet", "ctedetrowbyrow"], steps_tbd).sum() > 0:
         if ctedet_expid is not None:
             create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid, args.nproc)
             create_ctedet_rowbyrow_pdf(outfns["ctedetrowbyrow"], args.night, args.prod, ctedet_expid, args.nproc)
