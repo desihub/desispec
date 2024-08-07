@@ -1082,7 +1082,7 @@ def create_ctedet_rowbyrow_pdf(outpdf, night, prod, ctedet_expid, nproc, dpi=100
         ctedet_mydicts = _read_ctedet(night, prod, ctedet_expid, nproc)
 
     # AR compute the row-by-row model
-    ims = [ctedet_mydict["img"] for ctedet_mydict in ctedet_mydicts]
+    ims = [ctedet_mydict["img"] if ctedet_mydict is not None else None for ctedet_mydict in ctedet_mydicts]
     mods = _compute_rowbyrow(ims, nproc)
 
     # AR plotting
