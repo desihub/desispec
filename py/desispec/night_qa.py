@@ -66,6 +66,7 @@ def get_nightqa_outfns(outdir, night):
         "morningdark" : os.path.join(outdir, "morningdark-{}.pdf".format(night)),
         "badcol" : os.path.join(outdir, "badcol-{}.png".format(night)),
         "ctedet" : os.path.join(outdir, "ctedet-{}.pdf".format(night)),
+        "ctedetrowbyrow" : os.path.join(outdir, "ctedetrowbyrow-{}.pdf".format(night)),
         "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
         "tileqa" : os.path.join(outdir, "tileqa-{}.pdf".format(night)),
         "skyzfiber" : os.path.join(outdir, "skyzfiber-{}.png".format(night)),
