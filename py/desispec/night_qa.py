@@ -26,10 +26,11 @@ from desitarget.targets import zcut as lya_zcut
 from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
-from desispec.io import findfile
+from desispec.io import findfile, read_image
 from desispec.io.util import replace_prefix, get_tempfilename
 from desispec.calibfinder import CalibFinder
 from desispec.scripts import preproc
+from desispec.correct_cte import get_rowbyrow_image_model
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
@@ -44,6 +45,9 @@ log = get_logger()
 
 cameras = ["b", "r", "z"]
 petals = np.arange(10, dtype=int)
+
+ctedet_mydicts = None
+
 
 def get_nightqa_outfns(outdir, night):
     """
@@ -819,9 +823,9 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     os.rename(tmp_outpng, outpng)
 
 
-def _read_ctedet(night, prod, ctedet_expid, petal, camera):
+def _read_ctedet_campet(night, prod, ctedet_expid, petal, camera):
     """
-    Internal function used by create_ctedet_pdf(), reading the ctedet_expid preproc info.
+    Internal function used by _read_ctedet reading the ctedet_expid preproc info for one {camera, petal}.
 
     Args:
         night: night (int)
@@ -839,9 +843,10 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
     if os.path.isfile(fn):
         mydict = {}
         mydict["fn"] = fn
-        # AR read
-        with fitsio.FITS(fn) as fx:
-            mydict["img"] = fx["IMAGE"].read()
+        # AR read (use read_image(), so that it can be used by get_rowbyrow_image_model)
+        #with fitsio.FITS(fn) as fx:
+        #    mydict["img"] = fx["IMAGE"].read()
+        mydict["img"] = read_image(fn)
         # AR check if we re displaying a 1s FLAT
         hdr = fitsio.read_header(fn, "IMAGE")
         if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
@@ -858,6 +863,41 @@ def _read_ctedet(night, prod, ctedet_expid, petal, camera):
         return mydict
     else:
         return None
+
+
+def _read_ctedet(night, prod, ctedet_expid, nproc):
+    """
+    Internal function used by create_ctedet_pdf() and create_ctedet_rowbyrow_pdf(),
+        reading the ctedet_expid preproc info.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        nproc: number of processes running at the same time (int)
+
+    Returns:
+        mydicts: a list of dictionaries with the IMAGE data, plus various infos,
+                    assuming a preproc file is available, otherwise ``None``.
+                the list is for [b0, r0, z0, b1, r1, z1, ..., b9, r9, z9]
+    """
+    myargs = []
+    for petal in petals:
+        for camera in cameras:
+            myargs.append(
+                [
+                    night,
+                    prod,
+                    ctedet_expid,
+                    petal,
+                    camera,
+                ]
+            )
+    # AR launching pool
+    pool = multiprocessing.Pool(processes=nproc)
+    with pool:
+        mydicts = pool.starmap(_read_ctedet_campet, myargs)
+    return mydicts
 
 
 def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=None, xmax=None, ylim=(-5, 10),
@@ -887,6 +927,12 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
     # AR temporary output file
     tmp_outpdf = get_tempfilename(outpdf)
 
+    # AR read ctedet
+    global ctedet_mydicts
+    if ctedet_mydicts is None:
+        ctedet_mydicts = _read_ctedet(night, prod, ctedet_expid, nproc)
+
+    # AR
     myargs = []
     for petal in petals:
         for camera in cameras:
@@ -899,16 +945,13 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                     camera,
                 ]
             )
-    # AR launching pool
-    pool = multiprocessing.Pool(processes=nproc)
-    with pool:
-        mydicts = pool.starmap(_read_ctedet, myargs)
+
     # AR plotting
     clim = (-5, 5)
     tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     colors = {"A" : tmpcols[1], "B" : tmpcols[1], "C" : tmpcols[0], "D" : tmpcols[0]}
     with PdfPages(tmp_outpdf) as pdf:
-        for mydict in mydicts:
+        for mydict in ctedet_mydicts:
             petcam_xmin, petcam_xmax = xmin, xmax
             fig = plt.figure(figsize=(30, 5))
             gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
@@ -928,7 +971,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                         color="k", fontsize=20, fontweight="bold", ha="center", va="center",
                         transform=ax1d.transAxes,
                     )
-                img = mydict["img"]
+                img = mydict["img"].pix
                 ny, nx = img.shape
                 if petcam_xmin is None:
                     petcam_xmin = 0
@@ -967,6 +1010,177 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nproc, nrow=21, xmin=No
                 ax1d.grid()
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
+
+    # AR move to final location
+    os.rename(tmp_outpdf, outpdf)
+
+
+def _compute_rowbyrow(ims, nproc):
+    """
+    Internal function used by create_ctedet_rowbyrow_pdf(),
+        executing get_rowbyrow_image_model() on a list of read_image(ctedet_fn).
+
+    Args:
+        ims: list of im objects, outputs of read_image(ctedet_fn); can contain some None values (list of objects)
+        nproc: number of processes running at the same time (int)
+
+    Returns:
+        mods: list of mod objects, outputs of get_rowbyrow_image_model(im) for each im of ims (list of objects)
+
+    Note:
+        mods[i]=None if ims[i]=None
+    """
+    # AR indexes with ims != None
+    ii = [i for i in range(len(ims)) if ims[i] is not None]
+
+    if len(ii) == 0:
+        return [None for _ in range(len(ims))]
+
+    else:
+        tmp_ims = [ims[i] for i in ii]
+        pool = multiprocessing.Pool(nproc)
+        with pool:
+            tmp_mods = pool.map(get_rowbyrow_image_model, tmp_ims)
+
+        # AR mods with mods[i]=None if ims[i]=None
+        mods = [None for _ in range(len(ims))]
+        for i, tmp_mod in zip(ii, tmp_mods):
+            mods[i] = tmp_mod
+        #
+        return mods
+
+
+def create_ctedet_rowbyrow_pdf(outpdf, night, prod, ctedet_expid, nproc, dpi=100):
+    """
+    For a given night, create a pdf with a CTE diagnosis (from preproc files).
+
+    Args:
+        outpdf: output pdf file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
+        ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        nproc: number of processes running at the same time (int)
+        dpi (optional, default to 100): dpi value in plt.savefig() (int)
+
+    Note:
+        * Credits to E. Schlafly.
+    """
+
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
+    campets = []
+    for petal in petals:
+        for camera in cameras:
+            campets.append("{}{}".format(camera, petal))
+
+    # AR read ctedet images
+    global ctedet_mydicts
+    if ctedet_mydicts is None:
+        ctedet_mydicts = _read_ctedet(night, prod, ctedet_expid, nproc)
+
+    # AR compute the row-by-row model
+    ims = [ctedet_mydict["img"] for ctedet_mydict in ctedet_mydicts]
+    mods = _compute_rowbyrow(ims, nproc)
+
+    # AR plotting
+    # AR remarks:
+    # AR - the (x,y) conversions for the side panels
+    # AR    are a bit counter-intuitive, as ax.imshow()
+    # AR    reverses the displayed axes...
+    # AR - the panels positioning is not very elegant,
+    # AR    probably could be coded in a nicer way!
+    clim = (-2, 2)
+    cmap = matplotlib.cm.coolwarm
+    tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {"A" : tmpcols[1], "B" : tmpcols[1], "C" : tmpcols[0], "D" : tmpcols[0]}
+    with PdfPages(tmp_outpdf) as pdf:
+
+        for campet, mydict, mod in zip(campets, ctedet_mydicts, mods):
+            camera, petal = campet[0], campet[1]
+            title = "EXPID={} {}{}".format(ctedet_expid, camera, petal)
+
+            if camera == cameras[0]:
+                fig = plt.figure(figsize=(20 * len(cameras) / 3, 10))
+                gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
+                ic = 0
+
+            ax = fig.add_subplot(gs[0, ic])
+            ax.set_title(title)
+            ax.set_xlabel(r"Fiber direction $\Longrightarrow$")
+            if ic == 0:
+                ax.set_ylabel(r"Wavelength direction $\Longrightarrow$")
+            if mydict is not None:
+                assert(mydict["img"].meta["CAMERA"].lower() == campet.lower())
+                ress = mydict["img"].pix - mod
+                median = np.nanmedian(ress)
+                ax.text(0.05, 0.95, "res_median = {:.2f}".format(median), transform=ax.transAxes)
+                im = ax.imshow(ress - median, cmap=cmap, vmin=clim[0], vmax=clim[1])
+                # AR amp labels + cte correction infos
+                # AR ampsec:
+                # AR - in the header they are 1-index
+                # AR - we change those to 0-index (consistent with OFFCOLS and CTECOLS)
+                tmpdy = -0.035 * ress.shape[0]
+                for amp in ["a", "b", "c", "d"]:
+                    key = "ampsec{}".format(amp)
+                    # 2-amp readout only has 2 amps, so check
+                    if key in mydict["img"].meta:
+                        ampsec = mydict["img"].meta[key]
+                        ampsecx, ampsecy = ampsec.replace("[", "").replace("]", "").split(",")
+                        ampsecx = "{}:{}".format(
+                            int(ampsecx.split(":")[0]) - 1,
+                            int(ampsecx.split(":")[1]) - 1,
+                        )
+                        ampsecy = "{}:{}".format(
+                            int(ampsecy.split(":")[0]) - 1,
+                            int(ampsecy.split(":")[1]) - 1,
+                        )
+                        ampsec_old = ampsec
+                        ampsec = "[{}, {}]".format(ampsecx, ampsecy)
+                        tmpx = np.mean([int(_) for _ in ampsecx.split(":")])
+                        tmpy = np.mean([int(_) for _ in ampsecy.split(":")])
+                        ax.text(tmpx, tmpy, amp.upper(), fontweight="bold", ha="center", va="center")
+                        tmpy += tmpdy
+                        ax.text(tmpx, tmpy, "[{}, {}]".format(ampsecx, ampsecy), fontweight="bold", ha="center", va="center")
+                        tmpy += tmpdy
+                        #ax.text(ampsecx, ampsecy, "{}\n{}".format(amp.upper(), ampsec), fontweight="bold", ha="center", va="center")
+                        # AR known columns with offset?
+                        # AR     stored in format like "12:24,1700:1900"
+                        colmins, colmaxs, colors = [], [], []
+                        for key, color in zip(
+                            ["OFFCOLS{}".format(amp.upper()) , "CTECOLS{}".format(amp.upper())],
+                            ["g", "darkgreen"],
+                        ):
+                            if key in mydict and mydict[key] is not None:
+                                ax.text(tmpx, tmpy, "{}: {}".format(key, mydict[key]), color=color, fontweight="bold", ha="center", va="center")
+                                tmpy += tmpdy
+                                for colrange in mydict[key].split(","):
+                                    colmins.append(int(colrange.split(":")[0]))
+                                    colmaxs.append(int(colrange.split(":")[1]))
+                                    colors.append(color)
+                        for colmin, colmax, color in zip(colmins, colmaxs, colors):
+                            ax.plot([colmin, colmax], [tmpy, tmpy], color=color, lw=3, alpha=0.75, zorder=1)
+                            tmpy += tmpdy
+                # AR flip the y-axis to have y coords increasing towards up
+                # AR    (e.g. see Guy+2023 Fig.4)
+                ax.set_ylim(ax.get_ylim()[::-1])
+                if (camera == cameras[-1]):
+                    p = ax.get_position().get_points().flatten()
+                    cax = fig.add_axes([
+                        p[0] + 1.05 * (p[2] - p[0]),
+                        p[1],
+                        0.05 * (p[2] - p[0]),
+                        1.0 * (p[3] - p[1])
+                    ])
+                    cbar = plt.colorbar(im, ax=ax, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
+                    clab = "preproc - rowbyrow_model - res_median [Units : ?]".format(median)
+                    cbar.set_label(clab)
+                    cbar.mappable.set_clim(clim)
+            ic += 1
+            if camera == cameras[-1]:
+                pdf.savefig(fig, bbox_inches="tight", dpi=dpi)
+                plt.close()
 
     # AR move to final location
     os.rename(tmp_outpdf, outpdf)
