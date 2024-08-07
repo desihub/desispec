@@ -2315,19 +2315,21 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
     # AR - morningdark
     # AR - badcol
     # AR - ctedet
+    # AR - ctedetrowbyrow
     # AR - sframesky
     # AR - tileqa
     # AR - skyzfiber
     # AR - petalnz
     for case, caselab, width, text in zip(
-        ["dark", "morningdark", "badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
-        ["DARK", "Morning DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
-        ["100%", "100%", "35%", "100%", "75%", "90%", "90%", "100%"],
+        ["dark", "morningdark", "badcol", "ctedet", "ctedetrowbyrow", "sframesky", "tileqa", "skyzfiber", "petalnz"],
+        ["DARK", "Morning DARK", "bad columns", "CTE detector (amps boundaries)", "CTE detector (row-by-row)", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
+        ["100%", "100%", "35%", "100%", "100%", "75%", "90%", "90%", "100%"],
         [
             "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nThe side panels report the median profiles for each pair of amps along each direction.\nWatch it and report unsual features (easy to say!)",
              "This pdf displays the 1200s (binned) morning DARK (one page per spectrograph; non-valid pixels are displayed in red)\nThe side panels report the median profiles for each pair of amps along each direction.\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
+            "This pdf displays another diagnosis to detect CTE anormal behaviour (one petal per page)\nWatch it and report unusual features (typically if some significant 'block pattern' along some fibers is not already identified by a OFFCOLS or CTECOLS correction).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nPixels with IVAR=0 are displayed in yellow.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
             "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
