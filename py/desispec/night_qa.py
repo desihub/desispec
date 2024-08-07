@@ -879,8 +879,8 @@ def _read_ctedet(night, prod, ctedet_expid, nproc):
 
     Returns:
         mydicts: a list of dictionaries with the IMAGE data, plus various infos,
-                    assuming a preproc file is available, otherwise ``None``.
-                the list is for [b0, r0, z0, b1, r1, z1, ..., b9, r9, z9]
+            assuming a preproc file is available, otherwise ``None``.
+            the list is for [b0, r0, z0, b1, r1, z1, ..., b9, r9, z9]
     """
     myargs = []
     for petal in petals:
