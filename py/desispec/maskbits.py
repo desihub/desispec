@@ -62,6 +62,8 @@ fibermask:
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
     - [LOWTRANSMISSION, 12, "Low fiber transmission. Cannot use for sky."]
+    - [NEARCHARGETRAP, 13, "Fiber trace near charge trap in one of the CCDs"]
+    - [VARIABLETHRU,   14, "Fiber has throughput variations we cannot model well"]
     - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
