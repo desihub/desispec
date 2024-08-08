@@ -386,7 +386,7 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key])
 
-    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]) :
+    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]) :
         """
         Args:
             keys: optional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
@@ -396,7 +396,7 @@ class CalibFinder() :
         """
         log = get_logger()
         fibers=[]
-        badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]
+        badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS","VARIABLETHRUFIBERS"]
         for key in keys :
             if key not in badfiber_keywords  :
                 log.error(f"key '{key}' not in the list of valid keys for bad fibers: {validkeys}")
@@ -512,7 +512,7 @@ class CalibFinder() :
                             continue
                         else:
                             log.debug(f'Temperature difference to selected dark is {np.abs(dark_entry["CCDTEMP"] - header["CCDTEMP"]):.5f}')
-                    
+
                     #same for bias
                     if bias_entry["DETECTOR"].strip() != self.data["DETECTOR"].strip() :
                         log.debug("Skip file %s with DETECTOR=%s != %s"%(bias_entry["FILENAME"],bias_entry["DETECTOR"],self.data["DETECTOR"]))
@@ -531,7 +531,7 @@ class CalibFinder() :
                             continue
                         else:
                             log.debug(f'Temperature difference to selected bias is {np.abs(bias_entry["CCDTEMP"] - header["CCDTEMP"]):.5f}')
-                    
+
                     found=True
                     log.debug(f"Found matching dark frames for camera {cameraid} created on {date_used}")
                     break
@@ -562,4 +562,3 @@ class CalibFinder() :
                 #this would prevent nightwatch failures in case of not-yet-existing files
                 log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, "
                            "falling back to $DESI_SPECTRO_CALIB")
-
