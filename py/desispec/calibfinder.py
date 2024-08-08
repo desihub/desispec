@@ -148,8 +148,9 @@ def ccdregionmask(headers) :
         masks.append(mask)
     return masks
 
+badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 
-def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"],yaml_file=None) :
+def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     """
     find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
 
@@ -157,7 +158,7 @@ def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIB
         headers: list of fits headers, or list of dictionnaries
 
     Optional:
-        keys: list of keywords, among ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"]. Default is all of them.
+        keys: list of keywords, among calibfinder.badfiber_keywords. Default is all of them.
         yaml_file: path to a specific yaml file. By default, the code will
         automatically find the yaml file from the environment variable
         DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
@@ -386,17 +387,16 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key])
 
-    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]) :
+    def badfibers(self,keys=badfiber_keywords) :
         """
         Args:
-            keys: optional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
+            keys: optional, list of keywords, among calibfinder.badfiber_keywords. Default is all of them.
 
         Returns:
             List of bad fibers from yaml file as a 1D array of intergers
         """
         log = get_logger()
         fibers=[]
-        badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS","VARIABLETHRUFIBERS"]
         for key in keys :
             if key not in badfiber_keywords  :
                 log.error(f"key '{key}' not in the list of valid keys for bad fibers: {validkeys}")
