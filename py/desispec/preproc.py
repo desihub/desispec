@@ -1123,19 +1123,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
+
+        average_read_noise = 0.
+
         if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
-            o,r =  calc_overscan(raw_overscan_col)
+            o,average_read_noise =  calc_overscan(raw_overscan_col)
             # replace by single value
             overscan_col = np.repeat(o,nrows)
-            if amps_with_readnoise_per_row is None or amp not in amps_with_readnoise_per_row:
-                # replace readnoise by average if amp not in amps_with_readnoise_per_row
-                rdnoise  = np.repeat(r,nrows)
-            else :
-                # keep value per row for 4 sigma positive outliers
-                median_noise = np.median(rdnoise)
-                rms_of_rdnoise = 1.4826*np.median(np.abs(rdnoise-median_noise))
-                rdnoise[rdnoise<median_noise+4*rms_of_rdnoise]=median_noise
             header['OMETH'+amp]=("AVERAGE","use average overscan")
         else :
             header['OMETH'+amp]=("PER_ROW","use average overscan per row")
@@ -1151,8 +1146,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
             # We use the overscan per row but we still compute a single readnoise value for the whole amplifier
             row_subtracted_overscan_col = raw_overscan_col - overscan_col[:,None]
-            o,r = calc_overscan(row_subtracted_overscan_col)
-            rdnoise  = np.repeat(r,nrows)
+            o,average_read_noise = calc_overscan(row_subtracted_overscan_col)
+
+        if amps_with_readnoise_per_row is None or amp not in amps_with_readnoise_per_row:
+            # replace readnoise by average if amp not in amps_with_readnoise_per_row
+            rdnoise  = np.repeat(average_read_noise,nrows)
+            header['RMETH'+amp]=("AVERAGE","use average readnoise")
+        else :
+            # keep value per row for 4 sigma positive outliers
+            median_noise = np.median(rdnoise)
+            rms_of_rdnoise = 1.4826*np.median(np.abs(rdnoise-median_noise))
+            rdnoise[rdnoise<median_noise+4*rms_of_rdnoise]=median_noise
+            header['RMETH'+amp]=("PER_ROW","use average readnoise per row for some rows")
 
         #- Mask bad amplifiers
         if amp.upper() in badamps.upper():
