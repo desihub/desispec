@@ -16,11 +16,12 @@ def parse_args():  # options=None):
                         help="Relative or absolute pathname to the yaml file summarizing the production.")
 
     # Code Flags
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where no jobs are actually created or submitted.")
-    parser.add_argument("--error-if-not-available", action="store_true",
-                        help="Raise an error instead of reporting and moving on if an exposure "+\
-                             "table doesn't exist.")
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="Perform a dry run where no jobs are actually created or submitted."
+                             + " Give what --dry-run-level to pass to desi_proc_night.")
+    # parser.add_argument("--error-if-not-available", action="store_true",
+    #                     help="Raise an error instead of reporting and moving on if an exposure "+\
+    #                          "table doesn't exist.")
 
     args = parser.parse_args()
 
