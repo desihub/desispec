@@ -814,7 +814,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     cfinder = None
     if ccd_calibration_filename is not False:
-        cfinder = CalibFinder([header, primary_header], 
+        cfinder = CalibFinder([header, primary_header],
                               yaml_file=ccd_calibration_filename,
                               fallback_on_dark_not_found=fallback_on_dark_not_found)
 
@@ -997,6 +997,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if no_overscan_per_row :
         log.debug("Option no_overscan_per_row is set")
 
+    # check for keyword READNOISEPERROW in config ...
+    amps_with_readnoise_per_row = None
+    if cfinder and cfinder.haskey("READNOISEPERROW"):
+        amps_with_readnoise_per_row = cfinder.value("READNOISEPERROW").split(",")
+        log.info("Read noise per row (keyword READNOISEPERROW) for amps {}".format(amps_with_readnoise_per_row))
+        # check that those amps exist otherwise throw an error
+        if not np.all(np.in1d(amps_with_readnoise_per_row,amp_ids)) :
+            mess = "Some 'READNOISEPERROW' amps {} are not in {}.".format(amps_with_readnoise_per_row,amp_ids)
+            log.error(mess)
+            raise KeyError(mess)
+    else :
+        log.debug("No keyword READNOISEPERROW in config")
+
     for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
@@ -1115,7 +1128,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value
             overscan_col = np.repeat(o,nrows)
-            rdnoise  = np.repeat(r,nrows)
+            if amps_with_readnoise_per_row is None or amp not in amps_with_readnoise_per_row:
+                # replace readnoise by average if amp not in amps_with_readnoise_per_row
+                rdnoise  = np.repeat(r,nrows)
+            else :
+                # keep value per row for 4 sigma positive outliers
+                median_noise = np.median(rdnoise)
+                rms_of_rdnoise = 1.4826*np.median(np.abs(rdnoise-median_noise))
+                rdnoise[rdnoise<median_noise+4*rms_of_rdnoise]=median_noise
             header['OMETH'+amp]=("AVERAGE","use average overscan")
         else :
             header['OMETH'+amp]=("PER_ROW","use average overscan per row")
