@@ -144,6 +144,8 @@ def submit_production(production_yaml, dry_run_level=False):
         thru_night = last_night
         log.warning(f"Setting thru_night to last_night: {thru_night}")
 
+    ## note that None defaults to "cumulative" when handed to desi_proc_night
+    ## unless no_redshifts is True
     no_redshifts = False
     if 'Z_SUBMIT_TYPES' in conf:
         z_submit_types_str = str(conf['Z_SUBMIT_TYPES'])
@@ -191,17 +193,22 @@ def submit_production(production_yaml, dry_run_level=False):
     ## Do the main processing
     finished = False
     processed_nights, skipped_nights = [], []
-    for night in all_nights:
+    all_nights = sorted(all_nights)
+    log.info(f"Processing {all_nights=}")
+    for night in sorted(all_nights):
         num_in_queue = check_queue_count(user=user, include_scron=False,
                                          dry_run_level=dry_run_level)
         ## In Jura the largest night had 115 jobs, to be conservative say 200
         if num_in_queue > 4800:
+            log.info(f"{num_in_queue} jobs in the queue, so stopping the job submissions.")
             break
         if os.path.exists(findfile('proctable', night=night, readonly=True)):
             skipped_nights.append(night)
+            log.info(f"{night=} already has a proctable, skipping.")
             continue
         ## We don't expect exposure tables to change during code execution here
         ## but we do expect processing tables to evolve, so clear that cache
+        log.info(f"Processing {night=}")
         # TODO uncomment when merged into branch with crossnight dependencies
         #desispec.workflow.proctable.reset_tilenight_ptab_cache()
         if dry_run_level < 4:
@@ -233,7 +240,7 @@ def submit_production(production_yaml, dry_run_level=False):
         #            dont_require_cals=False,
         #            psf_linking_without_fflat=False,
         #            still_acquiring=False)
-        log.info(f"Completed {night}.")
+        log.info(f"Completed {night=}.")
     else:
         ## I.e. if the above loop didn't "break" because of exceeding the queue
         ## and all nights finished
