@@ -11,6 +11,7 @@ import time
 import re
 import glob
 
+from desispec.parallel import stdouterr_redirected
 from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.scripts.proc_night import proc_night
@@ -190,6 +191,14 @@ def submit_production(production_yaml, dry_run_level=False):
     if reservation is not None:
         log.info(f'Using reservation: {reservation}')
 
+    ## Define log location
+    logpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                          os.environ['SPECPROD'], 'run', 'logs')
+    if dry_run_level < 4:
+        os.makedirs(logpath, exist_ok=True)
+    else:
+        log.info(f"{dry_run_level=} so not creating {logpath}")
+
     ## Do the main processing
     finished = False
     processed_nights, skipped_nights = [], []
@@ -212,11 +221,13 @@ def submit_production(production_yaml, dry_run_level=False):
         # TODO uncomment when merged into branch with crossnight dependencies
         #desispec.workflow.proctable.reset_tilenight_ptab_cache()
         if dry_run_level < 4:
-            proc_night(night=night, z_submit_types=z_submit_types,
-                       no_redshifts=no_redshifts,
-                       complete_tiles_thrunight=thru_night,
-                       surveys=surveys, dry_run_level=dry_run_level,
-                       queue=queue, reservation=reservation)
+            logfile = os.path.join(logpath, f'night-{night}.log')
+            with stdouterr_redirected(logfile):
+                proc_night(night=night, z_submit_types=z_submit_types,
+                           no_redshifts=no_redshifts,
+                           complete_tiles_thrunight=thru_night,
+                           surveys=surveys, dry_run_level=dry_run_level,
+                           queue=queue, reservation=reservation)
         else:
             log.info(f"{dry_run_level=} so not running desi_proc_night. "
                      + f"Would have run for {night=}")
@@ -246,9 +257,14 @@ def submit_production(production_yaml, dry_run_level=False):
         ## and all nights finished
         finished = True
         # write the sentinel
-        with open(sentinel_file, 'w') as sentinel:
-            sentinel.write(f"All done with processing for {production_yaml}")
-            sentinel.write(f"Nights processed: {all_nights}")
+        if dry_run_level < 4:
+            with open(sentinel_file, 'w') as sentinel:
+                sentinel.write(
+                    f"All done with processing for {production_yaml}")
+                sentinel.write(f"Nights processed: {all_nights}")
+        else:
+            log.info(f"{dry_run_level=} so not creating {sentinel_file}")
+
 
     log.info("Skipped the following nights that already had a processing table:")
     log.info(skipped_nights)
