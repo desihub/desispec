@@ -4,6 +4,7 @@ desispec.workflow.queue
 
 """
 import os
+import re
 import numpy as np
 from astropy.table import Table, vstack
 import subprocess
@@ -518,7 +519,23 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         log.critical(msg)
         raise RuntimeError(msg)
 
-    queue_info_table = Table.read(table_as_string, format='ascii.csv')
+    ## remove extra quotes that astropy table does't like
+    table_as_string = table_as_string.replace('"','')
+
+    ## remove parenthesis are also not very desirable
+    table_as_string = table_as_string.replace('(', '').replace(')', '')
+
+
+    ## remove node list with hyphen or comma otherwise it will break table reader
+    table_as_string = re.sub(r"nid\[[0-9,-]*\]", "multiple nodes", table_as_string)
+
+    try:
+        queue_info_table = Table.read(table_as_string, format='ascii.csv')
+    except:
+        log.info("Table retured by squeue couldn't be parsed. The string was:")
+        print(table_as_string)
+        raise
+    
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
 

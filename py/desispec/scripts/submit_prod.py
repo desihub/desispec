@@ -145,8 +145,8 @@ def submit_production(production_yaml, dry_run_level=False):
         thru_night = last_night
         log.warning(f"Setting thru_night to last_night: {thru_night}")
 
-    ## note that None defaults to "cumulative" when handed to desi_proc_night
-    ## unless no_redshifts is True
+    ## If not specified, run "cumulative" redshifts, otherwise do
+    ## as directed
     no_redshifts = False
     if 'Z_SUBMIT_TYPES' in conf:
         z_submit_types_str = str(conf['Z_SUBMIT_TYPES'])
@@ -157,7 +157,7 @@ def submit_production(production_yaml, dry_run_level=False):
             z_submit_types = [ztype.strip().lower() for ztype in
                                    z_submit_types_str.split(',')]
     else:
-        z_submit_types = None
+        z_submit_types = ['cumulative']
 
     if 'SURVEYS' in conf:
         surveys_str = str(conf['SURVEYS'])
