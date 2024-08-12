@@ -863,14 +863,16 @@ def assign_dependency(prow, dependency):
         if type(dependency) in [list, np.array]:
             ids, qids = [], []
             for curdep in dependency:
+                ids.append(curdep['INTID'])
                 if still_a_dependency(curdep):
-                    ids.append(curdep['INTID'])
+                    # ids.append(curdep['INTID'])
                     qids.append(curdep['LATEST_QID'])
             prow['INT_DEP_IDS'] = np.array(ids, dtype=int)
             prow['LATEST_DEP_QID'] = np.array(qids, dtype=int)
-        elif type(dependency) in [dict, OrderedDict, Table.Row] and still_a_dependency(dependency):
+        elif type(dependency) in [dict, OrderedDict, Table.Row]:
             prow['INT_DEP_IDS'] = np.array([dependency['INTID']], dtype=int)
-            prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
+            if still_a_dependency(dependency):
+                prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
     return prow
 
 def still_a_dependency(dependency):
@@ -1615,7 +1617,7 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
                 if matched_prows is not None:
                     matched_prows = matched_prows[matched_prows['NIGHT'] <= night]
                     for prow in matched_prows:
-                        if matched_prows['INTID'] != tnight['INTID']:
+                        if prow['INTID'] != tnight['INTID']:
                             tnights.append(prow)
                 log.info(f"Internal Processing IDs: {[prow['INTID'] for prow in tnights]}.\n")
                 ## Identify all exposures that should go into the fit
