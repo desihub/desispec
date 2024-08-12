@@ -844,11 +844,12 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             foo = findfile('stdstars',expid=2,spectrograph=0)
         the_exception = cm.exception
-        self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
+        self.assertTrue(str(the_exception), "Missing inputs for")
+
         with self.assertRaises(ValueError) as cm:
             foo = findfile('spectra', survey='main', groupname=123)
         the_exception = cm.exception
-        self.assertEqual(str(the_exception), "Required input 'faprogram' is not set for type 'spectra'!")
+        self.assertTrue(str(the_exception), "Missing inputs for")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
@@ -891,19 +892,58 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
 
-        # Test healpix versus tiles
+        # Test healpix versus tiles for various groupings
         a = findfile('spectra', groupname='5286', survey='main', faprogram='BRIGHT')
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'],
                          'healpix', 'main', 'bright', '52', '5286',
                          'spectra-main-bright-5286.fits.gz')
         self.assertEqual(a, b)
+
         a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'], 'tiles', 'cumulative',
                          '68000', '20200314',
                          'spectra-2-68000-thru20200314.fits.gz')
         self.assertEqual(a, b)
+
+        a = findfile('coadd', tile=68000, groupname='perexp', expid=1234,
+                     spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', 'perexp',
+                         '68000', '00001234',
+                         'coadd-2-68000-exp00001234.fits')
+        self.assertEqual(a, b)
+
+        a = findfile('coadd', tile=68000, groupname='1x_depth', subgroup=42,
+                     spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', '1x_depth',
+                         '68000', '42',
+                         'coadd-2-68000-1x_depth-42.fits')
+        self.assertEqual(a, b)
+
+        a = findfile('redrock', tile=68000, groupname='coffeeboba', subgroup=13,
+                     spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', 'coffeeboba',
+                         '68000', '13',
+                         'redrock-2-68000-coffeeboba-13.fits')
+        self.assertEqual(a, b)
+
+        #- groupname shouldn't impact non-tile non-healpix files
+        night = 20201010
+        expid = 1234
+        tileid = 8888
+        refpath = os.path.expandvars(f'$DESI_SPECTRO_DATA/{night}/{expid:08d}/fiberassign-{tileid:06d}.fits.gz')
+        for groupname in ('healpix', 'pernight', 'cumulative', 'perexp', 'blatfoo'):
+            testpath = findfile('fiberassign', night=night, expid=expid, tile=tileid, groupname=groupname)
+            self.assertEqual(testpath, refpath)
+
+        refpath = os.path.expandvars(f'$DESI_SPECTRO_REDUX/$SPECPROD/preproc/{night}/{expid:08d}/tilepix-{tileid}.json')
+        for groupname in ('healpix', 'pernight', 'cumulative', 'perexp', 'blatfoo'):
+            testpath = findfile('tilepix', night=night, expid=expid, tile=tileid, groupname=groupname)
+            self.assertEqual(testpath, refpath)
 
         #- Can't set both tile and healpix
         with self.assertRaises(ValueError):

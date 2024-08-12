@@ -100,7 +100,7 @@ def parse(options=None):
     return args
 
 
-def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, comm=None):
+def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, param_RR, comm=None):
     """
     Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
     with z_prior using the template contained in template_file
@@ -112,9 +112,12 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
     targetid : int array
         Array of the targetid (contained in the spectra_name_file)
         on which RR will be rerun with prior and qso template.
-    z_prior : float array
-        Array of the same size than targetid with the
+    z_qn : float array
+        Array of the same size as targetid with the
         redshift estimated by QN for the associated targetid
+    z_prior : float array
+        Array of the same size as targetid with the
+        redshift prior for the associated targetid
     param_RR : dict
         Contains info to re-run RR as the template_filename,
         filename_priors, filename_output_rerun_RR, filename_redrock_rerun_RR
@@ -134,25 +137,26 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
 
     """
     log = get_logger()
-    def write_prior_for_RR(targetid, z_prior, filename_priors):
+    def write_prior_for_RR(targetid, z_qn, z_prior, filename_priors):
         """
         Write the prior file for RR associated to the targetid list
 
         Args:
             targetid (int array): array of the targetid
                 on which RR will be rerun with prior and qso template.
-            z_prior (float array): array of the same size than targetid with the
+            z_qn (float array): array of the same size as targetid with the
                 redshift estimated by QN for the associated targetid
+            z_prior (float array): Array of the same size as targetid with the
+                redshift prior for the associated targetid
             filename_priors (str): name under which the file will be saved
         """
         function = np.array(['tophat'] * z_prior.size)  # need to be the same for every one
-        sigma = 0.1 * np.ones(z_prior.size)
         # save
         out = fitsio.FITS(filename_priors, 'rw', clobber=True)
-        data, names, extname = [targetid, function, z_prior, sigma], ['TARGETID', 'FUNCTION', 'Z', 'SIGMA'], 'PRIORS'
+        data, names, extname = [targetid, function, z_qn, z_prior], ['TARGETID', 'FUNCTION', 'Z', 'SIGMA'], 'PRIORS'
         out.write(data, names=names, extname=extname)
         out.close()
-        log.debug(f'Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
+        log.debug(f'Write prior file for RR with {z_prior.size} objects: {filename_priors}')
         return
 
     def extract_redshift_info_from_RR(filename_redrock, targetid):
@@ -213,12 +217,12 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR, 
         # find redshift range of the template
         redshift_template = fitsio.FITS(template_filename)['REDSHIFTS'][:]
         zmin, zmax = np.min(redshift_template), np.max(redshift_template)
-        sel = (z_prior >= zmin) & (z_prior <= zmax)
+        sel = (z_qn >= zmin) & (z_qn <= zmax)
 
         # In case where all the objects have priors outside the redshift template range
         # Skip the template to avoid any undesired errors
         if sel.sum() != 0:
-            write_prior_for_RR(targetid[sel], z_prior[sel], filename_priors)
+            write_prior_for_RR(targetid[sel], z_qn[sel], z_prior[sel], filename_priors)
 
             # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
             # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
@@ -300,8 +304,19 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
             raise KeyError("QN_MODEL_FILE and DESI_ROOT are not set in the current environment.")
 
     model_QN, wave_to_use = load_model(model_QN_path)
-
     data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN, out_grid=wave_to_use)
+
+    # Code to calculate the scaling constant for the dynamic RR prior
+    l_min = np.log10(wave_to_use[0])
+    l_max = np.log10(wave_to_use[-1])
+
+    # If this changes you must change it here. A future update to QuasarNP
+    # might store nboxes as a model parameter but as of 0.2.0 this is not the case.
+    nboxes = 13
+
+    dl_bins = (l_max - l_min) / nboxes
+    a = 2 * (10**(dl_bins) - 1)
+    log.info(f"Using {a = } for redrock prior scaling")
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
         sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
@@ -322,8 +337,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         sel_QN[sel_to_QN] = is_qso_QN
 
         sel_QSO_RR_with_no_z_pb = (redrock['SPECTYPE'] == 'QSO')
-        sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(redrock['Z'][sel_QN] - z_QN[sel_index_with_QN]) <= 0.05
-        log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.05 (since even with the prior, RR will give the same result)")
+        prior = a * (z_QN + 1) # Analytic prior width from QN box width
+        sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(redrock['Z'][sel_QN] - z_QN[sel_index_with_QN]) <= (prior[sel_index_with_QN] / 2)
+        log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objects with SPECTYPE==QSO and |z_RR - z_QN| < (prior_width / 2) (since even with the prior, RR will give the same result)")
 
         sel_QN &= ~sel_QSO_RR_with_no_z_pb
         index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
@@ -331,7 +347,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         log.info(f"RUN RR on {sel_QN.sum()}")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
-            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_QN[index_with_QN_with_no_pb], param_RR, comm=comm)
+            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
 
     if save_target == 'restricted':
         index_to_save = sel_QN.copy()

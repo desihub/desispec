@@ -372,4 +372,65 @@ class TestPixGroup(unittest.TestCase):
         self.assertGreater(n1, 0)
         self.assertEqual(n6, 0)
 
+    def test_frames2spectra(self):
+        """Test frames2spectra"""
+        from ..pixgroup import FrameLite, frames2spectra
+
+        #- Read input frames
+        frames = list()
+        for filename in self.framefiles:
+            frames.append( FrameLite.read(filename) )
+
+        #- Set some header keywords for testing
+        for i, fr in enumerate(frames):
+            fr.fibermap.meta['BLAT'] = i          #- conflicting, never merged
+            fr.fibermap.meta['FOO'] = 'biz'       #- consistent, but still not merged
+            fr.fibermap.meta['TILEID'] = 1234     #- only merged if onetile=True
+            fr.fibermap.meta['SURVEY'] = 'main'   #- always merged
+            fr.fibermap.meta['PROGRAM'] = 'dark'  #- always merged
+
+        #- converting list of frames
+        spectra = frames2spectra(frames)
+
+        #- converting dict of frames
+        framedict = dict()
+        for fr in frames:
+            night = fr.meta['NIGHT']
+            expid = fr.meta['EXPID']
+            camera = fr.meta['CAMERA']
+            framedict[(night, expid, camera)] = fr
+
+        spectra = frames2spectra(framedict)
+
+        #- Check header keyword propagation
+        self.assertNotIn('BLAT', spectra.fibermap.meta)
+        self.assertNotIn('FOO', spectra.fibermap.meta)
+        self.assertNotIn('TILEID', spectra.fibermap.meta)
+        self.assertIn('SURVEY', spectra.fibermap.meta)
+        self.assertIn('PROGRAM', spectra.fibermap.meta)
+
+        #- but originals were not changed
+        for i, fr in enumerate(frames):
+            self.assertEqual(fr.fibermap.meta['BLAT'], i)
+            self.assertEqual(fr.fibermap.meta['FOO'], 'biz')
+            self.assertEqual(fr.fibermap.meta['TILEID'], 1234)
+            self.assertEqual(fr.fibermap.meta['SURVEY'], 'main')
+            self.assertEqual(fr.fibermap.meta['PROGRAM'], 'dark')
+
+        #- frames2spectra(..., onetile=True) should propagate TILEID
+        spectra = frames2spectra(framedict, onetile=True)
+        self.assertNotIn('BLAT', spectra.fibermap.meta)
+        self.assertNotIn('FOO', spectra.fibermap.meta)
+        self.assertIn('TILEID', spectra.fibermap.meta)  #- different from before
+        self.assertIn('SURVEY', spectra.fibermap.meta)
+        self.assertIn('PROGRAM', spectra.fibermap.meta)
+
+        #- originals are still not changed
+        for i, fr in enumerate(frames):
+            self.assertEqual(fr.fibermap.meta['BLAT'], i)
+            self.assertEqual(fr.fibermap.meta['FOO'], 'biz')
+            self.assertEqual(fr.fibermap.meta['TILEID'], 1234)
+            self.assertEqual(fr.fibermap.meta['SURVEY'], 'main')
+            self.assertEqual(fr.fibermap.meta['PROGRAM'], 'dark')
+
 

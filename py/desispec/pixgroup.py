@@ -552,22 +552,37 @@ def add_missing_frames(frames):
                 wave[band], flux, ivar, mask, resolution_data,
                 frame.fibermap, header, scores)
 
-def frames2spectra(frames, pix=None, nside=64):
+def frames2spectra(frames, pix=None, nside=64, onetile=False):
     '''
     Combine a dict of FrameLite into a SpectraLite for healpix `pix`
 
     Args:
-        frames: dict of FrameLight, keyed by (night, expid, camera)
+        frames: list or dict of FrameLight, keyed by (night, expid, camera)
 
     Options:
         pix: only include targets in this NESTED healpix pixel number
         nside: Healpix nside, must be power of 2
+        onetile: All frames come from the same tile (impacts keyword propagation)
 
     Returns:
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
+
+    If `onetile` is True, propagate fibermap header keywords that apply
+    to a single tile, e.g. TILEID and fiberassign keywords
     '''
     log = get_logger()
+
+    #- support list or tuple instead of dict as input
+    if isinstance(frames, (list, tuple)):
+        framedict = dict()
+        for fr in frames:
+            night = fr.meta['NIGHT']
+            expid = fr.meta['EXPID']
+            camera = fr.meta['CAMERA']
+            framedict[(night, expid, camera)] = fr
+
+        frames = framedict
 
     #- shallow copy of frames dict in case we augment with blank frames
     frames = frames.copy()
@@ -703,6 +718,34 @@ def frames2spectra(frames, pix=None, nside=64):
             else:
                 outmap['FIBERSTATUS'] |= banddict[band]['FIBERSTATUS']
         merged_over_cams_fmaps.append(outmap)
+
+    #- Only keep fibermap keywords that apply to combined spectra, not individual exp
+    general_keywords = [
+            'SURVEY', 'PROGRAM', 'EXTNAME', 'LONGSTRN',
+            'INSTRUME', 'OBSERVAT', 'OBS-LAT', 'OBS-LONG', 'OBS-ELEV', 'TELESCOP'
+            ]
+
+    tile_keywords = [
+            'TILEID', 'TILERA', 'TILEDEC', 'FIELDROT',
+            'FILEDROT', 'FA_PLAN', 'FA_HA', 'FA_RUN', 'FA_M_GFA',
+            'FA_M_PET', 'FA_M_POS', 'REQRA', 'REQDEC', 'FIELDNUM',
+            'FA_VER', 'FA_SURV', 'FAFLAVOR', 'FAPRGRM', 'DESIROOT',
+            'GFA', 'MTL', 'SCND', 'SCND2', 'SCND3', 'SCNDMTL', 'SKY',
+            'SKYSUPP', 'TARG', 'TOO', 'FAARGS', 'FAOUTDIR',
+            'NOWTIME', 'RUNDATE', 'PMCORR', 'PMTIME', 'MTLTIME',
+            'OBSCON', 'GOALTIME', 'GOALTYPE', 'EBVFAC', 'SBPROF',
+            'MINTFRAC', 'FASCRIPT', 'SVNDM', 'SVNMTL',
+            ]
+
+    if onetile:
+        keep_keywords = general_keywords + tile_keywords
+    else:
+        keep_keywords = general_keywords
+
+    for fm in merged_over_cams_fmaps:
+        for key in list(fm.meta.keys()):
+            if key not in keep_keywords:
+                del fm.meta[key]
 
     #- Convert to Tables to facilitate column add/drop/reorder
     for i, fm in enumerate(merged_over_cams_fmaps):
