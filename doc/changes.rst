@@ -10,9 +10,12 @@ desispec Change Log
   Obtain the path to fiberassign files with :func:`~desispec.io.meta.findfile`,
   which will use :envvar:`FIBER_ASSIGN_DIR`. Use :envvar:`DESI_SURVEYOPS`
   to find surveyops files (PR `#2294`_).
+* Allow certain old redrock files in daily reductions to be read (PR `#2317`_).
+
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
+.. _`#2317`: https://github.com/desihub/desispec/pull/2317
 
 0.64.0 (2024-07-01)
 -------------------
