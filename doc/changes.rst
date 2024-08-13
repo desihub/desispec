@@ -20,6 +20,7 @@ desispec Change Log
   desispec.io.fibermap.assemble_fibermap based on content
   of DESI_SPECTRO_CALIB yaml files (PR `#2313`_).
 * Use read noise estimated per CCD row for some amplifiers (PR `#2314`_).
+* Allow certain old redrock files in daily reductions to be read (PR `#2317`_).
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
@@ -29,7 +30,7 @@ desispec Change Log
 .. _`#2310`: https://github.com/desihub/desispec/pull/2310
 .. _`#2313`: https://github.com/desihub/desispec/pull/2313
 .. _`#2314`: https://github.com/desihub/desispec/pull/2314
-
+.. _`#2317`: https://github.com/desihub/desispec/pull/2317
 
 0.64.0 (2024-07-01)
 -------------------
