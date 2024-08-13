@@ -26,6 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
+from desispec.calibfinder import CalibFinder
 
 from . import iotime
 from .table import read_table
@@ -1102,6 +1103,52 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             # for each of the bad fiber, add the bad bits to the fiber status
             badfibermask = np.bitwise_or.reduce(table["FIBERSTATUS"][table["FIBER"]==fiber])
             fibermap['FIBERSTATUS'][fibermap["FIBER"]==fiber] |= badfibermask
+
+    #- Add FIBERSTATUS bits based on DESI_SPECTRO_CALIB entries for all cameras
+    badfibers_keywords_and_maskbits={"NEARCHARGETRAPFIBERS":fibermask.NEARCHARGETRAP,"VARIABLETHRUFIBERS":fibermask.VARIABLETHRU}
+    badfibers=dict()
+    for key in badfibers_keywords_and_maskbits.keys() :
+        badfibers[key]=np.empty(0,dtype=int)
+    #- loop over cameras to look for bad fibers in the calibration yaml files with a calibfinder
+    for specid in range(10) :
+        for arm in ["b","r","z"] :
+            camera="{}{}".format(arm,specid)
+            try:
+                camheader = fits.getheader(rawfile, camera, disable_image_compression=True)
+            except KeyError:
+                log.debug("No camera {} in this file".format(camera))
+                continue
+            cfinder=CalibFinder([rawheader,camheader])
+            for key in badfibers_keywords_and_maskbits.keys() :
+                newbadfibers = cfinder.badfibers([key])
+                if newbadfibers.size > 0 :
+                    log.debug("Adding {} bad fibers {} of camera {}".format(key,newbadfibers,camera))
+                    # check that they do match the fiber number of this spectrograph or throw error
+                    # to avoid any misunderstanding
+                    if np.any((newbadfibers<specid*500)|(newbadfibers>=(specid+1)*500)) :
+                        mess="Not all fibers from {} belong to spectrograph ID {}".format(newbadfibers,specid)
+                        log.error(mess)
+                        raise KeyError(mess)
+                    badfibers[key] = np.append(badfibers[key],newbadfibers)
+
+    #- remove possible duplicates
+    # (it can happen if a bad fiber is mentionned in several cameras of the same spectro)
+    for key in badfibers_keywords_and_maskbits.keys() :
+        if badfibers[key].size > 1 :
+            badfibers[key] = np.unique(badfibers[key])
+    #- nice message
+    message="Bad fibers from DESI_SPECTRO_CALIB:"
+    is_empty=True
+    for key in badfibers_keywords_and_maskbits.keys() :
+        if badfibers[key].size > 0 :
+            message += " {}:{}".format(key,badfibers[key])
+            is_empty=False
+    if is_empty : message += " None"
+    log.info(message)
+    #- now add the keywords to FIBERSTATUS
+    for key in badfibers_keywords_and_maskbits.keys() :
+        selection = np.in1d(fibermap["FIBER"],badfibers[key])
+        fibermap["FIBERSTATUS"][selection] |= badfibers_keywords_and_maskbits[key]
 
     #- NaN are a pain; reset to dummy values
     for col in [

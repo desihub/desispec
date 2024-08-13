@@ -154,9 +154,9 @@ for raw_filename in raw_filenames :
             primary_header = fitsfile[1].header
 
         exptime = primary_header["EXPTIME"]
-        if exptime<1000:
-                log.critical(f"Morning darks should be exptime=1200s, but found {exptime}s")
-                raise TypeError(f"Morning darks should be exptime=1200s, but found {exptime}s")
+        if exptime<900:
+                log.critical(f"Darks should have exptime>=900s, but found {exptime}s")
+                raise TypeError(f"Darks should have exptime>900s, but found {exptime}s")
 
         extname=f'{(args.camera)}'.upper()
         try :
@@ -209,7 +209,7 @@ for raw_filename in raw_filenames :
                             dark=True,
                             pixflat=False,
                             nocrosstalk=True,
-                            ccd_calibration_filename=False)
+                            ccd_calibration_filename=None)
         img=image.pix
         if args.save_preproc :
             io.write_image(preproc_filename,image)

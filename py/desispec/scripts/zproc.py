@@ -58,7 +58,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
     parser.add_argument("-g", "--groupname", type=str,
-                        help="Redshift grouping type: cumulative, perexp, pernight, healpix")
+                        help="Redshift grouping type: cumulative, perexp, pernight, healpix, or custom name")
 
     #- Options for tile-based redshifts
     tiles_options = parser.add_argument_group("tile-based options (--groupname perexp, pernight, or cumulative)")
@@ -74,6 +74,8 @@ def parse(options=None):
     tiles_options.add_argument("-c", "--cameras", type=str,
                         help="Subset of cameras to process, either as a camword (e.g. a012)" +
                              "Or a comma separated list (e.g. b0,r0,z0).")
+    parser.add_argument("--subgroup", type=str,
+                        help="subgroup to use for non-standard groupname values")
 
     #- Options for healpix-based redshifts
     healpix_options = parser.add_argument_group("healpix-based options (--groupname healpix)")
@@ -203,8 +205,9 @@ def main(args=None, comm=None):
             log.error(msg)
             raise ValueError(msg)
         else:
-            msg = f"Only using exposures specified with --expids {args.expids}"
-            log.info(msg)
+            if rank == 0:
+                msg = f"Only using exposures specified with --expids {args.expids}"
+                log.info(msg)
 
     if args.groupname in ['perexp', 'pernight'] and args.nights is not None:
         if len(args.nights) > 1:
@@ -223,6 +226,21 @@ def main(args=None, comm=None):
                 log.critical(msg)
 
             raise ValueError(msg)
+
+    ## Unpack arguments for shorter names (tileid might be None, ok)
+    tileid, groupname, subgroup = args.tileid, args.groupname, args.subgroup
+
+    known_groups = ['cumulative', 'pernight', 'perexp', 'healpix']
+    if groupname not in known_groups:
+        if subgroup is None:
+            msg = f'Non-standard --groupname={groupname} requires --subgroup'
+            if rank == 0:
+                log.critical(msg)
+            raise ValueError(msg)
+        else:
+            msg = f'Non-standard {groupname=} not in {known_groups}; using {subgroup=}'
+            if rank == 0:
+                log.warning(msg)
 
     #- redrock non-MPI mode isn't compatible with GPUs,
     #- so if zproc is running in non-MPI mode, force --no-gpu
@@ -275,15 +293,6 @@ def main(args=None, comm=None):
     else:
         camword = create_camword(args.cameras)
 
-    ## Unpack arguments for shorter names (tileid might be None, ok)
-    tileid, groupname = args.tileid, args.groupname
-
-    known_groups = ['cumulative', 'pernight', 'perexp', 'healpix']
-    if groupname not in known_groups:
-        msg = 'obstype {} not in {}'.format(groupname, known_groups)
-        log.error(msg)
-        raise ValueError(msg)
-
     if args.batch:
         err = 0
         #-------------------------------------------------------------------------
@@ -292,6 +301,7 @@ def main(args=None, comm=None):
             ## create the batch script
             cmdline = list(sys.argv).copy()
             scriptfile = create_desi_zproc_batch_script(group=groupname,
+                                                        subgroup=subgroup,
                                                         tileid=tileid,
                                                         cameras=camword,
                                                         thrunight=args.thrunight,
@@ -394,6 +404,9 @@ def main(args=None, comm=None):
     if rank == 0:
         log.info('------------------------------')
         log.info('Groupname {}'.format(groupname))
+        if subgroup is not None:
+            log.info('Subgroup {}'.format(subgroup))
+
         if args.healpix is not None:
             log.info(f'Healpixels {args.healpix}')
         else:
@@ -442,10 +455,14 @@ def main(args=None, comm=None):
     if groupname == 'healpix':
         findfileopts = dict(groupname=groupname, survey=args.survey, faprogram=args.program)
     else:
-        findfileopts = dict(night=thrunight, tile=tileid, groupname=groupname)
-        if groupname == 'perexp':
+        findfileopts = dict(tile=tileid, groupname=groupname, subgroup=subgroup)
+        if groupname in ('cumulative', 'pernight'):
+            findfileopts['night'] = thrunight
+        elif groupname == 'perexp':
             assert len(expids) == 1
             findfileopts['expid'] = expids[0]
+        elif subgroup is not None:
+            findfileopts['subgroup'] = subgroup
 
     timer.stop('preflight')
 
@@ -608,7 +625,10 @@ def main(args=None, comm=None):
         qafile = findfile('tileqa', **findfileopts)
         qapng = findfile('tileqapng', **findfileopts)
         qalog = findfile('tileqa', logfile=True, **findfileopts)
+        ## requires all coadd and redrock outputs in addition to exposureqa
         infiles = []
+        for expid, night in zip(expids, nights):
+            infiles.append(findfile('exposureqa', expid=expid, night=night, readonly=True))
         for spectro in all_subgroups:
             findfileopts['spectrograph'] = spectro
             infiles.append(findfile('coadd', **findfileopts))

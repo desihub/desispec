@@ -1134,6 +1134,8 @@ def backup_filename(filename):
 
     Returns:
         New filename.N, or filename if original file didn't already exist
+
+    if filename=='/dev/null' or filename doesn't exist, just return filename
     """
     if filename == '/dev/null' or not os.path.exists(filename):
         return filename

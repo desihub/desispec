@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+
+"""
+Print history of desi_spectro_calib configurations for a camera
+"""
+
+import os, sys
+import numpy as np
+import argparse
+import yaml
+
+p = argparse.ArgumentParser(description='Print history of desi_spectro_calib configurations for a camera')
+group = p.add_mutually_exclusive_group()
+group.add_argument('-i', '--infile', help="input desi_spectro_calib sm*.yaml filename")
+group.add_argument('-c', '--camera', help="camera, e.g. b0,r5,z9,sm1r,sm10-z")
+args = p.parse_args()
+
+#- If --camera is provided instead of --infile, parse that into a filename under $DESI_SPECTRO_CALIB
+if args.camera is not None:
+    args.camera = args.camera.lower()
+    #- b0, r1, z9
+    if len(args.camera)==2 and args.camera.startswith( ('b', 'r', 'z') ):
+        from desispec.calibfinder import sp2sm
+        brz = args.camera[0].lower()
+        sp = int(args.camera[1])
+        smN = 'sm'+str(sp2sm(sp))
+    #- sm10-r, sm2b, sm9z (dashes optional)
+    elif args.camera.startswith('sm'):
+        brz = args.camera[-1]
+        smN = args.camera[0:-1]
+        if smN.endswith('-'):
+            smN = smN[0:-1]
+    else:
+        print('ERROR: unrecognized camera {args.camera}; expected something like b0,r1,z9,sm10z,sm2-r')
+        sys.exit(1)
+    
+    args.infile = os.path.join(os.environ['DESI_SPECTRO_CALIB'], 'spec', smN, f'{smN}-{brz}.yaml')
+    print(f'Using {args.infile}')
+
+config = yaml.safe_load(open(args.infile))
+
+#- strip out top level camera name from dictionary hierarchy
+smcam = list(config.keys())[0]
+config = config[smcam]
+
+#- Find time-sorted order of configurations
+keys = list(config.keys())
+begin_date = [int(cx['DATE-OBS-BEGIN']) for cx in config.values()]
+
+previous_config = dict()
+previous_config['DATE-OBS-END'] = '2000-01-01'
+for i in np.argsort(begin_date):
+
+    version_key = keys[i]
+    next_config = config[version_key]
+
+    next_begin = next_config['DATE-OBS-BEGIN']
+    next_end = next_config['DATE-OBS-END'] if 'DATE-OBS-END' in next_config else 'now'
+
+    print(f'{version_key} {next_begin} -> {next_end}')
+
+    if 'DATE-OBS-END' in previous_config:
+        previous_end = previous_config['DATE-OBS-END']
+    else:
+        previous_end = 'now'
+
+    #- warn about overlaps; conveniently 'now' > 'YEARMMDD' is True
+    if previous_end >= next_begin:
+        print(f'  WARNING: previous end {previous_end} overlaps next begin {next_begin}')
+
+    #- New or changed items
+    for key, value in next_config.items():
+        if key in ('DATE-OBS-BEGIN', 'DATE-OBS-END'):
+            continue
+        elif key not in previous_config:
+            print(f'  Setting  {key}={value}')
+        elif key in previous_config and previous_config[key] != next_config[key]:
+            current_value = previous_config[key]
+            # print(f'  Changing {key}={current_value} -> {value}')
+            print(f'  Changing {key}={value}')
+
+    #- Items that are dropped in the new config
+    for key, value in previous_config.items():
+        if key in ('DATE-OBS-BEGIN', 'DATE-OBS-END'):
+            continue
+        elif key not in next_config:
+            print(f'  Dropping {key}={value}')
+
+    previous_config = next_config
+
