@@ -92,8 +92,8 @@ class TestPixGroup(unittest.TestCase):
         cls.exptable.write(cls.expfile)
 
         # Setup a dummy SpectraLite for I/O tests
-        cls.fileio = 'test_spectralite.fits'
-        cls.fileiogz = 'test_spectralite.fits.gz'
+        cls.fileio = os.path.join(cls.testdir, 'test_spectralite.fits')
+        cls.fileiogz = os.path.join(cls.testdir, 'test_spectralite.fits.gz')
 
         cls.nwave = 100
         cls.nspec = 5

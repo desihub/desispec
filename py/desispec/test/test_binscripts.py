@@ -2,6 +2,7 @@
 import os, sys
 import unittest
 from uuid import uuid4
+import tempfile
 
 import numpy as np
 
@@ -26,6 +27,9 @@ class TestBinScripts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
         cls.nspec = 6
         cls.nwave = 2000  # Needed for QA
         cls.wave = 4000+np.arange(cls.nwave)
@@ -86,6 +90,7 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
+        os.chdir(cls.testdir)
         for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
             cls.skyfile, cls.calibfile, cls.stdfile, cls.qa_calib_file,
                          cls.qa_data_file, cls.modelfile, cls.qafig]:
@@ -95,6 +100,12 @@ class TestBinScripts(unittest.TestCase):
             del os.environ['PYTHONPATH']
         else:
             os.environ['PYTHONPATH'] = cls.origPath
+
+        #- back to where we started
+        os.chdir(cls.origdir)
+
+    def setUp(self):
+        os.chdir(self.testdir)
 
     def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
         """Write a fake frame"""

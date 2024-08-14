@@ -12,6 +12,7 @@ except ImportError:
 import unittest
 import uuid
 import os
+import tempfile
 from glob import glob
 from importlib import resources
 
@@ -26,6 +27,9 @@ class TestExtract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
         cls.testhash = uuid.uuid4()
         cls.imgfile = 'test-img-{}.fits'.format(cls.testhash)
         cls.outfile = 'test-out-{}.fits'.format(cls.testhash)
@@ -45,15 +49,19 @@ class TestExtract(unittest.TestCase):
         desispec.io.write_fibermap(cls.fibermapfile, fibermap)
 
     def setUp(self):
+        os.chdir(self.testdir)
         for filename in (self.outfile, self.outmodel):
             if os.path.exists(filename):
                 os.remove(filename)
 
     @classmethod
     def tearDownClass(cls):
+        os.chdir(cls.testdir)
         for filename in glob('test-*{}*.fits'.format(cls.testhash)):
             if os.path.exists(filename):
                 os.remove(filename)
+
+        os.chdir(cls.origdir)
 
     def test_boxcar(self):
         from desispec.quicklook.qlboxcar import do_boxcar

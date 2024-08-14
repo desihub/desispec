@@ -40,7 +40,9 @@ class TestSpectra(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Create specprod directory structure"""
+        cls.origDir = os.getcwd()
         cls.testDir = tempfile.mkdtemp()
+        os.chdir(cls.testDir)
         cls.origEnv = {
             "SPECPROD": None,
             "DESI_SPECTRO_REDUX": None,
@@ -75,12 +77,15 @@ class TestSpectra(unittest.TestCase):
         if os.path.exists(cls.testDir):
             shutil.rmtree(cls.testDir)
 
+        os.chdir(cls.origDir)
+
 
     def setUp(self):
         #- catch specific warnings so that we can find and fix
         # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
 
         #- Test data and files to work with
+        os.chdir(self.testDir)
         self.fileio = "test_spectra.fits"
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"

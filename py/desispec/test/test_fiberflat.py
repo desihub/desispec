@@ -7,6 +7,7 @@ from __future__ import division
 import unittest
 import copy
 import os
+import tempfile
 from uuid import uuid1
 
 import numpy as np
@@ -44,21 +45,31 @@ def _get_data():
 
 class TestFiberFlat(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
 
     def setUp(self):
+        os.chdir(self.testdir)
         id = uuid1()
         self.testfibermap = 'test_fibermap_{}.fits'.format(id)
         self.testframe = 'test_frame_{}.fits'.format(id)
         self.testflat = 'test_fiberflat_{}.fits'.format(id)
 
-
     def tearDown(self):
+        os.chdir(self.testdir)
         if os.path.isfile(self.testframe):
             os.unlink(self.testframe)
         if os.path.isfile(self.testflat):
             os.unlink(self.testflat)
         if os.path.isfile(self.testfibermap):
             os.unlink(self.testfibermap)
+
+    @classmethod
+    def tearDownClass(cls):
+        os.chdir(cls.origdir)
 
 
     def test_interface(self):
