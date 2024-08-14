@@ -9,8 +9,9 @@ import shutil
 from importlib import resources
 import tempfile
 
-
 from desispec.calibfinder import CalibFinder
+
+_standard_calib_dirs = ('DESI_SPECTRO_CALIB' in os.environ) and ('DESI_SPECTRO_DARK' in os.environ)
 
 class TestCalibFinder(unittest.TestCase):
     """Test desispec.calibfinder
@@ -57,6 +58,7 @@ class TestCalibFinder(unittest.TestCase):
         if cfinder.haskey("BIAS") :
             print(cfinder.findfile("BIAS"))
 
+    @unittest.skipIf(not _standard_calib_dirs, "$DESI_SPECTRO_CALIB or $DESI_SPECTRO_DARK not set")
     def test_missing_darks(self):
         """Missing dark files is only fatal if darks are requested
         """
