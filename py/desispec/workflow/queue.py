@@ -539,6 +539,11 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
 
+    ## If the table is empty, return it immediately, otherwise perform
+    ## sanity check and cuts
+    if len(queue_info_table) == 0:
+        return queue_info_table
+
     if np.any(queue_info_table['USER']!=user):
         msg = f"Warning {np.sum(queue_info_table['USER']!=user)} " \
               + f"jobs returned were not {user=}\n" \

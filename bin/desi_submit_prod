@@ -12,8 +12,11 @@ def parse_args():  # options=None):
     """
     parser = argparse.ArgumentParser(description="Submit a full production run of the DESI data pipeline for processing.")
 
-    parser.add_argument("--production-yaml", type=str, required=True,
+    parser.add_argument("-p", "--production-yaml", type=str, required=True,
                         help="Relative or absolute pathname to the yaml file summarizing the production.")
+    parser.add_argument("-p", "--queue-threshold", type=int, default=4800,
+                        help="The number of jobs for the current user in the queue at which the"
+                             + " at which the script stops submitting new jobs.")
 
     # Code Flags
     parser.add_argument("--dry-run-level", type=int, default=0,
