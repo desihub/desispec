@@ -7,6 +7,8 @@ from __future__ import absolute_import, division
 
 import os
 import unittest
+import tempfile
+import shutil
 from uuid import uuid4
 from astropy.table import Table
 
@@ -17,6 +19,9 @@ class TestScripts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
         # from os import environ
         # for k in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
         #     if k in environ:
@@ -25,10 +30,15 @@ class TestScripts(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
         cls.environ_cache.clear()
+        os.chdir(cls.origdir)
 
     def setUp(self):
-        pass
+        os.chdir(self.testdir)
 
     def tearDown(self):
         pass

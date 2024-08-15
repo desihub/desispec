@@ -4,6 +4,8 @@ tests bootcalib code
 
 import unittest
 from uuid import uuid1
+import tempfile
+import shutil
 import os
 import numpy as np
 import glob
@@ -21,6 +23,9 @@ class TestBoot(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
         cls.testarc = 'test_arc.fits.gz'
         cls.testflat = 'test_flat.fits.gz'
         cls.testout = 'test_bootcalib_{}.fits'.format(uuid1())
@@ -28,8 +33,8 @@ class TestBoot(unittest.TestCase):
         cls.data_unavailable = False
 
         # Grab the data
-        url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
-        url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
+        url_arc = 'https://data.desi.lbl.gov/public/epo/example_files/spectest/test_arc.fits.gz'
+        url_flat = 'https://data.desi.lbl.gov/public/epo/example_files/spectest/test_flat.fits.gz'
         for url, outfile in [(url_arc, cls.testarc), (url_flat, cls.testflat)]:
             if not os.path.exists(outfile):
                 try:
@@ -47,17 +52,14 @@ class TestBoot(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        """We deliberately don't clean up the testarc and testflat files,
-        since they are useful for offline testing.
-        """
-        # if os.path.exists(cls.testarc):
-        #     os.unlink(cls.testarc)
-        # if os.path.exists(cls.testflat):
-        #     os.unlink(cls.testflat)
-        if os.path.exists(cls.testout):
-            os.unlink(cls.testout)
-        if os.path.isfile(cls.qafile):
-            os.unlink(cls.qafile)
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
+        os.chdir(cls.origdir)
+
+    def setUp(self):
+        os.chdir(self.testdir)
 
     def test_fiber_peaks(self):
         if self.data_unavailable:

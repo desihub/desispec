@@ -1118,7 +1118,8 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             except KeyError:
                 log.debug("No camera {} in this file".format(camera))
                 continue
-            cfinder=CalibFinder([rawheader,camheader])
+
+            cfinder=CalibFinder([rawheader,camheader], fallback_on_dark_not_found=True)
             for key in badfibers_keywords_and_maskbits.keys() :
                 newbadfibers = cfinder.badfibers([key])
                 if newbadfibers.size > 0 :

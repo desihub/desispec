@@ -19,6 +19,10 @@ class TestPixGroup(unittest.TestCase):
     def setUpClass(cls):
         cls.testdir = tempfile.mkdtemp()
         cls.outdir = os.path.join(cls.testdir, 'output')
+
+        cls.origenv = dict()
+        for key in ['DESI_SPECTRO_REDUX', 'SPECPROD']:
+            cls.origenv[key] = os.getenv(key)  #- will be None if not set
         
         os.environ['DESI_SPECTRO_REDUX'] = cls.testdir
         os.environ['SPECPROD'] = 'grouptest'
@@ -92,8 +96,8 @@ class TestPixGroup(unittest.TestCase):
         cls.exptable.write(cls.expfile)
 
         # Setup a dummy SpectraLite for I/O tests
-        cls.fileio = 'test_spectralite.fits'
-        cls.fileiogz = 'test_spectralite.fits.gz'
+        cls.fileio = os.path.join(cls.testdir, 'test_spectralite.fits')
+        cls.fileiogz = os.path.join(cls.testdir, 'test_spectralite.fits.gz')
 
         cls.nwave = 100
         cls.nspec = 5
@@ -136,8 +140,16 @@ class TestPixGroup(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.testdir):
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
             shutil.rmtree(cls.testdir)
+
+        #- restore environment
+        for key, value in cls.origenv.items():
+            if value is not None:
+                os.environ[key] = value
+            elif key in os.environ:
+                del os.environ[key]
 
     def setUp(self):
         os.environ['DESI_SPECTRO_REDUX'] = self.testdir

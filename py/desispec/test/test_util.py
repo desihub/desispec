@@ -7,6 +7,8 @@ import time
 import unittest
 from uuid import uuid4
 import importlib
+import tempfile
+import shutil
 
 import numpy as np
 from astropy.table import Table
@@ -135,7 +137,7 @@ class TestNight(unittest.TestCase):
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests
 class TestRunCmd(unittest.TestCase):
-    
+
     def test_runcmd(self):
         """Test calling a script"""
         result, success = util.runcmd('echo hello > /dev/null')
@@ -276,12 +278,17 @@ class TestRunCmd(unittest.TestCase):
         
     @classmethod
     def setUpClass(cls):
+        cls.origdir = os.getcwd()
+        cls.testdir = tempfile.mkdtemp()
+        os.chdir(cls.testdir)
+
         cls.infile = 'test-'+uuid4().hex
         cls.outfile = 'test-'+uuid4().hex
         cls.testfile = 'test-'+uuid4().hex
 
     def setUp(self):
         # refresh timestamps so that outfile is older than infile
+        os.chdir(self.testdir)
         for filename in [self.infile, self.outfile]:
             with open(filename, 'w') as fx:
                 fx.write('This file is leftover from a test; you can remove it\n')
@@ -289,9 +296,11 @@ class TestRunCmd(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for filename in [cls.infile, cls.outfile, cls.testfile]:
-            if os.path.exists(filename):
-                os.remove(filename)
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
+        os.chdir(cls.origdir)
 
 class TestUtil(unittest.TestCase):
 
