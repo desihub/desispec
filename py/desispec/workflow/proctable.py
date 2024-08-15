@@ -549,14 +549,14 @@ def update_tilenight_ptab_cache(ptab):
     log = get_logger()
     ## If the cache doesn't exist, don't update it.
     if _tilenight_ptab_cache is None:
-        log.debug(f'Science exptab cache does not exist, so not updating')
+        log.debug(f'Tilenight proctab cache does not exist, so not updating')
         return
     cleaned_ptab = _select_tilenights_from_ptab(ptab)
     new_nights = np.unique(cleaned_ptab['NIGHT'])
     log.info(f'Removing all current entries in processing table tilenight '
-             + f'selection cache for nights {new_nights}')
+             + f'selection cache for nights {list(new_nights)}')
     conflicting_entries = np.isin(_tilenight_ptab_cache['NIGHT'], new_nights)
-    log.info(f"Removing {len(conflicting_entries)} rows and adding "
+    log.info(f"Removing {np.sum(conflicting_entries)} rows and adding "
              + f"{len(cleaned_ptab)} rows "
              + f"to processing table tilenight cache.")
     keep = np.bitwise_not(conflicting_entries)
@@ -683,6 +683,6 @@ def update_full_ptab_cache(ptab):
     t = ptab[_required_full_ptab_cols]
     new_nights = np.unique(t['NIGHT'])
     log.info(f'Replacing all current entries in processing table '
-             + f'cache for nights {new_nights.data}')
+             + f'cache for nights {list(new_nights)}')
     for night in new_nights:
         _full_ptab_cache[night] = t[t['NIGHT'] == night]

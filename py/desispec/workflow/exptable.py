@@ -1079,10 +1079,10 @@ def update_science_etab_cache(etab):
     cleaned_etab = _select_sciences_from_etab(etab)
     new_nights = np.unique(cleaned_etab['NIGHT'])
     log.info(f'Removing all current entries in science exposure '
-             + f'table row cache for nights {new_nights}')
+             + f'table row cache for nights {list(new_nights)}')
     conflicting_entries = np.isin(_science_etab_cache['NIGHT'], new_nights)
     log.info(
-        f"Removing {len(conflicting_entries)} rows and adding {len(cleaned_etab)} rows "
+        f"Removing {np.sum(conflicting_entries)} rows and adding {len(cleaned_etab)} rows "
         + f"to science exposure table row cache.")
     keep = np.bitwise_not(conflicting_entries)
     _science_etab_cache = _science_etab_cache[keep]

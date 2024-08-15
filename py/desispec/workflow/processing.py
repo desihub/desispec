@@ -1220,7 +1220,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
-    if ideps is None:
+    if ideps is None or len(ideps)==0:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
         all_valid_states = list(resubmission_states.copy())
@@ -1229,13 +1229,10 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         othernight_idep_qid_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
-                log.info(idep // 1000)
-                log.info(row['INTID'] // 1000)
                 if idep // 1000 != row['INTID'] // 1000:
                     log.info(f"Internal ID: {idep} not in id_to_row_map. "
                              + "This is expected since it's from another day. ")
                     reference_night = 20000000 + (idep // 1000)
-                    log.info(reference_night)
                     reftab = read_minimal_full_proctab_cols(nights=[reference_night])
                     if reftab is None:
                         msg = f"The dependency is from night={reference_night}" \
