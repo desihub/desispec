@@ -4,6 +4,7 @@ desispec.workflow.queue
 
 """
 import os
+import re
 import numpy as np
 from astropy.table import Table, vstack
 import subprocess
@@ -465,3 +466,132 @@ def any_jobs_failed(statuses, failed_states=None):
     if failed_states is None:
         failed_states = get_failed_states()
     return np.any([status in failed_states for status in statuses])
+
+def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information about specific jobs based on their jobids.
+
+    Parameters
+    ----------
+    user : str
+        NERSC user to query the jobs for
+    include_scron : bool
+        True if you want to include scron entries in the returned table.
+        Default is False.
+    dry_run_level : int
+        Whether this is a simulated run or real run. If nonzero, it is a
+        simulation and it returns a default table that doesn't query the
+        Slurm scheduler.
+
+    Returns
+    -------
+    Table
+        Table with the columns JOBID, PARTITION, NAME, USER, ST, TIME, NODES,
+        NODELIST(REASON) for the specified user.
+    """
+    log = get_logger()
+
+    cmd = f'squeue -u {user} -o "%i,%P,%j,%u,%t,%M,%D,%R"'
+    cmd_as_list = cmd.split()
+
+    if dry_run_level > 0:
+        log.info("Dry run, would have otherwise queried Slurm with the"
+                 +f" following: {' '.join(cmd_as_list)}")
+        string = 'JOBID,PARTITION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
+        string += f"27650097,cron,scron_ar,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650100,cron,scron_nh,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650098,cron,scron_up,{user},PD,0:00,1,(BeginTime)"
+        string += f"29078887,gpu_ss11,tilenight-20230413-24315,{user},PD,0:00,1,(Priority)"
+        string += f"29078892,gpu_ss11,tilenight-20230413-21158,{user},PD,0:00,1,(Priority)"
+        string += f"29079325,gpu_ss11,tilenight-20240309-24526,{user},PD,0:00,1,(Dependency)"
+        string += f"29079322,gpu_ss11,ztile-22959-thru20240309,{user},PD,0:00,1,(Dependency)"
+        string += f"29078883,gpu_ss11,tilenight-20230413-21187,{user},R,10:18,1,nid003960"
+        string += f"29079242,regular_milan_ss11,arc-20240309-00229483-a0123456789,{user},PD,0:00,3,(Priority)"
+        string += f"29079246,regular_milan_ss11,arc-20240309-00229484-a0123456789,{user},PD,0:00,3,(Priority)"
+
+        # create command to run to exercise subprocess -> stdout parsing
+        cmd = 'echo ' + string
+        cmd_as_list = ['echo', string]
+    else:
+        log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
+
+    #- sacct sometimes fails; try several times before giving up
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                          stderr=subprocess.STDOUT)
+            break
+        except subprocess.CalledProcessError as err:
+            log.error(f'{cmd} job query failure at {datetime.datetime.now()}')
+            log.error(f'{cmd_as_list}')
+            log.error(f'{err.output=}')
+    else:  #- for/else happens if loop doesn't succeed
+        msg = f'{cmd} query failed {max_attempts} times; exiting'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
+    ## remove extra quotes that astropy table does't like
+    table_as_string = table_as_string.replace('"','')
+
+    ## remove parenthesis are also not very desirable
+    table_as_string = table_as_string.replace('(', '').replace(')', '')
+
+
+    ## remove node list with hyphen or comma otherwise it will break table reader
+    table_as_string = re.sub(r"nid\[[0-9,-]*\]", "multiple nodes", table_as_string)
+
+    try:
+        queue_info_table = Table.read(table_as_string, format='ascii.csv')
+    except:
+        log.info("Table retured by squeue couldn't be parsed. The string was:")
+        print(table_as_string)
+        raise
+    
+    for col in queue_info_table.colnames:
+        queue_info_table.rename_column(col, col.upper())
+
+    ## If the table is empty, return it immediately, otherwise perform
+    ## sanity check and cuts
+    if len(queue_info_table) == 0:
+        return queue_info_table
+
+    if np.any(queue_info_table['USER']!=user):
+        msg = f"Warning {np.sum(queue_info_table['USER']!=user)} " \
+              + f"jobs returned were not {user=}\n" \
+              + f"{queue_info_table['USER'][queue_info_table['USER']!=user]}"
+        log.critical(msg)
+        raise ValueError(msg)
+
+    if not include_scron:
+        queue_info_table = queue_info_table[queue_info_table['PARTITION'] != 'cron']
+
+    return queue_info_table
+
+
+def check_queue_count(user=None, include_scron=False, dry_run_level=0):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information about specific jobs based on their jobids.
+
+    Parameters
+    ----------
+    user : str
+        NERSC user to query the jobs for
+    include_scron : bool
+        True if you want to include scron entries in the returned table.
+        Default is False.
+    dry_run_level : int
+        Whether this is a simulated run or real run. If nonzero, it is a
+        simulation and it returns a default table that doesn't query the
+        Slurm scheduler.
+
+    Returns
+    -------
+    int
+        The number of jobs for that user in the queue (including or excluding
+        scron entries depending on include_scron).
+    """
+    return len(get_jobs_in_queue(user=user, include_scron=include_scron,
+                                 dry_run_level=dry_run_level))
