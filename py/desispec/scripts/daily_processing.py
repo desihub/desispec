@@ -23,7 +23,7 @@ from desispec.workflow.proctable import default_obstypes_for_proctable, \
                                         erow_to_prow, default_prow
 from desispec.workflow.processing import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
-                                        update_and_recurvsively_submit, checkfor_and_submit_joint_job, \
+                                        update_and_recursively_submit, checkfor_and_submit_joint_job, \
                                         submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import difference_camwords, parse_badamps, validate_badamps
@@ -445,7 +445,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
         if len(ptable) > 0:
             ptable = update_from_queue(ptable, dry_run=dry_run_level)
-            # ptable, nsubmits = update_and_recurvsively_submit(ptable,
+            # ptable, nsubmits = update_and_recursively_submit(ptable,
             #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
@@ -500,7 +500,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # ii,nsubmits = 0, 0
     # while ii < 4 and any_jobs_not_complete(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
-    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits,
+    #     ptable, nsubmits = update_and_recursively_submit(ptable, submits=nsubmits,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
     #     if dry_run_level < 3:
     #          write_table(ptable, tablename=proc_table_pathname)

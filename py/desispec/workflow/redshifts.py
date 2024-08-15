@@ -3,23 +3,16 @@ desispec.workflow.redshifts
 ===========================
 
 """
-import sys, os, glob
-import re
-import subprocess
-import argparse
+import sys, os
 import numpy as np
-from astropy.table import Table, vstack, Column
 
+from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword
 from desispec.workflow.desi_proc_funcs import determine_resources
 from desiutil.log import get_logger
 
 import desispec.io
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, \
-                                       get_exposure_table_pathname
-from desispec.workflow.tableio import load_table
 from desispec.workflow import batch
-from desispec.util import parse_int_args
 
 
 
@@ -141,9 +134,8 @@ def get_zpix_redshift_script_pathname(healpix, survey, program):
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
                                    thrunight=None, nights=None, expids=None,
-                                   subgroup=None,
-                                   healpix=None, survey=None, program=None,
-                                   queue='regular', batch_opts=None,
+                                   subgroup=None, healpix=None, survey=None,
+                                   program=None, queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
                                    max_gpuprocs=None, no_gpu=False, run_zmtl=False,
@@ -383,69 +375,3 @@ def create_desi_zproc_batch_script(group,
     return scriptfile
 
 
-def read_minimal_exptables_columns(nights=None, tileids=None):
-    """
-    Read exposure tables while handling evolving formats
-
-    Args:
-        nights (list of int): nights to include (default all nights found)
-        tileids (list of int): tileids to include (default all tiles found)
-
-    Returns exptable with just columns TILEID, NIGHT, EXPID, 'CAMWORD',
-        'BADCAMWORD', filtered by science
-        exposures with LASTSTEP='all' and TILEID>=0
-
-    Note: the returned table is the full pipeline exposures table. It is trimmed
-          to science exposures that have LASTSTEP=='all'
-    """
-    log = get_logger()
-    if nights is None:
-        exptab_path = get_exposure_table_path(night=None)
-        monthglob = '202???'
-        globname = get_exposure_table_name(night='202?????')
-        etab_files = glob.glob(os.path.join(exptab_path, monthglob, globname))
-    else:
-        etab_files = list()
-        for night in nights:
-            etab_file = get_exposure_table_pathname(night)
-            if os.path.exists(etab_file):
-                etab_files.append(etab_file)
-            elif night >= 20201201:
-                log.error(f"Exposure table missing for night {night}")
-            else:
-                # - these are expected for the daily run, ok
-                log.debug(f"Exposure table missing for night {night}")
-
-    etab_files = sorted(etab_files)
-    exptables = list()
-    for etab_file in etab_files:
-        ## correct way but slower and we don't need multivalue columns
-        #t = load_table(etab_file, tabletype='etable')
-        t = Table.read(etab_file, format='ascii.csv')
-        ## For backwards compatibility if BADCAMWORD column does not
-        ## exist then add a blank one
-        if 'BADCAMWORD' not in t.colnames:
-            t.add_column(Table.Column(['' for i in range(len(t))], dtype='S36', name='BADCAMWORD'))
-        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-        if 'LASTSTEP' in t.colnames:
-            keep &= (t['LASTSTEP'] == 'all')
-        if tileids is not None:
-            # Default false
-            keep &= np.isin(t['TILEID'], tileids)
-        t = t[keep]
-        ## Need to ensure that the string columns are consistent
-        for col in ['CAMWORD', 'BADCAMWORD']:
-            ## Masked arrays need special handling
-            ## else just reassign with consistent dtype
-            if isinstance(t[col], Table.MaskedColumn):
-                ## If compeltely empty it's loaded as type int
-                ## otherwise fill masked with ''
-                if t[col].dtype == int:
-                    t[col] = Table.Column(['' for i in range(len(t))], dtype='S36', name=col)
-                else:
-                    t[col] = Table.Column(t[col].filled(fill_value=''), dtype='S36', name=col)
-            else:
-                t[col] = Table.Column(t[col], dtype='S36', name=col)
-        exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
-
-    return vstack(exptables)

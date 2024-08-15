@@ -17,7 +17,8 @@ from copy import deepcopy
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
     get_ztile_relpath, \
-    get_ztile_script_suffix, read_minimal_exptables_columns
+    get_ztile_script_suffix
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
@@ -237,7 +238,7 @@ def get_tiles_cumulative(sci_etable, z_submit_types, all_cumulatives, night):
             tiles_cumulative = list(tiles_this_night)
             log.info(f'Submitting cumulative redshifts for all tiles: {tiles_cumulative}')
         else:
-            allexp = read_minimal_exptables_columns(tileids=tiles_this_night)
+            allexp = read_minimal_science_exptab_cols(tileids=tiles_this_night)
             for tileid in tiles_this_night:
                 nights_with_tile = allexp['NIGHT'][allexp['TILEID'] == tileid]
                 if len(nights_with_tile) > 0 and night == np.max(nights_with_tile):
