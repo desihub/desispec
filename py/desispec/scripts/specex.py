@@ -50,6 +50,9 @@ def parse(options=None):
                         help="comma separated list of broken fibers")
     parser.add_argument("--disable-merge", action = 'store_true',
                         help="disable merging fiber bundles")
+    parser.add_argument("--dont-merge-with-input", action = 'store_true',
+                        help="dont use the input PSF as default when merging bundles")
+
 
     args = parser.parse_args(options)
 
@@ -271,7 +274,11 @@ def main(args=None, comm=None):
             time.sleep(5.)
 
             try:
-                merge_psf(inpsffile, bundlefiles, outfits)
+                if args.dont_merge_with_input :
+                    log.info("Do not include input PSF when merging bundles")
+                    merge_psf(bundlefiles[0], bundlefiles[1:], outfits)
+                else :
+                    merge_psf(inpsffile, bundlefiles, outfits)
             except Exception as e:
                 log.error(e)
                 log.error("merging failed for {}".format(outfits))
