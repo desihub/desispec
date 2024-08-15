@@ -8,6 +8,7 @@ import unittest
 import copy
 import os
 import tempfile
+import shutil
 from uuid import uuid1
 
 import numpy as np
@@ -69,6 +70,10 @@ class TestFiberFlat(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
         os.chdir(cls.origdir)
 
 

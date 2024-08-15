@@ -74,7 +74,8 @@ class TestSpectra(unittest.TestCase):
             else:
                 os.environ[e] = cls.origEnv[e]
 
-        if os.path.exists(cls.testDir):
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testDir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testDir):
             shutil.rmtree(cls.testDir)
 
         os.chdir(cls.origDir)

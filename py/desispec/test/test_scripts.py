@@ -8,6 +8,7 @@ from __future__ import absolute_import, division
 import os
 import unittest
 import tempfile
+import shutil
 from uuid import uuid4
 from astropy.table import Table
 
@@ -29,6 +30,10 @@ class TestScripts(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
         cls.environ_cache.clear()
         os.chdir(cls.origdir)
 

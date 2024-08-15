@@ -13,6 +13,7 @@ import unittest
 import uuid
 import os
 import tempfile
+import shutil
 from glob import glob
 from importlib import resources
 
@@ -56,10 +57,9 @@ class TestExtract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.chdir(cls.testdir)
-        for filename in glob('test-*{}*.fits'.format(cls.testhash)):
-            if os.path.exists(filename):
-                os.remove(filename)
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
 
         os.chdir(cls.origdir)
 

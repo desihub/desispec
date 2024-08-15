@@ -2,6 +2,7 @@
 import os, sys
 import unittest
 from uuid import uuid4
+import shutil
 import tempfile
 
 import numpy as np
@@ -90,12 +91,11 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        os.chdir(cls.testdir)
-        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
-            cls.skyfile, cls.calibfile, cls.stdfile, cls.qa_calib_file,
-                         cls.qa_data_file, cls.modelfile, cls.qafig]:
-            if os.path.exists(filename):
-                os.remove(filename)
+
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
+
         if cls.origPath is None:
             del os.environ['PYTHONPATH']
         else:

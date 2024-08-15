@@ -35,7 +35,7 @@ class TestCalibFinder(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         #- remove temporary calibration directory
-        if os.path.isdir(cls.calibdir) :
+        if cls.calibdir.startswith(tempfile.gettempdir()) and os.path.isdir(cls.calibdir) :
             shutil.rmtree(cls.calibdir)
 
     def tearDown(self):

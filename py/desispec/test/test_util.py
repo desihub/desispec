@@ -8,6 +8,7 @@ import unittest
 from uuid import uuid4
 import importlib
 import tempfile
+import shutil
 
 import numpy as np
 from astropy.table import Table
@@ -295,10 +296,9 @@ class TestRunCmd(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.chdir(cls.testdir)
-        for filename in [cls.infile, cls.outfile, cls.testfile]:
-            if os.path.exists(filename):
-                os.remove(filename)
+        #- Remove testdir only if it was created by tempfile.mkdtemp
+        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+            shutil.rmtree(cls.testdir)
 
         os.chdir(cls.origdir)
 
