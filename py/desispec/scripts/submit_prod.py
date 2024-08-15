@@ -17,7 +17,7 @@ from desispec.io import findfile
 from desispec.scripts.proc_night import proc_night
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import verify_variable_with_environment, listpath
-from desispec.workflow.redshifts import read_minimal_exptables_columns
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
 
@@ -60,7 +60,7 @@ def get_all_valid_nights(first_night, last_night):
         nights, list. A list of nights on or after Jan 1 2020 in which data exists at NERSC.
     """
     # TODO when merged into branch with crossnight dependencies this function changes name
-    fulletab = read_minimal_exptables_columns()
+    fulletab = read_minimal_science_exptab_cols()
     nights = np.unique(fulletab['NIGHT'])
     nights = nights[((nights>=first_night)&(nights<=last_night))]
     return nights
