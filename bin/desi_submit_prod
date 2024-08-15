@@ -14,7 +14,7 @@ def parse_args():  # options=None):
 
     parser.add_argument("-p", "--production-yaml", type=str, required=True,
                         help="Relative or absolute pathname to the yaml file summarizing the production.")
-    parser.add_argument("-p", "--queue-threshold", type=int, default=4800,
+    parser.add_argument("-q", "--queue-threshold", type=int, default=4800,
                         help="The number of jobs for the current user in the queue at which the"
                              + " at which the script stops submitting new jobs.")
 
