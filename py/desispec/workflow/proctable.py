@@ -402,6 +402,11 @@ def table_row_to_dict(table_row):
         raise TypeError(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
 
 
+## This cache is used in initial processing when we need to identify tilenights
+## to use
+_required_tilenight_ptab_cols = ['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
+                                 'OBSTYPE', 'JOBDESC', 'INTID', 'LATEST_QID',
+                                 'STATUS']
 def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
                                         reset_cache=False, readonly=True):
     """
@@ -474,8 +479,7 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
                                           dtype='S36', name=col)
             else:
                 t[col] = Table.Column(t[col], dtype='S36', name=col)
-        ptables.append(t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
-        'INTID', 'LATEST_QID'])
+        ptables.append(t[_required_tilenight_ptab_cols])
 
     if len(ptables) > 0:
         outtable = vstack(ptables)
@@ -529,8 +533,7 @@ def _set_tilenight_ptab_cache(ptab):
         t = _select_tilenights_from_ptab(ptab)
     else:
         t = ptab
-    _tilenight_ptab_cache = t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
-    'INTID', 'LATEST_QID']
+    _tilenight_ptab_cache = t[_required_tilenight_ptab_cols]
 
     _tilenight_ptab_cache.sort(['INTID'])
 
@@ -562,6 +565,9 @@ def update_tilenight_ptab_cache(ptab):
     _tilenight_ptab_cache.sort(['INTID'])
 
 
+## This cache is used in reprocessing where calibration jobs are also required
+## for now need the same columns but different rows
+_required_full_ptab_cols = _required_tilenight_ptab_cols
 def read_minimal_full_proctab_cols(nights=None, tileids=None,
                                    reset_cache=False, readonly=True):
     """
@@ -635,8 +641,7 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
                                           dtype='S36', name=col)
             else:
                 t[col] = Table.Column(t[col], dtype='S36', name=col)
-        ptables.append(t['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD', 'OBSTYPE',
-        'JOBDESC', 'INTID', 'LATEST_QID', 'STATUS'])
+        ptables.append(t[_required_full_ptab_cols])
 
     if len(ptables) > 0:
         outtable = vstack(ptables)
@@ -675,8 +680,7 @@ def update_full_ptab_cache(ptab):
     global _full_ptab_cache
     log = get_logger()
 
-    t = ptab['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD', 'OBSTYPE',
-    'JOBDESC', 'INTID', 'LATEST_QID', 'STATUS']
+    t = ptab[_required_full_ptab_cols]
     new_nights = np.unique(t['NIGHT'])
     log.info(f'Replacing all current entries in processing table '
              + f'cache for nights {new_nights.data}')
