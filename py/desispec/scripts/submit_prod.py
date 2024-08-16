@@ -18,12 +18,10 @@ from desispec.scripts.proc_night import proc_night
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import verify_variable_with_environment, listpath, \
     remove_slurm_environment_variables
-# TODO when merged into branch with crossnight dependencies this is in workflow.exptable as the new name
-# from desispec.workflow.exptable import read_minimal_science_exptab_cols
-from desispec.workflow.redshifts import read_minimal_exptables_columns as read_minimal_science_exptab_cols
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
-
+import desispec.workflow.proctable
 
 def get_nights_in_date_range(first_night, last_night):
     """
@@ -261,8 +259,11 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
         ## We don't expect exposure tables to change during code execution here
         ## but we do expect processing tables to evolve, so clear that cache
         log.info(f"Processing {night=}")
-        # TODO uncomment when merged into branch with crossnight dependencies
-        #desispec.workflow.proctable.reset_tilenight_ptab_cache()
+
+        ## Belt-and-suspenders: reset the processing table cache to force a re-read.
+        ## This shouldn't be necessary, but resetting the cache is conservative.
+        desispec.workflow.proctable.reset_tilenight_ptab_cache()
+
         if dry_run_level < 4:
             logfile = os.path.join(logpath, f'night-{night}.log')
             with stdouterr_redirected(logfile):
