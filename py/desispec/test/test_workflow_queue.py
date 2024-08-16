@@ -47,7 +47,7 @@ class TestWorkflowQueue(unittest.TestCase):
         queue.update_queue_state_cache(10, 'COMPLETED')
         qstates = queue.get_queue_states_from_qids(qids, use_cache=True, dry_run=3)
         # should be ['PENDING', 'COMPLETED', 'FAILED', 'FAILED']
-        self.assertEqual(qstates[1], 'PENDING')
+        self.assertEqual(qstates[11], 'PENDING')
         self.assertEqual(qstates[10], 'COMPLETED')
         self.assertEqual(qstates[2], 'FAILED')
         self.assertEqual(qstates[5], 'FAILED')
