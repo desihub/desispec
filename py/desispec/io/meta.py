@@ -790,7 +790,10 @@ def faflavor2program(faflavor):
         faprgm (str or array of str): what FAPRGM would be if we had set it
         (dark, bright, backup, other)
 
-    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2
+    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2.
+        for the survey=special tiles (m31, odin, and tertiary), the info
+        is/can be retrieve from the GOALTYPE keyword in the zero-th extension
+        of the fiberassign file.
     """
     #- Handle scalar or array input, upcasting bytes to str as needed
     scalar_input = np.isscalar(faflavor)
