@@ -1,0 +1,38 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import argparse
+
+import sys
+from desispec.scripts.submit_prod import submit_production
+
+def parse_args():  # options=None):
+    """
+    Creates an arguments parser for the desi run production
+    """
+    parser = argparse.ArgumentParser(description="Submit a full production run of the DESI data pipeline for processing.")
+
+    parser.add_argument("-p", "--production-yaml", type=str, required=True,
+                        help="Relative or absolute pathname to the yaml file summarizing the production.")
+    parser.add_argument("-q", "--queue-threshold", type=int, default=4500,
+                        help="The number of jobs for the current user in the queue at which the"
+                             + " at which the script stops submitting new jobs.")
+
+    # Code Flags
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="Perform a dry run where no jobs are actually created or submitted."
+                             + " Give what --dry-run-level to pass to desi_proc_night.")
+    # parser.add_argument("--error-if-not-available", action="store_true",
+    #                     help="Raise an error instead of reporting and moving on if an exposure "+\
+    #                          "table doesn't exist.")
+
+    args = parser.parse_args()
+
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    sys.exit(submit_production(**args.__dict__))
+
