@@ -337,8 +337,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
     full_etable = etable.copy()
 
-    ## Pre-populate exposure table and processing table caches of all nights
-    ## if doing cross-night redshifts
+    ## For I/O efficiency, pre-populate exposure table and processing table caches
+    ## of all nights if doing cross-night redshifts so that future per-night "reads"
+    ## will use the cache.
     if z_submit_types is not None and 'cumulative' in z_submit_types:
         ## this shouldn't need to change since we've already updated the exptab
         read_minimal_science_exptab_cols()
