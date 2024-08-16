@@ -158,6 +158,13 @@ if 'CAMWORD' in colnames and 'BADCAMWORD' in colnames and 'BADAMPS' in colnames:
         log.critical('No exposures! exiting...')
         sys.exit(1)
 
+#- keep only ZERO or DARK
+keep = (speclog['OBSTYPE']=='ZERO')|(speclog['OBSTYPE']=='DARK')| (speclog['OBSTYPE'] == 'zero')| (speclog['OBSTYPE'] == 'dark')
+speclog = speclog[keep]
+if len(speclog) == 0:
+    log.critical('No exposures! exiting...')
+    sys.exit(1)
+
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
 
