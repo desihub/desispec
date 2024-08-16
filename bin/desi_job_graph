@@ -83,6 +83,7 @@ fx.write(f"""<!DOCTYPE html>
     classDef OUT_OF_MEMORY fill:#d95f0e;
     classDef TIMEOUT       fill:#d95f0e;
     classDef CANCELLED     fill:#fed98e;
+    classDef NOTSUBMITTED  fill:#fcae1e;
     classDef UNKNOWN       fill:#ffffcc;
 """)
 
@@ -106,6 +107,8 @@ for row in proctable:
 
     if qid in jobinfo:
         state = jobinfo[qid]['STATE'].split()[0]
+    elif qid == 1:
+        state = 'NOTSUBMITTED'
     else:
         state = 'UNKNOWN'
 
