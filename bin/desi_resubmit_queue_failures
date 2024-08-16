@@ -11,9 +11,10 @@ from astropy.table import Table
 import glob
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desiutil.log import get_logger
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.proctable import get_processing_table_pathname
-from desispec.workflow.processing import update_and_recurvsively_submit
+from desispec.workflow.processing import update_and_recursively_submit
 from desispec.workflow.queue import get_resubmission_states
 
 def parse_args():  # options=None):
@@ -49,6 +50,7 @@ def parse_args():  # options=None):
 
 if __name__ == '__main__':
     args = parse_args()
+    log = get_logger()
     ptable_pathname = args.proc_table_pathname
     if ptable_pathname is None:
         if args.night is None:
@@ -66,21 +68,25 @@ if __name__ == '__main__':
         if not args.dont_resub_failed:
             resub_states.append('FAILED')
 
-    print(f"Resubmitting the following Slurm states: {resub_states}")
+    log.info(f"Resubmitting the following Slurm states: {resub_states}")
+
+    if args.dry_run > 0 and args.dry_run < 3:
+        log.warning(f"{args.dry_run=} will be run with limited simulation "
+                    f"because we don't want to write out incorrect queue information.")
 
     ## Combine the table names and types for easier passing to io functions
     table_type = 'proctable'
 
     ## Load in the files defined above
     ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
-    print(f"Identified ptable with {len(ptable)} entries.")
-    ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=0,
-                                   resubmission_states=resub_states,
-                                   ptab_name=ptable_pathname, dry_run=args.dry_run,
-                                   reservation=args.reservation)
+    log.info(f"Identified ptable with {len(ptable)} entries.")
+    ptable, nsubmits = update_and_recursively_submit(ptable, submits=0,
+                                                     resubmission_states=resub_states,
+                                                     ptab_name=ptable_pathname, dry_run=args.dry_run,
+                                                     reservation=args.reservation)
 
     if not args.dry_run:
         write_table(ptable, tablename=ptable_pathname)
 
-    print("Completed all necessary queue resubmissions from processing "
+    log.info("Completed all necessary queue resubmissions from processing "
           + f"table: {ptable_pathname}")

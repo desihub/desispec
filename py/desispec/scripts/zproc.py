@@ -29,8 +29,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
 from desispec.io.meta import get_nights_up_to_date
-from desispec.workflow.redshifts import read_minimal_exptables_columns, \
-    create_desi_zproc_batch_script
+from desispec.workflow.redshifts import create_desi_zproc_batch_script
 
 #- internal desispec imports
 import desispec.io
@@ -42,7 +41,8 @@ from desispec.util import runcmd
 from desispec.scripts import group_spectra
 from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
-from desispec.workflow.exptable import get_exposure_table_pathname
+from desispec.workflow.exptable import get_exposure_table_pathname, \
+    read_minimal_science_exptab_cols
 from desispec.workflow.desi_proc_funcs import assign_mpi, update_args_with_headers, log_timer
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
@@ -366,8 +366,8 @@ def main(args=None, comm=None):
                 ## Get list of only nights up to date of thrunight
                 nights = get_nights_up_to_date(args.thrunight)
 
-            exposure_table = read_minimal_exptables_columns(nights=nights,
-                                                            tileids=[tileid])
+            exposure_table = read_minimal_science_exptab_cols(nights=nights,
+                                                              tileids=[tileid])
             if args.expids is not None:
                 exposure_table = exposure_table[np.isin(exposure_table['EXPID'],
                                                         args.expids)]

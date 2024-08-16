@@ -16,8 +16,9 @@ import subprocess
 from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
-                                        get_ztile_relpath, \
-                                        get_ztile_script_suffix
+    get_ztile_relpath, \
+    get_ztile_script_suffix
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
     queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache
 from desispec.workflow.timing import what_night_is_it
@@ -30,7 +31,9 @@ from desispec.workflow.batch import parse_reservation
 from desispec.workflow.utils import pathjoin, sleep_and_report, \
     load_override_file
 from desispec.workflow.tableio import write_table, load_table
-from desispec.workflow.proctable import table_row_to_dict, erow_to_prow
+from desispec.workflow.proctable import table_row_to_dict, erow_to_prow, \
+    read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
+    update_full_ptab_cache, default_prow, get_default_qid
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -630,7 +633,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
     if len(dep_qids) > 0 and not dry_run:
-        state_dict = get_queue_states_from_qids(dep_qids, dry_run=0, use_cache=True)
+        state_dict = get_queue_states_from_qids(dep_qids, dry_run=dry_run, use_cache=True)
         still_depids = []
         for depid in dep_qids:
             if depid in state_dict.keys() and state_dict[int(depid)] == 'COMPLETED':
@@ -687,7 +690,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         batch_params.append(f'--reservation={reservation}')
 
     batch_params.append(f'{script_path}')
-
+    submitted = True
     if dry_run:
         current_qid = _get_fake_qid()
     else:
@@ -706,21 +709,31 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                     log.info('Sleeping 60 seconds then retrying')
                     time.sleep(60)
         else:  #- for/else happens if loop doesn't succeed
-            msg = f'{jobname} submission failed {max_attempts} times; exiting'
-            log.critical(msg)
-            raise RuntimeError(msg)
+            msg = f'{jobname} submission failed {max_attempts} times.' \
+                  + ' setting as unsubmitted and moving on'
+            log.error(msg)
+            current_qid = get_default_qid()
+            submitted = False
 
     log.info(batch_params)
-    log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
 
     ## Update prow with new information
     prow['LATEST_QID'] = current_qid
-    prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
-    prow['STATUS'] = 'SUBMITTED'
-    prow['SUBMIT_DATE'] = int(time.time())
 
-    ## Update the Slurm jobid cache of job states
-    update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
+    ## If we didn't submit, don't say we did and don't add to ALL_QIDS
+    if submitted:
+        log.info(f'Submitted {jobname} with dependencies {dep_str} and '
+                 + f'reservation={reservation}. Returned qid: {current_qid}')
+
+        ## Update prow with new information
+        prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
+        prow['STATUS'] = 'SUBMITTED'
+        prow['SUBMIT_DATE'] = int(time.time())
+    else:
+        prow['STATUS'] = 'UNSUBMITTED'
+
+        ## Update the Slurm jobid cache of job states
+        update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
     return prow
 
@@ -860,14 +873,16 @@ def assign_dependency(prow, dependency):
         if type(dependency) in [list, np.array]:
             ids, qids = [], []
             for curdep in dependency:
+                ids.append(curdep['INTID'])
                 if still_a_dependency(curdep):
-                    ids.append(curdep['INTID'])
+                    # ids.append(curdep['INTID'])
                     qids.append(curdep['LATEST_QID'])
             prow['INT_DEP_IDS'] = np.array(ids, dtype=int)
             prow['LATEST_DEP_QID'] = np.array(qids, dtype=int)
-        elif type(dependency) in [dict, OrderedDict, Table.Row] and still_a_dependency(dependency):
+        elif type(dependency) in [dict, OrderedDict, Table.Row]:
             prow['INT_DEP_IDS'] = np.array([dependency['INTID']], dtype=int)
-            prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
+            if still_a_dependency(dependency):
+                prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
     return prow
 
 def still_a_dependency(dependency):
@@ -1121,8 +1136,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 
     return np.all(list(test_dict.values()))
 
-def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
-                                   ptab_name=None, dry_run=0,reservation=None):
+def update_and_recursively_submit(proc_table, submits=0, resubmission_states=None,
+                                  ptab_name=None, dry_run=0, reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1156,7 +1171,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
-    proc_table = update_from_queue(proc_table, dry_run=False)
+    proc_table = update_from_queue(proc_table, dry_run=dry_run)
     log.info("Updated processing table queue information:")
     cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
             'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
@@ -1171,7 +1186,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
                                                           id_to_row_map, ptab_name,
                                                           resubmission_states,
                                                           reservation, dry_run)
-    proc_table = update_from_queue(proc_table)
+    proc_table = update_from_queue(proc_table, dry_run=dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -1215,19 +1230,50 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
-    if ideps is None:
+    if ideps is None or len(ideps)==0:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
         all_valid_states = list(resubmission_states.copy())
-        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','COMPLETED'])
+        good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
+        all_valid_states.extend(good_states)
+        othernight_idep_qid_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
-            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
-                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
-                            + "This is expected since it's from another day. "
-                            + f" This dependency will not be checked or "
-                            + "resubmitted")
+            if idep not in id_to_row_map:
+                if idep // 1000 != row['INTID'] // 1000:
+                    log.info(f"Internal ID: {idep} not in id_to_row_map. "
+                             + "This is expected since it's from another day. ")
+                    reference_night = 20000000 + (idep // 1000)
+                    reftab = read_minimal_full_proctab_cols(nights=[reference_night])
+                    if reftab is None:
+                        msg = f"The dependency is from night={reference_night}" \
+                              + f" but read_minimal_full_proctab_cols couldn't" \
+                              + f" locate that processing table, this is a " \
+                              +  f"fatal error."
+                        log.critical(msg)
+                        raise ValueError(msg)
+                    reftab = update_from_queue(reftab, dry_run=dry_run)
+                    entry = reftab[reftab['INTID'] == idep][0]
+                    if entry['STATUS'] not in good_states:
+                        msg = f"Internal ID: {idep} not in id_to_row_map. " \
+                              + f"Since the dependency is from night={reference_night} " \
+                              + f"and that job isn't in a good state this is an " \
+                              + f"error we can't overcome."
+                        log.error(msg)
+                        proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                        return proc_table, submits
+                    else:
+                        ## otherwise all is good, just update the cache to use this
+                        ## in the next stage
+                        othernight_idep_qid_lookup[idep] = entry['LATEST_QID']
+                        update_full_ptab_cache(reftab)
+                else:
+                    msg = f"Internal ID: {idep} not in id_to_row_map. " \
+                         + f"Since the dependency is from the same night" \
+                         + f" and we can't find it, this is a fatal error."
+                    log.critical(msg)
+                    raise ValueError(msg)
             elif proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
-                log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
+                log.error(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
                             f" but that exposure has state" +
                             f" {proc_table['STATUS'][id_to_row_map[idep]]} that" +
@@ -1237,19 +1283,20 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                 return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
-            if idep not in id_to_row_map and idep // 1000 != row['INTID'] // 1000:
-                log.warning(f"Internal ID: {idep} not in id_to_row_map. "
-                            + "This is expected since it's from another day. "
-                            + f" This dependency will not be checked or "
-                            + "resubmitted")
-                continue
-            elif proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
-                                                              proc_table, submits,
-                                                              id_to_row_map,
-                                                              reservation=reservation,
-                                                              dry_run=dry_run)
-            qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+            if idep in id_to_row_map:
+                if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
+                    proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
+                                                                  proc_table, submits,
+                                                                  id_to_row_map,
+                                                                  reservation=reservation,
+                                                                  dry_run=dry_run)
+                ## Now that we've resubmitted the dependency if necessary,
+                ## add the most recent QID to the list
+                qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+            else:
+                ## Since we verified above that the cross night QID is still
+                ## either pending or successful, add that to the list of QID's
+                qdeps.append(othernight_idep_qid_lookup[idep])
 
         qdeps = np.atleast_1d(qdeps)
         if len(qdeps) > 0:
@@ -1546,23 +1593,60 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
 
     if len(zprows) > 0:
         for zsubtype in z_submit_types:
+            log.info(" ")
+            log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.")
             if zsubtype == 'perexp':
                 for zprow in zprows:
-                    log.info(" ")
-                    log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
+                    log.info(f"EXPID: {zprow['EXPID']}.\n")
                     redshift_prow = make_redshift_prow([zprow], tnight, descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
                     redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
                     ptable.add_row(redshift_prow)
-            else:
-                log.info(" ")
-                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.")
+            elif zsubtype == 'cumulative':
+                tileids = np.unique([prow['TILEID'] for prow in zprows])
+                if len(tileids) > 1:
+                    msg = f"Error, more than one tileid provided for cumulative redshift job: {tileids}"
+                    log.critical(msg)
+                    raise ValueError(msg)
+                nights = np.unique([prow['NIGHT'] for prow in zprows])
+                if len(nights) > 1:
+                    msg = f"Error, more than one night provided for cumulative redshift job: {nights}"
+                    log.critical(msg)
+                    raise ValueError(msg)
+                tileid, night = tileids[0], nights[0]
+                ## For cumulative redshifts, get any existing processing rows for tile
+                matched_prows = read_minimal_tilenight_proctab_cols(tileids=tileids)
+                ## Identify the processing rows that should be assigned as dependecies
+                ## tnight should be first such that the new job inherits the other metadata from it
+                tnights = [tnight]
+                if matched_prows is not None:
+                    matched_prows = matched_prows[matched_prows['NIGHT'] <= night]
+                    for prow in matched_prows:
+                        if prow['INTID'] != tnight['INTID']:
+                            tnights.append(prow)
+                log.info(f"Internal Processing IDs: {[prow['INTID'] for prow in tnights]}.\n")
+                ## Identify all exposures that should go into the fit
+                expids = [prow['EXPID'][0] for prow in zprows]
+                ## note we can actually get the full list of exposures, but for now
+                ## we'll stay consistent with old processing where we only list exposures
+                ## from the current night
+                ## For cumulative redshifts, get valid expids from exptables
+                #matched_erows = read_minimal_science_exptab_cols(tileids=tileids)
+                #matched_erows = matched_erows[matched_erows['NIGHT']<=night]
+                #expids = list(set([prow['EXPID'][0] for prow in zprows])+set(matched_erows['EXPID']))
+                log.info(f"Expids: {expids}.\n")
+                redshift_prow, internal_id = make_joint_prow(tnights, descriptor=zsubtype, internal_id=internal_id)
+                redshift_prow['EXPID'] = expids
+                redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                               strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                               resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+                ptable.add_row(redshift_prow)
+            else: # pernight
                 expids = [prow['EXPID'][0] for prow in zprows]
                 log.info(f"Expids: {expids}.\n")
-                redshift_prow = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
-                internal_id += 1
+                redshift_prow, internal_id = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
                 redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
@@ -1700,6 +1784,7 @@ def make_joint_prow(prows, descriptor, internal_id):
         dict: Row of a processing table corresponding to the joint fit job.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
+    log = get_logger()
     first_row = table_row_to_dict(prows[0])
     joint_prow = first_row.copy()
 
@@ -1709,40 +1794,43 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
-    joint_prow['STATUS'] = 'U'
+    joint_prow['STATUS'] = 'UNSUBMITTED'
     joint_prow['SCRIPTNAME'] = ''
-    joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+    joint_prow['EXPID'] = np.unique(np.concatenate([currow['EXPID'] for currow in prows])).astype(int)
 
     ## Assign the PROCCAMWORD based on the descriptor and the input exposures
-    if descriptor == 'stdstarfit':
-        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
+    ## UPDATE 2024-04-24: badamps are now included in arc/flat joint fits,
+    ## so grab all PROCCAMWORDs instead of filtering out BADAMP cameras
+    ## For flats we want any camera that exists in all 12 exposures
+    ## For arcs we want any camera that exists in at least 3 exposures
+    pcamwords = [prow['PROCCAMWORD'] for prow in prows]
+    if descriptor in 'stdstarfit':
         joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
                                                   full_spectros_only=True)
+    elif descriptor in ['pernight', 'cumulative']:
+        joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
+                                                  full_spectros_only=False)
+    elif descriptor == 'nightlyflat':
+        joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
+                                                         full_spectros_only=False)
+    elif descriptor == 'psfnight':
+        ## Count number of exposures each camera is present for
+        camcheck = {}
+        for camword in pcamwords:
+            for cam in decode_camword(camword):
+                if cam in camcheck:
+                    camcheck[cam] += 1
+                else:
+                    camcheck[cam] = 1
+        ## if exists in 3 or more exposures, then include it
+        goodcams = []
+        for cam,camcount in camcheck.items():
+            if camcount >= 3:
+                goodcams.append(cam)
+        joint_prow['PROCCAMWORD'] = create_camword(goodcams)
     else:
-        ## UPDATE 2024-04-24: badamps are now included in arc/flat joint fits,
-        ## so grab all PROCCAMWORDs instead of filtering out BADAMP cameras
-        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
-
-        ## For flats we want any camera that exists in all 12 exposures
-        ## For arcs we want any camera that exists in at least 3 exposures
-        if descriptor == 'nightlyflat':
-            joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
-                                                             full_spectros_only=False)
-        elif descriptor == 'psfnight':
-            ## Count number of exposures each camera is present for
-            camcheck = {}
-            for camword in pcamwords:
-                for cam in decode_camword(camword):
-                    if cam in camcheck:
-                        camcheck[cam] += 1
-                    else:
-                        camcheck[cam] = 1
-            ## if exists in 3 or more exposures, then include it
-            goodcams = []
-            for cam,camcount in camcheck.items():
-                if camcount >= 3:
-                    goodcams.append(cam)
-            joint_prow['PROCCAMWORD'] = create_camword(goodcams)
+        log.warning("Warning asked to produce joint proc table row for unknown"
+                    + f" job description {descriptor}")
 
     joint_prow = assign_dependency(joint_prow, dependency=prows)
     return joint_prow, internal_id
@@ -1783,15 +1871,15 @@ def make_tnight_prow(prows, calibjobs, internal_id):
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
-    joint_prow['STATUS'] = 'U'
+    joint_prow['STATUS'] = 'UNSUBMITTED'
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
-    joint_prow = define_and_assign_dependency(joint_prow,calibjobs,use_tilenight=True)
+    joint_prow = define_and_assign_dependency(joint_prow, calibjobs, use_tilenight=True)
 
     return joint_prow
 
-def make_redshift_prow(prows, tnight, descriptor, internal_id):
+def make_redshift_prow(prows, tnights, descriptor, internal_id):
     """
     Given an input list or array of processing table rows and a descriptor, this creates a joint fit processing job row.
     It starts by copying the first input row, overwrites relevant columns, and defines the new dependencies (based on the
@@ -1800,11 +1888,11 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
     Args:
         prows, list or array of dicts. Unsumbitted rows corresponding to the individual prestdstar jobs that are
             the first steps of tilenight.
-        tnight, Table.Row object. Row corresponding to the tilenight job on which the redshift job depends.
+        tnights, list or array of Table.Row objects. Rows corresponding to the tilenight jobs on which the redshift job depends.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        dict: Row of a processing table corresponding to the tilenight job.
+        dict: Row of a processing table corresponding to the tilenight jobs.
     """
     first_row = table_row_to_dict(prows[0])
     redshift_prow = first_row.copy()
@@ -1814,11 +1902,11 @@ def make_redshift_prow(prows, tnight, descriptor, internal_id):
     redshift_prow['LATEST_QID'] = -99
     redshift_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     redshift_prow['SUBMIT_DATE'] = -99
-    redshift_prow['STATUS'] = 'U'
+    redshift_prow['STATUS'] = 'UNSUBMITTED'
     redshift_prow['SCRIPTNAME'] = ''
     redshift_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
-    redshift_prow = assign_dependency(redshift_prow,dependency=tnight)
+    redshift_prow = assign_dependency(redshift_prow,dependency=tnights)
 
     return redshift_prow
 
