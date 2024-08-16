@@ -790,7 +790,10 @@ def faflavor2program(faflavor):
         faprgm (str or array of str): what FAPRGM would be if we had set it
         (dark, bright, backup, other)
 
-    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2
+    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2.
+        for the survey=special tiles (m31, odin, and tertiary), the info
+        is/can be retrieve from the GOALTYPE keyword in the zero-th extension
+        of the fiberassign file.
     """
     #- Handle scalar or array input, upcasting bytes to str as needed
     scalar_input = np.isscalar(faflavor)
@@ -807,11 +810,36 @@ def faflavor2program(faflavor):
     dark |= faflavor == 'sv1elgqso'
     dark |= faflavor == 'sv1lrgqso'
     dark |= faflavor == 'sv1lrgqso2'
+    dark |= np.in1d(
+        faflavor,
+        np.char.add(
+            "special",
+            [
+                'm31', 'odin', 'tertiary1', 'tertiary2', 'tertiary4', 'tertiary5',
+                'tertiary7', 'tertiary9', 'tertiary11', 'tertiary14', 'tertiary15',
+                'tertiary16', 'tertiary17', 'tertiary18', 'tertiary21', 'tertiary23',
+                'tertiary25', 'tertiary26', 'tertiary27', 'tertiary31', 'tertiary35',
+                'tertiary37', 'tertiary38', 'tertiary40', 'tertiary41',
+            ]
+        )
+    )
     dark |= np.char.endswith(faflavor, 'dark')
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
     bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
+    bright |= np.in1d(
+        faflavor,
+        np.char.add(
+            "special",
+            [
+                'tertiary3', 'tertiary6', 'tertiary8', 'tertiary10', 'tertiary12',
+                'tertiary13', 'tertiary19', 'tertiary20', 'tertiary22', 'tertiary24',
+                'tertiary28', 'tertiary29', 'tertiary30', 'tertiary32', 'tertiary33',
+                'tertiary34', 'tertiary36', 'tertiary39',
+            ]
+        )
+    )
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
     backup  = faflavor == 'sv1backup1'
