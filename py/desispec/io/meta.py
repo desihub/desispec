@@ -807,11 +807,36 @@ def faflavor2program(faflavor):
     dark |= faflavor == 'sv1elgqso'
     dark |= faflavor == 'sv1lrgqso'
     dark |= faflavor == 'sv1lrgqso2'
+    dark |= np.in1d(
+        faflavor,
+        np.char.add(
+            "special",
+            [
+                'm31', 'odin', 'tertiary1', 'tertiary2', 'tertiary4', 'tertiary5',
+                'tertiary7', 'tertiary9', 'tertiary11', 'tertiary14', 'tertiary15',
+                'tertiary16', 'tertiary17', 'tertiary18', 'tertiary21', 'tertiary23',
+                'tertiary25', 'tertiary26', 'tertiary27', 'tertiary31', 'tertiary35',
+                'tertiary37', 'tertiary38', 'tertiary40', 'tertiary41',
+            ]
+        )
+    )
     dark |= np.char.endswith(faflavor, 'dark')
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
     bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
+    bright |= np.in1d(
+        faflavor,
+        np.char.add(
+            "special",
+            [
+                'tertiary3', 'tertiary6', 'tertiary8', 'tertiary10', 'tertiary12',
+                'tertiary13', 'tertiary19', 'tertiary20', 'tertiary22', 'tertiary24',
+                'tertiary28', 'tertiary29', 'tertiary30', 'tertiary32', 'tertiary33',
+                'tertiary34', 'tertiary36', 'tertiary39',
+            ]
+        )
+    )
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
     backup  = faflavor == 'sv1backup1'
