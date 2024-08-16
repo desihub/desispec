@@ -478,6 +478,11 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         NODELIST(REASON) for the specified user.
     """
     log = get_logger()
+    if user is None:
+        if 'USER' in os.environ:
+            user = os.environ['USER']
+        else:
+            user = 'desi'
 
     cmd = f'squeue -u {user} -o "%i,%P,%j,%u,%t,%M,%D,%R"'
     cmd_as_list = cmd.split()

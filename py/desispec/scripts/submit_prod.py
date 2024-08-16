@@ -16,8 +16,10 @@ from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.scripts.proc_night import proc_night
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.utils import verify_variable_with_environment, listpath
+from desispec.workflow.utils import verify_variable_with_environment, listpath, \
+    remove_slurm_environment_variables
 # TODO when merged into branch with crossnight dependencies this is in workflow.exptable as the new name
+# from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.redshifts import read_minimal_exptables_columns as read_minimal_science_exptab_cols
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
@@ -130,7 +132,7 @@ def get_nights_to_process(production_yaml, verbose=False):
     return sorted(all_nights)
 
 
-def submit_production(production_yaml, queue_threshold=4800, dry_run_level=False):
+def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False):
     """
     Interprets a production_yaml file and submits the respective nights for processing
     within the defined production.
@@ -152,17 +154,23 @@ def submit_production(production_yaml, queue_threshold=4800, dry_run_level=False
     with open(production_yaml, 'rb') as yamlfile:
         conf = yaml.safe_load(yamlfile)
 
+    ## Unset Slurm environment variables set when running in scrontab
+    remove_slurm_environment_variables()
+
     ## Make sure the specprod matches, if not set it to that in the file
     if 'SPECPROD' not in conf:
         raise ValueError(f"SPECPROD required in yaml file {production_yaml}")
     specprod = str(conf['SPECPROD']).lower()
     specprod = verify_variable_with_environment(var=specprod, var_name='specprod',
                                                 env_name='SPECPROD')
+
+    ## Define the user
     user = os.environ['USER']
 
     ## Look for sentinal
     sentinel_file = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                                 os.environ['SPECPROD'], 'run', 'sentinel.txt')
+                                 os.environ['SPECPROD'], 'run',
+                                 'prod_submission_complete.txt')
     if os.path.exists(sentinel_file):
         log.info(f"Sentinel file {sentinel_file} exists, therefore all "
                  + f"nights already submitted.")
