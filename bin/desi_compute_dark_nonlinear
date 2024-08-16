@@ -11,6 +11,17 @@ desi_compute_dark_nonlinear --days 20200729 20200730 --camera b0 \
 import astropy.io.fits as pyfits
 
 import argparse
+
+
+def previous_night_or_day(night_or_day) :
+    year = int(str(night_or_day)[0:4])
+    month = int(str(night_or_day)[4:6])
+    day = int(str(night_or_day)[6:8])
+    t = datetime.datetime(year, month, day) - datetime.timedelta(days=1)
+    return int(t.strftime('%Y%m%d'))
+
+
+
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="Compute a non-linear dark model",
@@ -29,6 +40,9 @@ parser.add_argument('--days', type=int, nargs="*",
                     help='YEARMMDD days to use for ZEROs and DARKs')
 parser.add_argument('--nights', type=int, nargs="*",
                     help='YEARMMDD nights to use for ZEROs and DARKs')
+
+parser.add_argument('--bias-per-day',action="store_true", help="compute a bias per day; default is per night")
+
 parser.add_argument('--first-expid', type=int, required=False,
                     help='First EXPID to include')
 parser.add_argument('--last-expid', type=int, required=False,
@@ -43,7 +57,7 @@ parser.add_argument('-t','--tempdir', type=str, required=False,
                     help='directory for intermediate files')
 parser.add_argument('--linexptime', type=float, default=300.0, required=False,
                     help='Model dark current as linear above this exptime')
-parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
+parser.add_argument('--nskip-zeros', type=int, default=5, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
@@ -90,41 +104,33 @@ log.debug(f'Writing temporary files to {tempdir}')
 if not os.path.isdir(tempdir):
     os.makedirs(tempdir)
 
-#- Data taken on the morning of the first day might be associated with the
-#- previous NIGHT
-#- Note: use the variable named "night" whether grouped by days or nights
-if args.days:
-    log.info('Grouping ZEROs with DARKs by calendar DAY')
-    daynight = 'DAY'
-    year = int(str(args.days[0])[0:4])
-    month = int(str(args.days[0])[4:6])
-    day = int(str(args.days[0])[6:8])
-
-    t = datetime.datetime(year, month, day) - datetime.timedelta(days=1)
-    nights = [int(t.strftime('%Y%m%d'))]
-    nights.extend(args.days)
-else:
-    log.info('Grouping ZEROs with DARKs by observing NIGHT')
-    daynight = 'NIGHT'
-    nights = args.nights
-
 speclog_file = os.path.join(tempdir, 'speclog.csv')
 if os.path.exists(speclog_file):
     log.info(f'Reading speclog from {speclog_file}')
     speclog = Table.read(speclog_file, format='ascii',fill_values=None)   #the None is needed to avoid masking
 else:
-    log.info(f'Generating speclog for nights {nights}')
-    speclog = desispec.io.util.get_speclog(nights)
+
+    nights_for_speclog = list()
+    if args.days is not None and len(args.days)>0 :
+        nights_for_speclog += args.days
+        nights_for_speclog += [previous_night_or_day(day) for day in args.days]
+    if args.nights is not None and len(args.nights)>0 :
+        nights_for_speclog += args.nights
+    nights_for_speclog = sorted(set(nights_for_speclog))
+
+    log.info(f'Generating speclog for nights {nights_for_speclog}')
+    speclog = desispec.io.util.get_speclog(nights_for_speclog)
 
     #- Add "DAY" column = rolls over at midnight instead of MST noon
-    if daynight == 'DAY':
-        t = Time(speclog['MJD']-7/24, format='mjd')
-        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+    t = Time(speclog['MJD']-7/24, format='mjd')
+    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
 
     #- Trim to just the requested days/nights
     keep = np.zeros(len(speclog), dtype=bool)
-    for night in nights:
-        keep |= speclog[daynight] == night
+    if args.nights is not None and len(args.nights)>0 :
+        keep |= np.in1d(speclog["NIGHT"],args.nights)
+    if args.days is not None and len(args.days)>0 :
+        keep |= np.in1d(speclog["DAY"],args.days)
 
     speclog = speclog[keep]
     tmpfile = speclog_file + '.tmp-' + str(os.getpid())
@@ -186,40 +192,44 @@ speclog = speclog[keep]
 isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
 isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
 
-badnights=[]
-for night in nights:
-    ii = speclog[daynight] == night
+#- group per night or per day if option --bias-per-day
+if args.bias_per_day :
+    daynight_key = "DAY"
+else :
+    daynight_key = "NIGHT"
+
+selected_daynights = []
+for daynight_val in np.unique(speclog[daynight_key]) :
+    ii = speclog[daynight_key] == daynight_val # either a day or a night
     nzeros = np.count_nonzero(ii & isZero)
     ndarks = np.count_nonzero(ii & isDark)
     darktimes = sorted(set(speclog['EXPTIME_INT'][ii & isDark]))
-    log.info(f'{night} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
+    log.info(f'{daynight_key}={daynight_val} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
     if nzeros==0 or ndarks==0:
-        badnights.append(night)
-        log.warning(f"there are no good observations left for {daynight} {night}, skipping that {daynight}")
+        log.warning(f"there are no good observations left for {daynight_key}={daynight_val}, skipping it")
+    else :
+        selected_daynights.append(daynight_val)
 
-#skip all nights that have no observations left
-nights = [n for n in nights if n not in badnights]
-if len(nights)==0:
-    log.critical('No nights left to process')
+if len(selected_daynights)==0:
+    log.critical('Nothing left to process')
     sys.exit(1)
-
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()
 min_temp=max_temp=None
-for night in nights:
+for daynight_val in selected_daynights :
     zerofiles = list()
-    ii = isZero & (speclog[daynight] == night)
+    ii = isZero & (speclog[daynight_key] == daynight_val)
     nzeros = np.count_nonzero(ii)
     nzeros_good = nzeros - args.nskip_zeros
     if nzeros_good < 5:
-        log.critical(f'{nzeros} ZEROS on {night} is insufficient when skipping {args.nskip_zeros}')
+        log.critical(f'{nzeros} ZEROS on {daynight_key}={daynight_val} is insufficient when skipping {args.nskip_zeros}')
         continue
 
     elif nzeros_good < 20:
-        log.warning(f'Only {nzeros_good} good ZEROs on {night}')
+        log.warning(f'Only {nzeros_good} good ZEROs on {daynight_key}={daynight_val}')
     else:
-        log.info(f'Using {nzeros_good} ZEROs on {night}')
+        log.info(f'Using {nzeros_good} ZEROs on {daynight_key}={daynight_val}')
 
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
@@ -249,7 +259,7 @@ for night in nights:
     if len(zerofiles)<5:
         log.warning(f'{len(zerofiles)} ZEROS on {night} is insufficient, reason are VCCD checks with minimum time {args.min_vccdsec}')
         continue
-    biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
+    biasfile = f'{tempdir}/bias-{daynight_key}-{daynight_val}-{args.camera}.fits'
     if os.path.exists(biasfile):
         log.info(f'{biasfile} already exists')
     else:
@@ -278,7 +288,7 @@ for exptime in darktimes:
     biasfiles = list()
     ii = (speclog['EXPTIME_INT'] == exptime)
     for row in speclog[isDark & ii]:
-        day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
+        daynight_val, night, expid = row[daynight_key], row['NIGHT'], row['EXPID']
         filename = findfile('raw', night, expid, args.camera)
         with pyfits.open(filename) as hdulist :
             if args.camera in hdulist :
@@ -299,7 +309,7 @@ for exptime in darktimes:
                         sys.exit(3)
                 else:
                     log.warning(f"no CCDTEMP header on {filename}, {args.camera}")
-                biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
+                biasfile=f'{tempdir}/bias-{daynight_key}-{daynight_val}-{args.camera}.fits'
                 if os.path.isfile(biasfile):
                     rawfiles.append(filename)
                     biasfiles.append(biasfile)
