@@ -135,6 +135,7 @@ for filename in args.infile :
             print("will show only {}".format(fibers))
 
     if args.no_mask :
+        frame.ivar += 0.1*(frame.ivar==0)*(frame.mask>0)
         frame.mask*=0
 
     for i,fiber in enumerate(fibers) :
