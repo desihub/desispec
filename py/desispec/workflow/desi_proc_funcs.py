@@ -89,6 +89,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--extract-subcomm-size", type=int, default=None, help="Size to use for GPU extract subcomm")
     parser.add_argument("--no-gpu", action="store_true", help="Do not use GPU for extractions even if available")
     parser.add_argument("--use-specter", action="store_true", help="Use classic specter instead of gpu_specter")
+    parser.add_argument("--dont-merge-with-psf-input", action="store_true", help="Do not merge with PSF input")
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
     parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
     parser.add_argument("--no-tpcorrparam", action="store_true", help="Do not apply tpcorrparam spatial model or fit tpcorrparam pca terms")

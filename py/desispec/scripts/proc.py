@@ -645,6 +645,9 @@ def main(args=None, comm=None):
                 cmd += ' --input-psf {}'.format(inpsf)
                 cmd += ' --output-psf {}'.format(outpsf)
 
+                if args.dont_merge_with_psf_input :
+                    cmd += ' --dont-merge-with-input'
+
                 # fibers to ignore for the PSF fit
                 # specex uses the fiber index in a camera
                 fibers_to_ignore = badfibers([hdr, camhdr[camera]],["BROKENFIBERS","BADCOLUMNFIBERS"])%500
