@@ -33,7 +33,7 @@ from desispec.workflow.utils import pathjoin, sleep_and_report, \
 from desispec.workflow.tableio import write_table, load_table
 from desispec.workflow.proctable import table_row_to_dict, erow_to_prow, \
     read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
-    update_full_ptab_cache
+    update_full_ptab_cache, default_prow, get_default_qid
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -690,7 +690,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         batch_params.append(f'--reservation={reservation}')
 
     batch_params.append(f'{script_path}')
-
+    submitted = True
     if dry_run:
         current_qid = _get_fake_qid()
     else:
@@ -709,21 +709,31 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                     log.info('Sleeping 60 seconds then retrying')
                     time.sleep(60)
         else:  #- for/else happens if loop doesn't succeed
-            msg = f'{jobname} submission failed {max_attempts} times; exiting'
-            log.critical(msg)
-            raise RuntimeError(msg)
+            msg = f'{jobname} submission failed {max_attempts} times.' \
+                  + ' setting as unsubmitted and moving on'
+            log.error(msg)
+            current_qid = get_default_qid()
+            submitted = False
 
     log.info(batch_params)
-    log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
 
     ## Update prow with new information
     prow['LATEST_QID'] = current_qid
-    prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
-    prow['STATUS'] = 'SUBMITTED'
-    prow['SUBMIT_DATE'] = int(time.time())
 
-    ## Update the Slurm jobid cache of job states
-    update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
+    ## If we didn't submit, don't say we did and don't add to ALL_QIDS
+    if submitted:
+        log.info(f'Submitted {jobname} with dependencies {dep_str} and '
+                 + f'reservation={reservation}. Returned qid: {current_qid}')
+
+        ## Update prow with new information
+        prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
+        prow['STATUS'] = 'SUBMITTED'
+        prow['SUBMIT_DATE'] = int(time.time())
+    else:
+        prow['STATUS'] = 'UNSUBMITTED'
+
+        ## Update the Slurm jobid cache of job states
+        update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
     return prow
 
@@ -1784,7 +1794,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
-    joint_prow['STATUS'] = 'U'
+    joint_prow['STATUS'] = 'UNSUBMITTED'
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.unique(np.concatenate([currow['EXPID'] for currow in prows])).astype(int)
 
@@ -1861,7 +1871,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
-    joint_prow['STATUS'] = 'U'
+    joint_prow['STATUS'] = 'UNSUBMITTED'
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 
@@ -1892,7 +1902,7 @@ def make_redshift_prow(prows, tnights, descriptor, internal_id):
     redshift_prow['LATEST_QID'] = -99
     redshift_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     redshift_prow['SUBMIT_DATE'] = -99
-    redshift_prow['STATUS'] = 'U'
+    redshift_prow['STATUS'] = 'UNSUBMITTED'
     redshift_prow['SCRIPTNAME'] = ''
     redshift_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
 

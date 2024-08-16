@@ -77,7 +77,7 @@ def get_processing_table_column_defs(return_default_values=False,
     """
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
-
+    defqid = get_default_qid()
     colnames1 = ['EXPID'                        , 'OBSTYPE', 'TILEID', 'NIGHT' ]
     coltypes1 = [np.ndarray                     , 'S10'    , int     , int     ]
     coldeflt1 = [np.ndarray(shape=0).astype(int), 'unknown', -99     , 20000101]
@@ -88,11 +88,11 @@ def get_processing_table_column_defs(return_default_values=False,
 
     colnames2 = [ 'PROCCAMWORD'    ,'CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID']
     coltypes2 = [ 'S40'            , np.int8    ,  int   , 'S16'    , 'S12'    , int         ]
-    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', -99         ]
+    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', defqid      ]
 
-    colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
-    coltypes2 += [  int         , 'S14'   , 'S40'       ]
-    coldeflt2 += [ -99          , 'U'     , ''   ]
+    colnames2 += [ 'SUBMIT_DATE', 'STATUS'     , 'SCRIPTNAME']
+    coltypes2 += [  int         , 'S14'        , 'S40'       ]
+    coldeflt2 += [ -99          , 'UNSUBMITTED', ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
     coltypes2 += [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
@@ -111,6 +111,11 @@ def get_processing_table_column_defs(return_default_values=False,
         return colnames, coldtypes, coldeflts
     else:
         return colnames, coldtypes
+def get_default_qid():
+    """
+    Returns the default slurm job id (QID) for the pipeline
+    """
+    return 1 #99999999
 
 def default_obstypes_for_proctable():
     """

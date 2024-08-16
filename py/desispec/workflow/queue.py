@@ -7,6 +7,8 @@ import os
 import numpy as np
 from astropy.table import Table, vstack
 import subprocess
+
+from desispec.workflow.proctable import get_default_qid
 from desiutil.log import get_logger
 import time, datetime
 
@@ -39,7 +41,11 @@ def get_resubmission_states():
     Returns:
         list. A list of strings outlining the job states that should be resubmitted.
     """
-    return ['UNSUBMITTED', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    ## 'UNSUBMITTED' is default pipeline state for things not yet submitted
+    ## 'DEP_NOT_SUBD' is set when resubmission can't proceed because a
+    ## dependency has failed
+    return ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
+            'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
 
 
 def get_termination_states():
@@ -301,6 +307,7 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
     Dict
         Dictionary with the keys as jobids and values as the slurm state of the job.
     """
+    def_qid = get_default_qid()
     global _cached_slurm_states
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
@@ -317,7 +324,8 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
         if dry_run > 2 or dry_run < 1:
             outtable = queue_info_from_qids(qids, columns='jobid,state', dry_run=dry_run)
             for row in outtable:
-                outdict[int(row['JOBID'])] = row['STATE']
+                if int(row['JOBID']) != def_qid:
+                    outdict[int(row['JOBID'])] = row['STATE']
     return outdict
 
 def update_queue_state_cache_from_table(queue_info_table):
@@ -357,7 +365,8 @@ def update_queue_state_cache(qid, state):
 
     """
     global _cached_slurm_states
-    _cached_slurm_states[int(qid)] = state
+    if int(qid) != get_default_qid():
+        _cached_slurm_states[int(qid)] = state
 
 def clear_queue_state_cache():
     """
@@ -407,6 +416,8 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
         log.info("Will be verifying that the file names are consistent")
 
     for row in qtable:
+        if int(row['JOBID']) == get_default_qid():
+            continue
         match = (int(row['JOBID']) == ptable['LATEST_QID'])
         if np.any(match):
             ind = np.where(match)[0][0]
