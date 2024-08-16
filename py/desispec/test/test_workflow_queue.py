@@ -19,14 +19,14 @@ class TestWorkflowQueue(unittest.TestCase):
 
     def test_queue_info_from_qids(self):
         """Test queue_info_from_qids"""
-        qids = [1,10,2,5]
+        qids = [11,10,2,5]
         qinfo = queue.queue_info_from_qids(qids, dry_run=3)
         self.assertEqual(list(qinfo['JOBID']), qids)
 
     def test_queue_state_cache(self):
         """Test queue state cache"""
         # Query qids to get state into cache
-        qids = [1,10,2,5]
+        qids = [11,10,2,5]
         qinfo = queue.queue_info_from_qids(qids, dry_run=3)
 
         # check cache matches state
