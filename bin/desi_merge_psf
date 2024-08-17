@@ -12,6 +12,4 @@ parser.add_argument('-o','--outfile', type = str, default = None, required=True,
 
 args = parser.parse_args()
 
-merge_psf(args.infiles,args.outfile)
-
-
+merge_psf(args.infiles[0],args.infiles[1:],args.outfile)

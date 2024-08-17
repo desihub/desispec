@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.64.1 (unreleased)
+0.65.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.65.0 (2024-08-16)
 -------------------
 
 * healpix grouping memory and I/O efficiency improvements (PR `#2290`_).
@@ -21,6 +26,13 @@ desispec Change Log
   of DESI_SPECTRO_CALIB yaml files (PR `#2313`_).
 * Use read noise estimated per CCD row for some amplifiers (PR `#2314`_).
 * Allow certain old redrock files in daily reductions to be read (PR `#2317`_).
+* Fix assemble_fibermap and unit tests for old data without dark models
+  (PR `#2319`_).
+* merge_psf option to not include input psf for sims (PR `#2320`_).
+* Add cross-night dependency tracking for cumulative ztile jobs (PR `#2321`_).
+* Modernize submit_prod (PR `#2322`_).
+* FIBERSTATUS VARIABLETHRU bad for sky and stdstars (PR `#2323`_).
+* faflavor2program for special tiles: fix other to bright or dark (PR `#2325`_).
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
@@ -31,6 +43,12 @@ desispec Change Log
 .. _`#2313`: https://github.com/desihub/desispec/pull/2313
 .. _`#2314`: https://github.com/desihub/desispec/pull/2314
 .. _`#2317`: https://github.com/desihub/desispec/pull/2317
+.. _`#2319`: https://github.com/desihub/desispec/pull/2319
+.. _`#2320`: https://github.com/desihub/desispec/pull/2320
+.. _`#2321`: https://github.com/desihub/desispec/pull/2321
+.. _`#2322`: https://github.com/desihub/desispec/pull/2322
+.. _`#2323`: https://github.com/desihub/desispec/pull/2323
+.. _`#2325`: https://github.com/desihub/desispec/pull/2325
 
 0.64.0 (2024-07-01)
 -------------------

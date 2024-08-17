@@ -10,9 +10,9 @@ import argparse
 import numpy as np
 from astropy.table import Table, vstack
 
-from desispec.workflow.redshifts import read_minimal_exptables_columns, \
-    get_ztile_script_pathname, get_ztile_relpath, \
+from desispec.workflow.redshifts import get_ztile_script_pathname, get_ztile_relpath, \
     get_ztile_script_suffix
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desiutil.log import get_logger
 
 from desispec.workflow import batch
@@ -599,7 +599,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         else:
             log.info(f'Loading production exposure tables for all nights')
 
-        exptable = read_minimal_exptables_columns(night)
+        exptable = read_minimal_science_exptab_cols(night)
 
     else:
         log.info(f'Loading exposure list from {explist}')
@@ -656,7 +656,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
     # - NOTE: this may not scale well several years into the survey
     if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-        allexp = read_minimal_exptables_columns()
+        allexp = read_minimal_science_exptab_cols()
         keep = np.in1d(allexp['TILEID'], tileids)
         exptable = allexp[keep]
         ## Ensure we only include data for nights up to and including specified nights

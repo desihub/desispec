@@ -282,3 +282,14 @@ def sleep_and_report(sleep_duration=0.1, message_suffix="", logfunc=None, dry_ru
         time.sleep(sleep_duration)
         logfunc(f"Resuming...")
     logfunc("\n\n")
+
+def remove_slurm_environment_variables():
+    """
+    Removes SLURM_MEM_PER_CPU and SLURM_OPEN_MODE from os.environ if present
+    """
+    log = get_logger()
+    for var in ['SLURM_MEM_PER_CPU', 'SLURM_OPEN_MODE']:
+        if var in os.environ:
+            log.info(f"Removing Slurm variable {var} from the environment"
+                     + " before running.")
+            del os.environ[var]

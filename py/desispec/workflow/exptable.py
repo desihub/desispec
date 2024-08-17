@@ -6,8 +6,10 @@ desispec.workflow.exptable
 import os
 import glob
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, vstack
 from astropy.io import fits
+
+from desispec.io import findfile
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import define_variable_from_environment, get_json_dict
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from_raw_data
@@ -916,3 +918,172 @@ def airfac_to_aircorr(airfac):
     https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
     """
     return airmass_to_aircorr(airfac_to_airmass(airfac))
+
+
+_science_etab_cache = None
+
+
+def read_minimal_science_exptab_cols(nights=None, tileids=None,
+                                     reset_cache=False, readonly=True):
+    """
+    Read exposure tables while handling evolving formats
+
+    Args:
+        nights (list of int): nights to include (default all nights found)
+        tileids (list of int): tileids to include (default all tiles found)
+        reset_cache (bool): If true, global cache is cleared
+        readonly (bool): If true, use readonly path to tables for laoding
+
+    Returns exptable with just columns TILEID, NIGHT, EXPID, 'CAMWORD',
+        'BADCAMWORD', filtered by science
+        exposures with LASTSTEP='all' and TILEID>=0
+
+    Note: the returned table is the full pipeline exposures table. It is trimmed
+          to science exposures that have LASTSTEP=='all'
+    """
+    global _science_etab_cache
+    log = get_logger()
+
+    ## If requested reset the science exposure table cache
+    if reset_cache:
+        reset_science_etab_cache()
+
+    ## If the cache exists, use it speed up the search over tiles and nights
+    if _science_etab_cache is not None:
+        log.info(f'Using cached exposure table rows for science selection')
+        t = _science_etab_cache.copy()
+        if nights is not None:
+            t = t[np.isin(t['NIGHT'], nights)]
+        if tileids is not None:
+            t = t[np.isin(t['TILEID'], tileids)]
+        return t
+
+    ## If not cached, then find all the relevant exposure tables and load them
+    if nights is None:
+        etab_path = findfile('exptable', night='99999999', readonly=readonly)
+        glob_path = etab_path.replace('99999999', '202?????').replace('999999',
+                                                                      '202???')
+        etab_files = glob.glob(glob_path)
+    else:
+        etab_files = list()
+        for night in nights:
+            etab_file = get_exposure_table_pathname(night)
+            if os.path.exists(etab_file):
+                etab_files.append(etab_file)
+            elif night >= 20201201:
+                log.error(f"Exposure table missing for night {night}")
+            else:
+                # - these are expected for the daily run, ok
+                log.debug(f"Exposure table missing for night {night}")
+
+    ## Load each relevant exposure table file, subselect valid science's and
+    ## append to the full set
+    etab_files = sorted(etab_files)
+    exptables = list()
+
+    for etab_file in etab_files:
+        ## correct way but slower and we don't need multivalue columns
+        # t = load_table(etab_file, tabletype='etable')
+        t = Table.read(etab_file, format='ascii.csv')
+
+        ## Subselect only valid science exposures
+        t = _select_sciences_from_etab(t)
+
+        ## For backwards compatibility if BADCAMWORD column does not
+        ## exist then add a blank one
+        if 'BADCAMWORD' not in t.colnames:
+            t.add_column(Table.Column(['' for i in range(len(t))], dtype='S36',
+                                      name='BADCAMWORD'))
+
+        ## Need to ensure that the string columns are consistent
+        for col in ['CAMWORD', 'BADCAMWORD']:
+            ## Masked arrays need special handling
+            ## else just reassign with consistent dtype
+            if isinstance(t[col], Table.MaskedColumn):
+                ## If compeltely empty it's loaded as type int
+                ## otherwise fill masked with ''
+                if t[col].dtype == int:
+                    t[col] = Table.Column(['' for i in range(len(t))],
+                                          dtype='S36', name=col)
+                else:
+                    t[col] = Table.Column(t[col].filled(fill_value=''),
+                                          dtype='S36', name=col)
+            else:
+                t[col] = Table.Column(t[col], dtype='S36', name=col)
+        exptables.append(t['TILEID', 'NIGHT', 'EXPID', 'CAMWORD', 'BADCAMWORD'])
+
+    outtable = vstack(exptables)
+
+    ## If we've loaded all nights, then cache the result
+    if nights is None:
+        log.info(f'Caching exposure table rows for science selection')
+        _set_science_etab_cache(outtable.copy())
+
+    ## If requeted specific tileids, then subselect that
+    if tileids is not None:
+        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
+
+    return outtable
+
+
+def _select_sciences_from_etab(etab):
+    """
+    takes an exposure table or combination of exposure tables and subselects
+    valid science jobs. Those that pass selection are returned as a table.
+    """
+    t = etab.copy()
+    t = t[((t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0))]
+    if 'LASTSTEP' in t.colnames:
+        t = t[t['LASTSTEP'] == 'all']
+
+    return t
+
+
+def reset_science_etab_cache():
+    """
+    reset the global cache of science exposure tables stored in var _science_etab_cache
+    """
+    global _science_etab_cache
+    log = get_logger()
+    log.info(f'Resetting science exposure table row cache')
+    _science_etab_cache = None
+
+
+def _set_science_etab_cache(etab):
+    """
+    sets the global cache of science exposure tables stored in var _science_etab_cache
+    """
+    global _science_etab_cache
+    log = get_logger()
+    log.info(f'Assigning science exposure table row cache to new table')
+    if 'OBSTYPE' in etab.colnames:
+        _science_etab_cache = _select_sciences_from_etab(etab)
+    else:
+        _science_etab_cache = etab
+    _science_etab_cache.sort(['EXPID'])
+
+
+def update_science_etab_cache(etab):
+    """
+    updates the global cache of science exposure tables stored in var
+    _science_etab_cache.
+
+    Notes: this will remove all current entries for any night in the input
+    """
+    global _science_etab_cache
+    log = get_logger()
+    ## If the cache doesn't exist, don't update it.
+    if _science_etab_cache is None:
+        log.debug(f'Science exptab cache does not exist, so not updating')
+        return
+    cleaned_etab = _select_sciences_from_etab(etab)
+    new_nights = np.unique(cleaned_etab['NIGHT'])
+    log.info(f'Removing all current entries in science exposure '
+             + f'table row cache for nights {list(new_nights)}')
+    conflicting_entries = np.isin(_science_etab_cache['NIGHT'], new_nights)
+    log.info(
+        f"Removing {np.sum(conflicting_entries)} rows and adding {len(cleaned_etab)} rows "
+        + f"to science exposure table row cache.")
+    keep = np.bitwise_not(conflicting_entries)
+    _science_etab_cache = _science_etab_cache[keep]
+    _science_etab_cache = vstack([_science_etab_cache, cleaned_etab])

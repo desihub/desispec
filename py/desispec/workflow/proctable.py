@@ -3,6 +3,7 @@ desispec.workflow.proctable
 ===========================
 
 """
+import glob
 
 import numpy as np
 import os
@@ -10,12 +11,17 @@ import os
 from astropy.table import Table, vstack
 from collections import OrderedDict
 
+from desispec.io import findfile
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.exptable import default_obstypes_for_exptable
+from desispec.workflow.tableio import load_table
 
 from desispec.workflow.utils import define_variable_from_environment, pathjoin
 from desispec.io.util import difference_camwords, parse_badamps, create_camword, decode_camword
 from desiutil.log import get_logger
+
+_full_ptab_cache = dict()
+_tilenight_ptab_cache = None
 
 ###############################################
 ##### Processing Table Column Definitions #####
@@ -71,7 +77,7 @@ def get_processing_table_column_defs(return_default_values=False,
     """
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
-
+    defqid = get_default_qid()
     colnames1 = ['EXPID'                        , 'OBSTYPE', 'TILEID', 'NIGHT' ]
     coltypes1 = [np.ndarray                     , 'S10'    , int     , int     ]
     coldeflt1 = [np.ndarray(shape=0).astype(int), 'unknown', -99     , 20000101]
@@ -82,11 +88,11 @@ def get_processing_table_column_defs(return_default_values=False,
 
     colnames2 = [ 'PROCCAMWORD'    ,'CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID']
     coltypes2 = [ 'S40'            , np.int8    ,  int   , 'S16'    , 'S12'    , int         ]
-    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', -99         ]
+    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', defqid      ]
 
-    colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
-    coltypes2 += [  int         , 'S14'   , 'S40'       ]
-    coldeflt2 += [ -99          , 'U'     , ''   ]
+    colnames2 += [ 'SUBMIT_DATE', 'STATUS'     , 'SCRIPTNAME']
+    coltypes2 += [  int         , 'S14'        , 'S40'       ]
+    coldeflt2 += [ -99          , 'UNSUBMITTED', ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
     coltypes2 += [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
@@ -105,6 +111,11 @@ def get_processing_table_column_defs(return_default_values=False,
         return colnames, coldtypes, coldeflts
     else:
         return colnames, coldtypes
+def get_default_qid():
+    """
+    Returns the default slurm job id (QID) for the pipeline
+    """
+    return 1 #99999999
 
 def default_obstypes_for_proctable():
     """
@@ -394,3 +405,289 @@ def table_row_to_dict(table_row):
         typ = type(table_row)
         log.error(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
         raise TypeError(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
+
+
+## This cache is used in initial processing when we need to identify tilenights
+## to use
+_required_tilenight_ptab_cols = ['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
+                                 'OBSTYPE', 'JOBDESC', 'INTID', 'LATEST_QID',
+                                 'STATUS']
+def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
+                                        reset_cache=False, readonly=True):
+    """
+    Read processing tables while handling evolving formats
+
+    Args:
+        nights (list of int): nights to include (default all nights found)
+        tileids (list of int): tileids to include (default all tiles found)
+        reset_cache (bool): If true, global cache is cleared
+        readonly (bool): If true, use readonly path to tables for laoding
+
+    Returns None if not proc tables exist or exptable with columns EXPID,
+         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID and rows matching
+         the input selection criteria
+    """
+    global _tilenight_ptab_cache
+    global _full_ptab_cache
+    log = get_logger()
+
+    ## If requested reset the tilenight processing table cache
+    if reset_cache:
+        reset_tilenight_ptab_cache()
+
+    if _tilenight_ptab_cache is not None:
+        log.info(f'Using cached processing table rows for tilenight selection')
+        t = _tilenight_ptab_cache.copy()
+        if nights is not None:
+            t = t[np.isin(t['NIGHT'], nights)]
+        if tileids is not None:
+            t = t[np.isin(t['TILEID'], tileids)]
+        return t
+
+    ## If not cached, then find all the relevant processing tables and load them
+    if nights is None:
+        ptab_path = findfile('proctable', night='99999999', readonly=readonly)
+        ptab_files = glob.glob(ptab_path.replace('99999999', '202?????'))
+    else:
+        ptab_files = list()
+        for night in nights:
+            ptab_file = findfile('proctable', night=night)
+            if os.path.exists(ptab_file):
+                ptab_files.append(ptab_file)
+            elif night >= 20201201:
+                log.error(f"Processing table missing for night {night}")
+            else:
+                # - these are expected for the daily run, ok
+                log.debug(f"Processing table missing for night {night}")
+
+    ## Load each relevant processing table file, subselect valid tilenight's and
+    ## append to the full set
+    ptab_files = sorted(ptab_files)
+    ptables = list()
+    for ptab_file in ptab_files:
+        ## correct way but slower and we don't need multivalue columns
+        t = load_table(tablename=ptab_file, tabletype='proctable')
+        t = _select_tilenights_from_ptab(t)
+
+        ## Need to ensure that the string columns are consistent
+        for col in ['PROCCAMWORD']:
+            ## Masked arrays need special handling
+            ## else just reassign with consistent dtype
+            if isinstance(t[col], Table.MaskedColumn):
+                ## If compeltely empty it's loaded as type int
+                ## otherwise fill masked with ''
+                if t[col].dtype == int:
+                    t[col] = Table.Column(['' for i in range(len(t))],
+                                          dtype='S36', name=col)
+                else:
+                    t[col] = Table.Column(t[col].filled(fill_value=''),
+                                          dtype='S36', name=col)
+            else:
+                t[col] = Table.Column(t[col], dtype='S36', name=col)
+        ptables.append(t[_required_tilenight_ptab_cols])
+
+    if len(ptables) > 0:
+        outtable = vstack(ptables)
+    else:
+        log.info(f"No processing tables found. Returning None.")
+        return None
+
+    ## If we've loaded all nights, then cache the result
+    if nights is None:
+        log.info(f'Caching processing table rows for tilenight selection')
+        _set_tilenight_ptab_cache(outtable)
+
+    ## If requested specific tileids, then subselect that
+    if tileids is not None:
+        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
+
+    return outtable
+
+
+def _select_tilenights_from_ptab(ptab):
+    """
+    takes a processing table or combination of processing tables and subselects
+    valid tilenight jobs. Those that pass selection are returned as a table.
+    """
+    t = ptab.copy()
+    t = t[((t['OBSTYPE'] == 'science') & (t['JOBDESC'] == 'tilenight'))]
+    if 'LASTSTEP' in t.colnames:
+        t = t[t['LASTSTEP'] == 'all']
+    return t
+
+
+def reset_tilenight_ptab_cache():
+    """
+    reset the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    log.info(f'Resetting processing table row cache for tilenight selection')
+    _tilenight_ptab_cache = None
+
+
+def _set_tilenight_ptab_cache(ptab):
+    """
+    sets the global cache of tilenight processing tables stored in var _tilenight_ptab_cache
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    log.info(
+        f'Asigning processing table row cache for tilenight selection to new table')
+    if 'OBSTYPE' in ptab.colnames:
+        t = _select_tilenights_from_ptab(ptab)
+    else:
+        t = ptab
+    _tilenight_ptab_cache = t[_required_tilenight_ptab_cols]
+
+    _tilenight_ptab_cache.sort(['INTID'])
+
+
+def update_tilenight_ptab_cache(ptab):
+    """
+    updates the global cache of tilenight processing tables stored in var
+    _tilenight_ptab_cache.
+
+    Notes: this will remove all current entries for any night in the input
+    """
+    global _tilenight_ptab_cache
+    log = get_logger()
+    ## If the cache doesn't exist, don't update it.
+    if _tilenight_ptab_cache is None:
+        log.debug(f'Tilenight proctab cache does not exist, so not updating')
+        return
+    cleaned_ptab = _select_tilenights_from_ptab(ptab)
+    new_nights = np.unique(cleaned_ptab['NIGHT'])
+    log.info(f'Removing all current entries in processing table tilenight '
+             + f'selection cache for nights {list(new_nights)}')
+    conflicting_entries = np.isin(_tilenight_ptab_cache['NIGHT'], new_nights)
+    log.info(f"Removing {np.sum(conflicting_entries)} rows and adding "
+             + f"{len(cleaned_ptab)} rows "
+             + f"to processing table tilenight cache.")
+    keep = np.bitwise_not(conflicting_entries)
+    _tilenight_ptab_cache = _tilenight_ptab_cache[keep]
+    _tilenight_ptab_cache = vstack([_tilenight_ptab_cache, cleaned_ptab])
+    _tilenight_ptab_cache.sort(['INTID'])
+
+
+## This cache is used in reprocessing where calibration jobs are also required
+## for now need the same columns but different rows
+_required_full_ptab_cols = _required_tilenight_ptab_cols
+def read_minimal_full_proctab_cols(nights=None, tileids=None,
+                                   reset_cache=False, readonly=True):
+    """
+    Read processing tables and cache if applicable
+
+    Args:
+        nights (list of int): nights to include (default all nights found)
+        tileids (list of int): tileids to include (default all tiles found)
+        reset_cache (bool): If true, global cache is cleared
+        readonly (bool): If true, use readonly path to tables for laoding
+
+    Returns None if not proc tables exist or exptable with columns EXPID,
+         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID, STATUS and rows matching
+         the input selection criteria
+    """
+    global _full_ptab_cache
+    log = get_logger()
+
+    ## If requested reset the full processing table cache
+    if reset_cache:
+        reset_full_ptab_cache()
+
+    ## If the cache exists, use it speed up the search over tiles and nights
+    if nights is not None and np.all(
+            np.in1d(nights, list(_full_ptab_cache.keys()))):
+        log.info(f'Using cached processing table rows')
+        tablist = []
+        for night in nights:
+            tablist.append(_full_ptab_cache[night])
+        t = vstack(tablist)
+        if tileids is not None:
+            t = t[np.isin(t['TILEID'], tileids)]
+        return t
+
+    ## If not cached, then find all the relevant processing tables and load them
+    if nights is None:
+        ptab_path = findfile('proctable', night='99999999', readonly=readonly)
+        ptab_files = glob.glob(ptab_path.replace('99999999', '202?????'))
+    else:
+        ptab_files = list()
+        for night in nights:
+            ptab_file = findfile('proctable', night=night)
+            if os.path.exists(ptab_file):
+                ptab_files.append(ptab_file)
+            elif night >= 20201201:
+                log.error(f"Processing table missing for night {night}")
+            else:
+                # - these are expected for the daily run, ok
+                log.debug(f"Processing table missing for night {night}")
+
+    ## Load each relevant processing table file, subselect valid tilenight's and
+    ## append to the full set
+    ptab_files = sorted(ptab_files)
+    ptables = list()
+    for ptab_file in ptab_files:
+        ## correct way but slower and we don't need multivalue columns
+        t = load_table(tablename=ptab_file, tabletype='proctable')
+
+        ## Need to ensure that the string columns are consistent
+        for col in ['PROCCAMWORD']:
+            ## Masked arrays need special handling
+            ## else just reassign with consistent dtype
+            if isinstance(t[col], Table.MaskedColumn):
+                ## If compeltely empty it's loaded as type int
+                ## otherwise fill masked with ''
+                if t[col].dtype == int:
+                    t[col] = Table.Column(['' for i in range(len(t))],
+                                          dtype='S36', name=col)
+                else:
+                    t[col] = Table.Column(t[col].filled(fill_value=''),
+                                          dtype='S36', name=col)
+            else:
+                t[col] = Table.Column(t[col], dtype='S36', name=col)
+        ptables.append(t[_required_full_ptab_cols])
+
+    if len(ptables) > 0:
+        outtable = vstack(ptables)
+    else:
+        log.info(f"No processing tables found. Returning None.")
+        return None
+
+    ## Cache the result
+    log.info(f'Caching processing table rows for full cache')
+    update_full_ptab_cache(outtable)
+
+    ## If requested specific tileids, then subselect that
+    if tileids is not None:
+        outtable = outtable[np.isin(outtable['TILEID'], tileids)]
+
+    return outtable
+
+
+def reset_full_ptab_cache():
+    """
+    reset the global cache of full processing tables stored in var _full_ptab_cache
+    """
+    global _full_ptab_cache
+    log = get_logger()
+    log.info(f'Resetting full processing table row cache')
+    _full_ptab_cache = dict()
+
+
+def update_full_ptab_cache(ptab):
+    """
+    updates the global cache of all processing tables stored in var
+    _full_ptab_cache.
+
+    Notes: this will remove all current entries for any night in the input
+    """
+    global _full_ptab_cache
+    log = get_logger()
+
+    t = ptab[_required_full_ptab_cols]
+    new_nights = np.unique(t['NIGHT'])
+    log.info(f'Replacing all current entries in processing table '
+             + f'cache for nights {list(new_nights)}')
+    for night in new_nights:
+        _full_ptab_cache[night] = t[t['NIGHT'] == night]

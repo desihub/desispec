@@ -110,7 +110,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
 
 def get_fiberbitmask_comparison_value(kind,band):
     """Takes a string argument and returns a 32-bit integer representing the logical OR of all
-    relevant fibermask bits for that given reduction step
+    fatally bad fibermask bits for that given reduction step
 
     Args:
         kind: str : string designating which combination of bits to use based on the operation.
@@ -122,6 +122,8 @@ def get_fiberbitmask_comparison_value(kind,band):
     Returns:
         bitmask : 32 bit bitmask corresponding to the fiberbitmask of the desired kind
             in the desired cameras (bands).
+
+    if FIBERSTATUS & bitmask != 0, then that fiber should not be used
     """
     if kind.lower() == 'all':
         return get_all_fiberbitmask_with_amp(band)
@@ -141,17 +143,33 @@ def get_fiberbitmask_comparison_value(kind,band):
 
 
 def get_skysub_fiberbitmask_val(band):
-    return get_all_fiberbitmask_with_amp(band)
+    """
+    Return mask of bad FIBERSTATUS bits for selecting sky fibers,
+    i.e. fibers with these bits set should not be used for the sky model
+    """
+    return get_all_fiberbitmask_with_amp(band) | fmsk.VARIABLETHRU
 
 def get_flat_fiberbitmask_val(band):
+    """
+    Return mask of bad FIBERSTATUS bits for fiberflats
+    i.e. fibers with these bits set have a bad fiberflat and cannot be used
+    """
     return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
 def get_fluxcalib_fiberbitmask_val(band):
+    """
+    Return mask of bad FIBERSTATUS bits that should trigger flux=ivar=0
+    instead of flux calibrating the spectra.
+    """
     return get_all_fiberbitmask_with_amp(band)
 
 def get_stdstars_fiberbitmask_val(band):
-    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION
+    """
+    Return mask of bad FIBERSTATUS bits for selecting standard stars,
+    i.e. fibers with these bits set should not be used as standard stars
+    """
+    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION | fmsk.VARIABLETHRU
 
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
@@ -161,6 +179,8 @@ def get_all_nonamp_fiberbitmask_val():
         be on a valid sky location, or even a target for RESTRICTED.
         Also does not include POORPOSITION which is bad for stdstars
         but not necessarily fatal for otherwise processing a normal fiber.
+        NEARCHARGETRAP and VARIABLETHRU are also not included since
+        they are ok for some types of processing but not others.
     """
     return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
             fmsk.BADPOSITION | \
@@ -168,9 +188,16 @@ def get_all_nonamp_fiberbitmask_val():
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
 def get_justamps_fiberbitmask():
+    """
+    Return a mask of the amp-specific FIBERSTATUS bits
+    """
     return ( fmsk.BADAMPB | fmsk.BADAMPR | fmsk.BADAMPZ )
 
 def get_all_fiberbitmask_with_amp(band):
+    """
+    Return all fatally bad FIBERSTATUS bits including the amp-specific
+    bit for this band
+    """
     amp_mask = get_all_nonamp_fiberbitmask_val()
     if band.lower().find('b')>=0:
         amp_mask |= fmsk.BADAMPB
@@ -181,4 +208,7 @@ def get_all_fiberbitmask_with_amp(band):
     return amp_mask
 
 def get_all_fiberbitmask_val():
+    """
+    Return a mask of all fatally bad FIBERSTATUS bits
+    """
     return ( get_all_nonamp_fiberbitmask_val() | get_justamps_fiberbitmask() )

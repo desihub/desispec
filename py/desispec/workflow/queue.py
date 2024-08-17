@@ -4,9 +4,12 @@ desispec.workflow.queue
 
 """
 import os
+import re
 import numpy as np
 from astropy.table import Table, vstack
 import subprocess
+
+from desispec.workflow.proctable import get_default_qid
 from desiutil.log import get_logger
 import time, datetime
 
@@ -39,7 +42,11 @@ def get_resubmission_states():
     Returns:
         list. A list of strings outlining the job states that should be resubmitted.
     """
-    return ['UNSUBMITTED', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    ## 'UNSUBMITTED' is default pipeline state for things not yet submitted
+    ## 'DEP_NOT_SUBD' is set when resubmission can't proceed because a
+    ## dependency has failed
+    return ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
+            'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
 
 
 def get_termination_states():
@@ -235,12 +242,21 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     if dry_run:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
-        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode'
-        for jobid, expid in zip(qids, 100000+np.arange(len(qids))):
-            string += f'\n{jobid},arc-20211102-{expid:08d}-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
-                  +'18:48:32,COMPLETED,0:0'
-
+        ### Set a random 5% of jobs as TIMEOUT, set seed for reproducibility
+        # np.random.seed(qids[0])
+        states = np.array(['COMPLETED'] * len(qids))
+        #states[np.random.random(len(qids)) < 0.05] = 'TIMEOUT'
+        ## Try two different column configurations, otherwise give up trying to simulate
+        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode'
+        if columns.lower() == string.lower():
+            for jobid, expid, state in zip(qids, 100000+np.arange(len(qids)), states):
+                string += f'\n{jobid},arc-20211102-{expid:08d}-a0123456789,realtime,2021-11-02'\
+                      +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
+                      +f'18:48:32,00:11:59,{state},0:0'
+        elif columns.lower() == 'jobid,state':
+            string = 'JobID,State'
+            for jobid, state in zip(qids, states):
+                string += f'\n{jobid},{state}'
         # create command to run to exercise subprocess -> stdout parsing
         cmd_as_list = ['echo', string]
     else:
@@ -292,6 +308,7 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
     Dict
         Dictionary with the keys as jobids and values as the slurm state of the job.
     """
+    def_qid = get_default_qid()
     global _cached_slurm_states
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
@@ -305,9 +322,11 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
         for qid in qids:
             outdict[qid] = _cached_slurm_states[qid]
     else:
-        outtable = queue_info_from_qids(qids, columns='jobid,state', dry_run=dry_run)
-        for row in outtable:
-            outdict[int(row['JOBID'])] = row['STATE']
+        if dry_run > 2 or dry_run < 1:
+            outtable = queue_info_from_qids(qids, columns='jobid,state', dry_run=dry_run)
+            for row in outtable:
+                if int(row['JOBID']) != def_qid:
+                    outdict[int(row['JOBID'])] = row['STATE']
     return outdict
 
 def update_queue_state_cache_from_table(queue_info_table):
@@ -347,7 +366,8 @@ def update_queue_state_cache(qid, state):
 
     """
     global _cached_slurm_states
-    _cached_slurm_states[int(qid)] = state
+    if int(qid) != get_default_qid():
+        _cached_slurm_states[int(qid)] = state
 
 def clear_queue_state_cache():
     """
@@ -397,6 +417,8 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
         log.info("Will be verifying that the file names are consistent")
 
     for row in qtable:
+        if int(row['JOBID']) == get_default_qid():
+            continue
         match = (int(row['JOBID']) == ptable['LATEST_QID'])
         if np.any(match):
             ind = np.where(match)[0][0]
@@ -406,7 +428,10 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
                             + f" but the jobname in the queue was "
                             + f"{row['JOBNAME']}.")
             state = str(row['STATE']).split(' ')[0]
-            ptable['STATUS'][ind] = state
+            ## Since dry run 1 and 2 save proc tables, don't alter the
+            ## states for these when simulating
+            if dry_run > 2 or dry_run < 1:
+                ptable['STATUS'][ind] = state
 
     return ptable
 
@@ -452,3 +477,137 @@ def any_jobs_failed(statuses, failed_states=None):
     if failed_states is None:
         failed_states = get_failed_states()
     return np.any([status in failed_states for status in statuses])
+
+def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information about specific jobs based on their jobids.
+
+    Parameters
+    ----------
+    user : str
+        NERSC user to query the jobs for
+    include_scron : bool
+        True if you want to include scron entries in the returned table.
+        Default is False.
+    dry_run_level : int
+        Whether this is a simulated run or real run. If nonzero, it is a
+        simulation and it returns a default table that doesn't query the
+        Slurm scheduler.
+
+    Returns
+    -------
+    Table
+        Table with the columns JOBID, PARTITION, NAME, USER, ST, TIME, NODES,
+        NODELIST(REASON) for the specified user.
+    """
+    log = get_logger()
+    if user is None:
+        if 'USER' in os.environ:
+            user = os.environ['USER']
+        else:
+            user = 'desi'
+
+    cmd = f'squeue -u {user} -o "%i,%P,%j,%u,%t,%M,%D,%R"'
+    cmd_as_list = cmd.split()
+
+    if dry_run_level > 0:
+        log.info("Dry run, would have otherwise queried Slurm with the"
+                 +f" following: {' '.join(cmd_as_list)}")
+        string = 'JOBID,PARTITION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
+        string += f"27650097,cron,scron_ar,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650100,cron,scron_nh,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650098,cron,scron_up,{user},PD,0:00,1,(BeginTime)"
+        string += f"29078887,gpu_ss11,tilenight-20230413-24315,{user},PD,0:00,1,(Priority)"
+        string += f"29078892,gpu_ss11,tilenight-20230413-21158,{user},PD,0:00,1,(Priority)"
+        string += f"29079325,gpu_ss11,tilenight-20240309-24526,{user},PD,0:00,1,(Dependency)"
+        string += f"29079322,gpu_ss11,ztile-22959-thru20240309,{user},PD,0:00,1,(Dependency)"
+        string += f"29078883,gpu_ss11,tilenight-20230413-21187,{user},R,10:18,1,nid003960"
+        string += f"29079242,regular_milan_ss11,arc-20240309-00229483-a0123456789,{user},PD,0:00,3,(Priority)"
+        string += f"29079246,regular_milan_ss11,arc-20240309-00229484-a0123456789,{user},PD,0:00,3,(Priority)"
+
+        # create command to run to exercise subprocess -> stdout parsing
+        cmd = 'echo ' + string
+        cmd_as_list = ['echo', string]
+    else:
+        log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
+
+    #- sacct sometimes fails; try several times before giving up
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                          stderr=subprocess.STDOUT)
+            break
+        except subprocess.CalledProcessError as err:
+            log.error(f'{cmd} job query failure at {datetime.datetime.now()}')
+            log.error(f'{cmd_as_list}')
+            log.error(f'{err.output=}')
+    else:  #- for/else happens if loop doesn't succeed
+        msg = f'{cmd} query failed {max_attempts} times; exiting'
+        log.critical(msg)
+        raise RuntimeError(msg)
+
+    ## remove extra quotes that astropy table does't like
+    table_as_string = table_as_string.replace('"','')
+
+    ## remove parenthesis are also not very desirable
+    table_as_string = table_as_string.replace('(', '').replace(')', '')
+
+
+    ## remove node list with hyphen or comma otherwise it will break table reader
+    table_as_string = re.sub(r"nid\[[0-9,-]*\]", "multiple nodes", table_as_string)
+
+    try:
+        queue_info_table = Table.read(table_as_string, format='ascii.csv')
+    except:
+        log.info("Table retured by squeue couldn't be parsed. The string was:")
+        print(table_as_string)
+        raise
+    
+    for col in queue_info_table.colnames:
+        queue_info_table.rename_column(col, col.upper())
+
+    ## If the table is empty, return it immediately, otherwise perform
+    ## sanity check and cuts
+    if len(queue_info_table) == 0:
+        return queue_info_table
+
+    if np.any(queue_info_table['USER']!=user):
+        msg = f"Warning {np.sum(queue_info_table['USER']!=user)} " \
+              + f"jobs returned were not {user=}\n" \
+              + f"{queue_info_table['USER'][queue_info_table['USER']!=user]}"
+        log.critical(msg)
+        raise ValueError(msg)
+
+    if not include_scron:
+        queue_info_table = queue_info_table[queue_info_table['PARTITION'] != 'cron']
+
+    return queue_info_table
+
+
+def check_queue_count(user=None, include_scron=False, dry_run_level=0):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get
+    information about specific jobs based on their jobids.
+
+    Parameters
+    ----------
+    user : str
+        NERSC user to query the jobs for
+    include_scron : bool
+        True if you want to include scron entries in the returned table.
+        Default is False.
+    dry_run_level : int
+        Whether this is a simulated run or real run. If nonzero, it is a
+        simulation and it returns a default table that doesn't query the
+        Slurm scheduler.
+
+    Returns
+    -------
+    int
+        The number of jobs for that user in the queue (including or excluding
+        scron entries depending on include_scron).
+    """
+    return len(get_jobs_in_queue(user=user, include_scron=include_scron,
+                                 dry_run_level=dry_run_level))
