@@ -225,24 +225,21 @@ def pca_tpcorr(tpcorr):
     from astropy.stats import mad_std
     out = dict()
     for f in 'brz':
-        # z5 is ugly in 1st PC; what would we want to do here?
-        # r7, 3994 in mean, 1st PC
-        # 4891 is a mystery and shows very large variability
         m = ((tpcorr['CAMERA'] == f) &
              (np.sum(tpcorr['TPCORR'] == 0, axis=1) < 100))
+        # only use exposures when all spectrographs were functioning
         tpcorr0 = tpcorr['TPCORR'][m]
         tpcorr0[tpcorr0 == 0] = 1
         rms = mad_std(tpcorr0, axis=1)
         tpcorr0[rms > 0.025, :] = 1
         rms = mad_std(tpcorr0, axis=0)
         tpcorr0[:, rms > 0.1] = 1  # zero 4891
-        if f == 'r':
-            # zero bad CTE region on r4
-            tpcorr0[:, 2250:2272] = 1
         tpcorr0 = np.clip(tpcorr0, 0.9, 1/0.9)
         tpcorrmed = np.median(tpcorr0, axis=0)
         tpcorr0 -= tpcorrmed[None, :]
         uu, ss, vv = np.linalg.svd(tpcorr0)
+        # we should move toward doing some kind of EPCA
+        # that handles missing data.
         eid = tpcorr['EXPID'][m]
         resvec = np.zeros(vv.shape[0], dtype=[
             ('pca', '%df4' % vv.shape[1]),
@@ -290,8 +287,9 @@ def fit_tpcorr_per_fiber(tpcorr):
             res['FIBER'][i] = i
             xx = tpcorr0['X'][:, i]
             yy = tpcorr0['Y'][:, i]
-            mok = np.isfinite(xx) & np.isfinite(yy) & (xx != 0) & (yy != 0)
-            if np.sum(mok) == 0:
+            mok = (np.isfinite(xx) & np.isfinite(yy) & (xx != 0) & (yy != 0)
+                   & (tpcorr0['TPCORR'][:, i] != 0))
+            if np.sum(mok) < 10:
                 res['X'][i] = 0
                 res['Y'][i] = 0
                 res['PARAM'][i, :] = 0
@@ -307,17 +305,28 @@ def fit_tpcorr_per_fiber(tpcorr):
             m = (bb != 0) & (bb > 0.5) & (bb < 2) & mok
             # a few fibers (e.g., 1680) have some weird historical TPCORR
             # data.  Don't use those horrible points.
-            # a large chunk of fibers on r4 are bad (250 - 272).
-            # This is the bad CTE region.  We probably don't want to use
-            # these in the mean adjustment.  See if these have IVAR=0 or
-            # something?
+            dd = np.sqrt((xx[:-1] - xx[1:]) ** 2 + (yy[:-1] - yy[1:])**2)
+            dd = np.concatenate([[0], dd])
+            moved = dd > 0.03
+            # require 30 microns of motion
+            # this removes most repeat measurements of stuck positioners
+            # to avoid having all of the weight come from a handful of
+            # positions
+            if np.sum(m & moved) < 10:
+                res['PARAM'][i, :] = 0
+                res['PARAM'][i, 0] = np.median(bb[m])
+                log.info(
+                    'Dummy entry for fiber %d with no good measurements.' % i)
+                continue
+            m = m & moved
             xx = xx[m]
             yy = yy[m]
             bb = bb[m]
             def model(param):
                 return cubic(param, xx, yy)
             def chi(param):
-                return (bb - model(param))
+                return (bb - model(param)) / 0.03
+                # typical sigmas are ~0.01.
             fit = least_squares(chi, guess, loss='soft_l1')
             res['PARAM'][i, :] = fit.x
             # do something sane for stationary fibers
