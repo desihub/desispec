@@ -415,7 +415,7 @@ _required_tilenight_ptab_cols = ['EXPID', 'TILEID', 'NIGHT', 'PROCCAMWORD',
 def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
                                         reset_cache=False, readonly=True):
     """
-    Read processing tables while handling evolving formats
+    Read processing tables while handling evolving formats; filter to just tilenight jobs
 
     Args:
         nights (list of int): nights to include (default all nights found)
@@ -423,9 +423,9 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
         reset_cache (bool): If true, global cache is cleared
         readonly (bool): If true, use readonly path to tables for laoding
 
-    Returns None if not proc tables exist or exptable with columns EXPID,
-         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID and rows matching
-         the input selection criteria
+    Returns None if no proc tables exist; otherwise proctable with columns EXPID,
+         TILEID, NIGHT, PROCCAMWORD, OBSTYPE, JOBDESC, INTID, LATEST_QID, STATUS,
+         and rows matching the input selection criteria
     """
     global _tilenight_ptab_cache
     global _full_ptab_cache
@@ -533,7 +533,7 @@ def _set_tilenight_ptab_cache(ptab):
     global _tilenight_ptab_cache
     log = get_logger()
     log.info(
-        f'Asigning processing table row cache for tilenight selection to new table')
+        f'Assigning processing table row cache for tilenight selection to new table')
     if 'OBSTYPE' in ptab.colnames:
         t = _select_tilenights_from_ptab(ptab)
     else:
@@ -584,9 +584,9 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
         reset_cache (bool): If true, global cache is cleared
         readonly (bool): If true, use readonly path to tables for laoding
 
-    Returns None if not proc tables exist or exptable with columns EXPID,
-         TILEID, NIGHT, PROCCAMWORD, INTID, LATEST_QID, STATUS and rows matching
-         the input selection criteria
+    Returns None if no proc tables exist; otherwise proctable with columns EXPID,
+         TILEID, NIGHT, PROCCAMWORD, OBSTYPE, JOBDESC, INTID, LATEST_QID, STATUS,
+         and rows matching the input selection criteria
     """
     global _full_ptab_cache
     log = get_logger()
@@ -610,7 +610,7 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
     ## If not cached, then find all the relevant processing tables and load them
     if nights is None:
         ptab_path = findfile('proctable', night='99999999', readonly=readonly)
-        ptab_files = glob.glob(ptab_path.replace('99999999', '202?????'))
+        ptab_files = sorted(glob.glob(ptab_path.replace('99999999', '202?????')))
     else:
         ptab_files = list()
         for night in nights:

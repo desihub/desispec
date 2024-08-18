@@ -354,6 +354,10 @@ def load_table(tablename=None, tabletype=None, night=None, joinsymb='|', verbose
             coldefaults = [guess_default_by_dtype(typ) for typ in coltypes]
         colnames, coltypes = np.array(colnames), np.array(coltypes)
 
+        #- special case handle older daily processing tables with different column names
+        if (tabletype == 'proctable') and ('CAMWORD' in table.colnames) and ('PROCCAMWORD' not in table.colnames):
+            table.rename_column('CAMWORD', 'PROCCAMWORD')
+
         if len(table) > 0:
             outcolumns = []
             first_err = True
