@@ -963,7 +963,7 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None,
         etab_path = findfile('exptable', night='99999999', readonly=readonly)
         glob_path = etab_path.replace('99999999', '202?????').replace('999999',
                                                                       '202???')
-        etab_files = glob.glob(glob_path)
+        etab_files = sorted(glob.glob(glob_path))
     else:
         etab_files = list()
         for night in nights:
