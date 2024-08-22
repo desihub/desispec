@@ -1,6 +1,6 @@
 """
-desispec.scripts.trace_shifts
-=============================
+desispec.scripts.large_trace_shifts
+===================================
 
 """
 
