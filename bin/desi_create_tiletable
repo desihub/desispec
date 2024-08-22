@@ -109,6 +109,7 @@ def main():
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument('-o', '--outfile', required=True, help="output filename")
+    p.add_argument('--outfile2', required=False, help="Additional output filename (e.g. csv instead of fits)")
     p.add_argument('--specprod', required=False, help="specprod to use")
     p.add_argument('--nproc', type=int, default=32, help="number of processes to use")
     p.add_argument('--debug', action="store_true", help="start ipython at the end")
@@ -129,6 +130,7 @@ def main():
     log.info(f'Creating tile table for {len(tileids)} tiles')
 
     # warm up tsnr2_to_efftime ensemble cache before multiprocessing
+    # so that they are read only once, instead of once per process
     blat = tsnr2_to_efftime(10, 'elg')
 
     # get tile info in parallel
@@ -142,6 +144,12 @@ def main():
     results.write(tmpfile)
     os.rename(tmpfile, args.outfile)
     log.info(f'Wrote {args.outfile}')
+
+    if args.outfile2 is not None:
+        tmpfile = get_tempfilename(args.outfile2)
+        results.write(tmpfile)
+        os.rename(tmpfile, args.outfile2)
+        log.info(f'Wrote {args.outfile2}')
 
     if args.debug:
         import IPython; IPython.embed()
