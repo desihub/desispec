@@ -460,7 +460,7 @@ desispec API
 
 .. automodule:: desispec.scripts.createoverride
     :members:
-       
+
 .. automodule:: desispec.scripts.daily_processing
     :members:
 
@@ -623,9 +623,12 @@ desispec API
 .. automodule:: desispec.scripts.trace_shifts
     :members:
 
+.. automodule:: desispec.scripts.large_trace_shifts
+    :members:
+
 .. automodule:: desispec.scripts.update_exptable
     :members:
-       
+
 .. automodule:: desispec.scripts.update_spectra
     :members:
 
@@ -672,6 +675,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.trace_shifts
+    :members:
+
+.. automodule:: desispec.large_trace_shifts
     :members:
 
 .. automodule:: desispec.tsnr
