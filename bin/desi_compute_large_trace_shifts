@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the trace shifts for a preprocessed image, using a PSF and a set of known lines
+"""
+
+import sys
+import desispec.scripts.large_trace_shifts as large_trace_shifts
+
+
+if __name__ == '__main__':
+    args = large_trace_shifts.parse()
+    sys.exit(large_trace_shifts.main(args))
