@@ -87,17 +87,26 @@ def detect_spots_in_image(image) :
 def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
     '''
     match two catalogs, assuming the coordinates are in the same coordinate system (no transfo)
+
     Args:
+
         x1 : float numpy array of coordinates along first axis of cartesian coordinate system
+
         y1 : float numpy array of coordinates along second axis in same system
+
         x2 : float numpy array of coordinates along first axis in same system
+
         y2 : float numpy array of coordinates along second axis in same system
+
     returns:
+
         indices_2 : integer numpy array. if ii is a index array for entries in the first catalog,
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
                             negative indices_2 indicate unmatched entries
+
         distances : distances between pairs. It can be used to discard bad matches
+
     '''
 
     xy1=np.array([x1,y1]).T
