@@ -185,6 +185,9 @@ desispec API
 .. automodule:: desispec.joincosmics
     :members:
 
+.. automodule:: desispec.large_trace_shifts
+    :members:
+
 .. automodule:: desispec.linalg
     :members:
 
@@ -506,6 +509,9 @@ desispec API
 .. automodule:: desispec.scripts.interpolate_fiber_psf
     :members:
 
+.. automodule:: desispec.scripts.large_trace_shifts
+    :members:
+
 .. automodule:: desispec.scripts.link_calibnight
     :members:
 
@@ -623,9 +629,6 @@ desispec API
 .. automodule:: desispec.scripts.trace_shifts
     :members:
 
-.. automodule:: desispec.scripts.large_trace_shifts
-    :members:
-
 .. automodule:: desispec.scripts.update_exptable
     :members:
 
@@ -675,9 +678,6 @@ desispec API
     :members:
 
 .. automodule:: desispec.trace_shifts
-    :members:
-
-.. automodule:: desispec.large_trace_shifts
     :members:
 
 .. automodule:: desispec.tsnr
