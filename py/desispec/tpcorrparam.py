@@ -26,6 +26,7 @@ import numpy as np
 from astropy.io import fits
 from desiutil.log import get_logger
 import desispec.calibfinder
+import desispec.io
 
 
 def cubic(p, x, y):
@@ -134,7 +135,8 @@ def gather_tpcorr(recs):
         EXPID: expid of exposure
     """
     out = np.zeros(3*len(recs), dtype=[
-        ('X', '5000f4'), ('Y', '5000f4'), ('TPCORR', '5000f4'),
+        ('X', '5000f4'), ('Y', '5000f4'),
+        ('TPCORR', '5000f4'), ('TPCORR_MODEL', '5000f4'),
         ('CAMERA', 'U1'), ('NIGHT', 'i4'), ('EXPID', 'i4')])
     count = -1
     for rec in recs:
@@ -153,12 +155,14 @@ def gather_tpcorr(recs):
                     continue
                 fiber = frame.fibermap['FIBER']
                 out['TPCORR'][count, fiber] = sky.throughput_corrections
+                out['TPCORR_MODEL'][count, fiber] = (
+                    sky.throughput_corrections_model)
                 out['X'][count, fiber] = frame.fibermap['FIBER_X']
                 out['Y'][count, fiber] = frame.fibermap['FIBER_Y']
     return out
 
 
-def gather_dark_tpcorr(specprod=None):
+def gather_dark_tpcorr(specprod=None, nproc=4):
     """Gathers TPCORR for dark exposures expected to be well behaved.
 
     This wraps gather_tpcorr, making a sensible selection of dark
@@ -174,13 +178,23 @@ def gather_dark_tpcorr(specprod=None):
     if specprod is None:
         specprod = os.environ.get('SPECPROD', 'daily')
     expfn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         specprod, 'exposures-{specprod}.fits')
+                         specprod, f'exposures-{specprod}.fits')
     exps = fits.getdata(expfn)
     m = ((exps['EXPTIME'] > 300) & (exps['SKY_MAG_R_SPEC'] > 20.5) &
          (exps['SKY_MAG_R_SPEC'] < 30) & (exps['FAPRGRM'] == 'dark'))
+    exps = exps[m]
     if specprod == 'daily':
         exps = exps[exps['NIGHT'] >= 20210901]
-    return gather_tpcorr(exps[m])
+    log = get_logger()
+    log.info(f'Gathering skies for {len(exps)} exposures...')
+    if nproc > 1:
+        from multiprocessing import pool
+        p = pool.Pool(nproc)
+        res = p.map(gather_tpcorr, [[exp] for exp in exps])
+        res = np.concatenate(res)
+    else:
+        res = gather_tpcorr(exps)
+    return res
 
 
 def pca_tpcorr(tpcorr):
@@ -211,24 +225,21 @@ def pca_tpcorr(tpcorr):
     from astropy.stats import mad_std
     out = dict()
     for f in 'brz':
-        # z5 is ugly in 1st PC; what would we want to do here?
-        # r7, 3994 in mean, 1st PC
-        # 4891 is a mystery and shows very large variability
         m = ((tpcorr['CAMERA'] == f) &
              (np.sum(tpcorr['TPCORR'] == 0, axis=1) < 100))
+        # only use exposures when all spectrographs were functioning
         tpcorr0 = tpcorr['TPCORR'][m]
         tpcorr0[tpcorr0 == 0] = 1
         rms = mad_std(tpcorr0, axis=1)
         tpcorr0[rms > 0.025, :] = 1
         rms = mad_std(tpcorr0, axis=0)
         tpcorr0[:, rms > 0.1] = 1  # zero 4891
-        if f == 'r':
-            # zero bad CTE region on r4
-            tpcorr0[:, 2250:2272] = 1
         tpcorr0 = np.clip(tpcorr0, 0.9, 1/0.9)
         tpcorrmed = np.median(tpcorr0, axis=0)
         tpcorr0 -= tpcorrmed[None, :]
         uu, ss, vv = np.linalg.svd(tpcorr0)
+        # we should move toward doing some kind of EPCA
+        # that handles missing data.
         eid = tpcorr['EXPID'][m]
         resvec = np.zeros(vv.shape[0], dtype=[
             ('pca', '%df4' % vv.shape[1]),
@@ -276,8 +287,9 @@ def fit_tpcorr_per_fiber(tpcorr):
             res['FIBER'][i] = i
             xx = tpcorr0['X'][:, i]
             yy = tpcorr0['Y'][:, i]
-            mok = np.isfinite(xx) & np.isfinite(yy) & (xx != 0) & (yy != 0)
-            if np.sum(mok) == 0:
+            mok = (np.isfinite(xx) & np.isfinite(yy) & (xx != 0) & (yy != 0)
+                   & (tpcorr0['TPCORR'][:, i] != 0))
+            if np.sum(mok) < 10:
                 res['X'][i] = 0
                 res['Y'][i] = 0
                 res['PARAM'][i, :] = 0
@@ -293,17 +305,28 @@ def fit_tpcorr_per_fiber(tpcorr):
             m = (bb != 0) & (bb > 0.5) & (bb < 2) & mok
             # a few fibers (e.g., 1680) have some weird historical TPCORR
             # data.  Don't use those horrible points.
-            # a large chunk of fibers on r4 are bad (250 - 272).
-            # This is the bad CTE region.  We probably don't want to use
-            # these in the mean adjustment.  See if these have IVAR=0 or
-            # something?
+            dd = np.sqrt((xx[:-1] - xx[1:]) ** 2 + (yy[:-1] - yy[1:])**2)
+            dd = np.concatenate([[0], dd])
+            moved = dd > 0.03
+            # require 30 microns of motion
+            # this removes most repeat measurements of stuck positioners
+            # to avoid having all of the weight come from a handful of
+            # positions
+            if np.sum(m & moved) < 10:
+                res['PARAM'][i, :] = 0
+                res['PARAM'][i, 0] = np.median(bb[m])
+                log.info(
+                    'Dummy entry for fiber %d with no good measurements.' % i)
+                continue
+            m = m & moved
             xx = xx[m]
             yy = yy[m]
             bb = bb[m]
             def model(param):
                 return cubic(param, xx, yy)
             def chi(param):
-                return (bb - model(param))
+                return (bb - model(param)) / 0.03
+                # typical sigmas are ~0.01.
             fit = least_squares(chi, guess, loss='soft_l1')
             res['PARAM'][i, :] = fit.x
             # do something sane for stationary fibers
@@ -321,17 +344,7 @@ def fit_tpcorr_per_fiber(tpcorr):
     return out
 
 
-# note! one worry: in the current PR, the meaning of TPCORR will change
-# moving forward, and we won't have any of the current throughput measurements
-# for computing these coefficients in the future.  We'd have to develop
-# an alternative scheme for computing these coefficients or would have
-# to change this PR so that the new and old TPCORR have similar meanings.
-# That option would mean passing calculate_throughput_corrections some
-# goofy sky model that doesn't include the new model TPCORR from this PR.
-# Or we add another model extension with the new TPCORR from this PR,
-# and then this routine would require the product of the model TPCORR and
-# the measured TPCORR.
-def make_tpcorrparam_files(tpcorr=None, spatial=None, dirname=None):
+def make_tpcorrparam_files(tpcorr=None, spatial=None, dirname=None, npca=2):
     """Gather, fit, and write tpcorrparam files to output directory.
 
     This function is intended for producing tpcorrparam files to
@@ -346,27 +359,58 @@ def make_tpcorrparam_files(tpcorr=None, spatial=None, dirname=None):
         dirname (optional): directory to which to write files.  Defaults
             to DESI_SPECTRO_CALIB.
     """
+    log = get_logger()
     if dirname is None:
         dirname = os.environ['DESI_SPECTRO_CALIB']
     if tpcorr is None:
         tpcorr = gather_dark_tpcorr()
+    if 'TPCORR_MODEL' in tpcorr.dtype.names:
+        tpcorr = tpcorr.copy()
+        tpcorr['TPCORR'] *= tpcorr['TPCORR_MODEL']
+        log.info('Multiplying TPCORR by TPCORR_MODEL')
+        # if TPCORR_MODEL is in there, that means that the measured TPCORR
+        # are measured after the model TPCORR have been removed.
+        # this puts the model back in so that the TPCORR field has the
+        # "total" TPCORR"
+
+    m = ((tpcorr['X'] == 0) | (tpcorr['Y'] == 0) |
+         ~np.isfinite(tpcorr['X']) | ~np.isfinite(tpcorr['Y']) |
+         ~np.isfinite(tpcorr['TPCORR']))
+    fiber = np.arange(5000)[None, :]
+    # ignore problematic region on r4 in device that was replaced.
+    m = m | ((tpcorr['EXPID'][:, None] > 1.07e5) &
+             (tpcorr['EXPID'][:, None] < 1.53e5) &
+             (fiber >= 2250) & (fiber < 2272) &
+             (tpcorr['CAMERA'][:, None] == 'r'))
+    # ignore problematic region on z5 in device that was replaced.
+    m = m | ((tpcorr['CAMERA'][:, None] == 'z') &
+             (tpcorr['EXPID'][:, None] < 1.55e5) &
+             (fiber > 2660) & (fiber < 2690))
+    # ignore fiber 1098 on the B camera as too noisy (parallel charge
+    # transfer issue)
+    m = m | ((fiber == 1098) & (tpcorr['CAMERA'][:, None] == 'b'))
+    mzero = m.copy()
+    tpcorr['TPCORR'][mzero] = 0
+
     if spatial is None:
         spatial = fit_tpcorr_per_fiber(tpcorr)
+
     tpcorrspatmod = np.zeros_like(tpcorr['TPCORR'])
     for f in 'brz':
         m = tpcorr['CAMERA'] == f
         tpcorrspatmod[m] = tpcorrspatialmodel(
             spatial[f], tpcorr['X'][m], tpcorr['Y'][m])
-    m = ((tpcorr['X'] == 0) | (tpcorr['Y'] == 0) |
-         ~np.isfinite(tpcorr['X']) | ~np.isfinite(tpcorr['Y']) |
-         ~np.isfinite(tpcorr['TPCORR']))
+
     tpcorrresid = tpcorr.copy()
     tpcorrresid['TPCORR'] -= tpcorrspatmod
     tpcorrresid['TPCORR'] += 1
-    tpcorrresid['TPCORR'][m] = 0  # invalid value
+    tpcorrresid['TPCORR'][mzero] = 0  # invalid value
+
     pca = pca_tpcorr(tpcorrresid)
+    constants = dict()
     for f in 'brz':
         constant = spatial[f]['PARAM'][:, 0].copy()
+        constants[f] = constant
         spatial[f]['PARAM'][:, 0] = 1
         for i in range(10):
             sm = desispec.calibfinder.sp2sm(i)
@@ -378,5 +422,6 @@ def make_tpcorrparam_files(tpcorr=None, spatial=None, dirname=None):
                          fits.Header(dict(extname='SPATIAL')))
             fits.append(fn, constant[i*500:(i+1)*500],
                         fits.Header(dict(extname='MEAN')))
-            fits.append(fn, pca[f][1]['pca'][:2, i*500:(i+1)*500],
+            fits.append(fn, pca[f][1]['pca'][:npca, i*500:(i+1)*500],
                         fits.Header(dict(extname='PCA')))
+    return tpcorrresid, spatial, pca, constants
