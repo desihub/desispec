@@ -89,6 +89,9 @@ def isStdStar(fibermap, bright=None):
             log.warning('Using FA_TYPE to find standard stars instead')
             yes = (fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0
 
+    #- Remove fibers with known variable throughput
+    yes &= ((fibermap['FIBERSTATUS'] & fibermask.VARIABLETHRU) == 0)
+
     return yes
 
 def applySmoothingFilter(flux,width=200) :
