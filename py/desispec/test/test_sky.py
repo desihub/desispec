@@ -5,9 +5,11 @@ tests desispec.sky
 import unittest
 
 import numpy as np
-from desispec.sky import compute_sky, subtract_sky, SkyModel
+from astropy.table import Table
+from desispec.sky import compute_sky, subtract_sky, SkyModel, get_sky_fibers
 from desispec.resolution import Resolution
 from desispec.frame import Frame
+from desispec.maskbits import fibermask
 import desispec.io
 
 import desispec.scripts.sky as skyscript
@@ -154,6 +156,29 @@ class TestSky(unittest.TestCase):
         self.assertEqual(sky2.stat_ivar, None)
         self.assertEqual(sky2.throughput_corrections, None)
         self.assertEqual(sky2.nrej, sky1.nrej)
+
+    def test_get_sky_fibers(self):
+        """Test desispec.sky.get_sky_fibers"""
+        fibermap = Table()
+        fibermap['TARGETID'] = np.arange(5)
+        fibermap['OBJTYPE'] = ['TGT', 'SKY', 'TGT', 'SKY', 'TGT']
+        fibermap['FIBERSTATUS'] = 0
+
+        #- Test default behavior
+        skyfibers = list(get_sky_fibers(fibermap))
+        self.assertEqual(skyfibers, [1,3])
+
+        #- Test overrides
+        skyfibers = list(get_sky_fibers(fibermap, override_sky_targetids=[0,1]))
+        self.assertEqual(skyfibers, [0,1])
+
+        skyfibers = list(get_sky_fibers(fibermap, exclude_sky_targetids=[0,1]))
+        self.assertEqual(skyfibers, [3,])
+
+        #- SKY fibers with VARIABLETHRU should be excluded
+        fibermap['FIBERSTATUS'][3] = fibermask.VARIABLETHRU
+        skyfibers = list(get_sky_fibers(fibermap))
+        self.assertEqual(skyfibers, [1,])
 
     def test_main(self):
         pass

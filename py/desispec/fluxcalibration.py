@@ -18,6 +18,7 @@ from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 from desispec.gpu import is_gpu_available, NoGPU
+from desispec.maskbits import fibermask
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time

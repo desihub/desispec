@@ -73,11 +73,10 @@ class TestFrameBitMask(unittest.TestCase):
         #- POORPOSITION is ok for flats, sky, and fluxcalib; but bad for stdstars
         self.check_mask('POORPOSITION', ok_steps=['flat', 'sky', 'fluxcalib'], bad_steps=['stdstar'])
 
-        #- NEARCHARGETRAP is informative; treated as ok for everyone including sky
+        #- NEARCHARGETRAP and VARIABLETHRU are informative for fiberbitmasking;
+        #- i.e. they don't trigger masking fibers
         #- TODO: it's actually bad for faint targets and sky for a single amp, but we structurally
         #- don't have a way to encode that in FIBERSTATUS (fiber not CCD or amp)
         self.check_mask('NEARCHARGETRAP', ok_steps=['flat', 'sky', 'stdstar', 'fluxcalib'], bad_steps=[])
+        self.check_mask('VARIABLETHRU', ok_steps=['flat', 'sky', 'stdstar', 'fluxcalib'], bad_steps=[])
 
-        #- VARIABLETHRU is ok for flats because otherwise we'd block the entire fiber,
-        #- and ok to at least attempt to flux calibrate it, but it shouldn't be used for sky or stdstars
-        self.check_mask('VARIABLETHRU', ok_steps=['flat', 'fluxcalib'], bad_steps=['sky', 'stdstar'])
