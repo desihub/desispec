@@ -2,10 +2,24 @@
 desispec Change Log
 ===================
 
-0.65.1 (unreleased)
+0.66.0 (unreleased)
 -------------------
 
-* No changes yet.
+First tag used for Kibo/Y3 run.
+
+* Update TPCORR parameter creation code (PR `#2318`_).
+* Minor changes to desi_compute_dark_nonlinear (PR `#2326`_).
+* Fix parsing of old daily proctables (PR `#2327`_).
+* Script for fitting large trace shifts (PR `#2334`_).
+* Work around NaNs in GFA pipeline inputs (PR `#2336`_).
+* Fix usage of FIBERSTATUS VARIABLETHRU bit (PR `#2337`_).
+
+.. _`#2318`: https://github.com/desihub/desispec/pull/2318
+.. _`#2326`: https://github.com/desihub/desispec/pull/2326
+.. _`#2327`: https://github.com/desihub/desispec/pull/2327
+.. _`#2334`: https://github.com/desihub/desispec/pull/2334
+.. _`#2336`: https://github.com/desihub/desispec/pull/2336
+.. _`#2337`: https://github.com/desihub/desispec/pull/2337
 
 0.65.0 (2024-08-16)
 -------------------
