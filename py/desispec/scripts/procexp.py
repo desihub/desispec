@@ -149,7 +149,7 @@ def main(args):
 
     if not args.no_tsnr:
         log.info("calculating tsnr")
-        results, alpha = calc_tsnr2(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=args.alpha_only)
+        results, alpha = calc_tsnr2(frame,uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=args.alpha_only)
 
         frame.meta['TSNRALPH'] = alpha
 

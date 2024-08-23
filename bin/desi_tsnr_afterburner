@@ -210,12 +210,13 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     sky = cframe_filename.replace('cframe', 'sky')
     psf = cframe_filename.replace('cframe', 'psf')
 
+    cframe=read_frame(cframe_filename, skip_resolution=True)
     frame=read_frame(iin, skip_resolution=True)
     fiberflat=read_fiberflat(flat)
     fluxcalib=read_flux_calibration(calib)
     skymodel=read_sky(sky)
 
-    results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
+    results, alpha = calc_tsnr2(cframe, frame, fiberflat=fiberflat,
                                 skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=alpha_only)
 
     table=Table()
