@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.66.0 (unreleased)
+0.66.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.66.0 (2024-08-23)
 -------------------
 
 First tag used for Kibo/Y3 run.
@@ -13,6 +18,10 @@ First tag used for Kibo/Y3 run.
 * Script for fitting large trace shifts (PR `#2334`_).
 * Work around NaNs in GFA pipeline inputs (PR `#2336`_).
 * Fix usage of FIBERSTATUS VARIABLETHRU bit (PR `#2337`_).
+* Fix pertile bug and remove deprecated desi_run_night script (PR `#2339`_).
+* cross-tile spectra stacking header cleanup (PR `#2340`_).
+* Fix TSNR2 for masked spectra and targets with large positioning offsets
+  (PR `#2341`_).
 
 .. _`#2318`: https://github.com/desihub/desispec/pull/2318
 .. _`#2326`: https://github.com/desihub/desispec/pull/2326
@@ -20,6 +29,9 @@ First tag used for Kibo/Y3 run.
 .. _`#2334`: https://github.com/desihub/desispec/pull/2334
 .. _`#2336`: https://github.com/desihub/desispec/pull/2336
 .. _`#2337`: https://github.com/desihub/desispec/pull/2337
+.. _`#2339`: https://github.com/desihub/desispec/pull/2339
+.. _`#2340`: https://github.com/desihub/desispec/pull/2340
+.. _`#2341`: https://github.com/desihub/desispec/pull/2341
 
 0.65.0 (2024-08-16)
 -------------------
