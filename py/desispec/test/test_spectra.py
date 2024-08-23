@@ -478,6 +478,48 @@ class TestSpectra(unittest.TestCase):
         sp3 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
         spx = stack([sp1, sp2, sp3])
 
+        #- Cross-tile stacking of same TILEID keeps tile-specific keywords
+        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, fibermap=self.fmap1.copy())
+        sp2 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar, fibermap=self.fmap2.copy())
+        sp1.fibermap.meta['TILEID'] = 1
+        sp1.fibermap.meta['TILERA'] = 10
+        sp1.meta['TILEID'] = 1
+        sp1.meta['TILERA'] = 10
+        sp2.fibermap.meta['TILEID'] = 1
+        sp2.fibermap.meta['TILERA'] = 10
+        sp2.meta['TILEID'] = 1
+        sp2.meta['TILERA'] = 10
+
+        spx = stack([sp1, sp2])
+        self.assertIn('TILEID', spx.meta)
+        self.assertIn('TILERA', spx.meta)
+        self.assertIn('TILEID', spx.fibermap.meta)
+        self.assertIn('TILERA', spx.fibermap.meta)
+        self.assertEqual(spx.meta['TILEID'], sp1.meta['TILEID'])
+        self.assertEqual(spx.meta['TILERA'], sp1.meta['TILERA'])
+
+        #- but cross-tile stacking of different tiles drops tile-specific keywords
+        #- without modifying original inputs
+        sp2.fibermap.meta['TILEID'] = 2
+        sp2.fibermap.meta['TILERA'] = 20
+        sp2.meta['TILEID'] = 2
+        sp2.meta['TILERA'] = 20
+
+        spx = stack([sp1, sp2])
+        self.assertNotIn('TILEID', spx.meta)
+        self.assertNotIn('TILERA', spx.meta)
+        self.assertNotIn('TILEID', spx.fibermap.meta)
+        self.assertNotIn('TILERA', spx.fibermap.meta)
+
+        self.assertIn('TILEID', sp1.meta)
+        self.assertIn('TILEID', sp1.fibermap.meta)
+        self.assertIn('TILEID', sp2.meta)
+        self.assertIn('TILEID', sp2.fibermap.meta)
+        self.assertEqual(sp1.meta['TILEID'], 1)
+        self.assertEqual(sp1.fibermap.meta['TILEID'], 1)
+        self.assertEqual(sp2.meta['TILEID'], 2)
+        self.assertEqual(sp2.fibermap.meta['TILEID'], 2)
+
     def test_slice(self):
         """Test desispec.spectra.__getitem__"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
