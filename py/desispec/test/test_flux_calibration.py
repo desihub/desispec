@@ -10,7 +10,7 @@ import copy
 import numpy as np
 #import scipy.sparse
 
-#from desispec.maskbits import specmask
+from desispec.maskbits import fibermask
 from desispec.frame import Frame
 from desispec.fluxcalibration import normalize_templates
 from desispec.fluxcalibration import FluxCalib
@@ -204,6 +204,7 @@ class TestFluxCalibration(unittest.TestCase):
         fm['CMX_TARGET'] = np.zeros(10, dtype=int)
         fm['CMX_TARGET'][0:2] = cmx_mask.STD_FAINT
         fm['CMX_TARGET'][2:4] = cmx_mask.SV0_STD_FAINT
+        fm['FIBERSTATUS'] = 0
         self.assertEqual(main_cmx_or_sv(fm)[2], 'cmx')
         self.assertEqual(np.count_nonzero(isStdStar(fm)), 4)
 
@@ -213,6 +214,7 @@ class TestFluxCalibration(unittest.TestCase):
         fm['SV1_MWS_TARGET'] = np.zeros(10, dtype=int)
         fm['SV1_DESI_TARGET'][0:2] = sv1_desi_mask.STD_FAINT
         fm['SV1_MWS_TARGET'][2:4] = sv1_mws_mask.GAIA_STD_FAINT
+        fm['FIBERSTATUS'] = 0
         self.assertEqual(main_cmx_or_sv(fm)[2], 'sv1')
         self.assertEqual(np.count_nonzero(isStdStar(fm)), 4)
 
@@ -224,10 +226,20 @@ class TestFluxCalibration(unittest.TestCase):
         fm['DESI_TARGET'][2:4] = desi_mask.STD_BRIGHT
         fm['DESI_TARGET'][4:6] |= desi_mask.MWS_ANY
         fm['MWS_TARGET'][4:6] = sv1_mws_mask.GAIA_STD_FAINT
+        fm['FIBERSTATUS'] = 0
         self.assertEqual(main_cmx_or_sv(fm)[2], 'main')
         self.assertEqual(np.count_nonzero(isStdStar(fm)), 6)
         self.assertEqual(np.count_nonzero(isStdStar(fm, bright=False)), 4)
         self.assertEqual(np.count_nonzero(isStdStar(fm, bright=True)), 2)
+
+        #- VARIABLETHRU should be excluded
+        fm['FIBERSTATUS'] = 0
+        ii = isStdStar(fm)
+        fm['FIBERSTATUS'][0] = fibermask.VARIABLETHRU
+        jj = isStdStar(fm)
+        self.assertTrue(ii[0])
+        self.assertFalse(jj[0])
+
 
 
     def test_main(self):

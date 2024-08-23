@@ -18,6 +18,7 @@ from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 from desispec.gpu import is_gpu_available, NoGPU
+from desispec.maskbits import fibermask
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -88,6 +89,9 @@ def isStdStar(fibermap, bright=None):
                 np.sum((fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0) > 0:
             log.warning('Using FA_TYPE to find standard stars instead')
             yes = (fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0
+
+    #- Remove fibers with known variable throughput
+    yes &= ((fibermap['FIBERSTATUS'] & fibermask.VARIABLETHRU) == 0)
 
     return yes
 

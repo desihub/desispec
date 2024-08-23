@@ -21,7 +21,7 @@ from scipy.signal import fftconvolve
 import sys
 from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 import scipy.ndimage
-from desispec.maskbits import specmask
+from desispec.maskbits import specmask, fibermask
 from desispec.preproc import get_amp_ids,parse_sec_keyword
 from desispec.io import findfile,read_xytraceset
 from desispec.calibfinder import CalibFinder
@@ -198,6 +198,8 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
     some targetids by providing a list of them through exclude_sky_targetids
     or by just providing all the sky targetids directly (in that case
     the OBJTYPE information is ignored)
+
+    Fibers with FIBERSTATUS bit VARIABLETHRU are also excluded
     """
     log = get_logger()
     # Grab sky fibers on this frame
@@ -206,7 +208,9 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
         skyfibers = np.where(np.in1d(fibermap['TARGETID'], override_sky_targetids))[0]
         # we ignore OBJTYPEs
     else:
-        skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
+        oksky = (fibermap['OBJTYPE'] == 'SKY')
+        oksky &= ((fibermap['FIBERSTATUS'] & fibermask.VARIABLETHRU) == 0)
+        skyfibers = np.where(oksky)[0]
         if exclude_sky_targetids is not None:
             log.info('Excluding default sky fibers using exclude_sky_targetids')
             bads = np.in1d(fibermap['TARGETID'][skyfibers], exclude_sky_targetids)

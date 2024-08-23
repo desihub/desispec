@@ -147,7 +147,7 @@ def get_skysub_fiberbitmask_val(band):
     Return mask of bad FIBERSTATUS bits for selecting sky fibers,
     i.e. fibers with these bits set should not be used for the sky model
     """
-    return get_all_fiberbitmask_with_amp(band) | fmsk.VARIABLETHRU
+    return get_all_fiberbitmask_with_amp(band)
 
 def get_flat_fiberbitmask_val(band):
     """
@@ -169,7 +169,7 @@ def get_stdstars_fiberbitmask_val(band):
     Return mask of bad FIBERSTATUS bits for selecting standard stars,
     i.e. fibers with these bits set should not be used as standard stars
     """
-    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION | fmsk.VARIABLETHRU
+    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION
 
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
