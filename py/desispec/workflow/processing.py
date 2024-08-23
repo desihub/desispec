@@ -1646,7 +1646,8 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
             else: # pernight
                 expids = [prow['EXPID'][0] for prow in zprows]
                 log.info(f"Expids: {expids}.\n")
-                redshift_prow, internal_id = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
+                redshift_prow = make_redshift_prow(zprows, tnight, descriptor=zsubtype, internal_id=internal_id)
+                internal_id += 1
                 redshift_prow = create_and_submit(redshift_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                                resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
