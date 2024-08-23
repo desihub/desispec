@@ -1085,44 +1085,56 @@ def main():
 
         gfa_table = None
 
-        if args.gfa_proc_dir is not None :
-            try :
+        if args.gfa_proc_dir is not None:
+            try:
                 gfa_table = read_gfa_data(args.gfa_proc_dir)
-            except PermissionError as e :
+            except PermissionError as e:
                 log.error(e)
                 log.error("could not read some files in {}".format(args.gfa_proc_dir))
                 args.gfa_proc_dir = None
 
-        if args.gfa_proc_dir is not None and gfa_table is not None :
-            e2i = {e:i for i,e in enumerate(gfa_table["EXPID"])}
-            jj=[]
-            ii=[]
-            for j,e in enumerate(tsnr2_expid_table["EXPID"]) :
-                if e in e2i :
+        if args.gfa_proc_dir is not None and gfa_table is not None:
+            e2i = {e: i for i, e in enumerate(gfa_table["EXPID"])}
+            jj = []
+            ii = []
+            for j, e in enumerate(tsnr2_expid_table["EXPID"]):
+                if e in e2i:
                     jj.append(j)
                     ii.append(e2i[e])
 
-            cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB","AIRMASS",]
-            for col in cols :
-                if col in gfa_table.dtype.names :
-                    if col == "FWHM_ASEC" :
+            cols = ("TRANSPARENCY", "FWHM_ASEC", "FIBER_FRACFLUX", "FIBER_FRACFLUX_ELG",
+                    "FIBER_FRACFLUX_BGS", "FIBERFAC", "FIBERFAC_ELG", "FIBERFAC_BGS",
+                    "SKY_MAG_AB", "AIRMASS")
+            for col in cols:
+                if col in gfa_table.dtype.names:
+                    if col == "FWHM_ASEC":
                         col2 = "SEEING_GFA"
-                    else :
-                        col2 = col+"_GFA"
-                    tsnr2_expid_table[col2]=np.zeros(len(tsnr2_expid_table),dtype=float)
-                    tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
+                    else:
+                        col2 = col + "_GFA"
+                    tsnr2_expid_table[col2] = np.zeros(len(tsnr2_expid_table), dtype=float)
+                    if np.isfinite(gfa_table[col][ii]).all():
+                        tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
+                    else:
+                        log.warning("gfa_table column '%s' contains NaN or other non-finite values. Invalid values will be replaced with zero (0).", col)
+                        good_values = gfa_table[col][ii].copy()
+                        good_values[~np.isfinite(good_values)] = 0
+                        tsnr2_expid_table[col2][jj] = good_values
 
-        if args.gfa_proc_dir is not None  and (args.skymags is not None or args.compute_skymags) :
+        if args.gfa_proc_dir is not None and (args.skymags is not None or args.compute_skymags):
+            #
+            # Assuming NaN are replaced with zero above, compute_efftime() will return zero for the affected rows.
+            # That is, there are no divide-by-zero or other errors induced by replacing NaN with zero.
+            #
             efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
-            for col in ["EFFTIME_DARK_GFA","EFFTIME_BRIGHT_GFA","EFFTIME_BACKUP_GFA"] :
-                tsnr2_expid_table[col]=np.zeros(len(tsnr2_expid_table),dtype=float)
-            tsnr2_expid_table["EFFTIME_DARK_GFA"][jj]=efftime_dark
-            tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj]=efftime_bright
-            tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj]=efftime_backup
-            goaltype=tsnr2_expid_table["GOALTYPE"]
-            tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"] # default
-            tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
-            tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
+            for col in ("EFFTIME_DARK_GFA", "EFFTIME_BRIGHT_GFA", "EFFTIME_BACKUP_GFA"):
+                tsnr2_expid_table[col] = np.zeros(len(tsnr2_expid_table), dtype=float)
+            tsnr2_expid_table["EFFTIME_DARK_GFA"][jj] = efftime_dark
+            tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj] = efftime_bright
+            tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj] = efftime_backup
+            goaltype = tsnr2_expid_table["GOALTYPE"]
+            tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"]  # default
+            tsnr2_expid_table["EFFTIME_GFA"][goaltype == "bright"] = tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype == "bright"]
+            tsnr2_expid_table["EFFTIME_GFA"][goaltype == "backup"] = tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype == "backup"]
 
         # end of loop on nights
 

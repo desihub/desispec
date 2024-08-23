@@ -157,14 +157,31 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     # test default
     res["GOALTIME"][res["GOALTIME"]==0] = default_goaltime
 
-    for i,tile in enumerate(tiles) :
-        jj=(exposure_table["TILEID"]==tile)
-        res["NEXP"][i]=np.sum(jj)
-        for k in ["EXPTIME","LRG_EFFTIME_DARK","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_SPEC","EFFTIME_ETC","EFFTIME_GFA"] :
-            if k in exposure_table.dtype.names :
-                res[k][i] = np.sum(exposure_table[k][jj])
-                if k == "EFFTIME_ETC" or k == "EFFTIME_GFA" :
-                    if np.any((exposure_table[k][jj]==0)&(exposure_table["EFFTIME_SPEC"][jj]>0)) : res[k][i]=0 # because we are missing data
+    for i, tile in enumerate(tiles):
+        jj = (exposure_table["TILEID"] == tile)
+        res["NEXP"][i] = np.sum(jj)
+        for k in ("EXPTIME", "LRG_EFFTIME_DARK", "ELG_EFFTIME_DARK", "BGS_EFFTIME_BRIGHT",
+                  "LYA_EFFTIME_DARK", "EFFTIME_SPEC", "EFFTIME_ETC", "EFFTIME_GFA"):
+            if k in exposure_table.dtype.names:
+                #
+                # If exposure_table comes from a Table.read(), it may contain masked values.
+                # If exposure_table comes from desispec.io.read_table(), it may contain NaN,
+                # in particular for a small number of exposures in the GFA summary file.
+                # In some cases the NaN values will already have been replaced by zero, but
+                # we can and should be careful.
+                #
+                if not np.isfinite(exposure_table[k][jj]).all():
+                    log.warning("exposure_table column '%s' contains NaN or other non-finite values, a sum will be performed over valid values.", k)
+                    good_values = exposure_table[k][jj].copy()
+                    good_values[~np.isfinite(good_values)] = 0
+                    res[k][i] = np.sum(good_values)
+                else:
+                    if hasattr(exposure_table[k], 'mask'):
+                        log.warning("exposure_table column '%s' contains masked values, a sum will be performed over unmasked values.", k)
+                    res[k][i] = np.sum(exposure_table[k][jj])
+                if k == "EFFTIME_ETC" or k == "EFFTIME_GFA":
+                    if np.any((exposure_table[k][jj] == 0) & (exposure_table["EFFTIME_SPEC"][jj] > 0)):
+                        res[k][i] = 0  # because we are missing data
 
         # copy the following from the exposure table if it exists and not already set as sv1
 

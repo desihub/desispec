@@ -112,6 +112,7 @@ def main():
     p.add_argument('--specprod', required=False, help="specprod to use")
     p.add_argument('--nproc', type=int, default=32, help="number of processes to use")
     p.add_argument('--debug', action="store_true", help="start ipython at the end")
+    p.epilog = 'Note: in addition to --outfile, also writes .csv or .fits equivalent'
     args = p.parse_args()
 
     log = get_logger()
@@ -129,6 +130,7 @@ def main():
     log.info(f'Creating tile table for {len(tileids)} tiles')
 
     # warm up tsnr2_to_efftime ensemble cache before multiprocessing
+    # so that they are read only once, instead of once per process
     blat = tsnr2_to_efftime(10, 'elg')
 
     # get tile info in parallel
@@ -142,6 +144,21 @@ def main():
     results.write(tmpfile)
     os.rename(tmpfile, args.outfile)
     log.info(f'Wrote {args.outfile}')
+
+    prefix, extension = os.path.splitext(args.outfile)
+    if extension == '.csv':
+        altoutfile = prefix+'.fits'
+    elif extension == '.fits' or extension == '.fits.gz':
+        altoutfile = prefix+'.csv'
+    else:
+        log.info('Unrecognized outfile extension %s; not writing alternate .csv/.fits file')
+        altoutfile = None
+
+    if altoutfile is not None:
+        tmpfile = get_tempfilename(altoutfile)
+        results.write(tmpfile)
+        os.rename(tmpfile, altoutfile)
+        log.info(f'Wrote {altoutfile}')
 
     if args.debug:
         import IPython; IPython.embed()
