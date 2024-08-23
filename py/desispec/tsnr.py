@@ -894,7 +894,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     #                 = (rel. fiber frac-offset correction for psf in seeing) / (rel. fiber frac-offset correction for psf in 1.1'') / plate scale**2 [flux calib * fiberflat]
     #
 
-    notnull           = rel_psf_loss_1p1 > 0.0
+    notnull           = (rel_psf_loss_1p1 > 0.01) # do not do the subtle correction of relative fiber loss vs seeing compare to 1.1'' if the fiber is off target
 
     for tracer in ['psf', 'mws', 'qso', 'lya', 'gpbbackup']:
         tsnr_fiberfracs[tracer] = np.ones_like(rel_psf_loss)
@@ -963,13 +963,14 @@ def calc_tsnr2_cframe(cframe):
     skymodel = read_sky(skyfile)
     fluxcalib = read_flux_calibration(fluxcalibfile)
 
-    return calc_tsnr2(frame, fiberflat, skymodel, fluxcalib)
+    return calc_tsnr2(cframe, frame, fiberflat, skymodel, fluxcalib)
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True, include_fiberfracs=True):
+def calc_tsnr2(cframe, frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True, include_fiberfracs=True):
     '''
     Compute template SNR^2 values for a given frame
 
     Args:
+        cframe : calibrated Frame object for one camera
         frame : uncalibrated Frame object for one camera
         fiberflat : FiberFlat object
         sky : SkyModel object
@@ -1100,9 +1101,10 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     if alpha_only:
         return {}, alpha
 
-    maskfactor = np.ones_like(frame.mask, dtype=float)
-    maskfactor[frame.mask > 0] = 0.0
-    maskfactor *= (frame.ivar > 0.0)
+    # use cframe instead of frame mask and ivar
+    maskfactor = np.ones_like(cframe.mask, dtype=float)
+    maskfactor[cframe.mask > 0] = 0.0
+    maskfactor *= (cframe.ivar > 0.0)
     tsnrs = {}
 
     for tracer in ensemble.keys():
