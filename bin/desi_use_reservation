@@ -24,7 +24,7 @@ def get_reservation_info(name):
     resinfo = json.loads(subprocess.check_output(cmd.split()))
 
     if len(resinfo['reservations']) == 0:
-        log.critical(f'reservation {reservation} not found')
+        log.critical(f'reservation {name} not found')
         sys.exit(1)
     elif len(resinfo['reservations']) > 1:
         log.critical(f'"{cmd}" returned info for more than one reservation')
