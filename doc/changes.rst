@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.66.1 (unreleased)
+0.66.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.66.1 (2024-08-26)
+-------------------
+
+* Fix ztile tile-qa dependency checking (PR `#2344`_).
+
+.. _`#2344`: https://github.com/desihub/desispec/pull/2344
 
 0.66.0 (2024-08-23)
 -------------------
