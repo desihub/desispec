@@ -626,9 +626,12 @@ def main(args=None, comm=None):
         qapng = findfile('tileqapng', **findfileopts)
         qalog = findfile('tileqa', logfile=True, **findfileopts)
         ## requires all coadd and redrock outputs in addition to exposureqa
+        ## note that exposure_table is populated for both pernight and cumulative
+        ## so we can use it to loop over exposures
         infiles = []
-        for expid, night in zip(expids, nights):
-            infiles.append(findfile('exposureqa', expid=expid, night=night, readonly=True))
+        for erow in exposure_table:
+            infiles.append(findfile('exposureqa', expid=erow['EXPID'],
+                                    night=erow['NIGHT'], readonly=True))
         for spectro in all_subgroups:
             findfileopts['spectrograph'] = spectro
             infiles.append(findfile('coadd', **findfileopts))
