@@ -245,17 +245,22 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
     all_nights = sorted(all_nights)
     log.info(f"Processing {all_nights=}")
     for night in sorted(all_nights):
-        num_in_queue = check_queue_count(user=user, include_scron=False,
-                                         dry_run_level=dry_run_level)
-        ## In Jura the largest night had 115 jobs, to be conservative say 200 by default
-        if num_in_queue > queue_threshold:
-            log.info(f"{num_in_queue} jobs in the queue > {queue_threshold},"
-                     + " so stopping the job submissions.")
-            break
+        ## If proctable exists, assume we've already completed that night
         if os.path.exists(findfile('proctable', night=night, readonly=True)):
             skipped_nights.append(night)
             log.info(f"{night=} already has a proctable, skipping.")
             continue
+
+        ## If the queue is too full, stop submitting nights
+        num_in_queue = check_queue_count(user=user, include_scron=False,
+                                         dry_run_level=dry_run_level)
+        ## In Jura the largest night had 115 jobs, to be conservative we submit
+        ## up to 4500 jobs (out of a 5000 limit) by default
+        if num_in_queue > queue_threshold:
+            log.info(f"{num_in_queue} jobs in the queue > {queue_threshold},"
+                     + " so stopping the job submissions.")
+            break
+
         ## We don't expect exposure tables to change during code execution here
         ## but we do expect processing tables to evolve, so clear that cache
         log.info(f"Processing {night=}")
