@@ -463,10 +463,21 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
     ## Load each relevant processing table file, subselect valid tilenight's and
     ## append to the full set
     ptab_files = sorted(ptab_files)
+    ## Less intrusive logging of files we're reading in
+    if len(ptab_files) > 0:
+        dirname = os.path.dirname(ptab_files[0])
+        shortnames = [fil.replace(dirname+"/", '') for fil in ptab_files]
+    else:
+        dirname = ''
+        shortnames = []
+    log.info(f"Loading the following processing tables for "
+             + f"tilenight processing table cache from directory: {dirname}, filenames: {shortnames}")
+
     ptables = list()
     for ptab_file in ptab_files:
         ## correct way but slower and we don't need multivalue columns
-        t = load_table(tablename=ptab_file, tabletype='proctable')
+        t = load_table(tablename=ptab_file, tabletype='proctable',
+                       suppress_logging=True)
         t = _select_tilenights_from_ptab(t)
 
         ## Need to ensure that the string columns are consistent
@@ -626,10 +637,21 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
     ## Load each relevant processing table file, subselect valid tilenight's and
     ## append to the full set
     ptab_files = sorted(ptab_files)
+    ## Less intrusive logging of files we're reading in
+    if len(ptab_files) > 0:
+        dirname = os.path.dirname(ptab_files[0])
+        shortnames = [fil.replace(dirname+"/", '') for fil in ptab_files]
+    else:
+        dirname = ''
+        shortnames = []
+    log.info(f"Loading the following processing tables for "
+             + f"tilenight processing table cache from directory: {dirname}, filenames: {shortnames}")
+
     ptables = list()
     for ptab_file in ptab_files:
         ## correct way but slower and we don't need multivalue columns
-        t = load_table(tablename=ptab_file, tabletype='proctable')
+        t = load_table(tablename=ptab_file, tabletype='proctable',
+                       suppress_logging=True)
 
         ## Need to ensure that the string columns are consistent
         for col in ['PROCCAMWORD']:
