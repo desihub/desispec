@@ -756,9 +756,12 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         arc_prows = []
         for arc_erow in arcs:
             if arc_erow['EXPID'] in processed_cal_expids:
-                matches = np.where(ptable['EXPID'] == arc_erow['EXPID'])[0]
+                matches = np.where([arc_erow['EXPID'] in itterprow['EXPID']
+                                    for itterprow in ptable])[0]
                 if len(matches) == 1:
                     prow = ptable[matches[0]]
+                    log.info("Found existing arc prow in ptable, " 
+                             + f"including it for psfnight job: {list(prow)}")
                     arc_prows.append(prow)
                 continue
             prow, int_id = make_exposure_prow(arc_erow, int_id, calibjobs)
@@ -779,9 +782,12 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         flat_prows = []
         for flat_erow in flats:
             if flat_erow['EXPID'] in processed_cal_expids:
-                matches = np.where(ptable['EXPID'] == flat_erow['EXPID'])[0]
+                matches = np.where([flat_erow['EXPID'] in itterprow['EXPID']
+                                    for itterprow in ptable])[0]
                 if len(matches) == 1:
                     prow = ptable[matches[0]]
+                    log.info("Found existing flat prow in ptable, " 
+                             + f"including it for nightlyflat job: {list(prow)}")
                     flat_prows.append(prow)
                 continue
 
