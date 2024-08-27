@@ -470,8 +470,8 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
     else:
         dirname = ''
         shortnames = []
-    log.info(f"Loading the following processing tables for "
-             + f"tilenight processing table cache from directory: {dirname}, filenames: {shortnames}")
+    log.info(f"Loading the following processing tables for tilenight processing"
+             + f" table cache from directory: {dirname}, filenames: {shortnames}")
 
     ptables = list()
     for ptab_file in ptab_files:
@@ -644,8 +644,8 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
     else:
         dirname = ''
         shortnames = []
-    log.info(f"Loading the following processing tables for "
-             + f"tilenight processing table cache from directory: {dirname}, filenames: {shortnames}")
+    log.info(f"Loading the following processing tables for full processing "
+             + f"table cache from directory: {dirname}, filenames: {shortnames}")
 
     ptables = list()
     for ptab_file in ptab_files:
