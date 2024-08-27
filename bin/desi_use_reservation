@@ -95,22 +95,31 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     #- Get currently running jobs and filter to those that are eligible for this reservation
     jobs = get_jobs_in_queue()
 
+    #- Sort by name so that earlier nights are prioritized over later nights
+    jobs.sort('NAME')
+
+    #- Filter which jobs are in reservation vs. eligible to move into reservation
     jobs_in_reservation = jobs[jobs['RESERVATION'] == name]
 
     eligible_for_reservation = jobs['RESERVATION'] == 'null'
     eligible_for_reservation &= jobs['PARTITION'] == regular_partition
 
-    #- TBD: only move jobs that are currently eligible to run, not those waiting for dependencies
+    #- Only move jobs that are currently eligible to run, not those waiting for dependencies
+    #- so that we don't fill reservation with jobs that can't run
     eligible_for_reservation &= jobs['ST'] == 'PD'
     eligible_for_reservation &= jobs['NODELISTREASON'] != 'Dependency'
-
     jobs_eligible = jobs[eligible_for_reservation]
 
+    #- Counting jobs and nodes in and out of the reservation
     njobs_in_reservation = len(jobs_in_reservation)
     njobnodes_in_reservation = np.sum(jobs_in_reservation['NODES'])
 
     njobs_eligible = len(jobs_eligible)
     njobnodes_eligible = np.sum(jobs_eligible['NODES'])
+
+    if njobs_eligible == 0:
+        log.info('No available jobs to add')
+        return
 
     njobnodes_to_add = max(0, ressize + extra_nodes - njobnodes_in_reservation)
     njobnodes_to_add = min(njobnodes_to_add, njobnodes_eligible)
