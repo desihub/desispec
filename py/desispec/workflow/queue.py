@@ -498,7 +498,7 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
     Returns
     -------
     Table
-        Table with the columns JOBID, PARTITION, NAME, USER, ST, TIME, NODES,
+        Table with the columns JOBID, PARTITION, RESERVATION, NAME, USER, ST, TIME, NODES,
         NODELIST(REASON) for the specified user.
     """
     log = get_logger()
@@ -508,29 +508,29 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         else:
             user = 'desi'
 
-    cmd = f'squeue -u {user} -o "%i,%P,%j,%u,%t,%M,%D,%R"'
+    cmd = f'squeue -u {user} -o "%i,%P,%v,%j,%u,%t,%M,%D,%R"'
     cmd_as_list = cmd.split()
 
     if dry_run_level > 0:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
-        string = 'JOBID,PARTITION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
-        string += f"27650097,cron,scron_ar,{user},PD,0:00,1,(BeginTime)"
-        string += f"27650100,cron,scron_nh,{user},PD,0:00,1,(BeginTime)"
-        string += f"27650098,cron,scron_up,{user},PD,0:00,1,(BeginTime)"
-        string += f"29078887,gpu_ss11,tilenight-20230413-24315,{user},PD,0:00,1,(Priority)"
-        string += f"29078892,gpu_ss11,tilenight-20230413-21158,{user},PD,0:00,1,(Priority)"
-        string += f"29079325,gpu_ss11,tilenight-20240309-24526,{user},PD,0:00,1,(Dependency)"
-        string += f"29079322,gpu_ss11,ztile-22959-thru20240309,{user},PD,0:00,1,(Dependency)"
-        string += f"29078883,gpu_ss11,tilenight-20230413-21187,{user},R,10:18,1,nid003960"
-        string += f"29079242,regular_milan_ss11,arc-20240309-00229483-a0123456789,{user},PD,0:00,3,(Priority)"
-        string += f"29079246,regular_milan_ss11,arc-20240309-00229484-a0123456789,{user},PD,0:00,3,(Priority)"
+        string = 'JOBID,PARTITION,RESERVATION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
+        string += f"27650097,cron,(null),scron_ar,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650100,cron,(null),scron_nh,{user},PD,0:00,1,(BeginTime)"
+        string += f"27650098,cron,(null),scron_up,{user},PD,0:00,1,(BeginTime)"
+        string += f"29078887,gpu_ss11,(null),tilenight-20230413-24315,{user},PD,0:00,1,(Priority)"
+        string += f"29078892,gpu_ss11,(null),tilenight-20230413-21158,{user},PD,0:00,1,(Priority)"
+        string += f"29079325,gpu_ss11,(null),tilenight-20240309-24526,{user},PD,0:00,1,(Dependency)"
+        string += f"29079322,gpu_ss11,(null),ztile-22959-thru20240309,{user},PD,0:00,1,(Dependency)"
+        string += f"29078883,gpu_ss11,(null),tilenight-20230413-21187,{user},R,10:18,1,nid003960"
+        string += f"29079242,regular_milan_ss11,(null),arc-20240309-00229483-a0123456789,{user},PD,0:00,3,(Priority)"
+        string += f"29079246,regular_milan_ss11,(null),arc-20240309-00229484-a0123456789,{user},PD,0:00,3,(Priority)"
 
         # create command to run to exercise subprocess -> stdout parsing
         cmd = 'echo ' + string
         cmd_as_list = ['echo', string]
     else:
-        log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
+        log.info(f"Querying jobs in queue with: {' '.join(cmd_as_list)}")
 
     #- sacct sometimes fails; try several times before giving up
     max_attempts = 3
