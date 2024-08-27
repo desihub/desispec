@@ -756,6 +756,10 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         arc_prows = []
         for arc_erow in arcs:
             if arc_erow['EXPID'] in processed_cal_expids:
+                matches = np.where(ptable['EXPID'] == arc_erow['EXPID'])[0]
+                if len(matches) == 1:
+                    prow = ptable[matches[0]]
+                    arc_prows.append(prow)
                 continue
             prow, int_id = make_exposure_prow(arc_erow, int_id, calibjobs)
             prow, ptable = create_submit_add_and_save(prow, ptable)
@@ -775,6 +779,10 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         flat_prows = []
         for flat_erow in flats:
             if flat_erow['EXPID'] in processed_cal_expids:
+                matches = np.where(ptable['EXPID'] == flat_erow['EXPID'])[0]
+                if len(matches) == 1:
+                    prow = ptable[matches[0]]
+                    flat_prows.append(prow)
                 continue
 
             jobdesc = 'flat'
