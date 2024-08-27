@@ -110,6 +110,22 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     eligible_for_reservation &= jobs['NODELISTREASON'] != 'Dependency'
     jobs_eligible = jobs[eligible_for_reservation]
 
+    #- if there are 20x more tilenight or ztile jobs eligible than flats,
+    #- move them to second priority after fiberflatnight
+    num_eligible_tilenight = np.sum(np.char.startswith(jobs_eligible['NAME'], 'tilenight'))
+    num_eligible_ztile = np.sum(np.char.startswith(jobs_eligible['NAME'], 'ztile'))
+    num_eligible_flat = np.sum(np.char.startswith(jobs_eligible['NAME'], 'flat'))
+
+    if num_eligible_tilenight > 0 and num_eligible_flat > 0 and num_eligible_tilenight > 20*num_eligible_flat:
+        log.info(f'{num_eligible_tilenight} tilenight jobs >> {num_eligible_flat} flat jobs; prioritizing tilenight')
+        jobtypes.remove('tilenight')
+        jobtypes.insert(1, 'tilenight')
+
+    if num_eligible_ztile > 0 and num_eligible_flat > 0 and num_eligible_ztile > 20*num_eligible_flat:
+        log.info(f'{num_eligible_ztile} ztile jobs >> {num_eligible_flat} flat jobs; prioritizing ztile')
+        jobtypes.remove('ztile')
+        jobtypes.insert(1, 'ztile')
+
     #- Counting jobs and nodes in and out of the reservation
     njobs_in_reservation = len(jobs_in_reservation)
     njobnodes_in_reservation = np.sum(jobs_in_reservation['NODES'])
@@ -117,15 +133,15 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     njobs_eligible = len(jobs_eligible)
     njobnodes_eligible = np.sum(jobs_eligible['NODES'])
 
-    if njobs_eligible == 0:
-        log.info('No available jobs to add')
-        return
-
     njobnodes_to_add = max(0, ressize + extra_nodes - njobnodes_in_reservation)
     njobnodes_to_add = min(njobnodes_to_add, njobnodes_eligible)
 
     log.info(f'At {time.asctime()}, {name} ({ressize} nodes) has {njobs_in_reservation} jobs using {njobnodes_in_reservation} nodes')
     log.info(f'{njobs_eligible} {restype} jobs using {njobnodes_eligible} nodes are eligible to be moved into the reservation')
+
+    if njobs_eligible == 0:
+        log.info('No available jobs to add')
+        return
 
     if njobnodes_to_add == 0:
         log.info('Reservation full, no need to add more jobs at this time')
