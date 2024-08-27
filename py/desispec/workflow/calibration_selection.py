@@ -110,7 +110,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
                  + f"more information is known.")
         return etable[[]]
     else:
-        log.error(f"Only found {Counter(exptypes)} calibrations "
+        log.warning(f"Only found {Counter(exptypes)} calibrations "
                   + "and not acquiring new data, so this may be fatal "
                   + "if you aren't using an override file.")
 
