@@ -65,6 +65,11 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
 
     log = get_logger()
 
+    if resinfo is None and name is None:
+        msg = 'Must provide either name or resinfo'
+        log.critical(msg)
+        raise ValueError(msg)
+
     if resinfo is None:
         resinfo = get_reservation_info(name)
 
@@ -180,7 +185,11 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
                 print(cmd)
             else:
                 log.info(cmd)
-                subprocess.run(cmd.split())
+                try:
+                    subprocess.run(cmd.split(), check=True)
+                except subprocess.CalledProcessError as err:
+                    log.error(str(err))
+                    log.warning('Continuing anyway')
 
 #--------------------------------------------------------------------
 
