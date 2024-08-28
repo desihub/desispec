@@ -2,10 +2,19 @@
 desispec Change Log
 ===================
 
-0.66.2 (unreleased)
+0.66.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.66.2 (2024-08-27)
+-------------------
+
+* Add desi_use_reservation script (PR `#2346`_).
+* Improve workflow for resubmitted Kibo jobs (PR `#2348`_)
+
+.. _`#2346`: https://github.com/desihub/desispec/pull/2346
+.. _`#2348`: https://github.com/desihub/desispec/pull/2348
 
 0.66.1 (2024-08-26)
 -------------------
