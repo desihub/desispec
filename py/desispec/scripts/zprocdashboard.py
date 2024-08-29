@@ -80,6 +80,8 @@ def parse(options):
                         help="Set if you don't want the dashboard to count qn and MgII files.")
     parser.add_argument('--no-tileqa', action="store_true",
                         help="Set if you don't want the dashboard to count tile QA files.")
+    parser.add_argument('--no-zmtl', action="store_true",
+                        help="Set if you don't want the dashboard to count zmtl files.")
     parser.add_argument('--ignore-json-archive', action="store_true",
                         help="Ignore the existing json archive of good exposure rows, regenerate all rows from " +
                              "information on disk. As always, this will write out a new json archive," +
@@ -106,7 +108,7 @@ def main(args=None):
 
     args.show_null = True
     doem, doqso = (not args.no_emfits), (not args.no_qsofits)
-    dotileqa = (not args.no_tileqa)
+    dotileqa, dozmtl = (not args.no_tileqa), (not args.no_zmtl)
 
     output_dir, prod_dir = get_output_dir(args.redux_dir, args.specprod,
                                           args.output_dir, makedir=True)
@@ -174,7 +176,7 @@ def main(args=None):
 
 
 
-def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
+def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=True,
                          check_on_disk=False, night_json_zinfo=None,
                          skipd_tileids=None, all_exptabs=None):
     """
@@ -189,6 +191,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         doqso (bool): true if it should expect qso_qn and qso_mgii files.
             Default is True.
         dotileqa (bool): true if it should expect tileqa files. Default is True.
+        dozmtl (bool): true if it should expect zmtl files. Default is True.
         check_on_disk (bool): true if it should check on disk for missing
             exposures and tiles that aren't represented in the exposure tables.
         night_json_zinfo (dict): A dictionary of dicts where each key is a unique
@@ -231,8 +234,13 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
             expected_by_type[ztype]['em'] = 1
         if doqso:
             expected_by_type[ztype]['qso'] = 1
+        ## These are special to specific redshift types, so we remove
+        ## if not asked to do them rather than setting specific redshift
+        ## types to 1 as done above
         if not dotileqa:
             expected_by_type[ztype]['tile-qa'] = 0
+        if not dozmtl:
+            expected_by_type[ztype]['zmtl'] = 0
 
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = get_terminal_steps(expected_by_type)
@@ -504,7 +512,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True,
         if unique_key in uniqs_processing:
             status = 'processing'
         elif unique_key in unaccounted_for_tileids:
-            status = 'unaccounted'
+            status = 'unrecorded'
         else:
             status = 'unprocessed'
 

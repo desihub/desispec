@@ -249,7 +249,9 @@ def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
 def return_color_profile():
     color_profile = dict()
     color_profile['DEFAULT'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
+    color_profile['PENDING'] = {'font': '#000000', 'background': '#ccd1d1'}  # gray
     color_profile['NULL'] = {'font': '#34495e', 'background': '#ccd1d1'}  # gray on gray
+    color_profile['GOODNULL'] = {'font': '#34495e', 'background': '#7fb3d5'}  # gray on blue
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
     color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
     color_profile['GOOD'] = {'font':'#000000' ,'background':'#7fb3d5'}   #  blue
@@ -527,11 +529,8 @@ def _initialize_page(color_profile, titlefill='Processing'):
     for ctype,cdict in color_profile.items():
         font = cdict['font']
         background = '#eee'#cdict['background'] # no background for a whole table after implementing color codes for processing columns
-        html_page += f'\ttable tr#{ctype} '+'{background-color:'+f'{background}; color:{font}'+';}\n'
-
-    ## Finally there is a class of table element that is null in a good way
-    ## Label as such
-    html_page += 'table td#GOODNULL {background-color:#7fb3d5;color:gray}\n'
+        ## double bracket in fstring produces single string bracket in output
+        html_page += f'\ttable tr#{ctype} {{background-color:{background}; color:{font};}}\n'
 
     html_page += '</style>\n\n'
     html_page += f"</head><body><h1>DESI '{os.environ['SPECPROD']}' "
@@ -557,7 +556,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
     <select style="margin-bottom:10px" id="statuslist" onchange="filterByStatus()" class='form-control'>
     <option>processing</option>
     <option>unprocessed</option>
-    <option>unaccounted</option>
+    <option>unrecorded</option>
     <option>ALL</option>
     </select>
     """
@@ -590,38 +589,38 @@ def _closing_str():
 
 def _table_row(dictionary):
     idlabel = dictionary.pop('COLOR')
-    color_profile = return_color_profile()
-    if dictionary["STATUS"] != 'processing':
+    # color_profile = return_color_profile()
+    if dictionary["STATUS"] in ['unprocessed', 'unrecorded']:
         style_str = 'display:none;'
     else:
         style_str = ''
 
     if idlabel is None:
-        row_str = '<tr style="{}">'.format(style_str)
+        row_str = f'<tr style="{style_str}">'
     else:
-        row_str = '<tr style="'+style_str+'" id="'+str(idlabel)+'">'
+        row_str = f'<tr style="{style_str}" id="{idlabel}">'
 
     for elem in dictionary.values():
-        chars = str(elem).split('/')
-        if len(chars)==2: # m/n
-            if chars[0]=='0' and chars[1]=='0':
+        if re.match('^\d+\/\d+$', elem) is not None:
+            strs = str(elem).split('/')
+            numerator, denom = int(strs[0]), int(strs[1])
+            if numerator == 0 and denom == 0:
                 row_str += _table_element_id(elem, 'GOODNULL')
-            elif chars[0]=='0' and chars[1]!='0':
+            elif numerator == 0 and denom != 0:
                 row_str += _table_element_id(elem, 'BAD')
-            elif chars[0]!='0' and int(chars[0])<int(chars[1]):
+            elif numerator != 0 and numerator < denom:
                 row_str += _table_element_id(elem, 'INCOMPLETE')
-            elif chars[0]!='0' and int(chars[0])==int(chars[1]):
+            elif numerator !=0 and numerator == denom:
                 row_str += _table_element_id(elem, 'GOOD')
             else:
                 row_str += _table_element_id(elem, 'OVERFULL')
-
         else:
             row_str += _table_element(elem)
     row_str += '</tr>'#\n'
     return row_str
 
 def _table_element(elem):
-    return '<td>{}</td>'.format(elem)
+    return f'<td>{elem}</td>'
 
 def _table_element_style(elem,style):
     return f'<td style="{style}">{elem}</td>'
