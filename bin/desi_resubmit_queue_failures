@@ -40,13 +40,25 @@ def parse_args():  # options=None):
                              "OUT_OF_MEMORY, PREEMPTED, TIMEOUT, CANCELLED, FAILED.")
     parser.add_argument("--no-resub-failed", action="store_true", required=False,
                         help="Give this flag if you do NOT want to resubmit " +
-                             "jobs with Slurm status 'FAILED' by default.")
+                             "jobs with Slurm status 'FAILED' by default. " +
+                             "This should not be used if defining " +
+                             "--resub-states explicitly.")
 
     args = parser.parse_args()
 
     if args.resub_states is not None:
+        ## User should never provide custom list of states and request to remove FAILED
+        if args.no_resub_failed:
+            log = get_logger()
+            msg = f"Provided user-defined resubmision states {args.resub_states} but " \
+                  + f"also requested args.no_resub_failed. Please choose one or the other."
+            log.critical(msg)
+            raise ValueError(msg)
+        ## Clean up the input string into a list of strings
         args.resub_states = [state.strip().upper() for state in args.resub_states.split(',')]
+
     return args
+
 
 if __name__ == '__main__':
     args = parse_args()
