@@ -377,7 +377,8 @@ def clear_queue_state_cache():
     _cached_slurm_states.clear()
 
 
-def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
+def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
+                      check_complete_jobs=False):
     """
     Given an input prcessing table (ptable) and query table from the Slurm queue (qtable) it cross matches the
     Slurm job ID's and updates the 'state' in the table using the current state in the Slurm scheduler system.
@@ -390,6 +391,9 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
         ignore_scriptnames, bool. Default is False. Set to true if you do not
                         want to check whether the scriptname matches the jobname
                         return by the slurm scheduler.
+        check_complete_jobs, bool. Default is False. Set to true if you want to
+                        also check QID's that currently have a STATUS "COMPLETED".
+                        in the ptable.
         The following are only used if qtable is not provided:
             dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                            table that doesn't query the Slurm scheduler.
@@ -402,9 +406,13 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     log = get_logger()
     if qtable is None:
         log.info("qtable not provided, querying Slurm using ptable's LATEST_QID set")
-        qids = np.array(ptable['LATEST_QID'])
-        ## Avoid null valued QID's (set to -99)
-        qids = qids[qids > 0]
+        ## Avoid null valued QID's (set to 2)
+        sel = ptable['LATEST_QID'] > 2
+        ## Only submit incomplete jobs unless explicitly told to check them
+        ## completed jobs shouldn't change status
+        if not check_complete_jobs:
+            sel &= (ptable['STATUS'] != 'COMPLETED')
+        qids = np.array(ptable['LATEST_QID'][sel])
         qtable = queue_info_from_qids(qids, dry_run=dry_run)
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
