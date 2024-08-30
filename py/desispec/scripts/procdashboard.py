@@ -195,7 +195,6 @@ def populate_night_info(night, check_on_disk=False,
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
-    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
 
     exptab, proctab, \
     unaccounted_for_expids,\
@@ -208,23 +207,27 @@ def populate_night_info(night, check_on_disk=False,
         [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
     ## Add a new indexing column to include calibnight rows in correct location
-    exptab.add_column(Table.Column(data=2*np.arange(1,len(exptab)+1),name="ORDER"))
-    exptab.add_column(Table.Column(data=[0]*len(exptab), name="PTAB_INTID"))
+    exptab.add_column(Table.Column(data=2 * np.arange(1,len(exptab)+1),name="ORDER"))
+    exptab.add_column(Table.Column(data=[0] * len(exptab), name="PTAB_INTID"))
     exptab.add_column(Table.Column(data=[0] * len(exptab), name="LATEST_QID"))
-    exptab.add_column(Table.Column(data=['unknown']*len(exptab), name="STATUS"))
+    exptab.add_column(Table.Column(data=['unknown'] * len(exptab), name="STATUS", dtype='S20'))
+    exptab.add_column(Table.Column(data=['unknown'] * len(exptab), name="JOBDESC", dtype='S20'))
     if proctab is not None and len(proctab) > 0:
         ## Update the STATUS of the
         proctab = update_from_queue(proctab)
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
         expjobs_ptab = proctab[np.isin(proctab['JOBDESC'],
-                                       ['arc', 'flat', 'tilenight'])]
+                                       ['arc', 'flat', 'tilenight',
+                                        'prestdstar', 'stdstar', 'poststdstar'])]
         for i,erow in enumerate(exptab):
-            for prow in tnight_ptab:
+            ## proctable has an array of expids, so check for them in a loop
+            for prow in expjobs_ptab:
                 if erow['EXPID'] in prow['EXPID']:
                     erow['STATUS'][i] = prow['STATUS']
                     erow['LATEST_QID'][i] = prow['LATEST_QID']
                     erow['PTAB_INTID'][i] = prow['INTID']
+                    erow['JOBDESC'][i] = prow['JOBDESC']
         caljobs_ptab = proctab[np.isin(proctab['JOBDESC'],
                                        ['ccdcalib', 'psfnight', 'nightlyflat'])]
         for prow in caljobs_ptab:
@@ -291,8 +294,8 @@ def populate_night_info(night, check_on_disk=False,
     del proctab
     exptab.sort(['ORDER'])
 
-    logfiletemplate = os.path.join(logpath,
-                                   '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
+    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
+    logfiletemplate = os.path.join(logpath, '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
     fileglob_template = os.path.join(specproddir, 'exposures', str(night),
                                      '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
     fileglob_calib_template = os.path.join(specproddir, 'calibnight', str(night),
@@ -411,11 +414,11 @@ def populate_night_info(night, check_on_disk=False,
             elif laststep == 'fluxcal':
                 pass
             else:
-                print(
-                    f"WARNING: didn't understand science exposure expid={expid} of night {night}: laststep={laststep}")
+                print("WARNING: didn't understand science exposure "
+                      + f"expid={expid} of night {night}: laststep={laststep}")
         elif laststep != 'all' and obstype != 'science':
-            print(
-                f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
+            print("WARNING: didn't understand non-science exposure "
+                  + f"expid={expid} of night {night}: laststep={laststep}")
 
         nfiles = {step:0 for step in ['psf','frame','ff','sky','sframe','std','cframe']}
         if obstype == 'arc':
@@ -472,7 +475,14 @@ def populate_night_info(night, check_on_disk=False,
                                        zexpid=zfild_expid, specs='*', jobid='',
                                        ext='log'))
             ## If no unified science script, identify which log to point to
-            if obstype.lower() == 'science' and len(lognames) == 0:
+            if row['JOBDESC'] == 'tilenight':
+                file_head = 'tilenight'
+                lognames = glob.glob(logfiletemplate.format(pre=file_head,
+                                                            night=night,
+                                                            zexpid=tileid,
+                                                            specs='*', jobid='',
+                                                            ext='log'))
+            elif obstype.lower() == 'science' and len(lognames) == 0:
                 ## First chronologically is the prestdstar
                 lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
                                                             night=night,
@@ -500,31 +510,17 @@ def populate_night_info(night, check_on_disk=False,
                         lognames = lognames_post
                         file_head = 'poststdstar'
 
-            newest_jobid = '00000000'
-            spectrographs = ''
+
+            newest_jobid, logfile = 0, None
 
             for log in lognames:
-                jobid = log.split('-')[-1].split('.')[0]
-                if int(jobid) > int(newest_jobid):
+                jobid = int(log.split('-')[-1].split('.')[0])
+                if jobid > newest_jobid:
                     newest_jobid = jobid
-                    spectrographs = log.split('-')[-2]
-            if newest_jobid != '00000000' and len(spectrographs) != 0:
-                if file_head == 'stdstarfit':
-                    zexp = first_exp_of_tile
-                else:
-                    zexp = zfild_expid
-                logname = logfiletemplate.format(pre=file_head, night=night,
-                                                 zexpid=zexp,
-                                                 specs=spectrographs,
-                                                 jobid='-' + newest_jobid,
-                                                 ext='log')
-                slurmname = logfiletemplate.format(pre=file_head, night=night,
-                                                   zexpid=zexp,
-                                                   specs=spectrographs,
-                                                   jobid='', ext='slurm')
-
-                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage),
-                                         'Slurm')
+                    logname = log
+            if newest_jobid > 0:
+                slurmname = logname.replace(f'-{jobid}.log', '.slurm')
+                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage), 'Slurm')
                 log_hlink = _hyperlink(os.path.relpath(logname, webpage), 'Log')
 
         rd = dict()

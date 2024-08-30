@@ -396,14 +396,14 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
         ## files and dashboard are per night so these are unique without night
         ## in the key
         if ztype == 'perexp':
-            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}', '{zexpid}',
                                            'ztile-{tileid}-{zexpid}{jobid}.{ext}')
         elif ztype =='cumulative':
-            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}', '{night}',
                                            'ztile-{tileid}-thru{night}{jobid}.{ext}')
         else:
             # pernight
-            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}',
+            logfiletemplate = os.path.join(logpath, '{ztype}', '{tileid}', '{night}',
                                            'ztile-{tileid}-{night}{jobid}.{ext}')
 
         succinct_expid = ''
@@ -420,7 +420,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
                     break
 
         obstype = str(row['OBSTYPE']).lower().strip()
-
+        
         zfild_tid = tileid.zfill(6)
         linkloc = f"https://data.desi.lbl.gov/desi/target/fiberassign/tiles/" \
                   + f"trunk/{zfild_tid[0:3]}/fiberassign-{zfild_tid}.png"
@@ -522,27 +522,24 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
 
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD', 'NULL']:
-            lognames = glob.glob(
-                logfiletemplate.format(ztype=ztype, tileid=tileid, night=night,
-                                       zexpid=zfild_expid, jobid='*',
-                                       ext='log'))
+            templatelog = logfiletemplate.format(ztype=ztype, tileid=tileid,
+                                                 night=night, zexpid=zfild_expid,
+                                                 jobid='*', ext='log')
+            lognames = glob.glob(templatelog)
+            ## If that template had no results, try to old naming scheme for results
+            if len(lognames) == 0:
+                templatelog = templatelog.replace(f'{ztype}-', 'coadd-redshifts-')
+                lognames = glob.glob(templatelog)
 
-            newest_jobid = '00000000'
-
+            newest_jobid, logfile = 0, None
             for log in lognames:
-                jobid = log[-12:-4]
-                if int(jobid) > int(newest_jobid):
+                jobid = int(log.split('-')[-1].split('.')[0])
+                if jobid > newest_jobid:
                     newest_jobid = jobid
-            if newest_jobid != '00000000':
-                logname = logfiletemplate.format(ztype=ztype, tileid=tileid, night=night,
-                                       zexpid=zfild_expid, jobid=f'-{newest_jobid}',
-                                       ext='log')
-                slurmname = logfiletemplate.format(ztype=ztype, tileid=tileid, night=night,
-                                       zexpid=zfild_expid, jobid='',
-                                       ext='slurm')
-
-                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage),
-                                         'Slurm')
+                    logname = log
+            if newest_jobid > 0:
+                slurmname = logname.replace(f'-{jobid}.log', '.slurm')
+                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage), 'Slurm')
                 log_hlink = _hyperlink(os.path.relpath(logname, webpage), 'Log')
 
         rd = dict()
