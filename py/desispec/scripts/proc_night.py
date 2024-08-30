@@ -369,12 +369,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             if np.max([len(qids) for qids in ptable['ALL_QIDS']]) < 3:
                 log.info("Job failures were detected. Resubmitting those jobs "
                          + "before continuing with new submissions.")
-                resub_states = get_resubmission_states()
-                if not no_resub_failed:
-                    resub_states.append('FAILED')
-                log.info(f"Resubmitting the following Slurm states: {resub_states}")
+
                 ptable, nsubmits = update_and_recursively_submit(ptable,
-                                                                 resubmission_states=resub_states,
+                                                                 no_resub_failed=no_resub_failed,
                                                                  ptab_name=proc_table_pathname,
                                                                  dry_run=dry_run,
                                                                  reservation=reservation)

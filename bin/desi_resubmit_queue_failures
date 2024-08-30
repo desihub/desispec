@@ -62,14 +62,6 @@ if __name__ == '__main__':
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
-    resub_states = args.resub_states
-    if resub_states is None:
-        resub_states = get_resubmission_states()
-        if not args.no_resub_failed:
-            resub_states.append('FAILED')
-
-    log.info(f"Resubmitting the following Slurm states: {resub_states}")
-
     if args.dry_run > 0 and args.dry_run < 3:
         log.warning(f"{args.dry_run=} will be run with limited simulation "
                     f"because we don't want to write out incorrect queue information.")
@@ -81,7 +73,8 @@ if __name__ == '__main__':
     ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
     log.info(f"Identified ptable with {len(ptable)} entries.")
     ptable, nsubmits = update_and_recursively_submit(ptable, submits=0,
-                                                     resubmission_states=resub_states,
+                                                     resubmission_states=args.resub_states,
+                                                     no_resub_failed=args.no_resub_failed,
                                                      ptab_name=ptable_pathname, dry_run=args.dry_run,
                                                      reservation=args.reservation)
 

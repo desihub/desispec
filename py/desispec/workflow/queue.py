@@ -16,7 +16,7 @@ import time, datetime
 global _cached_slurm_states
 _cached_slurm_states = dict()
 
-def get_resubmission_states():
+def get_resubmission_states(no_resub_failed=False):
     """
     Defines what Slurm job failure modes should be resubmitted in the hopes of the job succeeding the next time.
 
@@ -39,14 +39,21 @@ def get_resubmission_states():
         S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
         TO TIMEOUT Job terminated upon reaching its time limit.
 
+    Args:
+        no_resub_failed: bool. Set to True if you do NOT want to resubmit
+            jobs with Slurm status 'FAILED' by default. Default is False.
+
     Returns:
         list. A list of strings outlining the job states that should be resubmitted.
     """
     ## 'UNSUBMITTED' is default pipeline state for things not yet submitted
     ## 'DEP_NOT_SUBD' is set when resubmission can't proceed because a
     ## dependency has failed
-    return ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
-            'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    resub_states = ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
+                    'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    if not no_resub_failed:
+        resub_states.append('FAILED')
+    return resub_states
 
 
 def get_termination_states():
@@ -114,6 +121,35 @@ def get_failed_states():
     return ['BOOT_FAIL', 'CANCELLED', 'DEADLINE', 'FAILED', 'NODE_FAIL',
             'OUT_OF_MEMORY', 'PREEMPTED', 'REVOKED', 'SUSPENDED', 'TIMEOUT']
 
+
+def get_non_final_states():
+    """
+    Defines what Slurm job states that are not final and therefore indicate the
+    job hasn't finished running.
+
+    Possible values that Slurm returns are:
+
+        CA or ca or CANCELLED for cancelled jobs will only show currently running jobs in queue unless times are explicitly given
+        BF BOOT_FAIL   Job terminated due to launch failure
+        CA CANCELLED Job was explicitly cancelled by the user or system administrator. The job may or may not have been initiated.
+        CD COMPLETED Job has terminated all processes on all nodes with an exit code of zero.
+        DL DEADLINE Job terminated on deadline.
+        F FAILED Job terminated with non-zero exit code or other failure condition.
+        NF NODE_FAIL Job terminated due to failure of one or more allocated nodes.
+        OOM OUT_OF_MEMORY Job experienced out of memory error.
+        PD PENDING Job is awaiting resource allocation.
+        PR PREEMPTED Job terminated due to preemption.
+        R RUNNING Job currently has an allocation.
+        RQ REQUEUED Job was requeued.
+        RS RESIZING Job is about to change size.
+        RV REVOKED Sibling was removed from cluster due to other cluster starting the job.
+        S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
+        TO TIMEOUT Job terminated upon reaching its time limit.
+
+    Returns:
+        list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
+    """
+    return ['PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
 
 def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
                              columns='jobid,jobname,partition,submit,eligible,'+
