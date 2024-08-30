@@ -51,7 +51,7 @@ def parse_args():  # options=None):
         if args.no_resub_failed:
             log = get_logger()
             msg = f"Provided user-defined resubmision states {args.resub_states} but " \
-                  + f"also requested args.no_resub_failed. Please choose one or the other."
+                  + f"also requested --no-resub-failed. Please choose one or the other."
             log.critical(msg)
             raise ValueError(msg)
         ## Clean up the input string into a list of strings
