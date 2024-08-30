@@ -25,7 +25,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     get_terminal_steps, get_tables
 from desispec.workflow.proctable import get_processing_table_pathname, \
     table_row_to_dict
-from desispec.workflow.queue import update_from_queue
+from desispec.workflow.queue import update_from_queue, get_non_final_states
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
@@ -192,6 +192,9 @@ def populate_night_info(night, check_on_disk=False,
 
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = get_terminal_steps(expected_by_type)
+
+    ## Get non final Slurm states
+    non_final_states = get_non_final_states()
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
@@ -445,10 +448,19 @@ def populate_night_info(night, check_on_disk=False,
         else:
             nexpected = ncams
 
+        if expid in expid_processing:
+            status = row['STATUS']
+        elif expid in unaccounted_for_expids:
+            status = 'unaccounted'
+        else:
+            status = 'unprocessed'
+
         if terminal_step is None:
             row_color = 'NULL'
         elif expected[terminal_step] == 0:
             row_color = 'NULL'
+        elif status in non_final_states:
+            row_color = status
         elif nfiles[terminal_step] == 0:
             row_color = 'BAD'
         elif nfiles[terminal_step] < nexpected:
@@ -457,13 +469,6 @@ def populate_night_info(night, check_on_disk=False,
             row_color = 'GOOD'
         else:
             row_color = 'OVERFULL'
-
-        if expid in expid_processing:
-            status = row['STATUS']
-        elif expid in unaccounted_for_expids:
-            status = 'unaccounted'
-        else:
-            status = 'unprocessed'
 
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD', 'NULL'] and obstype.lower() in ['arc',

@@ -14,7 +14,7 @@ import numpy as np
 from os import listdir
 import json
 
-from desispec.workflow.queue import update_from_queue
+from desispec.workflow.queue import update_from_queue, get_non_final_states
 # import desispec.io.util
 from desiutil.log import get_logger
 from desispec.workflow.exptable import get_exposure_table_pathname, \
@@ -246,6 +246,9 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
 
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = get_terminal_steps(expected_by_type)
+
+    ## Get non final Slurm states
+    non_final_states = get_non_final_states()
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
@@ -500,10 +503,19 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
             elif terminal_step == 'em':
                 true_terminal_step = 'emline'
 
+        if unique_key in uniqs_processing:
+            status = row['STATUS']
+        elif unique_key in unaccounted_for_tileids:
+            status = 'unrecorded'
+        else:
+            status = 'unprocessed'
+
         if true_terminal_step is None:
             row_color = 'NULL'
         elif expected[terminal_step] == 0:
             row_color = 'NULL'
+        elif status in non_final_states:
+            row_color = status
         elif nfiles[true_terminal_step] == 0:
             row_color = 'BAD'
         elif nfiles[true_terminal_step] < npossible:
@@ -513,12 +525,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
         else:
             row_color = 'OVERFULL'
 
-        if unique_key in uniqs_processing:
-            status = row['STATUS']
-        elif unique_key in unaccounted_for_tileids:
-            status = 'unrecorded'
-        else:
-            status = 'unprocessed'
+
 
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD', 'NULL']:

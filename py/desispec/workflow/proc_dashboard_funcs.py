@@ -249,7 +249,10 @@ def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
 def return_color_profile():
     color_profile = dict()
     color_profile['DEFAULT'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
-    color_profile['PENDING'] = {'font': '#000000', 'background': '#ccd1d1'}  # gray
+    color_profile['PENDING'] = {'font': '#000000', 'background': '#FFFFFF'}  # black on white
+    color_profile['RUNNING'] = color_profile['PENDING']
+    color_profile['REQUEUED'] = color_profile['PENDING']
+    color_profile['RESIZING'] = color_profile['PENDING']
     color_profile['NULL'] = {'font': '#34495e', 'background': '#ccd1d1'}  # gray on gray
     color_profile['GOODNULL'] = {'font': '#34495e', 'background': '#7fb3d5'}  # gray on blue
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
@@ -342,6 +345,7 @@ def generate_nightly_table_html(night_info, night, show_null):
 
     ngood, ninter, nbad, nnull, nover, n_notnull, noprocess, norecord = \
         0, 0, 0, 0, 0, 0, 0, 0
+    npending, nrunning = 0, 0
 
     main_body = ""
     for key, row_info in reversed(night_info.items()):
@@ -350,7 +354,7 @@ def generate_nightly_table_html(night_info, night, show_null):
             continue
         main_body += ("\t" + table_row + "\n")
         status = str(row_info["STATUS"]).lower()
-        if status == 'processing':
+        if status not in ['unprocessed', 'unrecorded']:
             if 'COLOR' in row_info:
                 color = row_info['COLOR']
             else:
@@ -366,6 +370,12 @@ def generate_nightly_table_html(night_info, night, show_null):
                 n_notnull += 1
             elif color == 'OVERFULL':
                 nover += 1
+                n_notnull += 1
+            elif color == 'PENDING':
+                npending += 1
+                n_notnull += 1
+            elif color == 'RUNNING':
+                nrunning += 1
                 n_notnull += 1
             else:
                 nnull += 1
@@ -383,6 +393,8 @@ def generate_nightly_table_html(night_info, night, show_null):
                + f"Incomplete: {ninter}/{n_notnull}{htmltab}"
                + f"Failed: {nbad}/{n_notnull}{htmltab}"
                + f"Overfull: {nover}/{n_notnull}{htmltab}"
+               + f"Pending: {npending}/{n_notnull}{htmltab}"
+               + f"Running: {nrunning}/{n_notnull}{htmltab}"
                + f"Unprocessed: {noprocess}{htmltab}"
                + f"NoTabEntry: {norecord}{htmltab}"
                + f"Other: {nnull}"
