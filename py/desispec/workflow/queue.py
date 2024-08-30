@@ -268,6 +268,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
             results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns, dry_run=dry_run))
         results = vstack(results)
         return results
+    elif len(qids) == 0:
+        return Table(names=columns.upper().split(','))
 
     ## Turn the queue id's into a list
     ## this should work with str or int type also, though not officially supported
@@ -435,27 +437,34 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
                            table that doesn't query the Slurm scheduler.
 
     Returns:
-        ptable, Table. The same processing table as the input except that the "STATUS" column in ptable for all jobs is
+        ptab, Table. A opy of the same processing table as the input except that the "STATUS" column in ptable for all jobs is
                        updated based on the 'STATE' in the qtable (as matched by "LATEST_QID" in the ptable
                        and "JOBID" in the qtable).
     """
     log = get_logger()
+    ptab = ptable.copy()
     if qtable is None:
-        log.info("qtable not provided, querying Slurm using ptable's LATEST_QID set")
+        log.info("qtable not provided, querying Slurm using ptab's LATEST_QID set")
         ## Avoid null valued QID's (set to 2)
-        sel = ptable['LATEST_QID'] > 2
+        sel = ptab['LATEST_QID'] > 2
         ## Only submit incomplete jobs unless explicitly told to check them
         ## completed jobs shouldn't change status
         if not check_complete_jobs:
-            sel &= (ptable['STATUS'] != 'COMPLETED')
-        qids = np.array(ptable['LATEST_QID'][sel])
+            sel &= (ptab['STATUS'] != 'COMPLETED')
+        log.info(f"Querying Slurm for {np.sum(sel)} QIDs from table of length {len(ptab)}.")
+        qids = np.array(ptab['LATEST_QID'][sel])
+        ## If you provide empty jobids Slurm gives you the three most recent jobs,
+        ## which we don't want here
+        if len(qids) == 0:
+            log.info(f"No QIDs left to query. Returning the original table.")
+            return ptab
         qtable = queue_info_from_qids(qids, dry_run=dry_run)
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
-             +f"{len(ptable)} jobs in the ptable. Updating those now.")
+             +f"{len(ptab)} jobs in the ptab. Updating those now.")
 
     check_scriptname = ('JOBNAME' in qtable.colnames
-                        and 'SCRIPTNAME' in ptable.colnames
+                        and 'SCRIPTNAME' in ptab.colnames
                         and not ignore_scriptnames)
     if check_scriptname:
         log.info("Will be verifying that the file names are consistent")
@@ -463,21 +472,21 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
     for row in qtable:
         if int(row['JOBID']) == get_default_qid():
             continue
-        match = (int(row['JOBID']) == ptable['LATEST_QID'])
+        match = (int(row['JOBID']) == ptab['LATEST_QID'])
         if np.any(match):
             ind = np.where(match)[0][0]
-            if check_scriptname and ptable['SCRIPTNAME'][ind] not in row['JOBNAME']:
-                log.warning(f"For job with expids:{ptable['EXPID'][ind]}"
-                            + f" the scriptname is {ptable['SCRIPTNAME'][ind]}"
+            if check_scriptname and ptab['SCRIPTNAME'][ind] not in row['JOBNAME']:
+                log.warning(f"For job with expids:{ptab['EXPID'][ind]}"
+                            + f" the scriptname is {ptab['SCRIPTNAME'][ind]}"
                             + f" but the jobname in the queue was "
                             + f"{row['JOBNAME']}.")
             state = str(row['STATE']).split(' ')[0]
             ## Since dry run 1 and 2 save proc tables, don't alter the
             ## states for these when simulating
             if dry_run > 2 or dry_run < 1:
-                ptable['STATUS'][ind] = state
+                ptab['STATUS'][ind] = state
 
-    return ptable
+    return ptab
 
 def any_jobs_not_complete(statuses, termination_states=None):
     """

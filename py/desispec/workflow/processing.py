@@ -644,7 +644,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                    log.info(f"removing completed jobid {depid}")
                 elif state_dict[int(depid)] not in non_final_states:
                     failed_dependency = True
-                    log.info("Found a dependency in a bad final state: "
+                    log.info("Found a dependency in a bad final state="
                              + f"{state_dict[int(depid)]} for depjobid={depid},"
                              + " not submitting this job.")
                     still_depids.append(depid)
@@ -733,13 +733,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         current_qid = get_default_qid()
         submitted = False
 
-    log.info(batch_params)
-
     ## Update prow with new information
     prow['LATEST_QID'] = current_qid
 
     ## If we didn't submit, don't say we did and don't add to ALL_QIDS
     if submitted:
+        log.info(batch_params)
         log.info(f'Submitted {jobname} with dependencies {dep_str} and '
                  + f'reservation={reservation}. Returned qid: {current_qid}')
 
@@ -748,6 +747,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         prow['STATUS'] = 'SUBMITTED'
         prow['SUBMIT_DATE'] = int(time.time())
     else:
+        log.info(f"Would have submitted: {batch_params}")
         prow['STATUS'] = 'UNSUBMITTED'
 
         ## Update the Slurm jobid cache of job states
