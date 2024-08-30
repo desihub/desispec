@@ -33,6 +33,7 @@ from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, parse_badamps, create_camword, camword_union, \
     columns_to_goodcamword, spectros_to_camword
 
+
 def parse(options):
     """
     Initialize the parser to read input
@@ -156,8 +157,9 @@ def main(args=None):
             subset_exptabs = all_exptabs[np.isin(all_exptabs['TILEID'], tiles)]
             
             ## get the per exposure info for a night
-            night_zinfo = populate_night_zinfo(night, doem, doqso,
-                                               dotileqa, args.check_on_disk,
+            night_zinfo = populate_night_zinfo(night, doem=doem, doqso=doqso,
+                                               dotileqa=dotileqa, dozmtl=dozmtl,
+                                               check_on_disk=args.check_on_disk,
                                                night_json_zinfo=night_json_zinfo,
                                                skipd_tileids=skipd_tileids,
                                                all_exptabs=subset_exptabs)
@@ -240,12 +242,19 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
         ## if not asked to do them rather than setting specific redshift
         ## types to 1 as done above
         if not dotileqa:
+            log.info(f"Given {dotileqa=} so not expecting tile-qa files.")
             expected_by_type[ztype]['tile-qa'] = 0
         if not dozmtl:
+            log.info(f"Given {dozmtl=} so not expecting zmtl files.")
             expected_by_type[ztype]['zmtl'] = 0
+
+    for key, val in expected_by_type.items():
+        log.info(f"Expecting the following for type {key}: {val}")
 
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = get_terminal_steps(expected_by_type)
+    for key, val in terminal_steps.items():
+        log.info(f"Expecting the following for terminal state for type {key}: {val}")
 
     ## Get non final Slurm states
     non_final_states = get_non_final_states()
@@ -414,13 +423,16 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
             succinct_expid = str(row['EXPID'][0])
         else:
             str_expids = np.sort(row['EXPID']).astype(str)
-            for i in range(len(str_expids[0])):
-                ith_digit = str_expids[0][i]
-                if np.all([ith_digit == expid[i] for expid in str_expids]):
-                    succinct_expid += ith_digit
-                else:
-                    succinct_expid += f'[{str_expids[0][i:]}-{str_expids[-1][i:]}]'
-                    break
+            if len(str_expids) < 4:
+                succinct_expid = ','.join(str_expids)
+            else:
+                for i in range(len(str_expids[0])):
+                    ith_digit = str_expids[0][i]
+                    if np.all([ith_digit == expid[i] for expid in str_expids]):
+                        succinct_expid += ith_digit
+                    else:
+                        succinct_expid += f'[{str_expids[0][i:]}-{str_expids[-1][i:]}]'
+                        break
 
         obstype = str(row['OBSTYPE']).lower().strip()
         
@@ -528,7 +540,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
 
 
         slurm_hlink, log_hlink = '----', '----'
-        if row_color not in ['GOOD', 'NULL']:
+        if row_color not in ['GOOD', 'NULL', 'PENDING']:
             templatelog = logfiletemplate.format(ztype=ztype, tileid=tileid,
                                                  night=night, zexpid=zfild_expid,
                                                  jobid='*', ext='log')

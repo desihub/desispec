@@ -131,7 +131,7 @@ def main(args=None):
                 night_json_info = read_json(filename_json=filename_json)
 
             ## get the per exposure info for a night
-            night_info = populate_night_info(night, args.check_on_disk,
+            night_info = populate_night_info(night, check_on_disk=args.check_on_disk,
                                              night_json_info=night_json_info,
                                              skipd_expids=skipd_expids)
             nightly_tables[night] = night_info.copy()
@@ -236,13 +236,16 @@ def populate_night_info(night, check_on_disk=False,
         for prow in caljobs_ptab:
             jobdesc = prow['JOBDESC']
             expids = prow['EXPID']
-            lastexpid = expids[-1]
-            if lastexpid in exptab['EXPID']:
-                joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
+            if jobdesc == 'ccdcalib':
+                expid = expids[0]
+            else:
+                expid = expids[-1]
+            if expid in exptab['EXPID']:
+                joint_erow = table_row_to_dict(exptab[exptab['EXPID']==expid][0])
                 joint_erow['OBSTYPE'] = jobdesc
                 joint_erow['ORDER'] = joint_erow['ORDER']+1
-                if len(expids) == 1:
-                    joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
+                if len(expids) < 5:
+                    joint_erow['COMMENTS'] = [f"Exposure(s) {','.join(np.array(expids).astype(str))}"]
                 else:
                     joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
                 # ## Derive the appropriate PROCCAMWORD from the exposure table
@@ -472,9 +475,8 @@ def populate_night_info(night, check_on_disk=False,
             row_color = 'OVERFULL'
 
         slurm_hlink, log_hlink = '----', '----'
-        if row_color not in ['GOOD', 'NULL'] and obstype.lower() in ['arc',
-                                                                     'flat',
-                                                                     'science']:
+        if row_color not in ['GOOD', 'NULL', 'PENDING'] \
+                and obstype.lower() in ['arc', 'flat', 'science']:
             file_head = obstype.lower()
             lognames = glob.glob(
                 logfiletemplate.format(pre=file_head, night=night,
@@ -540,17 +542,12 @@ def populate_night_info(night, check_on_disk=False,
         rd["EXP TIME"] = str(exptime)
         rd["PROC CAMWORD"] = proccamword
         rd["PSF"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
-        rd["FRAME"] = _str_frac(nfiles['frame'],
-                                        ncams * expected['frame'])
+        rd["FRAME"] = _str_frac(nfiles['frame'], ncams * expected['frame'])
         rd["FFLAT"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
-        rd["SFRAME"] = _str_frac(nfiles['sframe'],
-                                        ncams * expected['sframe'])
-        rd["SKY"] = _str_frac(nfiles['sky'],
-                                        ncams * expected['sframe'])
-        rd["STD"] = _str_frac(nfiles['std'],
-                                        nspecs * expected['std'])
-        rd["CFRAME"] = _str_frac(nfiles['cframe'],
-                                        ncams * expected['cframe'])
+        rd["SFRAME"] = _str_frac(nfiles['sframe'], ncams * expected['sframe'])
+        rd["SKY"] = _str_frac(nfiles['sky'], ncams * expected['sframe'])
+        rd["STD"] = _str_frac(nfiles['std'], nspecs * expected['std'])
+        rd["CFRAME"] = _str_frac(nfiles['cframe'], ncams * expected['cframe'])
         rd["SLURM FILE"] = slurm_hlink
         rd["LOG FILE"] = log_hlink
         rd["COMMENTS"] = comments

@@ -23,8 +23,10 @@ from desispec.workflow.exptable import get_exposure_table_column_types, \
     default_obstypes_for_exptable, get_exposure_table_column_defaults, \
     get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.queue import get_non_final_states
 from desispec.workflow.tableio import load_table
 
+non_final_q_states = get_non_final_states()
 
 def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
     if 'DESI_SPECTRO_DATA' not in os.environ.keys():
@@ -250,9 +252,9 @@ def return_color_profile():
     color_profile = dict()
     color_profile['DEFAULT'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
     color_profile['PENDING'] = {'font': '#000000', 'background': '#FFFFFF'}  # black on white
-    color_profile['RUNNING'] = color_profile['PENDING']
-    color_profile['REQUEUED'] = color_profile['PENDING']
-    color_profile['RESIZING'] = color_profile['PENDING']
+    ## for now make all non-final states the same as pending
+    for state in non_final_q_states:
+        color_profile[state] = color_profile['PENDING']
     color_profile['NULL'] = {'font': '#34495e', 'background': '#ccd1d1'}  # gray on gray
     color_profile['GOODNULL'] = {'font': '#34495e', 'background': '#7fb3d5'}  # gray on blue
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
@@ -390,8 +392,7 @@ def generate_nightly_table_html(night_info, night, show_null):
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
     heading = (f"Night {night}{htmltab}"
                + f"Complete: {ngood}/{n_notnull}{htmltab}"
-               + f"Incomplete: {ninter}/{n_notnull}{htmltab}"
-               + f"Failed: {nbad}/{n_notnull}{htmltab}"
+               + f"Failed: {nbad+ninter}/{n_notnull}{htmltab}"
                + f"Overfull: {nover}/{n_notnull}{htmltab}"
                + f"Pending: {npending}/{n_notnull}{htmltab}"
                + f"Running: {nrunning}/{n_notnull}{htmltab}"
@@ -600,6 +601,7 @@ def _closing_str():
     return closing
 
 def _table_row(dictionary):
+    global non_final_q_states
     idlabel = dictionary.pop('COLOR')
     # color_profile = return_color_profile()
     if dictionary["STATUS"] in ['unprocessed', 'unrecorded']:
@@ -613,7 +615,10 @@ def _table_row(dictionary):
         row_str = f'<tr style="{style_str}" id="{idlabel}">'
 
     for elem in dictionary.values():
-        if re.match('^\d+\/\d+$', elem) is not None:
+        ## If job is still running don't color things yet
+        if idlabel.upper() in non_final_q_states:
+            row_str += _table_element(elem)
+        elif re.match('^\d+\/\d+$', elem) is not None:
             strs = str(elem).split('/')
             numerator, denom = int(strs[0]), int(strs[1])
             if numerator == 0 and denom == 0:
