@@ -536,7 +536,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
         background = cdict['background']
         html_page += f'\t#{ctype} ' + '{background-color:' + f'{background}' + ';}\n'
 
-    html_page + "\n"
+    html_page += "\n"
     ## Table rows shouldn't do the default background because of cell coloring
     for ctype,cdict in color_profile.items():
         font = cdict['font']
@@ -648,50 +648,6 @@ def _hyperlink(rel_path,displayname):
 def _str_frac(numerator,denominator):
     frac = f'{numerator}/{denominator}'
     return frac
-
-def _js_path(output_dir):
-    return os.path.join(output_dir,'js','open_nightly_table.js')
-
-def js_import_str(output_dir):  # Not used
-    output_path = _js_path(output_dir)
-    if not os.path.exists(os.path.join(output_dir,'js')):
-        os.makedirs(os.path.join(output_dir,'js'))
-    if not os.path.exists(output_path):
-        _write_js_script(output_path)
-    return f'<script type="text/javascript" src="{output_path}"></script>'
-
-def _write_js_script(output_path):
-    """
-    Return the javascript script to be added to the html file
-    """
-    s="""
-        var coll = document.getElementsByClassName('collapsible');
-        var i;
-        for (i = 0; i < coll.length; i++) {
-            coll[i].nextElementSibling.style.maxHeight='0px';
-            coll[i].addEventListener('click', function() {
-                this.classList.toggle('active');
-                var content = this.nextElementSibling;
-                if (content.style.maxHeight){
-                   content.style.maxHeight = null;
-                } else {
-                  content.style.maxHeight = '0px';
-                        }
-                });
-         };
-         var b1 = document.getElementById('b1');
-         b1.addEventListener('click',function() {
-             for (i = 0; i < coll.length; i++) {
-                 coll[i].nextElementSibling.style.maxHeight=null;
-                                               }});
-         var b2 = document.getElementById('b2');
-         b2.addEventListener('click',function() {
-             for (i = 0; i < coll.length; i++) {
-                 coll[i].nextElementSibling.style.maxHeight='0px'
-                         }});
-        """
-    with open(output_path,'w') as outjs:
-        outjs.write(s)
 
 def js_str(): # Used
     """

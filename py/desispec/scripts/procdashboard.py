@@ -221,18 +221,18 @@ def populate_night_info(night, check_on_disk=False,
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
         expjobs_ptab = proctab[np.isin(proctab['JOBDESC'],
-                                       ['arc', 'flat', 'tilenight',
-                                        'prestdstar', 'stdstar', 'poststdstar'])]
+                                       [b'arc', b'flat', b'tilenight',
+                                        b'prestdstar', b'stdstar', b'poststdstar'])]
         for i,erow in enumerate(exptab):
             ## proctable has an array of expids, so check for them in a loop
             for prow in expjobs_ptab:
                 if erow['EXPID'] in prow['EXPID']:
-                    erow['STATUS'][i] = prow['STATUS']
-                    erow['LATEST_QID'][i] = prow['LATEST_QID']
-                    erow['PTAB_INTID'][i] = prow['INTID']
-                    erow['JOBDESC'][i] = prow['JOBDESC']
+                    exptab['STATUS'][i] = prow['STATUS']
+                    exptab['LATEST_QID'][i] = prow['LATEST_QID']
+                    exptab['PTAB_INTID'][i] = prow['INTID']
+                    exptab['JOBDESC'][i] = prow['JOBDESC']
         caljobs_ptab = proctab[np.isin(proctab['JOBDESC'],
-                                       ['ccdcalib', 'psfnight', 'nightlyflat'])]
+                                       [b'ccdcalib', b'psfnight', b'nightlyflat'])]
         for prow in caljobs_ptab:
             jobdesc = prow['JOBDESC']
             expids = prow['EXPID']
@@ -245,54 +245,55 @@ def populate_night_info(night, check_on_disk=False,
                     joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
                 else:
                     joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
-            # ## Derive the appropriate PROCCAMWORD from the exposure table
-            # pcamwords = []
-            # for expid in expids:
-            #     if expid in exptab['EXPID']:
-            #         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
-            #         pcamword = ''
-            #         if 'BADCAMWORD' in erow:
-            #             if 'BADAMPS' in erow:
-            #                 pcamword = erow_to_goodcamword(erow,
-            #                                                suppress_logging=True,
-            #                                                exclude_badamps=False)
-            #             else:
-            #                 pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
-            #         else:
-            #             pcamword = erow['CAMWORD']
-            #         pcamwords.append(pcamword)
-            #
-            # if len(pcamwords) == 0:
-            #     print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
-            #     continue
-            # ## For flats we want any camera that exists in all 12 exposures
-            # ## For arcs we want any camera that exists in at least 3 exposures
-            # if jobdesc == 'nightlyflat':
-            #     joint_erow['CAMWORD'] = camword_intersection(pcamwords,
-            #                                        full_spectros_only=False)
-            # elif jobdesc == 'psfnight':
-            #     ## Count number of exposures each camera is present for
-            #     camcheck = {}
-            #     for camword in pcamwords:
-            #         for cam in decode_camword(camword):
-            #             if cam in camcheck:
-            #                 camcheck[cam] += 1
-            #             else:
-            #                 camcheck[cam] = 1
-            #     ## if exists in 3 or more exposures, then include it
-            #     goodcams = []
-            #     for cam, camcount in camcheck.items():
-            #         if camcount >= 3:
-            #             goodcams.append(cam)
-            #     joint_erow['CAMWORD'] = create_camword(goodcams)
+                # ## Derive the appropriate PROCCAMWORD from the exposure table
+                # pcamwords = []
+                # for expid in expids:
+                #     if expid in exptab['EXPID']:
+                #         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+                #         pcamword = ''
+                #         if 'BADCAMWORD' in erow:
+                #             if 'BADAMPS' in erow:
+                #                 pcamword = erow_to_goodcamword(erow,
+                #                                                suppress_logging=True,
+                #                                                exclude_badamps=False)
+                #             else:
+                #                 pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+                #         else:
+                #             pcamword = erow['CAMWORD']
+                #         pcamwords.append(pcamword)
+                #
+                # if len(pcamwords) == 0:
+                #     print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
+                #     continue
+                # ## For flats we want any camera that exists in all 12 exposures
+                # ## For arcs we want any camera that exists in at least 3 exposures
+                # if jobdesc == 'nightlyflat':
+                #     joint_erow['CAMWORD'] = camword_intersection(pcamwords,
+                #                                        full_spectros_only=False)
+                # elif jobdesc == 'psfnight':
+                #     ## Count number of exposures each camera is present for
+                #     camcheck = {}
+                #     for camword in pcamwords:
+                #         for cam in decode_camword(camword):
+                #             if cam in camcheck:
+                #                 camcheck[cam] += 1
+                #             else:
+                #                 camcheck[cam] = 1
+                #     ## if exists in 3 or more exposures, then include it
+                #     goodcams = []
+                #     for cam, camcount in camcheck.items():
+                #         if camcount >= 3:
+                #             goodcams.append(cam)
+                #     joint_erow['CAMWORD'] = create_camword(goodcams)
 
-            joint_erow['CAMWORD'] = prow['PROCCAMWORD']
-            joint_erow['BADCAMWORD'] = ''
-            joint_erow['BADAMPS'] = ''
-            joint_erow['STATUS'] = prow['STATUS']
-            joint_erow['LATEST_QID'] = prow['LATEST_QID']
-            joint_erow['PTAB_INTID'] = prow['INTID']
-            exptab.add_row(joint_erow)
+                joint_erow['CAMWORD'] = prow['PROCCAMWORD']
+                joint_erow['BADCAMWORD'] = ''
+                joint_erow['BADAMPS'] = ''
+                joint_erow['STATUS'] = prow['STATUS']
+                joint_erow['LATEST_QID'] = prow['LATEST_QID']
+                joint_erow['PTAB_INTID'] = prow['INTID']
+                joint_erow['JOBDESC'] = prow['JOBDESC']
+                exptab.add_row(joint_erow)
 
     del proctab
     exptab.sort(['ORDER'])
