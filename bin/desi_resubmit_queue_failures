@@ -38,7 +38,7 @@ def parse_args():  # options=None):
                         help="The SLURM queue states that should be resubmitted. " +
                              "E.g. UNSUBMITTED, BOOT_FAIL, DEADLINE, NODE_FAIL, " +
                              "OUT_OF_MEMORY, PREEMPTED, TIMEOUT, CANCELLED, FAILED.")
-    parser.add_argument("--dont-resub-failed", action="store_true", required=False,
+    parser.add_argument("--no-resub-failed", action="store_true", required=False,
                         help="Give this flag if you do NOT want to resubmit " +
                              "jobs with Slurm status 'FAILED' by default.")
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     resub_states = args.resub_states
     if resub_states is None:
         resub_states = get_resubmission_states()
-        if not args.dont_resub_failed:
+        if not args.no_resub_failed:
             resub_states.append('FAILED')
 
     log.info(f"Resubmitting the following Slurm states: {resub_states}")
