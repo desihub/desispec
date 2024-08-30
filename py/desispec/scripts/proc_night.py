@@ -36,7 +36,8 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     set_calibrator_flag, make_exposure_prow, \
     all_calibs_submitted, \
     update_and_recursively_submit, update_accounted_for_with_linking
-from desispec.workflow.queue import update_from_queue, any_jobs_failed
+from desispec.workflow.queue import update_from_queue, any_jobs_failed, \
+    get_resubmission_states
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix, erow_to_goodcamword, camword_union
 
@@ -55,7 +56,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                path_to_data=None, exp_obstypes=None, camword=None,
                badcamword=None, badamps=None, exps_to_ignore=None,
                sub_wait_time=0.1, verbose=False, dont_require_cals=False,
-               psf_linking_without_fflat=False,
+               psf_linking_without_fflat=False, no_resub_failed=False,
                still_acquiring=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
@@ -163,6 +164,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         psf_linking_without_fflat: bool. Default False. If set then the code
             will NOT raise an error if asked to link psfnight calibrations
             without fiberflatnight calibrations.
+        no_resub_failed: bool. Set to True if you do NOT want to resubmit
+            jobs with Slurm status 'FAILED' by default. Default is False.
         still_acquiring: bool. If True, assume more data might be coming, e.g.
             wait for additional exposures of latest tile.  If False, auto-derive
             True/False based upon night and current time. Primarily for testing.
@@ -366,7 +369,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             if np.max([len(qids) for qids in ptable['ALL_QIDS']]) < 3:
                 log.info("Job failures were detected. Resubmitting those jobs "
                          + "before continuing with new submissions.")
+
                 ptable, nsubmits = update_and_recursively_submit(ptable,
+                                                                 no_resub_failed=no_resub_failed,
                                                                  ptab_name=proc_table_pathname,
                                                                  dry_run=dry_run,
                                                                  reservation=reservation)

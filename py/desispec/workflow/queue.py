@@ -16,7 +16,7 @@ import time, datetime
 global _cached_slurm_states
 _cached_slurm_states = dict()
 
-def get_resubmission_states():
+def get_resubmission_states(no_resub_failed=False):
     """
     Defines what Slurm job failure modes should be resubmitted in the hopes of the job succeeding the next time.
 
@@ -39,14 +39,21 @@ def get_resubmission_states():
         S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
         TO TIMEOUT Job terminated upon reaching its time limit.
 
+    Args:
+        no_resub_failed: bool. Set to True if you do NOT want to resubmit
+            jobs with Slurm status 'FAILED' by default. Default is False.
+
     Returns:
         list. A list of strings outlining the job states that should be resubmitted.
     """
     ## 'UNSUBMITTED' is default pipeline state for things not yet submitted
     ## 'DEP_NOT_SUBD' is set when resubmission can't proceed because a
     ## dependency has failed
-    return ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
-            'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    resub_states = ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
+                    'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    if not no_resub_failed:
+        resub_states.append('FAILED')
+    return resub_states
 
 
 def get_termination_states():
@@ -114,6 +121,35 @@ def get_failed_states():
     return ['BOOT_FAIL', 'CANCELLED', 'DEADLINE', 'FAILED', 'NODE_FAIL',
             'OUT_OF_MEMORY', 'PREEMPTED', 'REVOKED', 'SUSPENDED', 'TIMEOUT']
 
+
+def get_non_final_states():
+    """
+    Defines what Slurm job states that are not final and therefore indicate the
+    job hasn't finished running.
+
+    Possible values that Slurm returns are:
+
+        CA or ca or CANCELLED for cancelled jobs will only show currently running jobs in queue unless times are explicitly given
+        BF BOOT_FAIL   Job terminated due to launch failure
+        CA CANCELLED Job was explicitly cancelled by the user or system administrator. The job may or may not have been initiated.
+        CD COMPLETED Job has terminated all processes on all nodes with an exit code of zero.
+        DL DEADLINE Job terminated on deadline.
+        F FAILED Job terminated with non-zero exit code or other failure condition.
+        NF NODE_FAIL Job terminated due to failure of one or more allocated nodes.
+        OOM OUT_OF_MEMORY Job experienced out of memory error.
+        PD PENDING Job is awaiting resource allocation.
+        PR PREEMPTED Job terminated due to preemption.
+        R RUNNING Job currently has an allocation.
+        RQ REQUEUED Job was requeued.
+        RS RESIZING Job is about to change size.
+        RV REVOKED Sibling was removed from cluster due to other cluster starting the job.
+        S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
+        TO TIMEOUT Job terminated upon reaching its time limit.
+
+    Returns:
+        list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
+    """
+    return ['PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
 
 def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
                              columns='jobid,jobname,partition,submit,eligible,'+
@@ -232,6 +268,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
             results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns, dry_run=dry_run))
         results = vstack(results)
         return results
+    elif len(qids) == 0:
+        return Table(names=columns.upper().split(','))
 
     ## Turn the queue id's into a list
     ## this should work with str or int type also, though not officially supported
@@ -377,7 +415,8 @@ def clear_queue_state_cache():
     _cached_slurm_states.clear()
 
 
-def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
+def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
+                      check_complete_jobs=False):
     """
     Given an input prcessing table (ptable) and query table from the Slurm queue (qtable) it cross matches the
     Slurm job ID's and updates the 'state' in the table using the current state in the Slurm scheduler system.
@@ -390,28 +429,42 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
         ignore_scriptnames, bool. Default is False. Set to true if you do not
                         want to check whether the scriptname matches the jobname
                         return by the slurm scheduler.
+        check_complete_jobs, bool. Default is False. Set to true if you want to
+                        also check QID's that currently have a STATUS "COMPLETED".
+                        in the ptable.
         The following are only used if qtable is not provided:
             dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                            table that doesn't query the Slurm scheduler.
 
     Returns:
-        ptable, Table. The same processing table as the input except that the "STATUS" column in ptable for all jobs is
+        ptab, Table. A opy of the same processing table as the input except that the "STATUS" column in ptable for all jobs is
                        updated based on the 'STATE' in the qtable (as matched by "LATEST_QID" in the ptable
                        and "JOBID" in the qtable).
     """
     log = get_logger()
+    ptab = ptable.copy()
     if qtable is None:
-        log.info("qtable not provided, querying Slurm using ptable's LATEST_QID set")
-        qids = np.array(ptable['LATEST_QID'])
-        ## Avoid null valued QID's (set to -99)
-        qids = qids[qids > 0]
+        log.info("qtable not provided, querying Slurm using ptab's LATEST_QID set")
+        ## Avoid null valued QID's (set to 2)
+        sel = ptab['LATEST_QID'] > 2
+        ## Only submit incomplete jobs unless explicitly told to check them
+        ## completed jobs shouldn't change status
+        if not check_complete_jobs:
+            sel &= (ptab['STATUS'] != 'COMPLETED')
+        log.info(f"Querying Slurm for {np.sum(sel)} QIDs from table of length {len(ptab)}.")
+        qids = np.array(ptab['LATEST_QID'][sel])
+        ## If you provide empty jobids Slurm gives you the three most recent jobs,
+        ## which we don't want here
+        if len(qids) == 0:
+            log.info(f"No QIDs left to query. Returning the original table.")
+            return ptab
         qtable = queue_info_from_qids(qids, dry_run=dry_run)
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
-             +f"{len(ptable)} jobs in the ptable. Updating those now.")
+             +f"{len(ptab)} jobs in the ptab. Updating those now.")
 
     check_scriptname = ('JOBNAME' in qtable.colnames
-                        and 'SCRIPTNAME' in ptable.colnames
+                        and 'SCRIPTNAME' in ptab.colnames
                         and not ignore_scriptnames)
     if check_scriptname:
         log.info("Will be verifying that the file names are consistent")
@@ -419,21 +472,21 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     for row in qtable:
         if int(row['JOBID']) == get_default_qid():
             continue
-        match = (int(row['JOBID']) == ptable['LATEST_QID'])
+        match = (int(row['JOBID']) == ptab['LATEST_QID'])
         if np.any(match):
             ind = np.where(match)[0][0]
-            if check_scriptname and ptable['SCRIPTNAME'][ind] not in row['JOBNAME']:
-                log.warning(f"For job with expids:{ptable['EXPID'][ind]}"
-                            + f" the scriptname is {ptable['SCRIPTNAME'][ind]}"
+            if check_scriptname and ptab['SCRIPTNAME'][ind] not in row['JOBNAME']:
+                log.warning(f"For job with expids:{ptab['EXPID'][ind]}"
+                            + f" the scriptname is {ptab['SCRIPTNAME'][ind]}"
                             + f" but the jobname in the queue was "
                             + f"{row['JOBNAME']}.")
             state = str(row['STATE']).split(' ')[0]
             ## Since dry run 1 and 2 save proc tables, don't alter the
             ## states for these when simulating
             if dry_run > 2 or dry_run < 1:
-                ptable['STATUS'][ind] = state
+                ptab['STATUS'][ind] = state
 
-    return ptable
+    return ptab
 
 def any_jobs_not_complete(statuses, termination_states=None):
     """

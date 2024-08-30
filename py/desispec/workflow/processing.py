@@ -20,7 +20,8 @@ from desispec.workflow.redshifts import get_ztile_script_pathname, \
     get_ztile_script_suffix
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, \
-    queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache
+    queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache, \
+    get_non_final_states
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
     create_desi_proc_batch_script, \
@@ -632,12 +633,23 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     ## should no longer be necessary in the normal workflow.
     # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
+    failed_dependency = False
     if len(dep_qids) > 0 and not dry_run:
+        non_final_states = get_non_final_states()
         state_dict = get_queue_states_from_qids(dep_qids, dry_run=dry_run, use_cache=True)
         still_depids = []
         for depid in dep_qids:
-            if depid in state_dict.keys() and state_dict[int(depid)] == 'COMPLETED':
-                log.info(f"removing completed jobid {depid}")
+            if depid in state_dict.keys():
+                if state_dict[int(depid)] == 'COMPLETED':
+                   log.info(f"removing completed jobid {depid}")
+                elif state_dict[int(depid)] not in non_final_states:
+                    failed_dependency = True
+                    log.info("Found a dependency in a bad final state="
+                             + f"{state_dict[int(depid)]} for depjobid={depid},"
+                             + " not submitting this job.")
+                    still_depids.append(depid)
+                else:
+                    still_depids.append(depid)
             else:
                 still_depids.append(depid)
         dep_qids = np.array(still_depids)
@@ -691,9 +703,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 
     batch_params.append(f'{script_path}')
     submitted = True
+    ## If dry_run give it a fake QID
+    ## if a dependency has failed don't even try to submit the job because
+    ## Slurm will refuse, instead just mark as unsubmitted.
     if dry_run:
         current_qid = _get_fake_qid()
-    else:
+    elif not failed_dependency:
         #- sbatch sometimes fails; try several times before giving up
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -714,14 +729,16 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
             log.error(msg)
             current_qid = get_default_qid()
             submitted = False
-
-    log.info(batch_params)
+    else:
+        current_qid = get_default_qid()
+        submitted = False
 
     ## Update prow with new information
     prow['LATEST_QID'] = current_qid
 
     ## If we didn't submit, don't say we did and don't add to ALL_QIDS
     if submitted:
+        log.info(batch_params)
         log.info(f'Submitted {jobname} with dependencies {dep_str} and '
                  + f'reservation={reservation}. Returned qid: {current_qid}')
 
@@ -730,6 +747,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         prow['STATUS'] = 'SUBMITTED'
         prow['SUBMIT_DATE'] = int(time.time())
     else:
+        log.info(f"Would have submitted: {batch_params}")
         prow['STATUS'] = 'UNSUBMITTED'
 
         ## Update the Slurm jobid cache of job states
@@ -1137,7 +1155,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
     return np.all(list(test_dict.values()))
 
 def update_and_recursively_submit(proc_table, submits=0, resubmission_states=None,
-                                  ptab_name=None, dry_run=0, reservation=None):
+                                  no_resub_failed=False, ptab_name=None,
+                                  dry_run=0, reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1150,6 +1169,8 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
             possible Slurm scheduler state, where you wish for jobs with that
             outcome to be resubmitted
+        no_resub_failed: bool. Set to True if you do NOT want to resubmit
+            jobs with Slurm status 'FAILED' by default. Default is False.
         ptab_name, str, the full pathname where the processing table should be saved.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
             dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
@@ -1169,7 +1190,8 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
     """
     log = get_logger()
     if resubmission_states is None:
-        resubmission_states = get_resubmission_states()
+        resubmission_states = get_resubmission_states(no_resub_failed=no_resub_failed)
+
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, dry_run=dry_run)
     log.info("Updated processing table queue information:")

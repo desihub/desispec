@@ -102,6 +102,9 @@ def parse_args():
                         help="If set then the code will NOT raise an error "
                              + "if asked to link psfnight calibrations "
                              + "without fiberflatnight calibrations.")
+    parser.add_argument("--no-resub-failed", action="store_true", required=False,
+                        help="Give this flag if you do NOT want to resubmit " +
+                             "jobs with Slurm status 'FAILED' by default.")
     parser.add_argument("--still-acquiring", action='store_true',
                         help="for testing --daily mode, assume more data is still coming even if "
                              + "outside of normal observing hours.")
