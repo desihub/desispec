@@ -14,6 +14,7 @@ import numpy as np
 from os import listdir
 import json
 
+from desispec.workflow.queue import update_from_queue
 # import desispec.io.util
 from desiutil.log import get_logger
 from desispec.workflow.exptable import get_exposure_table_pathname, \
@@ -129,6 +130,7 @@ def main(args=None):
     
     ## Get all the exposure tables for cross-night dependencies
     all_exptabs = read_minimal_science_exptab_cols(nights=None)
+
     ## We don't want future days mixing in
     all_exptabs = all_exptabs[all_exptabs['NIGHT'] <= np.max(nights)]
     ## Restrict to only the exptabs relevant to the current dashboard
@@ -271,6 +273,8 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
             log.warning(f"No processed data on night {night}. Assuming "
                   + f"{os.environ['SPECPROD']} implies ztypes={ztypes}")
     else:
+        ## Update the STATUS of the
+        proctab = update_from_queue(proctab)
         proctab = proctab[np.array([job in ['pernight', 'perexp', 'cumulative']
                                     for job in proctab['JOBDESC']])]
         ztypes = np.unique(proctab['JOBDESC'])
@@ -510,7 +514,7 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
             row_color = 'OVERFULL'
 
         if unique_key in uniqs_processing:
-            status = 'processing'
+            status = row['STATUS']
         elif unique_key in unaccounted_for_tileids:
             status = 'unrecorded'
         else:

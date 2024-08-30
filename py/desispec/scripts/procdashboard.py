@@ -25,6 +25,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     get_terminal_steps, get_tables
 from desispec.workflow.proctable import get_processing_table_pathname, \
     table_row_to_dict
+from desispec.workflow.queue import update_from_queue
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
@@ -208,66 +209,84 @@ def populate_night_info(night, check_on_disk=False,
 
     ## Add a new indexing column to include calibnight rows in correct location
     exptab.add_column(Table.Column(data=2*np.arange(1,len(exptab)+1),name="ORDER"))
+    exptab.add_column(Table.Column(data=[0]*len(exptab), name="PTAB_INTID"))
+    exptab.add_column(Table.Column(data=[0] * len(exptab), name="LATEST_QID"))
+    exptab.add_column(Table.Column(data=['unknown']*len(exptab), name="STATUS"))
     if proctab is not None and len(proctab) > 0:
+        ## Update the STATUS of the
+        proctab = update_from_queue(proctab)
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
-        for jobdesc in ['ccdcalib', 'psfnight', 'nightlyflat']:
-            if jobdesc in proctab['JOBDESC']:
-                jobrow = proctab[proctab['JOBDESC']==jobdesc][0]
-                expids = jobrow['EXPID']
-                lastexpid = expids[-1]
-                if lastexpid in exptab['EXPID']:
-                    joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
-                    joint_erow['OBSTYPE'] = jobdesc
-                    joint_erow['ORDER'] = joint_erow['ORDER']+1
-                    if len(expids) == 1:
-                        joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
-                    else:
-                        joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
-                ## Derive the appropriate PROCCAMWORD from the exposure table
-                pcamwords = []                
-                for expid in expids:
-                    if expid in exptab['EXPID']:
-                        erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
-                        pcamword = ''
-                        if 'BADCAMWORD' in erow:
-                            if 'BADAMPS' in erow:
-                                pcamword = erow_to_goodcamword(erow,
-                                                               suppress_logging=True,
-                                                               exclude_badamps=False)
-                            else:
-                                pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
-                        else:
-                            pcamword = erow['CAMWORD']
-                        pcamwords.append(pcamword)
+        expjobs_ptab = proctab[np.isin(proctab['JOBDESC'],
+                                       ['arc', 'flat', 'tilenight'])]
+        for i,erow in enumerate(exptab):
+            for prow in tnight_ptab:
+                if erow['EXPID'] in prow['EXPID']:
+                    erow['STATUS'][i] = prow['STATUS']
+                    erow['LATEST_QID'][i] = prow['LATEST_QID']
+                    erow['PTAB_INTID'][i] = prow['INTID']
+        caljobs_ptab = proctab[np.isin(proctab['JOBDESC'],
+                                       ['ccdcalib', 'psfnight', 'nightlyflat'])]
+        for prow in caljobs_ptab:
+            jobdesc = prow['JOBDESC']
+            expids = prow['EXPID']
+            lastexpid = expids[-1]
+            if lastexpid in exptab['EXPID']:
+                joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
+                joint_erow['OBSTYPE'] = jobdesc
+                joint_erow['ORDER'] = joint_erow['ORDER']+1
+                if len(expids) == 1:
+                    joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
+                else:
+                    joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
+            # ## Derive the appropriate PROCCAMWORD from the exposure table
+            # pcamwords = []
+            # for expid in expids:
+            #     if expid in exptab['EXPID']:
+            #         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+            #         pcamword = ''
+            #         if 'BADCAMWORD' in erow:
+            #             if 'BADAMPS' in erow:
+            #                 pcamword = erow_to_goodcamword(erow,
+            #                                                suppress_logging=True,
+            #                                                exclude_badamps=False)
+            #             else:
+            #                 pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+            #         else:
+            #             pcamword = erow['CAMWORD']
+            #         pcamwords.append(pcamword)
+            #
+            # if len(pcamwords) == 0:
+            #     print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
+            #     continue
+            # ## For flats we want any camera that exists in all 12 exposures
+            # ## For arcs we want any camera that exists in at least 3 exposures
+            # if jobdesc == 'nightlyflat':
+            #     joint_erow['CAMWORD'] = camword_intersection(pcamwords,
+            #                                        full_spectros_only=False)
+            # elif jobdesc == 'psfnight':
+            #     ## Count number of exposures each camera is present for
+            #     camcheck = {}
+            #     for camword in pcamwords:
+            #         for cam in decode_camword(camword):
+            #             if cam in camcheck:
+            #                 camcheck[cam] += 1
+            #             else:
+            #                 camcheck[cam] = 1
+            #     ## if exists in 3 or more exposures, then include it
+            #     goodcams = []
+            #     for cam, camcount in camcheck.items():
+            #         if camcount >= 3:
+            #             goodcams.append(cam)
+            #     joint_erow['CAMWORD'] = create_camword(goodcams)
 
-                if len(pcamwords) == 0:
-                    print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
-                    continue
-                ## For flats we want any camera that exists in all 12 exposures
-                ## For arcs we want any camera that exists in at least 3 exposures
-                if jobdesc == 'nightlyflat':
-                    joint_erow['CAMWORD'] = camword_intersection(pcamwords,
-                                                       full_spectros_only=False)
-                elif jobdesc == 'psfnight':
-                    ## Count number of exposures each camera is present for
-                    camcheck = {}
-                    for camword in pcamwords:
-                        for cam in decode_camword(camword):
-                            if cam in camcheck:
-                                camcheck[cam] += 1
-                            else:
-                                camcheck[cam] = 1
-                    ## if exists in 3 or more exposures, then include it
-                    goodcams = []
-                    for cam, camcount in camcheck.items():
-                        if camcount >= 3:
-                            goodcams.append(cam)
-                    joint_erow['CAMWORD'] = create_camword(goodcams)
-
-                joint_erow['BADCAMWORD'] = ''
-                joint_erow['BADAMPS'] = ''
-                exptab.add_row(joint_erow)
+            joint_erow['CAMWORD'] = prow['PROCCAMWORD']
+            joint_erow['BADCAMWORD'] = ''
+            joint_erow['BADAMPS'] = ''
+            joint_erow['STATUS'] = prow['STATUS']
+            joint_erow['LATEST_QID'] = prow['LATEST_QID']
+            joint_erow['PTAB_INTID'] = prow['INTID']
+            exptab.add_row(joint_erow)
 
     del proctab
     exptab.sort(['ORDER'])
@@ -437,7 +456,7 @@ def populate_night_info(night, check_on_disk=False,
             row_color = 'OVERFULL'
 
         if expid in expid_processing:
-            status = 'processing'
+            status = row['STATUS']
         elif expid in unaccounted_for_expids:
             status = 'unaccounted'
         else:
