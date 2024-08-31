@@ -554,11 +554,11 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
                 lognames = glob.glob(templatelog)
 
             newest_jobid, logfile = 0, None
-            for log in lognames:
-                jobid = int(log.split('-')[-1].split('.')[0])
+            for itlog in lognames:
+                jobid = int(itlog.split('-')[-1].split('.')[0])
                 if jobid > newest_jobid:
                     newest_jobid = jobid
-                    logname = log
+                    logname = itlog
             if newest_jobid > 0:
                 slurmname = logname.replace(f'-{jobid}.log', '.slurm')
                 slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage), 'Slurm')
