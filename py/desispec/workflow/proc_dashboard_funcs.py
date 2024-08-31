@@ -614,10 +614,15 @@ def _table_row(dictionary):
     else:
         row_str = f'<tr style="{style_str}" id="{idlabel}">'
 
-    for elem in dictionary.values():
+    for key, elem in dictionary.items():
         ## If job is still running don't color things yet
         if idlabel.upper() in non_final_q_states:
             row_str += _table_element(elem)
+        elif key == 'STATUS' and elem == 'COMPLETED' and idlabel == 'GOOD':
+            row_str += _table_element_id(elem, 'GOOD')
+        elif key == 'STATUS' and elem not in ['COMPLETED', 'unprocessed', 'unrecorded'] \
+              and elem not in non_final_q_states and idlabel != 'GOOD':
+            row_str += _table_element_id(elem, idlabel)
         elif re.match('^\d+\/\d+$', elem) is not None:
             strs = str(elem).split('/')
             numerator, denom = int(strs[0]), int(strs[1])
