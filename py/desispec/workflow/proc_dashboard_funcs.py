@@ -618,7 +618,7 @@ def _table_row(dictionary):
         ## If job is still running don't color things yet
         if idlabel.upper() in non_final_q_states:
             row_str += _table_element(elem)
-        elif key == 'STATUS' and elem in ['COMPLETED', 'NULL'] and idlabel == 'GOOD':
+        elif key == 'STATUS' and elem == 'COMPLETED' and idlabel in ['GOOD', 'NULL']:
             row_str += _table_element_id(elem, 'GOOD')
         elif key == 'STATUS' and elem not in ['COMPLETED', 'unprocessed', 'unrecorded'] \
               and elem not in non_final_q_states and idlabel != 'GOOD':

@@ -533,7 +533,10 @@ def populate_night_zinfo(night, doem=True, doqso=True, dotileqa=True, dozmtl=Tru
         elif nfiles[true_terminal_step] < npossible:
             row_color = 'INCOMPLETE'
         elif nfiles[true_terminal_step] == npossible:
-            row_color = 'GOOD'
+            if status in ['COMPLETED', 'NULL']:
+                row_color = 'GOOD'
+            else:
+                row_color = 'INCOMPLETE'
         else:
             row_color = 'OVERFULL'
 
