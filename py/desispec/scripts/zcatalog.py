@@ -122,15 +122,19 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             return None
         try:
             redshifts = fx['REDSHIFTS'].read()
+            zbest_file = False
         except IOError:
             #
             # zbest files do not have an EXP_FIBERMAP HDU, so force a recoadd.
             #
             redshifts = fx['ZBEST'].read()
-            recoadd_fibermap = True
+            zbest_file = True
 
-        if recoadd_fibermap:
-            spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
+        if recoadd_fibermap or zbest_file:
+            if zbest_file:
+                spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
+            else:
+                spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
             log.info('Recoadding fibermap from %s', os.path.basename(spectra_filename))
             fibermap_orig = read_table(spectra_filename)
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
