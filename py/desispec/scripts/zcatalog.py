@@ -120,8 +120,14 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             log.warning("Skipping {} with SPGRP {} != group {}".format(
                 rrfile, hdr['SPGRP'], group))
             return None
-
-        redshifts = fx['REDSHIFTS'].read()
+        try:
+            redshifts = fx['REDSHIFTS'].read()
+        except IOError:
+            #
+            # zbest files do not have an EXP_FIBERMAP HDU, so force a recoadd.
+            #
+            redshifts = fx['ZBEST'].read()
+            recoadd_fibermap = True
 
         if recoadd_fibermap:
             spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
@@ -132,7 +138,14 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = fx['EXP_FIBERMAP'].read()
 
-        tsnr2 = fx['TSNR2'].read()
+        try:
+            tsnr2 = fx['TSNR2'].read()
+        except IOError:
+            #
+            # zbest files do not have a TSNR2 HDU. For now just skip.
+            #
+            tsnr2 = None
+
         assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
         assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
