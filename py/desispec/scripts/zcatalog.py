@@ -138,9 +138,13 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             log.info('Recoadding fibermap from %s', os.path.basename(spectra_filename))
             fibermap_orig = read_table(spectra_filename)
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
+            if zbest_file:
+                fibermap.sort(['TARGETID'])
         else:
             fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = fx['EXP_FIBERMAP'].read()
+
+        assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
         try:
             tsnr2 = fx['TSNR2'].read()
@@ -150,8 +154,8 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             #
             tsnr2 = None
 
-        assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
-        assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+        if tsnr2 is not None:
+            assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
     if minimal:
         # basic set of target information
