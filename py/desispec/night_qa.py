@@ -129,6 +129,9 @@ def get_surveys_night_expids(
                     survey = fahdr["SURVEY"]
                 else:
                     survey = fahdr["FA_SURV"]
+            else:
+                log.warning("no associated fiberassign file for {}; ignoring".format(fns[i]))
+                continue
             if survey == "unknown":
                 log.warning("SURVEY could not be identified for {}; setting to 'unknown'".format(fns[i]))
             # AR append
