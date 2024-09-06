@@ -73,7 +73,7 @@ def _read_framefile(filename, nside=None, healpix=None, ifile=None):
         allpix = radec2pix(nside, ra, dec)
         ii = np.where((allpix == healpix) & ok)[0]
         if len(ii) == 0:
-            log.warning(f"Frame {filename} had no objects in healpix {args.healpix}. Continuing")
+            log.warning(f"Frame {filename} had no objects in healpix {healpix}. Continuing")
             return None
 
         frame = frame[ii]
