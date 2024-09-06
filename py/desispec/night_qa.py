@@ -1672,7 +1672,7 @@ def create_petalnz_pdf(
     surveys = surveys[ii]
     # AR cutting on sv1, sv2, sv3, main
     sel = np.in1d(surveys, ["sv1", "sv2", "sv3", "main"])
-    if sel.sum() > 0:
+    if sel.sum() != sel.size:
         log.info(
             "removing {}/{} tileids corresponding to surveys={}, different than sv1, sv2, sv3, main".format(
                 (~sel).sum(), tileids.size, ",".join(np.unique(surveys[~sel]).astype(str)),
