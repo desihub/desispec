@@ -129,6 +129,9 @@ def get_surveys_night_expids(
                     survey = fahdr["SURVEY"]
                 else:
                     survey = fahdr["FA_SURV"]
+            else:
+                log.warning("no associated fiberassign file for {}; ignoring".format(fns[i]))
+                continue
             if survey == "unknown":
                 log.warning("SURVEY could not be identified for {}; setting to 'unknown'".format(fns[i]))
             # AR append
@@ -1669,13 +1672,28 @@ def create_petalnz_pdf(
     surveys = surveys[ii]
     # AR cutting on sv1, sv2, sv3, main
     sel = np.in1d(surveys, ["sv1", "sv2", "sv3", "main"])
-    if sel.sum() > 0:
+    if sel.sum() != sel.size:
         log.info(
             "removing {}/{} tileids corresponding to surveys={}, different than sv1, sv2, sv3, main".format(
                 (~sel).sum(), tileids.size, ",".join(np.unique(surveys[~sel]).astype(str)),
             )
         )
         tileids, surveys = tileids[sel], surveys[sel]
+    # AR additional check if the tile is in tiles-{survey}.ecsv, as get_tilecov() needs that
+    # AR https://github.com/desihub/desispec/issues/2357
+    sel = np.ones(len(tileids), dtype=bool)
+    for survey in np.unique(surveys):
+        fn = os.path.join(os.getenv("DESI_SURVEYOPS"), "ops", "tiles-{}.ecsv".format(survey))
+        t = Table.read(fn)
+        reject = (surveys == survey) & (~np.in1d(tileids, t["TILEID"]))
+        if reject.sum() > 0:
+            log.warning(
+                "ignoring tiles={} which have survey={} but are not present in {}".format(
+                    ",".join(tileids[reject].astype(str)), survey, fn,
+                )
+            )
+            sel[reject] = False
+    tileids, surveys = tileids[sel], surveys[sel]
     # AR for main tiles, restrict to tiles with EFFTIME > MINTFRAC * GOALTIME
     # AR we also read the tile-qa*fits header below in the loop,
     # AR    but it is simpler/safer to do separate this first loop
