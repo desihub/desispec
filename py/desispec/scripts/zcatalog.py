@@ -523,7 +523,7 @@ def main(args=None):
         os.makedirs(os.path.dirname(outfile_all))
     log.info(f'Writing {outfile_all}')
     tmpfile = get_tempfilename(outfile_all)
-    write_bintable(tmpfile, zcat_basic, header=header, extname='ZCATALOG',
+    write_bintable(tmpfile, zcat, header=header, extname='ZCATALOG',
                    units=units, clobber=True)
     write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
     os.rename(tmpfile, outfile_all)
