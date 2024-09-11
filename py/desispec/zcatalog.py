@@ -456,10 +456,10 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
         ## Last column in TSNR2_LRG in all the redshift catalogs
         ## We will add the PRIMARY columns in the end
 
-        ## The indices of NUMOBS_INIT, PLATE_RA, and ZCAT_PRIMARY columns
+        ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
         nobs = np.where(np.array(tab.colnames) == 'NUMOBS_INIT')[0][0]
         pra = np.where(np.array(tab.colnames) == 'PLATE_RA')[0][0]
-        tsnr = np.where(np.array(tab.colnames) == 'TSNR2_LRG')[0][0]
+        tsnr = np.where(np.char.startswith(np.array(tab.colnames), 'TSNR2_'))[0][-1]
 
         ## List of all columns
         all_cols = tab.colnames
