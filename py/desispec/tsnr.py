@@ -1126,7 +1126,8 @@ def calc_tsnr2(cframe, frame, fiberflat, skymodel, fluxcalib, alpha_only=False, 
         result = dflux * fiberflat.fiberflat
 
         # Apply dust transmission.
-        result *= dust_transmission(frame.wave, ebv[:,None])
+        if tracer not in ['backup', 'gpbbackup']:
+            result *= dust_transmission(frame.wave, ebv[:,None])
 
         if include_fiberfracs:
             if (tracer in tsnr_fiberfracs):
