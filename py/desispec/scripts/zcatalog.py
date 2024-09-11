@@ -30,6 +30,7 @@ from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
 from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
+from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desiutil.annotate import load_csv_units
 import desiutil.depend
@@ -135,7 +136,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
             else:
                 spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
-            log.info('Recoadding fibermap from %s', os.path.basename(spectra_filename))
+            log.info('Recoadding fibermap from %s.', os.path.basename(spectra_filename))
             fibermap_orig = read_table(spectra_filename)
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
             if zbest_file:
@@ -149,10 +150,20 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
         try:
             tsnr2 = fx['TSNR2'].read()
         except IOError:
-            #
-            # zbest files do not have a TSNR2 HDU. For now just skip.
-            #
-            tsnr2 = None
+            if zbest_file:
+                #
+                # zbest files do not have a TSNR2 HDU.
+                #
+                log.info('Computing TSNR2 from SCORES HDU in %s.', os.path.basename(spectra_filename))
+                scores = read_table(spectra_filename, ext='SCORES')
+                if 'TARGETID' not in scores.colnames:
+                    assert len(scores) == len(fibermap_orig)
+                    scores['TARGETID'] = fibermap_orig['TARGETID']
+                tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
+                tsnr2.sort(['TARGETID'])
+            else:
+                log.warning("Unable to obtain TSNR2 information for %s!", rrfile)
+                tsnr2 = None
 
         if tsnr2 is not None:
             assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
