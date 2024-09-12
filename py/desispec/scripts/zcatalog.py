@@ -141,6 +141,9 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
             if zbest_file:
                 fibermap.sort(['TARGETID'])
+                if 'MEAN_PSF_TO_FIBER_SPECFLUX' not in fibermap.colnames:
+                    log.warning("Adding missing column MEAN_PSF_TO_FIBER_SPECFLUX to fibermap with dummy values.")
+                    fibermap['MEAN_PSF_TO_FIBER_SPECFLUX'] = np.zeros((len(fibermap), ), dtype=np.float32)
         else:
             fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = fx['EXP_FIBERMAP'].read()
@@ -167,6 +170,18 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
         if tsnr2 is not None:
             assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+            #
+            # Fill missing columns with dummy values.
+            #
+            for band in ('B', 'R', 'Z', ''):
+                for targ in ('ELG', 'GPBBACKUP', 'GPBBRIGHT', 'GPBDARK', 'LYA', 'BGS', 'QSO', 'LRG'):
+                    if band:
+                        colname = f'TSNR2_{targ}_{band}'
+                    else:
+                        colname = f'TSNR2_{targ}'
+                    if colname not in tsnr2.colnames:
+                        log.warning("TSNR2 table is missing %s, filling with dummy values.", colname)
+                        tsnr2[colname] = np.zeros((len(tsnr2), ), dtype=np.float32)
 
     if minimal:
         # basic set of target information
