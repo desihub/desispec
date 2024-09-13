@@ -460,7 +460,7 @@ def main(args=None):
         try:
             expfm = np.hstack(exp_fibermaps)
         except TypeError:
-            log.error(str(exp_fibermaps))
+            log.error(str([e.columns for e in exp_fibermaps]))
             expfm = None
     else:
         expfm = None
