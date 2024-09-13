@@ -24,7 +24,7 @@ from numpy.lib.recfunctions import append_fields
 import fitsio
 from astropy.table import Table, hstack, vstack
 
-from desiutil.log import get_logger
+from desiutil.log import get_logger, DEBUG
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
@@ -316,7 +316,8 @@ def parse(options=None):
                  "column descriptions")
     parser.add_argument('--nproc', type=int, default=1,
             help="Number of multiprocessing processes to use")
-
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help="Set log level to DEBUG.")
     args = parser.parse_args(options)
 
     return args
@@ -327,7 +328,10 @@ def main(args=None):
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
 
-    log=get_logger()
+    if args.verbose:
+        log=get_logger(DEBUG)
+    else:
+        log=get_logger()
 
     if args.outfile is None:
         args.outfile = io.findfile('zcatalog')
@@ -457,10 +461,13 @@ def main(args=None):
     desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
+        expfm_columns = ('TARGETID','PRIORITY','SUBPRIORITY','NIGHT','EXPID','MJD','TILEID','PETAL_LOC','DEVICE_LOC','LOCATION','FIBER','FIBERSTATUS','FIBERASSIGN_X','FIBERASSIGN_Y','LAMBDA_REF','NUM_ITER','FIBER_X','FIBER_Y','DELTA_X','DELTA_Y','FIBER_RA','FIBER_DEC','IN_COADD_B','IN_COADD_R','IN_COADD_Z')
+        for e in exp_fibermaps:
+            assert tuple(e.colnames) == expfm_columns
         try:
             expfm = np.hstack(exp_fibermaps)
         except TypeError:
-            log.error(str([e.columns for e in exp_fibermaps]))
+            log.error(f'TypeError when stacking exposure fibermaps!')
             expfm = None
     else:
         expfm = None
