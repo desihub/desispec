@@ -338,7 +338,7 @@ def main(args=None):
             import desidatamodel
         except ImportError:
             log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
-            sys.exit(1)
+            return 1
 
     if args.indir:
         indir = args.indir
@@ -357,27 +357,36 @@ def main(args=None):
     else:
         pertile = True
         tilefile = args.tiles if args.tiles is not None else io.findfile('tiles')
+        tilefile_format = 'fits'
         indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
         #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
         if indir.startswith('/global/cfs/cdirs'):
             indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
 
+        if not os.path.exists(tilefile):
+            log.warning(f'Tiles file {tilefile} does not exist. Trying CSV instead.')
+            tilefile = tilefile.replace('.fits', '.csv')
+            tilefile_format = 'ascii.csv'
+            if not os.path.exists(tilefile):
+                log.critical(f"Could not find a valid tiles file!")
+                return 1
+
         log.info(f'Loading tiles from {tilefile}')
-        tiles = Table.read(tilefile)
+        tiles = Table.read(tilefile, format=tilefile_format)
         if args.survey is not None:
             keep = tiles['SURVEY'] == args.survey
             tiles = tiles[keep]
             if len(tiles) == 0:
                 log.critical(f'No tiles kept after filtering by SURVEY={args.survey}')
-                sys.exit(1)
+                return 1
 
         if args.program is not None:
             keep = tiles['PROGRAM'] == args.program
             tiles = tiles[keep]
             if len(tiles) == 0:
                 log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')
-                sys.exit(1)
+                return 1
 
         tileids = tiles['TILEID']
         log.info(f'Searching disk for redrock*.fits files from {len(tileids)} tiles')
