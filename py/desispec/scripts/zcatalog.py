@@ -179,9 +179,13 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                         colname = f'TSNR2_{targ}_{band}'
                     else:
                         colname = f'TSNR2_{targ}'
-                    if colname not in tsnr2.colnames:
+                    if colname not in tsnr2.dtype.names:  # This should work for both numpy arrays and Tables.
                         log.warning("TSNR2 table is missing %s, filling with dummy values.", colname)
-                        tsnr2[colname] = np.zeros((len(tsnr2), ), dtype=np.float32)
+                        if isinstance(tsnr2, Table):
+                            tsnr2[colname] = np.zeros((len(tsnr2), ), dtype=np.float32)
+                        else:
+                            tsnr2 = append_fields(tsnr2, colname,
+                                                  np.zeros(tsnr2.shape, dtype=np.float32), dtypes=np.float32)
 
     if minimal:
         # basic set of target information
