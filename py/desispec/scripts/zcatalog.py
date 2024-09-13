@@ -586,10 +586,10 @@ def main(args=None):
     tmpfile = get_tempfilename(args.outfile)
 
     write_bintable(tmpfile, zcat, header=header, extname='ZCATALOG',
-                   units=units, clobber=True)
+                   units=units, comments=comments, clobber=True)
 
     if not args.minimal and expfm is not None:
-        write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
+        write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units, comments=comments)
 
     os.rename(tmpfile, args.outfile)
 
