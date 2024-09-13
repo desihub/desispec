@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.66.3 (unreleased)
+0.67.0 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.66.3 (2024-09-13)
+-------------------
+
+Final tag used for Kibo.
+
+* nightqa fixes for old nights with earlier formats (PR `#2361`_).
+* fix missing zall TSNR2 columns (PR `#2368`_).
+
+.. _`#2361`: https://github.com/desihub/desispec/pull/2361
+.. _`#2368`: https://github.com/desihub/desispec/pull/2368
 
 0.66.2 (2024-08-27)
 -------------------
