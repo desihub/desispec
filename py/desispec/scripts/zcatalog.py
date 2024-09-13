@@ -457,7 +457,11 @@ def main(args=None):
     desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
-        expfm = np.hstack(exp_fibermaps)
+        try:
+            expfm = np.hstack(exp_fibermaps)
+        except TypeError:
+            log.error(str(exp_fibermaps))
+            expfm = None
     else:
         expfm = None
 
