@@ -398,7 +398,12 @@ def main(args=None):
             if len(tmp) > 0:
                 redrockfiles.append(tmp)
             else:
-                log.error(f'no redrock files found in {indir}/{tileid}')
+                log.warning(f'No redrock files found in {indir}/{tileid}. Checking for zbest files.')
+                tmp = sorted(glob.glob(f'{indir}/{tileid}/*/zbest-*.fits'))
+                if len(tmp) > 0:
+                    redrockfiles.append(tmp)
+                else:
+                    log.error(f'No redrock OR zbest files found in {indir}/{tileid}!')
 
         #- convert list of lists -> list
         redrockfiles = list(itertools.chain.from_iterable(redrockfiles))
