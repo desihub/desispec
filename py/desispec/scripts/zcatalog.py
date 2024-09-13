@@ -366,7 +366,7 @@ def main(args=None):
 
         if not os.path.exists(tilefile):
             log.warning(f'Tiles file {tilefile} does not exist. Trying CSV instead.')
-            tilefile = tilefile.replace('.fits', '.csv')
+            tilefile = io.findfile('tiles_csv')
             tilefile_format = 'ascii.csv'
             if not os.path.exists(tilefile):
                 log.critical(f"Could not find a valid tiles file!")
