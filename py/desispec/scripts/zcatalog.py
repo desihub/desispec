@@ -461,14 +461,21 @@ def main(args=None):
     desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
-        expfm_columns = ('TARGETID','PRIORITY','SUBPRIORITY','NIGHT','EXPID','MJD','TILEID','PETAL_LOC','DEVICE_LOC','LOCATION','FIBER','FIBERSTATUS','FIBERASSIGN_X','FIBERASSIGN_Y','LAMBDA_REF','NUM_ITER','FIBER_X','FIBER_Y','DELTA_X','DELTA_Y','FIBER_RA','FIBER_DEC','IN_COADD_B','IN_COADD_R','IN_COADD_Z')
-        for e in exp_fibermaps:
-            assert tuple(e.colnames) == expfm_columns
         try:
+            #
+            # exp_fibermaps is normally a list of numpy arrays as returned by fitsio.
+            # np.hstack() is apparently best for concatenating those.
+            #
+            # However, if recoadd_fibermap is set, the exp_fibermaps are a list
+            # of astropy.table.Table, for which astropy.table.vstack is more appropriate.
+            #
             expfm = np.hstack(exp_fibermaps)
         except TypeError:
-            log.error(f'TypeError when stacking exposure fibermaps!')
-            expfm = None
+            try:
+                expfm = vstack(exp_fibermaps)
+            except TypeError:
+                log.error(f'TypeError when stacking exposure fibermaps!')
+                expfm = None
     else:
         expfm = None
 
