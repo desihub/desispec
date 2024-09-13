@@ -146,7 +146,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                     fibermap['MEAN_PSF_TO_FIBER_SPECFLUX'] = np.zeros((len(fibermap), ), dtype=np.float32)
         else:
             fibermap = Table(fx['FIBERMAP'].read())
-            expfibermap = fx['EXP_FIBERMAP'].read()
+            expfibermap = Table(fx['EXP_FIBERMAP'].read())
 
         assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
@@ -465,21 +465,14 @@ def main(args=None):
     desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
+        assert all([isinstance(e, Table) for e in exp_fibermaps])
         try:
-            #
-            # exp_fibermaps is normally a list of numpy arrays as returned by fitsio.
-            # np.hstack() is apparently best for concatenating those.
-            #
-            # However, if recoadd_fibermap is set, the exp_fibermaps are a list
-            # of astropy.table.Table, for which astropy.table.vstack is more appropriate.
-            #
-            expfm = np.hstack(exp_fibermaps)
-        except TypeError:
-            try:
-                expfm = vstack(exp_fibermaps)
-            except TypeError:
-                log.error(f'TypeError when stacking exposure fibermaps!')
-                expfm = None
+            expfm = vstack(exp_fibermaps)
+        except Exception as e:
+            log.error(f'Unexpected exception when stacking exposure fibermaps!')
+            log.error(type(e))
+            log.error(e.args[0])
+            expfm = None
     else:
         expfm = None
 
