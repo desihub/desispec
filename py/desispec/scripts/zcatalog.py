@@ -362,9 +362,10 @@ def main(args=None):
     if args.nproc>1:
         from multiprocessing import Pool
         with Pool(args.nproc) as pool:
-            results = pool.map(_wrap_read_redrock, read_args)
+            results = pool.map(_wrap_read_redrock, read_args, chunksize=1)
     else:
         results = [_wrap_read_redrock(a) for a in read_args]
+    log.info("Successfully read {} redrock files".format(nfiles))
 
     #- Stack catalogs
     zcatdata = list()
@@ -451,7 +452,7 @@ def main(args=None):
 
     # columns_basic = ['TARGETID', 'TILEID', 'FIRSTNIGHT', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MEAN_DELTA_X', 'RMS_DELTA_X', 'MEAN_DELTA_Y', 'RMS_DELTA_Y', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'MEAN_FIBER_X', 'MEAN_FIBER_Y', 'MEAN_FIBER_RA', 'STD_FIBER_RA', 'MEAN_FIBER_DEC', 'STD_FIBER_DEC', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO']  # do not split the photometric columns
 
-    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO']
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_photom = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_photom))==0
 
@@ -469,13 +470,13 @@ def main(args=None):
     columns_extra = [col for col in columns_extra if col in zcat.colnames]  # remove columns that do not exist
 
     zcat_basic = zcat[columns_basic].copy()
-    zcat_photom = zcat[columns_photom].copy()
+    zcat_imaging = zcat[columns_photom].copy()
     zcat_extra = zcat[columns_extra].copy()
 
     #- we're done adding columns, convert to numpy array for fitsio
     zcat = np.array(zcat)
     zcat_basic = np.array(zcat_basic)
-    zcat_photom = np.array(zcat_photom)
+    zcat_imaging = np.array(zcat_imaging)
     zcat_extra = np.array(zcat_extra)
 
     #- Inherit header from first input, but remove keywords that don't apply
@@ -518,40 +519,15 @@ def main(args=None):
         units = dict()
         comments = dict()
 
-    outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', args.outfile+'.fits')
-    if not os.path.isdir(os.path.dirname(outfile_all)):
-        os.makedirs(os.path.dirname(outfile_all))
-    log.info(f'Writing {outfile_all}')
-    tmpfile = get_tempfilename(outfile_all)
-    write_bintable(tmpfile, zcat, header=header, extname='ZCATALOG',
-                   units=units, clobber=True)
-    write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
-    os.rename(tmpfile, outfile_all)
-    log.info("Successfully wrote {}".format(outfile_all))
-
-    outfile_basic = args.outfile+'-basic.fits'
-    log.info(f'Writing {outfile_basic}')
-    tmpfile = get_tempfilename(outfile_basic)
+    outfile = args.outfile+'.fits'
+    log.info(f'Writing {outfile}')
+    tmpfile = get_tempfilename(outfile)
     write_bintable(tmpfile, zcat_basic, header=header, extname='ZCATALOG',
-                   units=units, clobber=True)
-    os.rename(tmpfile, outfile_basic)
-    log.info("Successfully wrote {}".format(outfile_basic))
-
-    outfile_photom = args.outfile+'-photom.fits'
-    log.info(f'Writing {outfile_photom}')
-    tmpfile = get_tempfilename(outfile_photom)
-    write_bintable(tmpfile, zcat_photom, header=header, extname='PHOTOM',
-                   units=units, clobber=True)
-    os.rename(tmpfile, outfile_photom)
-    log.info("Successfully wrote {}".format(outfile_photom))
-
-    outfile_extra = args.outfile+'-extra.fits'
-    log.info(f'Writing {outfile_extra}')
-    tmpfile = get_tempfilename(outfile_extra)
-    write_bintable(tmpfile, zcat_extra, header=header, extname='EXTRACOLS',
-                   units=units, clobber=True)
-    os.rename(tmpfile, outfile_extra)
-    log.info("Successfully wrote {}".format(outfile_extra))
+                   units=units, clobber=True, primary_extname='')
+    write_bintable(tmpfile, zcat_imaging, extname='IMAGING', units=units)
+    write_bintable(tmpfile, zcat_extra, extname='EXTRACOLS', units=units)
+    os.rename(tmpfile, outfile)
+    log.info("Successfully wrote {}".format(outfile))
 
     outfile_expfm = os.path.join(os.path.dirname(args.outfile), 'exp_fibermap', args.outfile+'-expfibermap.fits')
     if not os.path.isdir(os.path.dirname(outfile_expfm)):
