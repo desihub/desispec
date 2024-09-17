@@ -564,8 +564,15 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
 
             tivar[i]=np.sum(ivarjj,axis=0)
             tflux[i]=np.sum(ivarjj*spectra.flux[b][jj],axis=0)
+            ww = spectra.resolution_data[b].shape[1]//2
+            # resolution kernel width
+            npix = spectra.resolution_data[b].shape[2]
             for r in range(spectra.resolution_data[b].shape[1]) :
-                trdata[i,r]=np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0) # not sure applying mask is wise here
+                l1,l2 = max(r-ww, 0) , min(npix+(r-ww), npix)
+                norm = np.sum((spectra.ivar[b][jj,l1:l2]+0*
+                                    spectra.resolution_data[b][jj,r,l1-(r-ww):l2-(r-ww)]),axis=0)
+                trdata[i,r,l1-(r-ww):l2-(r-ww)]=np.sum((spectra.ivar[b][jj,l1:l2]*
+                                    spectra.resolution_data[b][jj,r,l1-(r-ww):l2-(r-ww)]),axis=0)/(norm+(norm==0))
             bad=(tivar[i]==0)
             if np.sum(bad)>0 :
                 tivar[i][bad] = np.sum(spectra.ivar[b][jj][:,bad],axis=0) # if all masked, keep original ivar
@@ -574,8 +581,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             if np.sum(ok)>0 :
                 tflux[i][ok] /= tivar[i][ok]
             ok=(tivar_unmasked>0)
-            if np.sum(ok)>0 :
-                trdata[i][:,ok] /= tivar_unmasked[ok]
             if spectra.mask is not None :
                 tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
         spectra.flux[b] = tflux
