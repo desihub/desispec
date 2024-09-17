@@ -276,19 +276,35 @@ def update_table(table1,table2,keys) :
 def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                            preexisting_tsnr2_frame_table, specprod_dir,
                            add_badexp=True, nights=None):
-    """ Compute summary tables.
+    """Compute exposure and frame summary tables.
 
-    Args:
-      summary_rows: list of dictionaries
-      preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
-      preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
-      specprod_dir: str, production directory
+    Parameters
+    ----------
+    summary_rows : :class:`list`
+        A list of :class:`dict` describing columns. In nightly operations, this
+        is an empty list.
+    preexisting_tsnr2_expid_table : :class:`~astropy.table.Table`
+        Update this exposure table if the input is not ``None``. In nightly operations,
+        this will always be set.
+    preexisting_tsnr2_frame_table : :class:`~astropy.table.Table`
+        Update this frame table if the input is not ``None``. In nightly operations,
+        this will always be set.
+    specprod_dir : :class:`str`
+        Production directory.
+    add_badexp : :class:`bool`, optional
+        Add known bad exposures that weren't processed. Default is ``True``.
+    nights : :class:`list`, optional
+        List of nights for which to compute bad exposures summary.
 
-    Options:
-      add_badexp (bool): add known bad exposures that weren't processed
-      nights: None or list, list of nights to compute bad exposures summary tales for
+    Returns
+    -------
+    :class:`tuple`
+        A tuple containing the updated exposure and frames tables.
 
-    Returns tsnr2_expid_table , tsnr2_frame_table
+    Raises
+    ------
+    KeyError
+        If the columns cannot be placed in the proper order.
     """
     log = get_logger()
 
@@ -509,7 +525,6 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
-
     if preexisting_tsnr2_expid_table is not None :
         log.debug("Update to preexisting")
 
@@ -552,12 +567,13 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
               'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
               'EFFTIME_BACKUP_GFA']
 
-    if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
-        missing=~np.in1d(exp_summary.dtype.names,neworder)
-        log.critical("missing keys {} in new order list".format(np.array(exp_summary.dtype.names)[missing]))
-        log.error("new order list:",sorted(neworder))
-        log.error("current table:",sorted(exp_summary.dtype.names))
-        sys.exit(12)
+    if not np.all(np.in1d(exp_summary.dtype.names, neworder)):
+        missing = ~np.in1d(exp_summary.dtype.names, neworder)
+        msg = "Missing keys, '{}' in new order list!".format(np.array(exp_summary.dtype.names)[missing])
+        log.critical(msg)
+        log.critical("new order list:",sorted(neworder))
+        log.critical("current table:",sorted(exp_summary.dtype.names))
+        raise KeyError(msg)
     newtable=Table()
     newtable.meta=exp_summary.meta
     for k in neworder :
@@ -568,6 +584,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
     exp_summary=newtable
 
     return exp_summary, cam_summary
+
 
 def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename,output_csv_filename=None) :
     """Writes a summary fits file.
@@ -926,6 +943,24 @@ def main():
     summary_rows  = list()
 
     def one_night(count, night, rows, tmpfilename):
+        """Prepare multiprocessing steps for analyzing one night.
+
+        Parameters
+        ----------
+        count : :class:`int`
+            A MPI rank number. This may be unused.
+        night : :class:`str`
+            The night to analyze.
+        rows : :class:`list`
+            A list that will be passed to :func:`compute_summary_tables`.
+        tmpfilename : :class:`str`
+            A temporary filename.
+
+        Returns
+        -------
+        :class:`int`
+            An integer suitable for passing to :func:`sys.exit`.
+        """
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
         night_expids=[]
         for dirname in dirnames :
@@ -937,7 +972,7 @@ def main():
         if expids is not None :
             night_expids = np.intersect1d(expids,night_expids)
             if night_expids.size == 0 :
-                return
+                return 0
         log.info("{} {}".format(night,night_expids))
 
         func_args = []
@@ -961,14 +996,20 @@ def main():
                         rows.append(entry)
 
         # write result after every night.
-        if len(rows)>0 or args.add_badexp:
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
-                                                                         preexisting_tsnr2_expid_table,
-                                                                         preexisting_tsnr2_frame_table,
-                                                                         args.prod, nights=[night],
-                                                                         add_badexp=args.add_badexp)
-            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
-            log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
+        if len(rows) > 0 or args.add_badexp:
+            try:
+                tsnr2_expid_table, tsnr2_frame_table = compute_summary_tables(rows,
+                                                                              preexisting_tsnr2_expid_table,
+                                                                              preexisting_tsnr2_frame_table,
+                                                                              args.prod, nights=[night],
+                                                                              add_badexp=args.add_badexp)
+            except KeyError:
+                # Error messages have already been logged at this point.
+                return 12
+            write_summary_tables(tsnr2_expid_table, tsnr2_frame_table, output_fits_filename=tmpfilename)
+            log.info("wrote {} entries in tmp file {}".format(len(rows), tmpfilename))
+
+        return 0
 
     if comm is not None:
         comm.barrier()
@@ -995,7 +1036,10 @@ def main():
                 for count,night in enumerate(ranknights):
                     tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
 
-                    one_night(count, night, rank_summary_rows, tmpfilename)
+                    one_night_status= one_night(count, night, rank_summary_rows, tmpfilename)
+                    #
+                    # Not sure of the best way to exit in this case.
+                    #
         else:
             log.warning('Rank {:d} has no nights to process'.format(rank))
 
@@ -1003,10 +1047,13 @@ def main():
         comm.barrier()
 
     else:
-        for count,night in enumerate(nights):
-            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+        for count, night in enumerate(nights):
+            tmpfilename=args.outfile.replace(".fits", "_tmp.fits")
 
-            one_night(count, night, summary_rows, tmpfilename)
+            one_night_status = one_night(count, night, summary_rows, tmpfilename)
+
+            if one_night_status != 0:
+                return one_night_status
 
     if (comm is None) | (rank == 0):
         log.info('Gathering TSNR tmp tables (over ranks: {}, {})'.format(multinode, size))
@@ -1045,11 +1092,6 @@ def main():
 
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
-
-        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
-        #                                                               preexisting_tsnr2_expid_table,
-        #                                                               preexisting_tsnr2_frame_table,args.prod,
-        #                                                               add_badexp=add_badexp)
 
         if args.skymags is not None :
             skymags_table = Table.read(args.skymags)
@@ -1175,7 +1217,7 @@ def main():
             new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
             if os.path.isfile(args.tile_completeness) :
                 previous_table = Table.read(args.tile_completeness)
-                new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
+                new_tile_table = merge_tile_completeness_table(previous_table, new_tile_table)
             new_tile_table.write(args.tile_completeness,overwrite=True)
             log.info("wrote {}".format(args.tile_completeness))
 
