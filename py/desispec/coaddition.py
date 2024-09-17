@@ -568,11 +568,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # resolution kernel width
             npix = spectra.resolution_data[b].shape[2]
             for r in range(spectra.resolution_data[b].shape[1]) :
-                l1,l2 = max(r-ww, 0) , min(npix+(r-ww), npix)
-                norm = np.sum((spectra.ivar[b][jj,l1:l2]+0*
-                                    spectra.resolution_data[b][jj,r,l1-(r-ww):l2-(r-ww)]),axis=0)
-                trdata[i,r,l1-(r-ww):l2-(r-ww)]=np.sum((spectra.ivar[b][jj,l1:l2]*
-                                    spectra.resolution_data[b][jj,r,l1-(r-ww):l2-(r-ww)]),axis=0)/(norm+(norm==0))
+                l1, l2 = max(r - ww, 0) , min(npix + (r - ww), npix)
+                l1x, l2x = l1 - (r - ww), l2 - (r - ww)
+                norm = np.sum(spectra.ivar[b][jj, l1:l2] ,axis=0)
+                trdata[i, r, l1x:l2x] = np.sum(spectra.ivar[b][jj, l1:l2] *
+                                    spectra.resolution_data[b][jj, r, l1x:l2x],
+                                               axis=0) / (norm + (norm == 0))
             bad=(tivar[i]==0)
             if np.sum(bad)>0 :
                 tivar[i][bad] = np.sum(spectra.ivar[b][jj][:,bad],axis=0) # if all masked, keep original ivar
