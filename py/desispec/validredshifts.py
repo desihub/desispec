@@ -199,26 +199,25 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     if not ignore_qso:
         # QSO - adopted from the code from Edmond
         # https://github.com/echaussidon/LSS/blob/8ca53f4c38cfa29722ee6958687e188cc894ed2b/py/LSS/qso_cat_utils.py#L282
-        res['IS_QSO_QN'] = np.max(np.array([cat[name] for name in ['C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']]), axis=0) > 0.95
+        res['IS_QSO_QN'] = np.max(np.array([cat[name] for name in ['C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']]), axis=0) > 0.99  # new threshold for Y3
         res['IS_QSO_QN_NEW_RR'] = cat['IS_QSO_QN_NEW_RR'] & res['IS_QSO_QN']
         res['QSO_MASKBITS'] = np.zeros(len(cat), dtype=int)
         res['QSO_MASKBITS'][cat['SPECTYPE']=='QSO'] += 2**1
         res['QSO_MASKBITS'][cat['IS_QSO_MGII']] += 2**2
         res['QSO_MASKBITS'][res['IS_QSO_QN']] += 2**3
         res['QSO_MASKBITS'][res['IS_QSO_QN_NEW_RR']] += 2**4
-        res['Z'] = cat['Z'].copy()
-        res['Z'][res['IS_QSO_QN_NEW_RR']] = cat['Z_NEW'][res['IS_QSO_QN_NEW_RR']].copy()
-        res['ZERR'] = cat['ZERR'].copy()
-        res['ZERR'][res['IS_QSO_QN_NEW_RR']] = cat['ZERR_NEW'][res['IS_QSO_QN_NEW_RR']].copy()
-        # Correct bump at z~3.7
-        sel_pb_redshift = (((res['Z'] > 3.65) & (res['Z'] < 3.9)) | ((res['Z'] > 5.15) & (res['Z'] < 5.35))) & ((cat['C_LYA'] < 0.95) | (cat['C_CIV'] < 0.95))
-        res['QSO_MASKBITS'][sel_pb_redshift] = 0
         res['GOOD_QSO'] = res['QSO_MASKBITS']>0
+        res['GOOD_QSO'] &= cat['OBJTYPE']=='TGT'
         if fiberstatus_cut:
             res['GOOD_QSO'] &= get_good_fiberstatus(cat, isqso=True)
+        mask_new_z = res['GOOD_QSO'] & res['IS_QSO_QN_NEW_RR']
+        res['Z_QSO'] = np.full(len(cat), np.nan)
+        res['Z_QSO'][mask_new_z] = cat['Z_NEW'][mask_new_z].copy()
+        res['ZERR_QSO'] = np.full(len(cat), np.nan)
+        res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
 
     # Remove unnecessary columns
-    columns_to_keep = ['GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO']
+    columns_to_keep = ['GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
     res = res[columns_to_keep]
 
