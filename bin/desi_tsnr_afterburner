@@ -2,7 +2,17 @@
 '''
 Calculate stand alone tsnr tables for a given desispec prod.
 
-Use MPI:
+Standard invocation for ``daily`` specprod on ``perlmutter``::
+
+    desi_tsnr_afterburner -o ${DESI_SPECTRO_REDUX}/${SPECPROD}/exposures-${SPECPROD}.fits --prod ${SPECPROD} \
+                          --tile-completeness ${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles-${SPECPROD}.csv \
+                          --aux /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits \
+                          --gfa-proc-dir /global/cfs/cdirs/desi/survey/GFA/ \
+                          --compute-skymags --add-badexp --update --nproc 32 \
+                          --nights $NIGHT &>> ${LOGLOCATION}/tsnr-${SPECPROD}-${NIGHT}.log
+
+Use MPI::
+
     salloc -N 2 -C haswell -q interactive -t 00:30:00
 
     # 2 nodes, 2 mpi ranks reducing 2 nights (1 per rank) with 32 processes.
@@ -34,7 +44,7 @@ from   desispec.io.fluxcalibration import read_flux_calibration
 from   desispec.io.util import get_tempfilename, decode_camword, difference_camwords
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
-from   astropy.table import Table, vstack
+# from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import read_gfa_data, compute_tile_completeness_table, merge_tile_completeness_table
 from   desispec.skymag import compute_skymag
@@ -269,7 +279,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
     """ Compute summary tables.
 
     Args:
-      summary_rows: list of dictionnaries
+      summary_rows: list of dictionaries
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
@@ -614,7 +624,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         alpha_only: bool, only recompute alpha
         details_dir: str or None, save details per frame in this directory if not None
 
-    Returns a dictionnary with NIGHT,EXPID,TILEID,EXPTIME,CAMERA, and the TSNR2 values for this camera
+    Returns a dictionary with NIGHT,EXPID,TILEID,EXPTIME,CAMERA, and the TSNR2 values for this camera
     """
     log = get_logger()
 
@@ -824,7 +834,7 @@ def main():
 
     if not args.outfile.endswith(".fits") :
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
-        sys.exit(1)
+        return 1
 
     if args.mpi and use_mpi():
         from mpi4py import  MPI
@@ -1202,6 +1212,8 @@ def main():
                 os.unlink(tmpfilename)
         else :
             log.error("no valid exposures added")
+
+    return 0
 
 
 if __name__ == '__main__':
