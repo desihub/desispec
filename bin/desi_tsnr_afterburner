@@ -841,6 +841,13 @@ def add_skymags_columns(exposure_table,skymags_table) :
 
 
 def main():
+    """Entry-point for command-line scripts.
+
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
+    """
     log = get_logger()
 
     args=parse()
@@ -935,8 +942,6 @@ def main():
             log.warning("Couldn't find the FRAMES HDU, looking for old format name TSNR2_FRAME")
             preexisting_tsnr2_frame_table = read_table(args.outfile,"TSNR2_FRAME")
 
-
-
     # starting computing
     # one night at a time
 
@@ -948,7 +953,7 @@ def main():
         Parameters
         ----------
         count : :class:`int`
-            A MPI rank number. This may be unused.
+            A MPI rank number. This may be unused inside this function.
         night : :class:`str`
             The night to analyze.
         rows : :class:`list`
@@ -1137,6 +1142,7 @@ def main():
             add_skymags_columns(tsnr2_expid_table,skymags_table)
 
         gfa_table = None
+        gfa_nights = list()
 
         if args.gfa_proc_dir is not None:
             try:
@@ -1145,70 +1151,118 @@ def main():
                 log.error(e)
                 log.error("could not read some files in {}".format(args.gfa_proc_dir))
                 args.gfa_proc_dir = None
-
-        if args.gfa_proc_dir is not None and gfa_table is not None:
-            e2i = {e: i for i, e in enumerate(gfa_table["EXPID"])}
-            jj = []
-            ii = []
-            for j, e in enumerate(tsnr2_expid_table["EXPID"]):
-                if e in e2i:
-                    jj.append(j)
-                    ii.append(e2i[e])
-
-            cols = ("TRANSPARENCY", "FWHM_ASEC", "FIBER_FRACFLUX", "FIBER_FRACFLUX_ELG",
-                    "FIBER_FRACFLUX_BGS", "FIBERFAC", "FIBERFAC_ELG", "FIBERFAC_BGS",
-                    "SKY_MAG_AB", "AIRMASS")
-            for col in cols:
-                if col in gfa_table.dtype.names:
-                    if col == "FWHM_ASEC":
-                        col2 = "SEEING_GFA"
-                    else:
-                        col2 = col + "_GFA"
-                    tsnr2_expid_table[col2] = np.zeros(len(tsnr2_expid_table), dtype=float)
-                    if np.isfinite(gfa_table[col][ii]).all():
-                        tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
-                    else:
-                        log.warning("gfa_table column '%s' contains NaN or other non-finite values. Invalid values will be replaced with zero (0).", col)
-                        good_values = gfa_table[col][ii].copy()
-                        good_values[~np.isfinite(good_values)] = 0
-                        tsnr2_expid_table[col2][jj] = good_values
-
-        if args.gfa_proc_dir is not None and (args.skymags is not None or args.compute_skymags):
             #
-            # Assuming NaN are replaced with zero above, compute_efftime() will return zero for the affected rows.
-            # That is, there are no divide-by-zero or other errors induced by replacing NaN with zero.
+            # It is not unusual for GFA processing to be delayed or otherwise to be
+            # out of sync with the current night. Therefore, when adding GFA
+            # data to the exposures, make a note of any nights where the GFA
+            # data changed, so this can be propagated to the tiles file.
             #
-            efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
-            for col in ("EFFTIME_DARK_GFA", "EFFTIME_BRIGHT_GFA", "EFFTIME_BACKUP_GFA"):
-                tsnr2_expid_table[col] = np.zeros(len(tsnr2_expid_table), dtype=float)
-            tsnr2_expid_table["EFFTIME_DARK_GFA"][jj] = efftime_dark
-            tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj] = efftime_bright
-            tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj] = efftime_backup
-            goaltype = tsnr2_expid_table["GOALTYPE"]
-            tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"]  # default
-            tsnr2_expid_table["EFFTIME_GFA"][goaltype == "bright"] = tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype == "bright"]
-            tsnr2_expid_table["EFFTIME_GFA"][goaltype == "backup"] = tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype == "backup"]
+            if gfa_table is not None:
+                #
+                # Perform a join of gfa_table & tsnr2_expid_table.
+                #
+                e2i = {e: i for i, e in enumerate(gfa_table["EXPID"])}
+                jj = []
+                ii = []
+                for j, e in enumerate(tsnr2_expid_table["EXPID"]):
+                    if e in e2i:
+                        jj.append(j)
+                        ii.append(e2i[e])
+                tsnr2_nights = tsnr2_expid_table["NIGHT"][jj]
+                #
+                # For daily reductions, all of the GFA columns should already exist.
+                #
+                cols = ("TRANSPARENCY", "FWHM_ASEC", "FIBER_FRACFLUX", "FIBER_FRACFLUX_ELG",
+                        "FIBER_FRACFLUX_BGS", "FIBERFAC", "FIBERFAC_ELG", "FIBERFAC_BGS",
+                        "SKY_MAG_AB", "AIRMASS")
+                for col in cols:
+                    if col in gfa_table.dtype.names:
+                        if col == "FWHM_ASEC":
+                            col2 = "SEEING_GFA"
+                        else:
+                            col2 = col + "_GFA"
+                        if col2 not in tsnr2_expid_table.colnames:
+                            tsnr2_expid_table[col2] = np.zeros(len(tsnr2_expid_table), dtype=float)
+                        gfa_values = gfa_table[col][ii]
+                        expid_values = tsnr2_expid_table[col2][jj]
+                        changed_values = (expid_values != gfa_values) & np.isfinite(gfa_values)
+                        gfa_nan = ~np.isfinite(gfa_values)
+                        if changed_values.any():
+                            expid_values[changed_values] = gfa_values[changed_values]
+                            gfa_nights += tsnr2_nights[changed_values].tolist()
+                            tsnr2_expid_table[col2][jj] = expid_values
+                        if gfa_nan.any():
+                            good_values = gfa_values.copy()
+                            good_values[gfa_nan] = 0
+                            #
+                            # If we are working with exposure tables with historical data, chances
+                            # are this correction has already been applied.
+                            #
+                            gfa_nan_changed_values = (tsnr2_expid_table[col2][jj] != good_values)
+                            if gfa_nan_changed_values.any():
+                                log.warning("gfa_table column '%s' contains NaN or other non-finite values. Invalid values will be replaced with zero (0).", col)
+                                tsnr2_expid_table[col2][jj] = good_values
+                                gfa_nights += tsnr2_nights[gfa_nan_changed_values].tolist()
 
-        # end of loop on nights
+            if args.skymags is not None or args.compute_skymags:
+                #
+                # Assuming NaN are replaced with zero above, compute_efftime() will return zero for the affected rows.
+                # That is, there are no divide-by-zero or other errors induced by replacing NaN with zero.
+                #
+                efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
+                efftime_columns = {"EFFTIME_DARK_GFA": efftime_dark,
+                                   "EFFTIME_BRIGHT_GFA": efftime_bright,
+                                   "EFFTIME_BACKUP_GFA": efftime_backup}
+                goaltype = tsnr2_expid_table["GOALTYPE"][jj]
+                efftime_gfa = tsnr2_expid_table["GOALTYPE"][jj]
+                for col in efftime_columns:
+                    if col not in tsnr2_expid_table.colnames:
+                        tsnr2_expid_table[col] = np.zeros(len(tsnr2_expid_table), dtype=float)
+                    gfa_values = efftime_columns[col]
+                    expid_values = tsnr2_expid_table[col][jj]
+                    changed_values = (expid_values != gfa_values)
+                    if changed_values.any():
+                        expid_values[changed_values] = gfa_values[changed_values]
+                        gfa_nights += tsnr2_nights[changed_values].tolist()
+                        tsnr2_expid_table[col][jj] = expid_values
+                        if col == "EFFTIME_DARK_GFA":
+                            # tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"]  # default
+                            efftime_gfa = expid_values
+                        elif col == "EFFTIME_BRIGHT_GFA":
+                            # tsnr2_expid_table["EFFTIME_GFA"][goaltype == "bright"] = tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype == "bright"]
+                            efftime_gfa[goaltype == "bright"] = expid_values[goaltype == "bright"]
+                        else:
+                            # tsnr2_expid_table["EFFTIME_GFA"][goaltype == "backup"] = tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype == "backup"]
+                            efftime_gfa[goaltype == "backup"] = expid_values[goaltype == "backup"]
+                        tsnr2_expid_table["GOALTYPE"][jj] = efftime_gfa
 
+        gfa_nights = np.unique(np.array(gfa_nights))
+        #
+        # End of loop on nights.
+        #
         if len(tsnr2_frame_table) == 0:
             log.error("no valid exposures added")
             return 1
 
-        if args.tile_completeness is not None :
+        if args.tile_completeness is not None:
             # renaming for historical code reasons
             exposure_table = tsnr2_expid_table
 
             # get list of tiles to look at
-            selection = np.repeat(True,len(exposure_table))
-            if args.expids is not None or args.nights is not None :
-                if args.expids is not None :
+            selection = np.repeat(True, len(exposure_table))
+            if args.expids is not None or args.nights is not None:
+                #
+                # args.expids and args.nights should have already been parsed above.
+                # Is there a specific reason to reparse them here?
+                #
+                if args.expids is not None:
                     expids = parse_int_args(args.expids)
-                    selection &= np.in1d(exposure_table["EXPID"],expids)
-                if args.nights is not None :
+                    selection &= np.in1d(exposure_table["EXPID"], expids)
+                if args.nights is not None:
                     nights = parse_int_args(args.nights)
-                    selection &= np.in1d(exposure_table["NIGHT"],nights)
-
+                    selection &= np.in1d(exposure_table["NIGHT"], nights)
+                if len(gfa_nights) > 0:
+                    selection &= np.in1d(exposure_table["NIGHT"], np.unique(np.array(gfa_nights)))
                 # consider only the tiles observed in this selection of exposures
                 tiles=np.unique(exposure_table["TILEID"][selection])
                 # keep all exposures of those tiles
