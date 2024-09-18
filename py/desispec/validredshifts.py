@@ -36,7 +36,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         redrock_path: str, path of redrock FITS file
 
     Options:
-        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS and ZWARN
+        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS
         return_target_columns: bool (default False), if True, include columns that indicate if the object belongs to each class of DESI targets
         extra_columns: list of str (default None), additional columns to include in the output
 
