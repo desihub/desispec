@@ -1273,14 +1273,12 @@ def main():
             if os.path.isfile(args.tile_completeness) :
                 previous_table = Table.read(args.tile_completeness)
                 new_tile_table = merge_tile_completeness_table(previous_table, new_tile_table)
-            new_tile_table.write(args.tile_completeness,overwrite=True)
-            log.info("wrote {}".format(args.tile_completeness))
 
-            if args.tile_completeness.endswith('.fits'):
-                head, ext = os.path.splitext(args.tile_completeness)
-                csvtiles = head + '.csv'
-                new_tile_table.write(csvtiles, overwrite=True)
-                log.info("wrote {}".format(csvtiles))
+            head, foo = os.path.splitext(args.tile_completeness)
+            write_formats = {'.fits': 'fits', '.csv': 'ascii.csv'}
+            for ext in write_formats:
+                new_tile_table.write(head + ext, format=write_formats[ext], overwrite=True)
+                log.info("Wrote %s.", head + ext)
 
             # compute_tile_completeness_table may have found new GOALTIME info
             # from auxiliary_table_filename, so update exposures if needed
