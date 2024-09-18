@@ -237,7 +237,7 @@ def parse(options=None):
     parser.add_argument("-t", "--tiles", type=str,
             help="ascii file with tileids to include (one per line)")
 
-    parser.add_argument("--survey", type=str,
+    parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
     parser.add_argument("--program", type=str,
             help="DESI program, e.g bright, dark")
@@ -278,13 +278,14 @@ def main(args=None):
             log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
             sys.exit(1)
 
+    survey = args.survey
+
     if args.indir:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
     elif args.group == 'healpix':
         pertile = False
-        survey = args.survey if args.survey is not None else "*"
         program = args.program if args.program is not None else "*"
         indir = os.path.join(io.specprod_root(), 'healpix')
 
@@ -307,12 +308,11 @@ def main(args=None):
 
         log.info(f'Loading tiles from {tilefile}')
         tiles = Table.read(tilefile)
-        if args.survey is not None:
-            keep = tiles['SURVEY'] == args.survey
-            tiles = tiles[keep]
-            if len(tiles) == 0:
-                log.critical(f'No tiles kept after filtering by SURVEY={args.survey}')
-                sys.exit(1)
+        keep = tiles['SURVEY'] == survey
+        tiles = tiles[keep]
+        if len(tiles) == 0:
+            log.critical(f'No tiles kept after filtering by SURVEY={survey}')
+            sys.exit(1)
 
         if args.program is not None:
             keep = tiles['PROGRAM'] == args.program
@@ -448,29 +448,55 @@ def main(args=None):
 
     # Add redshift quality flags
     zqual = validredshifts.actually_validate(zcat)
+    good_spec = validredshifts.get_good_fiberstatus(zcat)
+    zqual['GOOD_SPEC'] = good_spec.copy()
+
+    if survey in ['main', 'sv1', 'sv2', 'sv3']:
+        if survey=='main':
+            desi_target_col = 'DESI_TARGET'
+        else:
+            desi_target_col = survey.upper()+'_DESI_TARGET'
+        # The BGS_ANY, LRG, ELG and QSO bits are the same in SV1 to main
+        is_bgs = zcat[desi_target_col] & 2**60 > 0
+        is_lrg = zcat[desi_target_col] & 2**0 > 0
+        is_elg = zcat[desi_target_col] & 2**1 > 0
+        is_qso = zcat[desi_target_col] & 2**2 > 0
+        zqual['GOOD_Z_BGS'] &= is_bgs
+        zqual['GOOD_Z_LRG'] &= is_lrg
+        zqual['GOOD_Z_ELG'] &= is_elg
+        zqual['GOOD_Z_QSO'] &= is_qso
+        zqual['GOOD_Z'] = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']
+        not_primary_target = (~is_bgs) & (~is_lrg) & (~is_elg) & (~is_qso)
+        zqual['GOOD_Z'][not_primary_target] = ((zcat['ZWARN']==0) & good_spec)[not_primary_target]
+        zqual['Z_QSO'][~is_qso] = np.nan
+        zqual['ZERR_QSO'][~is_qso] = np.nan
+    else:
+        zqual['GOOD_Z'] = (zcat['ZWARN']==0) & good_spec
+
     zcat = hstack([zcat, zqual], join_type='exact')
 
-    # columns_basic = ['TARGETID', 'TILEID', 'FIRSTNIGHT', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MEAN_DELTA_X', 'RMS_DELTA_X', 'MEAN_DELTA_Y', 'RMS_DELTA_Y', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'MEAN_FIBER_X', 'MEAN_FIBER_Y', 'MEAN_FIBER_RA', 'STD_FIBER_RA', 'MEAN_FIBER_DEC', 'STD_FIBER_DEC', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO']  # do not split the photometric columns
+    # zcat.rename_columns(['Z_NEW', 'ZERR_NEW', 'IS_QSO_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha'],
+    #                     ['QN_Z_NEW', 'QN_ZERR_NEW', 'QN_IS_QSO_QN_NEW_RR', 'QN_C_LYA', 'QN_C_CIV', 'QN_C_CIII', 'QN_C_MgII', 'QN_C_Hbeta', 'QN_C_Halpha'])
 
-    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO', 'Z_QSO', 'ZERR_QSO']
-    columns_photom = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
-    assert len(np.intersect1d(columns_basic, columns_photom))==0
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_Z', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
+    assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
     # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
-    if args.survey!='main':
+    if survey!='main':
         for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
             if col in zcat.colnames:
                 zcat.remove_column(col)
 
     # Remove the columns that do not exist
     columns_basic = [col for col in columns_basic if col in zcat.colnames]
-    columns_photom = ['TARGETID', 'TILEID'] + columns_photom
-    columns_photom = [col for col in columns_photom if col in zcat.colnames]  # remove columns that do not exist
-    columns_extra = ['TARGETID', 'TILEID'] + [col for col in zcat.colnames if (col not in columns_basic and col not in columns_photom)]
+    columns_imaging = ['TARGETID', 'TILEID'] + columns_imaging
+    columns_imaging = [col for col in columns_imaging if col in zcat.colnames]  # remove columns that do not exist
+    columns_extra = ['TARGETID', 'TILEID'] + [col for col in zcat.colnames if (col not in columns_basic and col not in columns_imaging)]
     columns_extra = [col for col in columns_extra if col in zcat.colnames]  # remove columns that do not exist
 
     zcat_basic = zcat[columns_basic].copy()
-    zcat_imaging = zcat[columns_photom].copy()
+    zcat_imaging = zcat[columns_imaging].copy()
     zcat_extra = zcat[columns_extra].copy()
 
     #- we're done adding columns, convert to numpy array for fitsio
@@ -503,8 +529,8 @@ def main(args=None):
             key, value = parse_keyval(keyval)
             header[key] = value
 
-    if args.survey is not None:
-        header['SURVEY'] = args.survey
+    if survey is not None:
+        header['SURVEY'] = survey
 
     if args.program is not None:
         header['PROGRAM'] = args.program
@@ -519,15 +545,43 @@ def main(args=None):
         units = dict()
         comments = dict()
 
-    outfile = args.outfile+'.fits'
-    log.info(f'Writing {outfile}')
-    tmpfile = get_tempfilename(outfile)
+    if not os.path.isdir(os.path.dirname(args.outfile)):
+        os.makedirs(os.path.dirname(args.outfile))
+
+    outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', args.outfile+'.fits')
+    if not os.path.isdir(os.path.dirname(outfile_all)):
+        os.makedirs(os.path.dirname(outfile_all))
+    log.info(f'Writing {outfile_all}')
+    tmpfile = get_tempfilename(outfile_all)
+    write_bintable(tmpfile, zcat, header=header, extname='MERGEDZCAT',
+                   units=units, clobber=True)
+    write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
+    os.rename(tmpfile, outfile_all)
+    log.info("Successfully wrote {}".format(outfile_all))
+
+    outfile_basic = args.outfile+'.fits'
+    log.info(f'Writing {outfile_basic}')
+    tmpfile = get_tempfilename(outfile_basic)
     write_bintable(tmpfile, zcat_basic, header=header, extname='ZCATALOG',
-                   units=units, clobber=True, primary_extname='')
-    write_bintable(tmpfile, zcat_imaging, extname='IMAGING', units=units)
-    write_bintable(tmpfile, zcat_extra, extname='EXTRACOLS', units=units)
-    os.rename(tmpfile, outfile)
-    log.info("Successfully wrote {}".format(outfile))
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_basic)
+    log.info("Successfully wrote {}".format(outfile_basic))
+
+    outfile_imaging = args.outfile+'-imaging.fits'
+    log.info(f'Writing {outfile_imaging}')
+    tmpfile = get_tempfilename(outfile_imaging)
+    write_bintable(tmpfile, zcat_imaging, header=header, extname='IMAGING',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_imaging)
+    log.info("Successfully wrote {}".format(outfile_imaging))
+
+    outfile_extra = args.outfile+'-extra.fits'
+    log.info(f'Writing {outfile_extra}')
+    tmpfile = get_tempfilename(outfile_extra)
+    write_bintable(tmpfile, zcat_extra, header=header, extname='EXTRACOLS',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_extra)
+    log.info("Successfully wrote {}".format(outfile_extra))
 
     outfile_expfm = os.path.join(os.path.dirname(args.outfile), 'exp_fibermap', args.outfile+'-expfibermap.fits')
     if not os.path.isdir(os.path.dirname(outfile_expfm)):
@@ -538,5 +592,3 @@ def main(args=None):
                    units=units, clobber=True)
     os.rename(tmpfile, outfile_expfm)
     log.info("Successfully wrote {}".format(outfile_expfm))
-
-
