@@ -948,7 +948,8 @@ def main():
     summary_rows  = list()
 
     def one_night(count, night, rows, tmpfilename):
-        """Prepare multiprocessing steps for analyzing one night.
+        """Prepare input data for one night for passing to :func:`func`,
+        which performs the actual TSNR2 calculations.
 
         Parameters
         ----------
@@ -1038,10 +1039,10 @@ def main():
                 os.unlink(logfile)
 
             with stdouterr_redirected(to=logfile):
-                for count,night in enumerate(ranknights):
-                    tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
+                for count, night in enumerate(ranknights):
+                    tmpfilename = args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
 
-                    one_night_status= one_night(count, night, rank_summary_rows, tmpfilename)
+                    one_night_status = one_night(count, night, rank_summary_rows, tmpfilename)
                     #
                     # Not sure of the best way to exit in this case.
                     #
@@ -1053,7 +1054,7 @@ def main():
 
     else:
         for count, night in enumerate(nights):
-            tmpfilename=args.outfile.replace(".fits", "_tmp.fits")
+            tmpfilename = args.outfile.replace(".fits", "_tmp.fits")
 
             one_night_status = one_night(count, night, summary_rows, tmpfilename)
 
@@ -1262,7 +1263,7 @@ def main():
                     nights = parse_int_args(args.nights)
                     selection &= np.in1d(exposure_table["NIGHT"], nights)
                 if len(gfa_nights) > 0:
-                    selection &= np.in1d(exposure_table["NIGHT"], np.unique(np.array(gfa_nights)))
+                    selection &= np.in1d(exposure_table["NIGHT"], gfa_nights)
                 # consider only the tiles observed in this selection of exposures
                 tiles=np.unique(exposure_table["TILEID"][selection])
                 # keep all exposures of those tiles
