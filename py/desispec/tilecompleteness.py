@@ -400,5 +400,8 @@ def merge_tile_completeness_table(previous_table, new_table):
     #
     ii  = np.argsort(res["LASTNIGHT"])
     res = res[ii]
-
+    #
+    # Make sure metadata are updated.
+    #
+    res.meta['EXTNAME'] = 'TILES'
     return res
