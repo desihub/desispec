@@ -13,27 +13,18 @@ from astropy.table import Table, hstack, join
 import fitsio
 
 
-def get_good_fiberstatus(cat, isqso=False):
+def get_good_fiberstatus(cat):
     '''
     Validate the fiber status for a redrock catalog.
 
     Args:
         cat: redrock catalog (e.g., in astropy table format)
 
-    Options:
-        isqso: bool (default False), if True, use the specific QSO criteria
-
     Returns:
         good_fiberstatus: boolean array
     '''
 
-    if not isqso:
-        good_fiberstatus = cat['COADD_FIBERSTATUS']==0
-    else:
-        # good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==8388608) | (cat['COADD_FIBERSTATUS']==16777216)
-        from desispec.maskbits import fibermask
-        good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==fibermask['BADAMPR']) | (cat['COADD_FIBERSTATUS']==fibermask['BADAMPZ'])
-    good_fiberstatus &= cat['ZWARN'] & 2**9 == 0  # NO DATA flag
+    good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==2**3)  # allow bit 3 (restricted fiber reach)
     return good_fiberstatus
 
 
@@ -54,7 +45,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
              that indicate if each object meets the redshift quality criteria of specific tracers
     '''
 
-    output_columns = ['GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO']
+    output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']
     if return_target_columns:
         output_columns = ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
 
@@ -65,7 +56,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     ############################ Load data ############################
 
     columns_redshifts = ['TARGETID', 'CHI2', 'Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'DELTACHI2']
-    columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC']
+    columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'OBJTYPE']
     columns_emline = ['TARGETID', 'OII_FLUX', 'OII_FLUX_IVAR']
     columns_qso_mgii = ['TARGETID', 'IS_QSO_MGII']
     columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
@@ -175,26 +166,26 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     res = Table()
 
     # BGS
-    res['GOOD_BGS'] = cat['ZWARN']==0
-    res['GOOD_BGS'] &= cat['DELTACHI2']>40
+    res['GOOD_Z_BGS'] = cat['ZWARN']==0
+    res['GOOD_Z_BGS'] &= cat['DELTACHI2']>40
     if fiberstatus_cut:
-        res['GOOD_BGS'] &= get_good_fiberstatus(cat)
+        res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
 
     # LRG
-    res['GOOD_LRG'] = cat['ZWARN']==0
-    res['GOOD_LRG'] &= cat['Z']<1.5
-    res['GOOD_LRG'] &= cat['DELTACHI2']>15
+    res['GOOD_Z_LRG'] = cat['ZWARN']==0
+    res['GOOD_Z_LRG'] &= cat['Z']<1.5
+    res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
     if fiberstatus_cut:
-        res['GOOD_LRG'] &= get_good_fiberstatus(cat)
+        res['GOOD_Z_LRG'] &= get_good_fiberstatus(cat)
 
     # ELG
     if not ignore_emline:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            res['GOOD_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
-            res['GOOD_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
+            res['GOOD_Z_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
+            res['GOOD_Z_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
         if fiberstatus_cut:
-            res['GOOD_ELG'] &= get_good_fiberstatus(cat)
+            res['GOOD_Z_ELG'] &= get_good_fiberstatus(cat)
 
     if not ignore_qso:
         # QSO - adopted from the code from Edmond
@@ -206,18 +197,18 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['QSO_MASKBITS'][cat['IS_QSO_MGII']] += 2**2
         res['QSO_MASKBITS'][res['IS_QSO_QN']] += 2**3
         res['QSO_MASKBITS'][res['IS_QSO_QN_NEW_RR']] += 2**4
-        res['GOOD_QSO'] = res['QSO_MASKBITS']>0
-        res['GOOD_QSO'] &= cat['OBJTYPE']=='TGT'
+        res['GOOD_Z_QSO'] = res['QSO_MASKBITS']>0
+        res['GOOD_Z_QSO'] &= cat['OBJTYPE']=='TGT'
         if fiberstatus_cut:
-            res['GOOD_QSO'] &= get_good_fiberstatus(cat, isqso=True)
-        mask_new_z = res['GOOD_QSO'] & res['IS_QSO_QN_NEW_RR']
-        res['Z_QSO'] = np.full(len(cat), np.nan)
+            res['GOOD_Z_QSO'] &= get_good_fiberstatus(cat)
+        mask_new_z = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
+        res['Z_QSO'] = cat['Z'].copy()
         res['Z_QSO'][mask_new_z] = cat['Z_NEW'][mask_new_z].copy()
-        res['ZERR_QSO'] = np.full(len(cat), np.nan)
+        res['ZERR_QSO'] = cat['ZERR'].copy()
         res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
 
     # Remove unnecessary columns
-    columns_to_keep = ['GOOD_BGS', 'GOOD_LRG', 'GOOD_ELG', 'GOOD_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
     res = res[columns_to_keep]
 
