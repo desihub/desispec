@@ -449,36 +449,44 @@ def main(args=None):
     # Add redshift quality flags
     zqual = validredshifts.actually_validate(zcat)
     good_spec = validredshifts.get_good_fiberstatus(zcat)
-    zqual['GOOD_SPEC'] = good_spec.copy()
+    good_spec &= zcat['OBJTYPE']=='TGT'
+    zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
 
+    # Add GOOD_Z columns
     if survey in ['main', 'sv1', 'sv2', 'sv3']:
         if survey=='main':
             desi_target_col = 'DESI_TARGET'
         else:
             desi_target_col = survey.upper()+'_DESI_TARGET'
-        # The BGS_ANY, LRG, ELG and QSO bits are the same in SV1 to main
+
+        # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
         is_bgs = zcat[desi_target_col] & 2**60 > 0
         is_lrg = zcat[desi_target_col] & 2**0 > 0
         is_elg = zcat[desi_target_col] & 2**1 > 0
         is_qso = zcat[desi_target_col] & 2**2 > 0
-        zqual['GOOD_Z_BGS'] &= is_bgs
-        zqual['GOOD_Z_LRG'] &= is_lrg
-        zqual['GOOD_Z_ELG'] &= is_elg
-        zqual['GOOD_Z_QSO'] &= is_qso
-        zqual['GOOD_Z'] = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']
+
+        # GOOD_Z_TRACER requires that the object is a TRACER target
+        zqual['GOOD_Z_BGS'] &= is_bgs  # GOOD_Z_BGS: true if it is a BGS target and passes BGS redshift quality cut
+        zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_QSO: true if it is a LRG target and passes LRG redshift quality cut
+        zqual['GOOD_Z_ELG'] &= is_elg  # GOOD_Z_QSO: true if it is a ELG target and passes ELG redshift quality cut
+        zqual['GOOD_Z_QSO'] &= is_qso  # GOOD_Z_QSO: true if it is a QSO target and passes QSO redshift quality cut; confident QSO redshift (Z_QSO column)
+        # Merge BGS+LRG+ELG quality cuts
+        zqual['GOOD_Z'] = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']  # GOOD_Z: true if it has confident redshift (Z column)
         not_primary_target = (~is_bgs) & (~is_lrg) & (~is_elg) & (~is_qso)
-        zqual['GOOD_Z'][not_primary_target] = ((zcat['ZWARN']==0) & good_spec)[not_primary_target]
-        zqual['Z_QSO'][~is_qso] = np.nan
+        # GOOD_Z definition for objects that are not BGS or LRG or ELG or QSO targets
+        zqual['GOOD_Z'][not_primary_target] = (zcat['ZWARN']==0)[not_primary_target]
+
+        # Z_QSO and GOOD_Z_QSO are recorded separately
+        zqual['Z_QSO'][~is_qso] = np.nan  # Z_QSO: redrock best-fit redshift with QSO templates and QuasarNET prior for QSO targets
         zqual['ZERR_QSO'][~is_qso] = np.nan
     else:
-        zqual['GOOD_Z'] = (zcat['ZWARN']==0) & good_spec
+        # GOOD_Z definition for surveys that are not main or sv1 or sv2 or sv3
+        zqual['GOOD_Z'] = (zcat['ZWARN']==0)
+    zqual['GOOD_Z'] &= zqual['GOOD_SPEC']  # require good hardware status
 
     zcat = hstack([zcat, zqual], join_type='exact')
 
-    # zcat.rename_columns(['Z_NEW', 'ZERR_NEW', 'IS_QSO_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha'],
-    #                     ['QN_Z_NEW', 'QN_ZERR_NEW', 'QN_IS_QSO_QN_NEW_RR', 'QN_C_LYA', 'QN_C_CIV', 'QN_C_CIII', 'QN_C_MgII', 'QN_C_Hbeta', 'QN_C_Halpha'])
-
-    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_Z', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_SPEC', 'GOOD_Z', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
@@ -548,16 +556,16 @@ def main(args=None):
     if not os.path.isdir(os.path.dirname(args.outfile)):
         os.makedirs(os.path.dirname(args.outfile))
 
-    outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', args.outfile+'.fits')
-    if not os.path.isdir(os.path.dirname(outfile_all)):
-        os.makedirs(os.path.dirname(outfile_all))
-    log.info(f'Writing {outfile_all}')
-    tmpfile = get_tempfilename(outfile_all)
-    write_bintable(tmpfile, zcat, header=header, extname='MERGEDZCAT',
-                   units=units, clobber=True)
-    write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
-    os.rename(tmpfile, outfile_all)
-    log.info("Successfully wrote {}".format(outfile_all))
+    # outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', os.path.basename(args.outfile)+'.fits')
+    # if not os.path.isdir(os.path.dirname(outfile_all)):
+    #     os.makedirs(os.path.dirname(outfile_all))
+    # log.info(f'Writing {outfile_all}')
+    # tmpfile = get_tempfilename(outfile_all)
+    # write_bintable(tmpfile, zcat, header=header, extname='MERGEDZCAT',
+    #                units=units, clobber=True)
+    # write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
+    # os.rename(tmpfile, outfile_all)
+    # log.info("Successfully wrote {}".format(outfile_all))
 
     outfile_basic = args.outfile+'.fits'
     log.info(f'Writing {outfile_basic}')
@@ -583,7 +591,7 @@ def main(args=None):
     os.rename(tmpfile, outfile_extra)
     log.info("Successfully wrote {}".format(outfile_extra))
 
-    outfile_expfm = os.path.join(os.path.dirname(args.outfile), 'exp_fibermap', args.outfile+'-expfibermap.fits')
+    outfile_expfm = os.path.join(os.path.dirname(args.outfile), 'exp_fibermap', os.path.basename(args.outfile)+'-expfibermap.fits')
     if not os.path.isdir(os.path.dirname(outfile_expfm)):
         os.makedirs(os.path.dirname(outfile_expfm))
     log.info(f'Writing {outfile_expfm}')
