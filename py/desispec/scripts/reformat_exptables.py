@@ -1,6 +1,6 @@
 """
 desispec.scripts.reformat_exptables
-================================
+===================================
 
 """
 import argparse

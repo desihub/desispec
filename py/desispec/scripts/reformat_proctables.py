@@ -1,6 +1,6 @@
 """
 desispec.scripts.reformat_proctables
-================================
+====================================
 
 """
 import argparse
