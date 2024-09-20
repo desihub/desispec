@@ -1,8 +1,9 @@
 """
-desispec.scripts.updateexptables
+desispec.scripts.reformat_exptables
 ================================
 
 """
+import argparse
 import os
 import sys
 import numpy as np
@@ -20,8 +21,31 @@ from desispec.workflow.tableio import write_table, load_table
 from desispec.scripts.exposuretable import create_exposure_tables
 
 
+def get_parser():
+    """
+    Creates an arguments parser for the desi_reformat_exposure_tables script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-n", "--nights", type=str,  default=None, help="nights as comma separated string")
+    parser.add_argument("--night-range", type=str, default=None, help="comma separated pair of nights in form YYYYMMDD,YYYYMMDD"+\
+                                                                      "for first_night,last_night specifying the beginning"+\
+                                                                      "and end of a range of nights to be generated. "+\
+                                                                      "last_night should be inclusive.")
+    parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\
+                                                           "the exposure table, e.g. science,arc,flat,dark,zero, ...")
+    parser.add_argument("-i", "--path-to-data", type=str, default=None, help="path to the raw input data")
+    parser.add_argument("-o","--exp-table-path", type=str, default=None,  help="path to save exposure tables, without monthly subdirectory")
+    parser.add_argument("--orig-filetype", type=str, default='csv', help="format type for original exposure tables")
+    parser.add_argument("--out-filetype", type=str, default='csv', help="format type for output exposure tables")
+    parser.add_argument("--verbose", action="store_true", help="print verbose output")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run, printing the changes that would be made and the final output table "+
+                             "but not overwriting the actual files on disk.")
+    parser.add_argument("--no-specprod", action="store_true", help="Create exposure table in repository location "+\
+                                                                     "rather than the SPECPROD location.")
+    return parser
 
-def update_exposure_tables(nights=None, night_range=None, path_to_data=None,
+def reformat_exposure_tables(nights=None, night_range=None, path_to_data=None,
                            exp_table_path=None, obstypes=None, orig_filetype='csv',
                            out_filetype='csv',  verbose=False, no_specprod=False,
                            dry_run=False):

@@ -1,8 +1,9 @@
 """
-desispec.scripts.updateexptables
+desispec.scripts.reformat_proctables
 ================================
 
 """
+import argparse
 import os
 import glob
 import sys
@@ -19,8 +20,24 @@ from desispec.workflow.tableio import write_table, load_table
 from desispec.scripts.exposuretable import create_exposure_tables
 
 
+def get_parser():
+    """
+    Creates an arguments parser for the desi_reformat_processing_tables script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-n", "--nights", type=str,  default=None, help="nights as comma separated string")
+    parser.add_argument("--night-range", type=str, default=None, help="comma separated pair of nights in form YYYYMMDD,YYYYMMDD"+\
+                                                                      "for first_night,last_night specifying the beginning"+\
+                                                                      "and end of a range of nights to be generated. "+\
+                                                                      "last_night should be inclusive.")
+    parser.add_argument("--orig-filetype", type=str, default='csv', help="format type for original exposure tables")
+    parser.add_argument("--out-filetype", type=str, default='csv', help="format type for output exposure tables")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run, printing the changes that would be made and the final output table "+
+                             "but not overwriting the actual files on disk.")
+    return parser
 
-def update_processing_tables(nights=None, night_range=None, orig_filetype='csv',
+def reformat_processing_tables(nights=None, night_range=None, orig_filetype='csv',
                            out_filetype='csv', dry_run=False):
     """
     Generates updated processing tables for the nights requested. Requires
@@ -28,15 +45,15 @@ def update_processing_tables(nights=None, night_range=None, orig_filetype='csv',
 
     Args:
         nights: str, int, or comma separated list. The night(s) to generate
-                                                   procesing tables for.
+                                                   processing tables for.
         night_range: str. comma separated pair of nights in form
                           YYYYMMDD,YYYYMMDD for first_night,last_night
                           specifying the beginning and end of a range of
                           nights to be generated. first_night and last_night are
                           inclusive.
-        orig_filetype: str. The file extension (without the '.') of the exposure
+        orig_filetype: str. The file extension (without the '.') of the processing
                             tables.
-        out_filetype: str. The file extension for the outputted exposure tables
+        out_filetype: str. The file extension for the outputted processing tables
                            (without the '.').
 
     Returns:
@@ -174,4 +191,4 @@ def update_processing_tables(nights=None, night_range=None, orig_filetype='csv',
         ## Flush the outputs
         sys.stdout.flush()
         sys.stderr.flush()
-    print("Exposure table regenerations complete")
+    print("Processing table regenerations complete")
