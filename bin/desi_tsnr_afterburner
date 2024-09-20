@@ -494,7 +494,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
     # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
     # If no 'GPB_EFFTIME_BACKUP' then default to the BGS time
     ii = (exp_summary['GOALTYPE']=='backup')
-    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names and len(ii) > 0 and np.any(exp_summary['EFFTIME_SPEC'][ii]>0.):
+    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names and np.any(ii) and np.any(exp_summary['EFFTIME_SPEC'][ii]>0.):
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
