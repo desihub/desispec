@@ -583,7 +583,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             ok=(tivar[i]>0)
             if np.sum(ok)>0 :
                 tflux[i][ok] /= tivar[i][ok]
-            ok=(tivar_unmasked>0)
             if spectra.mask is not None :
                 tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
         spectra.flux[b] = tflux
