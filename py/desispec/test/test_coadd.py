@@ -140,6 +140,31 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(s1.mask['b'][0, mpix] > 0)
         self.assertTrue(s1.ivar['b'][0, mpix] == 0)
         
+    def test_coadd_resolution(self):
+        """Test proper behaviour of resolution matrix
+        i.e. if all input spectra were D_i = R_i * M
+        coadd must satisfy the same condition
+        protection against #2372 """
+        nspec, nwave = 20, 30
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        rng = np.random.default_rng(4343)
+        ivar = rng.uniform(size=s1.ivar['b'].shape)
+        # completely mask some fraction of pixels
+        ivar[rng.uniform(size=s1.ivar['b'].shape) < 0.01] = 0
+        s1.ivar['b'] = ivar
+        model0 = rng.uniform(size=nwave)
+        # random resolution matrix
+        resol = rng.uniform(size=s1.resolution_data['b'].shape)
+        s1.resolution_data['b'] = resol
+        for i in range(nspec):
+            s1.flux['b'][i] = Resolution(resol[i])@model0
+        # All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = [10]*nspec
+        coadd(s1,cosmics_nsig=1e10)
+        resmat2 = Resolution(s1.resolution_data['b'][0])
+        resmod = resmat2@model0
+        self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
+        
 
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
