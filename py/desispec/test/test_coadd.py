@@ -11,7 +11,7 @@ from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, fast_resample_spectra,
         spectroperf_resample_spectra, coadd_fibermap, coadd_cameras)
 from desispec.specscore import compute_coadd_scores
-
+from desispec.resolution import Resolution
 from desispec.maskbits import fibermask
 
 class TestCoadd(unittest.TestCase):
@@ -48,14 +48,16 @@ class TestCoadd(unittest.TestCase):
                                resolution_data=rdat,
                                fibermap=fmap)
         
-    def _random_spectra(self, ns=3, nw=10, seed=None):
+    def _random_spectra(self, ns=3, nw=10, seed=None, with_mask=False):
 
         np.random.seed(seed)
         wave = np.linspace(5000, 5100, nw)
         flux = np.random.uniform(0, 1, size=(ns,nw))
         ivar = np.random.uniform(0, 1, size=(ns,nw))
-        #mask = np.zeros((ns,nw),dtype=int)
-        mask = None
+        if with_mask:
+            mask = np.zeros((ns,nw),dtype=int)
+        else:
+            mask = None
         rdat = np.ones((ns,3,nw))
         rdat[:,0] *= 0.25
         rdat[:,1] *= 0.5
@@ -83,7 +85,7 @@ class TestCoadd(unittest.TestCase):
                 wave={"b":wave},
                 flux={"b":flux},
                 ivar={"b":ivar},
-                mask=None,
+                mask=({'b':mask} if mask is not None else None),
                 resolution_data={"b":rdat},
                 fibermap=fmap,
                 scores=scores,
@@ -101,7 +103,44 @@ class TestCoadd(unittest.TestCase):
         coadd(s1)
         self.assertEqual(s1.flux['b'].shape[0], 1)
         self.assertIsInstance(s1.scores, Table)
+
+    def test_coadd_single(self):
+        """Test coaddition of a single spectrum which should be no-op"""
+        nspec, nwave = 1, 10
+        s1 = self._random_spectra(nspec, nwave)
+        spec0 = s1.flux['b'] * 1
+        ivar0 = s1.ivar['b'] * 1
+        resmat = s1.resolution_data['b'] * 1
+        #- All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = 10
+        coadd(s1)
+        self.assertTrue(np.allclose(s1.flux['b'], spec0))
+        self.assertTrue(np.all(s1.ivar['b'] == ivar0))
+        self.assertTrue(np.all(s1.resolution_data['b'] == resmat))
+
+    def test_coadd_single_mask(self):
+        """Test coaddition with a masked pixel triggering #2372"""
+        nspec, nwave = 1, 10
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        mpix = 5
+        s1.mask['b'][0, mpix] = 1
+        s1.ivar['b'][0, mpix] = 0
+        nonmasked = s1.mask['b'][0] == 0
+        resmat1 = Resolution(s1.resolution_data['b'][0] * 1)
+        # All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = 10
+        coadd(s1)
+        resmat2 = Resolution(s1.resolution_data['b'][0] * 1)
+        modvec = np.ones(nwave)
+        # Here we are testing that after model spectra are
+        # the same as before coadd (outside the masked pixel)
+        mod1 = resmat1@modvec
+        mod2 = resmat2@modvec
+        self.assertTrue(np.allclose(mod1[nonmasked], mod2[nonmasked]))
+        self.assertTrue(s1.mask['b'][0, mpix] > 0)
+        self.assertTrue(s1.ivar['b'][0, mpix] == 0)
         
+
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
         nspec, nwave = 3, 10
