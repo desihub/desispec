@@ -570,7 +570,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # that needs to be used for ivar weights
             res_indices = (np.arange(npix)[None, :]
                            + np.arange(-ww, ww+1)[:, None]) % npix
-            res_whts = np.array([_[res_indices] for _ in spectra.ivar[b][jj]])
+            res_whts = np.array([_[res_indices] for _ in ivarjj])
             res_norm = res_whts.sum(axis=0)
             trdata[i, :, : ] = np.sum(res_whts *
                                     spectra.resolution_data[b][jj, : , : ],

@@ -121,25 +121,49 @@ class TestCoadd(unittest.TestCase):
     def test_coadd_single_mask(self):
         """Test coaddition with a masked pixel triggering #2372"""
         nspec, nwave = 1, 10
-        s1 = self._random_spectra(nspec, nwave, with_mask=True)
-        mpix = 5
-        s1.mask['b'][0, mpix] = 1
-        s1.ivar['b'][0, mpix] = 0
-        nonmasked = s1.mask['b'][0] == 0
-        resmat1 = Resolution(s1.resolution_data['b'][0] * 1)
-        # All the same targets, coadded in place
-        s1.fibermap['TARGETID'] = 10
-        coadd(s1)
-        resmat2 = Resolution(s1.resolution_data['b'][0] * 1)
-        modvec = np.ones(nwave)
-        # Here we are testing that after model spectra are
-        # the same as before coadd (outside the masked pixel)
-        mod1 = resmat1@modvec
-        mod2 = resmat2@modvec
-        self.assertTrue(np.allclose(mod1[nonmasked], mod2[nonmasked]))
-        self.assertTrue(s1.mask['b'][0, mpix] > 0)
-        self.assertTrue(s1.ivar['b'][0, mpix] == 0)
+        # check middle pixel and edge pixel
+        for mpix in [0,5]: 
+            s1 = self._random_spectra(nspec, nwave, with_mask=True)
+            s1.mask['b'][0, mpix] = 1
+            s1.ivar['b'][0, mpix] = 0
+            nonmasked = s1.mask['b'][0] == 0
+            resmat1 = Resolution(s1.resolution_data['b'][0] * 1)
+            # All the same targets, coadded in place
+            s1.fibermap['TARGETID'] = 10
+            coadd(s1)
+            resmat2 = Resolution(s1.resolution_data['b'][0] * 1)
+            modvec = np.ones(nwave)
+            # Here we are testing that after model spectra are
+            # the same as before coadd (outside the masked pixel)
+            mod1 = resmat1@modvec
+            mod2 = resmat2@modvec
+            self.assertTrue(np.allclose(mod1[nonmasked], mod2[nonmasked]))
+            self.assertTrue(s1.mask['b'][0, mpix] > 0)
+            self.assertTrue(s1.ivar['b'][0, mpix] == 0)
         
+    def test_coadd_full_mask(self):
+        """
+        Test coadd with one spectrum fully masked
+        """
+        nspec, nwave = 2, 30
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        flux0 = s1.flux['b'][0] * 1
+        rng = np.random.default_rng(4343)
+        ivar = rng.uniform(size=s1.ivar['b'].shape)
+        resol = rng.uniform(size=s1.resolution_data['b'].shape)        
+        s1.ivar['b'] = ivar * 1
+        s1.resolution_data['b'] = resol * 1
+        # fully mask second exposure
+        s1.mask['b'][1, :] = 1
+        # All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = [10] * nspec
+        coadd(s1)
+        # check that the output of the coadd equals the first spectrum
+        self.assertTrue(np.allclose(flux0, s1.flux['b'][0]))
+        self.assertTrue(np.allclose(ivar[0], s1.ivar['b'][0]))
+        self.assertTrue(np.allclose(resol[0], s1.resolution_data['b'][0]))
+        
+
     def test_coadd_resolution(self):
         """Test proper behaviour of resolution matrix
         i.e. if all input spectra were D_i = R_i * M
@@ -160,7 +184,7 @@ class TestCoadd(unittest.TestCase):
             s1.flux['b'][i] = Resolution(resol[i])@model0
         # All the same targets, coadded in place
         s1.fibermap['TARGETID'] = [10]*nspec
-        coadd(s1,cosmics_nsig=1e10)
+        coadd(s1, cosmics_nsig=1e10)
         resmat2 = Resolution(s1.resolution_data['b'][0])
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
