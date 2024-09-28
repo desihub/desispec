@@ -536,7 +536,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                     grad.append(ttflux)
                     gradvar.append(ttvar)
 
-            tivar_unmasked= np.sum(spectra.ivar[b][jj],axis=0)
             if spectra.mask is not None :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
