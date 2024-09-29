@@ -535,11 +535,16 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                     ttflux[0]  = 0
                     grad.append(ttflux)
                     gradvar.append(ttvar)
-
+            # here we keek original variance array
+            # that will not be modified
+            # and ivarjj_masked which will be modified by
+            # cosmic rays check and mask>0 check 
+            ivarjj_orig = spectra.ivar[b][jj].copy()
             if spectra.mask is not None :
-                ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
+                ivarjj_masked = spectra.ivar[b][jj] * (spectra.mask[b][jj] == 0)
             else :
-                ivarjj=spectra.ivar[b][jj]
+                ivarjj_masked = ivarjj_orig.copy()
+            
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 grad=np.array(grad)
                 gradvar=np.array(gradvar)
@@ -558,11 +563,11 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                         badindex=np.where(bad)[0]
                         for bi in badindex  :
                             k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
-                            ivarjj[k,bi]=0.
+                            ivarjj_masked[k, bi] = 0.
                             log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
 
-            tivar[i]=np.sum(ivarjj,axis=0)
-            tflux[i]=np.sum(ivarjj*spectra.flux[b][jj],axis=0)
+            tivar[i] = np.sum(ivarjj_masked,axis=0)
+            tflux[i] = np.sum(ivarjj_masked * spectra.flux[b][jj],axis=0)
             ww = spectra.resolution_data[b].shape[1]//2
             # resolution kernel width
             npix = spectra.resolution_data[b].shape[2]
@@ -570,15 +575,17 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # that needs to be used for ivar weights
             res_indices = (np.arange(npix)[None, :]
                            + np.arange(-ww, ww+1)[:, None]) % npix
-            res_whts = np.array([_[res_indices] for _ in ivarjj])
+            res_whts = np.array([_[res_indices] for _ in ivarjj_masked])
             res_norm = res_whts.sum(axis=0)
             trdata[i, :, : ] = np.sum(res_whts *
                                     spectra.resolution_data[b][jj, : , : ],
                                                axis=0) / (res_norm + (res_norm == 0))
             bad=(tivar[i]==0)
             if np.sum(bad)>0 :
-                tivar[i][bad] = np.sum(spectra.ivar[b][jj][:,bad],axis=0) # if all masked, keep original ivar
-                tflux[i][bad] = np.sum(spectra.ivar[b][jj][:,bad]*spectra.flux[b][jj][:,bad],axis=0)
+                tivar[i][bad] = np.sum(ivarjj_orig[:,bad], axis=0)
+                # if all masked, keep original ivar
+                tflux[i][bad] = np.sum(ivarjj_orig[:,bad] *
+                                       spectra.flux[b][jj][:,bad], axis=0)
             ok=(tivar[i]>0)
             if np.sum(ok)>0 :
                 tflux[i][ok] /= tivar[i][ok]
