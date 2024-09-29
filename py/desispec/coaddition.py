@@ -446,7 +446,8 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
-def _get_grad_var(wave, flux, ivar, mask, subset):
+def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
+                  tid=None, cosmics_nsig=None):
     # interpolate over bad measurements
     # to be able to compute gradient next
     # to a bad pixel and identify outlier
@@ -477,8 +478,24 @@ def _get_grad_var(wave, flux, ivar, mask, subset):
         ttflux[0] = 0
         grad.append(ttflux)
         gradvar.append(ttvar)
-    return np.array(grad), np.array(gradvar)
-
+    grad, gradvar = np.array(grad), np.array(gradvar)
+    gradivar = (gradvar > 0 ) /np.array(gradvar + (gradvar == 0))
+    nspec = grad.shape[0]
+    sgradivar = np.sum(gradivar)
+    if sgradivar > 0 :
+        meangrad = np.sum(gradivar * grad,axis=0) / sgradivar
+        deltagrad = grad - meangrad
+        chi2 = np.sum(gradivar * deltagrad**2, axis=0) / (nspec - 1)
+        bad  = (chi2 > cosmics_nsig**2)
+        nbad = np.sum(bad)
+        if nbad > 0 :
+            log.info("masking {} values for targetid={}".format(nbad, tid))
+            badindex = np.where(bad)[0]
+            for bi in badindex  :
+                k = np.argmax(gradivar[:, bi] * deltagrad[:, bi]**2)
+                ivarjj_masked[k, bi] = 0.
+                log.debug("masking spec {} wave={}".format(k, wave[bi]))
+    return 
 def coadd(spectra, cosmics_nsig=None, onetile=False) :
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
@@ -537,10 +554,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0  and len(jj)>2 :
-                grad, gradvar = _get_grad_var(spectra.wave[b], spectra.flux[b],
-                                             spectra.ivar[b], spectra.mask[b] if spectra.mask is not None
-                                             else None, jj)
             # here we keek original variance array
             # that will not be modified
             # and ivarjj_masked which will be modified by
@@ -551,24 +564,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             else :
                 ivarjj_masked = ivarjj_orig.copy()
             
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
-                gradivar=(gradvar>0)/np.array(gradvar+(gradvar==0))
-                nspec=grad.shape[0]
-                sgradivar=np.sum(gradivar)
-                if sgradivar>0 :
-                    meangrad=np.sum(gradivar*grad,axis=0)/sgradivar
-                    deltagrad=grad-meangrad
-                    chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
-
-                    bad  = (chi2>cosmics_nsig**2)
-                    nbad = np.sum(bad)
-                    if nbad>0 :
-                        log.info("masking {} values for targetid={}".format(nbad,tid))
-                        badindex=np.where(bad)[0]
-                        for bi in badindex  :
-                            k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
-                            ivarjj_masked[k, bi] = 0.
-                            log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
+                _mask_cosmics(spectra.wave[b], spectra.flux[b],
+                                              spectra.ivar[b],
+                                              spectra.mask[b] if spectra.mask is not None else None,
+                                              jj, ivarjj_masked, cosmics_nsig=cosmics_nsig,
+                              tid=tid)
 
             tivar[i] = np.sum(ivarjj_masked,axis=0)
             tflux[i] = np.sum(ivarjj_masked * spectra.flux[b][jj],axis=0)
@@ -719,11 +720,6 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
-                grad, gradvar = _get_grad_var(spectra.wave[b], spectra.flux[b],
-                                             spectra.ivar[b], spectra.mask[b] if spectra.mask is not None
-                                             else None, jj)
-
             ivar_unmasked[i,windices] += np.sum(spectra.ivar[b][jj],axis=0)
 
             if spectra.mask is not None :
@@ -732,20 +728,11 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                 ivarjj=spectra.ivar[b][jj]
 
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
-                gradivar = 1 / gradvar
-                nspec=grad.shape[0]
-                meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
-                deltagrad=grad-meangrad
-                chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
-                bad  = (chi2>cosmics_nsig**2)
-                nbad = np.sum(bad)
-                if nbad>0 :
-                    log.info("masking {} values for targetid={}".format(nbad,tid))
-                    badindex=np.where(bad)[0]
-                    for bi in badindex  :
-                        k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
-                        ivarjj[k,bi]=0.
-                        log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
+                _mask_cosmics(spectra.wave[b], spectra.flux[b],
+                                              spectra.ivar[b],
+                                              spectra.mask[b] if spectra.mask is not None else None,
+                                              jj, ivarjj, cosmics_nsig=cosmics_nsig,
+                              tid=tid)
 
             ivar[i,windices] += np.sum(ivarjj,axis=0)
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
