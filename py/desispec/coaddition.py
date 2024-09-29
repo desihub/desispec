@@ -446,6 +446,39 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
+def _get_grad_var(wave, flux, ivar, mask, subset):
+    # interpolate over bad measurements
+    # to be able to compute gradient next
+    # to a bad pixel and identify outlier
+    # many cosmics residuals are on edge
+    # of cosmic ray trace, and so can be
+    # next to a masked flux bin
+    grad = []
+    gradvar = []
+    for j in subset  :
+        if mask is not None :
+            ttivar0 = ivar[j] * (mask[j] == 0)
+        else :
+            ttivar0 = ivar[j]
+        good = (ttivar0 > 0)
+        bad  = ~good
+        if np.sum(good) == 0 :
+            continue
+        nbad = np.sum(bad)
+        ttflux = flux[j].copy()
+        if nbad > 0 :
+            ttflux[bad] = np.interp(wave[bad], wave[good], ttflux[good])
+        ttivar = ivar[j].copy()
+        if nbad > 0 :
+            ttivar[bad] = np.interp(wave[bad], wave[good], ttivar[good])
+        ttvar = 1./(ttivar + (ttivar == 0))
+        ttflux[1:] = ttflux[1:] - ttflux[:-1]
+        ttvar[1:] = ttvar[1:] + ttvar[:-1]
+        ttflux[0] = 0
+        grad.append(ttflux)
+        gradvar.append(ttvar)
+    return np.array(grad), np.array(gradvar)
+
 def coadd(spectra, cosmics_nsig=None, onetile=False) :
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
@@ -505,36 +538,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                 continue
 
             if cosmics_nsig is not None and cosmics_nsig > 0  and len(jj)>2 :
-                # interpolate over bad measurements
-                # to be able to compute gradient next
-                # to a bad pixel and identify outlier
-                # many cosmics residuals are on edge
-                # of cosmic ray trace, and so can be
-                # next to a masked flux bin
-                grad=[]
-                gradvar=[]
-                for j in jj :
-                    if spectra.mask is not None :
-                        ttivar = spectra.ivar[b][j]*(spectra.mask[b][j]==0)
-                    else :
-                        ttivar = spectra.ivar[b][j]
-                    good = (ttivar>0)
-                    bad  = ~good
-                    if np.sum(good)==0 :
-                        continue
-                    nbad = np.sum(bad)
-                    ttflux = spectra.flux[b][j].copy()
-                    if nbad>0 :
-                        ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
-                    ttivar = spectra.ivar[b][j].copy()
-                    if nbad>0 :
-                        ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
-                    ttvar = 1./(ttivar+(ttivar==0))
-                    ttflux[1:] = ttflux[1:]-ttflux[:-1]
-                    ttvar[1:]  = ttvar[1:]+ttvar[:-1]
-                    ttflux[0]  = 0
-                    grad.append(ttflux)
-                    gradvar.append(ttvar)
+                grad, gradvar = _get_grad_var(spectra.wave[b], spectra.flux[b],
+                                             spectra.ivar[b], spectra.mask[b] if spectra.mask is not None
+                                             else None, jj)
             # here we keek original variance array
             # that will not be modified
             # and ivarjj_masked which will be modified by
@@ -546,8 +552,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                 ivarjj_masked = ivarjj_orig.copy()
             
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
-                grad=np.array(grad)
-                gradvar=np.array(gradvar)
                 gradivar=(gradvar>0)/np.array(gradvar+(gradvar==0))
                 nspec=grad.shape[0]
                 sgradivar=np.sum(gradivar)
@@ -716,31 +720,9 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                 continue
 
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
-                # interpolate over bad measurements
-                # to be able to compute gradient next
-                # to a bad pixel and identify oulier
-                # many cosmics residuals are on edge
-                # of cosmic ray trace, and so can be
-                # next to a masked flux bin
-                grad=[]
-                gradvar=[]
-                for j in jj :
-                    if spectra.mask is not None :
-                        ttivar = spectra.ivar[b][j]*(spectra.mask[b][j]==0)
-                    else :
-                        ttivar = spectra.ivar[b][j]
-                    good = (ttivar>0)
-                    bad  = ~good
-                    ttflux = spectra.flux[b][j].copy()
-                    ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
-                    ttivar = spectra.ivar[b][j].copy()
-                    ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
-                    ttvar = 1./(ttivar+(ttivar==0))
-                    ttflux[1:] = ttflux[1:]-ttflux[:-1]
-                    ttvar[1:]  = ttvar[1:]+ttvar[:-1]
-                    ttflux[0]  = 0
-                    grad.append(ttflux)
-                    gradvar.append(ttvar)
+                grad, gradvar = _get_grad_var(spectra.wave[b], spectra.flux[b],
+                                             spectra.ivar[b], spectra.mask[b] if spectra.mask is not None
+                                             else None, jj)
 
             ivar_unmasked[i,windices] += np.sum(spectra.ivar[b][jj],axis=0)
 
@@ -750,8 +732,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                 ivarjj=spectra.ivar[b][jj]
 
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
-                grad=np.array(grad)
-                gradivar=1/np.array(gradvar)
+                gradivar = 1 / gradvar
                 nspec=grad.shape[0]
                 meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
                 deltagrad=grad-meangrad
