@@ -587,6 +587,9 @@ desispec API
 .. automodule:: desispec.scripts.reformat_exptables
     :members:
 
+.. automodule:: desispec.scripts.reformat_proctables
+    :members:
+
 .. automodule:: desispec.scripts.rejectcosmics
     :members:
 
