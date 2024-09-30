@@ -38,15 +38,27 @@ def parse_args():  # options=None):
                         help="The SLURM queue states that should be resubmitted. " +
                              "E.g. UNSUBMITTED, BOOT_FAIL, DEADLINE, NODE_FAIL, " +
                              "OUT_OF_MEMORY, PREEMPTED, TIMEOUT, CANCELLED, FAILED.")
-    parser.add_argument("--dont-resub-failed", action="store_true", required=False,
+    parser.add_argument("--no-resub-failed", action="store_true", required=False,
                         help="Give this flag if you do NOT want to resubmit " +
-                             "jobs with Slurm status 'FAILED' by default.")
+                             "jobs with Slurm status 'FAILED' by default. " +
+                             "This should not be used if defining " +
+                             "--resub-states explicitly.")
 
     args = parser.parse_args()
 
     if args.resub_states is not None:
+        ## User should never provide custom list of states and request to remove FAILED
+        if args.no_resub_failed:
+            log = get_logger()
+            msg = f"Provided user-defined resubmision states {args.resub_states} but " \
+                  + f"also requested --no-resub-failed. Please choose one or the other."
+            log.critical(msg)
+            raise ValueError(msg)
+        ## Clean up the input string into a list of strings
         args.resub_states = [state.strip().upper() for state in args.resub_states.split(',')]
+
     return args
+
 
 if __name__ == '__main__':
     args = parse_args()
@@ -62,14 +74,6 @@ if __name__ == '__main__':
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
-    resub_states = args.resub_states
-    if resub_states is None:
-        resub_states = get_resubmission_states()
-        if not args.dont_resub_failed:
-            resub_states.append('FAILED')
-
-    log.info(f"Resubmitting the following Slurm states: {resub_states}")
-
     if args.dry_run > 0 and args.dry_run < 3:
         log.warning(f"{args.dry_run=} will be run with limited simulation "
                     f"because we don't want to write out incorrect queue information.")
@@ -81,7 +85,8 @@ if __name__ == '__main__':
     ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
     log.info(f"Identified ptable with {len(ptable)} entries.")
     ptable, nsubmits = update_and_recursively_submit(ptable, submits=0,
-                                                     resubmission_states=resub_states,
+                                                     resubmission_states=args.resub_states,
+                                                     no_resub_failed=args.no_resub_failed,
                                                      ptab_name=ptable_pathname, dry_run=args.dry_run,
                                                      reservation=args.reservation)
 
