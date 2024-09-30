@@ -454,6 +454,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     # many cosmics residuals are on edge
     # of cosmic ray trace, and so can be
     # next to a masked flux bin
+    log = get_logger()
     grad = []
     gradvar = []
     for j in subset  :
@@ -496,6 +497,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                 ivarjj_masked[k, bi] = 0.
                 log.debug("masking spec {} wave={}".format(k, wave[bi]))
     return 
+
 def coadd(spectra, cosmics_nsig=None, onetile=False) :
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
