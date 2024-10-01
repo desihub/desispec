@@ -456,8 +456,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
     ivar (numpy.ndarray): 2d array of ivars (from Spectra)
     mask (numpy.ndarray or None): 2d array of masks (from Spectra) or None
-    subset (numpy.ndarray): 1d int array of indices of individual spectra that
-                            we are coadding
+    subset (numpy.ndarray): 1d int array of indices of individual spectra that we are coadding
     ivarjj_masked (numpy.ndarray): 2d array ivars that is being updated inplace
     tid (int): targetid (used for logging)
     cosmics_nsig (float): threshold for cosmic ray rejection
