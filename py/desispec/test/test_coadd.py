@@ -48,17 +48,12 @@ class TestCoadd(unittest.TestCase):
                                resolution_data=rdat,
                                fibermap=fmap)
         
-    def _random_spectra(self, ns=3, nw=10, seed=None, with_mask=False):
+    def _random_spectra(self, ns=3, nw=10, seed=None, with_mask=False,
+                        bands=('b',)):
 
-        np.random.seed(seed)
-        wave = np.linspace(5000, 5100, nw)
-        flux = np.random.uniform(0, 1, size=(ns,nw))
-        ivar = np.random.uniform(0, 1, size=(ns,nw))
-        if with_mask:
-            mask = np.zeros((ns,nw),dtype=int)
-        else:
-            mask = None
-        rdat = np.ones((ns,3,nw))
+        rng = np.random.default_rng(seed)
+        nres = 3 # number of resolution elts
+        rdat = np.ones((ns, nres, nw))
         rdat[:,0] *= 0.25
         rdat[:,1] *= 0.5
         rdat[:,2] *= 0.25
@@ -71,22 +66,37 @@ class TestCoadd(unittest.TestCase):
         #- move away from 0,0 which is treated as special (invalid) case
         fmap["TARGET_RA"] = 10
         fmap["TARGET_DEC"] = 0
-        fmap["FIBER_RA"] = np.random.normal(loc=10, scale=0.1, size=ns)
-        fmap["FIBER_DEC"] = np.random.normal(loc=0, scale=0.1, size=ns)
-
+        fmap["FIBER_RA"] = rng.normal(loc=10, scale=0.1, size=ns)
+        fmap["FIBER_DEC"] = rng.normal(loc=0, scale=0.1, size=ns)
         #- dummy scores
         scores = dict()
         scores['BLAT'] = np.zeros(ns)
         scores['FOO'] = np.ones(ns)
         scores['BAR'] = np.arange(ns)
-
+        wave = {'b': np.linspace(5000, 5100, nw),
+                'r': np.linspace(5080, 5180, nw),
+                'z': np.linspace(5160, 5260, nw)}
+        flux = {}
+        ivar = {}
+        resolution_data = {}
+        if with_mask:
+            mask = {}
+        else:
+            mask = None
+        for band in bands:
+            flux[band] = rng.uniform(0, 1, size=(ns,nw))
+            ivar[band] = rng.uniform(0, 1, size=(ns,nw))
+            if with_mask:
+                mask[band] = np.zeros((ns, nw), dtype=int)
+            resolution_data[band] = rdat.copy()
+            
         return Spectra(
-                bands=["b"],
-                wave={"b":wave},
-                flux={"b":flux},
-                ivar={"b":ivar},
-                mask=({'b':mask} if mask is not None else None),
-                resolution_data={"b":rdat},
+                bands=bands,
+                wave=wave,
+                flux=flux,
+                ivar=ivar,
+                mask=mask,
+                resolution_data=resolution_data,
                 fibermap=fmap,
                 scores=scores,
                 )
