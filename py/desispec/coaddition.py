@@ -702,7 +702,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         ivar_unmasked=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
         mask=np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
-        ivar_unmasked=ivar
+        ivar_unmasked=ivar.copy()
         mask=None
 
     if spectra.resolution_data is not None:
@@ -742,7 +742,6 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 _mask_cosmics(spectra.wave[b], spectra.flux[b],
                                               spectra.ivar[b],

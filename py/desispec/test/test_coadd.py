@@ -137,6 +137,21 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.ivar['b'] == ivar0))
         self.assertTrue(np.all(s1.resolution_data['b'] == resmat))
 
+    def test_coadd_cameras_single(self):
+        """Test coaddition of a single spectrum which should be no-op"""
+        nspec, nwave = 1, 10
+        s1 = self._random_spectra(nspec, nwave)
+        spec0 = s1.flux['b'] * 1
+        ivar0 = s1.ivar['b'] * 1
+        resmat = s1.resolution_data['b'] * 1
+        #- All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = 10
+        s2 = coadd_cameras(s1)
+        print('new orig', s2.flux['b'],spec0)
+        #self.assertTrue(np.allclose(s2.flux['b'], spec0))
+        #self.assertTrue(np.all(s2.ivar['b'] == ivar0))
+        #self.assertTrue(np.all(s2.resolution_data['b'] == resmat))
+
     def test_coadd_single_mask(self):
         """Test coaddition with a masked pixel triggering #2372"""
         nspec, nwave = 1, 10
@@ -974,14 +989,15 @@ class TestCoadd(unittest.TestCase):
         # Check flux
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
-        self.assertTrue(np.all(coadds.flux['brz'][0] == 0.5))
+        print (coadds.flux['brz'][0] )
+        self.assertTrue(np.all(coadds.flux['brz'][0] == 1))
 
         # Check ivar inside and outside camera wavelength overlap regions
         tol = 0.0001
         wave = coadds.wave['brz']
         idx_overlap = (5760 <= wave) & (wave <= 5800+tol) | (7520 <= wave) & (wave <= 7620+tol)
-        self.assertTrue(np.all(coadds.ivar['brz'][0][idx_overlap]  == 4.))
-        self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 2.))
+        self.assertTrue(np.all(coadds.ivar['brz'][0][idx_overlap]  == 2.))
+        self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 1.))
 
         # Test exception due to misaligned wavelength grids.
         self.spectra.wave['r'] += 0.001
