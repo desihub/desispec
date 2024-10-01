@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+import scipy.interpolate
 
 from astropy.table import Table
 from astropy.table.column import Column
@@ -74,7 +75,7 @@ class TestCoadd(unittest.TestCase):
         scores['FOO'] = np.ones(ns)
         scores['BAR'] = np.arange(ns)
         # create overlapping/pixel aligned wavelength intervals
-        wave_b = np.linspace(5000, 5100, nw)
+        wave_b = np.linspace(4000, 6000, nw)
         wave_b_edge = wave_b[int(0.7 * nw)]
         step = wave_b[1] - wave_b[0]
         wave_r = np.linspace(wave_b_edge, wave_b_edge + (nw - 1) * step,
@@ -251,6 +252,41 @@ class TestCoadd(unittest.TestCase):
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
         
+    def test_coadd_cameras_resolution(self):
+        """Test proper behaviour of resolution matrix
+        i.e. if all input spectra were D_i = R_i * M
+        coadd must satisfy the same condition
+        protection against #2372 """
+        nspec, nwave = 20, 30
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4343)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        s1.fibermap['TARGETID'] = [10] * nspec
+        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
+        model0 = {}
+        for band in bands:
+            ivar = rng.uniform(size=s1.ivar[band].shape)
+            # completely mask some fraction of pixels
+            ivar[rng.uniform(size=s1.ivar[band].shape) < 0.01] = 0
+            s1.ivar[band] = ivar
+            resol = rng.uniform(size=s1.resolution_data[band].shape)
+            resol = resol/resol.sum(axis=1)[:,None,:]
+            s1.resolution_data[band] = resol
+            model0[band] = scipy.interpolate.interp1d(s2.wave['brz'],
+                                                     model0_brz, kind='nearest',
+                                                     fill_value='extrapolate',
+                                                     bounds_error=False)(s1.wave[band])
+            for i in range(nspec):
+                s1.flux[band][i] = Resolution(resol[i]) @ model0[band]
+        # random resolution matrix
+        # All the same targets, coadded in place
+        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        resmat2 = Resolution(s2.resolution_data['brz'][0])
+        resmod = resmat2@model0_brz
+        threshold = 0.4
+        # I do not check exactness because of what happens in edge pixels
+        self.assertTrue(np.all(np.abs(resmod - s2.flux['brz'][0]) < threshold))
 
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
