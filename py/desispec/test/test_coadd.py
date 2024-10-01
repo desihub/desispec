@@ -161,7 +161,9 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(s1.ivar['b'][0, mpix] == 0)
             
     def test_coadd_cameras_single_mask(self):
-        """Test coaddition of a single spectrum which should be no-op"""
+        """Test coaddition with a masked pixel triggering #2372
+        Now with coadd_cameras
+        """
         nspec, nwave = 1, 10
         s1 = self._random_spectra(nspec, nwave, with_mask=True)
         spec0 = s1.flux['b'][0] * 1
@@ -169,7 +171,6 @@ class TestCoadd(unittest.TestCase):
         resmat1 = Resolution(s1.resolution_data['b'][0] * 1)
         for mpix in [0,5]:
             s1.mask['b'][:, mpix] = 1
-            s1.ivar['b'][0, mpix] = 0
             nonmask = s1.mask['b'][0] == 0
             #- All the same targets, coadded in place
             s1.fibermap['TARGETID'] = 10
@@ -181,7 +182,7 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(s2.flux['b'][0][nonmask], spec0[nonmask]))
             self.assertTrue(np.all(s2.ivar['b'][0][nonmask] == ivar0[nonmask]))
             # temporarily disabled
-            # self.assertTrue(np.all((mod1==mod2)[nonmask]))
+            self.assertTrue(np.all((mod1 == mod2)[nonmask]))
         
     def test_coadd_full_mask(self):
         """

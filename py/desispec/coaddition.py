@@ -707,6 +707,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
 
     if spectra.resolution_data is not None:
         rdata=np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
+        rdata_norm = np.zeros_like(rdata)
     else:
         rdata = None
 
@@ -751,9 +752,22 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
 
             ivar[i,windices] += np.sum(ivarjj,axis=0)
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
+
             if spectra.resolution_data is not None:
+                ww = spectra.resolution_data[b].shape[1]//2
+                # resolution kernel width
+                npix = spectra.resolution_data[b].shape[2]
+                # indices of the corresponding variance point
+                # that needs to be used for ivar weights
+                res_indices = (np.arange(npix)[None, :]
+                               + np.arange(-ww, ww+1)[:, None]) % npix
+                res_whts = np.array([_[res_indices] for _ in ivarjj])
                 for r in range(band_ndiag) :
-                    rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((ivarjj*spectra.resolution_data[b][jj,r]),axis=0)
+                    cur_off =  (ndiag - band_ndiag)//2
+                    rdata[i, r + cur_off, windices] = np.sum(res_whts[:, r] *
+                                        spectra.resolution_data[b][jj, r , : ],
+                                                   axis=0)
+                    rdata_norm[i,r + cur_off, windices] += res_whts.sum(axis=0)[r]
             if spectra.mask is not None :
                 # this deserves some attention ...
 
@@ -773,8 +787,8 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         if np.sum(ok)>0 :
             flux[i][ok] /= ivar[i][ok]
         ok=(ivar_unmasked[i]>0)
-        if np.sum(ok)>0 and rdata is not None:
-            rdata[i][:,ok] /= ivar_unmasked[i][ok]
+        if rdata is not None:
+            rdata[i] = rdata[i] / (rdata_norm[i] + (rdata_norm[i] == 0))
 
     if 'COADD_NUMEXP' in spectra.fibermap.colnames:
         fibermap = spectra.fibermap
