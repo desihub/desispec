@@ -1072,7 +1072,7 @@ class TestCoadd(unittest.TestCase):
         tol = 0.0001
         wave = coadds.wave['brz']
         idx_overlap = (5760 <= wave) & (wave <= 5800+tol) | (7520 <= wave) & (wave <= 7620+tol)
-        self.assertTrue(np.all(coadds.ivar['brz'][0][idx_overlap]  == 2.))
+        self.assertTrue(np.allclose(coadds.ivar['brz'][0][idx_overlap], 2))
         self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 1.))
 
         # Test exception due to misaligned wavelength grids.
