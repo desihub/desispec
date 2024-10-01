@@ -366,13 +366,13 @@ class TestCoadd(unittest.TestCase):
     def test_spectroperf_resample(self):
         """Test spectroperf_resample"""
         s1 = self._random_spectra(1,20)
-        wave = np.linspace(5000, 5100, 10)
+        wave = np.linspace(4000, 6000, 10)
         s2 = spectroperf_resample_spectra(s1,wave=wave)
         
     def test_fast_resample(self):
         """Test fast_resample"""
         s1 = self._random_spectra(1,20)
-        wave = np.linspace(5000, 5100, 10)
+        wave = np.linspace(4000, 6000, 10)
         s2 = fast_resample_spectra(s1,wave=wave)
 
     def test_coadd_fibermap_onetile(self):
