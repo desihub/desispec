@@ -448,6 +448,21 @@ def coadd_fibermap(fibermap, onetile=False):
 
 def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                   tid=None, cosmics_nsig=None):
+    """
+    Mask cosmics for in multiple spectra by updating ivar array inplace
+    
+    Args:
+    wave (numpy.ndarray): 1d array of wavelengths
+    flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
+    ivar (numpy.ndarray): 2d array of ivars (from Spectra)
+    mask (numpy.ndarray or None): 2d array of masks (from Spectra) or None
+    subset (numpy.ndarray): 1d int array of indices of individual spectra that
+                            we are coadding
+    ivarjj_masked (numpy.ndarray): 2d array ivars that is being updated inplace
+    tid (int): targetid (used for logging)
+    cosmics_nsig (float): threshold for cosmic ray rejection
+    """
+
     # interpolate over bad measurements
     # to be able to compute gradient next
     # to a bad pixel and identify outlier
