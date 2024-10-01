@@ -73,9 +73,18 @@ class TestCoadd(unittest.TestCase):
         scores['BLAT'] = np.zeros(ns)
         scores['FOO'] = np.ones(ns)
         scores['BAR'] = np.arange(ns)
-        wave = {'b': np.linspace(5000, 5100, nw),
-                'r': np.linspace(5080, 5180, nw),
-                'z': np.linspace(5160, 5260, nw)}
+        # create overlapping/pixel aligned wavelength intervals
+        wave_b = np.linspace(5000, 5100, nw)
+        wave_b_edge = wave_b[int(0.7 * nw)]
+        step = wave_b[1] - wave_b[0]
+        wave_r = np.linspace(wave_b_edge, wave_b_edge + (nw - 1) * step,
+                             nw)
+        wave_r_edge = wave_r[int(0.7 * nw)]
+        wave_z = np.linspace(wave_r_edge, wave_r_edge + (nw - 1) * step,
+                             nw)
+        wave = {'b': wave_b,
+                'r': wave_r,
+                'z': wave_z}
         flux = {}
         ivar = {}
         resolution_data = {}
