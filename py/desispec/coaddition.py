@@ -546,13 +546,18 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
 
     for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
+
         nwave=spectra.wave[b].size
         tflux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
         tivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
         if spectra.mask is not None :
-            tmask=np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
-        else :
-            tmask=None
+            spectra_mask = spectra.mask[b]
+        else:
+            # I am creating a zero mask if there is no mask
+            # to not have to deal with two code-paths throughout
+            # the function
+            spectra_mask = np.zeros(spectra.flux[b].shape, dtype=int) 
+        tmask = np.zeros((ntarget, nwave), dtype=spectra_mask.dtype)
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
 
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
@@ -575,15 +580,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # and ivarjj_masked which will be modified by
             # cosmic rays check and mask>0 check 
             ivarjj_orig = spectra.ivar[b][jj].copy()
-            if spectra.mask is not None :
-                ivarjj_masked = spectra.ivar[b][jj] * (spectra.mask[b][jj] == 0)
-            else :
-                ivarjj_masked = ivarjj_orig.copy()
+            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0)
             
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
                 _mask_cosmics(spectra.wave[b], spectra.flux[b],
                                               spectra.ivar[b],
-                                              spectra.mask[b] if spectra.mask is not None else None,
+                                              spectra_mask,
                                               jj, ivarjj_masked, cosmics_nsig=cosmics_nsig,
                               tid=tid)
 
@@ -610,8 +612,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             ok=(tivar[i]>0)
             if np.sum(ok)>0 :
                 tflux[i][ok] /= tivar[i][ok]
-            if spectra.mask is not None :
-                tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
+            tmask[i] = np.bitwise_and.reduce(spectra_mask[jj], axis=0)
         spectra.flux[b] = tflux
         spectra.ivar[b] = tivar
         if spectra.mask is not None :
