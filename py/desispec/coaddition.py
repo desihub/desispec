@@ -753,7 +753,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
             if spectra.resolution_data is not None:
                 for r in range(band_ndiag) :
-                    rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0)
+                    rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((ivarjj*spectra.resolution_data[b][jj,r]),axis=0)
             if spectra.mask is not None :
                 # this deserves some attention ...
 

@@ -137,21 +137,6 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.ivar['b'] == ivar0))
         self.assertTrue(np.all(s1.resolution_data['b'] == resmat))
 
-    def test_coadd_cameras_single(self):
-        """Test coaddition of a single spectrum which should be no-op"""
-        nspec, nwave = 1, 10
-        s1 = self._random_spectra(nspec, nwave)
-        spec0 = s1.flux['b'] * 1
-        ivar0 = s1.ivar['b'] * 1
-        resmat = s1.resolution_data['b'] * 1
-        #- All the same targets, coadded in place
-        s1.fibermap['TARGETID'] = 10
-        s2 = coadd_cameras(s1)
-        print('new orig', s2.flux['b'],spec0)
-        #self.assertTrue(np.allclose(s2.flux['b'], spec0))
-        #self.assertTrue(np.all(s2.ivar['b'] == ivar0))
-        #self.assertTrue(np.all(s2.resolution_data['b'] == resmat))
-
     def test_coadd_single_mask(self):
         """Test coaddition with a masked pixel triggering #2372"""
         nspec, nwave = 1, 10
@@ -174,6 +159,29 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(mod1[nonmasked], mod2[nonmasked]))
             self.assertTrue(s1.mask['b'][0, mpix] > 0)
             self.assertTrue(s1.ivar['b'][0, mpix] == 0)
+            
+    def test_coadd_cameras_single_mask(self):
+        """Test coaddition of a single spectrum which should be no-op"""
+        nspec, nwave = 1, 10
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        spec0 = s1.flux['b'][0] * 1
+        ivar0 = s1.ivar['b'][0] * 1
+        resmat1 = Resolution(s1.resolution_data['b'][0] * 1)
+        for mpix in [0,5]:
+            s1.mask['b'][:, mpix] = 1
+            s1.ivar['b'][0, mpix] = 0
+            nonmask = s1.mask['b'][0] == 0
+            #- All the same targets, coadded in place
+            s1.fibermap['TARGETID'] = 10
+            modvec = np.ones(nwave)
+            s2 = coadd_cameras(s1)
+            resmat2 = Resolution(s2.resolution_data['b'][0] * 1)
+            mod1 = resmat1@modvec
+            mod2 = resmat2@modvec
+            self.assertTrue(np.allclose(s2.flux['b'][0][nonmask], spec0[nonmask]))
+            self.assertTrue(np.all(s2.ivar['b'][0][nonmask] == ivar0[nonmask]))
+            # temporarily disabled
+            # self.assertTrue(np.all((mod1==mod2)[nonmask]))
         
     def test_coadd_full_mask(self):
         """
@@ -989,7 +997,6 @@ class TestCoadd(unittest.TestCase):
         # Check flux
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
-        print (coadds.flux['brz'][0] )
         self.assertTrue(np.all(coadds.flux['brz'][0] == 1))
 
         # Check ivar inside and outside camera wavelength overlap regions
