@@ -125,23 +125,23 @@ class TestCoadd(unittest.TestCase):
         self.assertIsInstance(s1.scores, Table)
 
     def test_coadd_masked(self):
-        """Test coaddition when all spectra have certain wavelength range masked"""
+        """Test coaddition when all spectra have certain wavelength range masked
+        In this case we still prefer to preserve ivar like nothing happened
+        """
         nspec, nwave = 3, 10
         s1 = self._random_spectra(nspec, nwave, with_mask=True)
         maskpix = 5
         s1.mask['b'][:,:maskpix] = 1
-        #- All the same targets, coadded in place
+        # All the same targets, coadded in place
         s1.fibermap['TARGETID'] = 10
+        ivar0 = s1.ivar['b'].copy()
+        resol0 = s1.resolution_data['b'].copy()[0]
         coadd(s1)
         self.assertTrue(np.all(np.isfinite(s1.mask['b'])))
-        self.assertTrue(np.all(np.isfinite(s1.resolution_data['b'])))
         self.assertTrue(np.all(np.isfinite(s1.flux['b'])))
-        self.assertTrue(np.all(np.isfinite(s1.ivar['b'])))
-        # self.assertTrue(np.all(s1.ivar['b'][0][:maskpix]==0))
-        # this test is disabled because the coaddition code decides
-        # that if all the spectra are masked, the ivar is still computed like
-        # nothing is wrong
-        self.assertTrue(np.all(s1.mask['b'][0][:maskpix]!=0))
+        self.assertTrue(np.all(s1.resolution_data['b'] == resol0))
+        self.assertTrue(np.all(s1.ivar['b'] == np.sum(ivar0, axis=0)))
+        self.assertTrue(np.all(s1.mask['b'][0][:maskpix] != 0))
 
     def test_coadd_single(self):
         """Test coaddition of a single spectrum which should be no-op"""
