@@ -512,6 +512,21 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                 log.debug("masking spec {} wave={}".format(k, wave[bi]))
     return 
 
+def _resolution_weights(resolution, pix_weights):
+    ww = resolution.shape[1]//2
+    # resolution kernel width
+    npix = resolution.shape[2]
+    # indices of the corresponding variance point
+    # that needs to be used for ivar weights
+    res_indices = (np.arange(npix)[None, :]
+                   + np.arange(-ww, ww+1)[:, None]) % npix
+    res_whts = np.array([_[res_indices] for _ in pix_weights])
+    res = np.sum(res_whts * resolution,
+                              axis=0)
+    res_norm = np.sum(res_whts,
+                              axis=0)
+    return res, res_norm
+
 def coadd(spectra, cosmics_nsig=None, onetile=False) :
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
@@ -547,9 +562,10 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
     for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
 
-        nwave=spectra.wave[b].size
-        tflux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
-        tivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+        nwave = spectra.wave[b].size
+        tflux = np.zeros((ntarget, nwave), dtype=spectra.flux[b].dtype)
+        tivar = np.zeros((ntarget, nwave), dtype=spectra.ivar[b].dtype)
+        # these are the output arrays from stacking for all objects
         if spectra.mask is not None :
             spectra_mask = spectra.mask[b]
         else:
@@ -558,7 +574,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # the function
             spectra_mask = np.zeros(spectra.flux[b].shape, dtype=int) 
         tmask = np.zeros((ntarget, nwave), dtype=spectra_mask.dtype)
-        trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
+        trdata = np.zeros((ntarget, spectra.resolution_data[b].shape[1], nwave), dtype=spectra.resolution_data[b].dtype)
 
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
@@ -575,8 +591,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             if len(jj) == 0:
                 continue
 
-            # here we keek original variance array
-            # that will not be modified
+            # here we keep original variance array that will not be modified
             # and ivarjj_masked which will be modified by
             # cosmic rays check and mask>0 check 
             ivarjj_orig = spectra.ivar[b][jj].copy()
@@ -588,30 +603,27 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
                                               spectra_mask,
                                               jj, ivarjj_masked, cosmics_nsig=cosmics_nsig,
                               tid=tid)
+            # inverse variance weights
+            weights = ivarjj_masked * 1
+            tivar[i] = np.sum(ivarjj_masked, axis=0)
+            bad = (tivar[i] == 0)
+            weights[:, bad] = ivarjj_orig[:, bad]
+            # in the case of all masked pixels
+            # we still use the variances ignoring masking
+            # TODO One flaw here is if the same pixel was masked
+            # as cosmic in all exposures, then it will be ignored in the result
+            # with no visible flag set
 
-            tivar[i] = np.sum(ivarjj_masked,axis=0)
-            tflux[i] = np.sum(ivarjj_masked * spectra.flux[b][jj],axis=0)
-            ww = spectra.resolution_data[b].shape[1]//2
-            # resolution kernel width
-            npix = spectra.resolution_data[b].shape[2]
-            # indices of the corresponding variance point
-            # that needs to be used for ivar weights
-            res_indices = (np.arange(npix)[None, :]
-                           + np.arange(-ww, ww+1)[:, None]) % npix
-            res_whts = np.array([_[res_indices] for _ in ivarjj_masked])
-            res_norm = res_whts.sum(axis=0)
-            trdata[i, :, : ] = np.sum(res_whts *
-                                    spectra.resolution_data[b][jj, : , : ],
-                                               axis=0) / (res_norm + (res_norm == 0))
-            bad=(tivar[i]==0)
-            if np.sum(bad)>0 :
-                tivar[i][bad] = np.sum(ivarjj_orig[:,bad], axis=0)
-                # if all masked, keep original ivar
-                tflux[i][bad] = np.sum(ivarjj_orig[:,bad] *
-                                       spectra.flux[b][jj][:,bad], axis=0)
-            ok=(tivar[i]>0)
-            if np.sum(ok)>0 :
-                tflux[i][ok] /= tivar[i][ok]
+            tivar[i] = np.sum(weights, axis=0)
+            weights = weights / (tivar[i] + (tivar[i] == 0))
+
+            tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
+
+            # Now we want to deal with the situation when combined variance is zero
+            # but before masking it was not 
+
+            trdata[i, :, :] = _resolution_weights(spectra.resolution_data[b][jj],
+                                                  weights)[0]
             tmask[i] = np.bitwise_and.reduce(spectra_mask[jj], axis=0)
         spectra.flux[b] = tflux
         spectra.ivar[b] = tivar
