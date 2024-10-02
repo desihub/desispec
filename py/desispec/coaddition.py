@@ -13,6 +13,7 @@ import numpy as np
 import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
+import scipy.stats
 
 from astropy.table import Table, Column
 
@@ -496,6 +497,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         cur_grad_var = ttvar[1:] + ttvar[:-1]
         grad.append(cur_grad)
         gradvar.append(cur_grad_var)
+
     grad, gradvar = np.array(grad), np.array(gradvar)
     gradivar = (gradvar > 0 ) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
