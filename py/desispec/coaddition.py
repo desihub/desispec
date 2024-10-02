@@ -494,18 +494,22 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         grad.append(ttflux)
         gradvar.append(ttvar)
     grad, gradvar = np.array(grad), np.array(gradvar)
-    gradivar = (gradvar > 0 ) /np.array(gradvar + (gradvar == 0))
+    gradivar = (gradvar > 0 ) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
-    sgradivar = np.sum(gradivar)
-    if sgradivar > 0 :
-        meangrad = np.sum(gradivar * grad,axis=0) / sgradivar
+    sgradivar = np.sum(gradivar, axis=0)
+    bad = sgradivar == 0
+    # this should not happen really as we already
+    # interpolated over all zeros in ivars 
+    if (~bad).any():
+        meangrad = np.sum(gradivar * grad, axis=0) / (sgradivar +
+                                                      bad.astype(int))
         deltagrad = grad - meangrad
         chi2 = np.sum(gradivar * deltagrad**2, axis=0) / (nspec - 1)
-        bad  = (chi2 > cosmics_nsig**2)
-        nbad = np.sum(bad)
-        if nbad > 0 :
-            log.info("masking {} values for targetid={}".format(nbad, tid))
-            badindex = np.where(bad)[0]
+        cosmic_bad  = (chi2 > cosmics_nsig**2) & (~bad)
+        n_cosmic = np.sum(cosmic_bad)
+        if n_cosmic > 0 :
+            log.info("masking {} values for targetid={}".format(n_cosmic, tid))
+            badindex = np.where(cosmic_bad)[0]
             for bi in badindex  :
                 k = np.argmax(gradivar[:, bi] * deltagrad[:, bi]**2)
                 ivarjj_masked[k, bi] = 0.
