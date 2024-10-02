@@ -487,12 +487,15 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         ttivar = ivar[j].copy()
         if nbad > 0 :
             ttivar[bad] = np.interp(wave[bad], wave[good], ttivar[good])
-        ttvar = 1./(ttivar + (ttivar == 0))
-        ttflux[1:] = ttflux[1:] - ttflux[:-1]
-        ttvar[1:] = ttvar[1:] + ttvar[:-1]
-        ttflux[0] = 0
-        grad.append(ttflux)
-        gradvar.append(ttvar)
+        # ttivar should not be equal to zero anywhere but just in case
+        # we still protect against it
+        ttvar = 1. / (ttivar + (ttivar == 0))
+
+        # these have one pixel less
+        cur_grad = ttflux[1:] - ttflux[:-1]
+        cur_grad_var = ttvar[1:] + ttvar[:-1]
+        grad.append(cur_grad)
+        gradvar.append(cur_grad_var)
     grad, gradvar = np.array(grad), np.array(gradvar)
     gradivar = (gradvar > 0 ) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
@@ -513,9 +516,17 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
             log.info("masking {} values in {} spectra for targetid={}".format(n_cosmic, nspec,
                                                                               tid))
             badindex = np.where(cosmic_bad)[0]
+            # TODO this is likely not intended
+            # if we have more than cosmic in a the same pixel
+            # this will only mask it once
+            # Also the log is not correct then
             for bi in badindex  :
                 k = np.argmax(gradivar[:, bi] * deltagrad[:, bi]**2)
                 ivarjj_masked[k, bi] = 0.
+                ivarjj_masked[k, bi + 1] = 0
+                # since we are using the maximum value of grad^2
+                # we really cannot say which pixel is responsible for
+                # large gradient hence we must mask two pixels
                 log.debug("masking spec {} wave={}".format(k, wave[bi]))
     return 
 
@@ -630,9 +641,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             weights[:, bad] = ivarjj_orig[:, bad]
             # in the case of all masked pixels
             # we still use the variances ignoring masking
-            # TODO One flaw here is if the same pixel was masked
-            # as cosmic in all exposures, then it will be ignored in the result
-            # with no visible flag set
 
             tivar[i] = np.sum(weights, axis=0)
             weights = weights / (tivar[i] + (tivar[i] == 0))

@@ -10,7 +10,9 @@ from astropy.units import Unit
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, fast_resample_spectra,
-        spectroperf_resample_spectra, coadd_fibermap, coadd_cameras)
+                                 spectroperf_resample_spectra,
+                                 coadd_fibermap, coadd_cameras,
+                                 _mask_cosmics)
 from desispec.specscore import compute_coadd_scores
 from desispec.resolution import Resolution
 from desispec.maskbits import fibermask
@@ -110,7 +112,28 @@ class TestCoadd(unittest.TestCase):
                 fibermap=fmap,
                 scores=scores,
                 )
-        
+    def test_cosmic_masking(self):
+        rng = np.random.default_rng(133)
+        npix, nspec = 10000, 30
+        wave = np.arange(npix)
+        ivar = rng.uniform(0, 1,
+                           size=(nspec, npix)) * (1 + 100 * np.arange(nspec)[:, None])
+        model0 = 0.01 * (wave - (wave)**2 / npix) + rng.uniform(size=npix)
+        flux = model0 + rng.normal(size=(nspec, npix)) / np.sqrt(ivar)
+        COSMIC = 1e6
+        flux[2, 100] = COSMIC
+        flux[0, 130] = COSMIC
+        mask = np.zeros((nspec, npix), dtype=int)
+        ivarjj_masked = ivar * 1
+        cosmics_nsig = 4
+        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
+                      ivarjj_masked, tid=1,
+                      cosmics_nsig=cosmics_nsig)
+        # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
+        self.assertEqual((ivarjj_masked == 0).sum(), 6)
+        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
+                         2)
+    
     def test_coadd(self):
         """Test coaddition"""
         nspec, nwave = 3, 10
