@@ -21,8 +21,8 @@ from desispec.workflow.exptable import get_exposure_table_pathname, \
     get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     return_color_profile, find_new_exps, _hyperlink, _str_frac, \
-    get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
-    get_terminal_steps, get_tables
+    get_output_dir, make_html_page, read_json, write_json, \
+    get_terminal_steps, get_tables, populate_monthly_tables, get_nights
 from desispec.workflow.proctable import get_processing_table_pathname, \
     table_row_to_dict
 from desispec.workflow.queue import update_from_queue, get_non_final_states
@@ -31,6 +31,7 @@ from desispec.io.meta import specprod_root, rawdata_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, parse_badamps, create_camword, camword_intersection, \
     erow_to_goodcamword
+from desiutil.log import get_logger
 
 
 def parse(options):
@@ -72,6 +73,9 @@ def parse(options):
                              "Default is the earliest night available.")
     parser.add_argument('--end-night', type=str, default=None, required=False,
                         help="This specifies the last night (inclusive) to include in the dashboard. Default is today.")
+    parser.add_argument('--nproc', type=int, default=1, required=False,
+                        help="The number of processors to use with multiprocessing. " +
+                             "Default is 1.")
     parser.add_argument('--check-on-disk', action="store_true",
                         help="Check raw data directory for additional unaccounted for exposures on disk " +
                              "beyond the exposure table.")
@@ -84,17 +88,18 @@ def parse(options):
 
     return args
 
+
 ######################
 ### Main Functions ###
 ######################
 def main(args=None):
-    """ Code to generate a webpage for monitoring of desi_dailyproc production status
-    Usage:
-    -n can be 'all' or series of nights separated by comma or blank like 20200101,20200102 or 20200101 20200102
-    Normal Mode:
-    desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
-    desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
+    """ Code to generate a webpage for monitoring the spectra processing in a production.
+
+    Args:
+        args (argparse.Namespace): The arguments generated from
+            desispec.scripts.procdashboard.parse()
     """
+    log = get_logger()
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
@@ -112,34 +117,35 @@ def main(args=None):
     else:
         skipd_expids = None
 
-    nights_dict, nights = get_nights_dict(args.nights, args.start_night,
-                                          args.end_night, prod_dir)
+    def populate_night_info_wrapper(night_to_submit):
+        ## Load previous info if any
+        filename_json = os.path.join(output_dir, 'expjsons',
+                                     f'expinfo_{os.environ["SPECPROD"]}'
+                                     + f'_{night_to_submit}.json')
+        night_json_info = None
+        if not args.ignore_json_archive:
+            night_json_info = read_json(filename_json=filename_json)
 
-    print(f'Searching {prod_dir} for: {nights}')
+        ## get the per exposure info for a night
+        night_info = populate_night_info(night_to_submit,
+                                         check_on_disk=args.check_on_disk,
+                                         night_json_info=night_json_info,
+                                         skipd_expids=skipd_expids)
 
-    monthly_tables = {}
-    for month, nights_in_month in nights_dict.items():
-        print("Month: {}, nights: {}".format(month, nights_in_month))
-        nightly_tables = {}
-        for night in nights_in_month:
-            ## Load previous info if any
-            filename_json = os.path.join(output_dir, 'expjsons',
-                                         f'expinfo_{os.environ["SPECPROD"]}'
-                                         + f'_{night}.json')
-            night_json_info = None
-            if not args.ignore_json_archive:
-                night_json_info = read_json(filename_json=filename_json)
+        if len(night_info) == 0:
+            return {}
 
-            ## get the per exposure info for a night
-            night_info = populate_night_info(night, check_on_disk=args.check_on_disk,
-                                             night_json_info=night_json_info,
-                                             skipd_expids=skipd_expids)
-            nightly_tables[night] = night_info.copy()
+        ## write out the night_info to json file
+        write_json(output_data=night_info, filename_json=filename_json)
 
-            ## write out the night_info to json file
-            write_json(output_data=night_info, filename_json=filename_json)
+        return night_info.copy()
 
-        monthly_tables[month] = nightly_tables.copy()
+
+    nights = get_nights(args.nights, args.start_night, args.end_night, prod_dir)
+    log.info(f'Searching {prod_dir} for: {nights}')
+
+    monthly_tables = populate_monthly_tables(pernight_info_wrapper=populate_night_info_wrapper,
+                                             nights=nights, nproc=args.nproc)
 
     outfile = os.path.abspath(os.path.join(output_dir, args.output_name))
     make_html_page(monthly_tables, outfile, titlefill='Exp. Processing',
@@ -147,23 +153,35 @@ def main(args=None):
 
 
 
-def populate_night_info(night, check_on_disk=False,
-                        night_json_info=None, skipd_expids=None):
+def populate_night_info(night, night_json_info=None, check_on_disk=False, skipd_expids=None):
     """
-    For a given night, return the file counts and other other information for each exposure taken on that night
-    input: night
-    output: a dictionary containing the statistics with expid as key name
-    FLAVOR: FLAVOR of this exposure
-    OBSTYPE: OBSTYPE of this exposure
-    EXPTIME: Exposure time
-    SPECTROGRAPHS: a list of spectrographs used
-    n_spectrographs: number of spectrographs
-    n_psf: number of PSF files
-    n_ff:  number of fiberflat files
-    n_frame: number of frame files
-    n_sframe: number of sframe files
-    n_cframe: number of cframe files
-    n_sky: number of sky files
+    Use all available information in the SPECPROD to determine whether specific
+    jobs and exposures have been successfully processed or not based on the existence
+    of files on disk.
+
+    Args:
+        night (int): the night to check the status of the processing for.
+        night_json_info (dict of dicts): Dictionary of dictionarys. See output
+            definition for format.
+        check_on_disk (bool, optional): True if you want to submit
+            other jobs even the loaded processing table has incomplete jobs in
+            it. Use with caution. Default is False.
+        skipd_expids (bool, optional): Default is False. If False,
+            the code checks for the existence of the expected final data
+            products for the script being submitted. If all files exist and
+            this is False, then the script will not be submitted. If some
+            files exist and this is False, only the subset of the cameras
+            without the final data products will be generated and submitted.
+
+    Returns:
+        output (dict of dicts): keys are generally JOBDESC_EXPID. Each value
+            is a dict with keys of the column names and values as the elements
+            of the row in the table for each column. The one exception is COLOR
+            which is used to define the coloring of the row in the dashboard.
+            Current keys are: "COLOR", "EXPID", "TILEID", "OBSTYPE", "FA SURV",
+            "FA PRGRM", "LAST STEP", "EXP TIME" ,"PROC CAMWORD", "PSF", "FFLAT",
+            "FRAME", "SFRAME", "SKY", "STD", "CFRAME", "SLURM FILE", "LOG FILE",
+            "COMMENTS", and "STATUS".
     """
     if skipd_expids is None:
         skipd_expids = []

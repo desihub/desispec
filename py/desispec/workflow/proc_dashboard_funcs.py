@@ -3,6 +3,7 @@ desispec.workflow.proc_dashboard_funcs
 ======================================
 
 """
+import multiprocessing
 import os,glob
 import json
 import sys
@@ -68,7 +69,7 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
 
     return output_dir, prod_dir
 
-def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
+def get_nights(nights_arg, start_night, end_night, prod_dir):
     if nights_arg is None or nights_arg == 'all' \
             or (',' not in nights_arg and int(nights_arg) < 20000000):
         nights = list()
@@ -100,15 +101,45 @@ def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
         else:
             nights = nights[-1 * int(nights_arg):]
 
-    nights_dict = dict()
-    for night in nights:
-        month = str(night)[:6]
-        if month not in nights_dict.keys():
-            nights_dict[month] = [night]
-        else:
-            nights_dict[month].append(night)
+    return nights
 
-    return nights_dict, nights
+
+def populate_monthly_tables(pernight_info_wrapper, nights, nproc=1):
+    """
+    Run function pernight_info_wrapper for all nights in night. If nproc is
+    more than 1, multiprocessing i used.
+
+    Args:
+        pernight_inf_wrapper (func): function that takes night as an input
+            and produces a single output.
+        nights (list of int): the nights to check the status of the processing for.
+        night_json_info (dict of dicts): Dictionary of dictionarys. See output
+            definition for format.
+        nproc (int, optional): Number of processes to use with a multiprocessing Pool.
+
+    Returns:
+        monthly_tables (dict): each key refers to a month, with values being a
+            dictionary. Each of those dictionaries has the night as a key and
+            each value is the output of pernight_info_wrapper(night).
+    """
+    ## If nproc is 1, avoid multiprocessing overhead and just run the script serially
+    if nproc == 1:
+        night_info_dicts = []
+        for night in nights:
+            night_info_dicts.append(pernight_info_wrapper(night))
+    else:
+        with multiprocessing.Pool(nproc) as pool:
+            night_info_dicts = pool.map(pernight_info_wrapper, nights)
+
+    monthly_tables = {}
+    for night, night_info_dict in zip(nights, night_info_dicts):
+        month = str(night)[:6]
+        if month not in monthly_tables.keys():
+            monthly_tables[month] = {night: night_info_dict}
+        else:
+            monthly_tables[month][night] = night_info_dict
+    return monthly_tables
+
 
 def get_tables(night, check_on_disk=False, exptab_colnames=None):
     if exptab_colnames is None:
