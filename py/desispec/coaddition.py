@@ -504,11 +504,14 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         meangrad = np.sum(gradivar * grad, axis=0) / (sgradivar +
                                                       bad.astype(int))
         deltagrad = grad - meangrad
-        chi2 = np.sum(gradivar * deltagrad**2, axis=0) / (nspec - 1)
-        cosmic_bad  = (chi2 > cosmics_nsig**2) & (~bad)
+        chi2 = np.sum(gradivar * deltagrad**2, axis=0)
+        threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
+            -cosmics_nsig))
+        cosmic_bad  = (chi2 > threshold) & (~bad)
         n_cosmic = np.sum(cosmic_bad)
-        if n_cosmic > 0 :
-            log.info("masking {} values for targetid={}".format(n_cosmic, tid))
+        if n_cosmic > 0:
+            log.info("masking {} values in {} spectra for targetid={}".format(n_cosmic, nspec,
+                                                                              tid))
             badindex = np.where(cosmic_bad)[0]
             for bi in badindex  :
                 k = np.argmax(gradivar[:, bi] * deltagrad[:, bi]**2)
