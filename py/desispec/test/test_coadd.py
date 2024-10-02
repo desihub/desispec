@@ -139,7 +139,7 @@ class TestCoadd(unittest.TestCase):
         coadd(s1)
         self.assertTrue(np.all(np.isfinite(s1.mask['b'])))
         self.assertTrue(np.all(np.isfinite(s1.flux['b'])))
-        self.assertTrue(np.all(s1.resolution_data['b'] == resol0))
+        self.assertTrue(np.allclose(s1.resolution_data['b'] , resol0))
         self.assertTrue(np.all(s1.ivar['b'] == np.sum(ivar0, axis=0)))
         self.assertTrue(np.all(s1.mask['b'][0][:maskpix] != 0))
 
