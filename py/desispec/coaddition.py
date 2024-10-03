@@ -510,23 +510,24 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     # we do not attempt to mask if the number of spectra is strictly less than this
     if len(subset) < min_for_cosmics:
         return
-    
+    if mask is None:
+        # to simplify logic/avoid bugs
+        mask = np.zeros(ivar.shape, dtype=int)
+
     for counter, j in enumerate(subset):
-        if mask is not None :
-            ttivar0 = ivar[j] * (mask[j] == 0)
-        else :
-            ttivar0 = ivar[j]
+        ttivar0 = ivar[j] * (mask[j] == 0)
+
         good = (ttivar0 > 0)
-        bad  = ~good
-        if np.sum(good) == 0 :
+        bad = ~good
+        if np.sum(good) == 0:
             continue
         spec_pos.append(counter)
         nbad = np.sum(bad)
         ttflux = flux[j].copy()
-        if nbad > 0 :
+        if nbad > 0:
             ttflux[bad] = np.interp(wave[bad], wave[good], ttflux[good])
         ttivar = ivar[j].copy()
-        if nbad > 0 :
+        if nbad > 0:
             ttivar[bad] = np.interp(wave[bad], wave[good], ttivar[good])
         # ttivar should not be equal to zero anywhere but just in case
         # we still protect against it
@@ -542,9 +543,9 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     # because grad can have smaller number of spectra than
     # original data because we throw away fully masked spectra in
     # the loop before
-    
-    spec_pos, grad, gradvar = [np.array(_) for _ in [spec_pos,grad, gradvar]]
-    gradivar = (gradvar > 0 ) / np.array(gradvar + (gradvar == 0))
+
+    spec_pos, grad, gradvar = [np.array(_) for _ in [spec_pos, grad, gradvar]]
+    gradivar = (gradvar > 0) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
     if nspec < min_for_cosmics:
         # if after throwing out masked spectra we have not enough spectra
@@ -553,7 +554,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     sgradivar = np.sum(gradivar, axis=0)
     bad = sgradivar == 0
     # this should not happen really as we already
-    # interpolated over all zeros in ivars 
+    # interpolated over all zeros in ivars
     if (~bad).any():
         meangrad = np.sum(gradivar * grad, axis=0) / (sgradivar +
                                                       bad.astype(int))
@@ -561,14 +562,17 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         chi2 = np.sum(gradivar * deltagrad**2, axis=0)
         threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
             -cosmics_nsig))
-        cosmic_bad  = (chi2 > threshold) & (~bad)
+        cosmic_bad = (chi2 > threshold) & (~bad)
         n_cosmic = np.sum(cosmic_bad)
         if n_cosmic > 0:
             badindex = np.where(cosmic_bad)[0]
-            # these are the problematic pixels with potentially more than one cosmic
-            n_dups = 0 # count how many wavelengths with more than 1 masked value
+            # these are the problematic pixels with potentially more than
+            # one cosmic
+            n_dups = 0
+            # count how many wavelengths with more than 1 masked value
             for bi in badindex:
-                cur_mask = _iterative_masker(deltagrad[:, bi], gradivar[:, bi], cosmics_nsig)
+                cur_mask = _iterative_masker(deltagrad[:, bi], gradivar[:, bi],
+                                             cosmics_nsig)
                 if cur_mask.sum() > 1:
                     n_dups += 1
                 cur_mask_pos = spec_pos[cur_mask]
@@ -579,20 +583,19 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                 # large gradient hence we must mask two pixels
                 log.debug("masking specs {} wave={}".format(
                     cur_mask_pos, wave[bi]))
-            
+
             log.info(("masking {} wavelengths in {} spectra in cam {}"
                      "for targetid={}").format(n_cosmic, nspec, camera, tid))
             if n_dups > 0:
                 log.info(("masking {} wavelengths with more than 1 mask per "
                          "pixel for targetid={}").format(n_dups, tid))
-                
-    return 
+    return
 
 
 def _resolution_coadd(resolution, pix_weights):
     """
-    Given the resolution matrices for set of spectra, and 
-    inverse variances (or generally weights) for fluxes return the 
+    Given the resolution matrices for set of spectra, and
+    inverse variances (or generally weights) for fluxes return the
     accumulated resolution matrix, and the combined weights
     See #2372.
 
@@ -602,7 +605,6 @@ def _resolution_coadd(resolution, pix_weights):
 
     Returns resolution matrix (nres, npix),
     and the weight (nres, npix)
-    
     """
     ww = resolution.shape[1]//2
     # resolution kernel width
