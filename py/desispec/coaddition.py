@@ -656,9 +656,11 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
 
             trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
                                                   weights)[0]
-            tmask[i] = np.bitwise_and.reduce(spectra_mask[jj], axis=0)
-            # TODO This logic is broken. If the spectrum is used with weight of 0
-            # the mask should get ignored
+            # for pixels where we found ivar=0, since we decided
+            # to combine data anyway we need to OR the masks to indicate issues
+            # for the rest of the we assume there were some good pixels
+            # hence the mask should stay zero
+            tmask[i, bad] = np.bitwise_or.reduce(spectra_mask[jj,bad], axis=0)
         spectra.flux[b] = tflux
         spectra.ivar[b] = tivar
         if spectra.mask is not None :
