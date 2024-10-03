@@ -660,7 +660,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # to combine data anyway we need to OR the masks to indicate issues
             # for the rest of the we assume there were some good pixels
             # hence the mask should stay zero
-            tmask[i, bad] = np.bitwise_or.reduce(spectra_mask[jj,bad], axis=0)
+            tmask[i, bad] = np.bitwise_or.reduce(spectra_mask[jj][:, bad], axis=0)
         spectra.flux[b] = tflux
         spectra.ivar[b] = tivar
         if spectra.mask is not None :
