@@ -471,14 +471,15 @@ class TestCoadd(unittest.TestCase):
                                                       bounds_error=False)(
                                                           s1.wave[band]).astype(int)
             for i in range(nspec):
-                #random bitmask
-                s1.mask[band][i] = np.floor(2.**rng.integers(-1, 4, size=len(pixels[band]))).astype(int)
-                for j,curpix in enumerate(pixels[band]):
+                # random bitmask
+                s1.mask[band][i] = np.floor(2.**rng.integers(-1, 4,
+                                                             size=len(pixels[band]))).astype(int)
+                for j, curpix in enumerate(pixels[band]):
                     if curpix not in mask_dict:
                         mask_dict[curpix] = []
-                    mask_dict[curpix].append(s1.mask[band][i,j])
+                    mask_dict[curpix].append(s1.mask[band][i, j])
                     # create all the masks contributing to pixel
-            
+
         s2 = coadd_cameras(s1, cosmics_nsig=0)
         for curpix in range(len(pixels0)):
             cur_m = np.array(mask_dict[curpix])
@@ -488,8 +489,24 @@ class TestCoadd(unittest.TestCase):
                 self.assertTrue(s2.mask['brz'][0][curpix] == 0)
             else:
                 # otherwise it should be or'ed
-                self.assertTrue(np.bitwise_or.reduce(cur_m) == s2.mask['brz'][0][curpix])
-        
+                self.assertTrue(np.bitwise_or.reduce(cur_m) ==
+                                s2.mask['brz'][0][curpix])
+
+    def test_coadd_cameras_badfiberstatus(self):
+        """
+        Check that coadd_cameras return zero if there all the
+        spectra are terminally bad
+        """
+        nspec, nwave = 4, 1000
+        bands = ['b', 'r', 'z']
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        s1.fibermap['TARGETID'] = [10] * nspec
+        s1.fibermap['FIBERSTATUS'] = (fibermask.BADAMPB | fibermask.BADAMPR |
+                                      fibermask.BADAMPZ)
+        s2 = coadd_cameras(s1)
+        self.assertTrue(np.all(s2.ivar['brz'][0] == 0))
+        self.assertTrue(np.all(s2.flux['brz'][0] == 0))
+
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
         nspec, nwave = 3, 10
