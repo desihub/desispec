@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import numpy as np
 
 from desiutil.log import get_logger
 from desispec.workflow.tableio import load_table, write_table
@@ -30,9 +31,10 @@ def parse_args():  # options=None):
                         help="Query NERSC about jobs with STATUS 'COMPLETED'"
                              + "in addition to all other jobs. Default is False, "
                              + "which skips COMPLETED jobs.")
-    args = parser.parse_args()
+    parser.add_argument("--show-updated-table", action="store_true",
+                        help="Print a subset of the columns from the ptable with updated statuses.")
 
-    return args
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
@@ -57,5 +59,11 @@ if __name__ == '__main__':
 
     if not args.dry_run:
         write_table(ptable, tablename=ptable_pathname)
+
+    if args.show_updated_table:
+        log.info("Updated processing table:")
+        cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
+                'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
+        log.info(np.array(cols))
 
     log.info(f"Done updating STATUS column for processing table: {ptable_pathname}")
