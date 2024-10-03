@@ -466,7 +466,8 @@ def _chi2_threshold(nspec, nsig):
     return threshold
 
 
-def _iterative_masker(vec, ivar, cosmics_nsig, min_for_cosmics):
+def _iterative_masker(vec, ivar, cosmics_nsig, min_for_cosmics,
+                      threshold = None):
     """
     Given a vector and inverse variances vector
     perform the iterative cosmic masking based on
@@ -480,6 +481,7 @@ def _iterative_masker(vec, ivar, cosmics_nsig, min_for_cosmics):
     ivar(ndarray): inverse variances
     cosmics_nsig(float): threshold in units of sigma
     min_for_cosmics(int): what's the threshold in number of spectra when we stop trying to find more cosmics
+    threshold(float): optional threshold, if specified we ignore cosmic_nsig and chi2 statistics and just use static chi2 threshold
 
     Returns:
     badmask(ndarray): boolean mask of bad/cosmic pixels
@@ -490,8 +492,11 @@ def _iterative_masker(vec, ivar, cosmics_nsig, min_for_cosmics):
         metric = (vec - mean)**2  * ivar 
         chi2 = metric[good].sum()
         nspec = good.sum()
-        threshold = _chi2_threshold(nspec, cosmics_nsig)
-        if chi2 > threshold:
+        if threshold is None:
+            cur_threshold = _chi2_threshold(nspec, cosmics_nsig)
+        else:
+            cur_threshold = threshold
+        if chi2 > cur_threshold:
             good[np.argmax(metric*good)] = False
         else:
             break
@@ -583,7 +588,21 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                                                       bad.astype(int))
         deltagrad = grad - meangrad
         chi2 = np.sum(gradivar * deltagrad**2, axis=0)
-        threshold = _chi2_threshold(nspec, cosmics_nsig)
+        med_chi2 = np.median(chi2)
+        if med_chi2 > 2 * scipy.stats.chi2(nspec-1).ppf(0.5):
+            # the median(chi^2) across the whole spectrum
+            # at least a factor of two larger
+            # then expected so we are dominated by not-noise related reasons
+            # i.e. the object is variable
+            # we switch to handwaving and estimate the median chi2
+            # and stddev of chi2 distribution from 84-th percentile
+            threshold = med_chi2 + (scipy.stats.scoreatpercentile(chi2,
+                                                                  84)
+                                    - med_chi2) * cosmics_nsig
+            fix_threshold = threshold
+        else:
+            threshold = _chi2_threshold(nspec, cosmics_nsig)
+            fix_threshold = None
         cosmic_bad = (chi2 > threshold) & (~bad)
         n_cosmic = np.sum(cosmic_bad)
         if n_cosmic > 0:
@@ -595,7 +614,8 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
             for bi in badindex:
                 cur_bad_mask = _iterative_masker(deltagrad[:, bi],
                                                  gradivar[:, bi],
-                                                 cosmics_nsig, min_for_cosmics)
+                                                 cosmics_nsig, min_for_cosmics,
+                                                 threshold = fix_threshold)
                 if cur_bad_mask.sum() > 1:
                     n_dups += 1
                 cur_mask_pos = spec_pos[cur_bad_mask]

@@ -163,6 +163,32 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
                          2)
 
+    def test_cosmic_masking_variable(self):
+        """ Here we test the case where the spectrum varies 
+        by much more than variance tells us 
+        The cosmic masking should still work
+        """
+        rng = np.random.default_rng(133)
+        npix, nspec = 1000, 10
+        wave = np.arange(npix)
+        ivar = np.ones((nspec, npix)) * 100
+        model0 =  (wave - (wave)**2 / npix) 
+        flux = model0 * np.linspace(1, 2, nspec)[:, None] + (
+                rng.normal(size=(nspec, npix)) / np.sqrt(ivar))
+        COSMIC = 1e6
+        flux[2, 100] = COSMIC
+        flux[0, 130] = COSMIC
+        mask = np.zeros((nspec, npix), dtype=int)
+        ivarjj_masked = ivar * 1
+        cosmics_nsig = 4
+        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
+                      ivarjj_masked, tid=1,
+                      cosmics_nsig=cosmics_nsig)
+        # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
+        self.assertEqual((ivarjj_masked == 0).sum(), 6)
+        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
+                         2)
+
     def test_multi_cosmic_masking(self):
         """Test masking unlucky cosmics on two spectra at same wavelength"""
         rng = np.random.default_rng(133)
