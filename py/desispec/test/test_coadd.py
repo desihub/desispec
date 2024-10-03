@@ -112,6 +112,35 @@ class TestCoadd(unittest.TestCase):
                 fibermap=fmap,
                 scores=scores,
                 )
+
+    def test_cosmic_masking_blank(self):
+        """
+        Ensure the masking works fine even if we have a few 
+        fully masked spectra (ivar=0) in the set
+        """
+        rng = np.random.default_rng(133)
+        npix, nspec = 10000, 30
+        wave = np.arange(npix)
+        ivar = rng.uniform(0, 1,
+                           size=(nspec, npix)) * (1 + 100 * np.arange(nspec)[:, None])
+        model0 = 0.01 * (wave - (wave)**2 / npix) + rng.uniform(size=npix)
+        flux = model0 + rng.normal(size=(nspec, npix)) / np.sqrt(ivar)
+        COSMIC = 1e6
+        ivar[0] = 0
+        ivar[22] = 0
+        flux[10, 100] = COSMIC
+        flux[1, 130] = COSMIC
+        mask = np.zeros((nspec, npix), dtype=int)
+        ivarjj_masked = ivar * 1
+        cosmics_nsig = 4
+        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
+                      ivarjj_masked, tid=1,
+                      cosmics_nsig=cosmics_nsig)
+        # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
+        self.assertEqual(((ivarjj_masked == 0) & (ivar > 0)).sum(), 6)
+        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
+                         2)
+
     def test_cosmic_masking(self):
         rng = np.random.default_rng(133)
         npix, nspec = 10000, 30

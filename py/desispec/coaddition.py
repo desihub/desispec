@@ -504,7 +504,8 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     log = get_logger()
     grad = []
     gradvar = []
-    for j in subset  :
+    spec_pos = []
+    for counter, j in enumerate(subset):
         if mask is not None :
             ttivar0 = ivar[j] * (mask[j] == 0)
         else :
@@ -513,6 +514,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         bad  = ~good
         if np.sum(good) == 0 :
             continue
+        spec_pos.append(counter)
         nbad = np.sum(bad)
         ttflux = flux[j].copy()
         if nbad > 0 :
@@ -530,7 +532,12 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         grad.append(cur_grad)
         gradvar.append(cur_grad_var)
 
-    grad, gradvar = np.array(grad), np.array(gradvar)
+    # we have to be careful here
+    # because grad can have smaller number of spectra than
+    # original data because we throw away fully masked spectra in
+    # the loop before
+    
+    spec_pos, grad, gradvar = [np.array(_) for _ in [spec_pos,grad, gradvar]]
     gradivar = (gradvar > 0 ) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
     sgradivar = np.sum(gradivar, axis=0)
@@ -554,8 +561,8 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                 cur_mask = _iterative_masker(deltagrad[:, bi], gradivar[:, bi], cosmics_nsig)
                 if cur_mask.sum() > 1:
                     n_dups += 1
-                ivarjj_masked[cur_mask, bi] = 0.
-                ivarjj_masked[cur_mask, bi + 1] = 0
+                ivarjj_masked[spec_pos[cur_mask], bi] = 0.
+                ivarjj_masked[spec_pos[cur_mask], bi + 1] = 0
                 # since we are using the maximum value of grad^2
                 # we really cannot say which pixel is responsible for
                 # large gradient hence we must mask two pixels
