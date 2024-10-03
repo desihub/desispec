@@ -134,7 +134,6 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
                          2)
 
-    #- TODO: This test is known to fail and should be fixed
     def test_multi_cosmic_masking(self):
         """Test masking unlucky cosmics on two spectra at same wavelength"""
         rng = np.random.default_rng(133)
@@ -157,7 +156,7 @@ class TestCoadd(unittest.TestCase):
 
         #- cosmic at pixel=5 should mask pixels 4,5,6 in exposures 1 and 2
         self.assertEqual(list(ivarjj_masked[0]), [1,1,1,1,0,0,0,1,1,1])
-        self.assertEqual(list(ivarjj_masked[1]), [1,1,1,1,0,0,0,1,1,1])   ### FAILS
+        self.assertEqual(list(ivarjj_masked[1]), [1,1,1,1,0,0,0,1,1,1])
         self.assertEqual(list(ivarjj_masked[2]), [1,1,1,1,1,1,1,1,1,1])
         self.assertEqual(list(ivarjj_masked[3]), [1,1,1,1,1,1,1,1,1,1])
         self.assertEqual(list(ivarjj_masked[4]), [1,1,1,1,1,1,1,1,1,1])
@@ -204,7 +203,6 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.ivar['b'] == np.sum(ivar0, axis=0)))
         self.assertTrue(np.all(s1.mask['b'][0][:maskpix] != 0))
 
-        #- TODO: this is known to fail and should be fixed
         #- masking propagates even if masked for diff reasons on diff pix
         #- Note: this time masking a single pix, not all pixels up to maskpix
         s2 = self._random_spectra(nspec, nwave, with_mask=True)
@@ -400,6 +398,45 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(resmod[~edge_mask],
                                     s2.flux['brz'][0][~edge_mask]))
 
+    def test_coadd_cameras_mask(self):
+        """
+        Check masks are properly coadded by coadd_cameras
+        """
+        nspec, nwave = 4, 1000
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4343)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        s1.fibermap['TARGETID'] = [10] * nspec
+        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        pixels0 = np.arange(len(s2.wave['brz']))
+        pixels = {}
+        mask_dict = {}
+        for band in bands:
+            pixels[band] = scipy.interpolate.interp1d(s2.wave['brz'],
+                                                      pixels0, kind='nearest',
+                                                      fill_value='extrapolate',
+                                                      bounds_error=False)(
+                                                          s1.wave[band]).astype(int)
+            for i in range(nspec):
+                #random bitmask
+                s1.mask[band][i] = np.floor(2.**rng.integers(-1, 4, size=len(pixels[band]))).astype(int)
+                for j,curpix in enumerate(pixels[band]):
+                    if curpix not in mask_dict:
+                        mask_dict[curpix] = []
+                    mask_dict[curpix].append(s1.mask[band][i,j])
+                    # create all the masks contributing to pixel
+            
+        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        for curpix in range(len(pixels0)):
+            cur_m = np.array(mask_dict[curpix])
+            if cur_m.min() == 0:
+                # if there is a zero mask pix
+                # the output should be zeromask
+                self.assertTrue(s2.mask['brz'][0][curpix] == 0)
+            else:
+                # otherwise it should be or'ed
+                self.assertTrue(np.bitwise_or.reduce(cur_m) == s2.mask['brz'][0][curpix])
+        
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
         nspec, nwave = 3, 10
