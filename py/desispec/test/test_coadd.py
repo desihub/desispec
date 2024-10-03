@@ -133,6 +133,44 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual((ivarjj_masked == 0).sum(), 6)
         self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
                          2)
+
+    #- TODO: This test is known to fail and should be fixed
+    def test_multi_cosmic_masking(self):
+        """Test masking unlucky cosmics on two spectra at same wavelength"""
+        rng = np.random.default_rng(133)
+        npix, nspec = 10, 5
+        wave = np.arange(npix)
+        flux = np.ones( (nspec, npix) )
+        ivar = np.ones( (nspec, npix) )
+        mask = np.zeros( (nspec, npix), dtype=int)
+
+        #- make a fake cosmic on spectra 0,1 while leaving 2,3,4 ok
+        COSMIC = 1e6
+        flux[0, 5] = COSMIC
+        flux[1, 5] = COSMIC
+
+        ivarjj_masked = ivar * 1
+        cosmics_nsig = 4
+        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
+                      ivarjj_masked, tid=1,
+                      cosmics_nsig=cosmics_nsig)
+
+        #- cosmic at pixel=5 should mask pixels 4,5,6 in exposures 1 and 2
+        self.assertEqual(list(ivarjj_masked[0]), [1,1,1,1,0,0,0,1,1,1])
+        self.assertEqual(list(ivarjj_masked[1]), [1,1,1,1,0,0,0,1,1,1])   ### FAILS
+        self.assertEqual(list(ivarjj_masked[2]), [1,1,1,1,1,1,1,1,1,1])
+        self.assertEqual(list(ivarjj_masked[3]), [1,1,1,1,1,1,1,1,1,1])
+        self.assertEqual(list(ivarjj_masked[4]), [1,1,1,1,1,1,1,1,1,1])
+
+        #- But if the "cosmic" appears on all of the spectra, it is no longer
+        #- masked because it could be real signal
+        flux[:, 5] = COSMIC
+        ivarjj_masked = ivar * 1
+        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
+                      ivarjj_masked, tid=1,
+                      cosmics_nsig=cosmics_nsig)
+
+        self.assertTrue(np.all(ivarjj_masked == ivar))
     
     def test_coadd(self):
         """Test coaddition"""
@@ -165,6 +203,44 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(s1.resolution_data['b'] , resol0))
         self.assertTrue(np.all(s1.ivar['b'] == np.sum(ivar0, axis=0)))
         self.assertTrue(np.all(s1.mask['b'][0][:maskpix] != 0))
+
+        #- TODO: this is known to fail and should be fixed
+        #- masking propagates even if masked for diff reasons on diff pix
+        #- Note: this time masking a single pix, not all pixels up to maskpix
+        s2 = self._random_spectra(nspec, nwave, with_mask=True)
+        maskpix = 5
+        s2.mask['b'][:,maskpix] = 2**np.arange(nspec)  # 1,2,4...
+        ormask = np.bitwise_or.reduce(s2.mask['b'][:,maskpix]) # 7 for nspec=3
+        s2.fibermap['TARGETID'] = 10
+        coadd(s2)
+        self.assertTrue(np.all(np.isfinite(s1.mask['b'])))
+        self.assertEqual(s1.mask['b'][0,maskpix], ormask)
+        self.assertEqual(s1.mask['b'][0,np.arange(nwave) != maskpix], 0)
+
+    def test_coadd_with_cosmic(self):
+        """Test coadding spectra that have a cosmic ray"""
+        nspec, nwave = 3, 10
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+
+        #- simplify ivar and flux to make test math easier
+        s1.flux['b'][:,:] = 1.0
+        s1.ivar['b'][:,:] = 1.0
+
+        #- add unidentified cosmic on a single spectrum
+        COSMIC = 1e6
+        s1.flux['b'][0,1] = COSMIC
+
+        #- All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = 10
+        coadd(s1)
+
+        #- cosmic on pixel 1 masks pixels 0,1,2; reducing coadd ivar
+        self.assertTrue(np.all(s1.ivar['b'][0,0:2] == 2))
+        self.assertTrue(np.all(s1.ivar['b'][0,3:] == 3))
+
+        #- but since there were good spectra, the final mask is still 0
+        self.assertTrue(np.all(s1.mask['b'] == 0))
+
 
     def test_coadd_single(self):
         """Test coaddition of a single spectrum which should be no-op"""

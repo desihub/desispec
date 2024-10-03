@@ -530,6 +530,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                 # we really cannot say which pixel is responsible for
                 # large gradient hence we must mask two pixels
                 log.debug("masking spec {} wave={}".format(k, wave[bi]))
+
     return 
 
 def _resolution_coadd(resolution, pix_weights):
@@ -606,6 +607,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False) :
             # to not have to deal with two code-paths throughout
             # the function
             spectra_mask = np.zeros(spectra.flux[b].shape, dtype=int) 
+
         tmask = np.zeros((ntarget, nwave), dtype=spectra_mask.dtype)
         trdata = np.zeros((ntarget, spectra.resolution_data[b].shape[1], nwave), dtype=spectra.resolution_data[b].dtype)
 
@@ -806,6 +808,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                               spectra_mask[b],
                               jj, ivarjj_masked, cosmics_nsig=cosmics_nsig,
                               tid=tid)
+
             ivar[i, windices] += np.sum(ivarjj_masked, axis=0)
             flux[i, windices] += np.sum(ivarjj_masked * spectra.flux[b][jj], axis=0)
             ivar_unmasked[i, windices] += np.sum(ivarjj_orig, axis=0)
