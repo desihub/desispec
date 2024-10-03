@@ -608,7 +608,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                     cur_mask_pos, wave[bi]))
 
             log.info(("masking {} wavelengths in {} spectra in cam {}"
-                     "for targetid={}").format(n_cosmic, nspec, camera, tid))
+                     " for targetid={}").format(n_cosmic, nspec, camera, tid))
             if n_dups > 0:
                 log.info(("masking {} wavelengths with more than 1 mask per "
                          "pixel for targetid={}").format(n_dups, tid))
