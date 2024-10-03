@@ -763,6 +763,8 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
             # instead of constantly checking if spectra.mask is None
             spectra_mask[b] = np.zeros(spectra.flux[b].shape,dtype=int)
     else:
+        # notice this will OR accumulate masks
+        # and we will zero out those if the result ivar is > 0
         mask = np.zeros((ntarget, nwave), dtype=spectra.mask[b].dtype)
         for b in spectra.bands:
             spectra_mask[b] = spectra.mask[b]
@@ -831,21 +833,13 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
                 rdata_norm_unmasked[i, cur_off:max_ndiag-cur_off, windices] += new_norm1.T
 
             if spectra.mask is not None :
-                # this deserves some attention ...
-
-                tmpmask=np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
-
-                # directly copy mask where no overlap
-                jj=(number_of_overlapping_cameras[windices]==1)
-                mask[i,windices[jj]] = tmpmask[jj]
-
-                # 'and' in overlapping regions
-                jj=(number_of_overlapping_cameras[windices]>1)
-                mask[i,windices[jj]] = mask[i,windices[jj]] & tmpmask[jj]
+                tmpmask = np.bitwise_or.reduce(spectra.mask[b][jj], axis=0)
+                mask[i, windices] = mask[i, windices] | tmpmask
 
     bad = ivar == 0
     flux[bad] = flux_unmasked[bad]
     ivar[bad] = ivar_unmasked[bad]
+    mask[~bad] = 0 # if the ivar > 0 the mask must be zero
     norm = (ivar + (ivar==0))
     flux[:] = flux / norm
     if rdata is not None:
