@@ -213,9 +213,9 @@ class TestCoadd(unittest.TestCase):
         ormask = np.bitwise_or.reduce(s2.mask['b'][:,maskpix]) # 7 for nspec=3
         s2.fibermap['TARGETID'] = 10
         coadd(s2)
-        self.assertTrue(np.all(np.isfinite(s1.mask['b'])))
-        self.assertEqual(s1.mask['b'][0,maskpix], ormask)
-        self.assertEqual(s1.mask['b'][0,np.arange(nwave) != maskpix], 0)
+        self.assertTrue(np.all(np.isfinite(s2.mask['b'])))
+        self.assertEqual(s2.mask['b'][0,maskpix], ormask)
+        self.assertTrue(np.all(s2.mask['b'][0,np.arange(nwave) != maskpix] == 0))
 
     def test_coadd_with_cosmic(self):
         """Test coadding spectra that have a cosmic ray"""
