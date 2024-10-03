@@ -27,7 +27,9 @@ def parse_args():  # options=None):
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where the processing table is not written back out to disk.")
     parser.add_argument("--check-complete-jobs", action="store_true",
-                        help="Default is False. Query NERSC about jobs with STATUS 'COMPLETED'.")
+                        help="Query NERSC about jobs with STATUS 'COMPLETED'"
+                             + "in addition to all other jobs. Default is False, "
+                             + "which skips COMPLETED jobs.")
     args = parser.parse_args()
 
     return args
