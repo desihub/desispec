@@ -447,19 +447,42 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
-def _iterative_masker(vec, ivar, cosmics_nsig):
+
+def _chi2_threshold(nspec, nsig):
+    """
+    Return the threshold for the the
+    chi^2 = Sum_i 1/sigma_i^2 (x_i - Mean(x))^2
+    corresponding to the tail probability of nsig sigma
+
+    Args:
+    nspec(int): number of pixels in the sample
+    nsig(float): how many sigma of tail probability to cut-off
+
+    Returns:
+    threshold(float): the chi^2 (not reduced one) value
+    """
+    threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
+                -nsig))
+    return threshold
+
+
+def _iterative_masker(vec, ivar, cosmics_nsig, min_for_cosmics):
     """
     Given a vector and inverse variances vector
-    perform the iterative cosmic masking based on 
+    perform the iterative cosmic masking based on
     chi^2 value. I.e. if chi2^2 is larger then threshold we
     pick up the most deviating value
     One has to be careful here with variable objects
     and what's the best behaviour there.
-    
+
     Args:
     vec(ndarray): input vector
     ivar(ndarray): inverse variances
     cosmics_nsig(float): threshold in units of sigma
+    min_for_cosmics(int): what's the threshold in number of spectra when we stop trying to find more cosmics
+
+    Returns:
+    badmask(ndarray): boolean mask of bad/cosmic pixels
     """
     good = np.ones(len(vec), dtype=bool)
     while True:
@@ -467,13 +490,12 @@ def _iterative_masker(vec, ivar, cosmics_nsig):
         metric = (vec - mean)**2  * ivar 
         chi2 = metric[good].sum()
         nspec = good.sum()
-        threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
-                -cosmics_nsig))
+        threshold = _chi2_threshold(nspec, cosmics_nsig)
         if chi2 > threshold:
             good[np.argmax(metric*good)] = False
         else:
             break
-        if good.sum() < 3:
+        if good.sum() < min_for_cosmics:
             # there no point in proceeding with two pixels
             break
     return ~good
@@ -507,7 +529,8 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
     gradvar = []
     spec_pos = []
     min_for_cosmics = 3
-    # we do not attempt to mask if the number of spectra is strictly less than this
+    # we do not attempt to mask if the number of spectra
+    # is strictly less than this
     if len(subset) < min_for_cosmics:
         return
     if mask is None:
@@ -560,8 +583,7 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                                                       bad.astype(int))
         deltagrad = grad - meangrad
         chi2 = np.sum(gradivar * deltagrad**2, axis=0)
-        threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
-            -cosmics_nsig))
+        threshold = _chi2_threshold(nspec, cosmics_nsig)
         cosmic_bad = (chi2 > threshold) & (~bad)
         n_cosmic = np.sum(cosmic_bad)
         if n_cosmic > 0:
@@ -571,11 +593,12 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
             n_dups = 0
             # count how many wavelengths with more than 1 masked value
             for bi in badindex:
-                cur_mask = _iterative_masker(deltagrad[:, bi], gradivar[:, bi],
-                                             cosmics_nsig)
-                if cur_mask.sum() > 1:
+                cur_bad_mask = _iterative_masker(deltagrad[:, bi],
+                                                 gradivar[:, bi],
+                                                 cosmics_nsig, min_for_cosmics)
+                if cur_bad_mask.sum() > 1:
                     n_dups += 1
-                cur_mask_pos = spec_pos[cur_mask]
+                cur_mask_pos = spec_pos[cur_bad_mask]
                 ivarjj_masked[cur_mask_pos, bi] = 0.
                 ivarjj_masked[cur_mask_pos, bi + 1] = 0
                 # since we are using the maximum value of grad^2
