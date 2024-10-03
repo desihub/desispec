@@ -373,7 +373,7 @@ class TestCoadd(unittest.TestCase):
             s1.flux['b'][i] = Resolution(resol[i])@model0
         # All the same targets, coadded in place
         s1.fibermap['TARGETID'] = [10]*nspec
-        coadd(s1, cosmics_nsig=1e10)
+        coadd(s1, cosmics_nsig=0)
         resmat2 = Resolution(s1.resolution_data['b'][0])
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
@@ -391,7 +391,7 @@ class TestCoadd(unittest.TestCase):
         rng = np.random.default_rng(4343)
         s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
         s1.fibermap['TARGETID'] = [10] * nspec
-        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        s2 = coadd_cameras(s1, cosmics_nsig=0)
         model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
         edge_nmask = 2 
         # we will ignore pixels next to the edges of spectrum
@@ -421,7 +421,7 @@ class TestCoadd(unittest.TestCase):
                                                           s1.wave[band])
             for i in range(nspec):
                 s1.flux[band][i] = Resolution(resol[i]) @ model0[band]
-        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        s2 = coadd_cameras(s1, cosmics_nsig=0)
         resmat2 = Resolution(s2.resolution_data['brz'][0])
         resmod = resmat2@model0_brz
         self.assertTrue(np.allclose(resmod[~edge_mask],
@@ -436,7 +436,7 @@ class TestCoadd(unittest.TestCase):
         rng = np.random.default_rng(4343)
         s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
         s1.fibermap['TARGETID'] = [10] * nspec
-        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        s2 = coadd_cameras(s1, cosmics_nsig=0)
         pixels0 = np.arange(len(s2.wave['brz']))
         pixels = {}
         mask_dict = {}
@@ -455,7 +455,7 @@ class TestCoadd(unittest.TestCase):
                     mask_dict[curpix].append(s1.mask[band][i,j])
                     # create all the masks contributing to pixel
             
-        s2 = coadd_cameras(s1, cosmics_nsig=1e10)
+        s2 = coadd_cameras(s1, cosmics_nsig=0)
         for curpix in range(len(pixels0)):
             cur_m = np.array(mask_dict[curpix])
             if cur_m.min() == 0:
