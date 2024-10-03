@@ -447,6 +447,38 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
+def _iterative_masker(vec, ivar, cosmics_nsig):
+    """
+    Given a vector and inverse variances vector
+    perform the iterative cosmic masking based on 
+    chi^2 value. I.e. if chi2^2 is larger then threshold we
+    pick up the most deviating value
+    One has to be careful here with variable objects
+    and what's the best behaviour there.
+    
+    Args:
+    vec(ndarray): input vector
+    ivar(ndarray): inverse variances
+    cosmics_nsig(float): threshold in units of sigma
+    """
+    good = np.ones(len(vec), dtype=bool)
+    while True:
+        mean = (ivar[good] * vec[good]).sum() / ivar[good].sum()
+        metric = (vec - mean)**2  * ivar 
+        chi2 = metric[good].sum()
+        nspec = good.sum()
+        threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(
+                -cosmics_nsig))
+        if chi2 > threshold:
+            good[np.argmax(metric*good)] = False
+        else:
+            break
+        if good.sum() < 3:
+            # there no point in proceeding with two pixels
+            break
+    return ~good
+
+
 def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
                   tid=None, cosmics_nsig=None):
     """
@@ -515,21 +547,26 @@ def _mask_cosmics(wave, flux, ivar, mask, subset, ivarjj_masked,
         cosmic_bad  = (chi2 > threshold) & (~bad)
         n_cosmic = np.sum(cosmic_bad)
         if n_cosmic > 0:
-            log.info("masking {} values in {} spectra for targetid={}".format(n_cosmic, nspec,
-                                                                              tid))
             badindex = np.where(cosmic_bad)[0]
-            # TODO this is likely not intended
-            # if we have more than cosmic in a the same pixel
-            # this will only mask it once
-            # Also the log is not correct then
-            for bi in badindex  :
-                k = np.argmax(gradivar[:, bi] * deltagrad[:, bi]**2)
-                ivarjj_masked[k, bi] = 0.
-                ivarjj_masked[k, bi + 1] = 0
+            # these are the problematic pixels with potentially more than one cosmic
+            n_dups = 0 # count how many wavelengths with more than 1 masked value
+            for bi in badindex:
+                cur_mask = _iterative_masker(deltagrad[:, bi], gradivar[:, bi], cosmics_nsig)
+                if cur_mask.sum() > 1:
+                    n_dups += 1
+                ivarjj_masked[cur_mask, bi] = 0.
+                ivarjj_masked[cur_mask, bi + 1] = 0
                 # since we are using the maximum value of grad^2
                 # we really cannot say which pixel is responsible for
                 # large gradient hence we must mask two pixels
-                log.debug("masking spec {} wave={}".format(k, wave[bi]))
+                log.debug("masking specs {} wave={}".format(np.nonzero(cur_mask)[0], wave[bi]))
+            
+            log.info("masking {} wavelengths in {} spectra for targetid={}".format(n_cosmic, nspec,
+                                                                              tid))
+            if n_dups > 0:
+                log.info("masking {} wavelengths with more than 1 mask per pixel for targetid={}".format(n_dups,
+                                                                              tid))
+                
 
     return 
 
