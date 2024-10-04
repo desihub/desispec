@@ -393,6 +393,33 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(ivar[0], s1.ivar['b'][0]))
         self.assertTrue(np.allclose(resol[0], s1.resolution_data['b'][0]))
         
+    def test_coadd_skip_cosmics(self):
+        """
+        Test coadd with two spectra masked.  
+        Here we with 3 spectra mask_cosmics should run,
+        but with two masked spectra, it should not
+        this tests this
+        """
+        nspec, nwave = 3, 30
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        flux0 = s1.flux['b'][0] * 1
+        rng = np.random.default_rng(4343)
+        ivar = rng.uniform(size=s1.ivar['b'].shape)
+        resol = rng.uniform(size=s1.resolution_data['b'].shape)
+        s1.ivar['b'] = ivar * 1
+        s1.ivar['b'][1:, :] = 0
+        s1.resolution_data['b'] = resol * 1
+        # fully mask second exposure
+        s1.mask['b'][1, :] = 1
+        # All the same targets, coadded in place
+        s1.fibermap['TARGETID'] = [10] * nspec
+        coadd(s1)
+        # check that the output of the coadd equals the first spectrum
+        # and that the mask is zero
+        self.assertTrue(np.allclose(flux0, s1.flux['b'][0]))
+        self.assertTrue(np.all(s1.mask['b'][0]==0))
+        self.assertTrue(np.allclose(ivar[0], s1.ivar['b'][0]))
+        self.assertTrue(np.allclose(resol[0], s1.resolution_data['b'][0]))
 
     def test_coadd_resolution(self):
         """Test proper behaviour of resolution matrix
