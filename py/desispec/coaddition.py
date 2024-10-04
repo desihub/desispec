@@ -447,7 +447,6 @@ def coadd_fibermap(fibermap, onetile=False):
 
     return tfmap, exp_fibermap
 
-
 def _chi2_threshold(nspec, nsig):
     """
     Return the threshold for the the
@@ -473,10 +472,11 @@ def _iterative_masker(vec,
     """
     Given a vector and inverse variances vector
     perform the iterative cosmic masking based on
-    chi^2 value. I.e. if chi2^2 is larger then threshold we
-    pick up the most deviating value
-    One has to be careful here with variable objects
-    and what's the best behaviour there.
+    chi^2 value. I.e. if chi2^2 for the ensemble is larger then threshold we
+    pick up the most deviating value.
+    A special mode was designed for cases when variability is much larger
+    than expected from noise. In the case we just use static threshold value for
+    chi2
 
     Args:
     vec(ndarray): input vector
@@ -524,12 +524,6 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     cosmic_mask (numpy.ndarray): 2d mask with trues where we think we have a cosmic
     """
 
-    # interpolate over bad measurements
-    # to be able to compute gradient next
-    # to a bad pixel and identify outlier
-    # many cosmics residuals are on edge
-    # of cosmic ray trace, and so can be
-    # next to a masked flux bin
     log = get_logger()
     grad = []
     gradvar = []
@@ -554,6 +548,9 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
         # we must keep the position of 'good' spectra for later
         nbad = np.sum(bad)
         ttflux = flux[j].copy()
+        # interpolate over bad measurements to be able to compute gradient next
+        # to a bad pixel and identify outlier many cosmics residuals are on edge
+        # of cosmic ray trace, and so can be next to a masked flux bin
         if nbad > 0:
             ttflux[bad] = np.interp(wave[bad], wave[good], ttflux[good])
         ttivar = ivar[j].copy()
@@ -759,7 +756,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             # in the case of all masked pixels
             # we still use the variances ignoring masking
 
-            tivar[i] = np.sum(weights, axis=0)
+            tivar[i][bad] = np.sum(weights[:, bad], axis=0)
+            # we now recalculate the tivar, because we just replaced updated the weigths
             weights = weights / (tivar[i] + (tivar[i] == 0))
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
@@ -768,9 +766,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             # note we ignore the resolution matrix norm (sum of weights)
             # because weights already were normalized
 
-            # for pixels where we found ivar=0, since we decided
+            # for pixels where we first found ivar=0, since we decided
             # to combine data anyway we need to OR the masks to indicate issues
-            # for the rest of the we assume there were some good pixels
+            # if ivar wave foudn to be >0 it means assume there were some good pixels
             # hence the mask should stay zero
             tmask[i, bad] = np.bitwise_or.reduce(spectra_mask[jj][:, bad],
                                                  axis=0)
@@ -862,27 +860,29 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
     b = sbands[0]
     flux = np.zeros((ntarget, nwave), dtype=spectra.flux[b].dtype)
     ivar = np.zeros((ntarget, nwave), dtype=spectra.ivar[b].dtype)
-    # these are final results
+    # these are accumulator variables for final results
 
-    # this is a special accumulation for cases where all pixels are masked
-    # and then we still compute the final unvar assuming no masking
+    # this is a special accumulation variables for cases where all pixels
+    # are masked and then we still compute the final results assuming no masking
     flux_unmasked = np.zeros((ntarget, nwave), dtype=spectra.flux[b].dtype)
     ivar_unmasked = np.zeros((ntarget, nwave), dtype=spectra.ivar[b].dtype)
 
     spectra_mask = {}
     if spectra.mask is None:
-        mask = np.zeros((ntarget, nwave), dtype=int)
         for b in spectra.bands:
             # this is superfluous
             # but makes logic clearer allowing to directly use spectra_mask
             # instead of constantly checking if spectra.mask is None
             spectra_mask[b] = np.zeros(spectra.flux[b].shape, dtype=int)
     else:
-        # notice this will OR accumulate masks
-        # and we will zero out those if the result ivar is > 0
-        mask = np.zeros((ntarget, nwave), dtype=spectra.mask[b].dtype)
         for b in spectra.bands:
             spectra_mask[b] = spectra.mask[b]
+
+    # this is an accumulator variable for the masks
+    mask = np.zeros((ntarget, nwave), dtype=spectra_mask[b].dtype)
+    # note that this will OR accumulate masks
+    # and we will zero out those if the final ivar is > 0
+    # which meant we had some good pixels in the stack
 
     if spectra.resolution_data is not None:
         rdata = np.zeros((ntarget, max_ndiag, nwave),
@@ -894,6 +894,8 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
         rdata = None
 
     band_ndiag = None
+    # number of diagonals in the resolution matrix for the current band
+    # we set it here to None to avoid the warning in the case of no resolution data
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
 
@@ -955,21 +957,31 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
                 rdata_norm_unmasked[cur_rdata_pos] += new_norm1.T
 
             if spectra.mask is not None:
+                # accumulate all of the bad pixel masks we have
+                # we will zero out those if we end up with ivar>0 in the result
                 tmpmask = np.bitwise_or.reduce(spectra.mask[b][jj], axis=0)
                 mask[i, windices] = mask[i, windices] | tmpmask
 
+    # this is most likely from masked pixels
+    # we try to use flux_unmasked, ivar_unmasked for these
     bad = ivar == 0
     flux[bad] = flux_unmasked[bad]
     ivar[bad] = ivar_unmasked[bad]
     mask[~bad] = 0
-    # if ivar > 0 the mask must be zero
+    # for non-bad pixels the mask must be zero
 
     norm = (ivar + (ivar == 0))
     # note here we add ivar==0 not 'bad' to ivar
-    # because we have just changed ivar by replacing so of those
-    # from ivar_unmasked
+    # because we have just changed ivar by replacing some of those
+    # but it's possible that we still have some ivar==0 pixels
+
     flux[:] = flux / norm
+    # this is final step in weighted mean calculation
+    # division by the sum of inverse variances
+
     if rdata is not None:
+        # we need to the same procedure for the resolution matrices
+        # as we did for fluxes
         bad = rdata_norm == 0
         rdata[bad] = rdata_unmasked[bad]
         rdata_norm[bad] = rdata_norm_unmasked[bad]
