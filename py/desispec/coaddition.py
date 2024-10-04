@@ -574,10 +574,10 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     spec_pos, grad, gradvar = [np.array(_) for _ in [spec_pos, grad, gradvar]]
     gradivar = (gradvar > 0) / np.array(gradvar + (gradvar == 0))
     nspec = grad.shape[0]
+
     if nspec < min_for_cosmics:
         # if after throwing out masked spectra we have not enough spectra
-        # return
-        return
+        return cosmic_mask
 
     sgradivar = np.sum(gradivar, axis=0)
     bad = sgradivar == 0
