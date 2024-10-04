@@ -396,9 +396,9 @@ class TestCoadd(unittest.TestCase):
     def test_coadd_skip_cosmics(self):
         """
         Test coadd with two spectra masked.  
-        Here we with 3 spectra mask_cosmics should run,
-        but with two masked spectra, it should not
-        this tests this
+        Here with 3 spectra mask_cosmics should start,
+        but with two masked spectra, it should bail out
+        this tests the behaviour
         """
         nspec, nwave = 3, 30
         s1 = self._random_spectra(nspec, nwave, with_mask=True)
