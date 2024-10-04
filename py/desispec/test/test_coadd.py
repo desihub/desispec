@@ -51,7 +51,7 @@ class TestCoadd(unittest.TestCase):
                                resolution_data=rdat,
                                fibermap=fmap)
         
-    def _random_spectra(self, ns=3, nw=10, seed=None, with_mask=False,
+    def _random_spectra(self, ns=3, nw=10, seed=74273, with_mask=False,
                         bands=('b',)):
 
         rng = np.random.default_rng(seed)
@@ -130,15 +130,13 @@ class TestCoadd(unittest.TestCase):
         ivar[22] = 0
         flux[10, 100] = COSMIC
         flux[1, 130] = COSMIC
-        mask = np.zeros((nspec, npix), dtype=int)
-        ivarjj_masked = ivar * 1
         cosmics_nsig = 4
-        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
-                      ivarjj_masked, tid=1,
-                      cosmics_nsig=cosmics_nsig)
+        cosmic_mask = _mask_cosmics(wave, flux, ivar,
+                                    tid=1,
+                                    cosmics_nsig=cosmics_nsig)
         # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
-        self.assertEqual(((ivarjj_masked == 0) & (ivar > 0)).sum(), 6)
-        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
+        self.assertEqual(cosmic_mask.sum(), 6)
+        self.assertEqual((flux[cosmic_mask] == COSMIC).sum(),
                          2)
 
     def test_cosmic_masking(self):
@@ -152,79 +150,72 @@ class TestCoadd(unittest.TestCase):
         COSMIC = 1e6
         flux[2, 100] = COSMIC
         flux[0, 130] = COSMIC
-        mask = np.zeros((nspec, npix), dtype=int)
-        ivarjj_masked = ivar * 1
         cosmics_nsig = 4
-        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
-                      ivarjj_masked, tid=1,
-                      cosmics_nsig=cosmics_nsig)
+        cosmic_mask = _mask_cosmics(wave, flux, ivar,
+                                    tid=1,
+                                    cosmics_nsig=cosmics_nsig)
         # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
-        self.assertEqual((ivarjj_masked == 0).sum(), 6)
-        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
-                         2)
+        self.assertEqual(cosmic_mask.sum(), 6)
+        self.assertEqual((flux[cosmic_mask] == COSMIC).sum(), 2)
 
     def test_cosmic_masking_variable(self):
-        """ Here we test the case where the spectrum varies 
-        by much more than variance tells us 
+        """ Here we test the case where the spectrum varies
+        by much more than variance tells us
         The cosmic masking should still work
         """
         rng = np.random.default_rng(133)
         npix, nspec = 1000, 10
         wave = np.arange(npix)
         ivar = np.ones((nspec, npix)) * 100
-        model0 =  (wave - (wave)**2 / npix) 
+        model0 = (wave - (wave)**2 / npix) 
         flux = model0 * np.linspace(1, 2, nspec)[:, None] + (
                 rng.normal(size=(nspec, npix)) / np.sqrt(ivar))
         COSMIC = 1e6
         flux[2, 100] = COSMIC
         flux[0, 130] = COSMIC
-        mask = np.zeros((nspec, npix), dtype=int)
-        ivarjj_masked = ivar * 1
         cosmics_nsig = 4
-        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
-                      ivarjj_masked, tid=1,
-                      cosmics_nsig=cosmics_nsig)
+        cosmic_mask = _mask_cosmics(wave, flux, ivar,
+                                    tid=1,
+                                    cosmics_nsig=cosmics_nsig)
         # we mask pixel and 1 neighbor around hence 3 pixel per cosmic
-        self.assertEqual((ivarjj_masked == 0).sum(), 6)
-        self.assertEqual((flux[ivarjj_masked == 0] == COSMIC).sum(),
+        self.assertEqual(cosmic_mask.sum(), 6)
+        self.assertEqual((flux[cosmic_mask] == COSMIC).sum(),
                          2)
 
     def test_multi_cosmic_masking(self):
         """Test masking unlucky cosmics on two spectra at same wavelength"""
-        rng = np.random.default_rng(133)
         npix, nspec = 10, 5
         wave = np.arange(npix)
-        flux = np.ones( (nspec, npix) )
-        ivar = np.ones( (nspec, npix) )
-        mask = np.zeros( (nspec, npix), dtype=int)
+        flux = np.ones((nspec, npix))
+        ivar = np.ones((nspec, npix))
 
         #- make a fake cosmic on spectra 0,1 while leaving 2,3,4 ok
         COSMIC = 1e6
-        flux[0, 5] = COSMIC
-        flux[1, 5] = COSMIC
+        cosmic_pix = 5
+        flux[0, cosmic_pix] = COSMIC
+        flux[1, cosmic_pix] = COSMIC
 
-        ivarjj_masked = ivar * 1
         cosmics_nsig = 4
-        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
-                      ivarjj_masked, tid=1,
-                      cosmics_nsig=cosmics_nsig)
+        cosmic_mask = _mask_cosmics(wave, flux, ivar, tid=1,
+                                    cosmics_nsig=cosmics_nsig)
 
         #- cosmic at pixel=5 should mask pixels 4,5,6 in exposures 1 and 2
-        self.assertEqual(list(ivarjj_masked[0]), [1,1,1,1,0,0,0,1,1,1])
-        self.assertEqual(list(ivarjj_masked[1]), [1,1,1,1,0,0,0,1,1,1])
-        self.assertEqual(list(ivarjj_masked[2]), [1,1,1,1,1,1,1,1,1,1])
-        self.assertEqual(list(ivarjj_masked[3]), [1,1,1,1,1,1,1,1,1,1])
-        self.assertEqual(list(ivarjj_masked[4]), [1,1,1,1,1,1,1,1,1,1])
+        def mask2str(mask):
+            return ''.join([str(_) for _ in (mask).astype(int)])
 
-        #- But if the "cosmic" appears on all of the spectra, it is no longer
-        #- masked because it could be real signal
-        flux[:, 5] = COSMIC
-        ivarjj_masked = ivar * 1
-        _mask_cosmics(wave, flux, ivar, mask, np.arange(nspec),
-                      ivarjj_masked, tid=1,
-                      cosmics_nsig=cosmics_nsig)
+        self.assertEqual(mask2str(cosmic_mask[0]), '0000111000')
+        self.assertEqual(mask2str(cosmic_mask[1]), '0000111000')
+        for i in range(2, nspec):
+            self.assertEqual(mask2str(cosmic_mask[i]), '0000000000')
 
-        self.assertTrue(np.all(ivarjj_masked == ivar))
+        # But if the "cosmic" appears on all of the spectra, it is no longer
+        # masked because it could be real signal
+        flux[:, cosmic_pix] = COSMIC
+        cosmic_mask = _mask_cosmics(wave, flux, ivar,
+                                    tid=1,
+                                    cosmics_nsig=cosmics_nsig)
+
+        self.assertTrue(np.all(~cosmic_mask))
     
     def test_coadd(self):
         """Test coaddition"""
