@@ -510,18 +510,18 @@ def _iterative_masker(vec,
 
 def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     """
-    Mask cosmics for in multiple spectra by updating ivar array inplace
+    Mask cosmics in multiple spectra
     
     Args:
-    wave (numpy.ndarray): 1d array of wavelengths
-    flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
-    ivar (numpy.ndarray): 2d array of ivars (from Spectra) the ivars need to be masked already
-    tid (int): targetid (used for logging)
-    cosmics_nsig (float): threshold for cosmic ray rejection
-    camera (string): camera corresponding to the spectrum b/r/z
+        wave (numpy.ndarray): 1d array of wavelengths
+        flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
+        ivar (numpy.ndarray): 2d array of ivars (from Spectra) with ivar=0 for previously masked pixels
+        tid (int): targetid (used for logging)
+        cosmics_nsig (float): threshold for cosmic ray rejection
+        camera (string): camera corresponding to the spectrum b/r/z (used for logging)
 
     Returns:
-    cosmic_mask (numpy.ndarray): 2d mask with trues where we think we have a cosmic
+        cosmic_mask (numpy.ndarray): 2d mask with trues where we think we have a cosmic
     """
 
     log = get_logger()
@@ -578,6 +578,7 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
         # if after throwing out masked spectra we have not enough spectra
         # return
         return
+
     sgradivar = np.sum(gradivar, axis=0)
     bad = sgradivar == 0
     # this should not happen really as we already
@@ -635,6 +636,7 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
             if n_dups > 0:
                 log.info(("masking {} wavelengths with more than 1 mask per "
                           "pixel for targetid={}").format(n_dups, tid))
+
     return cosmic_mask
 
 
