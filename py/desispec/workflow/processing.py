@@ -636,7 +636,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     failed_dependency = False
     if len(dep_qids) > 0 and not dry_run:
         non_final_states = get_non_final_states()
-        state_dict = get_queue_states_from_qids(dep_qids, dry_run=dry_run, use_cache=True)
+        state_dict = get_queue_states_from_qids(dep_qids, dry_run_level=dry_run, use_cache=True)
         still_depids = []
         for depid in dep_qids:
             if depid in state_dict.keys():
@@ -1156,7 +1156,7 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 
 def update_and_recursively_submit(proc_table, submits=0, resubmission_states=None,
                                   no_resub_failed=False, ptab_name=None,
-                                  dry_run=0, reservation=None):
+                                  dry_run_level=0, reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1172,9 +1172,12 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
         no_resub_failed: bool. Set to True if you do NOT want to resubmit
             jobs with Slurm status 'FAILED' by default. Default is False.
         ptab_name, str, the full pathname where the processing table should be saved.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run_level (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
 
     Returns:
@@ -1193,7 +1196,7 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
         resubmission_states = get_resubmission_states(no_resub_failed=no_resub_failed)
 
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
-    proc_table = update_from_queue(proc_table, dry_run=dry_run)
+    proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
     log.info("Updated processing table queue information:")
     cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
             'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
@@ -1207,12 +1210,12 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
             proc_table, submits = recursive_submit_failed(rown, proc_table, submits,
                                                           id_to_row_map, ptab_name,
                                                           resubmission_states,
-                                                          reservation, dry_run)
-    proc_table = update_from_queue(proc_table, dry_run=dry_run)
+                                                          reservation, dry_run_level)
+    proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
-                            resubmission_states=None, reservation=None, dry_run=0):
+                            resubmission_states=None, reservation=None, dry_run_level=0):
     """
     Given a row of a processing table and the full processing table, this resubmits the given job.
     Before submitting a job, it checks the dependencies for failures in the processing table. If a dependency needs to
@@ -1230,9 +1233,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             possible Slurm scheduler state, where you wish for jobs with that
             outcome to be resubmitted
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run_level (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns:
         tuple: A tuple containing:
@@ -1273,7 +1279,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                               +  f"fatal error."
                         log.critical(msg)
                         raise ValueError(msg)
-                    reftab = update_from_queue(reftab, dry_run=dry_run)
+                    reftab = update_from_queue(reftab, dry_run_level=dry_run_level)
                     entry = reftab[reftab['INTID'] == idep][0]
                     if entry['STATUS'] not in good_states:
                         msg = f"Internal ID: {idep} not in id_to_row_map. " \
@@ -1311,7 +1317,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                                                                   proc_table, submits,
                                                                   id_to_row_map,
                                                                   reservation=reservation,
-                                                                  dry_run=dry_run)
+                                                                  dry_run_level=dry_run_level)
                 ## Now that we've resubmitted the dependency if necessary,
                 ## add the most recent QID to the list
                 qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
@@ -1327,10 +1333,10 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
 
     proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
-                                           strictly_successful=True, dry_run=dry_run)
+                                           strictly_successful=True, dry_run=dry_run_level)
     submits += 1
 
-    if not dry_run:
+    if dry_run_level < 3:
         if ptab_name is None:
             write_table(proc_table, tabletype='processing', overwrite=True)
         else:

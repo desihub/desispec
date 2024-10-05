@@ -25,8 +25,13 @@ def parse_args():  # options=None):
                         help="Directory name where the output processing table should be saved.")
     parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
                         help="File format and extension for the exp and proc tables.")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where the processing table is not written back out to disk.")
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="What level of dry_run to perform, if any. Default is 0. "
+                              + "0 which runs the code normally. "
+                              + "1 writes all files but doesn't submit any jobs to Slurm. "
+                              + "2 writes tables but doesn't write scripts or submit anything. "
+                              + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
+                              + "4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs. ")
     parser.add_argument("--check-complete-jobs", action="store_true",
                         help="Query NERSC about jobs with STATUS 'COMPLETED'"
                              + "in addition to all other jobs. Default is False, "
@@ -51,13 +56,17 @@ if __name__ == '__main__':
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
+    if args.dry_run_level > 0:
+        log.info(f"{args.dry_run_level=}, so will be simulating some features."
+                 + f" See parser for what each level limits.")
+
     ## Load in the files defined above
     ptable = load_table(tablename=ptable_pathname, tabletype='proctable')
     log.info(f"Identified ptable with {len(ptable)} entries.")
-    ptable = update_from_queue(ptable, dry_run=args.dry_run,
+    ptable = update_from_queue(ptable, dry_run_level=args.dry_run_level,
                                check_complete_jobs=args.check_complete_jobs)
 
-    if not args.dry_run:
+    if args.dry_run_level < 3:
         write_table(ptable, tablename=ptable_pathname)
 
     if args.show_updated_table:

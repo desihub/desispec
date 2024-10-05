@@ -432,9 +432,9 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
         check_complete_jobs, bool. Default is False. Set to true if you want to
                         also check QID's that currently have a STATUS "COMPLETED".
                         in the ptable.
-        The following are only used if qtable is not provided:
-            dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-                           table that doesn't query the Slurm scheduler.
+        dry_run, int. Used if qtable is not providedWhether this is a simulated run or real run.
+                       If nonzero, it is a simulation and it returns a default
+                       table that doesn't query the Slurm scheduler.
 
     Returns:
         ptab, Table. A opy of the same processing table as the input except that the "STATUS" column in ptable for all jobs is

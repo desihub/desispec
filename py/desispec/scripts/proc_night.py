@@ -85,16 +85,15 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         override_pathname (str): Full path to the override file.
         update_exptable (bool): If true then the exposure table is updated.
             The default is False.
-        dry_run_level (int, optional): If nonzero, this is a simulated run.
-            If dry_run_level=1 the scripts will be written but not submitted.
-            If dry_run_level=2, the scripts will not be written nor submitted
-            but the processing_table is still created.
-            If dry_run_level=3, no output files are written.
-            Logging will remain the same for testing as though scripts are
-            being submitted. Default is 0 (false).
+        dry_run_level (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         dry_run (bool, optional): When to run without submitting scripts or
             not. If dry_run_level is defined, then it over-rides this flag.
-            dry_run_level not set and dry_run=True, dry_run_level is set to 2
+            dry_run_level not set and dry_run=True, dry_run_level is set to 3
             (no scripts generated or run). Default for dry_run is False.
         no_redshifts (bool, optional): Whether to submit redshifts or not.
             If True, redshifts are not submitted.
@@ -191,7 +190,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Reconcile the dry_run and dry_run_level
     if dry_run and dry_run_level == 0:
-        dry_run_level = 2
+        dry_run_level = 3
     elif dry_run_level > 0:
         dry_run = True
 
@@ -358,7 +357,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Update processing table
     tableng = len(ptable)
     if tableng > 0:
-        ptable = update_from_queue(ptable, dry_run=dry_run_level)
+        ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
         if any_jobs_failed(ptable['STATUS']):
@@ -373,7 +372,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 ptable, nsubmits = update_and_recursively_submit(ptable,
                                                                  no_resub_failed=no_resub_failed,
                                                                  ptab_name=proc_table_pathname,
-                                                                 dry_run=dry_run,
+                                                                 dry_run_level=dry_run_level,
                                                                  reservation=reservation)
             elif not ignore_proc_table_failures:
                 err = "Some jobs have an incomplete job status. This script " \
@@ -588,11 +587,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ################### Wrap things up ###################
     unproc_table = None
     if len(ptable) > 0:
-        ## All jobs now submitted, update information from job queue and save
-        ## But only if actually submitting or fully simulating, don't simulate
-        ## outputs that will be written to disk (levels 1 and 2)
-        if dry_run_level < 1 or dry_run_level > 2:
-            ptable = update_from_queue(ptable, dry_run=dry_run_level)
+        ## All jobs now submitted, update information from job queue
+        ## If dry_run_level > 3, then Slurm isn't queried and these results are made up
+        ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
             ## Now that processing is complete, lets identify what we didn't process
