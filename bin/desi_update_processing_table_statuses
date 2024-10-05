@@ -74,5 +74,8 @@ if __name__ == '__main__':
         cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
                 'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
         log.info(np.array(cols))
-
+        for row in ptable:
+            log.info(np.array(row[cols]))
+        log.info("\n")
+       
     log.info(f"Done updating STATUS column for processing table: {ptable_pathname}")
