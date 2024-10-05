@@ -454,11 +454,11 @@ def _chi2_threshold(nspec, nsig):
     corresponding to the tail probability of nsig sigma
 
     Args:
-    nspec(int): number of pixels in the sample
-    nsig(float): how many sigma of tail probability to cut-off
+        nspec(int): number of pixels in the sample
+        nsig(float): how many sigma of tail probability to cut-off
 
     Returns:
-    threshold(float): the chi^2 (not reduced one) value
+        threshold(float): the chi^2 (not reduced one) value
     """
     threshold = scipy.stats.chi2(nspec - 1).isf(scipy.stats.norm.cdf(-nsig))
     return threshold
@@ -479,14 +479,14 @@ def _iterative_masker(vec,
     chi2
 
     Args:
-    vec(ndarray): input vector
-    ivar(ndarray): inverse variances
-    cosmics_nsig(float): threshold in units of sigma
-    min_for_cosmics(int): what's the threshold in number of spectra when we stop trying to find more cosmics
-    threshold(float): optional threshold, if specified we ignore cosmic_nsig and chi2 statistics and just use static chi2 threshold
+        vec(ndarray): input vector
+        ivar(ndarray): inverse variances
+        cosmics_nsig(float): threshold in units of sigma
+        min_for_cosmics(int): what's the threshold in number of spectra when we stop trying to find more cosmics
+        threshold(float): optional threshold, if specified we ignore cosmic_nsig and chi2 statistics and just use static chi2 threshold
 
     Returns:
-    badmask(ndarray): boolean mask of bad/cosmic pixels
+        badmask(ndarray): boolean mask of bad/cosmic pixels
     """
     good = np.ones(len(vec), dtype=bool)
     while True:
@@ -505,6 +505,7 @@ def _iterative_masker(vec,
         if good.sum() < min_for_cosmics:
             # there no point in proceeding with two pixels
             break
+
     return ~good
 
 
