@@ -117,6 +117,12 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
+    #
+    # This value *should* get overwritten by merge_tile_completeness_table(),
+    # but here we need a placeholder to make sure reorder_columns() works.
+    #
+    timestamp = datetime.datetime.now(tz=pytz.timezone('US/Pacific')).strftime("%Y-%m-%dT%H:%M:%S%z")
+    res["UPDATED"] = np.array(np.repeat(timestamp, ntiles))
     res.meta['EXTNAME'] = 'TILE_COMPLETENESS'
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
@@ -245,7 +251,11 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     # e.g. dither tiles or tiles where all exp so far are bad
     other = (res['EFFTIME_SPEC'] == 0.0)
     res['OBSSTATUS'][other] = 'other'
-
+    #
+    # This call to reorder_columns is probably not necessary, because it gets
+    # called again in merge_tile_completeness_table(). For now though, we
+    # need to ensure that the expected columns are present.
+    #
     res = reorder_columns(res)
 
     # reorder rows
