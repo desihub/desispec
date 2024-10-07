@@ -5,7 +5,23 @@ desispec Change Log
 0.67.0 (unreleased)
 -------------------
 
-* No changes yet.
+Major algorithmic change to coadds
+
+* Fix coaddition of Resolution matrices and identification of cosmics
+  in coadds (PR `#2377`).
+
+Other
+
+* Fix indexing bug with backup EFFTIME (PR `#2365`_).
+* Add "UPDATED" timestamp column to tiles file (PR `#2373`_).
+* Support reading old zbest files (now redrock) (PR `#2374`_).
+* Add script to update processing tabel column layout (PR `#2376`_).
+
+.. _`#2365`: https://github.com/desihub/desispec/pull/2365
+.. _`#2373`: https://github.com/desihub/desispec/pull/2373
+.. _`#2374`: https://github.com/desihub/desispec/pull/2374
+.. _`#2376`: https://github.com/desihub/desispec/pull/2376
+.. _`#2377`: https://github.com/desihub/desispec/pull/2377
 
 0.66.3 (2024-09-13)
 -------------------
