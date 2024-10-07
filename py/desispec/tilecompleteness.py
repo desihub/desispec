@@ -7,13 +7,16 @@ and tiles completion.
 """
 
 import os
-import numpy as np
+import datetime
 import glob
+
+import pytz
+import numpy as np
 from astropy.table import Table, vstack
 
-from desispec.io import read_table
-
 from desiutil.log import get_logger
+
+from desispec.io import read_table
 
 
 def read_gfa_data(gfa_proc_dir):
@@ -114,6 +117,12 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
+    #
+    # This value *should* get overwritten by merge_tile_completeness_table(),
+    # but here we need a placeholder to make sure reorder_columns() works.
+    #
+    timestamp = datetime.datetime.now(tz=pytz.timezone('US/Pacific')).strftime("%Y-%m-%dT%H:%M:%S%z")
+    res["UPDATED"] = np.array(np.repeat(timestamp, ntiles))
     res.meta['EXTNAME'] = 'TILE_COMPLETENESS'
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
@@ -242,7 +251,11 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     # e.g. dither tiles or tiles where all exp so far are bad
     other = (res['EFFTIME_SPEC'] == 0.0)
     res['OBSSTATUS'][other] = 'other'
-
+    #
+    # This call to reorder_columns is probably not necessary, because it gets
+    # called again in merge_tile_completeness_table(). For now though, we
+    # need to ensure that the expected columns are present.
+    #
     res = reorder_columns(res)
 
     # reorder rows
@@ -252,7 +265,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
+    neworder=['TILEID','SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','UPDATED']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         log = get_logger()
@@ -289,65 +302,82 @@ def is_same_table_rows(table1,index1,table2,index2) :
     return True
 
 
-def merge_tile_completeness_table(previous_table,new_table) :
-    """ Merges tile summary tables.
+def merge_tile_completeness_table(previous_table, new_table):
+    """Merges tile summary tables.
 
-    Args:
-      previous_table: astropy.table.Table
-      new_table: astropy.table.Table
-    Returns: astropy.table.Table with merged entries.
+    The ``UPDATED`` column contains a timestamp that will be
+    set to the current time for any entries in `new_table`.
+
+    Parameters
+    ----------
+    previous_table : :class:`~astropy.table.Table`
+        The previous version of the tile completeness table.
+    new_table : :class:`~astropy.table.Table`
+        The new tile completeness data, usually from one new night.
+
+    Returns
+    -------
+    :class:`~astropy.table.Table`
+        The table with merged entries.
     """
-
     log = get_logger()
-
-    # first check columns and add in previous if missing
-    for k in new_table.dtype.names :
-        if not k in previous_table.dtype.names :
-            log.info("New column {}".format(k))
-            previous_table[k] = np.zeros(len(previous_table),dtype=new_table[k].dtype)
-
-    # check whether there is any difference for the new ones
-    t2i={t:i for i,t in enumerate(previous_table["TILEID"])}
+    #
+    # First check columns and add in previous if missing.
+    #
+    for column in new_table.colnames:
+        if column not in previous_table.colnames:
+            log.info("Adding new column to previous data: '%s'.", column)
+            previous_table[column] = np.zeros(len(previous_table), dtype=new_table[column].dtype)
+    #
+    # Check whether there is any difference in new_table
+    #
+    t2i={t: i for i, t in enumerate(previous_table["TILEID"])}
 
     nadd=0
     nmod=0
     nforcekeep=0
-
-    # keep all tiles that are not in the new table
-    keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"],new_table["TILEID"]))[0])
+    #
+    # Keep all tiles that are not in new_table.
+    #
+    keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"], new_table["TILEID"]))[0])
     nsame = len(keep_from_previous)
 
     add_from_new = []
-    for j,t in enumerate(new_table["TILEID"]) :
-        if t not in t2i :
+    for j, t in enumerate(new_table["TILEID"]):
+        if t not in t2i:
             nadd += 1
             add_from_new.append(j)
             continue
-        i=t2i[t]
 
-        if is_same_table_rows(previous_table,i,new_table,j) :
+        i = t2i[t]
+        if is_same_table_rows(previous_table, i, new_table, j):
             nsame += 1
             keep_from_previous.append(i)
             continue
-
-        # do some sanity check
-        any_change=False
-        for k in ["SURVEY","GOALTYPE"] :
-            if new_table[k][j] == "unknown" and previous_table[k][i] != "unknown" :
-                log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
-                new_table[k][j] = previous_table[k][i]
-                any_change=True
+        #
+        # Perform some sanity checks.
+        #
+        any_change = False
+        for column in ("SURVEY", "GOALTYPE"):
+            if new_table[column][j] == "unknown" and previous_table[column][i] != "unknown":
+                log.warning("IGNORE change in column %s for tile %d: '%s' -> '%s'.",
+                            column, t, str(previous_table[column][i]), str(new_table[column][j]))
+                new_table[column][j] = previous_table[column][i]
+                any_change = True
 
         survey = new_table["SURVEY"][j]
-        if survey in ["cmx","sv1","sv2","sv3"]:
-            for k in ["GOALTIME","OBSSTATUS"] :
-                if new_table[k][j] != previous_table[k][i] :
-                    log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
-                    new_table[k][j] = previous_table[k][i]
-                    any_change=True
-
-        if any_change : # recheck if still different
-            if is_same_table_rows(previous_table,i,new_table,j) :
+        if survey in ("cmx", "sv1", "sv2", "sv3"):
+            for column in ("GOALTIME", "OBSSTATUS"):
+                if new_table[column][j] != previous_table[column][i]:
+                    log.warning("IGNORE change in column %s for tile %d: '%s' -> '%s'.",
+                                column, t, str(previous_table[column][i]), str(new_table[column][j]))
+                    new_table[column][j] = previous_table[column][i]
+                    any_change = True
+        #
+        # Redo check to see if there are still any differences.
+        #
+        if any_change:
+            if is_same_table_rows(previous_table, i, new_table, j):
                 nsame += 1
                 keep_from_previous.append(i)
                 continue
@@ -355,18 +385,33 @@ def merge_tile_completeness_table(previous_table,new_table) :
         nmod += 1
         add_from_new.append(j)
 
-    log.info("{} tiles unchanged".format(nsame))
-    log.info("{} tiles modified".format(nmod))
-    log.info("{} tiles added".format(nadd))
-
-    if len(add_from_new)>0 :
-        res = vstack( [ previous_table[keep_from_previous] , new_table[add_from_new] ] )
-    else :
+    log.info("%d tiles unchanged.", nsame)
+    log.info("%d tiles modified.", nmod)
+    log.info("%d tiles added.", nadd)
+    #
+    # Stack the tables.
+    #
+    if len(add_from_new) > 0:
+        #
+        # Set the UPDATED column.
+        #
+        timestamp = datetime.datetime.now(tz=pytz.timezone('US/Pacific')).strftime("%Y-%m-%dT%H:%M:%S%z")
+        new_table['UPDATED'][add_from_new] = timestamp
+        res = vstack([previous_table[keep_from_previous],
+                      new_table[add_from_new]])
+    else:
         res = previous_table
-
+    #
+    # Set column order.
+    #
     res = reorder_columns(res)
-    # reorder rows
+    #
+    # Reorder rows.
+    #
     ii  = np.argsort(res["LASTNIGHT"])
     res = res[ii]
-
+    #
+    # Make sure metadata are updated.
+    #
+    res.meta['EXTNAME'] = 'TILES'
     return res
