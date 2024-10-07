@@ -266,9 +266,12 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
             desispect.workflow.proctable.get_processing_table_column_defs()
         queue (str, optional): The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         joint (bool, optional): Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
             run with desi_proc_joint_fit. Default is False.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -422,9 +425,12 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
             desispect.workflow.proctable.get_processing_table_column_defs()
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
-        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written but not submitted.
-            If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
@@ -608,9 +614,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
             desispect.workflow.proctable.get_processing_table_column_defs()
-        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
@@ -1370,9 +1379,12 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             or 'flat' or 'nightlyflat'.
         z_submit_types (list of str, optional): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1511,9 +1523,12 @@ def joint_cal_fit(descriptor, ptable, prows, internal_id, queue, reservation,
         internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1583,9 +1598,12 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
         internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1704,9 +1722,12 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
         internal_id (int): the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue (str): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str): The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1751,7 +1772,7 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservati
     """
     Wrapper function for desiproc.workflow.processing.joint_fit specific to the stdstarfit joint fit and redshift fitting.
 
-    All variables are the same except::
+    All variables are the same except:
 
         Arg 'sciences' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'science'.
@@ -1769,7 +1790,7 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
     """
     Wrapper function for desiproc.workflow.processing.joint_fit specific to the nightlyflat joint fit.
 
-    All variables are the same except::
+    All variables are the same except:
 
         Arg 'flats' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'nightlyflat'.
@@ -1787,7 +1808,7 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
     """
     Wrapper function for desiproc.workflow.processing.joint_fit specific to the psfnight joint fit.
 
-    All variables are the same except::
+    All variables are the same except:
 
         Arg 'arcs' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'psfnight'.
@@ -1967,9 +1988,12 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
             is the smallest unassigned value.
         z_submit_types (list of str): The "group" types of redshifts that should be submitted with each
             exposure. If not specified or None, then no redshifts are submitted.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -2079,9 +2103,12 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry
             (if currently processing that tile). May be empty if none identified yet.
         internal_id (int): an internal identifier unique to each job. Increments with each new job. This
             is the smallest unassigned value.
-        dry_run (int, optional): If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-            dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
-            for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
+            0 which runs the code normally.
+            1 writes all files but doesn't submit any jobs to Slurm.
+            2 writes tables but doesn't write scripts or submit anything.
+            3 Doesn't write or submit anything but queries Slurm normally for job status.
+            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is

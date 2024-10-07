@@ -154,7 +154,7 @@ def get_non_final_states():
 def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
                              columns='jobid,jobname,partition,submit,eligible,'+
                                      'start,end,elapsed,state,exitcode',
-                             dry_run=0):
+                             dry_run_level=0):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
     window of all jobs submitted or executed during that time.
@@ -175,18 +175,22 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
         it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
         in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
         Other options include: suspended,derivedexitcode,reason,priority,jobname.
-    dry_run : int
-        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-        table that doesn't query the Slurm scheduler.
+    dry_run_level : int
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
-    Table
+    astropy.table.Table
         Table with the columns defined by the input variable 'columns' and information relating
         to all jobs submitted by the specified user in the specified time frame.
     """
     # global queue_info_table
-    if dry_run:
+    if dry_run_level:
         string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
         string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
                   +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
@@ -233,7 +237,7 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
     return queue_info_table
 
 def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
-                         'eligible,start,end,elapsed,state,exitcode', dry_run=0):
+                         'eligible,start,end,elapsed,state,exitcode', dry_run_level=0):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get
     information about specific jobs based on their jobids.
@@ -247,13 +251,17 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
         in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
         Other options include: suspended,derivedexitcode,reason,priority,jobname.
-    dry_run : int
-        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-        table that doesn't query the Slurm scheduler.
+    dry_run_level : int
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
-    Table
+    astropy.table.Table
         Table with the columns defined by the input variable 'columns' and information relating
         to all jobs submitted by the specified user in the specified time frame.
     """
@@ -265,7 +273,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     if len(qids) > nmax:
         results = list()
         for i in range(0, len(qids), nmax):
-            results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns, dry_run=dry_run))
+            results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns,
+                                                dry_run_level=dry_run_level))
         results = vstack(results)
         return results
     elif len(qids) == 0:
@@ -277,7 +286,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
 
     cmd_as_list = ['sacct', '-X', '--parsable2', '--delimiter=,',
                    f'--format={columns}', '-j', qid_str]
-    if dry_run:
+    if dry_run_level:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
         ### Set a random 5% of jobs as TIMEOUT, set seed for reproducibility
@@ -325,7 +334,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
 
     return queue_info_table
 
-def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
+def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get
     information on the job STATE. If use_cache is set and all qids have cached
@@ -335,10 +344,15 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
     ----------
     jobids : list or array of ints
         Slurm QID's at NERSC that you want to return information about.
-    dry_run : int
-        Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
-        table that doesn't query the Slurm scheduler.
-    use_cache, bool. If True the code first looks for a cached status
+    dry_run_level : int
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+    use_cache : bool
+        If True the code first looks for a cached status
         for the qid. If unavailable, then it queries Slurm. Default is False.
 
     Returns
@@ -360,11 +374,11 @@ def get_queue_states_from_qids(qids, dry_run=0, use_cache=False):
         for qid in qids:
             outdict[qid] = _cached_slurm_states[qid]
     else:
-        if dry_run > 2 or dry_run < 1:
-            outtable = queue_info_from_qids(qids, columns='jobid,state', dry_run=dry_run)
-            for row in outtable:
-                if int(row['JOBID']) != def_qid:
-                    outdict[int(row['JOBID'])] = row['STATE']
+        outtable = queue_info_from_qids(qids, columns='jobid,state',
+                                        dry_run_level=dry_run_level)
+        for row in outtable:
+            if int(row['JOBID']) != def_qid:
+                outdict[int(row['JOBID'])] = row['STATE']
     return outdict
 
 def update_queue_state_cache_from_table(queue_info_table):
@@ -415,31 +429,42 @@ def clear_queue_state_cache():
     _cached_slurm_states.clear()
 
 
-def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
+def update_from_queue(ptable, qtable=None, dry_run_level=0, ignore_scriptnames=False,
                       check_complete_jobs=False):
     """
     Given an input prcessing table (ptable) and query table from the Slurm queue (qtable) it cross matches the
     Slurm job ID's and updates the 'state' in the table using the current state in the Slurm scheduler system.
 
-    Args:
-        ptable, Table. Processing table that contains the jobs you want updated with the most recent queue table. Must
-                       have at least columnns 'LATEST_QID' and 'STATUS'.
-        qtable, Table. Table with the columns defined by the input variable 'columns' and information relating
-                                 to all jobs submitted by the specified user in the specified time frame.
-        ignore_scriptnames, bool. Default is False. Set to true if you do not
-                        want to check whether the scriptname matches the jobname
-                        return by the slurm scheduler.
-        check_complete_jobs, bool. Default is False. Set to true if you want to
-                        also check QID's that currently have a STATUS "COMPLETED".
-                        in the ptable.
-        dry_run, int. Used if qtable is not providedWhether this is a simulated run or real run.
-                       If nonzero, it is a simulation and it returns a default
-                       table that doesn't query the Slurm scheduler.
+    Parameters
+    ----------
+    ptable : astropy.table.Table
+        Processing table that contains the jobs you want updated with the most recent queue table. Must
+        have at least columnns 'LATEST_QID' and 'STATUS'.
+    qtable : astropy.table.Table
+        Table with the columns defined by the input variable 'columns' and information relating
+        to all jobs submitted by the specified user in the specified time frame.
+    ignore_scriptnames : bool
+        Default is False. Set to true if you do not
+        want to check whether the scriptname matches the jobname
+        return by the slurm scheduler.
+    check_complete_jobs: bool
+        Default is False. Set to true if you want to
+        also check QID's that currently have a STATUS "COMPLETED".
+        in the ptable.
+    dry_run_level : int
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
-    Returns:
-        ptab, Table. A opy of the same processing table as the input except that the "STATUS" column in ptable for all jobs is
-                       updated based on the 'STATE' in the qtable (as matched by "LATEST_QID" in the ptable
-                       and "JOBID" in the qtable).
+    Returns
+    -------
+    ptab : astropy.table.Table
+        A opy of the same processing table as the input except that the "STATUS" column in ptable for all jobs is
+        updated based on the 'STATE' in the qtable (as matched by "LATEST_QID" in the ptable
+        and "JOBID" in the qtable).
     """
     log = get_logger()
     ptab = ptable.copy()
@@ -458,7 +483,7 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
         if len(qids) == 0:
             log.info(f"No QIDs left to query. Returning the original table.")
             return ptab
-        qtable = queue_info_from_qids(qids, dry_run=dry_run)
+        qtable = queue_info_from_qids(qids, dry_run_level=dry_run_level)
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
              +f"{len(ptab)} jobs in the ptab. Updating those now.")
@@ -483,8 +508,7 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False,
             state = str(row['STATE']).split(' ')[0]
             ## Since dry run 1 and 2 save proc tables, don't alter the
             ## states for these when simulating
-            if dry_run > 2 or dry_run < 1:
-                ptab['STATUS'][ind] = state
+            ptab['STATUS'][ind] = state
 
     return ptab
 
@@ -494,15 +518,20 @@ def any_jobs_not_complete(statuses, termination_states=None):
     (as based on the list of acceptable final states, termination_states, given as an argument. These should be states
     that are viewed as final, as opposed to job states that require resubmission.
 
-    Args:
-        statuses, Table.Column or list or np.array. The statuses in the processing table "STATUS". Each element should
-                                                    be a string.
-        termination_states, list or np.array. Each element should be a string signifying a state that is returned
-                                              by the Slurm scheduler that should be deemed terminal state.
+    Parameters
+    ----------
+    statuses : Table.Column or list or np.array
+        The statuses in the processing table "STATUS". Each element should
+        be a string.
+    termination_states : list or np.array
+        Each element should be a string signifying a state that is returned
+        by the Slurm scheduler that should be deemed terminal state.
 
-    Returns:
-        bool. True if any of the statuses of the jobs given in statuses are NOT a member of the termination states.
-              Otherwise returns False.
+    Returns
+    -------
+    bool
+        True if any of the statuses of the jobs given in statuses are NOT a member of the termination states.
+        Otherwise returns False.
     """
     if termination_states is None:
         termination_states = get_termination_states()
@@ -516,16 +545,21 @@ def any_jobs_failed(statuses, failed_states=None):
     should be states that are viewed as final, as opposed to job states
     that require resubmission.
 
-    Args:
-        statuses, Table.Column or list or np.array. The statuses in the
-            processing table "STATUS". Each element should be a string.
-        failed_states, list or np.array. Each element should be a string
-            signifying a state that is returned by the Slurm scheduler that
-            should be consider failing or problematic.
+    Parameters
+    ----------
+    statuses : Table.Column or list or np.array
+        The statuses in the
+        processing table "STATUS". Each element should be a string.
+    failed_states : list or np.array
+        Each element should be a string
+        signifying a state that is returned by the Slurm scheduler that
+        should be consider failing or problematic.
 
-    Returns:
-        bool. True if any of the statuses of the jobs given in statuses are 
-            a member of the failed_states.
+    Returns
+    -------
+    bool
+        True if any of the statuses of the jobs given in statuses are
+        a member of the failed_states.
     """
     if failed_states is None:
         failed_states = get_failed_states()
@@ -544,13 +578,16 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         True if you want to include scron entries in the returned table.
         Default is False.
     dry_run_level : int
-        Whether this is a simulated run or real run. If nonzero, it is a
-        simulation and it returns a default table that doesn't query the
-        Slurm scheduler.
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
-    Table
+    astropy.table.Table
         Table with the columns JOBID, PARTITION, RESERVATION, NAME, USER, ST, TIME, NODES,
         NODELIST(REASON) for the specified user.
     """
@@ -652,9 +689,12 @@ def check_queue_count(user=None, include_scron=False, dry_run_level=0):
         True if you want to include scron entries in the returned table.
         Default is False.
     dry_run_level : int
-        Whether this is a simulated run or real run. If nonzero, it is a
-        simulation and it returns a default table that doesn't query the
-        Slurm scheduler.
+        If nonzero, this is a simulated run. Default is 0.
+        0 which runs the code normally.
+        1 writes all files but doesn't submit any jobs to Slurm.
+        2 writes tables but doesn't write scripts or submit anything.
+        3 Doesn't write or submit anything but queries Slurm normally for job status.
+        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
