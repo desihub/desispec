@@ -18,6 +18,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
     Args:
         specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
         tiles: astropy Table from spectro/redux/daily/tiles.csv
+        update_only: bool don't change entries for tiles that have no new data.
         clear_qa: bool indicating whether QA data should be cleared
 
     Returns: updated specstatus table, sorted by TILEID
@@ -43,6 +44,10 @@ def update_specstatus(specstatus, tiles, update_only=False,
     #- Added for Fuji, but not in tiles-specstatus so remove
     if 'PROGRAM' in tiles.colnames:
         tiles.remove_column('PROGRAM')
+
+    # Quick and dirty fix to keep the tiles file compatible with the specstatus file.
+    if 'UPDATED' in tiles.colnames:
+        tiles.remove_column('UPDATED')
 
     #- Confirm that they have the same columns except QA-specific ones
     tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE'])
