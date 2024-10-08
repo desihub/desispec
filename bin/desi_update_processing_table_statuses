@@ -31,7 +31,8 @@ def parse_args():  # options=None):
                               + "1 writes all files but doesn't submit any jobs to Slurm. "
                               + "2 writes tables but doesn't write scripts or submit anything. "
                               + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
-                              + "4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs. ")
+                              + "4 Doesn't write, submit jobs, or query Slurm."
+                              + "5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.")
     parser.add_argument("--check-complete-jobs", action="store_true",
                         help="Query NERSC about jobs with STATUS 'COMPLETED'"
                              + "in addition to all other jobs. Default is False, "

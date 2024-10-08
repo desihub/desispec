@@ -90,7 +90,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         dry_run (bool, optional): When to run without submitting scripts or
             not. If dry_run_level is defined, then it over-rides this flag.
             dry_run_level not set and dry_run=True, dry_run_level is set to 3
@@ -246,6 +247,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     resubmit_partial_complete = (not dont_resubmit_partial_jobs)
     require_cals = (not dont_require_cals)
     do_cte_flats = (not no_cte_flats)
+    ## False if not submitting or simulating
+    update_proctable = (dry_run_level == 0 or dry_run_level > 3)
     
     ## cte flats weren't available before 20211130 so hardcode that in
     if do_cte_flats and night < 20211130:
@@ -357,7 +360,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     ## Update processing table
     tableng = len(ptable)
     if tableng > 0:
-        ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
+        if update_proctable:
+            ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
         if any_jobs_failed(ptable['STATUS']):
@@ -588,8 +592,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     unproc_table = None
     if len(ptable) > 0:
         ## All jobs now submitted, update information from job queue
-        ## If dry_run_level > 3, then Slurm isn't queried and these results are made up
-        ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
+        ## If dry_run_level > 3, then Slurm isn't queried
+        if update_proctable:
+            ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
             ## Now that processing is complete, lets identify what we didn't process

@@ -60,13 +60,14 @@ def parse_args():
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
                         "dry-run-level is defined as nonzero.")
-    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
-                        help="""If nonzero, this is a simulated run.
-                                If level=1 the scripts will be written but not submitted.
-                                If level=2, scripts will not be written or submitted but processing_table is created.
-                                if level=3, no output files are written at all.
-                                Logging will remain the same for testing as though scripts are being submitted.
-                                Default is 0 (false).""")
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="What level of dry_run to perform, if any. Default is 0. "
+                              + "0 which runs the code normally. "
+                              + "1 writes all files but doesn't submit any jobs to Slurm. "
+                              + "2 writes tables but doesn't write scripts or submit anything. "
+                              + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
+                              + "4 Doesn't write, submit jobs, or query Slurm."
+                              + "5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.")
     parser.add_argument("--no-redshifts", action="store_true",
                         help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--ignore-proc-table-failures", action="store_true",
@@ -136,5 +137,4 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
-    args = parse_args()
-    proc_night(**args.__dict__)
+    args = parse

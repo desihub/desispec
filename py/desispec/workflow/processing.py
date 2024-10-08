@@ -271,7 +271,8 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         joint (bool, optional): Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
             run with desi_proc_joint_fit. Default is False.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -430,7 +431,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
@@ -619,7 +621,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
@@ -1186,7 +1189,8 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
 
     Returns:
@@ -1206,6 +1210,7 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
 
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
+
     log.info("Updated processing table queue information:")
     cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
             'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
@@ -1220,7 +1225,9 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
                                                           id_to_row_map, ptab_name,
                                                           resubmission_states,
                                                           reservation, dry_run_level)
+
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
+
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -1247,7 +1254,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns:
         tuple: A tuple containing:
@@ -1384,7 +1392,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1528,7 +1537,8 @@ def joint_cal_fit(descriptor, ptable, prows, internal_id, queue, reservation,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1603,7 +1613,8 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1727,7 +1738,8 @@ def submit_tilenight(ptable, prows, calibjobs, internal_id, queue, reservation,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
             less desirable because e.g. the sciences can run with SVN default calibrations rather
             than failing completely from failed calibrations. Default is False.
@@ -1993,7 +2005,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -2108,7 +2121,8 @@ def submit_tilenight_and_redshifts(ptable, sciences, calibjobs, internal_id, dry
             1 writes all files but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
-            4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+            4 Doesn't write, submit jobs, or query Slurm.
+            5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         queue (str, optional): The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation (str, optional): The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful (bool, optional): Whether all jobs require all inputs to have succeeded. For daily processing, this is

@@ -151,6 +151,36 @@ def get_non_final_states():
     """
     return ['PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
 
+def get_mock_slurm_data():
+    """
+    Returns a string of output that mimics what Slurm would return from
+    sacct -X --parsable2 --delimiter=,
+       --format=JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode -j <qid_str>
+
+    Returns
+    -------
+    str
+        Mock Slurm data csv format.
+    """
+    string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode\n'
+    string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02' \
+              + 'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T' \
+              + '18:48:32,00:11:59,COMPLETED,0:0' + '\n'
+    string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02' \
+              + 'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T' \
+              + '18:57:02,00:11:59,COMPLETED,0:0' + '\n'
+    string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02' \
+              + 'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T' \
+              + '19:06:17,00:11:59,COMPLETED,0:0' + '\n'
+    string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02' \
+              + 'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T' \
+              + '19:13:59,00:11:59,COMPLETED,0:0' + '\n'
+    string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02' \
+              + 'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T' \
+              + '19:24:49,00:11:59,COMPLETED,0:0'
+    return string
+
+
 def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
                              columns='jobid,jobname,partition,submit,eligible,'+
                                      'start,end,elapsed,state,exitcode',
@@ -181,7 +211,8 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
@@ -190,24 +221,11 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
         to all jobs submitted by the specified user in the specified time frame.
     """
     # global queue_info_table
-    if dry_run_level:
-        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
-        string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
-                  +'18:48:32,COMPLETED,0:0' + '\n'
-        string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T'\
-                  +'18:57:02,COMPLETED,0:0' + '\n'
-        string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T'\
-                  +'19:06:17,COMPLETED,0:0' + '\n'
-        string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T'\
-                  +'19:13:59,COMPLETED,0:0' + '\n'
-        string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02'\
-                  +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
-                  +'19:24:49,COMPLETED,0:0'
+    if dry_run_level > 4:
+        string = get_mock_slurm_data()
         cmd_as_list = ['echo', string]
+    elif dry_run_level > 3:
+        cmd_as_list = ['echo', 'JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode']
     else:
         if user is None:
             if 'USER' in os.environ:
@@ -257,7 +275,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
@@ -286,7 +305,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
 
     cmd_as_list = ['sacct', '-X', '--parsable2', '--delimiter=,',
                    f'--format={columns}', '-j', qid_str]
-    if dry_run_level:
+    if dry_run_level > 4:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
         ### Set a random 5% of jobs as TIMEOUT, set seed for reproducibility
@@ -306,6 +325,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
                 string += f'\n{jobid},{state}'
         # create command to run to exercise subprocess -> stdout parsing
         cmd_as_list = ['echo', string]
+    elif dry_run_level > 3:
+        cmd_as_list = ['echo', columns.lower()]
     else:
         log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
 
@@ -350,7 +371,8 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
     use_cache : bool
         If True the code first looks for a cached status
         for the qid. If unavailable, then it queries Slurm. Default is False.
@@ -457,7 +479,8 @@ def update_from_queue(ptable, qtable=None, dry_run_level=0, ignore_scriptnames=F
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
@@ -583,7 +606,8 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
@@ -601,10 +625,11 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
     cmd = f'squeue -u {user} -o "%i,%P,%v,%j,%u,%t,%M,%D,%R"'
     cmd_as_list = cmd.split()
 
-    if dry_run_level > 0:
+    header = 'JOBID,PARTITION,RESERVATION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
+    if dry_run_level > 4:
         log.info("Dry run, would have otherwise queried Slurm with the"
                  +f" following: {' '.join(cmd_as_list)}")
-        string = 'JOBID,PARTITION,RESERVATION,NAME,USER,ST,TIME,NODES,NODELIST(REASON)'
+        string = header
         string += f"27650097,cron,(null),scron_ar,{user},PD,0:00,1,(BeginTime)"
         string += f"27650100,cron,(null),scron_nh,{user},PD,0:00,1,(BeginTime)"
         string += f"27650098,cron,(null),scron_up,{user},PD,0:00,1,(BeginTime)"
@@ -619,6 +644,9 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         # create command to run to exercise subprocess -> stdout parsing
         cmd = 'echo ' + string
         cmd_as_list = ['echo', string]
+    elif dry_run_level > 3:
+        cmd = 'echo ' + header
+        cmd_as_list = ['echo', header]
     else:
         log.info(f"Querying jobs in queue with: {' '.join(cmd_as_list)}")
 
@@ -694,7 +722,8 @@ def check_queue_count(user=None, include_scron=False, dry_run_level=0):
         1 writes all files but doesn't submit any jobs to Slurm.
         2 writes tables but doesn't write scripts or submit anything.
         3 Doesn't write or submit anything but queries Slurm normally for job status.
-        4 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        4 Doesn't write, submit jobs, or query Slurm.
+        5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
 
     Returns
     -------
