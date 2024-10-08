@@ -154,8 +154,8 @@ def get_non_final_states():
 def get_mock_slurm_data():
     """
     Returns a string of output that mimics what Slurm would return from
-    sacct -X --parsable2 --delimiter=,
-       --format=JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode -j <qid_str>
+    sacct -X --parsable2 --delimiter=, \
+    --format=JobID,JobName,Partition,Submit,Eligible,Start,End,Elapsed,State,ExitCode -j <qid_str>
 
     Returns
     -------
