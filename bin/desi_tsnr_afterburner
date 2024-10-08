@@ -1235,7 +1235,7 @@ def main():
                         else:
                             # tsnr2_expid_table["EFFTIME_GFA"][goaltype == "backup"] = tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype == "backup"]
                             efftime_gfa[goaltype == "backup"] = expid_values[goaltype == "backup"]
-                        tsnr2_expid_table["GOALTYPE"][jj] = efftime_gfa
+                        tsnr2_expid_table["EFFTIME_GFA"][jj] = efftime_gfa
 
         gfa_nights = np.unique(np.array(gfa_nights))
         #
