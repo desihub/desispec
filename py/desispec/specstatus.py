@@ -87,6 +87,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
     #- Note: there is probably a more efficient way of doing this in bulk,
     #- but let's favor obvious over clever unless efficiency is needed
     num_updatedtiles = 0
+    log.debug('Checking for differences between tiles file and specstatus file')
     for i, tileid in enumerate(tiles['TILEID']):
         j = np.where(specstatus['TILEID'] == tileid)[0][0]
         if not update_only or tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
@@ -94,6 +95,8 @@ def update_specstatus(specstatus, tiles, update_only=False,
             for col in specstatus.colnames:
                 if col not in qacols:
                     if tiles[col][i] != specstatus[col][j]:
+                        log.debug('Tile %d updating %s %s -> %s',
+                                  tileid, col, str(tiles[col][i]), str(specstatus[col][j]))
                         different = True
             if not different and not clear_qa:
                 continue
