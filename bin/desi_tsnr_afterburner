@@ -1215,7 +1215,6 @@ def main():
                                    "EFFTIME_BRIGHT_GFA": efftime_bright,
                                    "EFFTIME_BACKUP_GFA": efftime_backup}
                 goaltype = tsnr2_expid_table["GOALTYPE"][jj]
-                efftime_gfa = tsnr2_expid_table["GOALTYPE"][jj]
                 for col in efftime_columns:
                     if col not in tsnr2_expid_table.colnames:
                         tsnr2_expid_table[col] = np.zeros(len(tsnr2_expid_table), dtype=float)
