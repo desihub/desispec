@@ -96,7 +96,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
                 if col not in qacols:
                     if tiles[col][i] != specstatus[col][j]:
                         log.debug('Tile %d updating %s %s -> %s',
-                                  tileid, col, str(tiles[col][i]), str(specstatus[col][j]))
+                                  tileid, col, str(specstatus[col][j]), str(tiles[col][i]))
                         different = True
             if not different and not clear_qa:
                 continue
