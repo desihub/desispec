@@ -619,12 +619,16 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     return ox,oy,odx,oex,of,ol
 
 def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
+    """
+    Prepare the reference spectrum to be used for wavelegth offset 
+    determination
+    """
     log = get_logger()
     
     # trim ref_spectrum
-    i = (ref_wave >= wave[0]) & (ref_wave <= wave[-1])
-    ref_wave = ref_wave[i]
-    ref_spectrum = ref_spectrum[i]
+    subset = (ref_wave >= wave[0]) & (ref_wave <= wave[-1])
+    ref_wave = ref_wave[subset]
+    ref_spectrum = ref_spectrum[subset]
 
     # check wave is linear or make it linear
     if (np.abs((ref_wave[1] - ref_wave[0]) - (ref_wave[-1] - ref_wave[-2])) >
@@ -636,53 +640,56 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
         ref_spectrum = resample_flux(tmp_wave, ref_wave, ref_spectrum)
         ref_wave = tmp_wave
     
-    n_wave_bins = 1
-    fiber_step = max(nfibers//2, 1)
+    n_wave_bins = 20 # how many points along wavelength to use to get psf
+    n_representative_fibers = 20 # how many fibers to use to get psf
+    fiber_list = np.unique(np.linspace(0, nfibers - 1,
+                                       n_representative_fibers).astype(int))
     wave_bins = np.linspace(wave[0], wave[-1], n_wave_bins+1)
     wave_bins = wave_bins[:-1] + .5 * np.diff(wave_bins)
     spectra = []
-    for central_wave in wave_bins:
-        i = np.searchsorted(ref_wave, central_wave)
-        log.warning(' xx %s %s'%(central_wave,i))
-        angstrom_hwidth = 3 # psf half width
-        dwave = ref_wave[i+1] - ref_wave[i]
+    ref_spectrum0 = ref_spectrum * 1
+    # original before convolution
+    angstrom_hwidth = 3 # psf half width
+    
+    for central_wave0 in wave_bins:
+        ipos = np.searchsorted(ref_wave, central_wave0)
+        central_wave = ref_wave[ipos] # actual value from the grid
+        dwave = ref_wave[ipos + 1] - ref_wave[ipos]
         hw = int(angstrom_hwidth / dwave) + 1
-        wave_range = ref_wave[i - hw:i + hw + 1]
+        wave_range = ref_wave[ipos - hw:ipos + hw + 1]
         kernels = []
-        #for fiber in range(0, nfibers, fiber_step):
-        for fiber in [250]:
-            # compute psf at most significant line of ref_spectrum
+        for fiber in fiber_list:
             x, y = psf.xy(fiber, wave_range)
-            # x = np.tile(x[hw] + np.linspace(-hw, hw, 2 * hw + 1),
-            #             (y.size, 1))
-            # x = x + np.linspace(-hw,hw,2*hw+1)
-            # x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
-            x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
+
+            x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
+            # original code below but I don't understand y[-1]-y[0] part
+            # x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
             y = np.tile(y, (2 * hw + 1, 1)).T
 
             kernel2d = psf._value(x, y, fiber, central_wave)
             kernel1d = np.sum(kernel2d, axis=1)
             kernels.append(kernel1d)
         kernels = np.mean(kernels, axis=0)
-        
-        ref_spectrum = fftconvolve(ref_spectrum, kernels, mode='same')
+        # average across fibers
+        ref_spectrum = fftconvolve(ref_spectrum0, kernels, mode='same')
         spectra.append(ref_spectrum)
     log.info("convolve reference spectrum using PSF")
     spectra = np.array(spectra)
     spectra_pos = np.searchsorted(wave_bins, ref_wave)
     result = ref_spectrum * 0.
-    ''' Edges of the spectrum '''
+    # Edges of the spectrum
     result[spectra_pos == 0] = spectra[0][spectra_pos==0]
     result[spectra_pos == n_wave_bins] = spectra[-1][spectra_pos == n_wave_bins]
     inside = (spectra_pos > 0) & (spectra_pos < n_wave_bins)
-    weight = (ref_wave[inside]-wave_bins[spectra_pos[inside]-1])/(
-        wave_bins[spectra_pos[inside]]-wave_bins[spectra_pos[inside]-1])
-    ''' weight is zero on left edge one on right'''
-    result[inside] = (1-weight) * spectra[spectra_pos[inside] - 1, inside]+(
-        weight * spectra[spectra_pos[inside],inside])
-    assert len(ref_wave)==len(result)
-    ref_spectrum = result
+    weight = (ref_wave[inside] - wave_bins[spectra_pos[inside] - 1])/(
+        wave_bins[spectra_pos[inside]] - wave_bins[spectra_pos[inside] - 1])
+    # weight is zero on left edge one on right
     
+    # linearly stitching the spectra convolved with different kernel
+    result[inside] = (1 - weight) * spectra[spectra_pos[inside] - 1, inside]+(
+        weight * spectra[spectra_pos[inside],inside])
+    ref_spectrum = result
+
     # resample input spectrum
     log.info("resample convolved reference spectrum")
     ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
