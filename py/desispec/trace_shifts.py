@@ -425,6 +425,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
 
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
+    flux0 = flux * 1 # for debugging 
     if continuum_subtract:
         mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
     else:
@@ -433,8 +434,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         
         # median flux of good fibers used as internal spectral reference
         mflux=np.median(flux[good_fibers],axis=0)
-
-
+    
     # measure y shifts
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
@@ -713,9 +713,9 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     return ref_wave, ref_spectrum
 
 
-def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
+def _continuum_subtract_median(flux0, ivar, continuum_win = 51):
     # here we get rid of continuum by applying a median filter 
-    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win))>continuum_win /2.
+    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /4.
     flux = flux0 * 1 # we will modify flux
     # we only keep emission lines and get rid of continuum
     for ii in range(flux.shape[0]):
@@ -794,7 +794,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
 
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = 17)
+    mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
 
     ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
 
