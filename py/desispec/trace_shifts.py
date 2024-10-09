@@ -415,21 +415,22 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     """
 
     log=get_logger()
+    continuum_subtract = True # use continuum subtracted spectra to self-calibrate
 
     # boxcar extraction
-
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
 
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
+    if continuum_subtract:
+        mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
+    else:
+        # boolean mask of fibers with good data
+        good_fibers = (np.sum(ivar>0, axis=1) > 0)
+        
+        # median flux of good fibers used as internal spectral reference
+        mflux=np.median(flux[good_fibers],axis=0)
 
-    # boolean mask of fibers with good data
-    # good_fibers = (np.sum(ivar>0, axis=1) > 0)
-
-    # median flux of good fibers used as internal spectral reference
-    # mflux=np.median(flux[good_fibers],axis=0)
-
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
 
     # measure y shifts
     wavemin = xytraceset.wavemin
