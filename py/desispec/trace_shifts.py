@@ -367,7 +367,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
             dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True)
             if fiber %10==0 :
-                log.info("Wavelength offset %f for fiber #%03d at wave %f "%(dwave, fiber, block_wave))
+                log.info("Wavelength offset %f +/- %f for fiber #%03d at wave %f "%(dwave, err, fiber, block_wave))
 
             if err > 1 :
                 continue
@@ -424,10 +424,12 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
 
     # boolean mask of fibers with good data
-    good_fibers = (np.sum(ivar>0, axis=1) > 0)
+    # good_fibers = (np.sum(ivar>0, axis=1) > 0)
 
     # median flux of good fibers used as internal spectral reference
-    mflux=np.median(flux[good_fibers],axis=0)
+    # mflux=np.median(flux[good_fibers],axis=0)
+
+    mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
 
     # measure y shifts
     wavemin = xytraceset.wavemin
@@ -818,7 +820,6 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         eps =  0.1
         x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
         dydw = (yp - y) / eps 
-        log.warning("%s %s %s"%(dwave, err, dydw))
         if err * dydw < 1 :
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
