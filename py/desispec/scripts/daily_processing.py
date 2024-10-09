@@ -520,4 +520,4 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     print("Exiting")
     ## Flush the outputs
     sys.stdout.flush()
-    sys.std
+    sys.stderr.flush()

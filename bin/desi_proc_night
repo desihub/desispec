@@ -137,4 +137,5 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
-    args = parse
+    args = parse_args()
+    proc_night(**args.__dict__)

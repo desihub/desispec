@@ -13,7 +13,7 @@ from desispec.workflow.queue import update_from_queue
 
 def parse_args():  # options=None):
     """
-    Get command line arguments for desi_update_processing_table_statuses
+    Get command line arguments for desi_update_proctable_statuses
     """
     parser = argparse.ArgumentParser(description="Update the STATUS of all jobs "
                                                  + "in a DESI processing table by "
@@ -21,6 +21,8 @@ def parse_args():  # options=None):
 
     parser.add_argument("-n","--night", type=str, default=None,
                         required=False, help="The night you want processed.")
+    parser.add_argument("-o","--outfile", type=str, default=None,
+                        required=False, help="Output filename, if different from default.")
     parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
                         help="Directory name where the output processing table should be saved.")
     parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
@@ -68,7 +70,11 @@ if __name__ == '__main__':
                                check_complete_jobs=args.check_complete_jobs)
 
     if args.dry_run_level < 3:
-        write_table(ptable, tablename=ptable_pathname)
+        if args.outfile is not None:
+            outfile = args.outfile
+        else:
+            outfile = ptable_pathname
+        write_table(ptable, tablename=outfile)
 
     if args.show_updated_table:
         log.info("Updated processing table:")
