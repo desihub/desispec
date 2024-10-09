@@ -18,6 +18,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
     Args:
         specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
         tiles: astropy Table from spectro/redux/daily/tiles.csv
+        update_only: bool don't change entries for tiles that have no new data.
         clear_qa: bool indicating whether QA data should be cleared
 
     Returns: updated specstatus table, sorted by TILEID
@@ -43,6 +44,10 @@ def update_specstatus(specstatus, tiles, update_only=False,
     #- Added for Fuji, but not in tiles-specstatus so remove
     if 'PROGRAM' in tiles.colnames:
         tiles.remove_column('PROGRAM')
+
+    # Quick and dirty fix to keep the tiles file compatible with the specstatus file.
+    if 'UPDATED' in tiles.colnames:
+        tiles.remove_column('UPDATED')
 
     #- Confirm that they have the same columns except QA-specific ones
     tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE'])
@@ -82,6 +87,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
     #- Note: there is probably a more efficient way of doing this in bulk,
     #- but let's favor obvious over clever unless efficiency is needed
     num_updatedtiles = 0
+    log.debug('Checking for differences between tiles file and specstatus file')
     for i, tileid in enumerate(tiles['TILEID']):
         j = np.where(specstatus['TILEID'] == tileid)[0][0]
         if not update_only or tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
@@ -89,6 +95,8 @@ def update_specstatus(specstatus, tiles, update_only=False,
             for col in specstatus.colnames:
                 if col not in qacols:
                     if tiles[col][i] != specstatus[col][j]:
+                        log.debug('Tile %d updating %s %s -> %s',
+                                  tileid, col, str(specstatus[col][j]), str(tiles[col][i]))
                         different = True
             if not different and not clear_qa:
                 continue
