@@ -618,6 +618,84 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     return ox,oy,odx,oex,of,ol
 
+def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
+    log = get_logger()
+    
+    # trim ref_spectrum
+    i = (ref_wave >= wave[0]) & (ref_wave <= wave[-1])
+    ref_wave = ref_wave[i]
+    ref_spectrum = ref_spectrum[i]
+
+    # check wave is linear or make it linear
+    if (np.abs((ref_wave[1] - ref_wave[0]) - (ref_wave[-1] - ref_wave[-2])) >
+    0.0001 * (ref_wave[1]-ref_wave[0])):
+        log.info("reference spectrum wavelength is not on a linear grid, resample it")
+        dwave = np.min(np.gradient(ref_wave))
+        tmp_wave = np.linspace(ref_wave[0], ref_wave[-1],
+                               int((ref_wave[-1]-ref_wave[0])/dwave))
+        ref_spectrum = resample_flux(tmp_wave, ref_wave, ref_spectrum)
+        ref_wave = tmp_wave
+    
+    n_wave_bins = 1
+    fiber_step = max(nfibers//2, 1)
+    wave_bins = np.linspace(wave[0], wave[-1], n_wave_bins+1)
+    wave_bins = wave_bins[:-1] + .5 * np.diff(wave_bins)
+    spectra = []
+    for central_wave in wave_bins:
+        i = np.searchsorted(ref_wave, central_wave)
+        log.warning(' xx %s %s'%(central_wave,i))
+        angstrom_hwidth = 3 # psf half width
+        dwave = ref_wave[i+1] - ref_wave[i]
+        hw = int(angstrom_hwidth / dwave) + 1
+        wave_range = ref_wave[i - hw:i + hw + 1]
+        kernels = []
+        #for fiber in range(0, nfibers, fiber_step):
+        for fiber in [250]:
+            # compute psf at most significant line of ref_spectrum
+            x, y = psf.xy(fiber, wave_range)
+            # x = np.tile(x[hw] + np.linspace(-hw, hw, 2 * hw + 1),
+            #             (y.size, 1))
+            # x = x + np.linspace(-hw,hw,2*hw+1)
+            # x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
+            x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
+            y = np.tile(y, (2 * hw + 1, 1)).T
+
+            kernel2d = psf._value(x, y, fiber, central_wave)
+            kernel1d = np.sum(kernel2d, axis=1)
+            kernels.append(kernel1d)
+        kernels = np.mean(kernels, axis=0)
+        
+        ref_spectrum = fftconvolve(ref_spectrum, kernels, mode='same')
+        spectra.append(ref_spectrum)
+    log.info("convolve reference spectrum using PSF")
+    spectra = np.array(spectra)
+    spectra_pos = np.searchsorted(wave_bins, ref_wave)
+    result = ref_spectrum * 0.
+    ''' Edges of the spectrum '''
+    result[spectra_pos == 0] = spectra[0][spectra_pos==0]
+    result[spectra_pos == n_wave_bins] = spectra[-1][spectra_pos == n_wave_bins]
+    inside = (spectra_pos > 0) & (spectra_pos < n_wave_bins)
+    weight = (ref_wave[inside]-wave_bins[spectra_pos[inside]-1])/(
+        wave_bins[spectra_pos[inside]]-wave_bins[spectra_pos[inside]-1])
+    ''' weight is zero on left edge one on right'''
+    result[inside] = (1-weight) * spectra[spectra_pos[inside] - 1, inside]+(
+        weight * spectra[spectra_pos[inside],inside])
+    assert len(ref_wave)==len(result)
+    ref_spectrum = result
+    
+    # resample input spectrum
+    log.info("resample convolved reference spectrum")
+    ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
+
+    log.info("absorb difference of calibration")
+    x = (wave - wave[wave.size//2]) / 50.
+    kernel = np.exp(- x**2/2)
+    f1 = fftconvolve(mflux, kernel, mode='same')
+    f2 = fftconvolve(ref_spectrum, kernel, mode='same')
+    # We scale by a constant factor
+    scale = (f1 * f2).sum() / (f2 * f2).sum()
+    ref_spectrum *= scale
+    return ref_wave, ref_spectrum
 
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
@@ -698,86 +776,42 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
     # do not allow negatives
     mflux[mflux <  0] = 0
-
-
-    # trim ref_spectrum
-    i=(ref_wave>=wave[0])&(ref_wave<=wave[-1])
-    ref_wave=ref_wave[i]
-    ref_spectrum=ref_spectrum[i]
-
-    # check wave is linear or make it linear
-    if np.abs((ref_wave[1]-ref_wave[0])-(ref_wave[-1]-ref_wave[-2]))>0.0001*(ref_wave[1]-ref_wave[0]) :
-        log.info("reference spectrum wavelength is not on a linear grid, resample it")
-        dwave = np.min(np.gradient(ref_wave))
-        tmp_wave = np.linspace(ref_wave[0],ref_wave[-1],int((ref_wave[-1]-ref_wave[0])/dwave))
-        ref_spectrum = resample_flux(tmp_wave, ref_wave , ref_spectrum)
-        ref_wave = tmp_wave
-
-    i=np.argmax(ref_spectrum)
-    central_wave_for_psf_evaluation  = ref_wave[i]
-    fiber_for_psf_evaluation = (flux.shape[0]//2)
-    try :
-        # compute psf at most significant line of ref_spectrum
-        dwave=ref_wave[i+1]-ref_wave[i]
-        hw=int(3./dwave)+1 # 3A half width
-        wave_range = ref_wave[i-hw:i+hw+1]
-        x,y=psf.xy(fiber_for_psf_evaluation,wave_range)
-        x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
-        y=np.tile(y,(2*hw+1,1)).T
-        kernel2d=psf._value(x,y,fiber_for_psf_evaluation,central_wave_for_psf_evaluation)
-        kernel1d=np.sum(kernel2d,axis=1)
-        log.info("convolve reference spectrum using PSF at fiber %d and wavelength %dA"%(fiber_for_psf_evaluation,central_wave_for_psf_evaluation))
-        ref_spectrum=fftconvolve(ref_spectrum,kernel1d, mode='same')
-    except :
-        log.warning("couldn't convolve reference spectrum: %s %s"%(sys.exc_info()[0],sys.exc_info()[1]))
-
-
-
-    # resample input spectrum
-    log.info("resample convolved reference spectrum")
-    ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
-
-    log.info("absorb difference of calibration")
-    x = (wave - wave[wave.size//2]) / 50.
-    kernel = np.exp(- x**2/2)
-    f1 = fftconvolve(mflux, kernel, mode='same')
-    f2 = fftconvolve(ref_spectrum, kernel, mode='same')
-    # We scale by a constant factor
-    scale = (f1 * f2).sum() / (f2 * f2).sum()
-    ref_spectrum *= scale
     
+    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
+
     log.info("fit shifts on wavelength bins")
     # define bins
-    n_wavelength_bins = degyy+4
-    y_for_dy=np.array([])
-    dy=np.array([])
-    ey=np.array([])
-    wave_for_dy=np.array([])
-
+    n_wavelength_bins = degyy + 4
+    y_for_dy = np.array([])
+    dy = np.array([])
+    ey = np.array([])
+    wave_for_dy = np.array([])
+    fiber_for_psf_evaluation = flux.shape[0] //2
+    wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
-        wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
-        if b<n_wavelength_bins-1 :
-            wmax=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*(b+1)
-        else :
-            wmax=wave[-1]
-        ok=(wave>=wmin)&(wave<=wmax)
-        sw= np.sum(mflux[ok]*(mflux[ok]>0))
-        if sw==0 :
+        wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
+        ok = (wave >= wmin) & (wave <= wmax)
+        flux_weight = np.sum(mflux[ok] * (mflux[ok] > 0))
+        log.warning("%s %s "%(b, flux_weight))
+        if flux_weight == 0 :
             continue
         dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
                 wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
                 prior_width_dy=prior_width_dy)
-        bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
-        x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
-        eps=0.1
-        x,yp=psf.xy(fiber_for_psf_evaluation,bin_wave+eps)
-        dydw=(yp-y)/eps
-        if err*dydw<1 :
-            dy=np.append(dy,-dwave*dydw)
-            ey=np.append(ey,err*dydw)
-            wave_for_dy=np.append(wave_for_dy,bin_wave)
+        bin_wave  = np.sum(mflux[ok] * (mflux[ok] > 0) * wave[ok]) / flux_weight
+        # flux weighted wavelength of the center
+        # Computing the derivative dy/dwavelength
+        x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
+        eps =  0.1
+        x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
+        dydw = (yp - y) / eps 
+        log.warning("%s %s %s"%(dwave, err, dydw))
+        if err * dydw < 1 :
+            dy = np.append(dy, -dwave * dydw)
+            ey = np.append(ey, err*dydw)
+            wave_for_dy = np.append(wave_for_dy,bin_wave)
             y_for_dy=np.append(y_for_dy,y)
-            log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave,y,dwave,err))
+            log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave, y, dwave, err))
 
     if False : # we don't need this for now
         try :
