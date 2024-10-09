@@ -365,7 +365,10 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
                 continue
             block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
 
-            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True)
+            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok], wave[ok],
+                                                                   reference_flux[ok],
+                                                                   ivar=ivar[fiber,ok],
+                                                                   hw=3., calibrate=True)
             if fiber %10==0 :
                 log.info("Wavelength offset %f +/- %f for fiber #%03d at wave %f "%(dwave, err, fiber, block_wave))
 
