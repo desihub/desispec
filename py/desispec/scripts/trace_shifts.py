@@ -140,8 +140,10 @@ def fit_trace_shifts(image, args):
             internal_wavelength_calib = False
         elif flavor == "arc" :
             internal_wavelength_calib = True
+            subtract_continuum = False
             args.arc_lamps = True
         else :
+            subtract_continuum = True
             internal_wavelength_calib = True
             args.sky = True
         log.info("wavelength calib, internal={}, sky={} , arc_lamps={}".format(internal_wavelength_calib,args.sky,args.arc_lamps))
@@ -196,7 +198,7 @@ def fit_trace_shifts(image, args):
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, subtract_continuum=subtract_continuum)
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration

@@ -393,7 +393,8 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
     return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy
 
-def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2) :
+def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2,
+                                           continuum_subtract = False):
     """
     Measures y offsets (internal wavelength calibration) from a preprocessed image and a trace set using a cross-correlation of boxcar extracted spectra.
     Uses boxcar_extraction , resample_boxcar_frame , compute_dy_from_spectral_cross_correlations_of_frame
@@ -406,6 +407,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
+        continuum_subtract : bool if true subtract continuum before cross-correlation
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -418,7 +420,6 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     """
 
     log=get_logger()
-    continuum_subtract = True # use continuum subtracted spectra to self-calibrate
 
     # boxcar extraction
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
