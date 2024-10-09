@@ -38,7 +38,7 @@ from desispec.io.util import create_camword, decode_camword, parse_cameras, \
     camword_to_spectros, columns_to_goodcamword, difference_camwords
 from desispec.io.util import validate_badamps, get_tempfilename, backup_filename
 from desispec.util import runcmd
-from desispec.scripts import group_spectra
+from desispec.scripts import group_spectra, coadd_spectra
 from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
 from desispec.workflow.exptable import get_exposure_table_pathname, \
@@ -529,20 +529,33 @@ def main(args=None, comm=None):
             splog = findfile('spectra', logfile=True, **findfileopts)
             coaddfile = findfile('coadd', **findfileopts)
 
-            cmd = f"desi_group_spectra --inframes {' '.join(cframes)} " \
-                  + f"--outfile {spectrafile} " \
-                  + f"--coaddfile {coaddfile} "
+            if os.path.exists(spectrafile):
+                log.info(f'Spectra file {os.path.basename(spectrafile)} already exists; only running coaddition')
+                group_func = coadd_spectra.main
+                inputs = [spectrafile,]
+                outputs = [coaddfile,]
+                cmd = f"desi_coadd_spectra -i {spectrafile} -o {coaddfile}"
+                if groupname != 'healpix':
+                    cmd += ' --onetile'
 
-            if groupname == 'healpix':
-                cmd += f"--healpix {healpix} "
-                cmd += f"--header SURVEY={args.survey} PROGRAM={args.program} "
             else:
-                cmd += "--onetile "
-                cmd += (f"--header SPGRP={groupname} SPGRPVAL={thrunight} "
-                        f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} PETAL={spectro} ")
+                group_func = group_spectra.main
+                inputs = cframes
+                outputs = [spectrafile, coaddfile]
+                cmd = f"desi_group_spectra --inframes {' '.join(cframes)} " \
+                      + f"--outfile {spectrafile} " \
+                      + f"--coaddfile {coaddfile} "
 
-                if groupname == 'perexp':
-                    cmd += f'EXPID={expids[0]} '
+                if groupname == 'healpix':
+                    cmd += f"--healpix {healpix} "
+                    cmd += f"--header SURVEY={args.survey} PROGRAM={args.program} "
+                else:
+                    cmd += "--onetile "
+                    cmd += (f"--header SPGRP={groupname} SPGRPVAL={thrunight} "
+                            f"NIGHT={thrunight} TILEID={tileid} SPECTRO={spectro} PETAL={spectro} ")
+
+                    if groupname == 'perexp':
+                        cmd += f'EXPID={expids[0]} '
 
             cmdargs = cmd.split()[1:]
             if args.dryrun:
@@ -550,9 +563,9 @@ def main(args=None, comm=None):
                     log.info(f"dryrun: Would have run {cmd}")
             else:
                 with stdouterr_redirected(splog):
-                    result, success = runcmd(group_spectra.main,
-                                             args=cmdargs, inputs=cframes,
-                                             outputs=[spectrafile, coaddfile])
+                    result, success = runcmd(group_func,
+                                             args=cmdargs, inputs=inputs,
+                                             outputs=outputs)
 
             if not success:
                 log.error(f'desi_group_spectra petal {spectro} failed; see {splog}')
