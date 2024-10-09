@@ -424,10 +424,12 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
 
     # resampling on common finer wavelength grid
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
+    oversampling = 4 # The reason why we oversample is unclear to me 
+    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
     flux0 = flux * 1 # for debugging 
     if continuum_subtract:
-        mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
+        mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = oversampling * 9)
+        flux[flux<0] = 0
     else:
         # boolean mask of fibers with good data
         good_fibers = (np.sum(ivar>0, axis=1) > 0)
@@ -713,9 +715,9 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     return ref_wave, ref_spectrum
 
 
-def _continuum_subtract_median(flux0, ivar, continuum_win = 51):
+def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
     # here we get rid of continuum by applying a median filter 
-    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /4.
+    continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
     flux = flux0 * 1 # we will modify flux
     # we only keep emission lines and get rid of continuum
     for ii in range(flux.shape[0]):
@@ -791,10 +793,10 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
 
     # resampling on common finer wavelength grid
+    oversampling = 2 #
+    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
 
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
-
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar)
+    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
 
     ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
 
