@@ -138,6 +138,15 @@ class TestProcNight(unittest.TestCase):
         self.assertEqual(len(prodfiles), 1)
         self.assertTrue(prodfiles[0].endswith('exposure_tables'))
 
+    def test_proc_night_dryrun3(self):
+        """Test that dry_run_level=4 doesn't produce any output"""
+        proctable, unproctable = proc_night(self.night, z_submit_types=['cumulative',],
+                                            dry_run_level=4, sub_wait_time=0.0)
+
+        prodfiles = glob.glob(self.proddir+'/*')
+        self.assertEqual(len(prodfiles), 1)
+        self.assertTrue(prodfiles[0].endswith('exposure_tables'))
+
     def test_proc_night_noz(self):
         """Test that z_submit_types=None doesn't submit any redshift jobs"""
 
@@ -203,7 +212,7 @@ class TestProcNight(unittest.TestCase):
         desispec.workflow.proctable.reset_tilenight_ptab_cache()
 
         ## test that the code runs
-        updatedtable2, nsubmits = update_and_recursively_submit(proctable2, submits=0, dry_run=3)
+        updatedtable2, nsubmits = update_and_recursively_submit(proctable2, submits=0, dry_run_level=4)
         self.assertFalse(np.any(np.in1d(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
                         msg='No TIMEOUTs in nominal resubmission')
 
@@ -214,7 +223,7 @@ class TestProcNight(unittest.TestCase):
             proctable2['STATUS'][proctable2['INTID']==cumulative2['INTID']] = 'TIMEOUT'
         updatedtable2, nsubmits = update_and_recursively_submit(proctable2,
                                                                 submits=0,
-                                                                dry_run=1)
+                                                                dry_run_level=4)
         self.assertFalse(np.any(np.in1d(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
                         msg='Cross night resubmission should leave no TIMEOUTs')
 
@@ -237,11 +246,9 @@ class TestProcNight(unittest.TestCase):
         ## Run resubmission code
         updatedtable2, nsubmits = update_and_recursively_submit(proctable2,
                                                                 submits=0,
-                                                                dry_run=1)
-        self.assertTrue(np.any(np.in1d(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
-                        msg='Cross night resubmission should leave two TIMEOUTs')
+                                                                dry_run_level=4)
         self.assertTrue(np.sum(updatedtable2['STATUS'] == 'DEP_NOT_SUBD')==2,
-                        msg='Cross night resubmission should have 2 TIMEOUTs' \
+                        msg='Cross night resubmission should have 2 DEP_NOT_SUBDs' \
                             + ' after forcing failed previous night jobs.')
 
 

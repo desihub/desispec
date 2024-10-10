@@ -31,9 +31,14 @@ def parse_args():  # options=None):
                         help="File format and extension for the exp and proc tables.")
     parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
-                        "dry-run-level is defined as nonzero.")
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="What level of dry_run to perform, if any. Default is 0. "
+                              + "0 which runs the code normally. "
+                              + "1 writes all files but doesn't submit any jobs to Slurm. "
+                              + "2 writes tables but doesn't write scripts or submit anything. "
+                              + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
+                              + "4 Doesn't write, submit jobs, or query Slurm."
+                              + "5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.")
     parser.add_argument("--resub-states", type=str, default=None, required=False,
                         help="The SLURM queue states that should be resubmitted. " +
                              "E.g. UNSUBMITTED, BOOT_FAIL, DEADLINE, NODE_FAIL, " +
@@ -74,24 +79,22 @@ if __name__ == '__main__':
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
-    if args.dry_run > 0 and args.dry_run < 3:
-        log.warning(f"{args.dry_run=} will be run with limited simulation "
-                    f"because we don't want to write out incorrect queue information.")
-
-    ## Combine the table names and types for easier passing to io functions
-    table_type = 'proctable'
+    if args.dry_run_level > 0:
+        log.info(f"{args.dry_run_level=}, so will be simulating some features."
+                 + f" See parser for what each level limits.")
 
     ## Load in the files defined above
-    ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
+    ptable = load_table(tablename=ptable_pathname, tabletype='proctable')
     log.info(f"Identified ptable with {len(ptable)} entries.")
     ptable, nsubmits = update_and_recursively_submit(ptable, submits=0,
                                                      resubmission_states=args.resub_states,
                                                      no_resub_failed=args.no_resub_failed,
-                                                     ptab_name=ptable_pathname, dry_run=args.dry_run,
+                                                     ptab_name=ptable_pathname,
+                                                     dry_run_level=args.dry_run_level,
                                                      reservation=args.reservation)
 
-    if not args.dry_run:
+    if args.dry_run_level < 3:
         write_table(ptable, tablename=ptable_pathname)
 
     log.info("Completed all necessary queue resubmissions from processing "
-          + f"table: {ptable_pathname}")
+             + f"table: {ptable_pathname}")

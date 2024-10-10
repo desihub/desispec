@@ -444,9 +444,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                             dry_run=(dry_run and ()))
 
         if len(ptable) > 0:
-            ptable = update_from_queue(ptable, dry_run=dry_run_level)
+            ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
             # ptable, nsubmits = update_and_recursively_submit(ptable,
-            #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
+            #                                                   ptab_name=proc_table_pathname, dry_run_level=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             if dry_run_level < 3:
@@ -481,7 +481,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                             resubmit_partial_complete=resubmit_partial_complete,
                                             z_submit_types=z_submit_types)
     ## All jobs now submitted, update information from job queue and save
-    ptable = update_from_queue(ptable, dry_run=dry_run_level)
+    ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
     if dry_run_level < 3:
         write_table(ptable, tablename=proc_table_pathname)
 
