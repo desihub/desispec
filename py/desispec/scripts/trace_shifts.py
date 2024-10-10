@@ -148,12 +148,14 @@ def fit_trace_shifts(image, args):
 
     spectrum_filename = args.spectrum
     if args.sky :
+        continuum_subtract = True
         srch_file = "data/spec-sky.dat"
         if not resources.files('desispec').joinpath(srch_file).is_file():
             log.error("Cannot find sky spectrum file {:s}".format(srch_file))
             raise RuntimeError("Cannot find sky spectrum file {:s}".format(srch_file))
         spectrum_filename = resources.files('desispec').joinpath(srch_file)
     elif args.arc_lamps :
+        continuum_subtract = False
         srch_file = "data/spec-arc-lamps.dat"
         if not resources.files('desispec').joinpath(srch_file).is_file():
             log.error("Cannot find arc lamps spectrum file {:s}".format(srch_file))
@@ -196,7 +198,7 @@ def fit_trace_shifts(image, args):
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration
