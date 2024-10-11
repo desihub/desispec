@@ -400,10 +400,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         else:
             ptable_expids = set()
         etable_expids = set(etable['EXPID'][etable['OBSTYPE']=='science'])
-        if len(etable_expids) == 0:
-            log.info(f"No science exposures yet. Exiting at {time.asctime()}.")
-            return ptable, None
-        elif len(etable_expids.difference(ptable_expids)) == 0:
+        if len(etable_expids.difference(ptable_expids)) == 0:
             log.info("All science EXPID's already present in processing table, "
                      + f"nothing to run. Exiting at {time.asctime()}.")
             return ptable, None
