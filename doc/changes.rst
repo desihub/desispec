@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.67.0 (unreleased)
+0.67.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.67.0 (2024-10-11)
+-------------------
+
+Used for Loa procution.
 
 Major algorithmic change to coadds
 
@@ -16,14 +23,23 @@ Other
 * Add "UPDATED" timestamp column to tiles file (PR `#2373`_).
 * Support reading old zbest files (now redrock) (PR `#2374`_).
 * Add script to update processing tabel column layout (PR `#2376`_).
-* Fix column incompatibility in :func:`desispec.specstatus.update_specstatus` (PR `#2384`_).
+* zproc runs coadd_spectra instead of group_spectra if spectra file already
+  exists (PR `#2383`_).
+* Fix column incompatibility in :func:`desispec.specstatus.update_specstatus`
+  (PR `#2384`_).
+* Add desi_update_proctable_status script and standardize dry-run levels
+  (PR `#2385`_).
+* Enable zproc.main to be called from other scripts (PR `#2391`_).
 
 .. _`#2365`: https://github.com/desihub/desispec/pull/2365
 .. _`#2373`: https://github.com/desihub/desispec/pull/2373
 .. _`#2374`: https://github.com/desihub/desispec/pull/2374
 .. _`#2376`: https://github.com/desihub/desispec/pull/2376
 .. _`#2377`: https://github.com/desihub/desispec/pull/2377
+.. _`#2383`: https://github.com/desihub/desispec/pull/2383
 .. _`#2384`: https://github.com/desihub/desispec/pull/2384
+.. _`#2385`: https://github.com/desihub/desispec/pull/2385
+.. _`#2391`: https://github.com/desihub/desispec/pull/2391
 
 0.66.3 (2024-09-13)
 -------------------
