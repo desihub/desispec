@@ -135,6 +135,22 @@ def parse(options=None):
 
 
 def main(args=None, comm=None):
+    """
+    Run spectral grouping, coaddition, redshifts, and afterburners
+
+    Options:
+        args (argparse.Namespace or list of str): options to use instead of sys.argv
+        comm: mpi4py communicator to use for parallelism
+
+    Returns: integer error code (0=good)
+    """
+    #- save original command line before parsing it
+    #- in case we need it for creating a batch script
+    if args is None or isinstance(args, argparse.Namespace):
+        cmdline = sys.argv.copy()
+    else:
+        cmdline = ['desi_zproc',] + list(args)
+
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
 
@@ -299,7 +315,6 @@ def main(args=None, comm=None):
         ## Create and submit a batch job if requested
         if rank == 0:
             ## create the batch script
-            cmdline = list(sys.argv).copy()
             scriptfile = create_desi_zproc_batch_script(group=groupname,
                                                         subgroup=subgroup,
                                                         tileid=tileid,
@@ -327,7 +342,8 @@ def main(args=None, comm=None):
         ## All ranks need to exit if submitted batch
         if comm is not None:
             err = comm.bcast(err, root=0)
-        sys.exit(err)
+
+        return int(err)
 
     exposure_table = None
     hpixexp = None
@@ -870,7 +886,7 @@ def main(args=None, comm=None):
             log.info(goodbye)
 
     if error_count > 0:
-        sys.exit(int(error_count))
+        return int(error_count)
     else:
         return 0
 
