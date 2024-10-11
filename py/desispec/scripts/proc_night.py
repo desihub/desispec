@@ -393,20 +393,29 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                       + "you entered '--ignore-proc-table-failures'. This "
                       + "script will not fix them. "
                       + "You should have fixed those first. Proceeding...")
-        if np.sum(ptable['OBSTYPE']=='science') > 0:
-            ptable_expids = set(np.concatenate(
-                                ptable['EXPID'][ptable['OBSTYPE']=='science']
-                            ))
+        ## Short cut to exit faster if all science exposures have been processed
+        ## but only if we have successfully processed the calibrations
+        good_etab = etable[etable['LASTSTEP']=='all']
+        terminal_cal_reached = False
+        if 'nightlyflat' in ptable['JOBDESC']:
+            terminal_cal_reached = True
+        elif np.sum(good_etab['OBSTYPE']=='flat') < 12 and not still_acquiring \
+                and 'psfnight' in ptable['JOBDESC']:
+            terminal_cal_reached = True
+        scisel = ptable['OBSTYPE'] == 'science'
+        if np.sum(scisel) > 0:
+            ptable_expids = set(np.concatenate(ptable['EXPID'][scisel]))
         else:
             ptable_expids = set()
-        etable_expids = set(etable['EXPID'][etable['OBSTYPE']=='science'])
-        if len(etable_expids) == 0:
-            log.info(f"No science exposures yet. Exiting at {time.asctime()}.")
-            return ptable, None
-        elif len(etable_expids.difference(ptable_expids)) == 0:
-            log.info("All science EXPID's already present in processing table, "
-                     + f"nothing to run. Exiting at {time.asctime()}.")
-            return ptable, None
+        etable_expids = set(etable['EXPID'][etable['OBSTYPE'] == 'science'])
+        if terminal_cal_reached:
+            if len(etable_expids) == 0:
+                log.info(f"No science exposures yet. Exiting at {time.asctime()}.")
+                return ptable, None
+            elif len(etable_expids.difference(ptable_expids)) == 0:
+                log.info("All science EXPID's already present in processing table, "
+                         + f"nothing to run. Exiting at {time.asctime()}.")
+                return ptable, None
 
         int_id = np.max(ptable['INTID'])+1
     else:
