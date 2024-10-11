@@ -885,10 +885,7 @@ def main(args=None, comm=None):
         else:
             log.info(goodbye)
 
-    if error_count > 0:
-        return int(error_count)
-    else:
-        return 0
+    return int(error_count)
 
 
 def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
