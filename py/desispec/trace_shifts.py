@@ -370,7 +370,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
                                                                    ivar=ivar[fiber,ok],
                                                                    hw=3., calibrate=True)
             if fiber %10==0 :
-                log.info("Wavelength offset %f +/- %f for fiber #%03d at wave %f "%(dwave, err, fiber, block_wave))
+                log.info(f"Wavelength offset {dwave} +/- {err} for fiber {fiber:03d} at wave {block_wave}")
 
             if err > 1 :
                 continue
@@ -832,7 +832,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
             ey = np.append(ey, err*dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
             y_for_dy=np.append(y_for_dy,y)
-            log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave, y, dwave, err))
+            log.info(f"wave = {bin_wave}A , y={y}, measured dwave = {dwave} +- {err} A")
 
     if False : # we don't need this for now
         try :
