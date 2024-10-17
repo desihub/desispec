@@ -9,8 +9,6 @@ from __future__ import absolute_import, division
 from desispec.io import read_frame
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
-from desispec.io.qa import load_qa_frame
-from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
 from desispec.io import write_skycorr
 from desispec.io import read_skycorr_pca
@@ -19,7 +17,6 @@ from desispec.io import read_tpcorrparam
 from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
-from desispec.qa import qa_plots
 from desispec.cosmics import reject_cosmic_rays_1d
 from desiutil.log import get_logger
 import argparse
@@ -35,10 +32,6 @@ def parse(options=None):
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-    parser.add_argument('--qafile', type = str, default = None, required=False,
-                        help = 'path of QA file. Will calculate for Sky Subtraction')
-    parser.add_argument('--qafig', type = str, default = None, required=False,
-                        help = 'path of QA figure file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-extra-variance', action='store_true',
@@ -138,21 +131,6 @@ def main(args=None) :
         skycorr=SkyCorr(wave=skymodel.wave,dwave=skymodel.dwave,dlsf=skymodel.dlsf,header=skymodel.header)
         write_skycorr(args.save_adjustments,skycorr)
         log.info("wrote {}".format(args.save_adjustments))
-
-    # QA
-    if (args.qafile is not None) or (args.qafig is not None):
-        log.info("performing skysub QA")
-        # Load
-        qaframe = load_qa_frame(args.qafile, frame_meta=frame.meta, flavor=frame.meta['FLAVOR'])
-        # Run
-        qaframe.run_qa('SKYSUB', (frame, skymodel))
-        # Write
-        if args.qafile is not None:
-            write_qa_frame(args.qafile, qaframe)
-            log.info("successfully wrote {:s}".format(args.qafile))
-        # Figure(s)
-        if args.qafig is not None:
-            qa_plots.frame_skyres(args.qafig, frame, skymodel, qaframe)
 
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)

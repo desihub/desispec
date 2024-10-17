@@ -196,30 +196,22 @@ class TestBoot(unittest.TestCase):
         bootscript.main(args)
 
         #- Ensure the PSF class can read that file
-        from desispec.quicklook.qlpsf import PSF
-        psf = PSF(self.testout)
+        # from desispec.quicklook.qlpsf import PSF
+        # psf = PSF(self.testout)
+
+        #- Ensure the output format is useably by xytraceset
+        from desispec.io import read_xytraceset
+        psf = read_xytraceset(self.testout)
 
         #- While we're at it, test some PSF accessor functions
         indices = np.array([0,1])
-        waves = np.array([psf.wmin, psf.wmin+1])
+        waves = np.array([psf.wavemin, psf.wavemin+1])
+        allrows = np.arange(psf.npix_y)
 
-        w = psf.wavelength()
-        w = psf.wavelength(ispec=0)
-        w = psf.wavelength(ispec=indices)
-        w = psf.wavelength(ispec=indices, y=0)
-        w = psf.wavelength(ispec=indices, y=indices)
+        w = psf.wave_vs_y(fiber=0, y=indices)
+        w = psf.wave_vs_y(fiber=1, y=allrows)
 
-        x = psf.x()
-        x = psf.x(ispec=0)
-        x = psf.x(ispec=indices)
-        x = psf.x(ispec=None, wavelength=psf.wmin)
-        x = psf.x(ispec=1, wavelength=psf.wmin)
-        x = psf.x(ispec=indices, wavelength=psf.wmin)
-        x = psf.x(ispec=indices, wavelength=waves)
-
-        y = psf.y(ispec=None, wavelength=psf.wmin)
-        y = psf.y(ispec=0, wavelength=psf.wmin)
-        y = psf.y(ispec=indices, wavelength=psf.wmin)
-        y = psf.y(ispec=indices, wavelength=waves)
+        x = psf.x_vs_wave(0, waves)
+        y = psf.y_vs_wave(0, waves)
 
 
