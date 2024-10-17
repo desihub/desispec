@@ -13,25 +13,6 @@ from desispec.io import read_xytraceset
 
 class TestBadColumn(unittest.TestCase):
 
-    # setUpClass runs once at the start before any tests
-    @classmethod
-    def setUpClass(cls):
-        pass
-
-    # setUpClass runs once at the end after every test
-    # e.g. to remove files created by setUpClass
-    @classmethod
-    def setUpClass(cls):
-        pass
-
-    # setUp runs before every test, e.g. to reset state
-    def setUp(self):
-        pass
-
-    # setUp runs after every test, e.g. to reset state
-    def tearDown(self):
-        pass
-
     def test_flux_bias_function(self):
         from desispec.badcolumn import flux_bias_function
 
