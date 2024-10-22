@@ -451,12 +451,11 @@ def main(args=None):
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
-    zqual['GOOD_Z'] = np.int16(-1)  # GOOD_Z: -1 if redshift quality is unknown
+    zqual['Z_CONF'] = np.uint8(0)  # Z_CONF: 0 if no confidence
     for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
         zqual[col] = zqual[col] & zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
-        zqual[col] = zqual[col].astype(np.int16)  # convert boolean to integer
 
-    # Add GOOD_Z columns
+    # evaluate Z_CONF
     if survey in ['main', 'sv1', 'sv2', 'sv3']:
         if survey=='main':
             desi_target_col = 'DESI_TARGET'
@@ -469,26 +468,31 @@ def main(args=None):
         is_elg = zcat[desi_target_col] & 2**1 > 0
         is_qso = zcat[desi_target_col] & 2**2 > 0
 
-        # GOOD_Z_TRACER: -1 if it is a not TRACER target, 0 if it is a TRACER target and fails TRACER redshift quality cut; 1 if it is a TRACER target and passes TRACER redshift quality cut
-        zqual['GOOD_Z_BGS'][~is_bgs] = -1
-        zqual['GOOD_Z_LRG'][~is_lrg] = -1
-        zqual['GOOD_Z_ELG'][~is_elg] = -1
-        zqual['GOOD_Z_QSO'][~is_qso] = -1
-        # Merge BGS+LRG+ELG quality cuts
-        mask = (is_bgs | is_lrg | is_elg) & ((zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1))
-        zqual['GOOD_Z'][mask] = 1  # GOOD_Z: 1 if it has confident redshift (Z column)
-        mask = (is_bgs | is_lrg | is_elg) & ~((zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1))
-        zqual['GOOD_Z'][mask] = 0  # GOOD_Z: 0 if it does not have confident redshift (Z column)
+        # GOOD_Z_TRACER: False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut; True if it is a TRACER target and passes TRACER redshift quality cut
+        # They apply to the Z column
+        zqual['GOOD_Z_BGS'] &= is_bgs
+        zqual['GOOD_Z_LRG'] &= is_lrg
+        zqual['GOOD_Z_ELG'] &= is_elg
 
-    else:  # undefined (-1) redshift quality if it is not from main or sv1-3 surveys
-        for col in ['GOOD_Z', 'GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
-            zqual[col] = np.int16(-1)
-        zqual['Z_QSO'] = np.nan
-        zqual['ZERR_QSO'] = np.nan
+        # GOOD_Z_QSO: True if Z_QSO is a confident redshift; it only applies to the Z_QSO column
+        # definition: False if it is not a QSO target or if it is a QSO target but fails QSO redshift quality cut; True if it is a QSO target and passes QSO redshift quality cut
+        zqual['GOOD_Z_QSO'] &= is_qso
+
+        mask = (zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1)
+        zqual['Z_CONF'][mask] = 2  # Z_CONF=2: highly confident; definition: if Z is a confident redshift
+
+        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        zqual['Z_CONF'][mask] = 1  # Z_CONF=1: less confident and Z is likely to be a catastrophically wrong redshift; definition: if the criteria for 2 is not met but has GOOD_SPEC==True and ZWARN==0
+
+    else:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+            zqual[col] = False
+        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        zqual['Z_CONF'][mask] = 1
 
     zcat = hstack([zcat, zqual], join_type='exact')
 
-    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_SPEC', 'GOOD_Z', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_SPEC', 'Z_CONF', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
