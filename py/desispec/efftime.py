@@ -91,8 +91,9 @@ def compute_efftime(table,
         exptime
         * (fiberfac_psf / airfac) ** 2
         * (sky_nom / effsky_backup)
-        / ebvfac ** 2
     )
+    # Note that the backup calculation is on purpose
+    # ommitting the E(B-V) term
 
     # set to -1 values with incorrect inputs
     bad=table["AIRMASS"]<0.99
