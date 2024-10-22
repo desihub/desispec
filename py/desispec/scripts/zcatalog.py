@@ -451,6 +451,10 @@ def main(args=None):
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
+    zqual['GOOD_Z'] = np.int16(-1)  # GOOD_Z: -1 if redshift quality is unknown
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        zqual[col] = zqual[col] & zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
+        zqual[col] = zqual[col].astype(np.int16)  # convert boolean to integer
 
     # Add GOOD_Z columns
     if survey in ['main', 'sv1', 'sv2', 'sv3']:
@@ -465,24 +469,22 @@ def main(args=None):
         is_elg = zcat[desi_target_col] & 2**1 > 0
         is_qso = zcat[desi_target_col] & 2**2 > 0
 
-        # GOOD_Z_TRACER requires that the object is a TRACER target
-        zqual['GOOD_Z_BGS'] &= is_bgs  # GOOD_Z_BGS: true if it is a BGS target and passes BGS redshift quality cut
-        zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_QSO: true if it is a LRG target and passes LRG redshift quality cut
-        zqual['GOOD_Z_ELG'] &= is_elg  # GOOD_Z_QSO: true if it is a ELG target and passes ELG redshift quality cut
-        zqual['GOOD_Z_QSO'] &= is_qso  # GOOD_Z_QSO: true if it is a QSO target and passes QSO redshift quality cut; confident QSO redshift (Z_QSO column)
+        # GOOD_Z_TRACER: -1 if it is a not TRACER target, 0 if it is a TRACER target and fails TRACER redshift quality cut; 1 if it is a TRACER target and passes TRACER redshift quality cut
+        zqual['GOOD_Z_BGS'][~is_bgs] = -1
+        zqual['GOOD_Z_LRG'][~is_lrg] = -1
+        zqual['GOOD_Z_ELG'][~is_elg] = -1
+        zqual['GOOD_Z_QSO'][~is_qso] = -1
         # Merge BGS+LRG+ELG quality cuts
-        zqual['GOOD_Z'] = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']  # GOOD_Z: true if it has confident redshift (Z column)
-        not_primary_target = (~is_bgs) & (~is_lrg) & (~is_elg) & (~is_qso)
-        # GOOD_Z definition for objects that are not BGS or LRG or ELG or QSO targets
-        zqual['GOOD_Z'][not_primary_target] = (zcat['ZWARN']==0)[not_primary_target]
+        mask = (is_bgs | is_lrg | is_elg) & ((zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1))
+        zqual['GOOD_Z'][mask] = 1  # GOOD_Z: 1 if it has confident redshift (Z column)
+        mask = (is_bgs | is_lrg | is_elg) & ~((zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1))
+        zqual['GOOD_Z'][mask] = 0  # GOOD_Z: 0 if it does not have confident redshift (Z column)
 
-        # Z_QSO and GOOD_Z_QSO are recorded separately
-        zqual['Z_QSO'][~is_qso] = np.nan  # Z_QSO: redrock best-fit redshift with QSO templates and QuasarNET prior for QSO targets
-        zqual['ZERR_QSO'][~is_qso] = np.nan
-    else:
-        # GOOD_Z definition for surveys that are not main or sv1 or sv2 or sv3
-        zqual['GOOD_Z'] = (zcat['ZWARN']==0)
-    zqual['GOOD_Z'] &= zqual['GOOD_SPEC']  # require good hardware status
+    else:  # undefined (-1) redshift quality if it is not from main or sv1-3 surveys
+        for col in ['GOOD_Z', 'GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+            zqual[col] = np.int16(-1)
+        zqual['Z_QSO'] = np.nan
+        zqual['ZERR_QSO'] = np.nan
 
     zcat = hstack([zcat, zqual], join_type='exact')
 
