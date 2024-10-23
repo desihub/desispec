@@ -478,7 +478,7 @@ def main(args=None):
         # definition: False if it is not a QSO target or if it is a QSO target but fails QSO redshift quality cut; True if it is a QSO target and passes QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
 
-        mask = (zqual['GOOD_Z_BGS']==1) | (zqual['GOOD_Z_LRG']==1) | (zqual['GOOD_Z_ELG']==1)
+        mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']
         zqual['Z_CONF'][mask] = 2  # Z_CONF=2: highly confident; definition: if Z is a confident redshift
 
         mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
