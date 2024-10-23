@@ -584,7 +584,7 @@ def main(args=None):
     outfile_imaging = args.outfile+'-imaging.fits'
     log.info(f'Writing {outfile_imaging}')
     tmpfile = get_tempfilename(outfile_imaging)
-    write_bintable(tmpfile, zcat_imaging, header=header, extname='IMAGING',
+    write_bintable(tmpfile, zcat_imaging, header=header, extname='ZCATALOG_IMAGING',
                    units=units, clobber=True)
     os.rename(tmpfile, outfile_imaging)
     log.info("Successfully wrote {}".format(outfile_imaging))
@@ -592,7 +592,7 @@ def main(args=None):
     outfile_extra = args.outfile+'-extra.fits'
     log.info(f'Writing {outfile_extra}')
     tmpfile = get_tempfilename(outfile_extra)
-    write_bintable(tmpfile, zcat_extra, header=header, extname='EXTRACOLS',
+    write_bintable(tmpfile, zcat_extra, header=header, extname='ZCATALOG_EXTRA',
                    units=units, clobber=True)
     os.rename(tmpfile, outfile_extra)
     log.info("Successfully wrote {}".format(outfile_extra))
