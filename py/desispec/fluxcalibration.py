@@ -1248,7 +1248,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
             log.info("{} keeping {} stars with highest throughput".format(camera, highest_throughput_nstars))
             ii=np.argsort(scale)[::-1][:highest_throughput_nstars]
             log.info("{} use those fibers = {}".format(camera, stdfibers[ii]))
-            log.info("{} with median correction = {}".format(camera, medcorr[ii]))
+            medcorr = np.median(scale[ii])
+            log.info("{} with median correction = {}".format(camera, medcorr))
             mscale=1./np.mean(1./scale[ii][badfiber[ii]==0])
         else :
             medscale = np.median(scale[badfiber==0])

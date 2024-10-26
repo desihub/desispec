@@ -35,7 +35,7 @@ def main():
 
     sp.check_call(["pyinstaller", "etc/desi_bundle.spec"])
     for ap in apps:
-        shutil.copy2(os.path.join("dist", ap), os.path.join(self.prefix, "bin", ap))
+        shutil.copy2(os.path.join("dist", ap), os.path.join(args.prefix, "bin", ap))
 
 
 if __name__ == "__main__":

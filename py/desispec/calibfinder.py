@@ -399,7 +399,7 @@ class CalibFinder() :
         fibers=[]
         for key in keys :
             if key not in badfiber_keywords  :
-                log.error(f"key '{key}' not in the list of valid keys for bad fibers: {validkeys}")
+                log.error(f"key '{key}' not in the list of valid keys for bad fibers: {badfiber_keywords}")
                 continue
             if self.haskey(key) :
                 val = self.value(key)

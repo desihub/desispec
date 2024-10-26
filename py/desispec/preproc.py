@@ -632,8 +632,8 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
     elif keyword == "DARK" :
         raise ValueError("Dark are now treated separately.")
     else :
-        log.error("Don't known how to read %s in %s"%(keyword,path))
-        raise ValueError("Don't known how to read %s in %s"%(keyword,path))
+        log.error("Don't known how to read %s in %s"%(keyword, filename))
+        raise ValueError("Don't known how to read %s in %s"%(keyword, filename))
     return False
 
 def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,

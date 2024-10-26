@@ -18,7 +18,7 @@ from scipy.signal import fftconvolve
 from scipy.ndimage import median_filter
 import numba
 
-from desispec.io import read_image
+from desispec.io import read_image, read_xytraceset
 from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
@@ -153,7 +153,7 @@ def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, wi
 
     tset = read_xytraceset(psf_filename)
     image = read_image(image_filename)
-    qframe = qproc_boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
+    qframe = qproc_boxcar_extraction(tset, image, fibers=fibers, width=width)
     return qframe.flux, qframe.ivar, qframe.wave
 
 
@@ -490,9 +490,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     log.info("Starting compute_dx_from_cross_dispersion_profiles with width={} deg={} rebin={}...".format(width,deg,image_rebin))
 
     t0=time.time()
-
-    if fibers is None :
-        fibers = np.arange(psf.nspec)
 
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
 

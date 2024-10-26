@@ -4,6 +4,7 @@ desispec.scripts.autocalib_fiberflat
 
 """
 from __future__ import absolute_import, division
+import sys
 import time
 
 import numpy as np
