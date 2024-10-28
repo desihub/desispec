@@ -460,7 +460,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
     return swdx,sw,svar,swy,swx,swl
 
 
-def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7,deg=2,image_rebin=4) :
+def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2,image_rebin=4) :
     """
     Measure x offsets from a preprocessed image and a trace set
 
@@ -471,9 +471,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
         image : DESI preprocessed image object
-        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
 
     Optional:
+        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 5
         deg    : degree of polynomial fit as a function of y, only used to find and mask outliers
         image_rebin : rebinning of CCD rows to run faster (with rebin=4 loss of precision <0.01 pixel)
@@ -493,6 +493,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
 
+    if fibers is None :
+        fibers = np.arange(psf.nspec)
 
     if image.mask is not None :
         image_ivar = image.ivar*(image.mask==0)
