@@ -5,32 +5,18 @@ desispec.scripts.procdashboard
 """
 import argparse
 import os, glob
-import sys
-import re
-from astropy.io import fits, ascii
-from astropy.table import Table, vstack
-import time, datetime
+from astropy.table import Table
 import numpy as np
-from os import listdir
-import json
 
-# import desispec.io.util
-from desispec.workflow.exptable import get_exposure_table_pathname, \
-    default_obstypes_for_exptable, \
-    get_exposure_table_column_types, \
-    get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
-    return_color_profile, find_new_exps, _hyperlink, _str_frac, \
+    _hyperlink, _str_frac, \
     get_output_dir, make_html_page, read_json, write_json, \
     get_terminal_steps, get_tables, populate_monthly_tables, get_nights
-from desispec.workflow.proctable import get_processing_table_pathname, \
-    table_row_to_dict
+from desispec.workflow.proctable import table_row_to_dict
 from desispec.workflow.queue import update_from_queue, get_non_final_states
-from desispec.workflow.tableio import load_table
-from desispec.io.meta import specprod_root, rawdata_root
+from desispec.io.meta import specprod_root
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_intersection, \
-    erow_to_goodcamword
+    difference_camwords, erow_to_goodcamword
 from desiutil.log import get_logger
 
 
@@ -132,11 +118,9 @@ def main(args=None):
                                          night_json_info=night_json_info,
                                          skipd_expids=skipd_expids)
 
-        if len(night_info) == 0:
-            return {}
-
         ## write out the night_info to json file
-        write_json(output_data=night_info, filename_json=filename_json)
+        if len(night_info) > 0:
+            write_json(output_data=night_info, filename_json=filename_json)
 
         return night_info.copy()
 

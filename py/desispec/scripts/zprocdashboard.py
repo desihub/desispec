@@ -5,32 +5,19 @@ desispec.scripts.zprocdashboard
 """
 import argparse
 import os, glob
-import sys
-import re
-from astropy.io import fits, ascii
-from astropy.table import Table, vstack
-import time, datetime
+
 import numpy as np
-from os import listdir
-import json
 
 from desispec.workflow.queue import update_from_queue, get_non_final_states
-# import desispec.io.util
 from desiutil.log import get_logger
-from desispec.workflow.exptable import get_exposure_table_pathname, \
-    default_obstypes_for_exptable, \
-    get_exposure_table_column_types, \
-    get_exposure_table_column_defaults, read_minimal_science_exptab_cols
+from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
-    return_color_profile, find_new_exps, _hyperlink, _str_frac, \
+    _hyperlink, _str_frac, \
     get_output_dir, make_html_page, read_json, write_json, \
     get_terminal_steps, get_tables, get_nights, populate_monthly_tables
-from desispec.workflow.proctable import get_processing_table_pathname, \
-    erow_to_prow, instantiate_processing_table
-from desispec.workflow.tableio import load_table
-from desispec.io.meta import specprod_root, rawdata_root, findfile
-from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_union, \
+from desispec.workflow.proctable import erow_to_prow, instantiate_processing_table
+from desispec.io.meta import specprod_root, findfile
+from desispec.io.util import camword_to_spectros, camword_union, \
     columns_to_goodcamword, spectros_to_camword
 
 
@@ -146,8 +133,8 @@ def main(args=None):
                                            night_json_zinfo=night_json_zinfo,
                                            skipd_tileids=skipd_tileids)
 
+        ## write out the night_info to json file
         if len(night_zinfo) > 0:
-            ## write out the night_info to json file
             write_json(output_data=night_zinfo, filename_json=filename_json)
 
         return night_zinfo
