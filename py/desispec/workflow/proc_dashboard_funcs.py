@@ -17,9 +17,7 @@ from astropy.io import fits
 ########################
 ### Helper Functions ###
 ########################
-from desispec.io import rawdata_root, specprod_root
-from desispec.io.util import camword_to_spectros, decode_camword, \
-    difference_camwords, create_camword, parse_badamps
+from desispec.io import rawdata_root
 from desispec.workflow.exptable import get_exposure_table_column_types, \
     default_obstypes_for_exptable, get_exposure_table_column_defaults, \
     get_exposure_table_pathname
