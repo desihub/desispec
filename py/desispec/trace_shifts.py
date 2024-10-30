@@ -494,7 +494,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
 
     if fibers is None :
-        fibers = np.arange(psf.nspec)
+        fibers = np.arange(xcoef.shape[0])
 
     if image.mask is not None :
         image_ivar = image.ivar*(image.mask==0)
