@@ -22,6 +22,7 @@ from desitarget.sv1.sv1_targetmask import desi_mask as sv1_mask
 from desitarget.cmx.cmx_targetmask import cmx_mask
 
 from desiutil.log import get_logger
+import desiutil.depend
 
 from desispec.io.util import get_tempfilename
 
@@ -406,7 +407,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     return QSO_sel
 
 
-def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True, templatefiles=None):
     """
     Save info from pandas dataframe in a fits file. Need to write the dtype array
     because of the list in the pandas dataframe (no other solution found)
@@ -415,7 +416,10 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
         dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
         filename (str):  name of the fits file
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+
+    Options:
         clobber (bool): overwrite the fits file defined by filename ?
+        templatefiles (list): list of Redrock template filenames to record in header
 
     Returns:
         None
@@ -454,10 +458,26 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z_Hbeta'] = np.array([dataframe['Z_LINES'][i][4] for i in range(dataframe.shape[0])])
     data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
 
+    # Header to save provenance
+    hdr = dict()
+    desiutil.depend.add_dependencies(hdr)
+    for key in ('QN_MODEL_FILE', 'RR_TEMPLATE_DIR'):
+        desiutil.depend.setdep(hdr, key, os.getenv(key, 'None'))
+
+    if templatefiles is not None:
+        for i, templatefilename in enumerate(templatefiles):
+            key = f'RR_TEMPLATE_{i}'
+            if 'RR_TEMPLATE_DIR' in os.environ and templatefilename.startswith(os.environ['RR_TEMPLATE_DIR']):
+                templatefilename = os.path.basename(templatefilename)
+
+            desiutil.depend.setdep(hdr, key, templatefilename)
+    else:
+        log.warning('Not recording template filenames in output header')
+
     # Save file in temporary file to track when timeout error appears during the writing
     tmpfile = get_tempfilename(filename)
     fits = fitsio.FITS(tmpfile, 'rw')
-    fits.write(data, extname='QN_RR')
+    fits.write(data, extname='QN_RR', header=hdr)
     log.info(f'write output in: {filename}')
     fits.close()
 
@@ -570,7 +590,7 @@ def main(args=None, comm=None):
             if QSO_from_QN.shape[0] > 0:
                 log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
                          f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
-                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
+                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET, templatefiles=args.templates)
             else:
                 file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by QN afterburner to be a QSO.")
