@@ -14,7 +14,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     get_terminal_steps, get_tables, populate_monthly_tables, get_nights
 from desispec.workflow.proctable import table_row_to_dict
 from desispec.workflow.queue import update_from_queue, get_non_final_states
-from desispec.io.meta import specprod_root
+from desispec.io.meta import specprod_root, get_readonly_filepath
 from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, erow_to_goodcamword
 from desiutil.log import get_logger
@@ -295,11 +295,12 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
     del proctab
     exptab.sort(['ORDER'])
 
+    readonly_specproddir = get_readonly_filepath(specproddir)
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
     logfiletemplate = os.path.join(logpath, '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
-    fileglob_template = os.path.join(specproddir, 'exposures', str(night),
+    fileglob_template = os.path.join(readonly_specproddir, 'exposures', str(night),
                                      '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
-    fileglob_calib_template = os.path.join(specproddir, 'calibnight', str(night),
+    fileglob_calib_template = os.path.join(readonly_specproddir, 'calibnight', str(night),
                                            '{ftype}-{cam}[0-9]-{night}.{ext}')
 
     def count_num_files(ftype, expid=None):

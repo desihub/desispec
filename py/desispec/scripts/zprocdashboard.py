@@ -557,7 +557,7 @@ def populate_z_night_info(night, night_json_info=None, doem=True, doqso=True,
 def count_num_files(ztype, ftype, tileid, expid, night):
     filename = findfile(filetype='spectra', night=int(night), expid=int(expid),
                         camera='b1', tile=int(tileid), groupname=ztype,
-                        spectrograph=1)
+                        spectrograph=1, readonly=True)
 
     if ftype == 'tile-qa':
         fileroot = filename.replace(f'spectra-1-', f'{ftype}-').split('.')[0]
