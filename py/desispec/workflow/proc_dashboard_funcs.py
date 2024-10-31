@@ -68,6 +68,21 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
     return output_dir, prod_dir
 
 def get_nights(nights_arg, start_night, end_night, prod_dir):
+    """
+    Takes arguments that can specify a range or list of night and derives what
+    set of nights they are trying to indentify.
+
+    Args:
+        nights_arg (str or int): Can be 'all', a list of nights, or None. If 'all' or
+            None all nights will be used in conjunction with start_night and
+            end_night to produce the output set of nights.
+        start_night (str or int): the first night inclusive to include.
+        end_night (str or int): the last night inclusive to include.
+        prod_dir (str): The path to the production. Typically $DESI_SPECTRO_REDUX/$SPECPROD.
+
+    Returns:
+        nights (np.array): An array of integer nights derived from the input parameters.
+    """
     if nights_arg is None or nights_arg == 'all' \
             or (',' not in nights_arg and int(nights_arg) < 20000000):
         nights = list()
@@ -105,6 +120,30 @@ def get_nights(nights_arg, start_night, end_night, prod_dir):
 def populate_night_info_and_archive(night,
                                     archive_fname_template, ignore_json_archive,
                                     pernight_info_func, pernight_info_func_args):
+    """
+    A wrapper around either desispec.workflow.procdashboard.populate_exp_night_info
+    or desispec.workflow.zprocdashboard.populate_z_night_info  that also checks
+    for an existing archive from past runs and uses that unless instructed not to.
+    Regardless of whether it uses the archive, it writes out the results to the
+    archive pointed to by archive_fname_template.
+
+    Args:
+        night (int): the night to run pernight_info_func on.
+        archive_fname_template (str): a python string that can be formatted with
+            keyword night to produce a json filepath to the archive location
+            for the night.
+        ignore_json_archive (bool): If true the existing archive is ignored and
+            regenerated.
+        pernight_info_func (function): Function that takes arguments night,
+            night_json_info, and optional keyword arguemnts in pernight_info_func_args
+            and produces a dictionary of dictionaries.
+        pernight_info_func_args (dict): Keyword arguments that are accepted by the
+            pernight_info_func function.
+
+    Returns:
+        night_info (dict): A dictionary of dictionaries where each key is an exposure
+            or redshift job and each entry is a dictionary summarizing that job.
+    """
     json_fname = archive_fname_template.format(night=night)
     ## Load previous info if any
     night_json_info = None
@@ -124,6 +163,10 @@ def populate_night_info_and_archive(night,
 
 
 def populate_night_info_and_archive_wrapper(kwargs):
+    """
+    Wrapper to populate_night_info_and_archive that takes a dictionary as input
+    and unpacks it and feeds it as keyward arguments to populate_night_info_and_archive
+    """
     return populate_night_info_and_archive(**kwargs)
 
 
@@ -134,18 +177,22 @@ def populate_monthly_tables(nights, daily_info_args, nproc=1):
 
     Args:
         nights (list of int): the nights to check the status of the processing for.
+        daily_info_args (dict): contains keys archive_fname_template, ignore_json_archive,
+            pernight_info_func, pernight_info_func_args and their appropriate values
+            to be passed on to populate_night_info_and_archive().
         nproc (int, optional): Number of processes to use with a multiprocessing Pool.
 
     Returns:
         monthly_tables (dict): each key refers to a month, with values being a
             dictionary. Each of those dictionaries has the night as a key and
-            each value is the output of pernight_info_wrapper(night).
+            each value is the output of e.g. populate_exp_night_info(night).
     """
     ## If nproc is 1, avoid multiprocessing overhead and just run the script serially
     if nproc == 1:
         night_info_dicts = []
         for night in nights:
-            night_info_dicts.append(populate_night_info_and_archive(night=night, **daily_info_args))
+            night_info_dicts.append(populate_night_info_and_archive(night=night,
+                                                                    **daily_info_args))
     else:
         daily_info_args_dicts = []
         for night in nights:
