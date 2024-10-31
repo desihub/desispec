@@ -102,17 +102,38 @@ def get_nights(nights_arg, start_night, end_night, prod_dir):
     return nights
 
 
-def populate_monthly_tables(pernight_info_wrapper, nights, nproc=1):
+def populate_night_info_and_archive(night,
+                                    archive_fname_template, ignore_json_archive,
+                                    pernight_info_func, pernight_info_func_args):
+    json_fname = archive_fname_template.format(night=night)
+    ## Load previous info if any
+    night_json_info = None
+    if not ignore_json_archive:
+        night_json_info = read_json(filename_json=json_fname)
+
+    ## get the per exposure info for a night
+    night_info = pernight_info_func(night,
+                                    night_json_info=night_json_info,
+                                    **pernight_info_func_args)
+
+    ## write out the night_info to json file
+    if len(night_info) > 0:
+        write_json(output_data=night_info, filename_json=json_fname)
+
+    return night_info.copy()
+
+
+def populate_night_info_and_archive_wrapper(kwargs):
+    return populate_night_info_and_archive(**kwargs)
+
+
+def populate_monthly_tables(nights, daily_info_args, nproc=1):
     """
     Run function pernight_info_wrapper for all nights in night. If nproc is
     more than 1, multiprocessing i used.
 
     Args:
-        pernight_inf_wrapper (func): function that takes night as an input
-            and produces a single output.
         nights (list of int): the nights to check the status of the processing for.
-        night_json_info (dict of dicts): Dictionary of dictionarys. See output
-            definition for format.
         nproc (int, optional): Number of processes to use with a multiprocessing Pool.
 
     Returns:
@@ -124,10 +145,16 @@ def populate_monthly_tables(pernight_info_wrapper, nights, nproc=1):
     if nproc == 1:
         night_info_dicts = []
         for night in nights:
-            night_info_dicts.append(pernight_info_wrapper(night))
+            night_info_dicts.append(populate_night_info_and_archive(night=night, **daily_info_args))
     else:
+        daily_info_args_dicts = []
+        for night in nights:
+            newdict = daily_info_args.copy()
+            newdict['night'] = night
+            daily_info_args_dicts.append(newdict)
         with multiprocessing.Pool(nproc) as pool:
-            night_info_dicts = pool.map(pernight_info_wrapper, nights)
+            night_info_dicts = pool.map(populate_night_info_and_archive_wrapper,
+                                        daily_info_args_dicts)
 
     monthly_tables = {}
     for night, night_info_dict in zip(nights, night_info_dicts):

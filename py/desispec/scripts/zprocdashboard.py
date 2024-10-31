@@ -117,33 +117,28 @@ def main(args=None):
     ## access later cross-night dependencies
     all_exptabs = read_minimal_science_exptab_cols(nights=None)
 
-    def populate_night_zinfo_wrapper(night_to_submit):
-        ## Load previous info if any
-        filename_json = os.path.join(output_dir, 'zjsons',
-                                     f'zinfo_{os.environ["SPECPROD"]}'
-                                     + f'_{night_to_submit}.json')
-        night_json_zinfo = None
-        if not args.ignore_json_archive:
-            night_json_zinfo = read_json(filename_json=filename_json)
-
-        ## get the per exposure info for a night
-        night_zinfo = populate_night_zinfo(night_to_submit, doem=doem, doqso=doqso,
-                                           dotileqa=dotileqa, dozmtl=dozmtl,
-                                           check_on_disk=args.check_on_disk,
-                                           night_json_zinfo=night_json_zinfo,
-                                           skipd_tileids=skipd_tileids)
-
-        ## write out the night_info to json file
-        if len(night_zinfo) > 0:
-            write_json(output_data=night_zinfo, filename_json=filename_json)
-
-        return night_zinfo
-
     nights = get_nights(args.nights, args.start_night, args.end_night, prod_dir)
     log.info(f'Searching {prod_dir} for: {nights}')
 
-    monthly_tables = populate_monthly_tables(pernight_info_wrapper=populate_night_zinfo_wrapper,
-                                             nights=nights, nproc=args.nproc)
+    ## Define location of cache files
+    archive_fname_template =  os.path.join(output_dir, 'zjsons',
+                                 f'zinfo_{os.environ["SPECPROD"]}'
+                                 + '_{night}.json')
+
+    ## Assign additional function arguments to dictionary to pass in
+    func_args = {'doem': doem, 'doqso': doqso, 'dotileqa': dotileqa,
+                 'dozmtl': dozmtl, 'check_on_disk': args.check_on_disk,
+                 'skipd_tileids': skipd_tileids}
+
+    ## Bundle the information together so that we can properly run it in parallel
+    daily_info_args = {'pernight_info_func': populate_z_night_info,
+                       'pernight_info_func_args': func_args,
+                       'archive_fname_template': archive_fname_template,
+                       'ignore_json_archive': args.ignore_json_archive}
+
+    monthly_tables = populate_monthly_tables(nights=nights,
+                                             daily_info_args=daily_info_args,
+                                             nproc=args.nproc)
 
     outfile = os.path.abspath(os.path.join(output_dir, args.output_name))
     make_html_page(monthly_tables, outfile, titlefill='z Processing',
@@ -151,18 +146,18 @@ def main(args=None):
 
 
 
-def populate_night_zinfo(night, night_json_zinfo=None, doem=True, doqso=True,
-                         dotileqa=True, dozmtl=True, check_on_disk=False,
-                         skipd_tileids=None):
+def populate_z_night_info(night, night_json_info=None, doem=True, doqso=True,
+                          dotileqa=True, dozmtl=True, check_on_disk=False,
+                          skipd_tileids=None):
     """
     For a given night, return the file counts and other information
     for each zproc job (either per-exposure, per-night, or cumulative for
     each tile on the requested night. Uses cached values supplied in
-    night_json_zinfo and skips tiles listed in skipd_tileids.
+    night_json_info and skips tiles listed in skipd_tileids.
 
     Args:
         night (int): the night to check the status of the processing for.
-        night_json_zinfo (dict of dicts): Dictionary of dictionarys. See output
+        night_json_info (dict of dicts): Dictionary of dictionarys. See output
             definition for format.
         doem (bool): true if it should expect emline files. Default is True.
         doqso (bool): true if it should expect qso_qn and qso_mgii files.
@@ -321,9 +316,9 @@ def populate_night_zinfo(night, night_json_zinfo=None, doem=True, doqso=True,
             unique_key = f'{tileid}_{ztype}'
 
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
-        if night_json_zinfo is not None and unique_key in night_json_zinfo \
-                and night_json_zinfo[unique_key]["COLOR"] in ['GOOD', 'NULL']:
-            output[unique_key] = night_json_zinfo[unique_key]
+        if night_json_info is not None and unique_key in night_json_info \
+                and night_json_info[unique_key]["COLOR"] in ['GOOD', 'NULL']:
+            output[unique_key] = night_json_info[unique_key]
             continue
 
         tilematches = exptab[exptab['TILEID'] == int(tileid)]

@@ -103,41 +103,33 @@ def main(args=None):
     else:
         skipd_expids = None
 
-    def populate_night_info_wrapper(night_to_submit):
-        ## Load previous info if any
-        filename_json = os.path.join(output_dir, 'expjsons',
-                                     f'expinfo_{os.environ["SPECPROD"]}'
-                                     + f'_{night_to_submit}.json')
-        night_json_info = None
-        if not args.ignore_json_archive:
-            night_json_info = read_json(filename_json=filename_json)
-
-        ## get the per exposure info for a night
-        night_info = populate_night_info(night_to_submit,
-                                         check_on_disk=args.check_on_disk,
-                                         night_json_info=night_json_info,
-                                         skipd_expids=skipd_expids)
-
-        ## write out the night_info to json file
-        if len(night_info) > 0:
-            write_json(output_data=night_info, filename_json=filename_json)
-
-        return night_info.copy()
-
-
     nights = get_nights(args.nights, args.start_night, args.end_night, prod_dir)
     log.info(f'Searching {prod_dir} for: {nights}')
 
-    monthly_tables = populate_monthly_tables(pernight_info_wrapper=populate_night_info_wrapper,
-                                             nights=nights, nproc=args.nproc)
+    ## Define location of cache files
+    archive_fname_template = os.path.join(output_dir, 'expjsons',
+                                  f'expinfo_{os.environ["SPECPROD"]}'
+                                  + '_{night}.json')
+
+    ## Assign additional function arguments to dictionary to pass in
+    func_args = {'check_on_disk': args.check_on_disk,
+                 'skipd_expids': skipd_expids}
+
+    ## Bundle the information together so that we can properly run it in parallel
+    daily_info_args = {'pernight_info_func': populate_exp_night_info,
+                       'pernight_info_func_args': func_args,
+                       'archive_fname_template': archive_fname_template,
+                       'ignore_json_archive': args.ignore_json_archive}
+
+    monthly_tables = populate_monthly_tables(nights=nights,
+                                             daily_info_args=daily_info_args,
+                                             nproc=args.nproc)
 
     outfile = os.path.abspath(os.path.join(output_dir, args.output_name))
     make_html_page(monthly_tables, outfile, titlefill='Exp. Processing',
                    show_null=args.show_null)
 
-
-
-def populate_night_info(night, night_json_info=None, check_on_disk=False, skipd_expids=None):
+def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, skipd_expids=None):
     """
     Use all available information in the SPECPROD to determine whether specific
     jobs and exposures have been successfully processed or not based on the existence
