@@ -12,7 +12,8 @@ import argparse
 
 import fitsio
 import numpy as np
-import pandas as pd
+# import pandas as pd
+from astropy.table import Table
 
 from desitarget.targets import main_cmx_or_sv
 from desitarget.targetmask import desi_mask
@@ -127,15 +128,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
 
     Returns
     -------
-    tuple
-        A tuple containing:
-
-        * redshift (numpy array): Array containing best redshift estimation by the new run of RR
-        * err_redshift (numpy array): Array containing the associated error for the redshift
-        * coeffs (numpy array): array containing the coefficient for the best fit given by RR
-          even we work only with QSO template, it has a "shape" of redshift.size x 10; *warning*:
-          they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
-
+    Table of redrock rerun results
     """
     log = get_logger()
     def write_prior_for_RR(targetid, z_qn, z_prior, filename_priors):
@@ -170,11 +163,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
                 on which RR will be rerun with prior and qso template.
 
         Returns:
-           * redshift (numpy array): Array containing best redshift estimation by the new run of RR
-           * err_redshift (numpy array): Array containing the associated error for the redshift
-           * coeffs (numpy array): array containing the coefficient for the best fit given by RR
-             even we work only with QSO template, it has a "shape" of redshift.size x 10; *warning*:
-             they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
+            Redrock output table ordered by input `targetid` list
         """
         with fitsio.FITS(filename_redrock) as redrock:
             # 9 July 2021:
@@ -191,13 +180,9 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
             for i, tgid in enumerate(targetid):
                 correct_index[i] = int(np.where(redrock_tgid == tgid)[0])
 
-            redshift = rr['Z'][correct_index]
-            err_redshift = rr['ZERR'][correct_index]
-            chi2 = rr['CHI2'][correct_index]
-            coeffs = np.zeros((redshift.size, 10))
-            coeffs[:, :4] = rr['COEFF'][correct_index]
+            rr_reordered = rr[correct_index]
 
-        return redshift, err_redshift, chi2, coeffs
+        return rr_reordered
 
     # define the output
     redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
@@ -215,7 +200,9 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
     filename_redrock_rerun_RR = param_RR['filename_redrock_rerun_RR']
 
-    # find redshift range spanned by templates
+    # Check that QN redshifts +- prior/2 is covered by Redrock templates.
+    # This should never fail, but if it does exit with an informative
+    # message so that we know what to fix
     zmin = 100
     zmax = -100
     for template_filename in param_RR['template_filenames']:
@@ -223,43 +210,45 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
         zmin = min(zmin, np.min(redshift_template))
         zmax = max(zmax, np.max(redshift_template))
 
-    sel = (z_qn >= zmin) & (z_qn <= zmax)
+    badz = (z_qn-z_prior/2 > zmax) | (z_qn+z_prior/2 < zmin)
+    if np.any(badz):
+        msg = f'Targets {targetid[badz]} have redshifts {z_qn[badz]} outside the Redrock coverage {zmin} <= z <= {zmax}'
+        log.critical(msg)
+        raise ValueError(msg)
 
-    # In case where all the objects have priors outside the redshift template range
-    # Skip the template to avoid any undesired errors
-    if sel.sum() != 0:
-        write_prior_for_RR(targetid[sel], z_qn[sel], z_prior[sel], filename_priors)
+    write_prior_for_RR(targetid, z_qn, z_prior, filename_priors)
 
-        # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
-        # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
-        # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
-        # To figure out with this, we just need to add a space before the -
+    # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
+    # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+    # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
+    # To figure out with this, we just need to add a space before the -
 
-        argument_for_rerun_RR  = ['--infiles', spectra_name]
-        argument_for_rerun_RR += ['--templates',] + param_RR['template_filenames']
-        argument_for_rerun_RR += ['--targetids', ' '+",".join(reversed(targetid[sel].astype(str))),
-                                                 # see long comment above about need for preceeding space
-                                 '--priors', filename_priors,
-                                 '--details', filename_output_rerun_RR,
-                                 '--outfile', filename_redrock_rerun_RR]
-        # NEW RUN RR
-        log.info(f'Running redrock with priors on selected targets with {param_RR["template_filenames"]}')
-        log.info('rrdesi '+' '.join(argument_for_rerun_RR))
+    argument_for_rerun_RR  = ['--infiles', spectra_name]
+    argument_for_rerun_RR += ['--templates',] + param_RR['template_filenames']
+    argument_for_rerun_RR += ['--targetids', ' '+",".join(reversed(targetid.astype(str))),
+                                             # see long comment above about need for preceeding space
+                             '--priors', filename_priors,
+                             '--details', filename_output_rerun_RR,
+                             '--outfile', filename_redrock_rerun_RR]
+    # NEW RUN RR
+    log.info(f'Running redrock with priors on selected targets with {param_RR["template_filenames"]}')
+    log.info('rrdesi '+' '.join(argument_for_rerun_RR))
 
-        rrdesi(argument_for_rerun_RR, comm=comm)
+    rrdesi(argument_for_rerun_RR, comm=comm)
 
-        log.info('Done running redrock')
+    log.info('Done running redrock')
 
-        # Extract information from the new run of RR
-        redshift, err_redshift, chi2, coeffs = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+    # Extract information from the new run of RR
+    ### redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+    redrock = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid)
 
-        if param_RR['delete_RR_output'] == 'True':
-            log.debug("Remove output from the new run of RR")
-            os.remove(filename_priors)
-            os.remove(filename_output_rerun_RR)
-            os.remove(filename_redrock_rerun_RR)
+    if param_RR['delete_RR_output'] == 'True':
+        log.debug("Remove output from the new run of RR")
+        os.remove(filename_priors)
+        os.remove(filename_output_rerun_RR)
+        os.remove(filename_redrock_rerun_RR)
 
-    return redshift, err_redshift, coeffs
+    return redrock
 
 
 def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR, save_target, comm=None):
@@ -331,6 +320,15 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         # sel_index_with_QN.size = z_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
         sel_index_with_QN = np.sum(c_line > param_QN['c_thresh'], axis=0) >= param_QN['n_thresh']
         log.info(f"We select QSO from QN with c_thresh={param_QN['c_thresh']} and n_thresh={param_QN['n_thresh']} --> {sel_index_with_QN.sum()} objects are QSO for QN")
+
+        # Exclude sky fibers even if they were selected by QN as a QSO
+        science_targets = (fibermap['OBJTYPE'][index_with_QN] == 'TGT')
+
+        if np.any(sel_index_with_QN & ~science_targets):
+            n = np.sum(sel_index_with_QN & ~science_targets)
+            log.info(f'Excluding {n} non-target fibers selected by QN (e.g. sky fibers)')
+            sel_index_with_QN &= science_targets
+
         is_qso_QN = np.zeros(sel_to_QN.sum(), dtype=bool)
         is_qso_QN[index_with_QN] = sel_index_with_QN
         sel_QN = sel_to_QN.copy()
@@ -347,7 +345,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         log.info(f"RUN RR on {sel_QN.sum()} targets")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
-            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
+            redrock_rerun = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
 
     if save_target == 'restricted':
         index_to_save = sel_QN.copy()
@@ -361,52 +359,73 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         # never happen since a test is performed before running this function in desi_qso_qn_afterburner
         log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
 
-    QSO_sel = pd.DataFrame()
+    QSO_sel = Table()
     QSO_sel['TARGETID'] = redrock['TARGETID'][index_to_save]
     QSO_sel['RA'] = fibermap['TARGET_RA'][index_to_save]
     QSO_sel['DEC'] = fibermap['TARGET_DEC'][index_to_save]
     QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][index_to_save]
     QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
-    QSO_sel['SPECTYPE'] = redrock['SPECTYPE'][index_to_save]
+    QSO_sel['SPECTYPE_RR'] = redrock['SPECTYPE'][index_to_save]
     QSO_sel['Z_RR'] = redrock['Z'][index_to_save]
+
+    num_to_save = sel_to_QN.sum()
+    assert len(QSO_sel) == num_to_save
 
     tmp_arr = np.nan * np.ones(sel_to_QN.sum())
     tmp_arr[index_with_QN] = z_QN
     QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
 
-    tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
-    tmp_arr[:, index_with_QN] = c_line
-    QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+    # tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
+    # tmp_arr[:, index_with_QN] = c_line
+    # QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result]
+    # tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
+    # tmp_arr[:, index_with_QN] = z_line
+    # QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result]
 
-    tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
-    tmp_arr[:, index_with_QN] = z_line
-    QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+    #- TODO: indexing probably wrong for some options for subsets to run vs. save
+    for i, linename in enumerate(lines):
+        linename = linename.split('(')[0]  #- strip (wavelength) part of line names
+        QSO_sel[f'C_{linename}'] = np.nan
+        QSO_sel[f'C_{linename}'][index_with_QN] = c_line[i]
+        QSO_sel[f'Z_{linename}'] = np.nan
+        QSO_sel[f'Z_{linename}'][index_with_QN] = z_line[i]
 
     tmp_arr = np.nan * np.ones(sel_to_QN.sum())
     if index_with_QN_with_no_pb.sum() != 0:  # in case where sel_QN.sum() == 0 and redshift is so not defined
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['Z']
     QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
 
     tmp_arr = np.nan * np.ones(sel_to_QN.sum())
     if index_with_QN_with_no_pb.sum() != 0:
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['ZERR']
     QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
+
+    tmp_arr = np.zeros(sel_to_QN.sum(), dtype=np.int)
+    if index_with_QN_with_no_pb.sum() != 0:
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['ZWARN']
+    QSO_sel['ZWARN_NEW'] = tmp_arr[index_to_save_QN_result]
+
+    tmp_arr = np.zeros(sel_to_QN.sum(), dtype='<U20')
+    if index_with_QN_with_no_pb.sum() != 0:
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['SUBTYPE']
+    QSO_sel['SUBTYPE_NEW'] = tmp_arr[index_to_save_QN_result]
 
     tmp_arr = np.nan * np.ones((sel_to_QN.sum(), 10))
     if index_with_QN_with_no_pb.sum() != 0:
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
+        ncoeff = redrock_rerun['COEFF'].shape[1]
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb], 0:ncoeff] = redrock_rerun['COEFF']
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb], ncoeff:] = 0.0
     QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
 
     return QSO_sel
 
 
-def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True, templatefiles=None):
+def save_to_fits(data, filename, DESI_TARGET, clobber=True, templatefiles=None):
     """
-    Save info from pandas dataframe in a fits file. Need to write the dtype array
-    because of the list in the pandas dataframe (no other solution found)
+    Save info from data in a fits file
 
     Args:
-        dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
+        data (astropy Table): Table containing all the necessary QSO info
         filename (str):  name of the fits file
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
 
@@ -418,44 +437,15 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True, templ
         None
     """
     log = get_logger()
-    # Ok we cannot use dataframe.to_records() since coeffs are saved in a list form and cannot be easily converted.
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA', 'f8'), ('DEC', 'f8'), ('Z_NEW', 'f8'), ('ZERR_NEW', 'f4'), (DESI_TARGET, 'i8'),
-                                               ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'), ('IS_QSO_QN_NEW_RR', '?'),
-                                               ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
-                                               ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')])
 
-    data['TARGETID'] = dataframe['TARGETID']
-    data['RA'] = dataframe['RA']
-    data['DEC'] = dataframe['DEC']
-
-    data['Z_NEW'] = dataframe['Z_NEW']
-    data['ZERR_NEW'] = dataframe['ZERR_NEW']
-    data[DESI_TARGET] = dataframe[DESI_TARGET]
-    data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
-    data['SPECTYPE'] = dataframe['SPECTYPE']
-    data['Z_RR'] = dataframe['Z_RR']
-    data['IS_QSO_QN_NEW_RR'] = dataframe['IS_QSO_QN_NEW_RR']
-
-    data['Z_QN'] = dataframe['Z_QN']
-    data['C_LYA'] = np.array([dataframe['C_LINES'][i][0] for i in range(dataframe.shape[0])])
-    data['C_CIV'] = np.array([dataframe['C_LINES'][i][1] for i in range(dataframe.shape[0])])
-    data['C_CIII'] = np.array([dataframe['C_LINES'][i][2] for i in range(dataframe.shape[0])])
-    data['C_MgII'] = np.array([dataframe['C_LINES'][i][3] for i in range(dataframe.shape[0])])
-    data['C_Hbeta'] = np.array([dataframe['C_LINES'][i][4] for i in range(dataframe.shape[0])])
-    data['C_Halpha'] = np.array([dataframe['C_LINES'][i][5] for i in range(dataframe.shape[0])])
-
-    data['Z_LYA'] = np.array([dataframe['Z_LINES'][i][0] for i in range(dataframe.shape[0])])
-    data['Z_CIV'] = np.array([dataframe['Z_LINES'][i][1] for i in range(dataframe.shape[0])])
-    data['Z_CIII'] = np.array([dataframe['Z_LINES'][i][2] for i in range(dataframe.shape[0])])
-    data['Z_MgII'] = np.array([dataframe['Z_LINES'][i][3] for i in range(dataframe.shape[0])])
-    data['Z_Hbeta'] = np.array([dataframe['Z_LINES'][i][4] for i in range(dataframe.shape[0])])
-    data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
+    #- lightweight copy so that we can update .meta header without altering original
+    data = Table(data, copy=False)
+    data.meta['EXTNAME'] = 'QN_RR'
 
     # Header to save provenance
-    hdr = dict()
-    desiutil.depend.add_dependencies(hdr)
+    desiutil.depend.add_dependencies(data.meta)
     for key in ('QN_MODEL_FILE', 'RR_TEMPLATE_DIR'):
-        desiutil.depend.setdep(hdr, key, os.getenv(key, 'None'))
+        desiutil.depend.setdep(data.meta, key, os.getenv(key, 'None'))
 
     if templatefiles is not None:
         for i, templatefilename in enumerate(templatefiles):
@@ -463,20 +453,16 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True, templ
             if 'RR_TEMPLATE_DIR' in os.environ and templatefilename.startswith(os.environ['RR_TEMPLATE_DIR']):
                 templatefilename = os.path.basename(templatefilename)
 
-            desiutil.depend.setdep(hdr, key, templatefilename)
+            desiutil.depend.setdep(data.meta, key, templatefilename)
     else:
         log.warning('Not recording template filenames in output header')
 
     # Save file in temporary file to track when timeout error appears during the writing
     tmpfile = get_tempfilename(filename)
-    fits = fitsio.FITS(tmpfile, 'rw')
-    fits.write(data, extname='QN_RR', header=hdr)
-    log.info(f'write output in: {filename}')
-    fits.close()
-
-    # Rename temporary file to output file, overwrite existing file.
+    data.write(tmpfile)
     os.rename(tmpfile, filename)
-    log.info(f'rename {tmpfile} to {filename}')
+
+    log.info(f'wrote output in: {filename}')
 
     return
 
@@ -580,10 +566,10 @@ def main(args=None, comm=None):
             QSO_from_QN = selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET,
                                                     args.coadd, param_QN, param_RR, args.save_target, comm=comm)
 
-            if QSO_from_QN.shape[0] > 0:
-                log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
+            if len(QSO_from_QN) > 0:
+                log.info(f"Number of targets saved : {len(QSO_from_QN)} -- "
                          f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
-                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET, templatefiles=args.templates)
+                save_to_fits(QSO_from_QN, args.output, DESI_TARGET, templatefiles=args.templates)
             else:
                 file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by QN afterburner to be a QSO.")
