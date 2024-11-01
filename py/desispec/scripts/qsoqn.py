@@ -202,7 +202,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     # define the output
     redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
 
-    if len(param_RR['templates_filename']) == 0:
+    if len(param_RR['template_filenames']) == 0:
         msg = 'No Redrock templates provided'
         log.critical(msg)
         raise ValueError(msg)
@@ -218,7 +218,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     # find redshift range spanned by templates
     zmin = 100
     zmax = -100
-    for template_filename in param_RR['templates_filename']:
+    for template_filename in param_RR['template_filenames']:
         redshift_template = fitsio.FITS(template_filename)['REDSHIFTS'][:]
         zmin = min(zmin, np.min(redshift_template))
         zmax = max(zmax, np.max(redshift_template))
@@ -236,14 +236,14 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
         # To figure out with this, we just need to add a space before the -
 
         argument_for_rerun_RR  = ['--infiles', spectra_name]
-        argument_for_rerun_RR += ['--templates',] + param_RR['templates_filename']
+        argument_for_rerun_RR += ['--templates',] + param_RR['template_filenames']
         argument_for_rerun_RR += ['--targetids', ' '+",".join(reversed(targetid[sel].astype(str))),
                                                  # see long comment above about need for preceeding space
                                  '--priors', filename_priors,
                                  '--details', filename_output_rerun_RR,
                                  '--outfile', filename_redrock_rerun_RR]
         # NEW RUN RR
-        log.info(f'Running redrock with priors on selected targets with {template_filename}')
+        log.info(f'Running redrock with priors on selected targets with {param_RR["template_filenames"]}')
         log.info('rrdesi '+' '.join(argument_for_rerun_RR))
 
         rrdesi(argument_for_rerun_RR, comm=comm)
@@ -351,7 +351,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         sel_QN &= ~sel_QSO_RR_with_no_z_pb
         index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
 
-        log.info(f"RUN RR on {sel_QN.sum()}")
+        log.info(f"RUN RR on {sel_QN.sum()} targets")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
             redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
@@ -508,7 +508,7 @@ def main(args=None, comm=None):
     param_QN = {'c_thresh': args.c_thresh, 'n_thresh': args.n_thresh}
 
     # param for the new run of RR
-    param_RR = {'templates_filename': args.templates}
+    param_RR = {'template_filenames': args.templates}
 
     #- write all temporary files to output directory, not input directory
     outdir = os.path.dirname(os.path.abspath(args.output))
