@@ -253,7 +253,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
 
 def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR, save_target, comm=None):
     """
-    Run QuasarNet to the object with index_to_QN == True from spectra_name.
+    Run QuasarNet to the object with sel_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
 
     Args:
@@ -317,13 +317,14 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
                                                                      verbose=False, wave=wave_to_use)  # c_line.size = index_with_QN.size and not index_to_QN !!
 
         # Selection QSO with QN :
-        # sel_index_with_QN.size = z_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
+        # sel_index_with_QN.size = z_QN.size = index_with_QN.size <= 500
+        # is_qso_QN.size = sel_to_QN.sum()
+        # sel_to_QN.size = sel_QN.size = 500
         sel_index_with_QN = np.sum(c_line > param_QN['c_thresh'], axis=0) >= param_QN['n_thresh']
         log.info(f"We select QSO from QN with c_thresh={param_QN['c_thresh']} and n_thresh={param_QN['n_thresh']} --> {sel_index_with_QN.sum()} objects are QSO for QN")
 
         # Exclude sky fibers even if they were selected by QN as a QSO
         science_targets = (fibermap['OBJTYPE'][index_with_QN] == 'TGT')
-
         if np.any(sel_index_with_QN & ~science_targets):
             n = np.sum(sel_index_with_QN & ~science_targets)
             log.info(f'Excluding {n} non-target fibers selected by QN (e.g. sky fibers)')
@@ -331,7 +332,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
 
         is_qso_QN = np.zeros(sel_to_QN.sum(), dtype=bool)
         is_qso_QN[index_with_QN] = sel_index_with_QN
-        sel_QN = sel_to_QN.copy()
+        sel_QN = np.zeros(sel_to_QN.size, dtype=bool)
         sel_QN[sel_to_QN] = is_qso_QN
 
         sel_QSO_RR_with_no_z_pb = (redrock['SPECTYPE'] == 'QSO')
