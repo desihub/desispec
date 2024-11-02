@@ -360,11 +360,11 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             else :
                 wmax=wave[-1]
             ok=(wave>=wmin)&(wave<=wmax)
-            flux_weight = ivar[fiber,ok] * flux[fiber,ok]**2 * (flux[fiber,ok]>0)
-            flux_weight_sum = np.sum(flux_weight)
-            if cur_weights_sum <= 0 :
+            flux_weights = ivar[fiber,ok] * flux[fiber,ok]**2 * (flux[fiber,ok]>0)
+            flux_weights_sum = np.sum(flux_weights)
+            if flux_weights_sum <= 0 :
                 continue
-            block_wave = np.sum(flux_weight * wave[ok]) / flux_weight_sum
+            block_wave = np.sum(flux_weights * wave[ok]) / flux_weights_sum
 
             dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok], wave[ok],
                                                                    reference_flux[ok],
@@ -814,15 +814,14 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
         ok = (wave >= wmin) & (wave <= wmax)
-        flux_weight = mflux[ok]**2 * (mflux[ok] > 0) * mivar[ok]
-        flux_weight_sum = np.sum(flux_weight)
-        log.warning("%s %s "%(b, flux_weight))
-        if flux_weight_sum == 0 :
+        flux_weights = mflux[ok]**2 * (mflux[ok] > 0) * mivar[ok]
+        flux_weights_sum = np.sum(flux_weights)
+        if flux_weights_sum == 0 :
             continue
         dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
                 wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
                 prior_width_dy=prior_width_dy)
-        bin_wave  = np.sum(flux_weight * wave[ok]) / flux_weight_sum
+        bin_wave  = np.sum(flux_weights * wave[ok]) / flux_weights_sum
         # flux weighted wavelength of the center
         # Computing the derivative dy/dwavelength
         x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
