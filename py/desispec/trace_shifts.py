@@ -632,8 +632,19 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
 def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     """
-    Prepare the reference spectrum to be used for wavelegth offset 
-    determination
+    Prepare the reference spectrum to be used for wavelength offset 
+    determination. Here we convolve it to the right LSF and rescale it 
+    to match the measured flux.
+
+    Arguments:
+        ref_wave: np.array of wavelengths 
+        ref_spectrum: np.array of reference spectrum flux
+        psf: PSF object
+        wave: np.array wavelength of extracted spectra
+        mflux: np.array flux of extracted spectra
+        nfibers: int 
+    Returns:
+        ref_wave, ref_spectrum: tuple of wavelength and flux arrays
     """
     log = get_logger()
     
@@ -718,6 +729,20 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
 
 
 def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
+    """
+    Compute the median spectrum after continuum subtraction
+    
+    Arguments:
+        flux0: (nfibers, npix) np.array of fluxes
+        ivar: (nfibers, npix)-shaped np.array of inverser variances
+        continuum_win: integer. How-many pixels around are used to get continuum. 
+            Here we use the 1d annulus from continuum_win/2 to continuum_win
+    
+    Returns:
+        mfux: npix np.array of median spectrum
+        mivar: npix np.array with ivar of the median spectrum 
+        flux: (nfibers, npix) continuum subtracted original flux array
+    """
     # here we get rid of continuum by applying a median filter 
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
     flux = flux0 * 1 # we will modify flux
