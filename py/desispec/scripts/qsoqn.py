@@ -22,6 +22,7 @@ from desitarget.sv1.sv1_targetmask import desi_mask as sv1_mask
 from desitarget.cmx.cmx_targetmask import cmx_mask
 
 from desiutil.log import get_logger
+import desiutil.depend
 
 from desispec.io.util import get_tempfilename
 
@@ -201,7 +202,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     # define the output
     redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
 
-    if len(param_RR['templates_filename']) == 0:
+    if len(param_RR['template_filenames']) == 0:
         msg = 'No Redrock templates provided'
         log.critical(msg)
         raise ValueError(msg)
@@ -209,55 +210,54 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     # make an independant run for each quasar templates to circumvent some problem from redrock:
     # 1] cannot give two templates in redrock as input, only one or a directory
     # 2] problem with prior and template redshift range .. --> give zero result and redrock stop
-    for template_filename in param_RR['templates_filename']:
-        filename_priors = param_RR['filename_priors']
-        filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
-        filename_redrock_rerun_RR = param_RR['filename_redrock_rerun_RR']
 
-        # find redshift range of the template
+    filename_priors = param_RR['filename_priors']
+    filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
+    filename_redrock_rerun_RR = param_RR['filename_redrock_rerun_RR']
+
+    # find redshift range spanned by templates
+    zmin = 100
+    zmax = -100
+    for template_filename in param_RR['template_filenames']:
         redshift_template = fitsio.FITS(template_filename)['REDSHIFTS'][:]
-        zmin, zmax = np.min(redshift_template), np.max(redshift_template)
-        sel = (z_qn >= zmin) & (z_qn <= zmax)
+        zmin = min(zmin, np.min(redshift_template))
+        zmax = max(zmax, np.max(redshift_template))
 
-        # In case where all the objects have priors outside the redshift template range
-        # Skip the template to avoid any undesired errors
-        if sel.sum() != 0:
-            write_prior_for_RR(targetid[sel], z_qn[sel], z_prior[sel], filename_priors)
+    sel = (z_qn >= zmin) & (z_qn <= zmax)
 
-            # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
-            # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
-            # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
-            # To figure out with this, we just need to add a space before the -
+    # In case where all the objects have priors outside the redshift template range
+    # Skip the template to avoid any undesired errors
+    if sel.sum() != 0:
+        write_prior_for_RR(targetid[sel], z_qn[sel], z_prior[sel], filename_priors)
 
-            argument_for_rerun_RR = ['--infiles', spectra_name,
-                                     '--templates', template_filename,
-                                     '--targetids', ' ' + ",".join(reversed(targetid[sel].astype(str))),
-                                     '--priors', filename_priors,
-                                     '--details', filename_output_rerun_RR,
-                                     '--outfile', filename_redrock_rerun_RR]
-            # NEW RUN RR
-            log.info(f'Running redrock with priors on selected targets with {template_filename}')
-            log.info('rrdesi '+' '.join(argument_for_rerun_RR))
+        # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
+        # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+        # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
+        # To figure out with this, we just need to add a space before the -
 
-            rrdesi(argument_for_rerun_RR, comm=comm)
+        argument_for_rerun_RR  = ['--infiles', spectra_name]
+        argument_for_rerun_RR += ['--templates',] + param_RR['template_filenames']
+        argument_for_rerun_RR += ['--targetids', ' '+",".join(reversed(targetid[sel].astype(str))),
+                                                 # see long comment above about need for preceeding space
+                                 '--priors', filename_priors,
+                                 '--details', filename_output_rerun_RR,
+                                 '--outfile', filename_redrock_rerun_RR]
+        # NEW RUN RR
+        log.info(f'Running redrock with priors on selected targets with {param_RR["template_filenames"]}')
+        log.info('rrdesi '+' '.join(argument_for_rerun_RR))
 
-            log.info('Done running redrock')
+        rrdesi(argument_for_rerun_RR, comm=comm)
 
-            # Extract information from the new run of RR
-            redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+        log.info('Done running redrock')
 
-            if param_RR['delete_RR_output'] == 'True':
-                log.debug("Remove output from the new run of RR")
-                os.remove(filename_priors)
-                os.remove(filename_output_rerun_RR)
-                os.remove(filename_redrock_rerun_RR)
+        # Extract information from the new run of RR
+        redshift, err_redshift, chi2, coeffs = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
 
-            # aggregate the result:
-            best_chi2 = np.zeros(targetid.size, dtype='bool')
-            best_chi2_tmp = chi2[sel] > chi2_tmp
-            best_chi2[sel] = best_chi2_tmp
-
-            redshift[best_chi2], err_redshift[best_chi2], coeffs[best_chi2] = redshift_tmp[best_chi2_tmp], err_redshift_tmp[best_chi2_tmp], coeffs_tmp[best_chi2_tmp]
+        if param_RR['delete_RR_output'] == 'True':
+            log.debug("Remove output from the new run of RR")
+            os.remove(filename_priors)
+            os.remove(filename_output_rerun_RR)
+            os.remove(filename_redrock_rerun_RR)
 
     return redshift, err_redshift, coeffs
 
@@ -344,7 +344,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         sel_QN &= ~sel_QSO_RR_with_no_z_pb
         index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
 
-        log.info(f"RUN RR on {sel_QN.sum()}")
+        log.info(f"RUN RR on {sel_QN.sum()} targets")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
             redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
@@ -400,7 +400,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     return QSO_sel
 
 
-def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True, templatefiles=None):
     """
     Save info from pandas dataframe in a fits file. Need to write the dtype array
     because of the list in the pandas dataframe (no other solution found)
@@ -409,7 +409,10 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
         dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
         filename (str):  name of the fits file
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+
+    Options:
         clobber (bool): overwrite the fits file defined by filename ?
+        templatefiles (list): list of Redrock template filenames to record in header
 
     Returns:
         None
@@ -448,10 +451,26 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z_Hbeta'] = np.array([dataframe['Z_LINES'][i][4] for i in range(dataframe.shape[0])])
     data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
 
+    # Header to save provenance
+    hdr = dict()
+    desiutil.depend.add_dependencies(hdr)
+    for key in ('QN_MODEL_FILE', 'RR_TEMPLATE_DIR'):
+        desiutil.depend.setdep(hdr, key, os.getenv(key, 'None'))
+
+    if templatefiles is not None:
+        for i, templatefilename in enumerate(templatefiles):
+            key = f'RR_TEMPLATE_{i}'
+            if 'RR_TEMPLATE_DIR' in os.environ and templatefilename.startswith(os.environ['RR_TEMPLATE_DIR']):
+                templatefilename = os.path.basename(templatefilename)
+
+            desiutil.depend.setdep(hdr, key, templatefilename)
+    else:
+        log.warning('Not recording template filenames in output header')
+
     # Save file in temporary file to track when timeout error appears during the writing
     tmpfile = get_tempfilename(filename)
     fits = fitsio.FITS(tmpfile, 'rw')
-    fits.write(data, extname='QN_RR')
+    fits.write(data, extname='QN_RR', header=hdr)
     log.info(f'write output in: {filename}')
     fits.close()
 
@@ -482,20 +501,27 @@ def main(args=None, comm=None):
     param_QN = {'c_thresh': args.c_thresh, 'n_thresh': args.n_thresh}
 
     # param for the new run of RR
-    param_RR = {'templates_filename': args.templates}
+    param_RR = {'template_filenames': args.templates}
+
+    #- write all temporary files to output directory, not input directory
+    outdir = os.path.dirname(os.path.abspath(args.output))
+    outbase = os.path.join(outdir, os.path.basename(args.coadd))
 
     if args.filename_priors is None:
-        param_RR['filename_priors'] = replace_prefix(args.coadd, 'coadd', 'priors-tmp')
+        param_RR['filename_priors'] = replace_prefix(outbase, 'coadd', 'priors_qn')
     else:
         param_RR['filename_priors'] = args.filename_priors
     if args.filename_output_rerun_RR is None:
-        param_RR['filename_output_rerun_RR'] = replace_prefix(args.coadd, 'coadd', 'rrdetails-tmp')
+        tmp = replace_prefix(outbase, 'coadd', 'rrdetails_qn')
+        tmp = os.path.splitext(tmp)[0] + '.h5'  #- replace extension with .h5
+        param_RR['filename_output_rerun_RR'] = tmp
     else:
         param_RR['filename_output_rerun_RR'] = args.filename_output_rerun_RR
     if (args.filename_redrock_rerun_RR is None):
-        param_RR['filename_redrock_rerun_RR'] = replace_prefix(args.coadd, 'coadd', 'redrock-tmp')
+        param_RR['filename_redrock_rerun_RR'] = replace_prefix(outbase, 'coadd', 'redrock_qn')
     else:
         param_RR['filename_redrock_rerun_RR'] = args.filename_redrock_rerun_RR
+
     param_RR['delete_RR_output'] = args.delete_RR_output
 
     if os.path.isfile(args.coadd) and os.path.isfile(args.redrock):
@@ -515,7 +541,7 @@ def main(args=None, comm=None):
 
             # from everest REDSHIFTS hdu and FIBERMAP hdu have the same order (the indices match)
             if np.sum(redrock['TARGETID'] == fibermap['TARGETID']) == redrock['TARGETID'].size:
-                log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
+                log.info("SANITY CHECK: The indices of REDSHIFTS HDU and FIBERMAP HDU match.")
             else:
                 log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
                 return 1
@@ -557,17 +583,17 @@ def main(args=None, comm=None):
             if QSO_from_QN.shape[0] > 0:
                 log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
                          f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
-                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
+                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET, templatefiles=args.templates)
             else:
                 file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by QN afterburner to be a QSO.")
                 file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
                 file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
                 file.close()
-                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
+                log.warning(f"No objects selected to save; blank file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
 
     else:  # file for the consider Tile / Night / petal does not exist
-        log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
+        log.error(f"**** Missing {args.coadd} or {args.redrock} ****")
         return 1
 
     log.info(f"EXECUTION TIME: {time.time() - start:3.2f} s.")
