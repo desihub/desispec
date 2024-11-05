@@ -477,8 +477,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     Measure x offsets from a preprocessed image and a trace set
 
     Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to YCCD
+        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to XCCD
+        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
@@ -1291,11 +1291,11 @@ def polynomial_fit(z,ez,xx,yy,degx,degy) :
 
 def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degyx,degyy,dx_coeff,dy_coeff) :
     """
-    Modifies legendre coefficients of an input trace set using polynomial coefficents (as defined by the routine monomials)
+    Modifies legendre coefficients of an input trace set using polynomial coefficients (as defined by the routine monomials)
 
     Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to YCCD
+        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to XCCD
+        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
@@ -1307,8 +1307,8 @@ def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degy
         dy_coeff : 1D np.array of polynomial coefficients of size (degyx*degyy) as defined by the routine monomials.
 
     Returns:
-        xcoef : 2D np.array of shape (nfibers,ncoef) with modified Legendre coefficents
-        ycoef : 2D np.array of shape (nfibers,ncoef) with modified Legendre coefficents
+        xcoef : 2D np.array of shape (nfibers,ncoef) with modified Legendre coefficients
+        ycoef : 2D np.array of shape (nfibers,ncoef) with modified Legendre coefficients
     """
     wave=np.linspace(wavemin,wavemax,100)
     nfibers=xcoef.shape[0]
