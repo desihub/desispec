@@ -1042,7 +1042,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         os.makedirs(tempdir)
 
     if not os.path.isdir(outdir):
-        os.makdeirs(outdir)
+        os.makedirs(outdir)
 
     if cameras is None:
         cameras = list()

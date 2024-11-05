@@ -18,7 +18,7 @@ from scipy.signal import fftconvolve
 from scipy.ndimage import median_filter
 import numba
 
-from desispec.io import read_image
+from desispec.io import read_image, read_xytraceset
 from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
@@ -153,7 +153,7 @@ def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, wi
 
     tset = read_xytraceset(psf_filename)
     image = read_image(image_filename)
-    qframe = qproc_boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
+    qframe = qproc_boxcar_extraction(tset, image, fibers=fibers, width=width)
     return qframe.flux, qframe.ivar, qframe.wave
 
 
@@ -460,7 +460,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
     return swdx,sw,svar,swy,swx,swl
 
 
-def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7,deg=2,image_rebin=4) :
+def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2,image_rebin=4) :
     """
     Measure x offsets from a preprocessed image and a trace set
 
@@ -471,9 +471,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
         image : DESI preprocessed image object
-        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
 
     Optional:
+        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 5
         deg    : degree of polynomial fit as a function of y, only used to find and mask outliers
         image_rebin : rebinning of CCD rows to run faster (with rebin=4 loss of precision <0.01 pixel)
@@ -492,10 +492,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     t0=time.time()
 
     if fibers is None :
-        fibers = np.arange(psf.nspec)
+        fibers = np.arange(xcoef.shape[0])
 
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
-
 
     if image.mask is not None :
         image_ivar = image.ivar*(image.mask==0)

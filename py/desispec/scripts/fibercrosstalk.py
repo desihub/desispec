@@ -292,7 +292,7 @@ def main(args) :
         for bundle in range(nbundles) :
             for i,df in enumerate(dfiber) :
                 err=1./np.sqrt(crosstalk_ivar[bundle,i]+(crosstalk_ivar[bundle,i]==0))
-                plt.errorbar(wave,crosstalk[bundle,i],err,fmt="o-",label="bundle = {:02d} dfiber = {:+d}".format(bundle,df))
+                plt.errorbar(frame.wave,crosstalk[bundle,i],err,fmt="o-",label="bundle = {:02d} dfiber = {:+d}".format(bundle,df))
         plt.grid()
         plt.legend()
         plt.show()
