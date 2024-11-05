@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.67.1 (unreleased)
+0.68.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Allow `desi_proc_night` to restart midway in calibrations (PR `#2392`_).
+* Remove E(B-V) factor in backup tile EFFTIME calculations (PR `#2395`_).
+* Fix undefined variables reported by static checker (PR `#2400`_).
+* QuasarNet afterburner runs LOZ and HIZ templates together;
+  Add input provenance to output files including $QN_MODEL_FILE (PR `#2402`_).
+* Use slurm job status to color and inform processing dashboards (PR `#2403`_).
+
+.. _`#2392`: https://github.com/desihub/desispec/pull/2392
+.. _`#2395`: https://github.com/desihub/desispec/pull/2395
+.. _`#2400`: https://github.com/desihub/desispec/pull/2400
+.. _`#2402`: https://github.com/desihub/desispec/pull/2402
+.. _`#2403`: https://github.com/desihub/desispec/pull/2403
 
 0.67.0 (2024-10-11)
 -------------------
