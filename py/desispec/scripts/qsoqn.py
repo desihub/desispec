@@ -251,20 +251,13 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
         log.info('Done running redrock')
 
         # Extract information from the new run of RR
-        redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
+        redshift, err_redshift, chi2, coeffs = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
 
         if param_RR['delete_RR_output'] == 'True':
             log.debug("Remove output from the new run of RR")
             os.remove(filename_priors)
             os.remove(filename_output_rerun_RR)
             os.remove(filename_redrock_rerun_RR)
-
-        # aggregate the result:
-        best_chi2 = np.zeros(targetid.size, dtype='bool')
-        best_chi2_tmp = chi2[sel] > chi2_tmp
-        best_chi2[sel] = best_chi2_tmp
-
-        redshift[best_chi2], err_redshift[best_chi2], coeffs[best_chi2] = redshift_tmp[best_chi2_tmp], err_redshift_tmp[best_chi2_tmp], coeffs_tmp[best_chi2_tmp]
 
     return redshift, err_redshift, coeffs
 
@@ -548,7 +541,7 @@ def main(args=None, comm=None):
 
             # from everest REDSHIFTS hdu and FIBERMAP hdu have the same order (the indices match)
             if np.sum(redrock['TARGETID'] == fibermap['TARGETID']) == redrock['TARGETID'].size:
-                log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
+                log.info("SANITY CHECK: The indices of REDSHIFTS HDU and FIBERMAP HDU match.")
             else:
                 log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
                 return 1
@@ -600,7 +593,7 @@ def main(args=None, comm=None):
                 log.warning(f"No objects selected to save; blank file {os.path.splitext(args.output)[0]+'.notargets.txt'} is written")
 
     else:  # file for the consider Tile / Night / petal does not exist
-        log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
+        log.error(f"**** Missing {args.coadd} or {args.redrock} ****")
         return 1
 
     log.info(f"EXECUTION TIME: {time.time() - start:3.2f} s.")
