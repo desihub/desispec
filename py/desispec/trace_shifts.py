@@ -218,7 +218,7 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
     A relative flux calibration of the two spectra is done internally.
 
     Args:
-        flux    : 1D array of spectral flux as a function of wavelenght
+        flux    : 1D array of spectral flux as a function of wavelength
         wave    : 1D array of wavelength (in Angstrom)
         refflux : 1D array of reference spectral flux
 
@@ -426,7 +426,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
 
     # resampling on common finer wavelength grid
-    oversampling = 4 # The reason why we oversample is unclear to me 
+    oversampling = 4
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
     flux0 = flux * 1 # for debugging 
     if continuum_subtract:
@@ -477,8 +477,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     Measure x offsets from a preprocessed image and a trace set
 
     Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
+        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to XCCD
+        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
@@ -799,7 +799,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         prior_width_dy: float with of the Gaussian prior on dy
 
     Returns:
-        ycoef  : 2D np.array of same shape as input, with modified Legendre coefficents for each fiber to convert wavelenght to YCCD
+        ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
 
     """
     log = get_logger()
@@ -1294,8 +1294,8 @@ def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degy
     Modifies legendre coefficients of an input trace set using polynomial coefficents (as defined by the routine monomials)
 
     Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
+        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to XCCD
+        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelength to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
