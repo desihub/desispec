@@ -3,6 +3,7 @@ desispec.workflow.proc_dashboard_funcs
 ======================================
 
 """
+import multiprocessing
 import os,glob
 import json
 import sys
@@ -16,15 +17,15 @@ from astropy.io import fits
 ########################
 ### Helper Functions ###
 ########################
-from desispec.io import rawdata_root, specprod_root
-from desispec.io.util import camword_to_spectros, decode_camword, \
-    difference_camwords, create_camword, parse_badamps
+from desispec.io import rawdata_root
 from desispec.workflow.exptable import get_exposure_table_column_types, \
     default_obstypes_for_exptable, get_exposure_table_column_defaults, \
     get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.queue import get_non_final_states
 from desispec.workflow.tableio import load_table
 
+non_final_q_states = get_non_final_states()
 
 def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
     if 'DESI_SPECTRO_DATA' not in os.environ.keys():
@@ -66,7 +67,22 @@ def get_output_dir(desi_spectro_redux, specprod, output_dir, makedir=True):
 
     return output_dir, prod_dir
 
-def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
+def get_nights(nights_arg, start_night, end_night, prod_dir):
+    """
+    Takes arguments that can specify a range or list of night and derives what
+    set of nights they are trying to indentify.
+
+    Args:
+        nights_arg (str or int): Can be 'all', a list of nights, or None. If 'all' or
+            None all nights will be used in conjunction with start_night and
+            end_night to produce the output set of nights.
+        start_night (str or int): the first night inclusive to include.
+        end_night (str or int): the last night inclusive to include.
+        prod_dir (str): The path to the production. Typically $DESI_SPECTRO_REDUX/$SPECPROD.
+
+    Returns:
+        nights (np.array): An array of integer nights derived from the input parameters.
+    """
     if nights_arg is None or nights_arg == 'all' \
             or (',' not in nights_arg and int(nights_arg) < 20000000):
         nights = list()
@@ -98,15 +114,104 @@ def get_nights_dict(nights_arg, start_night, end_night, prod_dir):
         else:
             nights = nights[-1 * int(nights_arg):]
 
-    nights_dict = dict()
-    for night in nights:
-        month = str(night)[:6]
-        if month not in nights_dict.keys():
-            nights_dict[month] = [night]
-        else:
-            nights_dict[month].append(night)
+    return nights
 
-    return nights_dict, nights
+
+def populate_night_info_and_archive(night,
+                                    archive_fname_template, ignore_json_archive,
+                                    pernight_info_func, pernight_info_func_args):
+    """
+    A wrapper around either desispec.workflow.procdashboard.populate_exp_night_info
+    or desispec.workflow.zprocdashboard.populate_z_night_info  that also checks
+    for an existing archive from past runs and uses that unless instructed not to.
+    Regardless of whether it uses the archive, it writes out the results to the
+    archive pointed to by archive_fname_template.
+
+    Args:
+        night (int): the night to run pernight_info_func on.
+        archive_fname_template (str): a python string that can be formatted with
+            keyword night to produce a json filepath to the archive location
+            for the night.
+        ignore_json_archive (bool): If true the existing archive is ignored and
+            regenerated.
+        pernight_info_func (function): Function that takes arguments night,
+            night_json_info, and optional keyword arguemnts in pernight_info_func_args
+            and produces a dictionary of dictionaries.
+        pernight_info_func_args (dict): Keyword arguments that are accepted by the
+            pernight_info_func function.
+
+    Returns:
+        night_info (dict): A dictionary of dictionaries where each key is an exposure
+            or redshift job and each entry is a dictionary summarizing that job.
+    """
+    json_fname = archive_fname_template.format(night=night)
+    ## Load previous info if any
+    night_json_info = None
+    if not ignore_json_archive:
+        night_json_info = read_json(filename_json=json_fname)
+
+    ## get the per exposure info for a night
+    night_info = pernight_info_func(night,
+                                    night_json_info=night_json_info,
+                                    **pernight_info_func_args)
+
+    ## write out the night_info to json file
+    if len(night_info) > 0:
+        write_json(output_data=night_info, filename_json=json_fname)
+
+    return night_info.copy()
+
+
+def populate_night_info_and_archive_wrapper(kwargs):
+    """
+    Wrapper to populate_night_info_and_archive that takes a dictionary as input
+    and unpacks it and feeds it as keyward arguments to populate_night_info_and_archive
+    """
+    return populate_night_info_and_archive(**kwargs)
+
+
+def populate_monthly_tables(nights, daily_info_args, nproc=1):
+    """
+    Run function pernight_info_wrapper for all nights in night. If nproc is
+    more than 1, multiprocessing i used.
+
+    Args:
+        nights (list of int): the nights to check the status of the processing for.
+        daily_info_args (dict): contains keys archive_fname_template, ignore_json_archive,
+            pernight_info_func, pernight_info_func_args and their appropriate values
+            to be passed on to populate_night_info_and_archive().
+        nproc (int, optional): Number of processes to use with a multiprocessing Pool.
+
+    Returns:
+        monthly_tables (dict): each key refers to a month, with values being a
+            dictionary. Each of those dictionaries has the night as a key and
+            each value is the output of e.g. populate_exp_night_info(night).
+    """
+    ## If nproc is 1, avoid multiprocessing overhead and just run the script serially
+    if nproc == 1:
+        night_info_dicts = []
+        for night in nights:
+            night_info_dicts.append(populate_night_info_and_archive(night=night,
+                                                                    **daily_info_args))
+    else:
+        daily_info_args_dicts = []
+        for night in nights:
+            newdict = daily_info_args.copy()
+            newdict['night'] = night
+            daily_info_args_dicts.append(newdict)
+        with multiprocessing.Pool(nproc) as pool:
+            night_info_dicts = pool.map(populate_night_info_and_archive_wrapper,
+                                        daily_info_args_dicts)
+
+    monthly_tables = {}
+    for night, night_info_dict in zip(nights, night_info_dicts):
+        month = str(night)[:6]
+        if month not in monthly_tables.keys():
+            monthly_tables[month] = {night: night_info_dict}
+        else:
+            monthly_tables[month][night] = night_info_dict
+    return monthly_tables
+
 
 def get_tables(night, check_on_disk=False, exptab_colnames=None):
     if exptab_colnames is None:
@@ -249,7 +354,12 @@ def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
 def return_color_profile():
     color_profile = dict()
     color_profile['DEFAULT'] = {'font':'#000000' ,'background':'#ccd1d1'} # gray
+    color_profile['PENDING'] = {'font': '#000000', 'background': '#FFFFFF'}  # black on white
+    ## for now make all non-final states the same as pending
+    for state in non_final_q_states:
+        color_profile[state] = color_profile['PENDING']
     color_profile['NULL'] = {'font': '#34495e', 'background': '#ccd1d1'}  # gray on gray
+    color_profile['GOODNULL'] = {'font': '#34495e', 'background': '#7fb3d5'}  # gray on blue
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
     color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
     color_profile['GOOD'] = {'font':'#000000' ,'background':'#7fb3d5'}   #  blue
@@ -340,6 +450,7 @@ def generate_nightly_table_html(night_info, night, show_null):
 
     ngood, ninter, nbad, nnull, nover, n_notnull, noprocess, norecord = \
         0, 0, 0, 0, 0, 0, 0, 0
+    npending, nrunning = 0, 0
 
     main_body = ""
     for key, row_info in reversed(night_info.items()):
@@ -348,7 +459,7 @@ def generate_nightly_table_html(night_info, night, show_null):
             continue
         main_body += ("\t" + table_row + "\n")
         status = str(row_info["STATUS"]).lower()
-        if status == 'processing':
+        if status not in ['unprocessed', 'unrecorded']:
             if 'COLOR' in row_info:
                 color = row_info['COLOR']
             else:
@@ -365,6 +476,12 @@ def generate_nightly_table_html(night_info, night, show_null):
             elif color == 'OVERFULL':
                 nover += 1
                 n_notnull += 1
+            elif color == 'PENDING':
+                npending += 1
+                n_notnull += 1
+            elif color == 'RUNNING':
+                nrunning += 1
+                n_notnull += 1
             else:
                 nnull += 1
         elif status == 'unprocessed':
@@ -378,9 +495,10 @@ def generate_nightly_table_html(night_info, night, show_null):
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
     heading = (f"Night {night}{htmltab}"
                + f"Complete: {ngood}/{n_notnull}{htmltab}"
-               + f"Incomplete: {ninter}/{n_notnull}{htmltab}"
-               + f"Failed: {nbad}/{n_notnull}{htmltab}"
+               + f"Failed: {nbad+ninter}/{n_notnull}{htmltab}"
                + f"Overfull: {nover}/{n_notnull}{htmltab}"
+               + f"Pending: {npending}/{n_notnull}{htmltab}"
+               + f"Running: {nrunning}/{n_notnull}{htmltab}"
                + f"Unprocessed: {noprocess}{htmltab}"
                + f"NoTabEntry: {norecord}{htmltab}"
                + f"Other: {nnull}"
@@ -522,16 +640,13 @@ def _initialize_page(color_profile, titlefill='Processing'):
         background = cdict['background']
         html_page += f'\t#{ctype} ' + '{background-color:' + f'{background}' + ';}\n'
 
-    html_page + "\n"
+    html_page += "\n"
     ## Table rows shouldn't do the default background because of cell coloring
     for ctype,cdict in color_profile.items():
         font = cdict['font']
         background = '#eee'#cdict['background'] # no background for a whole table after implementing color codes for processing columns
-        html_page += f'\ttable tr#{ctype} '+'{background-color:'+f'{background}; color:{font}'+';}\n'
-
-    ## Finally there is a class of table element that is null in a good way
-    ## Label as such
-    html_page += 'table td#GOODNULL {background-color:#7fb3d5;color:gray}\n'
+        ## double bracket in fstring produces single string bracket in output
+        html_page += f'\ttable tr#{ctype} {{background-color:{background}; color:{font};}}\n'
 
     html_page += '</style>\n\n'
     html_page += f"</head><body><h1>DESI '{os.environ['SPECPROD']}' "
@@ -557,7 +672,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
     <select style="margin-bottom:10px" id="statuslist" onchange="filterByStatus()" class='form-control'>
     <option>processing</option>
     <option>unprocessed</option>
-    <option>unaccounted</option>
+    <option>unrecorded</option>
     <option>ALL</option>
     </select>
     """
@@ -589,39 +704,48 @@ def _closing_str():
     return closing
 
 def _table_row(dictionary):
+    global non_final_q_states
     idlabel = dictionary.pop('COLOR')
-    color_profile = return_color_profile()
-    if dictionary["STATUS"] != 'processing':
+    # color_profile = return_color_profile()
+    if dictionary["STATUS"] in ['unprocessed', 'unrecorded']:
         style_str = 'display:none;'
     else:
         style_str = ''
 
     if idlabel is None:
-        row_str = '<tr style="{}">'.format(style_str)
+        row_str = f'<tr style="{style_str}">'
     else:
-        row_str = '<tr style="'+style_str+'" id="'+str(idlabel)+'">'
+        row_str = f'<tr style="{style_str}" id="{idlabel}">'
 
-    for elem in dictionary.values():
-        chars = str(elem).split('/')
-        if len(chars)==2: # m/n
-            if chars[0]=='0' and chars[1]=='0':
+    for key, elem in dictionary.items():
+        ## If job is still running don't color things yet
+        if idlabel.upper() in non_final_q_states:
+            row_str += _table_element(elem)
+        elif key == 'STATUS' and elem == 'COMPLETED' and idlabel in ['GOOD', 'NULL']:
+            row_str += _table_element_id(elem, 'GOOD')
+        elif key == 'STATUS' and elem not in ['COMPLETED', 'unprocessed', 'unrecorded'] \
+              and elem not in non_final_q_states and idlabel != 'GOOD':
+            row_str += _table_element_id(elem, idlabel)
+        elif re.match('^\d+\/\d+$', elem) is not None:
+            strs = str(elem).split('/')
+            numerator, denom = int(strs[0]), int(strs[1])
+            if numerator == 0 and denom == 0:
                 row_str += _table_element_id(elem, 'GOODNULL')
-            elif chars[0]=='0' and chars[1]!='0':
+            elif numerator == 0 and denom != 0:
                 row_str += _table_element_id(elem, 'BAD')
-            elif chars[0]!='0' and int(chars[0])<int(chars[1]):
+            elif numerator != 0 and numerator < denom:
                 row_str += _table_element_id(elem, 'INCOMPLETE')
-            elif chars[0]!='0' and int(chars[0])==int(chars[1]):
+            elif numerator !=0 and numerator == denom:
                 row_str += _table_element_id(elem, 'GOOD')
             else:
                 row_str += _table_element_id(elem, 'OVERFULL')
-
         else:
             row_str += _table_element(elem)
     row_str += '</tr>'#\n'
     return row_str
 
 def _table_element(elem):
-    return '<td>{}</td>'.format(elem)
+    return f'<td>{elem}</td>'
 
 def _table_element_style(elem,style):
     return f'<td style="{style}">{elem}</td>'
@@ -637,50 +761,6 @@ def _hyperlink(rel_path,displayname):
 def _str_frac(numerator,denominator):
     frac = f'{numerator}/{denominator}'
     return frac
-
-def _js_path(output_dir):
-    return os.path.join(output_dir,'js','open_nightly_table.js')
-
-def js_import_str(output_dir):  # Not used
-    output_path = _js_path(output_dir)
-    if not os.path.exists(os.path.join(output_dir,'js')):
-        os.makedirs(os.path.join(output_dir,'js'))
-    if not os.path.exists(output_path):
-        _write_js_script(output_path)
-    return f'<script type="text/javascript" src="{output_path}"></script>'
-
-def _write_js_script(output_path):
-    """
-    Return the javascript script to be added to the html file
-    """
-    s="""
-        var coll = document.getElementsByClassName('collapsible');
-        var i;
-        for (i = 0; i < coll.length; i++) {
-            coll[i].nextElementSibling.style.maxHeight='0px';
-            coll[i].addEventListener('click', function() {
-                this.classList.toggle('active');
-                var content = this.nextElementSibling;
-                if (content.style.maxHeight){
-                   content.style.maxHeight = null;
-                } else {
-                  content.style.maxHeight = '0px';
-                        }
-                });
-         };
-         var b1 = document.getElementById('b1');
-         b1.addEventListener('click',function() {
-             for (i = 0; i < coll.length; i++) {
-                 coll[i].nextElementSibling.style.maxHeight=null;
-                                               }});
-         var b2 = document.getElementById('b2');
-         b2.addEventListener('click',function() {
-             for (i = 0; i < coll.length; i++) {
-                 coll[i].nextElementSibling.style.maxHeight='0px'
-                         }});
-        """
-    with open(output_path,'w') as outjs:
-        outjs.write(s)
 
 def js_str(): # Used
     """

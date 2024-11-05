@@ -5,31 +5,19 @@ desispec.scripts.procdashboard
 """
 import argparse
 import os, glob
-import sys
-import re
-from astropy.io import fits, ascii
-from astropy.table import Table, vstack
-import time, datetime
+from astropy.table import Table
 import numpy as np
-from os import listdir
-import json
 
-# import desispec.io.util
-from desispec.workflow.exptable import get_exposure_table_pathname, \
-    default_obstypes_for_exptable, \
-    get_exposure_table_column_types, \
-    get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
-    return_color_profile, find_new_exps, _hyperlink, _str_frac, \
-    get_output_dir, get_nights_dict, make_html_page, read_json, write_json, \
-    get_terminal_steps, get_tables
-from desispec.workflow.proctable import get_processing_table_pathname, \
-    table_row_to_dict
-from desispec.workflow.tableio import load_table
-from desispec.io.meta import specprod_root, rawdata_root
+    _hyperlink, _str_frac, \
+    get_output_dir, make_html_page, read_json, write_json, \
+    get_terminal_steps, get_tables, populate_monthly_tables, get_nights
+from desispec.workflow.proctable import table_row_to_dict
+from desispec.workflow.queue import update_from_queue, get_non_final_states
+from desispec.io.meta import specprod_root, get_readonly_filepath
 from desispec.io.util import decode_camword, camword_to_spectros, \
-    difference_camwords, parse_badamps, create_camword, camword_intersection, \
-    erow_to_goodcamword
+    difference_camwords, erow_to_goodcamword
+from desiutil.log import get_logger
 
 
 def parse(options):
@@ -71,6 +59,9 @@ def parse(options):
                              "Default is the earliest night available.")
     parser.add_argument('--end-night', type=str, default=None, required=False,
                         help="This specifies the last night (inclusive) to include in the dashboard. Default is today.")
+    parser.add_argument('--nproc', type=int, default=1, required=False,
+                        help="The number of processors to use with multiprocessing. " +
+                             "Default is 1.")
     parser.add_argument('--check-on-disk', action="store_true",
                         help="Check raw data directory for additional unaccounted for exposures on disk " +
                              "beyond the exposure table.")
@@ -83,17 +74,18 @@ def parse(options):
 
     return args
 
+
 ######################
 ### Main Functions ###
 ######################
 def main(args=None):
-    """ Code to generate a webpage for monitoring of desi_dailyproc production status
-    Usage:
-    -n can be 'all' or series of nights separated by comma or blank like 20200101,20200102 or 20200101 20200102
-    Normal Mode:
-    desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
-    desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
+    """ Code to generate a webpage for monitoring the spectra processing in a production.
+
+    Args:
+        args (argparse.Namespace): The arguments generated from
+            desispec.scripts.procdashboard.parse()
     """
+    log = get_logger()
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 
@@ -111,58 +103,61 @@ def main(args=None):
     else:
         skipd_expids = None
 
-    nights_dict, nights = get_nights_dict(args.nights, args.start_night,
-                                          args.end_night, prod_dir)
+    nights = get_nights(args.nights, args.start_night, args.end_night, prod_dir)
+    log.info(f'Searching {prod_dir} for: {nights}')
 
-    print(f'Searching {prod_dir} for: {nights}')
+    ## Define location of cache files
+    archive_fname_template = os.path.join(output_dir, 'expjsons',
+                                  f'expinfo_{os.environ["SPECPROD"]}'
+                                  + '_{night}.json')
 
-    monthly_tables = {}
-    for month, nights_in_month in nights_dict.items():
-        print("Month: {}, nights: {}".format(month, nights_in_month))
-        nightly_tables = {}
-        for night in nights_in_month:
-            ## Load previous info if any
-            filename_json = os.path.join(output_dir, 'expjsons',
-                                         f'expinfo_{os.environ["SPECPROD"]}'
-                                         + f'_{night}.json')
-            night_json_info = None
-            if not args.ignore_json_archive:
-                night_json_info = read_json(filename_json=filename_json)
+    ## Assign additional function arguments to dictionary to pass in
+    func_args = {'check_on_disk': args.check_on_disk,
+                 'skipd_expids': skipd_expids}
 
-            ## get the per exposure info for a night
-            night_info = populate_night_info(night, args.check_on_disk,
-                                             night_json_info=night_json_info,
-                                             skipd_expids=skipd_expids)
-            nightly_tables[night] = night_info.copy()
+    ## Bundle the information together so that we can properly run it in parallel
+    daily_info_args = {'pernight_info_func': populate_exp_night_info,
+                       'pernight_info_func_args': func_args,
+                       'archive_fname_template': archive_fname_template,
+                       'ignore_json_archive': args.ignore_json_archive}
 
-            ## write out the night_info to json file
-            write_json(output_data=night_info, filename_json=filename_json)
-
-        monthly_tables[month] = nightly_tables.copy()
+    monthly_tables = populate_monthly_tables(nights=nights,
+                                             daily_info_args=daily_info_args,
+                                             nproc=args.nproc)
 
     outfile = os.path.abspath(os.path.join(output_dir, args.output_name))
     make_html_page(monthly_tables, outfile, titlefill='Exp. Processing',
                    show_null=args.show_null)
 
-
-
-def populate_night_info(night, check_on_disk=False,
-                        night_json_info=None, skipd_expids=None):
+def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, skipd_expids=None):
     """
-    For a given night, return the file counts and other other information for each exposure taken on that night
-    input: night
-    output: a dictionary containing the statistics with expid as key name
-    FLAVOR: FLAVOR of this exposure
-    OBSTYPE: OBSTYPE of this exposure
-    EXPTIME: Exposure time
-    SPECTROGRAPHS: a list of spectrographs used
-    n_spectrographs: number of spectrographs
-    n_psf: number of PSF files
-    n_ff:  number of fiberflat files
-    n_frame: number of frame files
-    n_sframe: number of sframe files
-    n_cframe: number of cframe files
-    n_sky: number of sky files
+    Use all available information in the SPECPROD to determine whether specific
+    jobs and exposures have been successfully processed or not based on the existence
+    of files on disk.
+
+    Args:
+        night (int): the night to check the status of the processing for.
+        night_json_info (dict of dicts): Dictionary of dictionarys. See output
+            definition for format.
+        check_on_disk (bool, optional): True if you want to submit
+            other jobs even the loaded processing table has incomplete jobs in
+            it. Use with caution. Default is False.
+        skipd_expids (bool, optional): Default is False. If False,
+            the code checks for the existence of the expected final data
+            products for the script being submitted. If all files exist and
+            this is False, then the script will not be submitted. If some
+            files exist and this is False, only the subset of the cameras
+            without the final data products will be generated and submitted.
+
+    Returns:
+        output (dict of dicts): keys are generally JOBDESC_EXPID. Each value
+            is a dict with keys of the column names and values as the elements
+            of the row in the table for each column. The one exception is COLOR
+            which is used to define the coloring of the row in the dashboard.
+            Current keys are: "COLOR", "EXPID", "TILEID", "OBSTYPE", "FA SURV",
+            "FA PRGRM", "LAST STEP", "EXP TIME" ,"PROC CAMWORD", "PSF", "FFLAT",
+            "FRAME", "SFRAME", "SKY", "STD", "CFRAME", "SLURM FILE", "LOG FILE",
+            "COMMENTS", and "STATUS".
     """
     if skipd_expids is None:
         skipd_expids = []
@@ -192,9 +187,11 @@ def populate_night_info(night, check_on_disk=False,
     ## Determine the last filetype that is expected for each obstype
     terminal_steps = get_terminal_steps(expected_by_type)
 
+    ## Get non final Slurm states
+    non_final_states = get_non_final_states()
+
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
-    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
 
     exptab, proctab, \
     unaccounted_for_expids,\
@@ -207,76 +204,103 @@ def populate_night_info(night, check_on_disk=False,
         [int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
     ## Add a new indexing column to include calibnight rows in correct location
-    exptab.add_column(Table.Column(data=2*np.arange(1,len(exptab)+1),name="ORDER"))
+    exptab.add_column(Table.Column(data=2 * np.arange(1,len(exptab)+1),name="ORDER"))
+    exptab.add_column(Table.Column(data=[0] * len(exptab), name="PTAB_INTID"))
+    exptab.add_column(Table.Column(data=[0] * len(exptab), name="LATEST_QID"))
+    exptab.add_column(Table.Column(data=['unknown'] * len(exptab), name="STATUS", dtype='S20'))
+    exptab.add_column(Table.Column(data=['unknown'] * len(exptab), name="JOBDESC", dtype='S20'))
     if proctab is not None and len(proctab) > 0:
+        ## Update the STATUS of the
+        proctab = update_from_queue(proctab)
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
-        for jobdesc in ['ccdcalib', 'psfnight', 'nightlyflat']:
-            if jobdesc in proctab['JOBDESC']:
-                jobrow = proctab[proctab['JOBDESC']==jobdesc][0]
-                expids = jobrow['EXPID']
-                lastexpid = expids[-1]
-                if lastexpid in exptab['EXPID']:
-                    joint_erow = table_row_to_dict(exptab[exptab['EXPID']==lastexpid][0])
-                    joint_erow['OBSTYPE'] = jobdesc
-                    joint_erow['ORDER'] = joint_erow['ORDER']+1
-                    if len(expids) == 1:
-                        joint_erow['COMMENTS'] = [f"Exposure {expids[0]}"]
-                    else:
-                        joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
-                ## Derive the appropriate PROCCAMWORD from the exposure table
-                pcamwords = []                
-                for expid in expids:
-                    if expid in exptab['EXPID']:
-                        erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
-                        pcamword = ''
-                        if 'BADCAMWORD' in erow:
-                            if 'BADAMPS' in erow:
-                                pcamword = erow_to_goodcamword(erow,
-                                                               suppress_logging=True,
-                                                               exclude_badamps=False)
-                            else:
-                                pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
-                        else:
-                            pcamword = erow['CAMWORD']
-                        pcamwords.append(pcamword)
+        expjobs_ptab = proctab[np.isin(proctab['JOBDESC'],
+                                       [b'arc', b'flat', b'tilenight',
+                                        b'prestdstar', b'stdstar', b'poststdstar'])]
+        for i,erow in enumerate(exptab):
+            ## proctable has an array of expids, so check for them in a loop
+            for prow in expjobs_ptab:
+                if erow['EXPID'] in prow['EXPID']:
+                    exptab['STATUS'][i] = prow['STATUS']
+                    exptab['LATEST_QID'][i] = prow['LATEST_QID']
+                    exptab['PTAB_INTID'][i] = prow['INTID']
+                    exptab['JOBDESC'][i] = prow['JOBDESC']
+        caljobs_ptab = proctab[np.isin(proctab['JOBDESC'],
+                                       [b'ccdcalib', b'psfnight', b'nightlyflat'])]
+        for prow in caljobs_ptab:
+            jobdesc = prow['JOBDESC']
+            expids = prow['EXPID']
+            if jobdesc == 'ccdcalib':
+                expid = expids[0]
+            else:
+                expid = expids[-1]
+            if expid in exptab['EXPID']:
+                joint_erow = table_row_to_dict(exptab[exptab['EXPID']==expid][0])
+                joint_erow['OBSTYPE'] = jobdesc
+                joint_erow['ORDER'] = joint_erow['ORDER']+1
+                if len(expids) < 5:
+                    joint_erow['COMMENTS'] = [f"Exposure(s) {','.join(np.array(expids).astype(str))}"]
+                else:
+                    joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
+                # ## Derive the appropriate PROCCAMWORD from the exposure table
+                # pcamwords = []
+                # for expid in expids:
+                #     if expid in exptab['EXPID']:
+                #         erow = table_row_to_dict(exptab[exptab['EXPID'] == expid][0])
+                #         pcamword = ''
+                #         if 'BADCAMWORD' in erow:
+                #             if 'BADAMPS' in erow:
+                #                 pcamword = erow_to_goodcamword(erow,
+                #                                                suppress_logging=True,
+                #                                                exclude_badamps=False)
+                #             else:
+                #                 pcamword = difference_camwords(erow['CAMWORD'], erow['BADCAMWORD'])
+                #         else:
+                #             pcamword = erow['CAMWORD']
+                #         pcamwords.append(pcamword)
+                #
+                # if len(pcamwords) == 0:
+                #     print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
+                #     continue
+                # ## For flats we want any camera that exists in all 12 exposures
+                # ## For arcs we want any camera that exists in at least 3 exposures
+                # if jobdesc == 'nightlyflat':
+                #     joint_erow['CAMWORD'] = camword_intersection(pcamwords,
+                #                                        full_spectros_only=False)
+                # elif jobdesc == 'psfnight':
+                #     ## Count number of exposures each camera is present for
+                #     camcheck = {}
+                #     for camword in pcamwords:
+                #         for cam in decode_camword(camword):
+                #             if cam in camcheck:
+                #                 camcheck[cam] += 1
+                #             else:
+                #                 camcheck[cam] = 1
+                #     ## if exists in 3 or more exposures, then include it
+                #     goodcams = []
+                #     for cam, camcount in camcheck.items():
+                #         if camcount >= 3:
+                #             goodcams.append(cam)
+                #     joint_erow['CAMWORD'] = create_camword(goodcams)
 
-                if len(pcamwords) == 0:
-                    print(f"Couldn't find exposures {expids} for joint job {jobdesc}")
-                    continue
-                ## For flats we want any camera that exists in all 12 exposures
-                ## For arcs we want any camera that exists in at least 3 exposures
-                if jobdesc == 'nightlyflat':
-                    joint_erow['CAMWORD'] = camword_intersection(pcamwords,
-                                                       full_spectros_only=False)
-                elif jobdesc == 'psfnight':
-                    ## Count number of exposures each camera is present for
-                    camcheck = {}
-                    for camword in pcamwords:
-                        for cam in decode_camword(camword):
-                            if cam in camcheck:
-                                camcheck[cam] += 1
-                            else:
-                                camcheck[cam] = 1
-                    ## if exists in 3 or more exposures, then include it
-                    goodcams = []
-                    for cam, camcount in camcheck.items():
-                        if camcount >= 3:
-                            goodcams.append(cam)
-                    joint_erow['CAMWORD'] = create_camword(goodcams)
-
+                joint_erow['CAMWORD'] = prow['PROCCAMWORD']
                 joint_erow['BADCAMWORD'] = ''
                 joint_erow['BADAMPS'] = ''
+                joint_erow['STATUS'] = prow['STATUS']
+                joint_erow['LATEST_QID'] = prow['LATEST_QID']
+                joint_erow['PTAB_INTID'] = prow['INTID']
+                joint_erow['JOBDESC'] = prow['JOBDESC']
                 exptab.add_row(joint_erow)
 
     del proctab
     exptab.sort(['ORDER'])
 
-    logfiletemplate = os.path.join(logpath,
-                                   '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
-    fileglob_template = os.path.join(specproddir, 'exposures', str(night),
+    readonly_specproddir = get_readonly_filepath(specproddir)
+    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', str(night))
+    logfiletemplate = os.path.join(logpath, '{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
+    fileglob_template = os.path.join(readonly_specproddir, 'exposures', str(night),
                                      '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
-    fileglob_calib_template = os.path.join(specproddir, 'calibnight', str(night),
+    fileglob_calib_template = os.path.join(readonly_specproddir, 'calibnight', str(night),
                                            '{ftype}-{cam}[0-9]-{night}.{ext}')
 
     def count_num_files(ftype, expid=None):
@@ -392,11 +416,11 @@ def populate_night_info(night, check_on_disk=False,
             elif laststep == 'fluxcal':
                 pass
             else:
-                print(
-                    f"WARNING: didn't understand science exposure expid={expid} of night {night}: laststep={laststep}")
+                print("WARNING: didn't understand science exposure "
+                      + f"expid={expid} of night {night}: laststep={laststep}")
         elif laststep != 'all' and obstype != 'science':
-            print(
-                f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
+            print("WARNING: didn't understand non-science exposure "
+                  + f"expid={expid} of night {night}: laststep={laststep}")
 
         nfiles = {step:0 for step in ['psf','frame','ff','sky','sframe','std','cframe']}
         if obstype == 'arc':
@@ -423,37 +447,48 @@ def populate_night_info(night, check_on_disk=False,
         else:
             nexpected = ncams
 
-        if terminal_step is None:
-            row_color = 'NULL'
-        elif expected[terminal_step] == 0:
-            row_color = 'NULL'
-        elif nfiles[terminal_step] == 0:
-            row_color = 'BAD'
-        elif nfiles[terminal_step] < nexpected:
-            row_color = 'INCOMPLETE'
-        elif nfiles[terminal_step] == nexpected:
-            row_color = 'GOOD'
-        else:
-            row_color = 'OVERFULL'
-
         if expid in expid_processing:
-            status = 'processing'
+            status = row['STATUS']
         elif expid in unaccounted_for_expids:
             status = 'unaccounted'
         else:
             status = 'unprocessed'
 
+        if terminal_step is None:
+            row_color = 'NULL'
+        elif expected[terminal_step] == 0:
+            row_color = 'NULL'
+        elif status in non_final_states:
+            row_color = status
+        elif nfiles[terminal_step] == 0:
+            row_color = 'BAD'
+        elif nfiles[terminal_step] < nexpected:
+            row_color = 'INCOMPLETE'
+        elif nfiles[terminal_step] == nexpected:
+            if status in ['COMPLETED', 'NULL']:
+                row_color = 'GOOD'
+            else:
+                row_color = 'INCOMPLETE'
+        else:
+            row_color = 'OVERFULL'
+
         slurm_hlink, log_hlink = '----', '----'
-        if row_color not in ['GOOD', 'NULL'] and obstype.lower() in ['arc',
-                                                                     'flat',
-                                                                     'science']:
+        if row_color not in ['GOOD', 'NULL', 'PENDING'] \
+                and obstype.lower() in ['arc', 'flat', 'science']:
             file_head = obstype.lower()
             lognames = glob.glob(
                 logfiletemplate.format(pre=file_head, night=night,
                                        zexpid=zfild_expid, specs='*', jobid='',
                                        ext='log'))
             ## If no unified science script, identify which log to point to
-            if obstype.lower() == 'science' and len(lognames) == 0:
+            if row['JOBDESC'] == 'tilenight':
+                file_head = 'tilenight'
+                lognames = glob.glob(logfiletemplate.format(pre=file_head,
+                                                            night=night,
+                                                            zexpid=tileid,
+                                                            specs='*', jobid='',
+                                                            ext='log'))
+            elif obstype.lower() == 'science' and len(lognames) == 0:
                 ## First chronologically is the prestdstar
                 lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
                                                             night=night,
@@ -481,31 +516,17 @@ def populate_night_info(night, check_on_disk=False,
                         lognames = lognames_post
                         file_head = 'poststdstar'
 
-            newest_jobid = '00000000'
-            spectrographs = ''
 
-            for log in lognames:
-                jobid = log.split('-')[-1].split('.')[0]
-                if int(jobid) > int(newest_jobid):
+            newest_jobid, logfile = 0, None
+
+            for itlog in lognames:
+                jobid = int(itlog.split('-')[-1].split('.')[0])
+                if jobid > newest_jobid:
                     newest_jobid = jobid
-                    spectrographs = log.split('-')[-2]
-            if newest_jobid != '00000000' and len(spectrographs) != 0:
-                if file_head == 'stdstarfit':
-                    zexp = first_exp_of_tile
-                else:
-                    zexp = zfild_expid
-                logname = logfiletemplate.format(pre=file_head, night=night,
-                                                 zexpid=zexp,
-                                                 specs=spectrographs,
-                                                 jobid='-' + newest_jobid,
-                                                 ext='log')
-                slurmname = logfiletemplate.format(pre=file_head, night=night,
-                                                   zexpid=zexp,
-                                                   specs=spectrographs,
-                                                   jobid='', ext='slurm')
-
-                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage),
-                                         'Slurm')
+                    logname = itlog
+            if newest_jobid > 0:
+                slurmname = logname.replace(f'-{jobid}.log', '.slurm')
+                slurm_hlink = _hyperlink(os.path.relpath(slurmname, webpage), 'Slurm')
                 log_hlink = _hyperlink(os.path.relpath(logname, webpage), 'Log')
 
         rd = dict()
@@ -519,17 +540,12 @@ def populate_night_info(night, check_on_disk=False,
         rd["EXP TIME"] = str(exptime)
         rd["PROC CAMWORD"] = proccamword
         rd["PSF"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
-        rd["FRAME"] = _str_frac(nfiles['frame'],
-                                        ncams * expected['frame'])
+        rd["FRAME"] = _str_frac(nfiles['frame'], ncams * expected['frame'])
         rd["FFLAT"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
-        rd["SFRAME"] = _str_frac(nfiles['sframe'],
-                                        ncams * expected['sframe'])
-        rd["SKY"] = _str_frac(nfiles['sky'],
-                                        ncams * expected['sframe'])
-        rd["STD"] = _str_frac(nfiles['std'],
-                                        nspecs * expected['std'])
-        rd["CFRAME"] = _str_frac(nfiles['cframe'],
-                                        ncams * expected['cframe'])
+        rd["SFRAME"] = _str_frac(nfiles['sframe'], ncams * expected['sframe'])
+        rd["SKY"] = _str_frac(nfiles['sky'], ncams * expected['sframe'])
+        rd["STD"] = _str_frac(nfiles['std'], nspecs * expected['std'])
+        rd["CFRAME"] = _str_frac(nfiles['cframe'], ncams * expected['cframe'])
         rd["SLURM FILE"] = slurm_hlink
         rd["LOG FILE"] = log_hlink
         rd["COMMENTS"] = comments
