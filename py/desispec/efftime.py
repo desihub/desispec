@@ -64,7 +64,8 @@ def compute_efftime(table,
 
     # flux in fiber artificially divided by fiber_area_arcsec2  because the sky flux is per arcsec2
     fflux_bright = flux_bright_nom * transparency * fiber_fracflux_bgs / airfac / ebvfac / fiber_area_arcsec2
-    fflux_backup = flux_backup_nom * transparency * fiber_fracflux_psf / airfac / ebvfac / fiber_area_arcsec2
+    fflux_backup = flux_backup_nom * transparency * fiber_fracflux_psf / airfac / fiber_area_arcsec2
+    # Note we are omitting the ebvfac for backup
 
     # AR effective sky
     effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
@@ -93,7 +94,7 @@ def compute_efftime(table,
         * (sky_nom / effsky_backup)
     )
     # Note that the backup calculation is on purpose
-    # ommitting the E(B-V) term
+    # omitting the E(B-V) term
 
     # set to -1 values with incorrect inputs
     bad=table["AIRMASS"]<0.99
