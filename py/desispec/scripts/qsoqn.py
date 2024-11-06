@@ -358,27 +358,36 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         # never happen since a test is performed before running this function in desi_qso_qn_afterburner
         log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
 
-    #- Assemble output table
+    #---- Assemble output table
+
+    #- Info propagated from original Redrock
     QSO_sel = Table()
     QSO_sel['TARGETID'] = redrock['TARGETID'][index_to_save]
     QSO_sel['RA'] = fibermap['TARGET_RA'][index_to_save]
     QSO_sel['DEC'] = fibermap['TARGET_DEC'][index_to_save]
     QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][index_to_save]
-    QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
     QSO_sel['SPECTYPE_RR'] = redrock['SPECTYPE'][index_to_save]
     QSO_sel['Z_RR'] = redrock['Z'][index_to_save]
 
+    #- Was Redrock rerun for this target?
+    QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
+
+    #- Indexing consistency checks
     assert np.sum(index_to_save) == np.sum(index_to_save_QN_result)
     num_to_save = np.sum(index_to_save)
-
-    if len(QSO_sel) != num_to_save:
-        import IPython; IPython.embed()
-
     assert len(QSO_sel) == num_to_save
 
+    index_of_QN_result_to_save = np.where(index_to_save_QN_result[index_with_QN])[0]
+
+    #- Info from QuasarNet: Z_QN, line confidences C_{line}, and line redshifts Z_{line}
+    QSO_sel['Z_QN'] = np.float32(np.nan)
+    QSO_sel['Z_QN'][index_with_QN] = z_QN[index_of_QN_result_to_save]
+
+    #- Previous indexing logic; check one case with an assert
     tmp_arr = np.nan * np.ones(sel_to_QN.sum())
     tmp_arr[index_with_QN] = z_QN
-    QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
+    # QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
+    assert np.allclose(QSO_sel['Z_QN'], tmp_arr[index_to_save_QN_result], equal_nan=True)
 
     #- TODO: indexing probably wrong for some options for subsets to run vs. save
 
@@ -386,16 +395,17 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     for i, linename in enumerate(lines):
         linename = linename.split('(')[0]  #- strip (wavelength) part of line names
         QSO_sel[f'C_{linename}'] = np.float32(np.nan)
-        QSO_sel[f'C_{linename}'][index_with_QN] = c_line[i]
+        QSO_sel[f'C_{linename}'][index_with_QN] = c_line[i][index_of_QN_result_to_save]
 
     for i, linename in enumerate(lines):
         linename = linename.split('(')[0]  #- strip (wavelength) part of line names
         QSO_sel[f'Z_{linename}'] = np.float32(np.nan)
-        QSO_sel[f'Z_{linename}'][index_with_QN] = z_line[i]
+        QSO_sel[f'Z_{linename}'][index_with_QN] = z_line[i][index_of_QN_result_to_save]
 
     #- Propagate Redrock rerun info as *_NEW columns; NaN/0/blank if not re-run
     for colname, dtype in [
-            ('Z','f8'), ('ZERR','f4'), ('ZWARN','i8'), ('SPECTYPE','S6'), ('SUBTYPE','S20'), ('DELTACHI2','f4') ]:
+            ('Z','f8'), ('ZERR','f4'), ('ZWARN','i8'), ('SPECTYPE','S3'), ('SUBTYPE','S3'),
+            ('CHI2','f4'), ('DELTACHI2','f4') ]:
         tmp_arr = np.ones(num_to_save, dtype=dtype)
         if dtype.startswith('f'):
             tmp_arr *= np.nan
