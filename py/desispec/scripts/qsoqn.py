@@ -128,7 +128,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
 
     Returns
     -------
-    Table of redrock rerun results
+    Table of Redrock rerun results
     """
     log = get_logger()
     def write_prior_for_RR(targetid, z_qn, z_prior, filename_priors):
@@ -163,7 +163,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
                 on which RR will be rerun with prior and qso template.
 
         Returns:
-            Redrock output table ordered by input `targetid` list
+            Table of Redrock output ordered by input `targetid` list
         """
         with fitsio.FITS(filename_redrock) as redrock:
             # 9 July 2021:
@@ -184,17 +184,10 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
 
         return rr_reordered
 
-    # define the output
-    redshift, err_redshift, chi2, coeffs = np.zeros(targetid.size), np.zeros(targetid.size), np.inf * np.ones(targetid.size), np.zeros((targetid.size, 10))
-
     if len(param_RR['template_filenames']) == 0:
         msg = 'No Redrock templates provided'
         log.critical(msg)
         raise ValueError(msg)
-
-    # make an independant run for each quasar templates to circumvent some problem from redrock:
-    # 1] cannot give two templates in redrock as input, only one or a directory
-    # 2] problem with prior and template redshift range .. --> give zero result and redrock stop
 
     filename_priors = param_RR['filename_priors']
     filename_output_rerun_RR = param_RR['filename_output_rerun_RR']
@@ -218,8 +211,10 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
 
     write_prior_for_RR(targetid, z_qn, z_prior, filename_priors)
 
-    # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
-    # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+    # Info: in the case where targetid is negative (e.g. -7008279),
+    # we cannot use it at first element of the targetid list
+    # otherwise RR required at least one argument for --targetids ..
+    # (it is a known problem for argparse in python, this comes from -)
     # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
     # To figure out with this, we just need to add a space before the -
 
@@ -239,7 +234,6 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
     log.info('Done running redrock')
 
     # Extract information from the new run of RR
-    ### redshift_tmp, err_redshift_tmp, chi2_tmp, coeffs_tmp = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid[sel])
     redrock = extract_redshift_info_from_RR(filename_redrock_rerun_RR, targetid)
 
     if param_RR['delete_RR_output'] == 'True':
@@ -269,7 +263,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         comm, optional: MPI communicator to pass to redrock; must be size=1
 
     Returns:
-        QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
+        QSO_sel (Table): contains all the information useful to build the QSO cat
     """
     log = get_logger()
 
@@ -305,16 +299,17 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
 
     dl_bins = (l_max - l_min) / nboxes
     a = 2 * (10**(dl_bins) - 1)
-    log.info(f"Using {a = } for redrock prior scaling")
+    log.info(f"Using Redrock prior width {a}*(1+z)")
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
         sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
         index_with_QN_with_no_pb = sel_QN.copy()
         c_line, z_line, z_QN = np.array([]), np.array([]), np.array([])
     else:
+        # Note: c_line.size = index_with_QN.size and not index_to_QN !!
         p = model_QN.predict(data[:, :, None])
         c_line, z_line, z_QN, c_line_bal, z_line_bal = process_preds(p, lines, lines_bal,
-                                                                     verbose=False, wave=wave_to_use)  # c_line.size = index_with_QN.size and not index_to_QN !!
+                                                                     verbose=False, wave=wave_to_use)
 
         # Selection QSO with QN :
         # sel_index_with_QN.size = z_QN.size = index_with_QN.size <= 500
@@ -346,7 +341,10 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         log.info(f"RUN RR on {sel_QN.sum()} targets")
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
-            redrock_rerun = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_qn=z_QN[index_with_QN_with_no_pb], z_prior=prior[index_with_QN_with_no_pb], param_RR=param_RR, comm=comm)
+            redrock_rerun = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN],
+                                                             z_qn=z_QN[index_with_QN_with_no_pb],
+                                                             z_prior=prior[index_with_QN_with_no_pb],
+                                                             param_RR=param_RR, comm=comm)
 
     if save_target == 'restricted':
         index_to_save = sel_QN.copy()
@@ -360,6 +358,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         # never happen since a test is performed before running this function in desi_qso_qn_afterburner
         log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
 
+    #- Assemble output table
     QSO_sel = Table()
     QSO_sel['TARGETID'] = redrock['TARGETID'][index_to_save]
     QSO_sel['RA'] = fibermap['TARGET_RA'][index_to_save]
@@ -369,69 +368,61 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     QSO_sel['SPECTYPE_RR'] = redrock['SPECTYPE'][index_to_save]
     QSO_sel['Z_RR'] = redrock['Z'][index_to_save]
 
-    num_to_save = sel_to_QN.sum()
+    assert np.sum(index_to_save) == np.sum(index_to_save_QN_result)
+    num_to_save = np.sum(index_to_save)
+
+    if len(QSO_sel) != num_to_save:
+        import IPython; IPython.embed()
+
     assert len(QSO_sel) == num_to_save
 
     tmp_arr = np.nan * np.ones(sel_to_QN.sum())
     tmp_arr[index_with_QN] = z_QN
     QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
 
-    # tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
-    # tmp_arr[:, index_with_QN] = c_line
-    # QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result]
-    # tmp_arr = np.nan * np.ones((6, sel_to_QN.sum()))
-    # tmp_arr[:, index_with_QN] = z_line
-    # QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result]
-
     #- TODO: indexing probably wrong for some options for subsets to run vs. save
+
+    #- Loop over lines twice to group C_line columns and Z_line columns
     for i, linename in enumerate(lines):
         linename = linename.split('(')[0]  #- strip (wavelength) part of line names
-        QSO_sel[f'C_{linename}'] = np.nan
+        QSO_sel[f'C_{linename}'] = np.float32(np.nan)
         QSO_sel[f'C_{linename}'][index_with_QN] = c_line[i]
-        QSO_sel[f'Z_{linename}'] = np.nan
+
+    for i, linename in enumerate(lines):
+        linename = linename.split('(')[0]  #- strip (wavelength) part of line names
+        QSO_sel[f'Z_{linename}'] = np.float32(np.nan)
         QSO_sel[f'Z_{linename}'][index_with_QN] = z_line[i]
 
-    tmp_arr = np.nan * np.ones(sel_to_QN.sum())
-    if index_with_QN_with_no_pb.sum() != 0:  # in case where sel_QN.sum() == 0 and redshift is so not defined
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['Z']
-    QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
+    #- Propagate Redrock rerun info as *_NEW columns; NaN/0/blank if not re-run
+    for colname, dtype in [
+            ('Z','f8'), ('ZERR','f4'), ('ZWARN','i8'), ('SPECTYPE','S6'), ('SUBTYPE','S20'), ('DELTACHI2','f4') ]:
+        tmp_arr = np.ones(num_to_save, dtype=dtype)
+        if dtype.startswith('f'):
+            tmp_arr *= np.nan
+        if index_with_QN_with_no_pb.sum() != 0:
+            tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun[colname]
+        QSO_sel[f'{colname}_NEW'] = tmp_arr
 
-    tmp_arr = np.nan * np.ones(sel_to_QN.sum())
-    if index_with_QN_with_no_pb.sum() != 0:
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['ZERR']
-    QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
-
-    tmp_arr = np.zeros(sel_to_QN.sum(), dtype=np.int)
-    if index_with_QN_with_no_pb.sum() != 0:
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['ZWARN']
-    QSO_sel['ZWARN_NEW'] = tmp_arr[index_to_save_QN_result]
-
-    tmp_arr = np.zeros(sel_to_QN.sum(), dtype='<U20')
-    if index_with_QN_with_no_pb.sum() != 0:
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redrock_rerun['SUBTYPE']
-    QSO_sel['SUBTYPE_NEW'] = tmp_arr[index_to_save_QN_result]
-
-    tmp_arr = np.nan * np.ones((sel_to_QN.sum(), 10))
+    #- hardcode 10 coeffs to match size of array from full Redrock runs with GALAXY templates
+    tmp_arr = np.nan * np.ones((sel_to_QN.sum(), 10), dtype='f4')
     if index_with_QN_with_no_pb.sum() != 0:
         ncoeff = redrock_rerun['COEFF'].shape[1]
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], 0:ncoeff] = redrock_rerun['COEFF']
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], ncoeff:] = 0.0
-    QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
+    QSO_sel['COEFF_NEW'] = tmp_arr[index_to_save_QN_result]
 
     return QSO_sel
 
 
-def save_to_fits(data, filename, DESI_TARGET, clobber=True, templatefiles=None):
+def save_to_fits(data, filename, templatefiles=None):
     """
     Save info from data in a fits file
 
     Args:
         data (astropy Table): Table containing all the necessary QSO info
         filename (str):  name of the fits file
-        DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
 
     Options:
-        clobber (bool): overwrite the fits file defined by filename ?
         templatefiles (list): list of Redrock template filenames to record in header
 
     Returns:
@@ -570,7 +561,7 @@ def main(args=None, comm=None):
             if len(QSO_from_QN) > 0:
                 log.info(f"Number of targets saved : {len(QSO_from_QN)} -- "
                          f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
-                save_to_fits(QSO_from_QN, args.output, DESI_TARGET, templatefiles=args.templates)
+                save_to_fits(QSO_from_QN, args.output, templatefiles=args.templates)
             else:
                 file = open(os.path.splitext(args.output)[0] + '.notargets.txt', "w")
                 file.write("No targets were selected by QN afterburner to be a QSO.")
