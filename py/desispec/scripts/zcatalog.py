@@ -19,7 +19,7 @@ import importlib.resources
 import multiprocessing as mp
 
 import numpy as np
-from numpy.lib.recfunctions import append_fields
+from numpy.lib.recfunctions import append_fields, drop_fields
 
 import fitsio
 from astropy.table import Table, hstack, vstack
@@ -130,6 +130,15 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             #
             redshifts = fx['ZBEST'].read()
             zbest_file = True
+
+        #
+        # These old columns show up in zbest files. They have been replaced with
+        # COADD_NUMEXP, COADD_NUMTILE, which are obtained from coadd_fibermapp()
+        # for zbest files.
+        #
+        for drop_column in ('NUMEXP', 'NUMTILE'):
+            if drop_column in redshifts.dtype.names:
+                redshifts = drop_fields(redshifts, drop_column, usemask=False, asrecarray=False)
 
         if recoadd_fibermap or zbest_file:
             if zbest_file:
