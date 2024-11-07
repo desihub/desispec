@@ -404,7 +404,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     for colname, dtype in [
             ('Z','f8'), ('ZERR','f4'), ('ZWARN','i8'), ('SPECTYPE','S3'), ('SUBTYPE','S3'),
             ('CHI2','f4'), ('DELTACHI2','f4') ]:
-        tmp_arr = np.ones(num_to_save, dtype=dtype)
+        tmp_arr = np.zeros(num_to_save, dtype=dtype)
         if dtype.startswith('f'):
             tmp_arr *= np.nan
         if index_with_QN_with_no_pb.sum() != 0:
