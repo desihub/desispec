@@ -267,6 +267,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     """
     log = get_logger()
 
+    if save_target not in ('all', 'restricted'):
+        raise ValueError(f'{save_target=} should be "all" or "restricted"')
+
     # INFO FOR QUASAR NET
     lines = ['LYA', 'CIV(1548)', 'CIII(1909)', 'MgII(2796)', 'Hbeta', 'Halpha']
     lines_bal = ['CIV(1548)']
@@ -346,17 +349,12 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
                                                              z_prior=prior[index_with_QN_with_no_pb],
                                                              param_RR=param_RR, comm=comm)
 
-    if save_target == 'restricted':
-        index_to_save = sel_QN.copy()
-        index_to_save_QN_result = sel_QN[sel_to_QN]
-    elif save_target == 'all':
-        index_to_save = sel_to_QN.copy()
-        # save every object with nan value if it is necessary --> there are sel_to_QN.sum() objects to save
-        # index_with_QN is size of sel_to_QN.sum()
-        index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
-    else:
-        # never happen since a test is performed before running this function in desi_qso_qn_afterburner
-        log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
+    #- Initially assemble outputs as if saving everything; will trim at end if needed
+    index_to_save = sel_to_QN.copy()
+    # save every object with nan value if it is necessary --> there are sel_to_QN.sum() objects to save
+    # index_with_QN is size of sel_to_QN.sum()
+    index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
+
 
     #---- Assemble output table
 
@@ -420,6 +418,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], 0:ncoeff] = redrock_rerun['COEFF']
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], ncoeff:] = 0.0
     QSO_sel['COEFF_NEW'] = tmp_arr[index_to_save_QN_result]
+
+    if save_target == 'restricted':
+        QSO_sel = QSO_sel[sel_QN[sel_to_QN]]
 
     return QSO_sel
 
