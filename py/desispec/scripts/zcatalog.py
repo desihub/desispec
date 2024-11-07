@@ -296,6 +296,7 @@ def parse(options=None):
             help="input directory")
     parser.add_argument("-o", "--outfile",type=str,
             help="output file")
+
     parser.add_argument("--minimal", action='store_true',
             help="only include minimal output columns")
     parser.add_argument("-t", "--tiles", type=str,
@@ -322,6 +323,7 @@ def parse(options=None):
             help="Number of multiprocessing processes to use")
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Set log level to DEBUG.")
+
     args = parser.parse_args(options)
 
     return args

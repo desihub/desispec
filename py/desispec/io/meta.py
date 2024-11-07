@@ -72,7 +72,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
         healpix=None, nside=64,
         band=None, spectrograph=None,
-        survey=None, faprogram=None,
+        survey=None, faprogram=None, version=None,
         rawdata_dir=None, specprod_dir=None, specprod=None, qaprod_dir=None,
         tiles_dir=None, download=False, outdir=None,
         return_exists=False,
@@ -173,7 +173,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits.gz',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
+        #
         #  qa
+        #
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
         tileqa     = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.fits',
         tileqapng  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.png',
@@ -191,7 +193,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- healpix based
         #
-        zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
         rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
@@ -225,6 +226,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
         emline_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/emline-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
+        #
+        # z catalogs
+        #
+        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
+        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
+        zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
+        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
+        zall_tile='{specprod_dir}/zcatalog/{version}/zall-tilecumulative-{specprod}.fits',
         #
         # Deprecated QA files below this point.
         #

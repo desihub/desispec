@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+
+"""
+Combine individual redrock files into indivudal zcatalogs for all of a --group type
+"""
+
+if __name__ == '__main__':
+    import sys
+    from desispec.scripts import zcatalog_wrap
+
+    sys.exit(zcatalog_wrap.main())
