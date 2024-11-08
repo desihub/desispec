@@ -9,8 +9,6 @@ LBNL
 updated Fall 2024
 """
 
-from __future__ import absolute_import, division, print_function
-
 import sys, os, glob, time
 import argparse
 from astropy.table import Table
@@ -93,23 +91,29 @@ def main(args=None):
         log.critical(f"Input directory {args.indir} does not exist.")
         return 1
 
-    ## If outdir is None, and cat_version is None, raise an error
-    if args.outdir is None and args.cat_version is None:
-        log.critical(f"Either --outdir or --cat-version must be specified.")
-        return 1
-
     if args.outdir is None:
+        ## since we only care about the directory path, we can
+        ## use dummy values for survey and faprogram
         args.outdir = os.path.dirname(findfile(ftype,
-                                                  version=args.cat_version,
-                                                  groupname=args.group))
-    if not os.path.exists(args.outdir):
-        log.info(f"Output directory {args.outdir} does not exist, creating now.")
-        os.makedirs(args.outdir)
+                                               version=args.cat_version,
+                                               groupname=args.group,
+                                               survey='dummy', faprogram='dummy'))
+
+    ## Define catalog version (currently not used except with findfile,
+    ## but since we are only using findfile for the filename and not the
+    ## directory tree, the version isn't actually relevant
+    if args.cat_version is None:
+        args.cat_version = os.path.basename(args.outdir)
+
+    logdir = os.path.join(args.outdir, 'logs')
+    if not os.path.exists(logdir):
+        log.info(f"Output log directory {logdir} does not exist, creating now.")
+        os.makedirs(logdir)
 
     ## Load the tiles file to know what to run
     tilesfile = findfile('tiles')
     if os.path.exists(tilesfile):
-        tiles_tab = Table.read(tilesfile, format='ascii.csv')
+        tiles_tab = Table.read(tilesfile, format='fits')
     else:
         log.warning(f'Tiles file {tilesfile} does not exist. Trying CSV instead.')
         tilesfile = findfile('tiles_csv')
@@ -125,8 +129,6 @@ def main(args=None):
 
     ## Define the generic command to be run each time
     cmd = f'desi_zcatalog -g {args.group} --nproc={args.nproc}'
-    if args.indir is not None:
-        cmd += f" --indir='{args.indir}'"
     if args.header is not None:
         cmd += f" --header='{args.header}'"
     for argument, argval in [('-v', args.verbose),
@@ -142,18 +144,38 @@ def main(args=None):
     #for survey in args.survey:
     for survey in np.unique(tiles_tab['SURVEY']):
         for program in np.unique(tiles_tab['PROGRAM'][tiles_tab['SURVEY']==survey]):
+            ## note that the version here isn't actually used because we only
+            ## take basename of findfile output
             out_fname = os.path.basename(findfile(ftype, groupname=args.group,
-                                             survey=survey,
-                                             faprogram=program))
+                                                  survey=survey, faprogram=program,
+                                                  version=args.cat_version))
             outfile = os.path.join(args.outdir, out_fname)
+
+            ## update the base command with the program and survey information
             current_cmd = cmd + f" --survey={survey} --program={program} --outfile={outfile}"
+            if args.indir is not None:
+                ## the healpix path includes survey and program and the
+                ## zcatalog assumes healpix indir has them included
+                if args.group == 'healpix':
+                    current_cmd += f" --indir={args.indir}/{survey}/{program}"
+                else:
+                    current_cmd += f" --indir={args.indir}"
             cmdargs = current_cmd.split()[1:]
+
+            log.info(f"Running {survey=}, {program=}, to produce {outfile}")
+            ## create a log file with the same name as the output except *.log
             log_fname = os.path.splitext(out_fname)[0] + '.log'
             outlog = os.path.join(args.outdir, 'logs', log_fname)
+
+            ## redirect stdout and stderr to the log file and only run if
+            ## outfile doesn't exist
             with stdouterr_redirected(outlog):
                 result, success = runcmd(zcatalog_script.main, args=cmdargs, inputs=[], outputs=[outfile,])
 
+            ## Save the outfile so we know what infiles to expect for zall
             survey_program_outfiles.append(outfile)
+
+            ## Track the number of failures and report result
             if not success:
                 error_count += 1
                 log.warning(
@@ -169,23 +191,34 @@ def main(args=None):
                                all_columns=True, columns_list=None,
                                output_filename=None)
         """
-        out_fname = os.path.basename(findfile(ftype.replace('zcat', 'zall')))
+        ## note that the version here isn't actually used because we only
+        ## take basename of findfile output
+        out_fname = os.path.basename(findfile(ftype.replace('zcat', 'zall'),
+                                              groupname=args.group,
+                                              version=args.cat_version))
         outfile = os.path.join(args.outdir, out_fname)
+        ## summary catalog code calls these zpix and ztile instead
         if args.group == 'healpix':
             specgroup = 'zpix'
         else:
             specgroup = 'ztile'
+        ## input here is the output file of the previous loop
         kwargs = {'specgroup': specgroup, 'indir': args.outdir, 'output_filename': outfile}
+
+        log.info(f"Running zall generation to produce {outfile}")
         log_fname = os.path.splitext(out_fname)[0] + '.log'
         outlog = os.path.join(args.outdir, 'logs', log_fname)
+        ## Redirect logging to seperate file and only run of all files output in the last
+        ## step exist
         with stdouterr_redirected(outlog):
-            result, success = runcmd(create_summary_catalog_wrapper, args=[kwargs],
+            result, success = runcmd(create_summary_catalog_wrapper, args=kwargs,
                                      inputs=survey_program_outfiles, outputs=[outfile])
         if not success:
             error_count += 1
             log.warning(f"Failed to produce output: {outfile}, see {outlog}")
         else:
             log.info(f"Success for job producing output: {outfile}")
+            
     if error_count == 0:
         log.info(f"SUCCESS: All done at {time.asctime()}")
     else:

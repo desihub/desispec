@@ -95,6 +95,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         spectrograph : integer spectrograph number, 0-9
         survey : e.g. sv1, sv3, main, special
         faprogram : fiberassign program, e.g. dark, bright
+        version : (str) version of the zcatalog
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
@@ -233,7 +234,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
         zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
         zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
-        zall_tile='{specprod_dir}/zcatalog/{version}/zall-tilecumulative-{specprod}.fits',
+        zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
         #
         # Deprecated QA files below this point.
         #
@@ -274,6 +275,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if groupname is None and tile is not None and filetype in (
             'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
             'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
+            'zcat_tile', 'zall_tile'
             ):
         groupname = 'cumulative'
 
@@ -347,7 +349,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 location[root_key] = val
     del loc_copy
 
-    if groupname is not None and tile is None:
+    if groupname is not None and tile is None and healpix is not None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
@@ -397,7 +399,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
-        'groupname':groupname, 'subgroup':subgroup,
+        'groupname':groupname, 'subgroup':subgroup, 'version':version,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }

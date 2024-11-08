@@ -292,9 +292,9 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-i", "--indir",  type=str,
+    parser.add_argument("-i", "--indir",  type=str, default=None,
             help="input directory")
-    parser.add_argument("-o", "--outfile",type=str,
+    parser.add_argument("-o", "--outfile",type=str, default=None,
             help="output file")
 
     parser.add_argument("--minimal", action='store_true',
@@ -350,7 +350,7 @@ def main(args=None):
             log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
             return 1
 
-    if args.indir:
+    if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
