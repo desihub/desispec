@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.68.1 (unreleased)
+0.68.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.68.1 (2024-11-08)
+-------------------
+
+Used for rerunning the QuasarNet afterburner on Loa. Compatible with
+0.68.0 tag for files that succeeded with that tag.
+
+* Fix QuasarNet afterburner indexing bug when all input spectra are masked
+  (PR `#2409`_).
+
+.. _`#2407`: https://github.com/desihub/desispec/pull/2407
 
 0.68.0 (2024-11-07)
 -------------------
