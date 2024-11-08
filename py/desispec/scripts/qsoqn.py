@@ -291,6 +291,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
 
     model_QN, wave_to_use = load_model(model_QN_path)
     data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN, out_grid=wave_to_use)
+    targetid_QN = fibermap['TARGETID'][index_with_QN]
 
     # Code to calculate the scaling constant for the dynamic RR prior
     l_min = np.log10(wave_to_use[0])
@@ -305,9 +306,11 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     log.info(f"Using Redrock prior width {a}*(1+z)")
 
     if len(index_with_QN) == 0:  # if there is no object for QN :(
+        log.warning('No good spectra to run QuasarNet on')
         sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
         index_with_QN_with_no_pb = sel_QN.copy()
-        c_line, z_line, z_QN = np.array([]), np.array([]), np.array([])
+        nlines = len(lines)
+        c_line, z_line, z_QN = np.zeros([nlines,0]), np.zeros([nlines,0]), np.array([])
     else:
         # Note: c_line.size = index_with_QN.size and not index_to_QN !!
         p = model_QN.predict(data[:, :, None])
@@ -355,7 +358,6 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     # index_with_QN is size of sel_to_QN.sum()
     index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
 
-
     #---- Assemble output table
 
     #- Info propagated from original Redrock
@@ -376,6 +378,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     assert len(QSO_sel) == num_to_save
 
     index_of_QN_result_to_save = np.where(index_to_save_QN_result[index_with_QN])[0]
+    assert np.all(QSO_sel['TARGETID'][index_with_QN] == targetid_QN[index_of_QN_result_to_save])
 
     #- Info from QuasarNet: Z_QN, line confidences C_{line}, and line redshifts Z_{line}
     QSO_sel['Z_QN'] = np.float32(np.nan)
@@ -387,7 +390,8 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     # QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
     assert np.allclose(QSO_sel['Z_QN'], tmp_arr[index_to_save_QN_result], equal_nan=True)
 
-    #- TODO: indexing probably wrong for some options for subsets to run vs. save
+    #- TODO: indexing is wrong for the case of prefiltering --target_selection qso,
+    #-       i.e. input sel_to_QN is not all True
 
     #- Loop over lines twice to group C_line columns and Z_line columns
     for i, linename in enumerate(lines):
@@ -401,6 +405,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         QSO_sel[f'Z_{linename}'][index_with_QN] = z_line[i][index_of_QN_result_to_save]
 
     #- Propagate Redrock rerun info as *_NEW columns; NaN/0/blank if not re-run
+    if index_with_QN_with_no_pb.sum() > 0:
+        assert np.all(QSO_sel['TARGETID'][index_with_QN[index_with_QN_with_no_pb]] == redrock_rerun['TARGETID'])
+
     for colname, dtype in [
             ('Z','f8'), ('ZERR','f4'), ('ZWARN','i8'), ('SPECTYPE','S3'), ('SUBTYPE','S3'),
             ('CHI2','f4'), ('DELTACHI2','f4') ]:
@@ -418,6 +425,8 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], 0:ncoeff] = redrock_rerun['COEFF']
         tmp_arr[index_with_QN[index_with_QN_with_no_pb], ncoeff:] = 0.0
     QSO_sel['COEFF_NEW'] = tmp_arr[index_to_save_QN_result]
+
+    assert np.all(~np.isnan(QSO_sel['Z_RR'][QSO_sel['IS_QSO_QN_NEW_RR']]))
 
     if save_target == 'restricted':
         QSO_sel = QSO_sel[sel_QN[sel_to_QN]]
@@ -477,6 +486,11 @@ def main(args=None, comm=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
+
+    #- TODO: the indexing bookkeeping for pre-filtering to only QSOs is
+    #- currently broken; it only works on all targets.
+    if args.target_selection != 'all':
+        raise NotImplementedError(f'Currently only "--target_selection all" is supported, not "--target_selection {args.target_selection}"')
 
     #- We need an MPI communicator to pass to redrock, but the rest of
     #- the qsoqn code isn't instrumented for MPI parallelism, so we require
