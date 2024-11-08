@@ -641,6 +641,9 @@ desispec API
 .. automodule:: desispec.scripts.zcatalog
     :members:
 
+.. automodule:: desispec.scripts.zcatalog_wrap
+    :members:
+       
 .. automodule:: desispec.scripts.zproc
     :members:
 
