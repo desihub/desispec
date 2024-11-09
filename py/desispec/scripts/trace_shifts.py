@@ -218,17 +218,14 @@ def fit_trace_shifts(image, args):
     degyy=args.degyy
 
     # if any quadrant is masked, reduce to a single offset
-    hy=image.pix.shape[0]//2
-    hx=image.pix.shape[1]//2
-    allgood=True
-    allgood &= (np.sum((x_for_dx<hx)&(y_for_dx<hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dx<hx)&(y_for_dx>hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dx>hx)&(y_for_dx<hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dx>hx)&(y_for_dx>hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dy<hx)&(y_for_dy<hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dy<hx)&(y_for_dy>hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dy>hx)&(y_for_dy<hy))>0) # some data in this quadrant
-    allgood &= (np.sum((x_for_dy>hx)&(y_for_dy>hy))>0) # some data in this quadrant
+    hy = image.pix.shape[0] // 2
+    hx = image.pix.shape[1] // 2
+    allgood = True
+    for _curx, _cury in [(x_for_dx,y_for_dx),(x_for_dy, y_for_dy)]:
+        for curxop in [np.less, np.greater]:
+            for curyop in [np.less, np.greater]:
+                allgood &= np.any(curxop(_curx, hx) & curyop(_cury, hy))
+        # some data in this quadrant
     if not allgood :
         log.warning("No shift data for at least one quadrant of the CCD, falls back to deg=0 shift")
         degxx=0
