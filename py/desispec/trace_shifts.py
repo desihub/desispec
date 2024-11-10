@@ -25,7 +25,8 @@ from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
 from desispec.qproc.qextract import qproc_boxcar_extraction
 
-def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
+def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, internal_offset_info=None,
+                        external_offset_info=None) :
     """
     Writes traces in a PSF.
 
@@ -33,6 +34,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
         input_psf_filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
         output_psf_filename : Path to output fits file which has to contain XTRACE and YTRACE HDUs
         xytraceset : xytraceset
+        internal_offset_info: dictionary of internal offsets in wavelength
+        external_offset_info: dictionary of external offsets in wavelength
     """
 
     xcoef=xytraceset.x_vs_wave_traceset._coeff
@@ -104,7 +107,24 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
     if (xytraceset.meta is not None) and ("PSF" in psf_fits):
         for k in xytraceset.meta.keys() :
             psf_fits["PSF"].header[k] = xytraceset.meta[k]
-
+    if internal_offset_info is not None:
+        data = {}
+        dwave,dwave_err,fiber,wave=[internal_offset_info[_] for _ in ['dwave','dwave_err','fiber','wave']]
+        data  = np.rec.fromarrays((fiber, wave, dwave, dwave_err),
+                                  dtype=np.dtype([('fiber','i4'),
+                                         ('wave','f4'),
+                                         ('dwave','f4'),
+                                         ('dwave_err','f4')]))
+        psf_fits.append(pyfits.BinTableHDU(data, name='INTOFF'))
+    if external_offset_info is not None:
+        data = {}
+        dwave,dwave_err,wave=[external_offset_info[_] for _ in ['dwave','dwave_err','wave']]
+        data  = np.rec.fromarrays((wave, dwave, dwave_err),
+                                  dtype=np.dtype([
+                                         ('wave','f4'),
+                                         ('dwave','f4'),
+                                         ('dwave_err','f4')]))
+        psf_fits.append( pyfits.BinTableHDU(data, name='EXTOFF'))
 
     tmpfile = get_tempfilename(output_psf_filename)
     psf_fits.writeto(tmpfile, overwrite=True)
@@ -346,7 +366,9 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
     ey=np.array([])
     fiber_for_dy=np.array([])
     wave_for_dy=np.array([])
-
+    dwave_list = np.array([])
+    dwave_err_list = np.array([])
+    
     nfibers = flux.shape[0]
 
     for fiber in range(nfibers) :
@@ -375,7 +397,8 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
             if err > 1 :
                 continue
-
+            dwave_list = np.append(dwave_list, dwave)
+            dwave_err_list = np.append(dwave_err_list, err)
             rw = legx(block_wave,wavemin,wavemax)
             tx = legval(rw,xcoef[fiber])
             ty = legval(rw,ycoef[fiber])
@@ -392,7 +415,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             fiber_for_dy=np.append(fiber_for_dy,fiber)
             wave_for_dy=np.append(wave_for_dy,block_wave)
 
-    return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy
+    return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy, dwave_list, dwave_err_list
 
 def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2,
                                            continuum_subtract = False):
@@ -444,7 +467,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     wavemax = xytraceset.wavemax
     xcoef   = xytraceset.x_vs_wave_traceset._coeff
     ycoef   = xytraceset.y_vs_wave_traceset._coeff
-
+    
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
 
 @numba.jit
@@ -834,6 +857,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     dy = np.array([])
     ey = np.array([])
     wave_for_dy = np.array([])
+    dwave_list = np.array([])
+    dwave_err_list = np.array([])
     fiber_for_psf_evaluation = flux.shape[0] //2
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
@@ -857,6 +882,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
+            dwave_list = np.append(dwave_list, dwave)
+            dwave_err_list = np.append(dwave_err_list, err)
             y_for_dy=np.append(y_for_dy,y)
             log.info(f"wave = {bin_wave}A , y={y}, measured dwave = {dwave} +- {err} A")
 
@@ -895,7 +922,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     for fiber in range(ycoef.shape[0]) :
         ycoef[fiber] += dycoef
 
-    return ycoef
+    return ycoef, (wave_for_dy, dwave_list, dwave_err_list)
+
 
 
 # end of routines for cross-correlation method for trace shifts

@@ -198,11 +198,13 @@ def fit_trace_shifts(image, args):
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration
-
+            internal_offset_info = {'wave':wave_for_dy,
+                                    'fiber':fiber_for_dy, 'dwave':dwave,
+                                    'dwave_err':dwave_err}
         else :
             # duplicate dx results with zero shift to avoid write special case code below
             x_for_dy = x_for_dx.copy()
@@ -211,7 +213,8 @@ def fit_trace_shifts(image, args):
             ey       = 1.e-6*np.ones(ex.shape)
             fiber_for_dy = fiber_for_dx.copy()
             wave_for_dy  = wave_for_dx.copy()
-
+            internal_offset_info = None
+            
     degxx=args.degxx
     degxy=args.degxy
     degyx=args.degyx
@@ -341,11 +344,16 @@ def fit_trace_shifts(image, args):
         # the psf is used only to convolve the input spectrum
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
-        tset.y_vs_wave_traceset._coeff = shift_ycoef_using_external_spectrum(psf=psf,xytraceset=tset,
+        (tset.y_vs_wave_traceset._coeff,
+         (wave_external, dwave_external, dwave_err_external)) = shift_ycoef_using_external_spectrum(psf=psf,xytraceset=tset,
                                                                              image=image,fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
                                                                              degyy=args.degyy,width=7)
-
+        external_offset_info = {'wave': wave_external,
+                                'dwave': dwave_external,
+                                'dwave_err':dwave_err_external}
+    else:
+        external_offset_info = None
     x = np.zeros(x0.shape)
     y = np.zeros(x0.shape)
     for s in range(tset.nspec) :
@@ -361,7 +369,7 @@ def fit_trace_shifts(image, args):
     tset.meta["MINDY"]=np.min(dy)
     tset.meta["MAXDY"]=np.max(dy)
 
-    return tset
+    return tset, internal_offset_info, external_offset_info
 
 def main(args=None) :
 
@@ -382,10 +390,11 @@ def main(args=None) :
         log.critical(f"Entire {os.path.basename(args.image)} image is masked; can't fit traceshifts")
         sys.exit(1)
 
-    tset = fit_trace_shifts(image=image, args=args)
+    tset, internal_offset_info, external_offset_info = fit_trace_shifts(image=image, args=args)
     tset.meta['IN_PSF'] = shorten_filename(args.psf)
     tset.meta['IN_IMAGE'] = shorten_filename(args.image)
 
     if args.outpsf is not None :
-        write_traces_in_psf(args.psf,args.outpsf,tset)
+        write_traces_in_psf(args.psf,args.outpsf,tset, internal_offset_info=internal_offset_info,
+                            external_offset_info=external_offset_info)
         log.info("wrote modified PSF in %s"%args.outpsf)
