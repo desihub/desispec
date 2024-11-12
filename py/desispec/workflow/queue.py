@@ -583,7 +583,9 @@ def any_jobs_need_resubmission(statuses, resub_states=None):
     """
     if resub_states is None:
         resub_states = get_resubmission_states(no_resub_failed=False)
-    return np.any(np.isin(statuses, resub_states))
+    ## This works with strings or bytes, unlike np.isin
+    return np.any([status in resub_states for status in statuses])
+
 
 def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
     """
