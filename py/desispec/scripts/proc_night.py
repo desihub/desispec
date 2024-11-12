@@ -36,7 +36,7 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     set_calibrator_flag, make_exposure_prow, \
     all_calibs_submitted, \
     update_and_recursively_submit, update_accounted_for_with_linking
-from desispec.workflow.queue import update_from_queue, any_jobs_failed, \
+from desispec.workflow.queue import update_from_queue, any_jobs_need_resubmission, \
     get_resubmission_states
 from desispec.io.util import decode_camword, difference_camwords, \
     create_camword, replace_prefix, erow_to_goodcamword, camword_union
@@ -364,35 +364,37 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
-        if any_jobs_failed(ptable['STATUS']):
+        if any_jobs_need_resubmission(ptable['STATUS']):
             ## Try up to two times to resubmit failures, afterwards give up
             ## unless explicitly told to proceed with the failures
             ## Note after 2 resubmissions, the code won't resubmit anymore even
             ## if given ignore_proc_table_failures
-            if np.max([len(qids) for qids in ptable['ALL_QIDS']]) < 3:
-                log.info("Job failures were detected. Resubmitting those jobs "
-                         + "before continuing with new submissions.")
+            log.info("Job failures were detected. Resubmitting those jobs "
+                     + "before continuing with new submissions.")
 
-                ptable, nsubmits = update_and_recursively_submit(ptable,
-                                                                 no_resub_failed=no_resub_failed,
-                                                                 ptab_name=proc_table_pathname,
-                                                                 dry_run_level=dry_run_level,
-                                                                 reservation=reservation)
-            elif not ignore_proc_table_failures:
-                err = "Some jobs have an incomplete job status. This script " \
-                      + "will not fix them. You should remedy those first. "
-                log.error(err)
-                ## if the failures are in calibrations, then crash since
-                ## we need them for any new jobs
-                if any_jobs_failed(ptable['STATUS'][ptable['CALIBRATOR'] > 0]):
-                    err += "To proceed anyway use "
-                    err += "'--ignore-proc-table-failures'. Exiting."
-                    raise AssertionError(err)
-            else:
-                log.warning("Some jobs have an incomplete job status, but "
-                      + "you entered '--ignore-proc-table-failures'. This "
-                      + "script will not fix them. "
-                      + "You should have fixed those first. Proceeding...")
+            ptable, nsubmits = update_and_recursively_submit(ptable,
+                                                             no_resub_failed=no_resub_failed,
+                                                             max_resubs=2,
+                                                             ptab_name=proc_table_pathname,
+                                                             dry_run_level=dry_run_level,
+                                                             reservation=reservation)
+
+            if any_jobs_need_resubmission(ptable['STATUS']):
+                if not ignore_proc_table_failures:
+                    err = "Some jobs have an incomplete job status. This script " \
+                          + "will not fix them. You should remedy those first. "
+                    log.error(err)
+                    ## if the failures are in calibrations, then crash since
+                    ## we need them for any new jobs
+                    if any_jobs_need_resubmission(ptable['STATUS'][ptable['CALIBRATOR'] > 0]):
+                        err += "To proceed anyway use "
+                        err += "'--ignore-proc-table-failures'. Exiting."
+                        raise AssertionError(err)
+                else:
+                    log.warning("Some jobs have an incomplete job status, but "
+                          + "you entered '--ignore-proc-table-failures'. This "
+                          + "script will not fix them. "
+                          + "You should have fixed those first. Proceeding...")
         ## Short cut to exit faster if all science exposures have been processed
         ## but only if we have successfully processed the calibrations
         good_etab = etable[etable['LASTSTEP']=='all']

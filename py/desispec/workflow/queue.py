@@ -49,12 +49,12 @@ def get_resubmission_states(no_resub_failed=False):
     ## 'UNSUBMITTED' is default pipeline state for things not yet submitted
     ## 'DEP_NOT_SUBD' is set when resubmission can't proceed because a
     ## dependency has failed
-    resub_states = ['UNSUBMITTED', 'DEP_NOT_SUBD', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL',
-                    'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
+    resub_states = ['UNSUBMITTED', 'DEP_NOT_SUBD', 'MAX_RESUB', 'BOOT_FAIL',
+                    'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED',
+                    'REVOKED', 'SUSPENDED', 'TIMEOUT', 'CANCELLED']
     if not no_resub_failed:
         resub_states.append('FAILED')
     return resub_states
-
 
 def get_termination_states():
     """
@@ -560,20 +560,17 @@ def any_jobs_not_complete(statuses, termination_states=None):
         termination_states = get_termination_states()
     return np.any([status not in termination_states for status in statuses])
 
-def any_jobs_failed(statuses, failed_states=None):
+def any_jobs_need_resubmission(statuses, resub_states=None):
     """
     Returns True if any of the job statuses in the input column of the
-    processing table, statuses, are not complete (as based on the list of
-    acceptable final states, termination_states, given as an argument. These
-    should be states that are viewed as final, as opposed to job states
-    that require resubmission.
+    processing table, statuses, are not in the resubmission states.
 
     Parameters
     ----------
     statuses : Table.Column or list or np.array
         The statuses in the
         processing table "STATUS". Each element should be a string.
-    failed_states : list or np.array
+    resub_states : list or np.array
         Each element should be a string
         signifying a state that is returned by the Slurm scheduler that
         should be consider failing or problematic.
@@ -584,9 +581,9 @@ def any_jobs_failed(statuses, failed_states=None):
         True if any of the statuses of the jobs given in statuses are
         a member of the failed_states.
     """
-    if failed_states is None:
-        failed_states = get_failed_states()
-    return np.any([status in failed_states for status in statuses])
+    if resub_states is None:
+        resub_states = get_resubmission_states(no_resub_failed=False)
+    return np.any(np.isin(statuses, resub_states))
 
 def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
     """
