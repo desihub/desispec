@@ -168,11 +168,7 @@ def get_dark_night_expid(night, prod):
     """
     #
     expid = None
-    proctable_fn = os.path.join(
-        prod,
-        "processing_tables",
-        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
-    )
+    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod)
     log.info("proctable_fn = {}".format(proctable_fn))
     if not os.path.isfile(proctable_fn):
         log.warning("no {} found; returning None".format(proctable_fn))
@@ -225,12 +221,7 @@ def get_morning_dark_night_expid(night, prod, exptime=1200):
     """
     #
     expid = None
-    exptable_fn = os.path.join(
-        prod,
-        "exposure_tables",
-        str(night // 100),
-        "exposure_table_{}.csv".format(night),
-    )
+    exptable_fn = findfile('exposure_table', night=night, specprod_dir=prod)
     log.info("exptable_fn = {}".format(exptable_fn))
     if not os.path.isfile(exptable_fn):
         log.warning("no {} found; returning None".format(exptable_fn))
@@ -468,7 +459,7 @@ def _read_dark(fn, night, prod, dark_expid, petal, camera, binning=4):
         return None
 
 
-def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras=None, run_preproc=None):
+def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_science_cameras_str=None, run_preproc=None):
     """
     For a given night, create a pdf with the 300s binned dark.
 
@@ -479,7 +470,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         dark_expid: EXPID of the 300s or 1200s DARK exposure to display (int)
         nproc: number of processes running at the same time (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
-        bkgsub_science_cameras (optional, defaults to None): comma-separated list of the
+        bkgsub_science_cameras_str (optional, defaults to None): comma-separated list of the
             cameras to be additionally processed with the --bkgsub-for-science argument
             (e.g. "b") (string)
         run_preproc (optional, defaults to None): if None, autoderive if preproc should be run, otherwise
@@ -501,9 +492,10 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         raise ValueError(msg)
 
     # AR sanity check
-    if bkgsub_science_cameras is not None:
-        if not np.all(np.in1d(bkgsub_science_cameras.split(","), cameras)):
-            raise ValueError("cameras_bkgsub_science={} not in b,r,z".format(bkgsub_science_cameras))
+    if bkgsub_science_cameras_str is not None:
+        bkgsub_science_cameras = bkgsub_science_cameras_str.split(",")
+        if not np.all(np.in1d(bkgsub_science_cameras_str.split(","), cameras)):
+            raise ValueError("cameras_bkgsub_science={} not in b,r,z".format(bkgsub_science_cameras_str))
 
     # AR get existing campets
     h = fits.open(rawfn)
@@ -515,15 +507,10 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             campet = "{}{}".format(camera, petal)
             if campet.upper() in extnames:
                 campets.append(campet)
-    campets = ",".join(campets)
     log.info("existing campets: {}".format(campets))
 
     # AR first check if we need to process this dark image
-    proctable_fn = os.path.join(
-        prod,
-        "processing_tables",
-        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
-    )
+    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod)
     # if set to None will judge necessity for preprocessing according to proctable
     # but allows manual override e.g. for cases where no proctable should be there
     if run_preproc is None:
@@ -549,16 +536,21 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         # AR run preproc?
 
     if run_preproc:
+        cmds = []
         specprod_dir = tempfile.mkdtemp()
-        outdir = os.path.join(specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+        outdir = os.path.dirname(findfile("preproc", night, dark_expid,
+                                          'r1', specprod_dir=specprod_dir))
         os.makedirs(outdir, exist_ok=True)
-        cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {}".format(
-            night, dark_expid, outdir, nproc, campets,
-        )
-        log.info("run: {}".format(cmd))
+        for campet in campets:
+            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu 1 --cameras {}".format(
+                night, dark_expid, outdir, campet,
+            )
+            log.info("run: {}".format(cmd))
 
-        # like os.system(cmd), but avoids system call for MPI compatibility
-        preproc.main(cmd.split()[1:])
+            # like os.system(cmd), but avoids system call for MPI compatibility
+            cmds.append(cmd.split()[1:])
+        with multiprocessing.Pool(processes=nproc) as pool:
+            pool.starmap(preproc.main, cmds)
     else:
         specprod_dir = prod
 
@@ -578,19 +570,18 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 ]
             )
     # AR launching pool
-    pool = multiprocessing.Pool(processes=nproc)
-    with pool:
+    with multiprocessing.Pool(processes=nproc) as pool:
         mydicts = pool.starmap(_read_dark, myargs)
 
     # AR campets to be additionally processed with --bkgsub-for-science
     # AR besides, check the very unlikely case where a camera is missing
     # AR    for all petals
-    print(repr(bkgsub_science_cameras))
-    if bkgsub_science_cameras is not None:
+    print(repr(bkgsub_science_cameras_str))
+    if bkgsub_science_cameras_str is not None:
         missing_cameras = []
-        for camera in bkgsub_science_cameras.split(","):
-            _ = [campet for campet in campets.split(",") if campet[0] == camera]
-            if len(_) == 0:
+        for camera in bkgsub_science_cameras:
+            testlist = [campet for campet in campets if campet[0] == camera]
+            if len(testlist) == 0:
                 missing_cameras.append(camera)
         if len(missing_cameras) > 0:
             log.warning(
@@ -598,30 +589,32 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                     missing_cameras
                 )
             )
-        bkgsub_science_cameras = ",".join([camera for camera in bkgsub_science_cameras.split(",") if camera not in missing_cameras])
-        bkgsub_science_campets = ",".join(
-            [
-                campet for campet in campets.split(",")
-                if campet[0] in bkgsub_science_cameras.split(",")
-            ]
-        )
+        bkgsub_science_cameras = [camera for camera in bkgsub_science_cameras if camera not in missing_cameras]
+        bkgsub_science_campets = [campet for campet in campets if campet[0] in bkgsub_science_cameras]
+        bkgsub_science_cameras_str = ",".join(bkgsub_science_cameras)
         log.info("campets to be additionally processed with --bkgsub-for-science: {}".format(bkgsub_science_campets))
         #
         if len(bkgsub_science_campets) > 0:
             bkgsub_specprod_dir = tempfile.mkdtemp()
-            outdir = os.path.join(bkgsub_specprod_dir, "preproc", str(night), "{:08d}".format(dark_expid))
+            outdir = os.path.dirname(findfile("preproc", night, dark_expid,
+                                     'r1', specprod_dir=bkgsub_specprod_dir))
             os.makedirs(outdir, exist_ok=True)
-            cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu {} --cameras {} --bkgsub-for-science".format(
-                night, dark_expid, outdir, nproc, bkgsub_science_campets,
-            )
-            log.info("run: {}".format(cmd))
-            # like os.system(cmd), but avoids system call for MPI compatibility
-            preproc.main(cmd.split()[1:])
+            cmds = []
+            for campet in bkgsub_science_campets:
+                cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu 1 --cameras {} --bkgsub-for-science".format(
+                    night, dark_expid, outdir, campet,
+                )
+                log.info("run: {}".format(cmd))
+
+                # like os.system(cmd), but avoids system call for MPI compatibility
+                cmds.append(cmd.split()[1:])
+            with multiprocessing.Pool(processes=nproc) as pool:
+                pool.starmap(preproc.main, cmds)
 
         # AR read the bkgsub dark
         bkgsub_myargs = []
         for petal in petals:
-            for camera in bkgsub_science_cameras.split(","):
+            for camera in bkgsub_science_cameras:
                 bkgsub_myargs.append(
                     [
                         findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=bkgsub_specprod_dir),
@@ -634,8 +627,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                     ]
                 )
         # AR launching pool
-        pool = multiprocessing.Pool(processes=nproc)
-        with pool:
+        with multiprocessing.Pool(processes=nproc) as pool:
             bkgsub_mydicts = pool.starmap(_read_dark, bkgsub_myargs)
 
     # AR plotting
@@ -650,8 +642,8 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     cmap.set_bad(color="r")
     # AR
     ncol = 2 * len(cameras)
-    if bkgsub_science_cameras is not None:
-        ncol += 2 * len(bkgsub_science_cameras)
+    if bkgsub_science_cameras_str is not None:
+        ncol += 2 * len(bkgsub_science_cameras_str)
     width_ratios = 0.1 + np.zeros(ncol)
     width_ratios[::2] = 1
     tmpcols = plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -668,8 +660,8 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 campet_mydicts = [mydicts[ii[0]]]
                 campet_titles = [title]
                 # AR bkgsub-for-science case
-                if bkgsub_science_cameras is not None:
-                    if camera in bkgsub_science_cameras.split(","):
+                if bkgsub_science_cameras_str is not None:
+                    if camera in bkgsub_science_cameras:
                         bkgsub_ii = [i for i in range(len(bkgsub_myargs)) if bkgsub_myargs[i][4] == petal and bkgsub_myargs[i][5] == camera]
                         assert(len(bkgsub_ii) == 1)
                         campet_mydicts.append(bkgsub_mydicts[bkgsub_ii[0]])
@@ -898,8 +890,7 @@ def _read_ctedet(night, prod, ctedet_expid, nproc):
                 ]
             )
     # AR launching pool
-    pool = multiprocessing.Pool(processes=nproc)
-    with pool:
+    with multiprocessing.Pool(processes=nproc) as pool:
         mydicts = pool.starmap(_read_ctedet_campet, myargs)
     return mydicts
 
@@ -1042,8 +1033,7 @@ def _compute_rowbyrow(ims, nproc):
 
     else:
         tmp_ims = [ims[i] for i in ii]
-        pool = multiprocessing.Pool(nproc)
-        with pool:
+        with multiprocessing.Pool(nproc) as pool:
             tmp_mods = pool.map(get_rowbyrow_image_model, tmp_ims)
 
         # AR mods with mods[i]=None if ims[i]=None
@@ -1290,8 +1280,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
             ]
         )
     # AR launching pool
-    pool = multiprocessing.Pool(processes=nproc)
-    with pool:
+    with multiprocessing.Pool(processes=nproc) as pool:
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
     cmap = matplotlib.cm.Greys_r
