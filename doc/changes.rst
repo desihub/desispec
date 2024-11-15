@@ -139,6 +139,7 @@ First tag used for Kibo/Y3 run.
   desi_spectro_calib yaml files (PR `#2296`_).
 * desi_group_spectra header propagation cleanup (PR `#2302`_).
 * zproc requires exposure-qa files for tileqa step (PR `#2306`_).
+* Re-add support for custom tile groups like 1x_depth (PR `#2309`_)
 * Don't set envs in desispec.module that are now set in desimodules
   (PR `#2310`_).
 * New FIBERSTATUS NEARCHARGETRAP and VARIABLETHRU set in
@@ -159,6 +160,7 @@ First tag used for Kibo/Y3 run.
 .. _`#2296`: https://github.com/desihub/desispec/pull/2296
 .. _`#2302`: https://github.com/desihub/desispec/pull/2302
 .. _`#2306`: https://github.com/desihub/desispec/pull/2306
+.. _`#2309`: https://github.com/desihub/desispec/pull/2309
 .. _`#2310`: https://github.com/desihub/desispec/pull/2310
 .. _`#2313`: https://github.com/desihub/desispec/pull/2313
 .. _`#2314`: https://github.com/desihub/desispec/pull/2314
