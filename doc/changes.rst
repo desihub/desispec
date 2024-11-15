@@ -16,7 +16,7 @@ Used for rerunning the QuasarNet afterburner on Loa. Compatible with
 * Fix QuasarNet afterburner indexing bug when all input spectra are masked
   (PR `#2409`_).
 
-.. _`#2407`: https://github.com/desihub/desispec/pull/2407
+.. _`#2409`: https://github.com/desihub/desispec/pull/2409
 
 0.68.0 (2024-11-07)
 -------------------
