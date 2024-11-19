@@ -276,11 +276,11 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                                        index=i, name=add_col)
             if add_col == 'PLATE_RA':
                 i = expfibermap.colnames.index('LAMBDA_REF')
-                expfibermap.add_column(expfibermap['TARGET_RA'],
+                expfibermap.add_column(expfibermap['FIBER_RA'],
                                        index=i, name=add_col)
             if add_col == 'PLATE_DEC':
                 i = expfibermap.colnames.index('PLATE_RA')
-                expfibermap.add_column(expfibermap['TARGET_DEC'],
+                expfibermap.add_column(expfibermap['FIBER_DEC'],
                                        index=i, name=add_col)
 
     #- Add group specific columns, recognizing some some of them may
