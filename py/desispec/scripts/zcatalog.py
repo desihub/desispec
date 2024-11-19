@@ -33,6 +33,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desiutil.annotate import load_csv_units
+from desiutil.names import radec_to_desiname
 import desiutil.depend
 
 def load_sv1_ivar_w12(hpix, targetids):
@@ -150,12 +151,42 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
             if zbest_file:
                 fibermap.sort(['TARGETID'])
-                if 'MEAN_PSF_TO_FIBER_SPECFLUX' not in fibermap.colnames:
-                    log.warning("Adding missing column MEAN_PSF_TO_FIBER_SPECFLUX to fibermap with dummy values.")
-                    fibermap['MEAN_PSF_TO_FIBER_SPECFLUX'] = np.zeros((len(fibermap), ), dtype=np.float32)
         else:
             fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = Table(fx['EXP_FIBERMAP'].read())
+
+        #
+        # Older files, including, but not limited to zbest files, may not have DESINAME and other columns.
+        #
+        for add_col in ('DESINAME', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC'):
+            if add_col not in fibermap.colnames:
+                log.info("Adding column '%s' to %s.", add_col, os.path.basename(spectra_filename))
+                if add_col == 'DESINAME':
+                    i = fibermap.colnames.index('TARGET_DEC')
+                    fibermap.add_column(radec_to_desiname(fibermap['TARGET_RA'], fibermap['TARGET_DEC']),
+                                        index=i, name=add_col)
+                if add_col == 'MEAN_PSF_TO_FIBER_SPECFLUX':
+                    log.warning("Adding missing column '%s' to fibermap with dummy values.", add_col)
+                    i = fibermap.colnames.index('MEAN_MD')
+                    fibermap.add_column(np.zeros((len(fibermap), ), dtype=np.float32),
+                                        index=i, name=add_col)
+                if add_col == 'PLATE_RA':
+                    i = fibermap.colnames.index('SCND_TARGET')
+                    fibermap.add_column(fibermap['TARGET_RA'],
+                                        index=i, name=add_col)
+                if add_col == 'PLATE_DEC':
+                    i = fibermap.colnames.index('PLATE_RA')
+                    fibermap.add_column(fibermap['TARGET_DEC'],
+                                        index=i, name=add_col)
+
+        for add_col in ('PSF_TO_FIBER_SPECFLUX',):
+            if add_col not in expfibermap.colnames:
+                log.info("Adding column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(spectra_filename))
+                if add_col == 'PSF_TO_FIBER_SPECFLUX':
+                    log.warning("Adding missing column '%s' to expfibermap with dummy values.", add_col)
+                    i = expfibermap.colnames.index('FIBER_DEC')
+                    expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
+                                           index=i, name=add_col)
 
         assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
