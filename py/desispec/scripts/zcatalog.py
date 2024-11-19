@@ -251,7 +251,10 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 data.add_column(np.zeros((len(data), ), dtype=np.float32),
                                 index=i, name=add_col)
             if add_col == 'PLATE_RA':
-                i = data.colnames.index('SCND_TARGET')
+                try:
+                    i = data.colnames.index('SCND_TARGET')
+                except ValueError:
+                    i = data.colnames.index('MWS_TARGET')
                 data.add_column(data['TARGET_RA'],
                                 index=i, name=add_col)
             if add_col == 'PLATE_DEC':
