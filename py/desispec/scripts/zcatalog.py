@@ -132,15 +132,6 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
             redshifts = fx['ZBEST'].read()
             zbest_file = True
 
-        #
-        # These old columns show up in zbest files. They have been replaced with
-        # COADD_NUMEXP, COADD_NUMTILE, which are obtained from coadd_fibermapp()
-        # for zbest files.
-        #
-        for drop_column in ('NUMEXP', 'NUMTILE'):
-            if drop_column in redshifts.dtype.names:
-                redshifts = drop_fields(redshifts, drop_column, usemask=False, asrecarray=False)
-
         if recoadd_fibermap or zbest_file:
             if zbest_file:
                 spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
@@ -154,39 +145,6 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
         else:
             fibermap = Table(fx['FIBERMAP'].read())
             expfibermap = Table(fx['EXP_FIBERMAP'].read())
-
-        #
-        # Older files, including, but not limited to zbest files, may not have DESINAME and other columns.
-        #
-        for add_col in ('DESINAME', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC'):
-            if add_col not in fibermap.colnames:
-                log.info("Adding column '%s' to %s.", add_col, os.path.basename(spectra_filename))
-                if add_col == 'DESINAME':
-                    i = fibermap.colnames.index('TARGET_DEC')
-                    fibermap.add_column(radec_to_desiname(fibermap['TARGET_RA'], fibermap['TARGET_DEC']),
-                                        index=i, name=add_col)
-                if add_col == 'MEAN_PSF_TO_FIBER_SPECFLUX':
-                    log.warning("Adding missing column '%s' to fibermap with dummy values.", add_col)
-                    i = fibermap.colnames.index('MEAN_MD')
-                    fibermap.add_column(np.zeros((len(fibermap), ), dtype=np.float32),
-                                        index=i, name=add_col)
-                if add_col == 'PLATE_RA':
-                    i = fibermap.colnames.index('SCND_TARGET')
-                    fibermap.add_column(fibermap['TARGET_RA'],
-                                        index=i, name=add_col)
-                if add_col == 'PLATE_DEC':
-                    i = fibermap.colnames.index('PLATE_RA')
-                    fibermap.add_column(fibermap['TARGET_DEC'],
-                                        index=i, name=add_col)
-
-        for add_col in ('PSF_TO_FIBER_SPECFLUX',):
-            if add_col not in expfibermap.colnames:
-                log.info("Adding column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(spectra_filename))
-                if add_col == 'PSF_TO_FIBER_SPECFLUX':
-                    log.warning("Adding missing column '%s' to expfibermap with dummy values.", add_col)
-                    i = expfibermap.colnames.index('FIBER_DEC')
-                    expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
-                                           index=i, name=add_col)
 
         assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
@@ -262,6 +220,65 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 ])
         else:
             data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
+    #
+    # These old columns show up in zbest files. They have been replaced with
+    # COADD_NUMEXP, COADD_NUMTILE, which are obtained from coadd_fibermapp()
+    # for zbest files.
+    #
+    for drop_col in ('NUMEXP', 'NUMTILE', 'NUMTARGET', 'HEALPIX', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z'):
+        if drop_col in data.colnames:
+            log.info("Removing column '%s' from %s ('ZCATALOG').", drop_col, os.path.basename(spectra_filename))
+            data.remove_column(drop_col)
+
+    if data['RELEASE'].dtype == np.dtype('>i4'):
+        log.info("Casting column 'RELEASE' in %s ('ZCATALOG') to 'int16'.", os.path.basename(spectra_filename))
+        data.replace_column('RELEASE', data['RELEASE'].astype(np.int16))
+
+    #
+    # Older files, including, but not limited to zbest files, may not have DESINAME and other columns.
+    #
+    for add_col in ('DESINAME', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC', 'FITMETHOD'):
+        if add_col not in data.colnames:
+            log.info("Adding missing column '%s' to %s ('ZCATALOG').", add_col, os.path.basename(spectra_filename))
+            if add_col == 'DESINAME':
+                i = data.colnames.index('TARGET_DEC')
+                data.add_column(radec_to_desiname(data['TARGET_RA'], data['TARGET_DEC']),
+                                index=i, name=add_col)
+            if add_col == 'MEAN_PSF_TO_FIBER_SPECFLUX':
+                log.warning("Adding missing column '%s' to %s ('ZCATALOG') with dummy values!", add_col, os.path.basename(spectra_filename))
+                i = data.colnames.index('MEAN_MJD')
+                data.add_column(np.zeros((len(data), ), dtype=np.float32),
+                                index=i, name=add_col)
+            if add_col == 'PLATE_RA':
+                i = data.colnames.index('SCND_TARGET')
+                data.add_column(data['TARGET_RA'],
+                                index=i, name=add_col)
+            if add_col == 'PLATE_DEC':
+                i = data.colnames.index('PLATE_RA')
+                data.add_column(data['TARGET_DEC'],
+                                index=i, name=add_col)
+            if add_col == 'FITMETHOD':
+                i = data.colnames.index('DESINAME')
+                data.add_column(np.array(['PCA'] * len(data)).astype(np.dtype('S4')),
+                                index=i, name=add_col)
+
+    for add_col in ('PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC'):
+        if add_col not in expfibermap.colnames:
+            log.info("Adding missing column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(spectra_filename))
+            if add_col == 'PSF_TO_FIBER_SPECFLUX':
+                log.warning("Adding missing column '%s' to %s ('EXP_FIBERMAP') with dummy values!", add_col, os.path.basename(spectra_filename))
+                i = expfibermap.colnames.index('FIBER_DEC')
+                expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
+                                       index=i, name=add_col)
+            if add_col == 'PLATE_RA':
+                i = expfibermap.colnames.index('SCND_TARGET')
+                expfibermap.add_column(expfibermap['TARGET_RA'],
+                                       index=i, name=add_col)
+            if add_col == 'PLATE_DEC':
+                i = expfibermap.colnames.index('PLATE_RA')
+                expfibermap.add_column(expfibermap['TARGET_DEC'],
+                                       index=i, name=add_col)
 
     #- Add group specific columns, recognizing some some of them may
     #- have already been inherited from the fibermap.
