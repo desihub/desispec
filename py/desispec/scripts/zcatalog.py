@@ -275,7 +275,10 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                 expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
                                        index=i, name=add_col)
             if add_col == 'PLATE_RA':
-                i = expfibermap.colnames.index('SCND_TARGET')
+                try:
+                    i = expfibermap.colnames.index('SCND_TARGET')
+                except ValueError:
+                    i = expfibermap.colnames.index('MWS_TARGET')
                 expfibermap.add_column(expfibermap['TARGET_RA'],
                                        index=i, name=add_col)
             if add_col == 'PLATE_DEC':
