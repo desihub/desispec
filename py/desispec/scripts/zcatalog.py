@@ -228,11 +228,11 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
     #
     for drop_col in ('NUMEXP', 'NUMTILE', 'NUMTARGET', 'HEALPIX', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z'):
         if drop_col in data.colnames:
-            log.info("Removing column '%s' from %s ('ZCATALOG').", drop_col, os.path.basename(spectra_filename))
+            log.info("Removing column '%s' from %s ('ZCATALOG').", drop_col, os.path.basename(rrfile))
             data.remove_column(drop_col)
 
     if data['RELEASE'].dtype == np.dtype('>i4'):
-        log.info("Casting column 'RELEASE' in %s ('ZCATALOG') to 'int16'.", os.path.basename(spectra_filename))
+        log.info("Casting column 'RELEASE' in %s ('ZCATALOG') to 'int16'.", os.path.basename(rrfile))
         data.replace_column('RELEASE', data['RELEASE'].astype(np.int16))
 
     #
@@ -240,13 +240,20 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
     #
     for add_col in ('DESINAME', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC', 'FITMETHOD'):
         if add_col not in data.colnames:
-            log.info("Adding missing column '%s' to %s ('ZCATALOG').", add_col, os.path.basename(spectra_filename))
+            log.info("Adding missing column '%s' to %s ('ZCATALOG').", add_col, os.path.basename(rrfile))
             if add_col == 'DESINAME':
                 i = data.colnames.index('TARGET_DEC')
-                data.add_column(radec_to_desiname(data['TARGET_RA'], data['TARGET_DEC']),
+                if (np.isfinite(data['TARGET_RA']) & np.isfinite(data['TARGET_DEC'])).all():
+                    desiname = radec_to_desiname(data['TARGET_RA'], data['TARGET_DEC'])
+                else:
+                    log.warning("NaN detected in TARGET_RA, TARGET_DEC for %s ('ZCATALOG'), dummy values will be used!", os.path.basename(rrfile))
+                    desiname = np.array(['-'*22]*len(data))
+                    good_radec = np.where(np.isfinite(data['TARGET_RA']) & np.isfinite(data['TARGET_DEC']))[0]
+                    desiname[good_radec] = radec_to_desiname(data['TARGET_RA'][good_radec], data['TARGET_DEC'][good_radec])
+                data.add_column(desiname,
                                 index=i, name=add_col)
             if add_col == 'MEAN_PSF_TO_FIBER_SPECFLUX':
-                log.warning("Adding missing column '%s' to %s ('ZCATALOG') with dummy values!", add_col, os.path.basename(spectra_filename))
+                log.warning("Adding missing column '%s' to %s ('ZCATALOG') with dummy values!", add_col, os.path.basename(rrfile))
                 i = data.colnames.index('MEAN_MJD')
                 data.add_column(np.zeros((len(data), ), dtype=np.float32),
                                 index=i, name=add_col)
@@ -268,9 +275,9 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
     for add_col in ('PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC'):
         if add_col not in expfibermap.colnames:
-            log.info("Adding missing column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(spectra_filename))
+            log.info("Adding missing column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(rrfile))
             if add_col == 'PSF_TO_FIBER_SPECFLUX':
-                log.warning("Adding missing column '%s' to %s ('EXP_FIBERMAP') with dummy values!", add_col, os.path.basename(spectra_filename))
+                log.warning("Adding missing column '%s' to %s ('EXP_FIBERMAP') with dummy values!", add_col, os.path.basename(rrfile))
                 i = expfibermap.colnames.index('FIBER_DEC')
                 expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
                                        index=i, name=add_col)
