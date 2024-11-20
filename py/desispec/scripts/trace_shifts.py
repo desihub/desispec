@@ -211,9 +211,10 @@ def fit_trace_shifts(image, args):
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration
-            internal_offset_info = {'wave':wave_for_dy,
-                                    'fiber':fiber_for_dy, 'dwave':dwave,
-                                    'dwave_err':dwave_err}
+            internal_offset_info = dict(wave=wave_for_dy,
+                                        fiber=fiber_for_dy,
+                                        dwave=dwave,
+                                        dwave_err=dwave_err)
         else :
             # duplicate dx results with zero shift to avoid write special case code below
             x_for_dy = x_for_dx.copy()
@@ -357,9 +358,9 @@ def fit_trace_shifts(image, args):
                                                                              image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
                                                                              degyy=args.degyy, width=7)
-        external_offset_info = {'wave': wave_external,
-                                'dwave': dwave_external,
-                                'dwave_err':dwave_err_external}
+        external_offset_info = dict(wave=wave_external,
+                                    dwave=dwave_external,
+                                    dwave_err=dwave_err_external)
     else:
         external_offset_info = None
     x = np.zeros(x0.shape)
