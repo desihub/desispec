@@ -226,7 +226,7 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
     # COADD_NUMEXP, COADD_NUMTILE, which are obtained from coadd_fibermapp()
     # for zbest files.
     #
-    for drop_col in ('NUMEXP', 'NUMTILE', 'NUMTARGET', 'HEALPIX', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z'):
+    for drop_col in ('NUMEXP', 'NUMTILE', 'NUMTARGET', 'HPXPIXEL', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z'):
         if drop_col in data.colnames:
             log.info("Removing column '%s' from %s ('ZCATALOG').", drop_col, os.path.basename(rrfile))
             data.remove_column(drop_col)
