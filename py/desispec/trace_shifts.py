@@ -356,6 +356,8 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
         ey : 1D array of uncertainties on dy
         fiber : 1D array of fiber ID (first fiber = 0)
         wave  : 1D array of wavelength
+        dwave : 1D array of wavelength offsets
+        dwave_err: 1D array of wavelength offset uncertainties
 
     """
     log=get_logger()
@@ -823,6 +825,9 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
+        wave:  : 1D array of wavelengths for which offsets are computed
+        dwave: : 1D array of wavelength offsets
+        dwave_err: 1D array of wavelength offset uncertainties
 
     """
     log = get_logger()
@@ -922,7 +927,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     for fiber in range(ycoef.shape[0]) :
         ycoef[fiber] += dycoef
 
-    return ycoef, (wave_for_dy, dwave_list, dwave_err_list)
+    return ycoef, wave_for_dy, dwave_list, dwave_err_list
 
 
 

@@ -353,7 +353,7 @@ def fit_trace_shifts(image, args):
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
         (tset.y_vs_wave_traceset._coeff,
-         (wave_external, dwave_external, dwave_err_external)) = shift_ycoef_using_external_spectrum(psf=psf, xytraceset=tset,
+         wave_external, dwave_external, dwave_err_external) = shift_ycoef_using_external_spectrum(psf=psf, xytraceset=tset,
                                                                              image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
                                                                              degyy=args.degyy, width=7)
