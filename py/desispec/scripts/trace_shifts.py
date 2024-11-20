@@ -94,7 +94,15 @@ def read_specter_psf(filename) :
 
 
 def fit_trace_shifts(image, args):
+    """
+    Perform the fitting of shifts of spectral traces 
+    This consists of two steps, one is internal, by 
+    cross-correlating spectra to themselves, and then
+    cross-correlating to external (ususally sky) spectrum
 
+    Return updated traceset and two dictionaies with offset information 
+    to be written in the PSF file
+    """
     global psfs
 
     log=get_logger()
@@ -168,6 +176,7 @@ def fit_trace_shifts(image, args):
         nfibers = args.nfibers # FOR DEBUGGING
 
     fibers=np.arange(nfibers)
+    internal_offset_info = None
 
     if lines is not None :
 
@@ -213,7 +222,6 @@ def fit_trace_shifts(image, args):
             ey       = 1.e-6*np.ones(ex.shape)
             fiber_for_dy = fiber_for_dx.copy()
             wave_for_dy  = wave_for_dx.copy()
-            internal_offset_info = None
             
     degxx=args.degxx
     degxy=args.degxy
@@ -345,10 +353,10 @@ def fit_trace_shifts(image, args):
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
         (tset.y_vs_wave_traceset._coeff,
-         (wave_external, dwave_external, dwave_err_external)) = shift_ycoef_using_external_spectrum(psf=psf,xytraceset=tset,
-                                                                             image=image,fibers=fibers,
+         (wave_external, dwave_external, dwave_err_external)) = shift_ycoef_using_external_spectrum(psf=psf, xytraceset=tset,
+                                                                             image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
-                                                                             degyy=args.degyy,width=7)
+                                                                             degyy=args.degyy, width=7)
         external_offset_info = {'wave': wave_external,
                                 'dwave': dwave_external,
                                 'dwave_err':dwave_err_external}

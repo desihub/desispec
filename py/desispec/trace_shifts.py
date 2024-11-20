@@ -34,8 +34,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, inter
         input_psf_filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
         output_psf_filename : Path to output fits file which has to contain XTRACE and YTRACE HDUs
         xytraceset : xytraceset
-        internal_offset_info: dictionary of internal offsets in wavelength
-        external_offset_info: dictionary of external offsets in wavelength
+        internal_offset_info: dictionary of internal offsets (i.e. fiber vs 'median  fiber') in wavelength
+        external_offset_info: dictionary of external offsets (i.e. 'median fiber' vs external spectrum) in wavelength
     """
 
     xcoef=xytraceset.x_vs_wave_traceset._coeff
@@ -109,21 +109,21 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, inter
             psf_fits["PSF"].header[k] = xytraceset.meta[k]
     if internal_offset_info is not None:
         data = {}
-        dwave,dwave_err,fiber,wave=[internal_offset_info[_] for _ in ['dwave','dwave_err','fiber','wave']]
+        dwave, dwave_err, fiber, wave=[internal_offset_info[_] for _ in ['dwave','dwave_err','fiber','wave']]
         data  = np.rec.fromarrays((fiber, wave, dwave, dwave_err),
-                                  dtype=np.dtype([('fiber','i4'),
-                                         ('wave','f4'),
-                                         ('dwave','f4'),
-                                         ('dwave_err','f4')]))
+                                  dtype=np.dtype([('FIBER','i4'),
+                                         ('WAVE','f4'),
+                                         ('DWAVE','f4'),
+                                         ('DWAVE_ERR','f4')]))
         psf_fits.append(pyfits.BinTableHDU(data, name='INTOFF'))
     if external_offset_info is not None:
         data = {}
         dwave,dwave_err,wave=[external_offset_info[_] for _ in ['dwave','dwave_err','wave']]
         data  = np.rec.fromarrays((wave, dwave, dwave_err),
                                   dtype=np.dtype([
-                                         ('wave','f4'),
-                                         ('dwave','f4'),
-                                         ('dwave_err','f4')]))
+                                         ('WAVE','f4'),
+                                         ('DWAVE','f4'),
+                                         ('DWAVE_ERR','f4')]))
         psf_fits.append( pyfits.BinTableHDU(data, name='EXTOFF'))
 
     tmpfile = get_tempfilename(output_psf_filename)
