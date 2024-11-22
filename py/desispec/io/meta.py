@@ -68,13 +68,72 @@ def get_readonly_filepath(filepath):
 
     return filepath
 
+def get_findfile_argparser():
+    """
+    Defines an argparser for a command line tool to call findfile
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="Returns the location where a file should be.")
+
+    ## Required argument
+    parser.add_argument("filetype", type=str, help="File type, typically the prefix, e.g., 'frame' or 'psf'.")
+
+    ## Optional arguments depending on filetype
+    parser.add_argument("-n", "--night", type=str,
+                        help="YEARMMDD string or int.")
+    parser.add_argument("-e", "--expid", type=int,
+                        help="Integer exposure ID.")
+    parser.add_argument("-c", "--camera", type=str,
+                        help="'b0', 'r1', ..., 'z9'.")
+    parser.add_argument("-t", "--tile", type=int,
+                        help="Integer tile (pointing) number.")
+    parser.add_argument("-g", "--groupname", type=str,
+                        help="Spectral grouping name (e.g., 'healpix', 'cumulative', 'pernight').")
+    parser.add_argument("--subgroup", type=str,
+                        help="Subgrouping name for non-standard group names.")
+    parser.add_argument("--healpix", type=int,
+                        help="Healpix pixel number.")
+    parser.add_argument("--nside", type=int, default=64,
+                        help="Healpix nside (default: 64).")
+    parser.add_argument("--band", type=str, choices=['b', 'r', 'z'],
+                        help="Camera band ('b', 'r', or 'z').")
+    parser.add_argument("--spectrograph", type=int,
+                        help="Integer spectrograph number (0-9).")
+    parser.add_argument("--survey", type=str,
+                        help="Survey, e.g., sv1, sv3, main, special.")
+    parser.add_argument("--faprogram", type=str,
+                        help="Fiberassign program, e.g., dark, bright.")
+
+    ## General options
+    parser.add_argument("--rawdata_dir", type=str,
+                        help="Overrides $DESI_SPECTRO_DATA.")
+    parser.add_argument("--specprod_dir", type=str,
+                        help="Overrides $DESI_SPECTRO_REDUX/$SPECPROD/.")
+    parser.add_argument("--specprod", type=str,
+                        help="Production name or full path to production.")
+    parser.add_argument("--qaprod_dir", type=str,
+                        help="Defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided.")
+    parser.add_argument("--tiles_dir", type=str,
+                        help="Defaults to $FIBER_ASSIGN_DIR if not provided.")
+    parser.add_argument("--outdir", type=str,
+                        help="Use this directory for output instead of canonical location.")
+    parser.add_argument("--download", action="store_true",
+                        help="If not found locally, try to fetch remotely.")
+    parser.add_argument("--return_exists", action="store_true",
+                        help="Also return whether the file exists.")
+    parser.add_argument("--readonly", action="store_true",
+                        help="Return read-only version of path if possible.")
+    parser.add_argument("--logfile", action="store_true",
+                        help="Return the pathname of the log instead of the data product itself.")
+
+    return parser
+
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
-        healpix=None, nside=64,
-        band=None, spectrograph=None,
-        survey=None, faprogram=None,
-        rawdata_dir=None, specprod_dir=None, specprod=None, qaprod_dir=None,
-        tiles_dir=None, download=False, outdir=None,
+        healpix=None, nside=64, band=None, spectrograph=None,
+        survey=None, faprogram=None, rawdata_dir=None,
+        specprod_dir=None, specprod=None, qaprod_dir=None,
+        outdir=None, tiles_dir=None, download=False,
         return_exists=False,
         readonly=False, logfile=False):
     """Returns location where file should be
@@ -83,7 +142,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         filetype : file type, typically the prefix, e.g. "frame" or "psf"
 
     Args depending upon filetype:
-        night : YEARMMDD string
+        night : YEARMMDD string or int
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
