@@ -1277,7 +1277,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
     log = get_logger()
     row = proc_table[rown]
     log.info(f"Identified row {row['INTID']} as needing resubmission.")
-    log.info(f"{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}")
+    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}")
     if len(proc_table['ALL_QIDS'][rown]) > max_resubs:
         log.warning(f"Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, "
                     + f"Jobdesc={row['JOBDESC']} has already been submitted "
@@ -1297,7 +1297,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 if idep // 1000 != row['INTID'] // 1000:
-                    log.info(f"Internal ID: {idep} not in id_to_row_map. "
+                    log.debug(f"Internal ID: {idep} not in id_to_row_map. "
                              + "This is expected since it's from another day. ")
                     reference_night = 20000000 + (idep // 1000)
                     reftab = read_minimal_full_proctab_cols(nights=[reference_night])
