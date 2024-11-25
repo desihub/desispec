@@ -8,6 +8,7 @@ import sys
 import os
 from glob import glob
 import tempfile
+import shutil
 import textwrap
 from desiutil.log import get_logger
 import multiprocessing
@@ -535,9 +536,11 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 run_preproc = False
         # AR run preproc?
 
+    temp_dir_loc = None
     if run_preproc:
         cmds = []
-        specprod_dir = tempfile.mkdtemp()
+        temp_dir_loc = tempfile.mkdtemp()
+        specprod_dir = temp_dir_loc
         outdir = os.path.dirname(findfile("preproc", night, dark_expid,
                                           'r1', specprod_dir=specprod_dir))
         os.makedirs(outdir, exist_ok=True)
@@ -550,7 +553,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             # like os.system(cmd), but avoids system call for MPI compatibility
             cmds.append(cmd.split()[1:])
         with multiprocessing.Pool(processes=nproc) as pool:
-            pool.starmap(preproc.main, cmds)
+            pool.map(preproc.main, cmds)
     else:
         specprod_dir = prod
 
@@ -573,6 +576,11 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     with multiprocessing.Pool(processes=nproc) as pool:
         mydicts = pool.starmap(_read_dark, myargs)
 
+    ## Remove the temporary directory
+    if temp_dir_loc is not None and os.path.exists(temp_dir_loc):
+            shutil.rmtree(temp_dir_loc)
+            log.info(f"Removed temporary directory and its contents: {temp_dir_loc}")
+            
     # AR campets to be additionally processed with --bkgsub-for-science
     # AR besides, check the very unlikely case where a camera is missing
     # AR    for all petals
@@ -594,6 +602,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         bkgsub_science_cameras_str = ",".join(bkgsub_science_cameras)
         log.info("campets to be additionally processed with --bkgsub-for-science: {}".format(bkgsub_science_campets))
         #
+        bkgsub_specprod_dir = None
         if len(bkgsub_science_campets) > 0:
             bkgsub_specprod_dir = tempfile.mkdtemp()
             outdir = os.path.dirname(findfile("preproc", night, dark_expid,
@@ -609,7 +618,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 # like os.system(cmd), but avoids system call for MPI compatibility
                 cmds.append(cmd.split()[1:])
             with multiprocessing.Pool(processes=nproc) as pool:
-                pool.starmap(preproc.main, cmds)
+                pool.map(preproc.main, cmds)
 
         # AR read the bkgsub dark
         bkgsub_myargs = []
@@ -630,6 +639,11 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         with multiprocessing.Pool(processes=nproc) as pool:
             bkgsub_mydicts = pool.starmap(_read_dark, bkgsub_myargs)
 
+        ## Remove the temporary directory
+        if bkgsub_specprod_dir is not None and os.path.exists(bkgsub_specprod_dir):
+            shutil.rmtree(bkgsub_specprod_dir)
+            log.info(f"Removed temporary directory and its contents: {bkgsub_specprod_dir}")
+    
     # AR plotting
     # AR remarks:
     # AR - the (x,y) conversions for the side panels

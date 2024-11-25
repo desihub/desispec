@@ -125,7 +125,8 @@ def main():
         log.info("args.compute_missing_only set: will override args.steps={}".format(args.steps))
         steps_tbd = []
         for step in steps_all:
-            if not os.path.isfile(outfns[step]) and step != 'html':
+            ## recompute html since recomputing other steps
+            if not os.path.isfile(outfns[step]) or step == 'html':
                 steps_tbd.append(step)
                 log.info(f"add {step} to steps_tbd, as args.compute_missing_only "
                          + f"set and no {outfns[step]} present")
