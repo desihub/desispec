@@ -1297,8 +1297,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 if idep // 1000 != row['INTID'] // 1000:
-                    log.debug(f"Internal ID: {idep} not in id_to_row_map. "
-                             + "This is expected since it's from another day. ")
+                    log.debug("Internal ID: %d not in id_to_row_map. "
+                             + "This is expected since it is from another day. ", idep)
                     reference_night = 20000000 + (idep // 1000)
                     reftab = read_minimal_full_proctab_cols(nights=[reference_night])
                     if reftab is None:
