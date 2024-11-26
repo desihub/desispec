@@ -32,9 +32,9 @@ def parse(options=None):
             help="The version number of the output catalogs")
 
     parser.add_argument("-i", "--indir",  type=str, default=None,
-            help="input directory")
+            help="Input directory")
     parser.add_argument("-o", "--outdir", type=str, default=None,
-            help="output directory")
+            help="Output directory without version number included.")
     parser.add_argument("--header", type=str, default=None,
             help="KEYWORD=VALUE entries to add to the output header")
     # parser.add_argument("--survey", type=str, nargs="*", default=None,
