@@ -2,21 +2,43 @@
 desispec Change Log
 ===================
 
-0.68.0 (unreleased)
+0.68.2 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.68.1 (2024-11-08)
+-------------------
+
+Used for rerunning the QuasarNet afterburner on Loa. Compatible with
+0.68.0 tag for files that succeeded with that tag.
+
+* Fix QuasarNet afterburner indexing bug when all input spectra are masked
+  (PR `#2409`_).
+
+.. _`#2409`: https://github.com/desihub/desispec/pull/2409
+
+0.68.0 (2024-11-07)
+-------------------
+
+Used for rerunning the QuasarNet afterburner on Loa.
+
 * Allow `desi_proc_night` to restart midway in calibrations (PR `#2392`_).
-* Remove E(B-V) factor in backup tile EFFTIME calculations (PR `#2395`_).
+* Remove E(B-V) factor in backup tile EFFTIME calculations (PR `#2395`_, `#2406`_).
 * Fix undefined variables reported by static checker (PR `#2400`_).
 * QuasarNet afterburner runs LOZ and HIZ templates together;
   Add input provenance to output files including $QN_MODEL_FILE (PR `#2402`_).
 * Use slurm job status to color and inform processing dashboards (PR `#2403`_).
+* Update QuasarNet afterburner outputs - add columns, don't run SKY fibers
+  (PR `#2407`_).
 
 .. _`#2392`: https://github.com/desihub/desispec/pull/2392
 .. _`#2395`: https://github.com/desihub/desispec/pull/2395
 .. _`#2400`: https://github.com/desihub/desispec/pull/2400
 .. _`#2402`: https://github.com/desihub/desispec/pull/2402
 .. _`#2403`: https://github.com/desihub/desispec/pull/2403
+.. _`#2406`: https://github.com/desihub/desispec/pull/2406
+.. _`#2407`: https://github.com/desihub/desispec/pull/2407
 
 0.67.0 (2024-10-11)
 -------------------
@@ -117,6 +139,7 @@ First tag used for Kibo/Y3 run.
   desi_spectro_calib yaml files (PR `#2296`_).
 * desi_group_spectra header propagation cleanup (PR `#2302`_).
 * zproc requires exposure-qa files for tileqa step (PR `#2306`_).
+* Re-add support for custom tile groups like 1x_depth (PR `#2309`_)
 * Don't set envs in desispec.module that are now set in desimodules
   (PR `#2310`_).
 * New FIBERSTATUS NEARCHARGETRAP and VARIABLETHRU set in
@@ -137,6 +160,7 @@ First tag used for Kibo/Y3 run.
 .. _`#2296`: https://github.com/desihub/desispec/pull/2296
 .. _`#2302`: https://github.com/desihub/desispec/pull/2302
 .. _`#2306`: https://github.com/desihub/desispec/pull/2306
+.. _`#2309`: https://github.com/desihub/desispec/pull/2309
 .. _`#2310`: https://github.com/desihub/desispec/pull/2310
 .. _`#2313`: https://github.com/desihub/desispec/pull/2313
 .. _`#2314`: https://github.com/desihub/desispec/pull/2314

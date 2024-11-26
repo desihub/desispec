@@ -47,6 +47,8 @@ for files,outfile in zip([dark_files,bias_files],
         files_new = [f for f in files if f.replace(f"{args.indir}/","") not in outtab['FILENAME']]
     else:
         files_new = files
+    if len(files_new)==0:
+        raise ValueError(f"No new files found in {args.indir} to add to {outfile}")
     for fi in files_new:
         with fits.open(fi, "readonly") as f:
             det = f[0].header["DETECTOR"]
