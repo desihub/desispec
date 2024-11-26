@@ -316,8 +316,8 @@ def parse(options=None):
             help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
     parser.add_argument('--recoadd-fibermap', action='store_true',
             help="Re-coadd FIBERMAP from spectra files")
-    parser.add_argument('--add-units', action='store_true',
-            help="Add units to output catalog from desidatamodel "
+    parser.add_argument('--do-not-add-units', action='store_true',
+            help="Don't add units to output catalog from desidatamodel "
                  "column descriptions")
     parser.add_argument('--nproc', type=int, default=1,
             help="Number of multiprocessing processes to use")
@@ -343,7 +343,8 @@ def main(args=None):
         args.outfile = io.findfile('zcatalog')
 
     #- If adding units, check dependencies before doing a lot of work
-    if args.add_units:
+    add_units = not args.do_not_add_units
+    if add_units:
         try:
             import desidatamodel
         except ImportError:
@@ -572,7 +573,7 @@ def main(args=None):
         header['PROGRAM'] = args.program
 
     #- Add units if requested
-    if args.add_units:
+    if add_units:
         datamodeldir = str(importlib.resources.files('desidatamodel'))
         unitsfile = os.path.join(datamodeldir, 'data', 'column_descriptions.csv')
         log.info(f'Adding units from {unitsfile}')

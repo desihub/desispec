@@ -20,16 +20,17 @@ from desiutil.log import get_logger, DEBUG
 from desispec.io.meta import findfile
 from desispec.io import specprod_root
 from desispec.scripts import zcatalog as zcatalog_script
-from desispec.zcatalog import create_summary_catalog_wrapper
+from desispec.zcatalog import create_summary_catalog
+
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-g", "--group", type=str,
+    parser.add_argument("-g", "--group", type=str, required=True,
             help="Add columns specific to this spectral grouping "
                  "e.g. pernight, perexp, cumulative, healpix")
-
-    parser.add_argument("--cat-version",type=str, default=None,
+    parser.add_argument('-V', "--cat-version",type=str, required=True,
             help="The version number of the output catalogs")
+
     parser.add_argument("-i", "--indir",  type=str, default=None,
             help="input directory")
     parser.add_argument("-o", "--outdir", type=str, default=None,
@@ -48,8 +49,8 @@ def parse(options=None):
             help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
     parser.add_argument('--recoadd-fibermap', action='store_true',
             help="Re-coadd FIBERMAP from spectra files")
-    parser.add_argument('--add-units', action='store_true',
-            help="Add units to output catalog from desidatamodel "
+    parser.add_argument('--do-not-add-units', action='store_true',
+            help="Set if you do not want to add units to output catalog from desidatamodel "
                  "column descriptions")
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Set log level to DEBUG.")
@@ -57,6 +58,12 @@ def parse(options=None):
 
     return args
 
+def _create_summary_catalog_wrapper(kwargs):
+    """
+    Trivial wrapper around create_summary_catalog that takes a dict
+    and passes the key-value pairs to create_summary_catalog as keyword arguments
+    """
+    return create_summary_catalog(**kwargs)
 
 def main(args=None):
     if not isinstance(args, argparse.Namespace):
@@ -67,13 +74,8 @@ def main(args=None):
     else:
         log=get_logger()
 
-    ## Ensure we know where to save the files
-    if args.outdir is None and args.cat_version is None:
-        log.critical(f"Either --outdir or --cat-version must be specifiied. Exiting")
-        return 1
-
     ## If adding units, check dependencies before doing a lot of work
-    if args.add_units:
+    if not args.do_not_add_units:
         try:
             import desidatamodel
         except ImportError:
@@ -98,12 +100,6 @@ def main(args=None):
                                                version=args.cat_version,
                                                groupname=args.group,
                                                survey='dummy', faprogram='dummy'))
-
-    ## Define catalog version (currently not used except with findfile,
-    ## but since we are only using findfile for the filename and not the
-    ## directory tree, the version isn't actually relevant
-    if args.cat_version is None:
-        args.cat_version = os.path.basename(args.outdir)
 
     logdir = os.path.join(args.outdir, 'logs')
     if not os.path.exists(logdir):
@@ -135,7 +131,7 @@ def main(args=None):
                              ("--minimal", args.minimal),
                              ('--patch-missing-ivar-w12', args.patch_missing_ivar_w12),
                              ('--recoadd-fibermap', args.recoadd_fibermap),
-                             ('--add-units', args.add_units)]:
+                             ('--do-not-add-units', args.do_not_add_units)]:
         if argval:
             cmd += f" {argument}"
 
@@ -211,7 +207,7 @@ def main(args=None):
         ## Redirect logging to seperate file and only run of all files output in the last
         ## step exist
         with stdouterr_redirected(outlog):
-            result, success = runcmd(create_summary_catalog_wrapper, args=kwargs,
+            result, success = runcmd(_create_summary_catalog_wrapper, args=kwargs,
                                      inputs=survey_program_outfiles, outputs=[outfile])
         if not success:
             error_count += 1

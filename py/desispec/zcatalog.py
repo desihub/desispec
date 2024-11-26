@@ -157,13 +157,6 @@ def _get_survey_program_from_filename(filename):
     program = arr[2]
     return survey, program
 
-def create_summary_catalog_wrapper(kwargs):
-    """
-    Trivial wrapper around create_summary_catalog that takes a dict
-    and passes the key-value pairs to create_summary_catalog as keyword arguments
-    """
-    return create_summary_catalog(**kwargs)
-
 def create_summary_catalog(specgroup, indir=None, specprod=None,
                            all_columns = True, columns_list = None,
                            output_filename=None):
