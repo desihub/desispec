@@ -100,6 +100,9 @@ def main(args=None):
                                                version=args.cat_version,
                                                groupname=args.group,
                                                survey='dummy', faprogram='dummy'))
+    else:
+        args.outdir = os.path.join(args.outdir, args.cat_version)
+    log.info(f"Writing outputs to the following directory: {args.outdir}")
 
     logdir = os.path.join(args.outdir, 'logs')
     if not os.path.exists(logdir):
