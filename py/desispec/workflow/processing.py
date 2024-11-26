@@ -1166,7 +1166,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 
     return np.all(list(test_dict.values()))
 
-def update_and_recursively_submit(proc_table, submits=0, resubmission_states=None,
+def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
+                                  resubmission_states=None,
                                   no_resub_failed=False, ptab_name=None,
                                   dry_run_level=0, reservation=None):
     """
@@ -1178,6 +1179,7 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
     Args:
         proc_table, Table, the processing table with a row per job.
         submits, int, the number of submissions made to the queue. Used for saving files and in not overloading the scheduler.
+        max_resubs, int, the number of times a job should be resubmitted before giving up. Default is very high at 100.
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
             possible Slurm scheduler state, where you wish for jobs with that
             outcome to be resubmitted
@@ -1221,16 +1223,19 @@ def update_and_recursively_submit(proc_table, submits=0, resubmission_states=Non
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
-            proc_table, submits = recursive_submit_failed(rown, proc_table, submits,
-                                                          id_to_row_map, ptab_name,
-                                                          resubmission_states,
-                                                          reservation, dry_run_level)
+            proc_table, submits = recursive_submit_failed(rown=rown, proc_table=proc_table,
+                                                          submits=submits, max_resubs=max_resubs,
+                                                          id_to_row_map=id_to_row_map,
+                                                          ptab_name=ptab_name,
+                                                          resubmission_states=resubmission_states,
+                                                          reservation=reservation,
+                                                          dry_run_level=dry_run_level)
 
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
 
     return proc_table, submits
 
-def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
+def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs=100, ptab_name=None,
                             resubmission_states=None, reservation=None, dry_run_level=0):
     """
     Given a row of a processing table and the full processing table, this resubmits the given job.
@@ -1244,6 +1249,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         submits, int, the number of submissions made to the queue. Used for saving files and in not overloading the scheduler.
         id_to_row_map, dict, lookup dictionary where the keys are internal ids (INTID's) and the values are the row position
             in the processing table.
+        max_resubs, int, the number of times a job should be resubmitted before giving up. Default is very high at 100.
         ptab_name, str, the full pathname where the processing table should be saved.
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
             possible Slurm scheduler state, where you wish for jobs with that
@@ -1271,7 +1277,13 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     log = get_logger()
     row = proc_table[rown]
     log.info(f"Identified row {row['INTID']} as needing resubmission.")
-    log.info(f"{row['INTID']}: Expid(s): {row['EXPID']}  Job: {row['JOBDESC']}")
+    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}")
+    if len(proc_table['ALL_QIDS'][rown]) > max_resubs:
+        log.warning(f"Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, "
+                    + f"Jobdesc={row['JOBDESC']} has already been submitted "
+                    + f"{max_resubs+1} times. Not resubmitting.")
+        proc_table['STATUS'][rown] = "MAX_RESUB"
+        return proc_table, submits
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
@@ -1285,8 +1297,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 if idep // 1000 != row['INTID'] // 1000:
-                    log.info(f"Internal ID: {idep} not in id_to_row_map. "
-                             + "This is expected since it's from another day. ")
+                    log.debug("Internal ID: %d not in id_to_row_map. "
+                             + "This is expected since it is from another day. ", idep)
                     reference_night = 20000000 + (idep // 1000)
                     reftab = read_minimal_full_proctab_cols(nights=[reference_night])
                     if reftab is None:
