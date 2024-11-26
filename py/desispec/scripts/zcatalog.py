@@ -348,7 +348,9 @@ def main(args=None):
         try:
             import desidatamodel
         except ImportError:
-            log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
+            log.critical('Unable to import desidatamodel, required to add units.'
+                         + ' Try "module load desidatamodel" first or use '
+                         + '--do-not-add-units')
             return 1
 
     if args.indir is not None:
