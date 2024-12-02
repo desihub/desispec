@@ -1459,23 +1459,24 @@ def apply_flux_calibration(frame, fluxcalib):
 
     """
     F'=F/C
-    Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
-    = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
-    = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
-    = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    Var(F') = Var(F)/C^2 + F**2*(  d(1/C)/dC )^2*Var(C)
+    = 1/(ivar(F)*C^2) + F**2*(1/C**2)^2*Var(C)
+    = 1/(ivar(F)*C^2) + F**2*Var(C)/C^4
+    = 1/(ivar(F)*C^2) + F**2/(ivar(C)*C^4)
+    ivar(F') = C^4 * ivar(F) * ivar(C)/ (F^2 + C^2)
     """
-    # for fiber in range(nfibers) :
-    #     C = fluxcalib.calib[fiber]
-    #     flux[fiber]=frame.flux[fiber]*(C>0)/(C+(C==0))
-    #     ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
 
     C = fluxcalib.calib
-    frame.flux = frame.flux * (C>0) / (C+(C==0))
-    frame.ivar *= (fluxcalib.ivar>0) * (C>0)
+    good = (fluxcalib.ivar>0) & (C>0) & (frame.ivar>0)
     for i in range(nfibers) :
-        ok=np.where(frame.ivar[i]>0)[0]
-        if ok.size>0 :
-            frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
+        ok = good[i]
+        if ok.any() > 0 :
+            frame.ivar[i,ok] = C[i, ok]**4 * frame.ivar[i,ok] * fluxcalib.ivar[i,ok]/ (
+                frame.flux[i,ok]**2 + C[i,ok]**2 )
+        frame.ivar[i, ~ok] = 0
+    # It is important we update flux *after*
+    # updating variance
+    frame.flux = frame.flux * (C>0) / (C+(C==0))
 
     if fluxcalib.fibercorr is not None and frame.fibermap is not None :
         if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
