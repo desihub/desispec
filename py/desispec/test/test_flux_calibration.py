@@ -139,8 +139,8 @@ class TestFluxCalibration(unittest.TestCase):
         ivar = np.random.uniform(0.9, 1.1, size=flux.shape)
         origframe = Frame(wave, flux.copy(), ivar.copy(), spectrograph=0)
 
-        #define fluxcalib object
-        calib = np.random.uniform(.5, 1.5, shape=origframe.flux.shape)
+        # define fluxcalib object
+        calib = np.random.uniform(.5, 1.5, size=origframe.flux.shape)
         mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
 
         ivar_big = 1e20 * np.ones_like(origframe.flux)
