@@ -139,7 +139,7 @@ class TestFluxCalibration(unittest.TestCase):
         ivar = np.random.uniform(0.9, 1.1, size=flux.shape)
         origframe = Frame(wave, flux.copy(), ivar.copy(), spectrograph=0)
 
-        # define fluxcalib object
+        # efine fluxcalib object
         calib = np.random.uniform(.5, 1.5, size=origframe.flux.shape)
         mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
 
@@ -157,6 +157,7 @@ class TestFluxCalibration(unittest.TestCase):
         # calibration vector
         fc = FluxCalib(origframe.wave, calib, ivar, mask)
         frame = copy.deepcopy(origframe)
+        frame.ivar = ivar_big
         apply_flux_calibration(frame, fc)
         self.assertTrue(np.allclose(frame.flux**2 * frame.ivar,
                                     calib**2 * ivar))
