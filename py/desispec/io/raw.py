@@ -19,7 +19,6 @@ import desispec.io
 import desispec.io.util
 from . import iotime
 from desispec.util import header2night
-import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
@@ -62,6 +61,8 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
     documentation for details.
     '''
+    #- Deferred import for faster initial module import
+    import desispec.preproc
 
     log = get_logger()
 
