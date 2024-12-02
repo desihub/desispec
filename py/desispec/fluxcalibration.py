@@ -1463,7 +1463,7 @@ def apply_flux_calibration(frame, fluxcalib):
     = 1/(ivar(F)*C^2) + F^2*(1/C^2)^2*Var(C)
     = 1/(ivar(F)*C^2) + F^2*Var(C)/C^4
     = 1/(ivar(F)*C^2) + F^2/(ivar(C)*C^4)
-    ivar(F') = C^4 * ivar(F) * ivar(C)/ (C^2 * ivar(C) + F^2)
+    ivar(F') = C^4 * ivar(F) * ivar(C)/ (C^2 * ivar(C) + F^2 * ivar(F))
     """
 
     C = fluxcalib.calib
@@ -1473,8 +1473,9 @@ def apply_flux_calibration(frame, fluxcalib):
         if ok.any():
             frame.ivar[i, ok] = (C[i, ok]**4 * frame.ivar[i, ok] *
                                  fluxcalib.ivar[i, ok] /
-                                 (frame.flux[i, ok]**2 +
-                                  fluxcalib.ivar[i, ok] * C[i, ok]**2))
+                                 (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
+                                  frame.flux[i, ok]**2 * frame.ivar[i, ok]
+                                  ))
         frame.ivar[i, ~ok] = 0
     # It is important we update flux *after*
     # updating variance
