@@ -1467,16 +1467,17 @@ def apply_flux_calibration(frame, fluxcalib):
     """
 
     C = fluxcalib.calib
-    good = (fluxcalib.ivar>0) & (C>0) & (frame.ivar>0)
+    good = (fluxcalib.ivar > 0) & (C > 0) & (frame.ivar > 0)
     for i in range(nfibers) :
         ok = good[i]
-        if ok.any() > 0 :
-            frame.ivar[i,ok] = C[i, ok]**4 * frame.ivar[i,ok] * fluxcalib.ivar[i,ok]/ (
-                frame.flux[i,ok]**2 + C[i,ok]**2 )
+        if ok.any():
+            frame.ivar[i, ok] = (C[i, ok]**4 * frame.ivar[i, ok] *
+                                 fluxcalib.ivar[i, ok] /
+                                 (frame.flux[i, ok]**2 + C[i, ok]**2))
         frame.ivar[i, ~ok] = 0
     # It is important we update flux *after*
     # updating variance
-    frame.flux = frame.flux * (C>0) / (C+(C==0))
+    frame.flux = frame.flux * (C > 0) / (C + (C == 0))
 
     if fluxcalib.fibercorr is not None and frame.fibermap is not None :
         if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
