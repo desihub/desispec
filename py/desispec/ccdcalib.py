@@ -117,7 +117,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                mask=False, dark=False, pixflat=False)
+                mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
         # propagate gains to first_image_header
         for a in get_amp_ids(img.meta) :
@@ -276,7 +276,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
             raise ValueError(message)
 
         # subtract overscan region
-        cfinder=CalibFinder([image_header,primary_header])
+        cfinder=CalibFinder([image_header,primary_header],fallback_on_dark_not_found=True)
 
         image=fitsfile[camera].data.astype("float64")
 
@@ -674,7 +674,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
                 rawhdr = fx['SPEC'].read_header()
                 camhdr = fx[camera].read_header()
 
-            cf = CalibFinder([rawhdr, camhdr])
+            cf = CalibFinder([rawhdr, camhdr],fallback_on_dark_not_found=True)
             defaultbias = cf.findfile('BIAS')
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
