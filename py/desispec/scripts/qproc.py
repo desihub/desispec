@@ -17,7 +17,6 @@ from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fibe
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.io.xytraceset import read_xytraceset,write_xytraceset
 import desispec.scripts.trace_shifts as trace_shifts_script
-from desispec.trace_shifts import write_traces_in_psf
 from desispec.calibfinder import CalibFinder
 from desispec.qproc.qframe import QFrame
 from desispec.qproc.io import read_qframe,write_qframe
