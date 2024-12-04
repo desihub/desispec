@@ -502,13 +502,22 @@ class TestFiberFlatObject(unittest.TestCase):
             ff.fibermap = fibermap
             #- add +/- 5% tilt edge-to-edge
             tilt = 1 + 0.05*fibermap['FIBERASSIGN_X']/400
-            # tilt = np.ones(self.nspec)
+            print(f'DEBUG: {petal=}  {np.min(tilt)=}  {np.max(tilt)=}')
+            print(f'DEBUG: {petal=}  {np.min(ff.fiberflat)=}  {np.max(ff.fiberflat)=}')
             for i in range(ff.fiberflat.shape[0]):
                 ff.fiberflat[i] *= tilt[i]
 
             tilted_fiberflats[camera] = ff
 
-        final_fiberflats = gradient_correction(tilted_fiberflats, ref_fiberflats)
+        try:
+            final_fiberflats = gradient_correction(tilted_fiberflats, ref_fiberflats)
+        except Exception as err:
+            for petal in range(10):
+                camera = f'r{petal}'
+                ffratio = tilted_fiberflats[camera].fiberflat / ref_fiberflats[camera].fiberflat
+                print(f'DEBUG: {camera=} {ffratio=}')
+
+            raise err
 
         for cam in final_fiberflats:
             self.assertTrue(np.allclose(final_fiberflats[cam].fiberflat, ref_fiberflats[cam].fiberflat))
