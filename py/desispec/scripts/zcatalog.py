@@ -292,10 +292,11 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-i", "--indir",  type=str,
+    parser.add_argument("-i", "--indir",  type=str, default=None,
             help="input directory")
-    parser.add_argument("-o", "--outfile",type=str,
+    parser.add_argument("-o", "--outfile",type=str, default=None,
             help="output file")
+
     parser.add_argument("--minimal", action='store_true',
             help="only include minimal output columns")
     parser.add_argument("-t", "--tiles", type=str,
@@ -315,13 +316,14 @@ def parse(options=None):
             help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
     parser.add_argument('--recoadd-fibermap', action='store_true',
             help="Re-coadd FIBERMAP from spectra files")
-    parser.add_argument('--add-units', action='store_true',
-            help="Add units to output catalog from desidatamodel "
+    parser.add_argument('--do-not-add-units', action='store_true',
+            help="Don't add units to output catalog from desidatamodel "
                  "column descriptions")
     parser.add_argument('--nproc', type=int, default=1,
             help="Number of multiprocessing processes to use")
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Set log level to DEBUG.")
+
     args = parser.parse_args(options)
 
     return args
@@ -341,14 +343,17 @@ def main(args=None):
         args.outfile = io.findfile('zcatalog')
 
     #- If adding units, check dependencies before doing a lot of work
-    if args.add_units:
+    add_units = not args.do_not_add_units
+    if add_units:
         try:
             import desidatamodel
         except ImportError:
-            log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
+            log.critical('Unable to import desidatamodel, required to add units.'
+                         + ' Try "module load desidatamodel" first or use '
+                         + '--do-not-add-units')
             return 1
 
-    if args.indir:
+    if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
@@ -570,7 +575,7 @@ def main(args=None):
         header['PROGRAM'] = args.program
 
     #- Add units if requested
-    if args.add_units:
+    if add_units:
         datamodeldir = str(importlib.resources.files('desidatamodel'))
         unitsfile = os.path.join(datamodeldir, 'data', 'column_descriptions.csv')
         log.info(f'Adding units from {unitsfile}')

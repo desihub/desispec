@@ -219,11 +219,9 @@ def main(args=None):
     if args.ncpu > 1 and num_cameras>1:
         n = min(args.ncpu, num_cameras)
         log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
-        pool = mp.Pool(n)
-        failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
+        with mp.Pool(n) as pool:
+            failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
         num_failed = np.sum(failed)
-        pool.close()
-        pool.join()
     else:
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         num_failed = 0

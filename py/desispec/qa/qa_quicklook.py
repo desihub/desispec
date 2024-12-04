@@ -341,7 +341,7 @@ class Trace_Shifts(MonitoringAlg):
         from desispec.trace_shifts import compute_dy_using_boxcar_extraction as compute_dy
         fibers=np.arange(500) #RS: setting nfibers to 500 for now
         ox,oy,odx,oex,of,ol=compute_dx(xcoef,ycoef,wavemin,wavemax,image,fibers=fibers)
-        x_for_dy,y_for_dy,ody,ey,fiber_for_dy,wave_for_dy=compute_dy(psftrace,image,fibers)
+        x_for_dy,y_for_dy,ody,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err=compute_dy(psftrace,image,fibers)
 
         # return average shifts in x and y
         dx=np.mean(odx)

@@ -131,10 +131,10 @@ def get_findfile_argparser():
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
         healpix=None, nside=64, band=None, spectrograph=None,
-        survey=None, faprogram=None, rawdata_dir=None,
-        specprod_dir=None, specprod=None, qaprod_dir=None,
-        outdir=None, tiles_dir=None, download=False,
-        return_exists=False,
+        survey=None, faprogram=None, version=None,
+        rawdata_dir=None, specprod_dir=None, specprod=None,
+        qaprod_dir=None, tiles_dir=None, outdir=None,
+        download=False, return_exists=False,
         readonly=False, logfile=False):
     """Returns location where file should be
 
@@ -154,6 +154,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         spectrograph : integer spectrograph number, 0-9
         survey : e.g. sv1, sv3, main, special
         faprogram : fiberassign program, e.g. dark, bright
+        version : (str) version of the zcatalog
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
@@ -232,7 +233,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits.gz',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
+        #
         #  qa
+        #
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
         tileqa     = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.fits',
         tileqapng  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.png',
@@ -250,7 +253,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- healpix based
         #
-        zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
         rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
@@ -284,6 +286,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
         emline_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/emline-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
+        #
+        # z catalogs
+        #
+        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
+        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
+        zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
+        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
+        zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
         #
         # Dashboard files
         #
@@ -329,6 +339,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if groupname is None and tile is not None and filetype in (
             'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
             'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
+            'zcat_tile', 'zall_tile'
             ):
         groupname = 'cumulative'
 
@@ -402,7 +413,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 location[root_key] = val
     del loc_copy
 
-    if groupname is not None and tile is None:
+    if groupname is not None and tile is None and healpix is not None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
@@ -452,7 +463,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
-        'groupname':groupname, 'subgroup':subgroup,
+        'groupname':groupname, 'subgroup':subgroup, 'version':version,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }

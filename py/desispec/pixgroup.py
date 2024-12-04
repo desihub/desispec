@@ -14,7 +14,6 @@ import numpy as np
 import fitsio
 from astropy.io import fits
 from astropy.table import Table, vstack
-import healpy as hp
 
 from desimodel.footprint import radec2pix
 from desiutil.log import get_logger
