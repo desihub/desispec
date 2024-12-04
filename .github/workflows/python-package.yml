@@ -85,7 +85,7 @@ jobs:
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
             - name: Run the test with coverage
-              run: DESIMODEL=$(pwd) pytest --cov
+              run: DESIMODEL=$(pwd) pytest --cov py/desispec/test
             - name: Coveralls
               env:
                 COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}

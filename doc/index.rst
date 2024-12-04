@@ -10,10 +10,8 @@ Contents
 
     overview.rst
     install.rst
-    pipeline.rst
     dev.rst
     coadd.rst
-    qa.rst
     cte-correction.rst
     changes.rst
     api.rst

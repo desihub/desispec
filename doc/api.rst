@@ -152,9 +152,6 @@ desispec API
 .. automodule:: desispec.io.photo
     :members:
 
-.. automodule:: desispec.io.qa
-    :members:
-
 .. automodule:: desispec.io.raw
     :members:
 
@@ -212,84 +209,6 @@ desispec API
 .. automodule:: desispec.parallel
     :members:
 
-.. automodule:: desispec.pipeline
-    :members:
-
-.. automodule:: desispec.pipeline.control
-    :members:
-
-.. automodule:: desispec.pipeline.db
-    :members:
-
-.. automodule:: desispec.pipeline.defs
-    :members:
-
-.. automodule:: desispec.pipeline.plan
-    :members:
-
-.. automodule:: desispec.pipeline.prod
-    :members:
-
-.. automodule:: desispec.pipeline.run
-    :members:
-
-.. automodule:: desispec.pipeline.scriptgen
-    :members:
-
-.. automodule:: desispec.pipeline.tasks
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.base
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.cframe
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.extract
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.fiberflat
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.fiberflatnight
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.fibermap
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.fluxcalib
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.preproc
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.psf
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.psfnight
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.qadata
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.rawdata
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.redshift
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.sky
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.spectra
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.starfit
-    :members:
-
-.. automodule:: desispec.pipeline.tasks.traceshift
-    :members:
-
 .. automodule:: desispec.pixflat
     :members:
 
@@ -297,45 +216,6 @@ desispec API
     :members:
 
 .. automodule:: desispec.preproc
-    :members:
-
-.. automodule:: desispec.qa
-    :members:
-
-.. automodule:: desispec.qa.html
-    :members:
-
-.. automodule:: desispec.qa.qa_brick
-    :members:
-
-.. automodule:: desispec.qa.qa_exposure
-    :members:
-
-.. automodule:: desispec.qa.qa_frame
-    :members:
-
-.. automodule:: desispec.qa.qa_multiexp
-    :members:
-
-.. automodule:: desispec.qa.qa_night
-    :members:
-
-.. automodule:: desispec.qa.qa_plots
-    :members:
-
-.. automodule:: desispec.qa.qa_plots_ql
-    :members:
-
-.. automodule:: desispec.qa.qa_prod
-    :members:
-
-.. automodule:: desispec.qa.qa_quicklook
-    :members:
-
-.. automodule:: desispec.qa.qalib
-    :members:
-
-.. automodule:: desispec.qa.utils
     :members:
 
 .. automodule:: desispec.qproc
@@ -363,60 +243,6 @@ desispec API
     :members:
 
 .. automodule:: desispec.qproc.rowbyrowextract
-    :members:
-
-.. automodule:: desispec.quicklook
-    :members:
-
-.. automodule:: desispec.quicklook.arcprocess
-    :members:
-
-.. automodule:: desispec.quicklook.merger
-    :members:
-
-.. automodule:: desispec.quicklook.palib
-    :members:
-
-.. automodule:: desispec.quicklook.pas
-    :members:
-
-.. automodule:: desispec.quicklook.procalgs
-    :members:
-
-.. automodule:: desispec.quicklook.qas
-    :members:
-
-.. automodule:: desispec.quicklook.ql_plotlib
-    :members:
-
-.. automodule:: desispec.quicklook.qlboxcar
-    :members:
-
-.. automodule:: desispec.quicklook.qlconfig
-    :members:
-
-.. automodule:: desispec.quicklook.qlexceptions
-    :members:
-
-.. automodule:: desispec.quicklook.qlheartbeat
-    :members:
-
-.. automodule:: desispec.quicklook.qllogger
-    :members:
-
-.. automodule:: desispec.quicklook.qlpsf
-    :members:
-
-.. automodule:: desispec.quicklook.qlresolution
-    :members:
-
-.. automodule:: desispec.quicklook.quickfiberflat
-    :members:
-
-.. automodule:: desispec.quicklook.quicklook
-    :members:
-
-.. automodule:: desispec.quicklook.quicksky
     :members:
 
 .. automodule:: desispec.resolution
@@ -524,13 +350,7 @@ desispec API
 .. automodule:: desispec.scripts.mergebundles
     :members:
 
-.. automodule:: desispec.scripts.night
-    :members:
-
 .. automodule:: desispec.scripts.nightly_bias
-    :members:
-
-.. automodule:: desispec.scripts.pipe
     :members:
 
 .. automodule:: desispec.scripts.pipe_exec
@@ -560,18 +380,6 @@ desispec API
 .. automodule:: desispec.scripts.procexp
     :members:
 
-.. automodule:: desispec.scripts.qa_exposure
-    :members:
-
-.. automodule:: desispec.scripts.qa_frame
-    :members:
-
-.. automodule:: desispec.scripts.qa_night
-    :members:
-
-.. automodule:: desispec.scripts.qa_prod
-    :members:
-
 .. automodule:: desispec.scripts.qproc
     :members:
 
@@ -579,9 +387,6 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.qsoqn
-    :members:
-
-.. automodule:: desispec.scripts.quicklook
     :members:
 
 .. automodule:: desispec.scripts.reformat_exptables
@@ -600,9 +405,6 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.sky
-    :members:
-
-.. automodule:: desispec.scripts.skysubresid
     :members:
 
 .. automodule:: desispec.scripts.specex
