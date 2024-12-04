@@ -270,24 +270,24 @@ class TestFiberFlat(unittest.TestCase):
 
         fiberflat = np.ones_like(flux)
         ffivar = 2*np.ones_like(flux)
-        ffmask = np.zeros_like(flux)
+        ffmask = np.zeros_like(flux, dtype=np.uint32)
         fiberflat[0] *= 0.8
         fiberflat[1] *= 1.2
         fiberflat[2, 0:10] = 0  #- bad fiberflat
         ffivar[2, 10:20] = 0    #- bad fiberflat
         ffmask[2, 20:30] = 1    #- bad fiberflat
 
-        ff = FiberFlat(wave, fiberflat, ffivar)
+        ff = FiberFlat(wave, fiberflat, ffivar, mask=ffmask)
 
+        self.assertTrue(np.all(ff.fiberflat == fiberflat))
+        self.assertTrue(np.all(ff.ivar == ffivar))
+        self.assertTrue(np.all(ff.mask == ffmask))
+
+        #- Test applying fiberflat
         origframe = copy.deepcopy(frame)
         apply_fiberflat(frame, ff)
 
-        #- was fiberflat applied?
-        self.assertTrue(np.all(frame.flux[0] == origframe.flux[0]/0.8))
-        self.assertTrue(np.all(frame.flux[1] == origframe.flux[1]/1.2))
-        self.assertTrue(np.all(frame.flux[2] == origframe.flux[2]))
-
-        #- did mask get set?
+        #- did mask get set for bad fiberflat?
         ii = (ff.fiberflat == 0)
         self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
         ii = (ff.ivar == 0)
@@ -295,10 +295,17 @@ class TestFiberFlat(unittest.TestCase):
         ii = (ff.mask != 0)
         self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
 
+        #- was fiberflat applied for non-masked pixels?
+        ok = (frame.mask & specmask.BADFIBERFLAT) == 0
+        self.assertTrue(np.all(frame.flux[0][ok[0]] == origframe.flux[0][ok[0]]/0.8))
+        self.assertTrue(np.all(frame.flux[1][ok[1]] == origframe.flux[1][ok[1]]/1.2))
+        self.assertTrue(np.all(frame.flux[2][ok[2]] == origframe.flux[2][ok[2]]))
+
         #- Should fail if frame and ff don't have a common wavelength grid
         frame.wave = frame.wave + 0.1
         with self.assertRaises(ValueError):
             apply_fiberflat(frame, ff)
+
 
     def test_apply_fiberflat_ivar(self):
         '''test error propagation in apply_fiberflat'''
@@ -310,13 +317,13 @@ class TestFiberFlat(unittest.TestCase):
         origframe = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
 
         fiberflat = np.ones_like(flux)
-        ffmask = np.zeros_like(flux)
+        ffmask = np.zeros_like(flux, dtype=np.uint32)
         fiberflat[0] *= 0.5
         fiberflat[1] *= 1.5
 
         #- ff with essentially no error
         ffivar = 1e20 * np.ones_like(flux)
-        ff = FiberFlat(wave, fiberflat, ffivar)
+        ff = FiberFlat(wave, fiberflat, ffivar, mask=ffmask)
         frame = copy.deepcopy(origframe)
         apply_fiberflat(frame, ff)
         self.assertTrue(np.allclose(frame.ivar, fiberflat**2))
