@@ -1502,10 +1502,7 @@ def _calibrate_resolution_matrix(res_mat, calib, good_calib):
         res_mat_fc: corrected resolution matrix
     """
     # We use calculation from #2419
-    # res_mat is the banded representation of the resolution matrix
-    # calib is the calibration vector
-    # good_calib is the subset of pixel where calib is valid
-    # the caclulation is C^{-1} R C
+    # the calculation is C^{-1} R C
     # the only complication if C has zeros.
     # Then for the left we take the pseudo inverse
     # and for the right we interpolate over bad regions
@@ -1518,8 +1515,9 @@ def _calibrate_resolution_matrix(res_mat, calib, good_calib):
         rcalib = _interpolate_bad_regions(calib, ~good_calib)
     # now we align the diagonals to the banded storage
     # of the resolution matrix
-    M1 = [np.roll(icalib, _) for _ in np.arange(-5, 6)[::-1]]
-    M2 = [1./rcalib for _ in np.arange(-5, 6)]
+    width = res_mat.shape[0]
+    M1 = [np.roll(icalib, _) for _ in np.arange(-width//2,(width//2)+1)[::-1]]
+    M2 = [1./rcalib for _ in np.arange(width)]
     res_mat_out = res_mat * M1 * M2
     # This has been tested with X0 and X1 being indentical in this calculation
     # M1 = [np.roll(D1, _) for _ in np.arange(-5, 6)[::-1]]
