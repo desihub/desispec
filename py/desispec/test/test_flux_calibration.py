@@ -139,7 +139,7 @@ class TestFluxCalibration(unittest.TestCase):
         ivar = np.random.uniform(0.9, 1.1, size=flux.shape)
         origframe = Frame(wave, flux.copy(), ivar.copy(), spectrograph=0)
 
-        # efine fluxcalib object
+        # define fluxcalib object
         calib = np.random.uniform(.5, 1.5, size=origframe.flux.shape)
         mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
 
@@ -179,7 +179,7 @@ class TestFluxCalibration(unittest.TestCase):
         frame=copy.deepcopy(origframe)
         apply_flux_calibration(frame,fc)
         self.assertTrue(np.all(frame.ivar[0,0:10]==0.0))
-
+        
         # should also work even the calib =0  ??
         #fcivar=np.ones_like(origframe.flux)
         #calib=np.ones_like(origframe.flux)
@@ -198,6 +198,39 @@ class TestFluxCalibration(unittest.TestCase):
         fc=FluxCalib(origframe.wave+0.01,calib,fcivar,mask)
         with self.assertRaises(SystemExit):  #should be ValueError instead?
             apply_flux_calibration(frame,fc)
+
+        # if the calibration is constant resolution should not change
+        resol = np.random.uniform(size=(flux.shape[0], 11, flux.shape[1]))
+        flux = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
+        ivar = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
+        frame = Frame(wave, flux.copy(), ivar.copy(), spectrograph=0,
+                      resolution_data=resol.copy())
+        calib = flux * 0 + 10
+        mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
+        fc = FluxCalib(origframe.wave, calib, ivar, mask)
+        apply_flux_calibration(frame, fc)
+        self.assertTrue(np.allclose(frame.resolution_data, resol))
+        
+        # preservation of resolution equation
+        resol = np.random.uniform(size=(flux.shape[0], 11, flux.shape[1]))
+        # input spectra 
+        flux0 = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
+        flux0[:, :6] = 0
+        flux0[:, -7:] = 0
+        # convolving with the resolution matrix
+        flux_conv = np.array([desispec.resolution.Resolution(resol[i])@flux0[i] for i in range(nspec)])
+        flux0_calib = flux0 / calib
+        frame = Frame(wave, flux_conv.copy(), ivar.copy(), spectrograph=0,
+                      resolution_data=resol.copy())
+        calib = np.random.uniform(.5, 1.5, size=origframe.flux.shape)
+        mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
+        fc = FluxCalib(origframe.wave, calib, ivar, mask)
+        apply_flux_calibration(frame, fc)
+        flux1_conv = np.array([desispec.resolution.Resolution(
+            frame.resolution_data[i])@flux0_calib[i] for i in range(nspec)])
+        print (flux1_conv[:7,5:10], frame.flux[:7,5:10])
+        self.assertTrue(np.allclose(flux1_conv, frame.flux))
+        
 
     def test_isStdStar(self):
         """test isStdStar works for cmx, main, and sv1 fibermaps"""

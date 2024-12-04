@@ -1516,8 +1516,8 @@ def _calibrate_resolution_matrix(res_mat, calib, good_calib):
     # now we align the diagonals to the banded storage
     # of the resolution matrix
     width = res_mat.shape[0]
-    M1 = [np.roll(icalib, _) for _ in np.arange(-width//2,(width//2)+1)[::-1]]
-    M2 = [1./rcalib for _ in np.arange(width)]
+    M1 = [np.roll(icalib, _) for _ in np.arange(-(width//2),(width//2)+1)[::-1]]
+    M2 = [rcalib for _ in np.arange(width)]
     res_mat_out = res_mat * M1 * M2
     # This has been tested with X0 and X1 being indentical in this calculation
     # M1 = [np.roll(D1, _) for _ in np.arange(-5, 6)[::-1]]
@@ -1527,7 +1527,7 @@ def _calibrate_resolution_matrix(res_mat, calib, good_calib):
     return res_mat_out
 
 
-def _interpolate_bad_regions(spec, mask):
+def _interpolate_bad_regions(spec,badmask):
     """
     Interpolate bad regions
     Arguments:
@@ -1537,7 +1537,7 @@ def _interpolate_bad_regions(spec, mask):
     Returns:
         ret Interpolated ndarray
     """
-    xind = np.nonzero(mask)[0]
+    xind = np.nonzero(badmask)[0]
     if len(xind) == 0:
         return spec
     elif len(xind) == len(spec):
