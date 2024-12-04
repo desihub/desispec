@@ -127,10 +127,10 @@ def purge_tilenight(tiles, night, dry_run=True):
                             future_cumulatives[thrunight_int] = [tile]
 
     ## Finally, remove any dashboard caches for the impacted nights
-    allnights = sorted([night] + list(future_cumulatives.keys()))
-    for dashnight in allnights:
-        for cachefiletype in ['expinfo', 'zinfo']:
-            dashcache = findfile(cachefiletype, night=dashnight)
+    futurenights = sorted(list(future_cumulatives.keys()))
+    ## Remove expinfo and zinfo for the present night
+    for cachefiletype in ['expinfo', 'zinfo']:
+            dashcache = findfile(cachefiletype, night=night)
             if os.path.exists(dashcache):
                 if dry_run:
                     print(f"Dry_run set, so not removing {dashcache}.")
@@ -139,9 +139,20 @@ def purge_tilenight(tiles, night, dry_run=True):
                     os.remove(dashcache)
             else:
                 print(f"Couldn't find {cachefiletype} file: {dashcache}")
+    ## Remove just zinfo for futurenights since we only purge cumulative zs
+    for dashnight in futurenights:
+        dashcache = findfile('zinfo', night=dashnight)
+        if os.path.exists(dashcache):
+            if dry_run:
+                print(f"Dry_run set, so not removing {dashcache}.")
+            else:
+                print(f"Removing: {dashcache}.")
+                os.remove(dashcache)
+        else:
+            print(f"Couldn't find {cachefiletype} file: {dashcache}")
 
     ## Load old processing table
-    timestamp = time.strftime('%Y%m%d_%Hh%Mm')
+    timestamp = time.strftime('%Y%m%d_%Hh%Mm%Ss')
     ppathname = findfile('processing_table', night=night)
     ptable = load_table(tablename=ppathname, tabletype='proctable')
 
@@ -167,7 +178,7 @@ def purge_tilenight(tiles, night, dry_run=True):
         ptable = load_table(tablename=ppathname, tabletype='proctable')
 
         ## Now let's remove the tiles from the processing table
-        nokeep = ptable['JOBNAME'] == 'cumulative'
+        nokeep = ptable['JOBDESC'] == 'cumulative'
         nokeep &= np.isin(ptable['TILEID'], futuretiles)
         keep = np.bitwise_not(nokeep)
         print(f'Removing {len(keep) - np.sum(keep)}/{len(keep)} processing '
