@@ -353,9 +353,6 @@ desispec API
 .. automodule:: desispec.scripts.nightly_bias
     :members:
 
-.. automodule:: desispec.scripts.pipe_exec
-    :members:
-
 .. automodule:: desispec.scripts.preproc
     :members:
 
