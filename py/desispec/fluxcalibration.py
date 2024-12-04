@@ -1476,8 +1476,10 @@ def apply_flux_calibration(frame, fluxcalib):
                                  (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
-            frame.resolution_data[i] = _calibrate_resolution_matrix(
-                frame.resolution_data[i], C[i], C[i] > 0)
+            if frame.resolution_data is not None:
+                frame.resolution_data[i] = _calibrate_resolution_matrix(
+                    frame.resolution_data[i], C[i], (C[i] > 0)
+                    & (fluxcalib.ivar[i] > 0))
         frame.ivar[i, ~ok] = 0
     # It is important we update flux *after*
     # updating variance
@@ -1490,6 +1492,15 @@ def apply_flux_calibration(frame, fluxcalib):
 
 
 def _calibrate_resolution_matrix(res_mat, calib, good_calib):
+    """
+    Apply corrections to the resolution matrix given the flux calibration
+    Arguments:
+        res_mat: (ndarray) banded storage of the resolution matrix
+        calib: (ndarray) calibration vector
+        good_calib: (ndarray) array of booleans for good pixels
+    Returns:
+        res_mat_fc: corrected resolution matrix
+    """
     # We use calculation from #2419
     # res_mat is the banded representation of the resolution matrix
     # calib is the calibration vector
@@ -1505,13 +1516,28 @@ def _calibrate_resolution_matrix(res_mat, calib, good_calib):
     else:
         # we need to fill holes
         rcalib = _interpolate_bad_regions(calib, ~good_calib)
+    # now we align the diagonals to the banded storage
+    # of the resolution matrix
     M1 = [np.roll(icalib, _) for _ in np.arange(-5, 6)[::-1]]
     M2 = [1./rcalib for _ in np.arange(-5, 6)]
-    return res_mat * M1 * M2
+    res_mat_out = res_mat * M1 * M2
+    # This has been tested with X0 and X1 being indentical in this calculation
+    # M1 = [np.roll(D1, _) for _ in np.arange(-5, 6)[::-1]]
+    # M2 = [D2 for _ in np.arange(-5, 6)]
+    # X1 = (desispec.resolution.Resolution(res[0] * M1 * M2).todense())
+    # X0 = (np.diag(D1) @ r.todense() @ np.diag(D2))
+    return res_mat_out
+
 
 def _interpolate_bad_regions(spec, mask):
     """
     Interpolate bad regions
+    Arguments:
+        spec: ndarray with data
+        mask: bad mask that needs to be interpolated over
+
+    Returns:
+        ret Interpolated ndarray
     """
     xind = np.nonzero(mask)[0]
     if len(xind) == 0:
