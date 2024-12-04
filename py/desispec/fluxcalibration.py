@@ -1476,15 +1476,67 @@ def apply_flux_calibration(frame, fluxcalib):
                                  (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
+            frame.resolution_data[i] = _calibrate_resolution_matrix(
+                frame.resolution_data[i], C[i], C[i] > 0)
         frame.ivar[i, ~ok] = 0
     # It is important we update flux *after*
     # updating variance
     frame.flux = frame.flux * (C > 0) / (C + (C == 0))
-
-    if fluxcalib.fibercorr is not None and frame.fibermap is not None :
-        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
+        
+    if fluxcalib.fibercorr is not None and frame.fibermap is not None:
+        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names:
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
-            frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
+            frame.fibermap["PSF_TO_FIBER_SPECFLUX"] = fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
+
+
+def _calibrate_resolution_matrix(res_mat, calib, good_calib):
+    # We use calculation from #2419
+    # res_mat is the banded representation of the resolution matrix
+    # calib is the calibration vector
+    # good_calib is the subset of pixel where calib is valid
+    # the caclulation is C^{-1} R C
+    # the only complication if C has zeros.
+    # Then for the left we take the pseudo inverse
+    # and for the right we interpolate over bad regions
+    icalib = np.zeros(len(calib))
+    icalib[good_calib ] = 1./calib[good_calib]
+    if not good_calib.any():
+        rcalib = np.ones(len(calib))
+    else:
+        # we need to fill holes
+        rcalib = _interpolate_bad_regions(calib, ~good_calib)
+    M1 = [np.roll(icalib, _) for _ in np.arange(-5, 6)[::-1]]
+    M2 = [1./rcalib for _ in np.arange(-5, 6)]
+    return res_mat * M1 * M2
+
+def _interpolate_bad_regions(spec, mask):
+    """
+    Interpolate bad regions
+    """
+    xind = np.nonzero(mask)[0]
+    if len(xind) == 0:
+        return spec
+    elif len(xind) == len(spec):
+        return spec
+    edges = np.nonzero(np.diff(xind, prepend=-10) > 1)[0]
+    n_edges = len(edges)
+    spec1 = spec * 1
+    for i in range(n_edges):
+        if i == n_edges - 1:
+            rh = xind[-1]
+        else:
+            rh = xind[edges[i + 1] - 1]
+        lh = xind[edges[i]]
+        # lh rh inclusive
+        if lh == 0:
+            spec1[:rh + 1] = spec[rh + 1]
+        elif rh == len(spec) - 1:
+            spec1[lh:] = spec[lh - 1]
+        else:
+            spec1[lh:rh + 1] = np.interp(np.arange(lh,
+                                                   rh + 1), [lh - 1, rh + 1],
+                                         [spec[lh - 1], spec[rh + 1]])
+    return spec1
 
 
 def ZP_from_calib(exptime, wave, calib):
