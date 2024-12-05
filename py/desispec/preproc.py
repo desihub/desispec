@@ -28,7 +28,6 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_fiberflat, shorten_filename, findfile
 from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
-from desispec.image_model import compute_image_model
 from desispec.util import header2night
 
 def get_amp_ids(header):
@@ -1433,6 +1432,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     xyset = None
 
     if model_variance  :
+
+        #- deferred import to avoid circular import
+        from desispec.image_model import compute_image_model
 
         psf = None
         if psf_filename is None :

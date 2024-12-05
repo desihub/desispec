@@ -34,6 +34,11 @@ class XYTraceSet(object):
         self.wavemax = wavemax
         self.npix_y = npix_y
         
+        self._xcoef = xcoef
+        self._ycoef = ycoef
+        self._xsigcoef = xsigcoef
+        self._ysigcoef = ysigcoef
+
         self.x_vs_wave_traceset = TraceSet(xcoef,[wavemin,wavemax])
         self.y_vs_wave_traceset = TraceSet(ycoef,[wavemin,wavemax])
         
@@ -79,6 +84,26 @@ class XYTraceSet(object):
     
     def ysig_vs_y(self,fiber,y) :
         return self.ysig_vs_wave(fiber,self.wave_vs_y(fiber,y))
+
+    def __getitem__(self, ii):
+        xcoef = self._xcoef[ii]
+        ycoef = self._ycoef[ii]
+
+        if self._xsigcoef is not None:
+            xsigcoef = self._xsigcoef[ii]
+        else:
+            xsigcoef = None
+            
+        if self._ysigcoef is not None:
+            ysigcoef = self._ysigcoef[ii]
+        else:
+            ysigcoef = None
+
+        return XYTraceSet(xcoef=xcoef, ycoef=ycoef,
+                          wavemin=self.wavemin, wavemax=self.wavemax,
+                          npix_y=self.npix_y,
+                          xsigcoef=xsigcoef, ysigcoef=ysigcoef,
+                          meta=self.meta)
     
     """
         if self.x_vs_y_traceset is None :

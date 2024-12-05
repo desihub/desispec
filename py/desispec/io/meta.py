@@ -133,7 +133,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         healpix=None, nside=64, band=None, spectrograph=None,
         survey=None, faprogram=None, version=None,
         rawdata_dir=None, specprod_dir=None, specprod=None,
-        qaprod_dir=None, tiles_dir=None, outdir=None,
+        tiles_dir=None, outdir=None,
         download=False, return_exists=False,
         readonly=False, logfile=False):
     """Returns location where file should be
@@ -160,7 +160,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir : overrides $DESI_SPECTRO_DATA
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         specprod : production name, or full path to production
-        qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         tiles_dir : defaults to $FIBER_ASSIGN_DIR if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
@@ -299,29 +298,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         expinfo = '{specprod_dir}/run/dashboard/expjsons/expinfo_{specprod}_{night}.json',
         zinfo = '{specprod_dir}/run/dashboard/zjsons/zinfo_{specprod}_{night}.json',
-        #
-        # Deprecated QA files below this point.
-        #
-        qa_data = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
-        qa_data_exp = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
-        qa_bootcalib = '{qaprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
-        qa_sky_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
-        qa_skychi_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-skychi-{camera}-{expid:08d}.png',
-        qa_s2n_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-s2n-{camera}-{expid:08d}.png',
-        qa_flux_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
-        qa_toplevel_html = '{qaprod_dir}/qa-toplevel.html',
-        qa_calib = '{qaprod_dir}/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
-        qa_calib_html = '{qaprod_dir}/calib2d/qa-calib2d.html',
-        qa_calib_exp = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.yaml',
-        qa_calib_exp_html = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.html',
-        qa_exposures_html = '{qaprod_dir}/exposures/qa-exposures.html',
-        qa_exposure_html = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.html',
-        qa_flat_fig = '{qaprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
-        qa_ztruth = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
-        qa_ztruth_fig = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
-        ql_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfig-{camera}-{expid:08d}.png',
-        ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
-        ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
     )
     ## aliases
     location['desi'] = location['raw']
@@ -439,9 +415,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # but we may need the variable to be set in the meantime
         specprod_dir = "dummy"
 
-    if qaprod_dir is None and 'qaprod_dir' in required_inputs:
-        qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
-
     if tiles_dir is None and 'tiles_dir' in required_inputs:
         tiles_dir = os.environ['FIBER_ASSIGN_DIR']
 
@@ -461,7 +434,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
-        'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
+        'specprod_dir':specprod_dir, 'specprod':specprod, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
         'groupname':groupname, 'subgroup':subgroup, 'version':version,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
@@ -557,7 +530,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwargs):
+def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified
@@ -577,8 +550,7 @@ def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwar
         dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir,
-                            qaprod_dir=qaprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -842,17 +814,6 @@ def specprod_root(specprod=None, readonly=False):
         specprod = get_readonly_filepath(specprod)
 
     return specprod
-
-def qaprod_root(specprod_dir=None):
-    """Return directory root for spectro production QA, i.e.
-    ``$DESI_SPECTRO_REDUX/$SPECPROD/QA``.
-
-    Raises:
-        KeyError: if these environment variables aren't set.
-    """
-    if specprod_dir is None:
-        specprod_dir = specprod_root()
-    return os.path.join(specprod_dir, 'QA')
 
 def faflavor2program(faflavor):
     """
