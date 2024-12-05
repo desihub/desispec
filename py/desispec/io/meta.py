@@ -293,6 +293,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
         zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
         zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
         zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
+        #
+        # Dashboard files
+        #
+        expinfo = '{specprod_dir}/run/dashboard/expjsons/expinfo_{specprod}_{night}.json',
+        zinfo = '{specprod_dir}/run/dashboard/zjsons/zinfo_{specprod}_{night}.json',
     )
     ## aliases
     location['desi'] = location['raw']
