@@ -290,9 +290,6 @@ desispec API
 .. automodule:: desispec.scripts.createoverride
     :members:
 
-.. automodule:: desispec.scripts.daily_processing
-    :members:
-
 .. automodule:: desispec.scripts.editexptable
     :members:
 
