@@ -236,7 +236,7 @@ def main(args=None):
         else :
             options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","degyy":0})
         tmp_args = trace_shifts_script.parse(options=options)
-        tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
+        tset, int_offset_info, ext_offset_info = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
 
