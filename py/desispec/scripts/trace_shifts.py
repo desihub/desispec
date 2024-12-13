@@ -155,6 +155,7 @@ def fit_trace_shifts(image, args):
         log.info("wavelength calib, internal={}, sky={} , arc_lamps={}".format(internal_wavelength_calib,args.sky,args.arc_lamps))
 
     spectrum_filename = args.spectrum
+    continuum_subtract = False
     if args.sky :
         continuum_subtract = True
         srch_file = "data/spec-sky.dat"
@@ -163,7 +164,6 @@ def fit_trace_shifts(image, args):
             raise RuntimeError("Cannot find sky spectrum file {:s}".format(srch_file))
         spectrum_filename = resources.files('desispec').joinpath(srch_file)
     elif args.arc_lamps :
-        continuum_subtract = False
         srch_file = "data/spec-arc-lamps.dat"
         if not resources.files('desispec').joinpath(srch_file).is_file():
             log.error("Cannot find arc lamps spectrum file {:s}".format(srch_file))
