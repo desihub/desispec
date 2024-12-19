@@ -60,7 +60,7 @@ jobs:
                 fitsio-version: ['<2']  # latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
         env:
-            DESIUTIL_VERSION: 3.4.2
+            DESIUTIL_VERSION: 3.4.3
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
