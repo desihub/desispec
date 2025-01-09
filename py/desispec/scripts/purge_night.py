@@ -5,7 +5,7 @@ desispec.scripts.purge_night
 """
 import argparse
 from desispec.io.meta import findfile
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.scripts.purge_tilenight import purge_tilenight, remove_directory
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname
@@ -23,7 +23,7 @@ def get_parser():
     Creates an arguments parser for the desi_purge_tilenight script
     """
     parser = argparse.ArgumentParser(
-        description=' Purges a night from a production, intended ' +
+        description='Purges a night from a production, intended ' +
                     'for providing a fresh start before resubmitting that night ' +
                     'from the beginning with desi_submit_night. ' +
                     'CAVEAT: this does not purge healpix redshifts, ' +
@@ -70,13 +70,7 @@ def purge_night(night, dry_run=True):
         tiles = np.asarray(etable['TILEID'][tile_sel])
 
     log = get_logger()
-    print(f'Purging night {night}')
-
-    ## First perform the purge of the individual tiles, this is slower
-    ## but includes future redshifts and future processing tables
-    if tiles is not None:
-        print(f'Future redshifts from {tiles=} will also be removed.')
-        purge_tilenight(tiles, night, dry_run=dry_run)
+    log.info(f'Purging night {night}')
 
     ## Now proceed with removing fill night-level directories and files
     ## specific to the specified night
@@ -86,12 +80,12 @@ def purge_night(night, dry_run=True):
 
     #- Night and tile directories
     nightdirs = [
-        f'calibnight/{night}',
-        f'exposures/{night}',
-        f'nightqa/{night}',
-        f'preproc/{night}',
-        f'run/scripts/night/{night}',
-        ]
+                    f'calibnight/{night}',
+                    f'exposures/{night}',
+                    f'nightqa/{night}',
+                    f'preproc/{night}',
+                    f'run/scripts/night/{night}',
+                ]
     nightdirs += sorted(glob.glob(f'tiles/cumulative/*/{night}'))
     nightdirs += sorted(glob.glob(f'tiles/pernight/*/{night}'))
     nightdirs += sorted(glob.glob(f'run/scripts/tiles/cumulative/*/{night}'))
@@ -115,6 +109,13 @@ def purge_night(night, dry_run=True):
         else:
             log.info(f'already gone: {filename}')
 
+    ## Next perform the purge of the individual tiles, should skip over
+    ## all the individual exposure directories already removed above and then
+    ## remove the future redshifts that used the data purged here
+    if tiles is not None:
+        log.info(f'Future redshifts from {tiles=} will also be removed.')
+        purge_tilenight(tiles, night, dry_run=dry_run)
+
     ## These should now be taken care of by per-tile based removal
     # log.warning("Not attempting to find and purge perexp redshifts")
     # log.warning("Not attempting to find and purge healpix redshifts")
@@ -122,4 +123,5 @@ def purge_night(night, dry_run=True):
     log.info(f"Done purging {specprod} night {night}")
 
     if dry_run:
-        log.warning('That was a dry run with no files removed; rerun with --not-dry-run to actually remove files')
+        log.warning('That was a dry run with no files removed; rerun '
+                    + 'with --not-dry-run to actually remove files')
