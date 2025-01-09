@@ -192,7 +192,7 @@ def purge_tilenight(tiles, night, dry_run=True):
             nokeep = ptable['JOBDESC'] == 'cumulative'
             nokeep &= np.isin(ptable['TILEID'], futuretiles)
             keep = np.bitwise_not(nokeep)
-            log.info(f'Removing {len(keep) - np.sum(keep)}/{len(keep)} processing '
+            log.info(f'Removing {np.sum(nokeep)}/{len(nokeep)} processing '
                   + f'table entries for night={futurenight}')
             ptable = ptable[keep]
 
