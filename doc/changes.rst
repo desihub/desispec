@@ -43,7 +43,7 @@ Used for rerunning the QuasarNet afterburner on Loa.
 0.67.0 (2024-10-11)
 -------------------
 
-Used for Loa procution.
+Used for Loa production.
 
 Major algorithmic change to coadds
 
