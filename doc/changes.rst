@@ -831,7 +831,9 @@ Minor:
 * Fix rank race condition bug in specex.py (PR `#1809`_).
 * Stdstar use correct sky and flat fiber; scale ivar (PR `#1817`_).
 * Stdstar memory optimization (PR `#1820`_).
+* Major: Replace TPCORR per-fiber corrections with a model (PR `#1801`_)
 
+.. _`#1801`: https://github.com/desihub/desispec/pull/1801
 .. _`#1809`: https://github.com/desihub/desispec/pull/1809
 .. _`#1817`: https://github.com/desihub/desispec/pull/1817
 .. _`#1820`: https://github.com/desihub/desispec/pull/1820
