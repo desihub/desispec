@@ -456,19 +456,25 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
         ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
         ## Last column in TSNR2_LRG in all the redshift catalogs
         ## We will add the PRIMARY columns in the end
+        colname_array = np.array(tab.colnames)
+        colname_index = colname_array.argsort()
+        assert (np.unique(colname_array) == colname_array[colname_index]).all()
 
         ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
-        nobs = np.where(np.array(tab.colnames) == 'NUMOBS_INIT')[0][0]
-        pra = np.where(np.array(tab.colnames) == 'PLATE_RA')[0][0]
-        tsnr = np.where(np.char.startswith(np.array(tab.colnames), 'TSNR2_'))[0][-1]
+        nobs = np.where(colname_array == 'NUMOBS_INIT')[0][0]
+        pra = np.where(colname_array == 'PLATE_RA')[0][0]
+        tsnr = np.where(np.char.startswith(colname_array, 'TSNR2_'))[0][-1]
+        log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
 
         ## List of all columns
         all_cols = tab.colnames
-
+        log.debug(all_cols)
+        log.debug(target_cols)
+        log.debug(primary_cols)
         ## Reorder the columns
         ## This reorder is important for stacking the different redshift catalogs
         ## Also to keep it neat and clean
-        req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1]+primary_cols
+        req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1] + primary_cols
     else:
         log.debug("all_columns = False")
         if (columns_list == None):
