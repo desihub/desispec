@@ -451,6 +451,7 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
         primary_cols.append(prim_cols[xx])
 
     if all_columns:
+        log.debug("all_columns = True")
         ## Rearranging the columns to order all the *TARGET columns together
         ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
         ## Last column in TSNR2_LRG in all the redshift catalogs
@@ -469,7 +470,9 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
         ## Also to keep it neat and clean
         req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1]+primary_cols
     else:
+        log.debug("all_columns = False")
         if (columns_list == None):
+            log.debug("columns_list is None")
             ## These are the pre-selected list of columns
             pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM',
                                'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',
@@ -488,8 +491,10 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
                 req_columns = pre_selected_cols[0:3]+['TILEID', 'LASTNIGHT']+pre_selected_cols[3:]
 
         else:
+            log.debug("columns_list is not None")
             ## Adding the primary flag columns to the user-requested list
             req_columns = columns_list + primary_cols
+    log.debug(req_columns)
 
     ## Final table with the required columns
     t_final = tab[req_columns]
