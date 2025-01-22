@@ -368,10 +368,10 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## Convert the masked column table to normal astropy table and select required columns
     final_table = update_table_columns(tab, specgroup=specgroup, order_columns=order_columns,
                                        all_columns=all_columns, columns_list=columns_list)
-
+    log.debug("Completed call to update_table_columns().")
     ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
     desiutil.depend.mergedep(dependencies, final_table.meta)
-
+    log.debug("Completed call to mergedep().")
     ## Write final output via a temporary filename
     tmpfile = get_tempfilename(output_filename)
     write_bintable(tmpfile, final_table, extname='ZCATALOG', clobber=True)
