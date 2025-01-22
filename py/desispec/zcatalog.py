@@ -158,7 +158,7 @@ def _get_survey_program_from_filename(filename):
     return survey, program
 
 def create_summary_catalog(specgroup, indir=None, specprod=None,
-                           all_columns = True, columns_list = None,
+                           order_columns=True, all_columns=True, columns_list=None,
                            output_filename=None):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
@@ -171,19 +171,21 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'
-    indir : str
+    indir : str, optional
         Input directory to look for zpix/ztile files.
-    specprod : str
+    specprod : str, optional
         Internal Release Name for the DESI Spectral Release.
         Used to derive input directory if indir is not provided.
-    all_columns : bool
-        Whether or not to include all the columns into the final table. Default is True.
-    columns_list : list
-        If all_columns = False, list of columns to include in the final table.
-        If None, a list of pre-decided summary columns will be used. Default is None.
+    order_columns : bool, optional
+        If ``False``, do not try to reorder the columns in the final file. Default is ``True``.
+    all_columns : bool, optional
+        Whether or not to include all the columns into the final table. Default is ``True``.
+    columns_list : list, optional
+        If all_columns is ``False``, list of columns to include in the final table.
+        If None, a list of pre-decided summary columns will be used. Default is ``None``.
         The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
         catalog witll be included.
-    output_filename : str
+    output_filename : str, optional
         Path+Filename for the output summary redshift catalog.
         The output FITS file will be saved at this path.
         If not specified, the output filename will be derived from specgroup and $SPECPROD
@@ -379,7 +381,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 ####################################################################################################
 ####################################################################################################
 
-def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_list = None):
+def update_table_columns(table, specgroup = 'zpix', order_columns = True, all_columns = True, columns_list = None):
     """
     This function fills the ``*TARGET`` masked columns and returns the final table
     with the required columns.
@@ -388,12 +390,14 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
     ----------
     table : Astropy Table
         A table.
-    specgroup : str
+    specgroup : str, optional
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
-    all_columns : bool
-        Whether or not to include all the columns into the final table. Default is True.
-    columns_list : list
+    order_columns : bool, optional
+        If ``False``, do not try to reorder the columns in the final file. Default is ``True``.
+    all_columns : bool, optional
+        Whether or not to include all the columns into the final table. Default is ``True``.
+    columns_list : list, optional
         If all_columns = False, list of columns to include in the final table.
         If None, a list of pre-decided summary columns will be used. Default is None.
         The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
@@ -450,56 +454,61 @@ def update_table_columns(table, specgroup = 'zpix', all_columns = True, columns_
         primary_cols.append(nspec_cols[xx])
         primary_cols.append(prim_cols[xx])
 
-    if all_columns:
-        log.debug("all_columns = True")
-        ## Rearranging the columns to order all the *TARGET columns together
-        ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
-        ## Last column in TSNR2_LRG in all the redshift catalogs
-        ## We will add the PRIMARY columns in the end
-        colname_array = np.array(tab.colnames)
-        colname_index = colname_array.argsort()
-        assert (np.unique(colname_array) == colname_array[colname_index]).all()
+    if order_columns:
+        log.debug("order_columns is True")
+        if all_columns:
+            log.debug("all_columns is True")
+            ## Rearranging the columns to order all the *TARGET columns together
+            ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
+            ## Last column in TSNR2_LRG in all the redshift catalogs
+            ## We will add the PRIMARY columns in the end
+            colname_array = np.array(tab.colnames)
+            colname_index = colname_array.argsort()
+            assert (np.unique(colname_array) == colname_array[colname_index]).all()
 
-        ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
-        nobs = np.where(colname_array == 'NUMOBS_INIT')[0][0]
-        pra = np.where(colname_array == 'PLATE_RA')[0][0]
-        tsnr = np.where(np.char.startswith(colname_array, 'TSNR2_'))[0][-1]
-        log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
+            ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
+            nobs = np.where(colname_array == 'NUMOBS_INIT')[0][0]
+            pra = np.where(colname_array == 'PLATE_RA')[0][0]
+            tsnr = np.where(np.char.startswith(colname_array, 'TSNR2_'))[0][-1]
+            log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
 
-        ## List of all columns
-        all_cols = tab.colnames
-        log.debug(all_cols)
-        log.debug(target_cols)
-        log.debug(primary_cols)
-        ## Reorder the columns
-        ## This reorder is important for stacking the different redshift catalogs
-        ## Also to keep it neat and clean
-        req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1] + primary_cols
-    else:
-        log.debug("all_columns = False")
-        if (columns_list == None):
-            log.debug("columns_list is None")
-            ## These are the pre-selected list of columns
-            pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM',
-                               'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',
-                               'COADD_FIBERSTATUS',  'CHI2', 'DELTACHI2',
-                               'MASKBITS', 'SPECTYPE', 'FLUX_G', 'FLUX_R',
-                               'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G',
-                               'FLUX_IVAR_R', 'FLUX_IVAR_Z','FLUX_IVAR_W1',
-                               'FLUX_IVAR_W2', 'TSNR2_LRG', 'TSNR2_BGS', 'TSNR2_ELG',
-                               'TSNR2_QSO', 'TSNR2_LYA'] + target_cols + primary_cols
-
-
-            ## Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
-            if (specgroup == 'zpix'):
-                req_columns = pre_selected_cols[0:3]+['HEALPIX']+pre_selected_cols[3:]
-            else:
-                req_columns = pre_selected_cols[0:3]+['TILEID', 'LASTNIGHT']+pre_selected_cols[3:]
-
+            ## List of all columns
+            all_cols = tab.colnames
+            log.debug(all_cols)
+            log.debug(target_cols)
+            log.debug(primary_cols)
+            ## Reorder the columns
+            ## This reorder is important for stacking the different redshift catalogs
+            ## Also to keep it neat and clean
+            req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1] + primary_cols
         else:
-            log.debug("columns_list is not None")
-            ## Adding the primary flag columns to the user-requested list
-            req_columns = columns_list + primary_cols
+            log.debug("all_columns is False")
+            if (columns_list == None):
+                log.debug("columns_list is None")
+                ## These are the pre-selected list of columns
+                pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM',
+                                'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',
+                                'COADD_FIBERSTATUS',  'CHI2', 'DELTACHI2',
+                                'MASKBITS', 'SPECTYPE', 'FLUX_G', 'FLUX_R',
+                                'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G',
+                                'FLUX_IVAR_R', 'FLUX_IVAR_Z','FLUX_IVAR_W1',
+                                'FLUX_IVAR_W2', 'TSNR2_LRG', 'TSNR2_BGS', 'TSNR2_ELG',
+                                'TSNR2_QSO', 'TSNR2_LYA'] + target_cols + primary_cols
+
+
+                ## Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
+                if (specgroup == 'zpix'):
+                    req_columns = pre_selected_cols[0:3]+['HEALPIX']+pre_selected_cols[3:]
+                else:
+                    req_columns = pre_selected_cols[0:3]+['TILEID', 'LASTNIGHT']+pre_selected_cols[3:]
+
+            else:
+                log.debug("columns_list is not None")
+                ## Adding the primary flag columns to the user-requested list
+                req_columns = columns_list + primary_cols
+    else:
+        log.debug("order_columns is False")
+        req_columns = tab.colnames
     log.debug(req_columns)
 
     ## Final table with the required columns
