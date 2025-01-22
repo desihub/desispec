@@ -366,8 +366,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER'])
 
     ## Convert the masked column table to normal astropy table and select required columns
-    final_table = update_table_columns(table = tab, specgroup = specgroup, \
-                                       all_columns = all_columns, columns_list = columns_list)
+    final_table = update_table_columns(tab, specgroup=specgroup, order_columns=order_columns,
+                                       all_columns=all_columns, columns_list=columns_list)
 
     ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
     desiutil.depend.mergedep(dependencies, final_table.meta)
