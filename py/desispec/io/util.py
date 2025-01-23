@@ -210,7 +210,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     if isinstance(data, Table):
         log.debug("data is astropy.table.Table.")
         outdata = data
-    if isinstance(data, (np.recarray, np.ndarray)):
+    elif isinstance(data, (np.recarray, np.ndarray)):
         log.debug("data is numpy array.")
         outdata = Table(data)
     elif isinstance(data, astropy.io.fits.BinTableHDU):
