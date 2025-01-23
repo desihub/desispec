@@ -207,16 +207,23 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     hdu = None
     #- Convert data as needed
-    if isinstance(data, (np.recarray, np.ndarray, Table)):
+    if isinstance(data, Table):
+        log.debug("data is astropy.table.Table.")
+        outdata = data
+    if isinstance(data, (np.recarray, np.ndarray)):
+        log.debug("data is numpy array.")
         outdata = Table(data)
     elif isinstance(data, astropy.io.fits.BinTableHDU):
+        log.debug("data is astropy.io.fits.BinTableHDU.")
         hdu = data
     else:
+        log.debug("data is something else. Trying to convert.")
         outdata = Table(_dict2ndarray(data))
 
     if hdu is None:
         hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
 
+    log.debug("Conversion to astropy.io.fits.BinTableHDU is complete.")
     if extname is not None:
         hdu.header['EXTNAME'] = extname
     elif 'EXTNAME' not in hdu.header:
@@ -254,11 +261,12 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
                 tform_key = 'TFORM'+str(i)
                 hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
+    log.debug("hdu units and comments processed.")
     #
     # Add checksum cards.
     #
     hdu.add_checksum()
-
+    log.debug("hdu checksum complete.")
     #- Write the data and header
 
     if os.path.isfile(filename):
@@ -731,21 +739,21 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
-    Takes a camword as input and returns any spectrograph represented 
+    Takes a camword as input and returns any spectrograph represented
     within that camword in a sorted list. By default this includes partial
-    spectrographs (with one or two cameras represented). But if 
-    full_spectros_only is set to True, only spectrographs with all 
+    spectrographs (with one or two cameras represented). But if
+    full_spectros_only is set to True, only spectrographs with all
     cameras represented are given.
 
     Args:
         camword, str. The camword of all cameras.
-        full_spectros_only, bool. Default is False. Flag to specify if you 
-                                  want all spectrographs with any cameras 
-                                  existing in the camword (the default) or 
+        full_spectros_only, bool. Default is False. Flag to specify if you
+                                  want all spectrographs with any cameras
+                                  existing in the camword (the default) or
                                   if you only want fully populated spectrographs.
 
     Returns:
-        spectros, list. A sorted list of integer spectrograph numbers 
+        spectros, list. A sorted list of integer spectrograph numbers
                         represented in the camword input.
     """
     ## Normalize the camword
