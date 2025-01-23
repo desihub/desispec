@@ -1,5 +1,5 @@
 # Based on desimodules/22.1b.
-scipy<1.14
+scipy<1.9
 pytz
 requests
 astropy
