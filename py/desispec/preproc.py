@@ -698,7 +698,7 @@ def find_masked_rows(mask, header, amp):
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=None,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=False, use_savgol=None,
+            use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False,no_overscan_per_row=False,no_ccd_region_mask=False,
@@ -726,8 +726,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         filename (str or unicode): read HDU 0 and use that
 
     Optional overscan features:
-        overscan_per_row : bool,  Subtract the overscan_col values
-            row by row from the data.
         use_overscan_row : bool,  Subtract off the overscan_row
             from the data (default: False).  Requires ORSEC in
             the Header
