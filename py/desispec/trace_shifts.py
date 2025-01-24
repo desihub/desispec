@@ -283,7 +283,7 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
                                (flux[ihw:-ihw] - refflux[b:e])**2)
         if prior_width_dy is not None:
             chi2[ihw + d] += (dwave * d / prior_width_dy)**2
-        
+
 
 
     i=np.argmin(chi2)
@@ -370,12 +370,10 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
     wave_for_dy=np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
-    
+
     nfibers = flux.shape[0]
 
     for fiber in range(nfibers) :
-        if fiber %10==0 :
-            log.info("computing dy for fiber #%03d"%fiber)
 
         for b in range(n_wavelength_bins) :
             wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
@@ -394,7 +392,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
                                                                    reference_flux[ok],
                                                                    ivar=ivar[fiber,ok],
                                                                    hw=3., calibrate=True)
-            if fiber % 10==0 :
+            if fiber % 100 == 50 :
                 log.info(f"Wavelength offset {dwave} +/- {err} for fiber {fiber:03d} at wave {block_wave}")
 
             if err > 1 :
@@ -453,23 +451,23 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     # resampling on common finer wavelength grid
     oversampling = 4
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
-    flux0 = flux * 1 # for debugging 
+    flux0 = flux * 1 # for debugging
     if continuum_subtract:
         mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = oversampling * 9)
         flux[flux<0] = 0
     else:
         # boolean mask of fibers with good data
         good_fibers = (np.sum(ivar>0, axis=1) > 0)
-        
+
         # median flux of good fibers used as internal spectral reference
         mflux=np.median(flux[good_fibers],axis=0)
-    
+
     # measure y shifts
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
     xcoef   = xytraceset.x_vs_wave_traceset._coeff
     ycoef   = xytraceset.y_vs_wave_traceset._coeff
-    
+
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
 
 @numba.jit
@@ -531,7 +529,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     if fibers is None :
         fibers = np.arange(xcoef.shape[0])
 
-    log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
+    log.debug("wavelength range : [%f,%f]"%(wavemin,wavemax))
 
     if image.mask is not None :
         image_ivar = image.ivar*(image.mask==0)
@@ -650,28 +648,28 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
             ol = np.append(ol,fl)
 
     t1=time.time()
-    log.info("computing dx for {} fibers in {} sec".format(len(fibers),t1-t0))
+    log.debug("computing dx for {} fibers in {} sec".format(len(fibers),t1-t0))
 
     return ox,oy,odx,oex,of,ol
 
 def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     """
-    Prepare the reference spectrum to be used for wavelength offset 
-    determination. Here we convolve it to the right LSF and rescale it 
+    Prepare the reference spectrum to be used for wavelength offset
+    determination. Here we convolve it to the right LSF and rescale it
     to match the measured flux.
 
     Arguments:
-        ref_wave: np.array of wavelengths 
+        ref_wave: np.array of wavelengths
         ref_spectrum: np.array of reference spectrum flux
         psf: PSF object
         wave: np.array wavelength of extracted spectra
         mflux: np.array flux of extracted spectra
-        nfibers: int 
+        nfibers: int
     Returns:
         ref_wave, ref_spectrum: tuple of wavelength and flux arrays
     """
     log = get_logger()
-    
+
     # trim ref_spectrum
     subset = (ref_wave >= wave[0]) & (ref_wave <= wave[-1])
     ref_wave = ref_wave[subset]
@@ -686,7 +684,7 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
                                int((ref_wave[-1]-ref_wave[0])/dwave))
         ref_spectrum = resample_flux(tmp_wave, ref_wave, ref_spectrum)
         ref_wave = tmp_wave
-    
+
     n_wave_bins = 20 # how many points along wavelength to use to get psf
     n_representative_fibers = 20 # how many fibers to use to get psf
     fiber_list = np.unique(np.linspace(0, nfibers - 1,
@@ -697,7 +695,7 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     ref_spectrum0 = ref_spectrum * 1
     # original before convolution
     angstrom_hwidth = 3 # psf half width
-    
+
     for central_wave0 in wave_bins:
         ipos = np.searchsorted(ref_wave, central_wave0)
         central_wave = ref_wave[ipos] # actual value from the grid
@@ -731,7 +729,7 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     weight = (ref_wave[inside] - wave_bins[spectra_pos[inside] - 1])/(
         wave_bins[spectra_pos[inside]] - wave_bins[spectra_pos[inside] - 1])
     # weight is zero on left edge one on right
-    
+
     # linearly stitching the spectra convolved with different kernel
     result[inside] = (1 - weight) * spectra[spectra_pos[inside] - 1, inside]+(
         weight * spectra[spectra_pos[inside],inside])
@@ -755,19 +753,19 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
 def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
     """
     Compute the median spectrum after continuum subtraction
-    
+
     Arguments:
         flux0: (nfibers, npix) np.array of fluxes
         ivar: (nfibers, npix)-shaped np.array of inverser variances
-        continuum_win: integer. How-many pixels around are used to get continuum. 
+        continuum_win: integer. How-many pixels around are used to get continuum.
             Here we use the 1d annulus from continuum_win/2 to continuum_win
-    
+
     Returns:
         mfux: npix np.array of median spectrum
-        mivar: npix np.array with ivar of the median spectrum 
+        mivar: npix np.array with ivar of the median spectrum
         flux: (nfibers, npix) continuum subtracted original flux array
     """
-    # here we get rid of continuum by applying a median filter 
+    # here we get rid of continuum by applying a median filter
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
     flux = flux0 * 1 # we will modify flux
     # we only keep emission lines and get rid of continuum
@@ -881,7 +879,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
         eps =  0.1
         x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
-        dydw = (yp - y) / eps 
+        dydw = (yp - y) / eps
         if err * dydw < 1 :
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
@@ -1357,3 +1355,34 @@ def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degy
         dy=m.T.dot(dy_coeff)
         ycoef[fiber]=legfit(rw,y+dy,deg=ycoef.shape[1]-1)
     return xcoef,ycoef
+
+def recompute_legendre_coefficients_for_x(xcoef,ycoef,wavemin,wavemax,degxx,degxy,dx_coeff) :
+    """
+    Modifies legendre coefficients of an input trace set using polynomial coefficients (as defined by the routine monomials)
+
+    Args:
+        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to XCCD
+        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficients for each fiber to convert wavelength to YCCD
+        wavemin : float
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
+        degxx : int, degree of polynomial for x shifts as a function of x (x is axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
+        degxy : int, degree of polynomial for x shifts as a function of y (y is axis=0 in numpy image array, AXIS=1 in FITS, wavelength dispersion axis)
+        dx_coeff : 1D np.array of polynomial coefficients of size (degxx*degxy) as defined by the routine monomials.
+
+    Returns:
+        new_xcoef : 2D np.array of shape (nfibers,ncoef) with modified Legendre coefficients
+    """
+    new_xcoef = np.zeros_like(xcoef)
+    wave=np.linspace(wavemin,wavemax,100)
+    nfibers=xcoef.shape[0]
+    rw=legx(wave,wavemin,wavemax)
+    for fiber in range(nfibers) :
+        x = legval(rw,xcoef[fiber])
+        y = legval(rw,ycoef[fiber])
+
+        m=monomials(x,y,degxx,degxy)
+        dx=m.T.dot(dx_coeff)
+        new_xcoef[fiber]=legfit(rw,x+dx,deg=xcoef.shape[1]-1)
+
+    return new_xcoef

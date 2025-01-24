@@ -19,7 +19,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
 from desispec.io import shorten_filename
 from desiutil.log import get_logger
-from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
+from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x
 
 
 
@@ -92,15 +92,174 @@ def read_specter_psf(filename) :
         raise ValueError("Unknown PSFTYPE='{}'".format(psftype))
     return psf
 
+def fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
+                      dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
+
+    log     = get_logger()
+    xcoef   = tset.x_vs_wave_traceset._coeff
+    ycoef   = tset.y_vs_wave_traceset._coeff
+    nfibers = xcoef.shape[0]
+
+    n = 0
+    nloops = max(degxx, degyx) + max(degxy, degyy)
+    while True: # loop because polynomial degrees could be reduced
+
+        # Try fitting offsets.
+        log.info("polynomial fit of measured offsets with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
+        try :
+            dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(z=dx,ez=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
+            dy_coeff,dy_coeff_covariance,dy_errorfloor,dy_mod,dy_mask=polynomial_fit(z=dy,ez=ey,xx=x_for_dy,yy=y_for_dy,degx=degyx,degy=degyy)
+
+            log.info("dx dy error floor = %4.3f %4.3f pixels"%(dx_errorfloor,dy_errorfloor))
+
+            #log.info("check fit uncertainties are ok on edge of CCD")
+
+            merr=0.
+            for fiber in [0,nfibers-1] :
+                for rw in [-1,1] :
+                    tx = legval(rw,xcoef[fiber])
+                    ty = legval(rw,ycoef[fiber])
+                    m=monomials(tx,ty,degxx,degxy)
+                    tdx=np.inner(dx_coeff,m)
+                    tsx=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
+                    m=monomials(tx,ty,degyx,degyy)
+                    tdy=np.inner(dy_coeff,m)
+                    tsy=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
+                    merr=max(merr,tsx)
+                    merr=max(merr,tsy)
+            log.info("max edge shift error = %4.3f pixels"%merr)
+            if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
+                break
+
+        except ( LinAlgError , ValueError ) :
+            log.warning("polynomial fit failed with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
+            if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
+                log.error("polynomial degrees are already 0. we can't fit the offsets")
+                raise RuntimeError("polynomial degrees are already 0. we can't fit the offsets")
+            merr = 100000. # this will lower the pol. degree.
+
+        if merr > max_error :
+            if merr != 100000. :
+                log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
+
+            if (degxy>0 or degyy>0) and (degxy>degxx or degyy>degyx): # first along wavelength
+                if degxy>0 : degxy-=1
+                if degyy>0 : degyy-=1
+            else :                                                  # then along fiber
+                if degxx>0 : degxx-=1
+                if degyx>0 : degyx-=1
+        else :
+            # error is ok, so we quit the loop
+            break
+
+        # Sanity check to ensure looping is not infinite.
+        n += 1
+        if n > nloops:
+            raise RuntimeError(f'Maximum fit iterations {nloops} exceeded.')
+    # print central shift
+    mx=np.median(x_for_dx)
+    my=np.median(y_for_dx)
+    m=monomials(mx,my,degxx,degxy)
+    mdx=np.inner(dx_coeff,m)
+    mex=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
+
+    mx=np.median(x_for_dy)
+    my=np.median(y_for_dy)
+    m=monomials(mx,my,degyx,degyy)
+    mdy=np.inner(dy_coeff,m)
+    mey=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
+    log.info("central shifts dx = %4.3f +- %4.3f dy = %4.3f +- %4.3f "%(mdx,mex,mdy,mey))
+
+    new_xcoeff , new_ycoeff = recompute_legendre_coefficients(xcoef=tset.x_vs_wave_traceset._coeff,
+                                                              ycoef=tset.y_vs_wave_traceset._coeff,
+                                                              wavemin=tset.wavemin,
+                                                              wavemax=tset.wavemax,
+                                                              degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,
+                                                              dx_coeff=dx_coeff,dy_coeff=dy_coeff)
+
+    return new_xcoeff , new_ycoeff
+
+def fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,max_error) :
+
+    log     = get_logger()
+    xcoef   = tset.x_vs_wave_traceset._coeff
+    ycoef   = tset.x_vs_wave_traceset._coeff
+    nfibers = xcoef.shape[0]
+
+    n = 0
+    nloops = degxx + degxy
+    while True: # loop because polynomial degrees could be reduced
+
+        # Try fitting offsets.
+        log.debug("polynomial fit of measured offsets with degx=(%d,%d)"%(degxx,degxy))
+        try :
+            dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(z=dx,ez=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
+            if dx_errorfloor>0.1 :
+                log.info("dx error floor = %4.3f pixels"%(dx_errorfloor))
+
+            log.debug("check fit uncertainties are ok on edge of CCD")
+
+            merr=0.
+            for fiber in [0,nfibers-1] :
+                for rw in [-1,1] :
+                    tx = legval(rw,xcoef[fiber])
+                    ty = legval(rw,ycoef[fiber])
+                    m=monomials(tx,ty,degxx,degxy)
+                    tdx=np.inner(dx_coeff,m)
+                    tsx=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
+                    merr=max(merr,tsx)
+            log.debug("max edge shift error = %4.3f pixels"%merr)
+            if degxx==0 and degxy==0  :
+                break
+
+        except ( LinAlgError , ValueError ) :
+            log.warning("polynomial fit failed with degx=(%d,%d)"%(degxx,degxy))
+            if degxx==0 and degxy==0  :
+                log.error("polynomial degrees are already 0. we can't fit the offsets")
+                raise RuntimeError("polynomial degrees are already 0. we can't fit the offsets")
+            merr = 100000. # this will lower the pol. degree.
+
+        if merr > max_error :
+            if merr != 100000. :
+                log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
+
+            if degxy>0 and degxy>degxx : # first along wavelength
+                if degxy>0 : degxy-=1
+            else :                                                  # then along fiber
+                if degxx>0 : degxx-=1
+        else :
+            # error is ok, so we quit the loop
+            break
+
+        # Sanity check to ensure looping is not infinite.
+        n += 1
+        if n > nloops:
+            raise RuntimeError(f'Maximum fit iterations {nloops} exceeded.')
+    # print central shift
+    mx=np.median(x_for_dx)
+    my=np.median(y_for_dx)
+    m=monomials(mx,my,degxx,degxy)
+    mdx=np.inner(dx_coeff,m)
+    mex=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
+    log.info("central shifts dx = %4.3f +- %4.3f"%(mdx,mex))
+
+    new_xcoeff = recompute_legendre_coefficients_for_x(xcoef=tset.x_vs_wave_traceset._coeff,
+                                                       ycoef=tset.y_vs_wave_traceset._coeff,
+                                                       wavemin=tset.wavemin,
+                                                       wavemax=tset.wavemax,
+                                                       degxx=degxx,degxy=degxy,
+                                                       dx_coeff=dx_coeff)
+
+    return new_xcoeff
 
 def fit_trace_shifts(image, args):
     """
-    Perform the fitting of shifts of spectral traces 
-    This consists of two steps, one is internal, by 
+    Perform the fitting of shifts of spectral traces
+    This consists of two steps, one is internal, by
     cross-correlating spectra to themselves, and then
     cross-correlating to external (ususally sky) spectrum
 
-    Return updated traceset and two dictionaies with offset information 
+    Return updated traceset and two dictionaies with offset information
     to be written in the PSF file
     """
     global psfs
@@ -177,6 +336,7 @@ def fit_trace_shifts(image, args):
 
     fibers=np.arange(nfibers)
     internal_offset_info = None
+    specter_psf = None
 
     if lines is not None :
 
@@ -185,10 +345,10 @@ def fit_trace_shifts(image, args):
         # it's in principle more accurate
         # but gives systematic residuals for complex spectra like the sky
 
+        if specter_psf is None :
+            specter_psf = read_specter_psf(args.psf)
 
-        psf = read_specter_psf(args.psf)
-
-        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(psf,image,fibers,lines)
+        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(specter_psf,image,fibers,lines)
         x_for_dx=x
         y_for_dx=y
         fiber_for_dx=fiber_xy
@@ -203,8 +363,38 @@ def fit_trace_shifts(image, args):
         # internal calibration method that does not use the psf
         # nor a prior set of lines. this method is much faster
 
-        # measure x shifts
-        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
+        degxx=args.degxx
+        degxy=args.degxy
+        degyx=args.degyx
+        degyy=args.degyy
+
+        for iteration in range(10) :
+            # measure x shifts
+            x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
+
+            if iteration == 0 :
+                # if any quadrant is masked, reduce to a single offset
+                hy = image.pix.shape[0] // 2
+                hx = image.pix.shape[1] // 2
+                allgood = True
+                for curxop in [np.less, np.greater]:
+                    for curyop in [np.less, np.greater]:
+                        allgood &= np.any(curxop(x_for_dx, hx) & curyop(y_for_dx, hy))
+                        # some data in this quadrant
+                if not allgood :
+                    log.warning("No shift data for at least one quadrant of the CCD, falls back to deg=0 shift")
+                    degxx=0
+                    degxy=0
+                    degyx=0
+                    degyy=0
+
+            new_xcoeff = fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,args.max_error)
+            maxdx = np.max(np.abs(new_xcoeff[:,0]-xcoef[:,0]))
+            tset.x_vs_wave_traceset._coeff = new_xcoeff
+            xcoef = tset.x_vs_wave_traceset._coeff
+            if maxdx<0.001 :
+                break
+
         if internal_wavelength_calib :
             # measure y shifts
             x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
@@ -223,84 +413,6 @@ def fit_trace_shifts(image, args):
             ey       = 1.e-6*np.ones(ex.shape)
             fiber_for_dy = fiber_for_dx.copy()
             wave_for_dy  = wave_for_dx.copy()
-            
-    degxx=args.degxx
-    degxy=args.degxy
-    degyx=args.degyx
-    degyy=args.degyy
-
-    # if any quadrant is masked, reduce to a single offset
-    hy = image.pix.shape[0] // 2
-    hx = image.pix.shape[1] // 2
-    allgood = True
-    for _curx, _cury in [(x_for_dx,y_for_dx),(x_for_dy, y_for_dy)]:
-        for curxop in [np.less, np.greater]:
-            for curyop in [np.less, np.greater]:
-                allgood &= np.any(curxop(_curx, hx) & curyop(_cury, hy))
-        # some data in this quadrant
-    if not allgood :
-        log.warning("No shift data for at least one quadrant of the CCD, falls back to deg=0 shift")
-        degxx=0
-        degxy=0
-        degyx=0
-        degyy=0
-
-    n = 0
-    nloops = max(degxx, degyx) + max(degxy, degyy)
-    while True: # loop because polynomial degrees could be reduced
-
-        # Try fitting offsets.
-        log.info("polynomial fit of measured offsets with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
-        try :
-            dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(z=dx,ez=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
-            dy_coeff,dy_coeff_covariance,dy_errorfloor,dy_mod,dy_mask=polynomial_fit(z=dy,ez=ey,xx=x_for_dy,yy=y_for_dy,degx=degyx,degy=degyy)
-
-            log.info("dx dy error floor = %4.3f %4.3f pixels"%(dx_errorfloor,dy_errorfloor))
-
-            log.info("check fit uncertainties are ok on edge of CCD")
-
-            merr=0.
-            for fiber in [0,nfibers-1] :
-                for rw in [-1,1] :
-                    tx = legval(rw,xcoef[fiber])
-                    ty = legval(rw,ycoef[fiber])
-                    m=monomials(tx,ty,degxx,degxy)
-                    tdx=np.inner(dx_coeff,m)
-                    tsx=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
-                    m=monomials(tx,ty,degyx,degyy)
-                    tdy=np.inner(dy_coeff,m)
-                    tsy=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
-                    merr=max(merr,tsx)
-                    merr=max(merr,tsy)
-            log.info("max edge shift error = %4.3f pixels"%merr)
-            if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
-                break
-
-        except ( LinAlgError , ValueError ) :
-            log.warning("polynomial fit failed with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
-            if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
-                log.error("polynomial degrees are already 0. we can't fit the offsets")
-                raise RuntimeError("polynomial degrees are already 0. we can't fit the offsets")
-            merr = 100000. # this will lower the pol. degree.
-
-        if merr > args.max_error :
-            if merr != 100000. :
-                log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
-
-            if (degxy>0 or degyy>0) and (degxy>degxx or degyy>degyx): # first along wavelength
-                if degxy>0 : degxy-=1
-                if degyy>0 : degyy-=1
-            else :                                                  # then along fiber
-                if degxx>0 : degxx-=1
-                if degyx>0 : degyx-=1
-        else :
-            # error is ok, so we quit the loop
-            break
-
-        # Sanity check to ensure looping is not infinite.
-        n += 1
-        if n > nloops:
-            raise RuntimeError(f'Maximum fit iterations {nloops} exceeded.')
 
     # write this for debugging
     if args.outoffsets :
@@ -313,23 +425,10 @@ def fit_trace_shifts(image, args):
         file.close()
         log.info("wrote offsets in ASCII file %s"%args.outoffsets)
 
-    # print central shift
-    mx=np.median(x_for_dx)
-    my=np.median(y_for_dx)
-    m=monomials(mx,my,degxx,degxy)
-    mdx=np.inner(dx_coeff,m)
-    mex=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
 
-    mx=np.median(x_for_dy)
-    my=np.median(y_for_dy)
-    m=monomials(mx,my,degyx,degyy)
-    mdy=np.inner(dy_coeff,m)
-    mey=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
-    log.info("central shifts dx = %4.3f +- %4.3f dy = %4.3f +- %4.3f "%(mdx,mex,mdy,mey))
 
-    # for each fiber, apply offsets and recompute legendre polynomial
-    log.info("for each fiber, apply offsets and recompute legendre polynomial")
-
+    tset.x_vs_wave_traceset._coeff,tset.y_vs_wave_traceset._coeff = fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
+                                                                                      dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,args.max_error)
 
     # compute x y to record max deviations
     wave = np.linspace(tset.wavemin,tset.wavemax,5)
@@ -338,13 +437,6 @@ def fit_trace_shifts(image, args):
     for s in range(tset.nspec) :
         x0[s]=tset.x_vs_wave(s,wave)
         y0[s]=tset.y_vs_wave(s,wave)
-
-    tset.x_vs_wave_traceset._coeff,tset.y_vs_wave_traceset._coeff = recompute_legendre_coefficients(xcoef=tset.x_vs_wave_traceset._coeff,
-                                                                                                    ycoef=tset.y_vs_wave_traceset._coeff,
-                                                                                                    wavemin=tset.wavemin,
-                                                                                                    wavemax=tset.wavemax,
-                                                                                                    degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,
-                                                                                                    dx_coeff=dx_coeff,dy_coeff=dy_coeff)
 
 
 
