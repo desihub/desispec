@@ -193,13 +193,14 @@ def calc_overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def subtract_peramp_overscan(image, hdr):
+def subtract_peramp_overscan(image, hdr, cfinder):
     """Subtract per-amp overscan using BIASSEC* keywords
     CURRENTLY DOES NOT SUPPORT BIAS MASK
 
     Args:
         image: 2D image array, modified in-place
         hdr: FITS header with BIASSEC[ABCD] or BIASSEC[1234] keywords
+        cfinder: CalibFinder for this image
 
     Note: currently used in desispec.ccdcalib.compute_bias_file to model
     bias image, but not preproc itself (which subtracts that bias, and
@@ -208,6 +209,8 @@ def subtract_peramp_overscan(image, hdr):
     amp_ids = get_amp_ids(hdr)
     for a,amp in enumerate(amp_ids) :
         ii=parse_sec_keyword(hdr['BIASSEC'+amp])
+        if cfinder.haskey(f'BIASMSK{amp}'):  # override BIASSEC when BIASMSK is present
+            ii = parse_sec_keyword(cfinder.value(f'BIASMSK{amp}'))
         s0,s1=ii[0],ii[1]
         for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
             if k+amp in hdr :
