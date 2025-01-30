@@ -23,13 +23,12 @@ from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
-def read_raw_primary_header(filename) :
-    '''Returns the primary header of a raw data image.
+def read_raw_primary_header(hdulist) :
+    '''Returns the primary header of a raw data image HDU list.
 
     Parameters
     ----------
-    filename : :class:`str`
-        Input FITS filename with DESI raw data.
+        hdulist astropy.io.fits HDUList
 
     Returns
     -------
@@ -37,15 +36,14 @@ def read_raw_primary_header(filename) :
     '''
     log = get_logger()
 
-    fx = fits.open(filename, memmap=False)
     hdu = 0
     primary_header = None
 
     while True:
-        primary_header = fx[hdu].header
+        primary_header = hdulist[hdu].header
         if "EXPTIME" in primary_header: break
 
-        if len(fx) > hdu + 1:
+        if len(hdulist) > hdu + 1:
             if hdu > 0:
                 log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
             hdu += 1
@@ -53,8 +51,6 @@ def read_raw_primary_header(filename) :
             msg = "Did not find header keyword EXPTIME in any HDU of %s!"
             log.critical(msg, filename)
             raise KeyError(msg % filename)
-
-    fx.close()
 
     return primary_header
 
@@ -105,7 +101,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
 
-    primary_header = read_raw_primary_header(filename)
+    primary_header = read_raw_primary_header(fx)
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
 
