@@ -23,6 +23,40 @@ from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
+def read_raw_primary_header(filename) :
+    '''Returns the primary header of a raw data image.
+
+    Parameters
+    ----------
+    filename : :class:`str`
+        Input FITS filename with DESI raw data.
+
+    Returns
+    -------
+        fits header
+    '''
+    log = get_logger()
+
+    fx = fits.open(filename, memmap=False)
+    hdu = 0
+    primary_header = None
+
+    while True:
+        primary_header = fx[hdu].header
+        if "EXPTIME" in primary_header: break
+
+        if len(fx) > hdu + 1:
+            if hdu > 0:
+                log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
+            hdu += 1
+        else:
+            msg = "Did not find header keyword EXPTIME in any HDU of %s!"
+            log.critical(msg, filename)
+            raise KeyError(msg % filename)
+
+    fx.close()
+
+    return primary_header
 
 def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     '''Returns preprocessed raw data from `camera` extension of `filename`.
@@ -71,25 +105,10 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
 
+    primary_header = read_raw_primary_header(filename)
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
-    hdu = 0
-    #
-    # primary_header will typically represent HDU 1 ('SPEC') since
-    # HDU 0 is empty.
-    #
-    while True:
-        primary_header = fx[hdu].header
-        if "EXPTIME" in primary_header: break
 
-        if len(fx) > hdu + 1:
-            if hdu > 0:
-                log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
-            hdu += 1
-        else:
-            msg = "Did not find header keyword EXPTIME in any HDU of %s!"
-            log.critical(msg, filename)
-            raise KeyError(msg % filename)
 
     #- Check if NIGHT keyword is present and valid; fix if needed
     #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
