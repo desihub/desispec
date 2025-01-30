@@ -259,7 +259,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
         log.info("reading %s %s", filename, camera)
         fitsfile=pyfits.open(filename)
 
-        primary_header=fitsfile[0].header
+        primary_header=io.raw.read_raw_primary_header(fitsfile)
         image_header=fitsfile[camera].header
 
         if first_image_header is None :
@@ -671,7 +671,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         if os.path.exists(testbias):
             rawtestfile = rawfiles[-1]
             with fitsio.FITS(rawtestfile) as fx:
-                rawhdr = fx['SPEC'].read_header()
+                rawhdr = io.raw.read_raw_primary_header(fx)
                 camhdr = fx[camera].read_header()
 
             cf = CalibFinder([rawhdr, camhdr],fallback_on_dark_not_found=True)
@@ -863,7 +863,7 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
         msg = f'Unknown {readout_mode=}'
         log.critical(msg)
         raise ValueError(msg)
-    
+
     median_diff1 = list()
     median_diff2 = list()
 
