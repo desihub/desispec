@@ -280,7 +280,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
         image=fitsfile[camera].data.astype("float64")
 
-        subtract_peramp_overscan(image, image_header)
+        subtract_peramp_overscan(image, image_header, cfinder)
 
         if shape is None :
             shape=image.shape
@@ -747,9 +747,14 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
 
     image, hdr = fitsio.read(rawfile, ext=cam1, header=True)
 
+    primary_hdr = None
+    with fitsio.FITS(rawfile) as fx:
+        primary_hdr = io.raw.read_raw_primary_header(fx)
+    cfinder = CalibFinder([primary_hdr, hdr],fallback_on_dark_not_found=True)
+
     #- subtract constant per-amp overscan region
     image = image.astype(float)
-    subtract_peramp_overscan(image, hdr)
+    subtract_peramp_overscan(image, hdr, cfinder)
 
     #- calculate differences per-amp
     readout_mode = get_readout_mode(hdr)
