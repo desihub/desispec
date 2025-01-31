@@ -6,7 +6,7 @@ desispec Change Log
 -------------------
 
 * Fix installation when using desiutil/3.5.0, dropping support of
-  `python setup.py test` as a side-effect [`PR #2437`_]
+  `python setup.py test` as a side-effect [PR `#2437`_]
 
 .. _`#2437`: https://github.com/desihub/desispec/pull/2437
 

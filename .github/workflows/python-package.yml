@@ -66,6 +66,8 @@ jobs:
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
+            - name: Install System Packages
+              run: sudo apt install libbz2-dev subversion
             - name: Checkout code
               uses: actions/checkout@v2
               with:
