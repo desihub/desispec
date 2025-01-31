@@ -5,7 +5,10 @@ desispec Change Log
 0.68.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix installation when using desiutil/3.5.0, dropping support of
+  `python setup.py test` as a side-effect [`PR #2437`_]
+
+.. _`#2437`: https://github.com/desihub/desispec/pull/2437
 
 0.68.1 (2024-11-08)
 -------------------
