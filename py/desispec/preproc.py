@@ -209,8 +209,8 @@ def subtract_peramp_overscan(image, hdr, cfinder):
     amp_ids = get_amp_ids(hdr)
     for a,amp in enumerate(amp_ids) :
         ii=parse_sec_keyword(hdr['BIASSEC'+amp])
-        if cfinder.haskey(f'BIASMSK{amp}'):  # override BIASSEC when BIASMSK is present
-            ii = parse_sec_keyword(cfinder.value(f'BIASMSK{amp}'))
+        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+            ii = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
         s0,s1=ii[0],ii[1]
         for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
             if k+amp in hdr :
@@ -914,8 +914,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         amp = amp_ids[0]
         tt     = parse_sec_keyword(header['DATASEC'+amp])
         ov_col = parse_sec_keyword(header['BIASSEC%s'%amp])
-        if cfinder.haskey(f'BIASMSK{amp}'):  # override BIASSEC when BIASMSK is present
-            ov_col = parse_sec_keyword(cfinder.value(f'BIASMSK{amp}'))
+        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+            ov_col = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
         overscan_col_width = max((tt[1].start-ov_col[1].start),(ov_col[1].stop-tt[1].stop))
         log.info(f"will keep overscan columns of width = {overscan_col_width} pixels")
         nx += 2*overscan_col_width
@@ -1023,15 +1023,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         use_overscan_row = use_overscan_row_orig
         no_overscan_per_row = no_overscan_per_row_orig
 
-        if cfinder.haskey(f'BIASMSK{amp}'):
+        if cfinder.haskey(f'GOODBIASSEC{amp}'):
             use_overscan_row = False
             no_overscan_per_row = True
 
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
-        if cfinder.haskey(f'BIASMSK{amp}'):  # override BIASSEC when BIASMSK is present
-            ov_col = parse_sec_keyword(cfinder.value(f'BIASMSK{amp}'))
-            log.info(f"Camera {camera} amp {amp} using BIASMSK instead of BIASSEC")
+        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+            ov_col = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
+            log.info(f"Camera {camera} amp {amp} using GOODBIASSEC instead of BIASSEC")
         if 'ORSEC'+amp in header.keys():
             ov_row = parse_sec_keyword(header['ORSEC'+amp])
         elif use_overscan_row:
@@ -1092,8 +1092,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
                 # Region is BIASSEC+DATASEC
                 ii    = parse_sec_keyword(header["BIASSEC"+amp])
-                if cfinder.haskey(f'BIASMSK{amp}'):  # override BIASSEC when BIASMSK is present
-                    ii = parse_sec_keyword(cfinder.value(f'BIASMSK{amp}'))
+                if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+                    ii = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
                 jj    = parse_sec_keyword(header["DATASEC"+amp])
                 start = min(ii[1].start,jj[1].start)
                 stop  = max(ii[1].stop,jj[1].stop)
