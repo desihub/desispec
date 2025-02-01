@@ -23,12 +23,12 @@ from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
-def read_raw_primary_header(hdulist) :
+def read_raw_primary_header(filename):
     '''Returns the primary header of a raw data image HDU list.
 
     Parameters
     ----------
-        hdulist astropy.io.fits HDUList
+        filename: path of the DESI raw image
 
     Returns
     -------
@@ -39,10 +39,12 @@ def read_raw_primary_header(hdulist) :
     hdu = 0
     primary_header = None
 
+    hdulist = fits.open(filename)
+
     while True:
         primary_header = hdulist[hdu].header
-        if "EXPTIME" in primary_header: break
-
+        if "EXPTIME" in primary_header:
+            break
         if len(hdulist) > hdu + 1:
             if hdu > 0:
                 log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
@@ -101,7 +103,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
 
-    primary_header = read_raw_primary_header(fx)
+    primary_header = read_raw_primary_header(filename)
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
 

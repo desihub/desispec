@@ -76,7 +76,7 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--nodarktrail', action='store_true',
                         help = 'do not correct for dark trails if any')
     parser.add_argument('--no-overscan-per-row', action='store_true',
-                        help = 'do not perform an overscan subtraction per row (which can be otherwise turned on automatically for some images)')
+                        help = 'disable per-row overscan subtraction (which can be otherwise turned on automatically for some images)')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
