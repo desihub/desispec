@@ -195,7 +195,6 @@ def calc_overscan(pix, nsigma=5, niter=3):
 
 def subtract_peramp_overscan(image, hdr, cfinder):
     """Subtract per-amp overscan using BIASSEC* keywords
-    CURRENTLY DOES NOT SUPPORT BIAS MASK
 
     Args:
         image: 2D image array, modified in-place
