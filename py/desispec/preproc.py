@@ -1149,7 +1149,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
-            o,average_read_noise =  calc_overscan(raw_overscan_col)
+            average_overscan, average_read_noise = calc_overscan(raw_overscan_col)
             # replace by single value
             overscan_col = np.repeat(o,nrows)
             header['OMETH'+amp]=("AVERAGE","use average overscan")
@@ -1255,7 +1255,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             for k in range(nrows):
                 data[k] -= overscan_col[k]
         else:
-            data -= o
+            data -= average_overscan
 
         saturlev_elec = gain*(saturlev_adu - np.mean(overscan_col))
         header['SATUELE'+amp] = (saturlev_elec,"saturation or non lin. level, in electrons")
@@ -1354,6 +1354,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- subtract dark after multiplication by gain
     if dark is not False  :
         log.info(f"Camera {camera} subtracting dark")
+
         image -= trimmed_dark_in_electrons
         # measure its noise
         new_readnoise = np.zeros(readnoise.shape)
