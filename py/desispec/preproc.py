@@ -1151,7 +1151,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             average_overscan, average_read_noise = calc_overscan(raw_overscan_col)
             # replace by single value
-            overscan_col = np.repeat(o,nrows)
+            overscan_col = np.repeat(average_overscan, nrows)
             header['OMETH'+amp]=("AVERAGE","use average overscan")
         else :
             header['OMETH'+amp]=("PER_ROW","use average overscan per row")
