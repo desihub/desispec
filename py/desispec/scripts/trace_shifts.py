@@ -19,7 +19,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
 from desispec.io import shorten_filename
 from desiutil.log import get_logger
-from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x
+from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y
 
 
 
@@ -252,6 +252,80 @@ def fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,max_error) :
 
     return new_xcoeff
 
+def fit_ycoeff(dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
+
+    log     = get_logger()
+    xcoef   = tset.x_vs_wave_traceset._coeff
+    ycoef   = tset.y_vs_wave_traceset._coeff
+    nfibers = xcoef.shape[0]
+
+    n = 0
+    nloops = degyx + degyy
+    while True: # loop because polynomial degrees could be reduced
+
+        # Try fitting offsets.
+        log.info("polynomial fit of measured offsets with degy=(%d,%d)"%(degyx,degyy))
+        try :
+            dy_coeff,dy_coeff_covariance,dy_errorfloor,dy_mod,dy_mask=polynomial_fit(z=dy,ez=ey,xx=x_for_dy,yy=y_for_dy,degx=degyx,degy=degyy)
+
+            if dy_errorfloor>0.1 :
+                log.info("dx error floor = %4.3f pixels"%(dy_errorfloor))
+
+            #log.info("check fit uncertainties are ok on edge of CCD")
+
+            merr=0.
+            for fiber in [0,nfibers-1] :
+                for rw in [-1,1] :
+                    tx = legval(rw,xcoef[fiber])
+                    ty = legval(rw,ycoef[fiber])
+                    m=monomials(tx,ty,degyx,degyy)
+                    tdy=np.inner(dy_coeff,m)
+                    tsy=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
+                    merr=max(merr,tsy)
+            log.info("max edge shift error = %4.3f pixels"%merr)
+            if degyx==0 and degyy==0 :
+                break
+
+        except ( LinAlgError , ValueError ) :
+            log.warning("polynomial fit failed with degy=(%d,%d)"%(degyx,degyy))
+            if degyx==0 and degyy==0 :
+                log.error("polynomial degrees are already 0. we can't fit the offsets")
+                raise RuntimeError("polynomial degrees are already 0. we can't fit the offsets")
+            merr = 100000. # this will lower the pol. degree.
+
+        if merr > max_error :
+            if merr != 100000. :
+                log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
+
+            if degyy>0 and degyy>degyx: # first along wavelength
+                if degyy>0 : degyy-=1
+            else :                                                  # then along fiber
+                if degyx>0 : degyx-=1
+        else :
+            # error is ok, so we quit the loop
+            break
+
+        # Sanity check to ensure looping is not infinite.
+        n += 1
+        if n > nloops:
+            raise RuntimeError(f'Maximum fit iterations {nloops} exceeded.')
+    # print central shift
+    mx=np.median(x_for_dy)
+    my=np.median(y_for_dy)
+    m=monomials(mx,my,degyx,degyy)
+    mdy=np.inner(dy_coeff,m)
+    mey=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
+    log.info("central shifts dy = %4.3f +- %4.3f "%(mdy,mey))
+
+    new_ycoeff = recompute_legendre_coefficients_for_y(xcoef=tset.x_vs_wave_traceset._coeff,
+                                                       ycoef=tset.y_vs_wave_traceset._coeff,
+                                                       wavemin=tset.wavemin,
+                                                       wavemax=tset.wavemax,
+                                                       degyx=degyx,degyy=degyy,
+                                                       dy_coeff=dy_coeff)
+
+    return new_ycoeff
+
 def fit_trace_shifts(image, args):
     """
     Perform the fitting of shifts of spectral traces
@@ -395,16 +469,30 @@ def fit_trace_shifts(image, args):
             if maxdx<0.001 :
                 break
 
-        if internal_wavelength_calib :
-            # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
-            mdy = np.median(dy)
-            log.info("Subtract median(dy)={}".format(mdy))
-            dy -= mdy # remove median, because this is an internal calibration
-            internal_offset_info = dict(wave=wave_for_dy,
-                                        fiber=fiber_for_dy,
-                                        dwave=dwave,
-                                        dwave_err=dwave_err)
+        if internal_wavelength_calib and (degyx>0 or degyy>0) :
+
+            for iteration in range(10) :
+                # measure y shifts
+                x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
+                mdy = np.median(dy)
+                log.info("Subtract median(dy)={}".format(mdy))
+                dy -= mdy # remove median, because this is an internal calibration
+
+                new_ycoeff = fit_ycoeff(dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,args.max_error)
+
+                meandy = np.mean(new_ycoeff[:,0]-ycoef[:,0])
+                maxdy = np.max(np.abs(new_ycoeff[:,0]-ycoef[:,0]-meandy))  # remove mean because of the median dy correction above
+                log.info("iteration = {} maxdy={:0.4f}".format(iteration,maxdy))
+                tset.y_vs_wave_traceset._coeff = new_ycoeff
+                ycoef = tset.y_vs_wave_traceset._coeff
+
+                if maxdy<0.001 :
+                    break
+
+                internal_offset_info = dict(wave=wave_for_dy,
+                                            fiber=fiber_for_dy,
+                                            dwave=dwave,
+                                            dwave_err=dwave_err)
         else :
             # duplicate dx results with zero shift to avoid write special case code below
             x_for_dy = x_for_dx.copy()
@@ -427,8 +515,8 @@ def fit_trace_shifts(image, args):
 
 
 
-    tset.x_vs_wave_traceset._coeff,tset.y_vs_wave_traceset._coeff = fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
-                                                                                      dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,args.max_error)
+    #tset.x_vs_wave_traceset._coeff,tset.y_vs_wave_traceset._coeff = fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
+    #                                                                                 dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,args.max_error)
 
     # compute x y to record max deviations
     wave = np.linspace(tset.wavemin,tset.wavemax,5)
