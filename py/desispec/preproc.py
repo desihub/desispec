@@ -1147,7 +1147,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         average_read_noise = 0.
 
-        if overscan_step <  2 or no_overscan_per_row : # tuned to trig on the worst few
+        if overscan_step < 2 or no_overscan_per_row or (not use_overscan_row):  # tuned to trig on the worst few
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             average_overscan, average_read_noise = calc_overscan(raw_overscan_col)
             # replace by single value
