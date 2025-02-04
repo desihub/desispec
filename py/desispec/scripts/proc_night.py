@@ -57,7 +57,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                badcamword=None, badamps=None, exps_to_ignore=None,
                sub_wait_time=0.1, verbose=False, dont_require_cals=False,
                psf_linking_without_fflat=False, no_resub_failed=False,
-               still_acquiring=False):
+               no_resub_any=False, still_acquiring=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
     night, or used to process data currently available on a given night using
@@ -166,6 +166,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             without fiberflatnight calibrations.
         no_resub_failed: bool. Set to True if you do NOT want to resubmit
             jobs with Slurm status 'FAILED' by default. Default is False.
+        no_resub_any: bool. Set to True if you do NOT want to resubmit
+            jobs. Default is False.
         still_acquiring: bool. If True, assume more data might be coming, e.g.
             wait for additional exposures of latest tile.  If False, auto-derive
             True/False based upon night and current time. Primarily for testing.
@@ -364,7 +366,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
-        if any_jobs_need_resubmission(ptable['STATUS']):
+        if any_jobs_need_resubmission(ptable['STATUS']) and not no_resub_any:
             ## Try up to two times to resubmit failures, afterwards give up
             ## unless explicitly told to proceed with the failures
             ## Note after 2 resubmissions, the code won't resubmit anymore even

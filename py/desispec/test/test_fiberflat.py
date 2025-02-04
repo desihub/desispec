@@ -45,19 +45,6 @@ def _get_data():
 
     return wave, flux, ivar, mask
 
-def _get_fibermap(petal, nspec):
-    fibermap = Table()
-    fibermap['FIBER'] = petal*500 + np.arange(nspec)
-    alpha = 2*np.pi/10  # angle of one petal in radians
-    theta = np.random.uniform(petal*alpha, (petal+1)*alpha, size=nspec)
-    r = np.random.uniform(0,400, size=nspec)
-    fibermap['FIBERASSIGN_X'] = r*np.cos(theta)
-    fibermap['FIBERASSIGN_Y'] = r*np.sin(theta)
-    fibermap['FIBERSTATUS'] = 0
-
-    return fibermap
-
-
 class TestFiberFlat(unittest.TestCase):
 
     @classmethod
@@ -72,6 +59,7 @@ class TestFiberFlat(unittest.TestCase):
         self.testfibermap = 'test_fibermap_{}.fits'.format(id)
         self.testframe = 'test_frame_{}.fits'.format(id)
         self.testflat = 'test_fiberflat_{}.fits'.format(id)
+        self.random = np.random.RandomState(42)
 
     def tearDown(self):
         os.chdir(self.testdir)
@@ -89,6 +77,7 @@ class TestFiberFlat(unittest.TestCase):
             shutil.rmtree(cls.testdir)
 
         os.chdir(cls.origdir)
+
 
 
     def test_interface(self):
@@ -263,7 +252,7 @@ class TestFiberFlat(unittest.TestCase):
         wave = np.arange(5000, 5050)
         nwave = len(wave)
         nspec = 3
-        flux = np.random.uniform(size=(nspec, nwave))
+        flux = self.random.uniform(size=(nspec, nwave))
         ivar = np.ones_like(flux)
         frame = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
         frame.meta['HELIOCOR'] = 1.0  #- breaks test due to interpolation over bad ff
@@ -312,7 +301,7 @@ class TestFiberFlat(unittest.TestCase):
         wave = np.arange(5000, 5010)
         nwave = len(wave)
         nspec = 3
-        flux = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
+        flux = self.random.uniform(0.9, 1.0, size=(nspec, nwave))
         ivar = np.ones_like(flux)
         origframe = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
 
@@ -399,15 +388,29 @@ class TestFiberFlat(unittest.TestCase):
 class TestFiberFlatObject(unittest.TestCase):
 
     def setUp(self):
+        self.random = np.random.RandomState(42)
         self.nspec = 5
         self.nwave = 10
         self.wave = np.arange(self.nwave)
-        self.fiberflat = np.random.uniform(size=(self.nspec, self.nwave))
+        self.fiberflat = self.random.uniform(size=(self.nspec, self.nwave))
         self.ivar = np.ones(self.fiberflat.shape)
         self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
-        self.meanspec = np.random.uniform(size=self.nwave)
+        self.meanspec = self.random.uniform(size=self.nwave)
         self.header = dict(blat=1, foo=2)
         self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec, header=self.header)
+
+    def _get_fibermap(self, petal, nspec):
+        """Return a basic fibermap for the requested `petal` with `nspec` rows"""
+        fibermap = Table()
+        fibermap['FIBER'] = petal*500 + np.arange(nspec)
+        alpha = 2*np.pi/10  # angle of one petal in radians
+        theta = self.random.uniform(petal*alpha, (petal+1)*alpha, size=nspec)
+        r = self.random.uniform(0,400, size=nspec)
+        fibermap['FIBERASSIGN_X'] = r*np.cos(theta)
+        fibermap['FIBERASSIGN_Y'] = r*np.sin(theta)
+        fibermap['FIBERSTATUS'] = 0
+
+        return fibermap
 
     def test_init(self):
         for key in ('wave', 'fiberflat', 'ivar', 'mask', 'meanspec'):
@@ -472,7 +475,7 @@ class TestFiberFlatObject(unittest.TestCase):
         fiberflats = list()
         expid = 1000
         for petal in range(10):
-            fibermap = _get_fibermap(petal, self.nspec)
+            fibermap = self._get_fibermap(petal, self.nspec)
             for i in range(3):
                 ff = copy.deepcopy(self.ff)
                 ff.header['EXPID'] = expid
@@ -487,7 +490,7 @@ class TestFiberFlatObject(unittest.TestCase):
         ref_fiberflats = dict()
         tilted_fiberflats = dict()
         for petal in range(10):
-            fibermap = _get_fibermap(petal, self.nspec)
+            fibermap = self._get_fibermap(petal, self.nspec)
             camera = f'r{petal}'
 
             ff = copy.deepcopy(self.ff)
