@@ -1171,6 +1171,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         if amps_with_readnoise_per_row is None or amp not in amps_with_readnoise_per_row:
             # replace readnoise by average if amp not in amps_with_readnoise_per_row
+
             rdnoise  = np.repeat(average_read_noise,nrows)
             header['RMETH'+amp]=("AVERAGE","use average readnoise")
         else :
@@ -1209,9 +1210,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         median_rdnoise  = np.median(rdnoise)
         median_overscan = np.median(overscan_col)
         log.info(f"Camera {camera} amp {amp} Median rdnoise and overscan= {median_rdnoise:.3f} {median_overscan:.3f}")
-
-        for j in range(nrows) :
-            readnoise[kk][j] = rdnoise[j]
+        orig_ov_col = parse_sec_keyword(header['BIASSEC%s'%amp])
+        if ov_col == orig_ov_col :
+            readnoise[kk] = rdnoise[:,None]
+        else :
+            # need to be careful because ov_col has less rows than the CCD active area
+            readnoise[kk] = np.mean(rdnoise)
+            begin=ov_col[0].start-orig_ov_col[0].start
+            end=ov_col[0].stop-orig_ov_col[0].start
+            assert(end-begin==rdnoise.size)
+            readnoise[kk][begin:end,:] = rdnoise[:,None]
 
         header['OVERSCN'+amp] = (median_overscan,'ADUs (gain not applied)')
         if gain != 1 :
