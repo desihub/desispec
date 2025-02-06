@@ -385,7 +385,6 @@ def read_spectra(
                 log.warning(
                     "FITS extension {} is not recognized and is ignored".format(name)
                 )
-                continue
 
     hdus.close()
     duration = time.time() - t0
