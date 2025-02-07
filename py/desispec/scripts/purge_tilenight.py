@@ -8,6 +8,7 @@ from desispec.io.meta import findfile
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table, write_table
+from desiutil.log import get_logger
 
 import os
 import glob
@@ -15,6 +16,8 @@ import shutil
 import sys
 import numpy as np
 import time
+
+
 
 def get_parser():
     """
@@ -38,16 +41,17 @@ def remove_directory(dirname, dry_run=True):
         dru_run, bool. True if you want to print actions instead of performing them.
                        False to actually perform them.
     """
+    log = get_logger()
     if os.path.exists(dirname):
-        print(f"Identified directory {dirname} as existing.")
-        print(f"Dir has contents: {os.listdir(dirname)}")
+        log.info(f"Identified directory {dirname} as existing.")
+        log.info(f"Dir has contents: {os.listdir(dirname)}")
         if dry_run:
-            print(f"Dry_run set, so not performing action.")
+            log.info(f"Dry_run set, so not performing any action.")
         else:
-            print(f"Removing: {dirname}")
+            log.info(f"Removing: {dirname}")
             shutil.rmtree(dirname)
     else:
-        print(f"Directory {dirname} doesn't exist, so no action required.")
+        log.info(f"Directory {dirname} doesn't exist, so no action required.")
 
 def purge_tilenight(tiles, night, dry_run=True):
     """
@@ -71,13 +75,15 @@ def purge_tilenight(tiles, night, dry_run=True):
     if tiles is None:
         raise ValueError("Must specify list of tiles.")
 
+    log = get_logger()
+
     epathname = get_exposure_table_pathname(night=str(night), usespecprod=True)
     etable = load_table(tablename=epathname, tabletype='exptable')
 
-    print(f'Purging night {night} tiles {tiles}')
+    log.info(f'Purging night {night} tiles {tiles}')
     future_cumulatives = {}
     for tile in tiles:
-        print(f'Purging tile {tile}')
+        log.info(f'Purging tile {tile}')
         exptable = etable[etable['TILEID'] == tile]
 
         ## Per exposure: remove preproc, exposure, and perexp redshift dirs
@@ -133,64 +139,72 @@ def purge_tilenight(tiles, night, dry_run=True):
             dashcache = findfile(cachefiletype, night=night)
             if os.path.exists(dashcache):
                 if dry_run:
-                    print(f"Dry_run set, so not removing {dashcache}.")
+                    log.info(f"Dry_run set, so not removing {dashcache}.")
                 else:
-                    print(f"Removing: {dashcache}.")
+                    log.info(f"Removing: {dashcache}.")
                     os.remove(dashcache)
             else:
-                print(f"Couldn't find {cachefiletype} file: {dashcache}")
+                log.info(f"Couldn't find {cachefiletype} file: {dashcache}")
     ## Remove just zinfo for futurenights since we only purge cumulative zs
     for dashnight in futurenights:
         dashcache = findfile('zinfo', night=dashnight)
         if os.path.exists(dashcache):
             if dry_run:
-                print(f"Dry_run set, so not removing {dashcache}.")
+                log.info(f"Dry_run set, so not removing {dashcache}.")
             else:
-                print(f"Removing: {dashcache}.")
+                log.info(f"Removing: {dashcache}.")
                 os.remove(dashcache)
         else:
-            print(f"Couldn't find {cachefiletype} file: {dashcache}")
+            log.info(f"Couldn't find {cachefiletype} file: {dashcache}")
 
     ## Load old processing table
     timestamp = time.strftime('%Y%m%d_%Hh%Mm%Ss')
     ppathname = findfile('processing_table', night=night)
-    ptable = load_table(tablename=ppathname, tabletype='proctable')
+    if os.path.exists(ppathname):
+        ptable = load_table(tablename=ppathname, tabletype='proctable')
 
-    ## Now let's remove the tiles from the processing table
-    keep = np.isin(ptable['TILEID'], tiles, invert=True)
-    print(f'Removing {len(keep) - np.sum(keep)}/{len(keep)} processing '
-          + f'table entries for {night=}')
-    ptable = ptable[keep]
+        ## Now let's remove the tiles from the processing table
+        keep = np.isin(ptable['TILEID'], tiles, invert=True)
+        log.info(f'Removing {len(keep) - np.sum(keep)}/{len(keep)} processing '
+              + f'table entries for {night=}')
+        ptable = ptable[keep]
 
-    if dry_run:
-        print(f'dry_run: not changing {ppathname}')
+        if dry_run:
+            log.info(f'dry_run: not changing {ppathname}')
+        else:
+            log.info(f'Archiving old processing table for {night=} with '
+                  + f'timestamp {timestamp} and saving trimmed one')
+            ## move old processing table out of the way
+            os.rename(ppathname,ppathname.replace('.csv',f".csv.{timestamp}"))
+            ## save new trimmed processing table
+            write_table(ptable,tablename=ppathname)
     else:
-        print(f'Archiving old processing table for {night=} with '
-              + f'timestamp {timestamp} and saving trimmed one')
-        ## move old processing table out of the way
-        os.rename(ppathname,ppathname.replace('.csv',f".csv.{timestamp}"))
-        ## save new trimmed processing table
-        write_table(ptable,tablename=ppathname)
+        log.info(f"Couldn't find Processing table at {ppathname}, so no "
+                 + f'table to modify.')
 
     ## Now archive and modify future processing tables
     for futurenight, futuretiles in future_cumulatives.items():
         ppathname = findfile('processing_table', night=futurenight)
-        ptable = load_table(tablename=ppathname, tabletype='proctable')
+        if os.path.exists(ppathname):
+            ptable = load_table(tablename=ppathname, tabletype='proctable')
 
-        ## Now let's remove the tiles from the processing table
-        nokeep = ptable['JOBDESC'] == 'cumulative'
-        nokeep &= np.isin(ptable['TILEID'], futuretiles)
-        keep = np.bitwise_not(nokeep)
-        print(f'Removing {len(keep) - np.sum(keep)}/{len(keep)} processing '
-              + f'table entries for night={futurenight}')
-        ptable = ptable[keep]
+            ## Now let's remove the tiles from the processing table
+            nokeep = ptable['JOBDESC'] == 'cumulative'
+            nokeep &= np.isin(ptable['TILEID'], futuretiles)
+            keep = np.bitwise_not(nokeep)
+            log.info(f'Removing {np.sum(nokeep)}/{len(nokeep)} processing '
+                  + f'table entries for night={futurenight}')
+            ptable = ptable[keep]
 
-        if dry_run:
-            print(f'dry_run: not changing {ppathname}')
+            if dry_run:
+                log.info(f'dry_run: not changing {ppathname}')
+            else:
+                log.info(f'Archiving old processing table for night={futurenight} with '
+                      + f'timestamp {timestamp} and saving trimmed one')
+                ## move old processing table out of the way
+                os.rename(ppathname, ppathname.replace('.csv', f".csv.{timestamp}"))
+                ## save new trimmed processing table
+                write_table(ptable, tablename=ppathname)
         else:
-            print(f'Archiving old processing table for night={futurenight} with '
-                  + f'timestamp {timestamp} and saving trimmed one')
-            ## move old processing table out of the way
-            os.rename(ppathname, ppathname.replace('.csv', f".csv.{timestamp}"))
-            ## save new trimmed processing table
-            write_table(ptable, tablename=ppathname)
+            log.info(f"Couldn't find processing table at {ppathname}, "
+                     + f'so no table to modify.')
