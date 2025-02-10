@@ -552,12 +552,20 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         tnight = None
         if tile in unique_ptab_tiles:
             tile_prows = ptable[ptable['TILEID']==tile]
+            ## old proctables have poststdstar, check for that or tilenight
             if 'tilenight' in tile_prows['JOBDESC']:
                 tnight = tile_prows[tile_prows['JOBDESC']=='tilenight'][0]
             elif 'poststdstar' in tile_prows['JOBDESC']:
                 poststdstars = tile_prows[tile_prows['JOBDESC']=='poststdstar']
                 tnight = tile_prows[tile_prows['JOBDESC']=='poststdstar'][-1]
-                tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
+                ## Try to gather all the expids, but if that fails just move on
+                ## with the EXPID's from the last entry. This only happens in daily
+                ## for old proctabs and doesn't matter for cumulative redshifts
+                try:
+                    tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
+                except:
+                    pass
+            ## if spectra processed, check for redshifts and remove any found
             if tnight is not None:
                 for cur_ztype in cur_z_submit_types.copy():
                     if cur_ztype in tile_prows['JOBDESC']:
@@ -566,6 +574,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 ## are done, move on to the next tile
                 if len(cur_z_submit_types) == 0:
                     continue
+
         log.info(f'\n\n################# Submitting {tile} #####################')
 
         ## Identify the science exposures for the given tile
@@ -589,6 +598,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         if len(cur_z_submit_types) == 0:
             cur_z_submit_types = None
 
+        ## if not tilenight, do tilenight and redshifts, otherwise just do redshifts
         if tnight is None:
             ## Process tilenight and redshifts
             ## No longer need to return sciences since this is always the
