@@ -347,44 +347,44 @@ def read_spectra(
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
-            if mat is None:
-                raise RuntimeError(
-                    "FITS extension name {} does not contain the band".format(name)
+            if mat is not None:
+                band = mat.group(1).lower()
+                type = mat.group(2)
+                if band not in bands:
+                    bands.append(band)
+                if type == "WAVELENGTH":
+                    if wave is None:
+                        wave = {}
+                    # - Note: keep original float64 resolution for wavelength
+                    wave[band] = native_endian(hdus[h].read())
+                elif type == "FLUX":
+                    if flux is None:
+                        flux = {}
+                    flux[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type == "IVAR":
+                    if ivar is None:
+                        ivar = {}
+                    ivar[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type == "MASK" and type not in skip_hdus:
+                    if mask is None:
+                        mask = {}
+                    mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
+                elif type == "RESOLUTION" and type not in skip_hdus:
+                    if res is None:
+                        res = {}
+                    res[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
+                    # this must be an "extra" HDU
+                    log.debug('Reading extra HDU %s', name)
+                    if extra is None:
+                        extra = {}
+                    if band not in extra:
+                        extra[band] = {}
+                    extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
+            else:
+                log.warning(
+                    "FITS extension {} is not recognized and is ignored".format(name)
                 )
-            band = mat.group(1).lower()
-            type = mat.group(2)
-            if band not in bands:
-                bands.append(band)
-            if type == "WAVELENGTH":
-                if wave is None:
-                    wave = {}
-                # - Note: keep original float64 resolution for wavelength
-                wave[band] = native_endian(hdus[h].read())
-            elif type == "FLUX":
-                if flux is None:
-                    flux = {}
-                flux[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type == "IVAR":
-                if ivar is None:
-                    ivar = {}
-                ivar[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type == "MASK" and type not in skip_hdus:
-                if mask is None:
-                    mask = {}
-                mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
-            elif type == "RESOLUTION" and type not in skip_hdus:
-                if res is None:
-                    res = {}
-                res[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
-                # this must be an "extra" HDU
-                log.debug('Reading extra HDU %s', name)
-                if extra is None:
-                    extra = {}
-                if band not in extra:
-                    extra[band] = {}
-
-                extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
 
     hdus.close()
     duration = time.time() - t0
