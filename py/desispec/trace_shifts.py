@@ -17,6 +17,7 @@ from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 from scipy.ndimage import median_filter
 import numba
+from importlib import resources
 
 from desispec.io import read_image, read_xytraceset
 from desispec.io.util import get_tempfilename
@@ -1420,3 +1421,89 @@ def recompute_legendre_coefficients_for_y(xcoef,ycoef,wavemin,wavemax,degyx,degy
         new_ycoef[fiber]=legfit(rw,y+dy,deg=ycoef.shape[1]-1)
 
     return new_ycoef
+
+
+def list_of_expected_spot_positions(traceset,fibers=None,max_number_of_lines=50) :
+    """
+    Computes a list of expected arc lamp spots position in the CCD image.
+    This function uses the data file data/spec-arc-lamps.dat that is already
+    used elsewhere.
+
+    Args:
+        traceset: desispec.xytracet instance
+    Optionnal:
+        fibers: numpy 1D array of int with fiber indices (between 0 and 500)
+        max_number_of_lines: max number of emission lines to consider (per fiber)
+
+    Returns:
+        x,y : two 1D arrays of floats with CCD coordinates of spots
+    """
+
+    x=[]
+    y=[]
+
+    # get list of arc lamp spots from arc lamp spectrum
+    log     = get_logger()
+    srch_file = "data/spec-arc-lamps.dat"
+    if not resources.files('desispec').joinpath(srch_file).is_file():
+        log.error("Cannot find arc lamps spectrum file {:s}".format(srch_file))
+        raise RuntimeError("Cannot find arc lamps spectrum file {:s}".format(srch_file))
+    spectrum_filename = resources.files('desispec').joinpath(srch_file)
+    tmp=np.loadtxt(spectrum_filename).T
+    ref_wave=tmp[0]
+    ref_spectrum=tmp[1]
+    log.info("read reference spectrum in %s with %d entries"%(spectrum_filename,ref_wave.size))
+
+    # convolve to get one peak per line
+    dw=np.median(np.gradient(ref_wave))
+    sigma=2. #A
+    hw=int(5*sigma/dw)+1
+    x=np.arange(-hw,hw+1)*dw
+    kernel=np.exp(-x**2/2/sigma**2)
+    ref_spectrum=fftconvolve(ref_spectrum,kernel,mode='same')
+
+    medflux=np.median(ref_spectrum)
+    nmad=1.4*np.median(np.abs(ref_spectrum-medflux))
+    maxflux=np.max(ref_spectrum)
+    threshold=min(medflux+10*nmad,maxflux/5.)
+    while (threshold<maxflux/2.) :
+        peaks=np.zeros(ref_spectrum.shape)
+        peaks[2:-2] = (ref_spectrum[2:-2]>threshold)\
+            *(ref_spectrum[2:-2]>ref_spectrum[3:-1])\
+            *(ref_spectrum[2:-2]>ref_spectrum[1:-3])\
+            *(ref_spectrum[2:-2]>ref_spectrum[4:])\
+            *(ref_spectrum[2:-2]>ref_spectrum[:-4])
+        peaks=np.where(peaks>0)[0]
+        if(peaks.size<=max_number_of_lines) :
+            break
+        threshold *= 1.5
+
+    # wavelength of peaks (will refine after selection)
+    peak_wavelengths=ref_wave[peaks]
+
+    inccd=np.zeros(peak_wavelengths.shape,dtype=bool)
+    for fiber in [0,traceset.nspec//2,traceset.nspec-1] :
+        y=traceset.y_vs_wave(fiber,peak_wavelengths)
+        inccd |= ( (y>0) & (y<traceset.npix_y))
+    peaks=peaks[inccd]
+
+    # refine wavelength with barycenter
+    peak_wavelengths=np.zeros(peaks.size)
+    for i,p in enumerate(peaks) :
+        peak_wavelengths[i] = np.sum(ref_wave[p-1:p+2]*ref_spectrum[p-1:p+2])/np.sum(ref_spectrum[p-1:p+2])
+
+    # create list of dots
+    xspot=[]
+    yspot=[]
+    if fibers is None :
+        fibers = np.arange(traceset.nspec)
+    for fiber in fibers :
+        x=traceset.x_vs_wave(fiber,peak_wavelengths)
+        y=traceset.y_vs_wave(fiber,peak_wavelengths)
+        ok=((y>0)&(y<traceset.npix_y))
+        xspot.append(x[ok])
+        yspot.append(y[ok])
+
+    xspot=np.hstack(xspot)
+    yspot=np.hstack(yspot)
+    return xspot,yspot
