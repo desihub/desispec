@@ -356,6 +356,14 @@ def fit_trace_shifts(image, args):
     xcoef   = tset.x_vs_wave_traceset._coeff
     ycoef   = tset.y_vs_wave_traceset._coeff
 
+    # keep a copy to compare final shifts at the end
+    benchmark_wave   = np.linspace(tset.wavemin,tset.wavemax,5)
+    benchmark_x_in = np.zeros((tset.nspec,benchmark_wave.size))
+    benchmark_y_in = np.zeros((tset.nspec,benchmark_wave.size))
+    for s in range(tset.nspec) :
+        benchmark_x_in[s]=tset.x_vs_wave(s,benchmark_wave)
+        benchmark_y_in[s]=tset.y_vs_wave(s,benchmark_wave)
+
     nfibers=xcoef.shape[0]
     log.info("read PSF trace with xcoef.shape = {} , ycoef.shape = {} , and wavelength range {}:{}".format(xcoef.shape,ycoef.shape,int(wavemin),int(wavemax)))
 
@@ -602,20 +610,26 @@ def fit_trace_shifts(image, args):
                                     dwave_err=dwave_err_external)
     else:
         external_offset_info = None
-    x = np.zeros(x0.shape)
-    y = np.zeros(x0.shape)
+
+    benchmark_x_out = np.zeros((tset.nspec,benchmark_wave.size))
+    benchmark_y_out = np.zeros((tset.nspec,benchmark_wave.size))
     for s in range(tset.nspec) :
-        x[s]=tset.x_vs_wave(s,wave)
-        y[s]=tset.y_vs_wave(s,wave)
-    dx = x-x0
-    dy = y-y0
+        benchmark_x_out[s]=tset.x_vs_wave(s,benchmark_wave)
+        benchmark_y_out[s]=tset.y_vs_wave(s,benchmark_wave)
+    dx = benchmark_x_out - benchmark_x_in
+    dy = benchmark_y_out - benchmark_y_in
     if tset.meta is None : tset.meta = dict()
-    tset.meta["MEANDX"]=np.mean(dx)
+    meandx=np.mean(dx)
+    meandy=np.mean(dy)
+    tset.meta["MEANDX"]=meandx
     tset.meta["MINDX"]=np.min(dx)
     tset.meta["MAXDX"]=np.max(dx)
-    tset.meta["MEANDY"]=np.mean(dy)
+    tset.meta["MEANDY"]=meandy
     tset.meta["MINDY"]=np.min(dy)
     tset.meta["MAXDY"]=np.max(dy)
+
+    log.info("MEANDX = {:+0.2f} pixel".format(meandx))
+    log.info("MEANDY = {:+0.2f} pixel".format(meandy))
 
     return tset, internal_offset_info, external_offset_info
 
