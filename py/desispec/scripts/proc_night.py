@@ -561,10 +561,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 ## Try to gather all the expids, but if that fails just move on
                 ## with the EXPID's from the last entry. This only happens in daily
                 ## for old proctabs and doesn't matter for cumulative redshifts
-                try:
-                    tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
-                except:
-                    pass
+                if len(tnight) > 1:
+                    try:
+                        tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
+                    except:
+                        log.warning(f"Tried and failed to populate full EXPIDs for: {dict(tnight)}")
+                        pass
             ## if spectra processed, check for redshifts and remove any found
             if tnight is not None:
                 for cur_ztype in cur_z_submit_types.copy():
