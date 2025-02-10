@@ -11,18 +11,19 @@ from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from importlib import resources
+from scipy.signal import fftconvolve
 
 import specter.psf
 
-from desispec.calibfinder import findcalibfile
+from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.xytraceset import XYTraceSet
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
 from desispec.io import shorten_filename
 from desiutil.log import get_logger
-from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y
-
-
+from desispec.util import parse_int_args
+from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y,list_of_expected_spot_positions
+from desispec.large_trace_shifts import detect_spots_in_image,match_same_system
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -92,6 +93,7 @@ def read_specter_psf(filename) :
     else :
         raise ValueError("Unknown PSFTYPE='{}'".format(psftype))
     return psf
+
 
 def fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
                       dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
@@ -344,12 +346,9 @@ def fit_trace_shifts(image, args):
     log.info("starting")
 
     if args.psf is None :
-        hdus = pyfits.open(args.image)
-        header = hdus[0].header
-        hdus.close()
-        #cfinder = CalibFinder([header])
-        args.psf = findcalibfile([header],"PSF")
-        log.info("Will use default PSF: {args.psf}")
+        args.psf = findcalibfile([image.meta],"PSF")
+        log.info(f"Will use default PSF: {args.psf}")
+
 
     tset = read_xytraceset(args.psf)
     wavemin = tset.wavemin
@@ -359,6 +358,8 @@ def fit_trace_shifts(image, args):
 
     nfibers=xcoef.shape[0]
     log.info("read PSF trace with xcoef.shape = {} , ycoef.shape = {} , and wavelength range {}:{}".format(xcoef.shape,ycoef.shape,int(wavemin),int(wavemax)))
+
+
 
     lines=None
     if args.lines is not None :
@@ -378,13 +379,11 @@ def fit_trace_shifts(image, args):
     internal_wavelength_calib    = (not args.continuum)
 
     if args.auto :
-        log.debug("read flavor of input image {}".format(args.image))
-        hdus = pyfits.open(args.image)
-        if "FLAVOR" not in hdus[0].header :
+        log.debug("read flavor of input image")
+        if "FLAVOR" not in image.meta :
             log.error("no FLAVOR keyword in image header, cannot run with --auto option")
             raise KeyError("no FLAVOR keyword in image header, cannot run with --auto option")
-        flavor = hdus[0].header["FLAVOR"].strip().lower()
-        hdus.close()
+        flavor = image.meta["FLAVOR"].strip().lower()
         log.info("Input is a '{}' image".format(flavor))
         if flavor == "flat" :
             internal_wavelength_calib = False
@@ -395,6 +394,57 @@ def fit_trace_shifts(image, args):
             internal_wavelength_calib = True
             args.sky = True
         log.info("wavelength calib, internal={}, sky={} , arc_lamps={}".format(internal_wavelength_calib,args.sky,args.arc_lamps))
+
+    if args.arc_lamps :
+
+        log.info("for arc lamps, find a first solution by comparing expected spots positions with detections over the whole CCD")
+        cfinder = CalibFinder([image.meta])
+        fibers=np.arange(tset.nspec)
+        if cfinder.haskey("BROKENFIBERS") :
+            brokenfibers=parse_int_args(cfinder.value("BROKENFIBERS"))%500
+            log.debug(f"brokenfibers={brokenfibers}")
+            fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
+        xref,yref = list_of_expected_spot_positions(tset,fibers)
+        xin,yin   = detect_spots_in_image(image)
+
+        log.info("start match ...")
+        fibersep=7.
+        oversampling=2
+        nfiberexcursion=25
+
+        bestnmatch=0
+        bestdx=0
+        bestindices=None
+        bestdistances=None
+
+        # shift of traces in PSF
+        delta_xref=0.
+        delta_yref=0.
+
+        # iterate over max allowed distance
+        for maxdistance in [ 4*fibersep,2*fibersep,fibersep ] :
+
+            # loop over possible offsets
+            bestnmatch=0
+            for dx in np.arange(-nfiberexcursion*oversampling,nfiberexcursion*oversampling+1)*fibersep/oversampling :
+                indices,distances = match_same_system(xref+delta_xref+dx,yref+delta_yref,xin,yin,remove_duplicates=True)
+                nmatch=np.sum( (indices>=0)&(distances<maxdistance) )
+                if nmatch > bestnmatch :
+                    bestnmatch    = nmatch
+                    bestindices   = indices
+                    bestdistances = distances
+                    bestdx=dx
+            # refine measure of best offset
+            log.info(f"best number of match={bestnmatch} for deltax={bestdx+delta_xref}")
+            ok=(bestindices>=0)&(bestdistances<maxdistance)
+            delta_xref = np.median(-xref[ok]+xin[bestindices[ok]])
+            delta_yref = np.median(-yref[ok]+yin[bestindices[ok]])
+            median_dist = np.median(np.sqrt((xref[ok]+delta_xref-xin[indices[ok]])**2+(yref[ok]+delta_yref-yin[indices[ok]])**2))
+            log.info(f"delta x = {delta_xref} , delta y = {delta_yref} , median_dist = {median_dist}")
+
+        log.info(f"apply best shift delta x = {delta_xref} , delta y = {delta_yref} to traceset")
+        xcoef[:,0] += delta_xref
+        ycoef[:,0] += delta_yref
 
     spectrum_filename = args.spectrum
     continuum_subtract = False
