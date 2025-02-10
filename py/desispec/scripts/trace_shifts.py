@@ -14,6 +14,7 @@ from importlib import resources
 
 import specter.psf
 
+from desispec.calibfinder import findcalibfile
 from desispec.xytraceset import XYTraceSet
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
@@ -35,8 +36,8 @@ Two methods are implemented.
 
     parser.add_argument('-i','--image', type = str, default = None, required=True,
                         help = 'path of DESI preprocessed fits image')
-    parser.add_argument('--psf', type = str, default = None, required=True,
-                        help = 'path of DESI psf fits file')
+    parser.add_argument('--psf', type = str, default = None, required=False,
+                        help = 'path of DESI psf fits file. If none, will use default PSF from calibration data.')
     parser.add_argument('--lines', type = str, default = None, required=False,
                         help = 'path of lines ASCII file. Using this option changes the fit method.')
     parser.add_argument('--spectrum', type = str, default = None, required=False,
@@ -341,6 +342,14 @@ def fit_trace_shifts(image, args):
     log=get_logger()
 
     log.info("starting")
+
+    if args.psf is None :
+        hdus = pyfits.open(args.image)
+        header = hdus[0].header
+        hdus.close()
+        #cfinder = CalibFinder([header])
+        args.psf = findcalibfile([header],"PSF")
+        log.info("Will use default PSF: {args.psf}")
 
     tset = read_xytraceset(args.psf)
     wavemin = tset.wavemin
