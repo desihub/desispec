@@ -97,6 +97,30 @@ def read_specter_psf(filename) :
 
 def fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
                       dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
+    '''
+    Fit offsets dx and dy as a function of x and y using low order Legendre polynomials and then
+    refit using those the full Legendre coefficients (per fiber and wavelength) of the trace sets.
+
+    Args :
+       dx = 1D array of offsets along X (in pixels)
+       ex = 1D array of errors on offsets along X (in pixels), same size as dx
+       x_for_dx = 1D array of X coordinates of points where the dx offsets are measured (in pixels), same size as dx
+       y_for_dx = 1D array of Y coordinates of points where the dx offsets are measured (in pixels), same size as dx
+       degxx    = prefered Legendre polynomial degree along X for the fit of dx(x,y)
+       degxy    = prefered Legendre polynomial degree along Y for the fit of dx(x,y)
+       dy = 1D array of offsets along Y (in pixels)
+       ey = 1D array of errors on offsets along Y (in pixels), same size as dy
+       x_for_dy = 1D array of X coordinates of points where the dy offsets are measured (in pixels), same size as dy
+       y_for_dy = 1D array of Y coordinates of points where the dy offsets are measured (in pixels), same size as dy
+       degyx    = prefered Legendre polynomial degree along X for the fit of dy(x,y)
+       degyy    = prefered Legendre polynomial degree along Y for the fit of dy(x,y)
+       tset     = xytracset instance
+       max_error = max allowed uncertainty on dx or dy before automatically reducing the Legendre polynomial degree
+
+    Returns :
+       xcoeff = 2D array with new array of Legendre coeffcient for the traceset tsec for X(fiber,wavelength)
+       ycoeff = 2D array with new array of Legendre coeffcient for the traceset tsec for Y(fiber,wavelength)
+    '''
 
     log     = get_logger()
     xcoef   = tset.x_vs_wave_traceset._coeff
@@ -183,7 +207,23 @@ def fit_xcoeff_ycoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,
     return new_xcoeff , new_ycoeff
 
 def fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,max_error) :
+    '''
+    Fit offsets dx as a function of x and y using low order Legendre polynomials and then
+    refit using those the full Legendre coefficients (per fiber and wavelength) of the trace sets.
 
+    Args :
+       dx = 1D array of offsets along X (in pixels)
+       ex = 1D array of errors on offsets along X (in pixels), same size as dx
+       x_for_dx = 1D array of X coordinates of points where the dx offsets are measured (in pixels), same size as dx
+       y_for_dx = 1D array of Y coordinates of points where the dx offsets are measured (in pixels), same size as dx
+       degxx    = prefered Legendre polynomial degree along X for the fit of dx(x,y)
+       degxy    = prefered Legendre polynomial degree along Y for the fit of dx(x,y)
+       tset     = xytracset instance
+       max_error = max allowed uncertainty on dx or dy before automatically reducing the Legendre polynomial degree
+
+    Returns :
+       xcoeff = 2D array with new array of Legendre coeffcient for the traceset tsec for X(fiber,wavelength)
+    '''
     log     = get_logger()
     xcoef   = tset.x_vs_wave_traceset._coeff
     ycoef   = tset.x_vs_wave_traceset._coeff
@@ -256,7 +296,23 @@ def fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,max_error) :
     return new_xcoeff
 
 def fit_ycoeff(dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
+    '''
+    Fit offsets dy as a function of x and y using low order Legendre polynomials and then
+    refit using those the full Legendre coefficients (per fiber and wavelength) of the trace sets.
 
+    Args :
+       dy = 1D array of offsets along Y (in pixels)
+       ey = 1D array of errors on offsets along Y (in pixels), same size as dy
+       x_for_dy = 1D array of X coordinates of points where the dy offsets are measured (in pixels), same size as dy
+       y_for_dy = 1D array of Y coordinates of points where the dy offsets are measured (in pixels), same size as dy
+       degyx    = prefered Legendre polynomial degree along X for the fit of dy(x,y)
+       degyy    = prefered Legendre polynomial degree along Y for the fit of dy(x,y)
+       tset     = xytracset instance
+       max_error = max allowed uncertainty on dx or dy before automatically reducing the Legendre polynomial degree
+
+    Returns :
+       ycoeff = 2D array with new array of Legendre coeffcient for the traceset tsec for Y(fiber,wavelength)
+    '''
     log     = get_logger()
     xcoef   = tset.x_vs_wave_traceset._coeff
     ycoef   = tset.y_vs_wave_traceset._coeff
