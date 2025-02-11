@@ -51,13 +51,13 @@ Two methods are implemented.
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
                         help = 'path of output ASCII file with measured offsets for QA')
-    parser.add_argument('--degxx', type = int, default = 2, required=False,
+    parser.add_argument('--degxx', type = int, default = 0, required=False,
                         help = 'polynomial degree for x shifts along x')
-    parser.add_argument('--degxy', type = int, default = 2, required=False,
+    parser.add_argument('--degxy', type = int, default = 0, required=False,
                         help = 'polynomial degree for x shifts along y')
-    parser.add_argument('--degyx', type = int, default = 2, required=False,
+    parser.add_argument('--degyx', type = int, default = 0, required=False,
                         help = 'polynomial degree for y shifts along x')
-    parser.add_argument('--degyy', type = int, default = 2, required=False,
+    parser.add_argument('--degyy', type = int, default = 0, required=False,
                         help = 'polynomial degree for y shifts along y')
     parser.add_argument('--continuum', action='store_true',
                         help = 'only fit shifts along x for continuum input image')
