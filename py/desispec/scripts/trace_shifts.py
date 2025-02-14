@@ -72,7 +72,8 @@ Two methods are implemented.
                         help = "width of cross-dispersion profile")
     parser.add_argument('--ccd-rows-rebin', type = int, default = 4 , required=False,
                         help = "rebinning of CCD rows to run faster")
-
+    parser.add_argument('--no-large-shift-scan', action="store_true",
+                        help = "do not perform a large shift scan for arc lamp or continuum exposures")
     args = parser.parse_args(options)
 
     return args
@@ -466,7 +467,7 @@ def fit_trace_shifts(image, args):
         log.debug(f"brokenfibers={brokenfibers}")
         fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
 
-    if args.arc_lamps :
+    if args.arc_lamps and (not args.no_large_shift_scan) :
 
         log.info("for arc lamps, find a first solution by comparing expected spots positions with detections over the whole CCD")
 
@@ -512,7 +513,7 @@ def fit_trace_shifts(image, args):
         xcoef[:,0] += delta_xref
         ycoef[:,0] += delta_yref
 
-    if args.continuum :
+    if args.continuum  and (not args.no_large_shift_scan) :
         log.info("for continuum or LED exposures, find a first solution on delta_X by comparing a wide cross-dispersion profile with expectations")
         delta_xref = compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fibers=fibers)
         log.info(f"apply best shift delta x = {delta_xref} to traceset")
