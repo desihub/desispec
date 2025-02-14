@@ -25,6 +25,10 @@ def parse_args():  # options=None):
 
     parser.add_argument("-n","--night", type=str, default=None,
                         required=False, help="The night you want processed.")
+    parser.add_argument("-e","--expids", type=int, nargs='*', default=None,
+                        required=False, help="The exposure ids to resubmit (along with the jobs they depend on).")
+    parser.add_argument("-t","--tileids", type=int, nargs='*', default=None,
+                        required=False, help="The tile ids to resubmit (along with the jobs they depend on).")
     parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
                         help="Directory name where the output processing table should be saved.")
     parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
@@ -91,7 +95,8 @@ if __name__ == '__main__':
                                                      no_resub_failed=args.no_resub_failed,
                                                      ptab_name=ptable_pathname,
                                                      dry_run_level=args.dry_run_level,
-                                                     reservation=args.reservation)
+                                                     reservation=args.reservation,
+                                                     expids=args.expids, tileids=args.tileids)
 
     if args.dry_run_level < 3:
         write_table(ptable, tablename=ptable_pathname)
