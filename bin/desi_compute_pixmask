@@ -18,6 +18,7 @@ from desispec.preproc import parse_sec_keyword, get_readout_mode, get_amp_ids
 from desispec.maskbits import ccdmask
 from desispec.workflow.tableio import load_table, load_tables
 from desispec.calibfinder import CalibFinder
+from desispec.io.raw import read_raw_primary_header
 
 #Parser to take arguments from command line
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -148,52 +149,51 @@ for raw_filename in raw_filenames :
         log.warning(f"{raw_filename} not found, continuing")
         continue
 
+    primary_header = read_raw_primary_header(raw_filename)
+    exptime = primary_header["EXPTIME"]
+
+    if exptime<900:
+        log.critical(f"Darks should have exptime>=900s, but found {exptime}s")
+        raise TypeError(f"Darks should have exptime>900s, but found {exptime}s")
+
+    extname=f'{(args.camera)}'.upper()
+
     with pyfits.open(raw_filename) as fitsfile:
-        primary_header = fitsfile[0].header
-        if not "EXPTIME" in primary_header :
-            primary_header = fitsfile[1].header
-
-        exptime = primary_header["EXPTIME"]
-        if exptime<900:
-                log.critical(f"Darks should have exptime>=900s, but found {exptime}s")
-                raise TypeError(f"Darks should have exptime>900s, but found {exptime}s")
-
-        extname=f'{(args.camera)}'.upper()
         try :
             cam_header=fitsfile[extname].header
         except KeyError as e :
             log.warning(f"No {args.camera} in {raw_filename}")
             continue
 
-        #this is a check on 2amp/4amp detector modes
-        if readout_mode is None:
-            readout_mode = get_readout_mode(cam_header)
-        else:
-            readout_mode2=get_readout_mode(cam_header)
-            if readout_mode2 != readout_mode:
-                log.critical("A set of spectra with different readout modes was submitted")
-                raise TypeError("A set of spectra with different readout modes was submitted")
+    #this is a check on 2amp/4amp detector modes
+    if readout_mode is None:
+        readout_mode = get_readout_mode(cam_header)
+    else:
+        readout_mode2=get_readout_mode(cam_header)
+        if readout_mode2 != readout_mode:
+            log.critical("A set of spectra with different readout modes was submitted")
+            raise TypeError("A set of spectra with different readout modes was submitted")
 
-        night = primary_header["NIGHT"]
-        expid = primary_header["EXPID"]
+    night = primary_header["NIGHT"]
+    expid = primary_header["EXPID"]
 
-        # get pixflat
-        cfinder = CalibFinder([primary_header,cam_header])
-        if cfinder.haskey("PIXFLAT") :
-            pixflat_filenames.append(cfinder.findfile("PIXFLAT"))
+    # get pixflat
+    cfinder = CalibFinder([primary_header,cam_header])
+    if cfinder.haskey("PIXFLAT") :
+        pixflat_filenames.append(cfinder.findfile("PIXFLAT"))
 
 
-        for k in ["DETECTOR","CCDCFG","CCDTMING","CCDTEMP"] :
-            if k not in hardware_and_readout.keys() :
-                hardware_and_readout[k]=cam_header[k]
+    for k in ["DETECTOR","CCDCFG","CCDTMING","CCDTEMP"] :
+        if k not in hardware_and_readout.keys() :
+            hardware_and_readout[k]=cam_header[k]
+        else :
+            if k == "CCDTEMP" :
+                assert(np.abs(hardware_and_readout[k]-cam_header[k])<5.)
             else :
-                if k == "CCDTEMP" :
-                    assert(np.abs(hardware_and_readout[k]-cam_header[k])<5.)
-                else :
-                    assert(hardware_and_readout[k]==cam_header[k])
+                assert(hardware_and_readout[k]==cam_header[k])
 
 
-        preproc_filename = io.findfile('preproc', night=night, expid=expid, camera=args.camera, specprod_dir=args.specprod_dir)
+    preproc_filename = io.findfile('preproc', night=night, expid=expid, camera=args.camera, specprod_dir=args.specprod_dir)
 
     if os.path.isfile(preproc_filename) :
         log.info(f"Read existing file {preproc_filename}")

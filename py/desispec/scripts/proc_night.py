@@ -35,7 +35,8 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     night_to_starting_iid, make_joint_prow, \
     set_calibrator_flag, make_exposure_prow, \
     all_calibs_submitted, \
-    update_and_recursively_submit, update_accounted_for_with_linking
+    update_and_recursively_submit, update_accounted_for_with_linking, \
+    submit_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_need_resubmission, \
     get_resubmission_states
 from desispec.io.util import decode_camword, difference_camwords, \
@@ -57,7 +58,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                badcamword=None, badamps=None, exps_to_ignore=None,
                sub_wait_time=0.1, verbose=False, dont_require_cals=False,
                psf_linking_without_fflat=False, no_resub_failed=False,
-               still_acquiring=False):
+               no_resub_any=False, still_acquiring=False):
     """
     Process some or all exposures on a night. Can be used to process an entire
     night, or used to process data currently available on a given night using
@@ -166,6 +167,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             without fiberflatnight calibrations.
         no_resub_failed: bool. Set to True if you do NOT want to resubmit
             jobs with Slurm status 'FAILED' by default. Default is False.
+        no_resub_any: bool. Set to True if you do NOT want to resubmit
+            jobs. Default is False.
         still_acquiring: bool. If True, assume more data might be coming, e.g.
             wait for additional exposures of latest tile.  If False, auto-derive
             True/False based upon night and current time. Primarily for testing.
@@ -364,7 +367,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             ptable = update_from_queue(ptable, dry_run_level=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
-        if any_jobs_need_resubmission(ptable['STATUS']):
+        if any_jobs_need_resubmission(ptable['STATUS']) and not no_resub_any:
             ## Try up to two times to resubmit failures, afterwards give up
             ## unless explicitly told to proceed with the failures
             ## Note after 2 resubmissions, the code won't resubmit anymore even
@@ -404,20 +407,20 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         elif np.sum(good_etab['OBSTYPE']=='flat') < 12 and not still_acquiring \
                 and 'psfnight' in ptable['JOBDESC']:
             terminal_cal_reached = True
-        scisel = ptable['OBSTYPE'] == 'science'
-        if np.sum(scisel) > 0:
-            ptable_expids = set(np.concatenate(ptable['EXPID'][scisel]))
-        else:
-            ptable_expids = set()
+        # scisel = ptable['OBSTYPE'] == 'science'
+        # if np.sum(scisel) > 0:
+        #     ptable_expids = set(np.concatenate(ptable['EXPID'][scisel]))
+        # else:
+        #     ptable_expids = set()
         etable_expids = set(etable['EXPID'][etable['OBSTYPE'] == 'science'])
         if terminal_cal_reached:
             if len(etable_expids) == 0:
                 log.info(f"No science exposures yet. Exiting at {time.asctime()}.")
                 return ptable, None
-            elif len(etable_expids.difference(ptable_expids)) == 0:
-                log.info("All science EXPID's already present in processing table, "
-                         + f"nothing to run. Exiting at {time.asctime()}.")
-                return ptable, None
+            # elif len(etable_expids.difference(ptable_expids)) == 0:
+            #     log.info("All science EXPID's already present in processing table, "
+            #              + f"nothing to run. Exiting at {time.asctime()}.")
+            #     return ptable, None
 
         int_id = np.max(ptable['INTID'])+1
     else:
@@ -464,7 +467,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     sci_etable, tiles_to_proc = determine_science_to_proc(
                                         etable=etable, tiles=tiles,
                                         surveys=surveys, laststeps=science_laststeps,
-                                        processed_tiles=np.unique(ptable['TILEID']),
                                         all_tiles=all_tiles,
                                         ignore_last_tile=still_acquiring,
                                         complete_tiles_thrunight=complete_tiles_thrunight,
@@ -538,7 +540,43 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Process Sciences
     ## Loop over new tiles and process them
+    unique_ptab_tiles = np.unique(ptable['TILEID'])
     for tile in tiles_to_proc:
+        # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
+        if z_submit_types is None:
+            cur_z_submit_types = []
+        else:
+            cur_z_submit_types = z_submit_types.copy()
+        ## Check if tile has already been processed. If it has, see if all
+        ## steps have been submitted
+        tnight = None
+        if tile in unique_ptab_tiles:
+            tile_prows = ptable[ptable['TILEID']==tile]
+            ## old proctables have poststdstar, check for that or tilenight
+            if 'tilenight' in tile_prows['JOBDESC']:
+                tnight = tile_prows[tile_prows['JOBDESC']=='tilenight'][0]
+            elif 'poststdstar' in tile_prows['JOBDESC']:
+                poststdstars = tile_prows[tile_prows['JOBDESC']=='poststdstar']
+                tnight = tile_prows[tile_prows['JOBDESC']=='poststdstar'][-1]
+                ## Try to gather all the expids, but if that fails just move on
+                ## with the EXPID's from the last entry. This only happens in daily
+                ## for old proctabs and doesn't matter for cumulative redshifts
+                if len(tnight) > 1:
+                    try:
+                        tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
+                    except:
+                        log.warning(f"Tried and failed to populate full EXPIDs for: {dict(tnight)}")
+                        pass
+            ## if spectra processed, check for redshifts and remove any found
+            if tnight is not None:
+                for cur_ztype in cur_z_submit_types.copy():
+                    if cur_ztype in tile_prows['JOBDESC']:
+                        cur_z_submit_types.remove(cur_ztype)
+                ## If the spectra have been processed and all requested redshifts
+                ## are done, move on to the next tile
+                if len(cur_z_submit_types) == 0:
+                    continue
+
         log.info(f'\n\n################# Submitting {tile} #####################')
 
         ## Identify the science exposures for the given tile
@@ -555,38 +593,48 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             prow['JOBDESC'] = prow['OBSTYPE']
             prow = define_and_assign_dependency(prow, calibjobs)
             sciences.append(prow)
-            
-        # don't submit cumulative redshifts for lasttile if it isn't in tiles_cumulative
-        if z_submit_types is None:
-            cur_z_submit_types = None
-        else:
-            cur_z_submit_types = z_submit_types.copy()
 
-        if ((z_submit_types is not None) and ('cumulative' in z_submit_types)
-            and (tile not in tiles_cumulative)):
+        if 'cumulative' in cur_z_submit_types and tile not in tiles_cumulative:
             cur_z_submit_types.remove('cumulative')
 
-        ## No longer need to return sciences since this is always the
-        ## full set of exposures, but will keep for now for backward
-        ## compatibility
-        extra_job_args = {}
-        if 'science' in overrides and 'tilenight' in overrides['science']:
-            extra_job_args = overrides['science']['tilenight']
-        else:
-            extra_job_args = {}
+        if len(cur_z_submit_types) == 0:
+            cur_z_submit_types = None
 
-        extra_job_args['z_submit_types'] = cur_z_submit_types
-        extra_job_args['laststeps'] = science_laststeps
-        ptable, sciences, int_id = submit_tilenight_and_redshifts(
-                                    ptable, sciences, calibjobs, int_id,
-                                    dry_run=dry_run_level, queue=queue,
-                                    reservation=reservation,
-                                    strictly_successful=True,
-                                    check_for_outputs=check_for_outputs,
-                                    resubmit_partial_complete=resubmit_partial_complete,
-                                    system_name=system_name,
-                                    use_specter=use_specter,
-                                    extra_job_args=extra_job_args)
+        ## if not tilenight, do tilenight and redshifts, otherwise just do redshifts
+        if tnight is None:
+            ## Process tilenight and redshifts
+            ## No longer need to return sciences since this is always the
+            ## full set of exposures, but will keep for now for backward
+            ## compatibility
+            extra_job_args = {}
+            if 'science' in overrides and 'tilenight' in overrides['science']:
+                extra_job_args = overrides['science']['tilenight']
+            else:
+                extra_job_args = {}
+
+            extra_job_args['z_submit_types'] = cur_z_submit_types
+            extra_job_args['laststeps'] = science_laststeps
+
+            ptable, sciences, int_id = submit_tilenight_and_redshifts(
+                                        ptable, sciences, calibjobs, int_id,
+                                        dry_run=dry_run_level, queue=queue,
+                                        reservation=reservation,
+                                        strictly_successful=True,
+                                        check_for_outputs=check_for_outputs,
+                                        resubmit_partial_complete=resubmit_partial_complete,
+                                        system_name=system_name,
+                                        use_specter=use_specter,
+                                        extra_job_args=extra_job_args)
+        elif cur_z_submit_types is not None:
+            ## Just process redshifts
+            ptable, int_id = submit_redshifts(ptable, sciences, tnight, int_id,
+                                              queue=queue, reservation=reservation,
+                                              dry_run=dry_run_level,
+                                              strictly_successful=True,
+                                              check_for_outputs=check_for_outputs,
+                                              resubmit_partial_complete=resubmit_partial_complete,
+                                              z_submit_types=cur_z_submit_types,
+                                              system_name=system_name)
 
         if len(ptable) > 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
