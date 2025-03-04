@@ -85,10 +85,6 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
     full_etable = etable.copy()
     sci_etable = etable[etable['OBSTYPE'] == 'science']
 
-    ## Cut on exposure time
-    if len(sci_etable) > 0:
-        sci_etable = sci_etable[sci_etable['EXPTIME'] >= 60]
-
     ## Remove any exposure related to the last tile when in daily mode
     ## and during the nightly processing
     if ignore_last_tile and len(sci_etable) > 0:
