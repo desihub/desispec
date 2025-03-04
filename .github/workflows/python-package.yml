@@ -16,16 +16,19 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.9', '3.10']  # fuji+guadalupe, not ready for 3.11 yet?
                 astropy-version: ['==5.0', '<6']  # fuji+guadalupe, latest
                 fitsio-version: ['==1.1.6', '<2']  # fuji+guadalupe, latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
+                numba-version: ['<0.61.0'] # for compatibility with old numpy
         env:
             DESIUTIL_VERSION: 3.4.2
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
+            - name: Install System Packages
+              run: sudo apt install libbz2-dev subversion
             - name: Checkout code
               uses: actions/checkout@v2
               with:
@@ -40,8 +43,7 @@ jobs:
                 python -m pip install pytest
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
-                python -m pip install -U 'numpy${{ matrix.numpy-version }}'
-                python -m pip install -U 'astropy${{ matrix.astropy-version }}'
+                python -m pip install 'numpy${{ matrix.numpy-version }}' 'astropy${{ matrix.astropy-version }}' 'numba${{ matrix.numba-version }}'
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
@@ -54,16 +56,19 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.10'] # latest
                 astropy-version: ['<6']  # latest
                 fitsio-version: ['<2']  # latest
                 numpy-version: ['<1.23']  # to keep asscalar, used by astropy
+                numba-version: ['<0.61.0'] # for compatibility with old numpy
         env:
-            DESIUTIL_VERSION: 3.4.3
+            DESIUTIL_VERSION: 3.4.2
             DESIMODEL_DATA: branches/test-0.18
 
         steps:
+            - name: Install System Packages
+              run: sudo apt install libbz2-dev subversion
             - name: Checkout code
               uses: actions/checkout@v2
               with:
@@ -78,9 +83,7 @@ jobs:
                 python -m pip install pytest pytest-cov coveralls
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
-                python -m pip install specutils\<1.15
-                python -m pip install -U 'numpy${{ matrix.numpy-version }}'
-                python -m pip install -U 'astropy${{ matrix.astropy-version }}'
+                python -m pip install specutils 'numpy${{ matrix.numpy-version }}' 'astropy${{ matrix.astropy-version }}' 'numba${{ matrix.numba-version }}'
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
@@ -98,7 +101,7 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.10']
         steps:
             - name: Checkout code
@@ -127,7 +130,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.9']
 
         steps:
@@ -140,7 +143,7 @@ jobs:
               with:
                 python-version: ${{ matrix.python-version }}
             - name: Install Python dependencies
-              run: python -m pip install --upgrade pip setuptools wheel Sphinx
+              run: python -m pip install --upgrade pip setuptools wheel Sphinx sphinx-rtd-theme
               # run: python -m pip install --upgrade pip wheel docutils\<0.18 Sphinx==3.1.2
             - name: Test the documentation
               run: sphinx-build -W --keep-going -b html doc doc/_build/html
@@ -151,7 +154,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.9']
         env:
             DESIUTIL_VERSION: 3.3.0
@@ -180,7 +183,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-22.04]
+                os: [ubuntu-latest]
                 python-version: ['3.9']
 
         steps:
@@ -198,6 +201,5 @@ jobs:
               # This is equivalent to an allowed falure.
               continue-on-error: true
               run: pycodestyle --count py/desispec
-
 
 # SAVE
