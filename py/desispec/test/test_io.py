@@ -828,20 +828,24 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertTrue(str(the_exception), "Missing inputs for")
 
-        #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
+        #- $DESI_SPECTRO_DATA is used if set, but defaults to $DESI_ROOT/spectro/data
+        path1 = findfile('raw', night=20201020, expid=123)
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
-        self.assertTrue(x is not None)
-        with self.assertRaises(KeyError):
-            x = findfile('raw', night='20150101', expid=123)
+        path2 = findfile('raw', night=20201020, expid=123)
+        self.assertEqual(path1, path2)
+        os.environ['DESI_SPECTRO_DATA'] = '/blat/foo'
+        path3 = findfile('raw', night=20201020, expid=123)
+        self.assertEqual(path3, path1.replace(os.path.expandvars('$DESI_ROOT/spectro/data'), '/blat/foo'))
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
-        #- Some require $DESI_SPECTRO_REDUX; others to not
+        #- $DESI_SPECTRO_REDUX is used if set, but defaults to $DESI_ROOT/spectro/redux
+        path1 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         del os.environ['DESI_SPECTRO_REDUX']
-        x = findfile('raw', night='20150101', expid=123)
-        self.assertTrue(x is not None)
-        with self.assertRaises(KeyError):
-            x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        path2 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        self.assertEqual(path1, path2)
+        os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
+        path3 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        self.assertEqual(path3, path1.replace(os.path.expandvars('$DESI_ROOT/spectro/redux'), '/blat/foo'))
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
         #- Camera is case insensitive
@@ -1746,4 +1750,13 @@ class TestIO(unittest.TestCase):
 
         self.assertEqual(specprod_root('blat/foo'), 'blat/foo')
         self.assertEqual(specprod_root('/blat/foo'), '/blat/foo')
+
+        #- $DESI_SPECTRO_REDUX overrides $DESI_ROOT/spectro/redux, but isn't required
+        del os.environ['DESI_SPECTRO_REDUX']
+        self.assertEqual(specprod_root(),
+                         os.path.expandvars('$DESI_ROOT/spectro/redux/$SPECPROD'))
+        os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
+        self.assertEqual(specprod_root(),
+                         os.path.expandvars('/blat/foo/$SPECPROD'))
+
 

@@ -782,7 +782,10 @@ def rawdata_root():
     Raises:
         KeyError: if these environment variables aren't set.
     """
-    return os.environ['DESI_SPECTRO_DATA']
+    if 'DESI_SPECTRO_DATA' in os.environ:
+        return os.environ['DESI_SPECTRO_DATA']
+    else:
+        return os.path.expandvars('$DESI_ROOT/spectro/data')
 
 
 def specprod_root(specprod=None, readonly=False):
@@ -808,7 +811,10 @@ def specprod_root(specprod=None, readonly=False):
         specprod = os.environ['SPECPROD']
 
     if '/' not in specprod:
-        specprod = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+        if 'DESI_SPECTRO_REDUX' in os.environ:
+            specprod = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+        else:
+            specprod = os.path.join(os.environ['DESI_ROOT'], 'spectro', 'redux', specprod)
 
     if readonly:
         specprod = get_readonly_filepath(specprod)
