@@ -1144,7 +1144,7 @@ def main():
                 skymags_table = Table(rows=skymag_rows, names=colnames)
                 add_skymags_columns(tsnr2_expid_table,skymags_table)
             else:
-                log.info("No sky magnitudes to append to table.")
+                log.warning("No sky magnitudes to append to table.")
 
         gfa_table = None
         gfa_nights = list()
