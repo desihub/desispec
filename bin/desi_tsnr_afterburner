@@ -407,42 +407,42 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
         if nights is None:
             nights = np.unique(exp_summary["NIGHT"])
         for night in nights:
-            prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
-            if not os.path.isfile(prod_table_filename) :
-                log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
+            pipe_exptab_filename = findfile("exposure_table", night=int(night))
+            if not os.path.isfile(pipe_exptab_filename) :
+                log.warning("cannot find prod. exposure table {}".format(pipe_exptab_filename))
                 continue
-            prod_table = load_table(tablename=prod_table_filename, tabletype="exptable", suppress_logging=True)
-            missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
+            pipe_exptab = load_table(tablename=pipe_exptab_filename, tabletype="exptable", suppress_logging=True)
+            missing = (~(np.in1d(pipe_exptab["EXPID"],exp_summary["EXPID"])))&(pipe_exptab["TILEID"]>0)
             nmissing=np.sum(missing)
             if nmissing>0:
                 for i in np.where(missing)[0] :
                     #- If the exposure was supposed to be processed but is unexpectedly
                     #- missing from prod, log error but don't add it to table because
                     #- we are in an ambiguous/error state of processing
-                    if prod_table["LASTSTEP"][i] == 'all':
-                        tileid = prod_table['TILEID'][i]
-                        expid = prod_table['EXPID'][i]
+                    if pipe_exptab["LASTSTEP"][i] == 'all':
+                        tileid = pipe_exptab['TILEID'][i]
+                        expid = pipe_exptab['EXPID'][i]
                         log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
                         continue
 
                     entry={}
-                    entry["EXPID"]=prod_table["EXPID"][i]
+                    entry["EXPID"]=pipe_exptab["EXPID"][i]
                     entry["NIGHT"]=night
-                    entry["TILEID"]=prod_table["TILEID"][i]
-                    entry["MJD"] = prod_table["MJD-OBS"][i]
+                    entry["TILEID"]=pipe_exptab["TILEID"][i]
+                    entry["MJD"] = pipe_exptab["MJD-OBS"][i]
                     entry["AIRMASS"]=0.
                     entry["EBV"]=0.
                     # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
-                    if "EBVFAC" in prod_table.dtype.names:
-                        entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
-                    entry["EXPTIME"]=prod_table["EXPTIME"][i]
+                    if "EBVFAC" in pipe_exptab.dtype.names:
+                        entry["EBV"] = 2.5 * np.log10(pipe_exptab["EBVFAC"][i]) / 2.165
+                    entry["EXPTIME"]=pipe_exptab["EXPTIME"][i]
                     entry['SEEING_ETC']=0.
                     entry["EFFTIME_ETC"] = 0.
-                    if "EFFTIME_ETC" in prod_table.dtype.names:
-                        entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
+                    if "EFFTIME_ETC" in pipe_exptab.dtype.names:
+                        entry["EFFTIME_ETC"] = pipe_exptab["EFFTIME_ETC"][i]
 
                     # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
-                    targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
+                    targ_dict = {key : pipe_exptab[key][i] for key in pipe_exptab.dtype.names}
                     entry = update_targ_info(entry, targ_dict)
                     entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
@@ -478,7 +478,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                     exp_summary.add_row(vals)
 
                     # same for other table
-                    for cam in decode_camword(difference_camwords(prod_table['CAMWORD'][i],prod_table["BADCAMWORD"][i])):
+                    for cam in decode_camword(difference_camwords(pipe_exptab['CAMWORD'][i],pipe_exptab["BADCAMWORD"][i])):
                         entry["CAMERA"]=cam
                         vals=[]
                         for j,k in enumerate(cam_summary.dtype.names) :
@@ -1138,9 +1138,13 @@ def main():
                             if entry is not None :
                                 skymag_rows.append(entry)
 
-            colnames = list(skymag_rows[0].keys())
-            skymags_table = Table(rows=skymag_rows, names=colnames)
-            add_skymags_columns(tsnr2_expid_table,skymags_table)
+            if len(skymag_rows) > 0:
+                log.info("Adding computed sky magnitudes to table.")
+                colnames = list(skymag_rows[0].keys())
+                skymags_table = Table(rows=skymag_rows, names=colnames)
+                add_skymags_columns(tsnr2_expid_table,skymags_table)
+            else:
+                log.warning("No sky magnitudes to append to table.")
 
         gfa_table = None
         gfa_nights = list()
