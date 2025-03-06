@@ -7,8 +7,11 @@ desispec Change Log
 
 * Fix installation when using desiutil/3.5.0, dropping support of
   `python setup.py test` as a side-effect [PR `#2437`_]
+* `$DESI_SPECTRO_REDUX` default to `$DESI_ROOT/spectro/redux` for
+  `desispec.io.findfile` [PR `#2448`_]
 
 .. _`#2437`: https://github.com/desihub/desispec/pull/2437
+.. _`#2448`: https://github.com/desihub/desispec/pull/2448
 
 0.68.1 (2024-11-08)
 -------------------

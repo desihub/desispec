@@ -177,8 +177,7 @@ def gather_dark_tpcorr(specprod=None, nproc=4):
     """
     if specprod is None:
         specprod = os.environ.get('SPECPROD', 'daily')
-    expfn = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         specprod, f'exposures-{specprod}.fits')
+    expfn = desispec.io.findfile('exposures', specprod=specprod)
     exps = fits.getdata(expfn)
     m = ((exps['EXPTIME'] > 300) & (exps['SKY_MAG_R_SPEC'] > 20.5) &
          (exps['SKY_MAG_R_SPEC'] < 30) & (exps['FAPRGRM'] == 'dark'))
