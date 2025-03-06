@@ -1169,7 +1169,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
                                   resubmission_states=None,
                                   no_resub_failed=False, ptab_name=None,
-                                  dry_run_level=0, reservation=None):
+                                  dry_run_level=0, reservation=None,
+                                  expids=None, tileids=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1194,6 +1195,8 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
             4 Doesn't write, submit jobs, or query Slurm.
             5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        expids: list of ints. The exposure ids to resubmit (along with the jobs they depend on).
+        tileids: list of ints. The tile ids to resubmit (along with the jobs they depend on).
 
     Returns:
         tuple: A tuple containing:
@@ -1207,6 +1210,17 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
+    if tileids is not None and expids is not None:
+        msg = f"Provided both expids and tilesids. Please only provide one."
+        log.critical(msg)
+        raise AssertionError(msg)
+    elif tileids is not None:
+        msg = f"Only resubmitting the following tileids and the jobs they depend on: {tileids=}"
+        log.info(msg)
+    elif expids is not None:
+        msg = f"Only resubmitting the following expids and the jobs they depend on: {expids=}"
+        log.info(msg)
+
     if resubmission_states is None:
         resubmission_states = get_resubmission_states(no_resub_failed=no_resub_failed)
 
@@ -1219,9 +1233,23 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
     log.info(np.array(cols))
     for row in proc_table:
         log.info(np.array(row[cols]))
+
+    ## If expids or tileids are given, subselect to the processing table rows
+    ## that included those exposures or tiles otherwise just list all indices
+    ## NOTE: Other rows can still be submitted if the selected rows depend on them
+    ## we hand the entire table to recursive_submit_failed(), which will walk the
+    ## entire dependency tree as necessary.
+    if expids is not None:
+        select_ptab_rows = np.where([np.any(np.isin(prow_eids, expids)) for prow_eids in proc_table['EXPID']])[0]
+    elif tileids is not None:
+        select_ptab_rows = np.where(np.isin(proc_table['TILEID'], tileids))[0]
+    else:
+        select_ptab_rows = np.arange(len(proc_table))
+
     log.info("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
-    for rown in range(len(proc_table)):
+    ## Loop over all requested rows and resubmit those that have failed
+    for rown in select_ptab_rows:
         if proc_table['STATUS'][rown] in resubmission_states:
             proc_table, submits = recursive_submit_failed(rown=rown, proc_table=proc_table,
                                                           submits=submits, max_resubs=max_resubs,
