@@ -61,7 +61,7 @@ def parse_args():  # options=None):
 
     if args.expids is not None:
         args.expids = np.array([eid.strip() for eid in args.expids.split(',')]).astype(int)
-    if args.tileid is not None:
+    if args.tileids is not None:
         args.tileids = np.array([tid.strip() for tid in args.tileids.split(',')]).astype(int)
 
     if args.resub_states is not None:
