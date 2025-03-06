@@ -23,6 +23,7 @@ from desispec.preproc import parse_sec_keyword, get_amp_ids, get_readout_mode
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm, sm2sp
 from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords,create_camword
+from desispec.io.raw import read_raw_primary_header
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
 
@@ -72,10 +73,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.info(f'Reading {filename} camera {camera}')
 
         # collect exposure times
+        primary_header = read_raw_primary_header(filename)
         fitsfile=pyfits.open(filename)
-        primary_header = fitsfile[0].header
-        if not "EXPTIME" in primary_header :
-            primary_header = fitsfile[1].header
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -117,7 +116,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                mask=False, dark=False, pixflat=False)
+                mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
         # propagate gains to first_image_header
         for a in get_amp_ids(img.meta) :
@@ -259,7 +258,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
         log.info("reading %s %s", filename, camera)
         fitsfile=pyfits.open(filename)
 
-        primary_header=fitsfile[0].header
+        primary_header=read_raw_primary_header(filename)
         image_header=fitsfile[camera].header
 
         if first_image_header is None :
@@ -276,11 +275,11 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
             raise ValueError(message)
 
         # subtract overscan region
-        cfinder=CalibFinder([image_header,primary_header])
+        cfinder=CalibFinder([image_header,primary_header],fallback_on_dark_not_found=True)
 
         image=fitsfile[camera].data.astype("float64")
 
-        subtract_peramp_overscan(image, image_header)
+        subtract_peramp_overscan(image, image_header, cfinder)
 
         if shape is None :
             shape=image.shape
@@ -670,11 +669,11 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
         #- Validate that the new nightlybias is better than default
         if os.path.exists(testbias):
             rawtestfile = rawfiles[-1]
+            rawhdr = read_raw_primary_header(rawtestfile)
             with fitsio.FITS(rawtestfile) as fx:
-                rawhdr = fx['SPEC'].read_header()
                 camhdr = fx[camera].read_header()
 
-            cf = CalibFinder([rawhdr, camhdr])
+            cf = CalibFinder([rawhdr, camhdr],fallback_on_dark_not_found=True)
             defaultbias = cf.findfile('BIAS')
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
@@ -747,9 +746,12 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
 
     image, hdr = fitsio.read(rawfile, ext=cam1, header=True)
 
+    primary_hdr = read_raw_primary_header(rawfile)
+    cfinder = CalibFinder([primary_hdr, hdr],fallback_on_dark_not_found=True)
+
     #- subtract constant per-amp overscan region
     image = image.astype(float)
-    subtract_peramp_overscan(image, hdr)
+    subtract_peramp_overscan(image, hdr, cfinder)
 
     #- calculate differences per-amp
     readout_mode = get_readout_mode(hdr)
@@ -863,7 +865,7 @@ def compare_dark(preprocfile1, preprocfile2, ny=8, nx=40):
         msg = f'Unknown {readout_mode=}'
         log.critical(msg)
         raise ValueError(msg)
-    
+
     median_diff1 = list()
     median_diff2 = list()
 

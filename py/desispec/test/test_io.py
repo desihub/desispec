@@ -731,29 +731,6 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
-    def test_io_qa_frame(self):
-        """Test reading and writing QA_Frame.
-        """
-        from ..qa import QA_Frame
-        from ..io.qa import read_qa_frame, write_qa_frame
-        nspec = 3
-        nwave = 10
-        wave = np.arange(nwave)
-        flux = np.random.uniform(size=(nspec, nwave))
-        ivar = np.ones(flux.shape)
-        frame = Frame(wave, flux, ivar, spectrograph=0)
-        frame.meta = dict(CAMERA='b0', FLAVOR='science', NIGHT='20160607', EXPID=1)
-        #- Init
-        qaframe = QA_Frame(frame)
-        qaframe.init_skysub()
-        # Write
-        write_qa_frame(self.testyfile, qaframe)
-        # Read
-        xqaframe = read_qa_frame(self.testyfile)
-        # Check
-        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'])
-        self.assertTrue(qaframe.flavor == xqaframe.flavor)
-
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """

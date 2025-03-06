@@ -1,8 +1,0 @@
-#!/usr/bin/env python
-"""
-Run DESI quicklook pipeline on a given exposure
-"""
-
-import sys
-from desispec.scripts import quicklook
-sys.exit(quicklook.ql_main(quicklook.parse()))

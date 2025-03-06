@@ -10,7 +10,6 @@ import desispec
 
 import astropy.io.fits as fits
 from astropy.table import Table
-from astropy.convolution import convolve, Box1DKernel
 
 import json
 import glob
@@ -279,6 +278,9 @@ class template_ensemble(object):
             single_mag: generate all templates at same average magnitude to limit MC noise
             convolve_to_nz: if True, each template dF^2 is convolved to match the n(z) (redshift distribution)
         """
+        #- Deferred import for faster module import
+        from astropy.convolution import convolve, Box1DKernel
+
         log = get_logger()
 
         if nz_table_filename is None :
@@ -304,8 +306,9 @@ class template_ensemble(object):
 
         log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
         dflux = flux.copy()
+        kernel = Box1DKernel(smoothing)
         for i in range(flux.shape[0]):
-            sflux  = convolve(flux[i], Box1DKernel(smoothing), boundary='extend')
+            sflux  = convolve(flux[i], kernel, boundary='extend')
             dflux[i] -= sflux
 
         log.info("Read N(z) in {}".format(nz_table_filename))
@@ -418,6 +421,8 @@ def get_ensemble(dirpath=None, smooth=0):
         is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high
         frequency residual for the ensemble.  See doc. 4723.
     '''
+    #- Deferred import for faster module import
+    from astropy.convolution import convolve, Box1DKernel
 
     log = get_logger()
 

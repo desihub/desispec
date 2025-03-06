@@ -5,7 +5,10 @@ desispec Change Log
 0.68.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix installation when using desiutil/3.5.0, dropping support of
+  `python setup.py test` as a side-effect [PR `#2437`_]
+
+.. _`#2437`: https://github.com/desihub/desispec/pull/2437
 
 0.68.1 (2024-11-08)
 -------------------
@@ -43,7 +46,7 @@ Used for rerunning the QuasarNet afterburner on Loa.
 0.67.0 (2024-10-11)
 -------------------
 
-Used for Loa procution.
+Used for Loa production.
 
 Major algorithmic change to coadds
 
@@ -831,7 +834,9 @@ Minor:
 * Fix rank race condition bug in specex.py (PR `#1809`_).
 * Stdstar use correct sky and flat fiber; scale ivar (PR `#1817`_).
 * Stdstar memory optimization (PR `#1820`_).
+* Major: Replace TPCORR per-fiber corrections with a model (PR `#1801`_)
 
+.. _`#1801`: https://github.com/desihub/desispec/pull/1801
 .. _`#1809`: https://github.com/desihub/desispec/pull/1809
 .. _`#1817`: https://github.com/desihub/desispec/pull/1817
 .. _`#1820`: https://github.com/desihub/desispec/pull/1820

@@ -42,27 +42,34 @@ steps_all = list(get_nightqa_outfns("", 0).keys())
 def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
-    parser.add_argument("-p", "--prod", type = str, default = None, required = False,
-                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-n","--night", type = int, default = None, required = True,
                         help = "night to process. ex: 20211128")
+    parser.add_argument("-p", "--prod", type = str, default = None, required = False,
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-g","--group", type = str, default = "cumulative", required = False,
                         help = 'tile group "cumulative" or "pernight"')
     parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
                         help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
     parser.add_argument("--css", type = str, default = None, required = False,
                         help = "html formatting css file; default to importlib.resources.files('desispec').joinpath('data/qa/nightqa.css')")
-    parser.add_argument("--recompute", action = "store_true",
-                        help = "recompute (i.e. overwrite args.outfile if already existing")
-    parser.add_argument("--compute_missing_only", action = "store_true",
-                        help = "compute missing files only; overrides args.steps")
     parser.add_argument("--steps", type = str, default = ",".join(steps_all), required = False,
                         help = "comma-separated list of steps to execute (default={})".format(",".join(steps_all)))
     parser.add_argument("--nproc", type = int, default = 1, required = False,
                         help="number of parallel processes for create_dark_pdf(), create_ctedet_pdf(), create_ctedet_rowbyrow_pdf() and create_sframesky_pdf() (default=1)")
     parser.add_argument("--dark-bkgsub-science-cameras", type = str, default = "b", required = False,
                         help="for the dark/morningdark, comma-separated list of the cameras to be additionally processed with the --bkgsub-for-science argument (default=b)")
-
+    ## flags
+    parser.add_argument("--recompute", action = "store_true",
+                        help="recompute (i.e. overwrite args.outfile if already existing")
+    parser.add_argument("--compute-missing-only", action = "store_true",
+                        help="compute missing files only; overrides args.steps")
+    parser.add_argument("--skip-dark-steps", action = "store_true",
+                        help="skips the dark, morningdark, and badcol steps even "
+                             + "if supplied in --steps; overrides args.steps")
+    parser.add_argument("--skip-cal-steps", action = "store_true",
+                        help="skips the dark, morningdark, badcol, ctedet, "
+                             + "and ctedetrowbyrow steps even if supplied "
+                             + "in --steps; overrides args.steps")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -71,6 +78,7 @@ def parse(options=None):
     # AR handle None...
     if args.dark_bkgsub_science_cameras.lower() == "none":
         args.dark_bkgsub_science_cameras = None
+
     return args
 
 
@@ -117,9 +125,20 @@ def main():
         log.info("args.compute_missing_only set: will override args.steps={}".format(args.steps))
         steps_tbd = []
         for step in steps_all:
-            if not os.path.isfile(outfns[step]):
+            ## recompute html since recomputing other steps
+            if not os.path.isfile(outfns[step]) or step == 'html':
                 steps_tbd.append(step)
-                log.info("add {} to steps_tbd, as args.compute_missing_only set and no {} present".format(step, outfns[step]))
+                log.info(f"add {step} to steps_tbd, as args.compute_missing_only "
+                         + f"set and no {outfns[step]} present")
+    if args.skip_dark_steps or args.skip_cal_steps:
+        for step in ['dark', 'morningdark', 'badcol']:
+            if step in steps_tbd:
+                steps_tbd.remove(step)
+    if args.skip_cal_steps:
+        for step in ['ctedet', 'ctedetrowbyrow']:
+            if step in steps_tbd:
+                steps_tbd.remove(step)
+
     if len(steps_tbd) == 0:
         log.info("no steps to be done")
     else:
@@ -131,10 +150,11 @@ def main():
         if os.path.isfile(fn):
             if args.recompute:
                 log.warning("\texisting {} will be overwritten".format(fn))
+            elif step == 'html':
+                log.warning("\texisting {} will be overwritten even though args.recompute = False".format(fn))
             else:
-                msg = "\t{} already exists, and args.recompute = False".format(fn)
-                log.error(msg)
-                raise ValueError(msg)
+                log.warning(f"\t{fn} already exists and args.recompute = False,"
+                            + f" so skipping this step")
 
     # AR expids, tileids, surveys
     if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], steps_tbd).sum() > 0:
@@ -152,45 +172,50 @@ def main():
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
     # AR dark
-    if "dark" in steps_tbd:
-        if dark_expid is not None:
-            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc, bkgsub_science_cameras=args.dark_bkgsub_science_cameras)
+    if "dark" in steps_tbd and dark_expid is not None \
+            and (args.recompute or not os.path.exists(outfns["dark"])):
+        create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid, args.nproc,
+                        bkgsub_science_cameras_str=args.dark_bkgsub_science_cameras)
 
     # AR morning dark expid
-    if "morningdark" in steps_tbd:
-        if morningdark_expid is not None:
-            create_dark_pdf(outfns["morningdark"], args.night, args.prod, morningdark_expid, args.nproc, bkgsub_science_cameras=args.dark_bkgsub_science_cameras)
+    if "morningdark" in steps_tbd and morningdark_expid is not None \
+            and (args.recompute or not os.path.exists(outfns["morningdark"])):
+        create_dark_pdf(outfns["morningdark"], args.night, args.prod, morningdark_expid,
+                        args.nproc, bkgsub_science_cameras_str=args.dark_bkgsub_science_cameras)
 
     # AR badcolumn
-    if "badcol" in steps_tbd:
-        if dark_expid is not None:
-            create_badcol_png(outfns["badcol"], args.night, args.prod)
+    if "badcol" in steps_tbd and dark_expid is not None \
+            and (args.recompute or not os.path.exists(outfns["badcol"])):
+        create_badcol_png(outfns["badcol"], args.night, args.prod)
 
     # AR CTE detector
-    if np.in1d(["ctedet", "ctedetrowbyrow"], steps_tbd).sum() > 0:
-        if ctedet_expid is not None:
-            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid, args.nproc)
-            create_ctedet_rowbyrow_pdf(outfns["ctedetrowbyrow"], args.night, args.prod, ctedet_expid, args.nproc)
+    if "ctedet" in steps_tbd and ctedet_expid is not None \
+            and (args.recompute or not os.path.exists(outfns["ctedet"])):
+        create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid, args.nproc)
+
+    if "ctedetrowbyrow" in steps_tbd and ctedet_expid is not None \
+            and (args.recompute or not os.path.exists(outfns["ctedetrowbyrow"])):
+        create_ctedet_rowbyrow_pdf(outfns["ctedetrowbyrow"], args.night, args.prod, ctedet_expid, args.nproc)
 
     # AR sframesky
-    if "sframesky" in steps_tbd:
+    if "sframesky" in steps_tbd and (args.recompute or not os.path.exists(outfns["sframesky"])):
         create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids, args.nproc)
 
     # AR tileqa
-    if "tileqa" in steps_tbd:
+    if "tileqa" in steps_tbd and (args.recompute or not os.path.exists(outfns["tileqa"])):
         create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids, group=args.group)
 
     # AR skyzfiber
-    if "skyzfiber" in steps_tbd:
-        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9,
-                group=args.group)
+    if "skyzfiber" in steps_tbd and (args.recompute or not os.path.exists(outfns["skyzfiber"])):
+        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod,
+                             np.unique(tileids), dchi2_threshold=9, group=args.group)
 
     # AR per-petal n(z)
-    if "petalnz" in steps_tbd:
+    if "petalnz" in steps_tbd and (args.recompute or not os.path.exists(outfns["petalnz"])):
         unq_tileids, ii = np.unique(tileids, return_index=True)
         unq_surveys = surveys[ii]
-        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25,
-                group=args.group)
+        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids,
+                           unq_surveys, dchi2_threshold=25, group=args.group)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
@@ -200,6 +225,7 @@ def main():
             outfns, args.night, args.prod, os.path.basename(args.css),
             expids, tileids, surveys,
         )
+
     duration_seconds = time.time() - start_time
     minutes = int(duration_seconds // 60)
     seconds = int(duration_seconds % 60)

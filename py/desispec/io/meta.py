@@ -131,10 +131,10 @@ def get_findfile_argparser():
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
         healpix=None, nside=64, band=None, spectrograph=None,
-        survey=None, faprogram=None, rawdata_dir=None,
-        specprod_dir=None, specprod=None, qaprod_dir=None,
-        outdir=None, tiles_dir=None, download=False,
-        return_exists=False,
+        survey=None, faprogram=None, version=None,
+        rawdata_dir=None, specprod_dir=None, specprod=None,
+        tiles_dir=None, outdir=None,
+        download=False, return_exists=False,
         readonly=False, logfile=False):
     """Returns location where file should be
 
@@ -154,12 +154,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         spectrograph : integer spectrograph number, 0-9
         survey : e.g. sv1, sv3, main, special
         faprogram : fiberassign program, e.g. dark, bright
+        version : (str) version of the zcatalog
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         specprod : production name, or full path to production
-        qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         tiles_dir : defaults to $FIBER_ASSIGN_DIR if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
@@ -232,7 +232,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits.gz',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
+        #
         #  qa
+        #
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
         tileqa     = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.fits',
         tileqapng  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.png',
@@ -250,7 +252,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- healpix based
         #
-        zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
         rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
@@ -285,28 +286,18 @@ def findfile(filetype, night=None, expid=None, camera=None,
         tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
-        # Deprecated QA files below this point.
+        # z catalogs
         #
-        qa_data = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
-        qa_data_exp = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
-        qa_bootcalib = '{qaprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
-        qa_sky_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
-        qa_skychi_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-skychi-{camera}-{expid:08d}.png',
-        qa_s2n_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-s2n-{camera}-{expid:08d}.png',
-        qa_flux_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
-        qa_toplevel_html = '{qaprod_dir}/qa-toplevel.html',
-        qa_calib = '{qaprod_dir}/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
-        qa_calib_html = '{qaprod_dir}/calib2d/qa-calib2d.html',
-        qa_calib_exp = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.yaml',
-        qa_calib_exp_html = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.html',
-        qa_exposures_html = '{qaprod_dir}/exposures/qa-exposures.html',
-        qa_exposure_html = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.html',
-        qa_flat_fig = '{qaprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
-        qa_ztruth = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
-        qa_ztruth_fig = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
-        ql_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfig-{camera}-{expid:08d}.png',
-        ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
-        ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
+        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
+        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
+        zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
+        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
+        zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
+        #
+        # Dashboard files
+        #
+        expinfo = '{specprod_dir}/run/dashboard/expjsons/expinfo_{specprod}_{night}.json',
+        zinfo = '{specprod_dir}/run/dashboard/zjsons/zinfo_{specprod}_{night}.json',
     )
     ## aliases
     location['desi'] = location['raw']
@@ -324,6 +315,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if groupname is None and tile is not None and filetype in (
             'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
             'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
+            'zcat_tile', 'zall_tile'
             ):
         groupname = 'cumulative'
 
@@ -397,7 +389,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 location[root_key] = val
     del loc_copy
 
-    if groupname is not None and tile is None:
+    if groupname is not None and tile is None and healpix is not None:
         hpixdir = healpix_subdirectory(nside, healpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
@@ -423,9 +415,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # but we may need the variable to be set in the meantime
         specprod_dir = "dummy"
 
-    if qaprod_dir is None and 'qaprod_dir' in required_inputs:
-        qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
-
     if tiles_dir is None and 'tiles_dir' in required_inputs:
         tiles_dir = os.environ['FIBER_ASSIGN_DIR']
 
@@ -445,9 +434,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
-        'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir, 'tiles_dir':tiles_dir,
+        'specprod_dir':specprod_dir, 'specprod':specprod, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
-        'groupname':groupname, 'subgroup':subgroup,
+        'groupname':groupname, 'subgroup':subgroup, 'version':version,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
         }
@@ -541,7 +530,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwargs):
+def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified
@@ -561,8 +550,7 @@ def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwar
         dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir,
-                            qaprod_dir=qaprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -826,17 +814,6 @@ def specprod_root(specprod=None, readonly=False):
         specprod = get_readonly_filepath(specprod)
 
     return specprod
-
-def qaprod_root(specprod_dir=None):
-    """Return directory root for spectro production QA, i.e.
-    ``$DESI_SPECTRO_REDUX/$SPECPROD/QA``.
-
-    Raises:
-        KeyError: if these environment variables aren't set.
-    """
-    if specprod_dir is None:
-        specprod_dir = specprod_root()
-    return os.path.join(specprod_dir, 'QA')
 
 def faflavor2program(faflavor):
     """

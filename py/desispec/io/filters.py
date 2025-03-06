@@ -4,7 +4,9 @@ desispec.io.filters
 
 """
 import numpy as np
-import speclite.filters
+
+#- defer import of speclite.filters for faster desispec.io import
+### import speclite.filters
 
 def load_filter(given_filter):
     """
@@ -16,6 +18,7 @@ def load_filter(given_filter):
         files have them in uppercase, so it should be in upper case like SDSS, DECAM or
         WISE. Speclite has lower case so are mapped here.
     """
+    import speclite.filters
 
     filternamemap={}
     filttype=str.split(given_filter,'_')
@@ -40,6 +43,8 @@ def load_legacy_survey_filter(band,photsys) :
         band: filter pass-band in "G","R","Z","W1","W2"
         photsys: "N" or "S" for North (BASS+MzLS) or South (CTIO/DECam)
     """
+    import speclite.filters
+
     filternamemap=None
     if band[0].upper()=="W" : # it's WISE
         filternamemap = "wise2010-{}".format(band.upper())
@@ -68,6 +73,8 @@ def load_gaia_filter(band,dr=2):
         band: filter pass-band in "G","BP","RP"
         dr: 2 or 3
     """
+    import speclite.filters
+
     if band.upper() not in ["G","BP","RP"]:
         raise ValueError("unknown band '{}'".format(band))
     if dr!=2:

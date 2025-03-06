@@ -22,13 +22,6 @@ import astropy.table
 from astropy.table import Table
 from astropy.units import Unit
 
-_specutils_imported = True
-try:
-    from specutils import SpectrumList, Spectrum1D
-    from astropy.nddata import InverseVariance, StdDevUncertainty
-except ImportError:
-    _specutils_imported = False
-
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
@@ -697,8 +690,10 @@ class Spectra(object):
         NameError
             If ``specutils`` is not available in the environment.
         """
-        if not _specutils_imported:
-            raise NameError("specutils is not available in the environment.")
+        #- only import specutils if needed for faster module import
+        from specutils import SpectrumList, Spectrum1D
+        from astropy.nddata import InverseVariance
+
         sl = SpectrumList()
         for i, band in enumerate(self.bands):
             meta = {'band': band}
@@ -751,8 +746,10 @@ class Spectra(object):
         ValueError
             If an unknown type is found in `spectra`.
         """
-        if not _specutils_imported:
-            raise NameError("specutils is not available in the environment.")
+        #- only import specutils if needed for faster module import
+        from specutils import SpectrumList, Spectrum1D
+        from astropy.nddata import InverseVariance, StdDevUncertainty
+
         if isinstance(spectra, SpectrumList):
             sl = spectra
             try:
