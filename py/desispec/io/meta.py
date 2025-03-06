@@ -785,7 +785,7 @@ def rawdata_root():
     if 'DESI_SPECTRO_DATA' in os.environ:
         return os.environ['DESI_SPECTRO_DATA']
     else:
-        return os.path.expandvars('$DESI_ROOT/spectro/data')
+        return os.path.join(os.environ['DESI_ROOT'], 'spectro', 'data')
 
 
 def specprod_root(specprod=None, readonly=False):
