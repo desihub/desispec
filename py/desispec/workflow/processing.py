@@ -1393,7 +1393,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         if len(qdeps) > 0:
             proc_table['LATEST_DEP_QID'][rown] = qdeps
         else:
-            log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
+            log.warning(f"Number of internal dependencies was {len(ideps)} but number "
+                        + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
+                        + " This is expected if the ideps were status=COMPLETED")
 
     proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
                                            strictly_successful=True, dry_run=dry_run_level)
