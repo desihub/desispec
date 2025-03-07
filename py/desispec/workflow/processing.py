@@ -1321,7 +1321,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         all_valid_states = list(resubmission_states.copy())
         good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
         all_valid_states.extend(good_states)
-        othernight_idep_qid_lookup = {}
+        othernight_idep_row_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 if idep // 1000 != row['INTID'] // 1000:
@@ -1347,9 +1347,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
                         return proc_table, submits
                     else:
-                        ## otherwise all is good, just update the cache to use this
+                        ## otherwise if incomplete, just update the cache to use this
                         ## in the next stage
-                        othernight_idep_qid_lookup[idep] = entry['LATEST_QID']
+                        othernight_idep_row_lookup[idep] = entry
                         update_full_ptab_cache(reftab)
                 else:
                     msg = f"Internal ID: {idep} not in id_to_row_map. " \
@@ -1376,12 +1376,18 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                                                                   reservation=reservation,
                                                                   dry_run_level=dry_run_level)
                 ## Now that we've resubmitted the dependency if necessary,
-                ## add the most recent QID to the list
-                qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+                ## add the most recent QID to the list assuming it isn't COMPLETED
+                if still_a_dependency(proc_table[id_to_row_map[idep]]):
+                    qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+                else:
+                    log.info(f"{idep} is COMPLETED. Not submitting as a dependency.")
             else:
                 ## Since we verified above that the cross night QID is still
                 ## either pending or successful, add that to the list of QID's
-                qdeps.append(othernight_idep_qid_lookup[idep])
+                if still_a_dependency(othernight_idep_row_lookup[idep]):
+                    qdeps.append(othernight_idep_row_lookup[idep]['LATEST_QID'])
+                else:
+                    log.info(f"{idep} is COMPLETED. Not submitting as a dependency.")
 
         qdeps = np.atleast_1d(qdeps)
         if len(qdeps) > 0:
