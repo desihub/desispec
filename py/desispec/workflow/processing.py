@@ -1390,9 +1390,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                     log.info(f"{idep} is COMPLETED. Not submitting as a dependency.")
 
         qdeps = np.atleast_1d(qdeps)
-        if len(qdeps) > 0:
-            proc_table['LATEST_DEP_QID'][rown] = qdeps
-        else:
+        proc_table['LATEST_DEP_QID'][rown] = qdeps
+        if len(qdeps) < len(ideps):
             log.warning(f"Number of internal dependencies was {len(ideps)} but number "
                         + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
                         + " This is expected if the ideps were status=COMPLETED")
