@@ -467,6 +467,10 @@ def fit_trace_shifts(image, args):
         log.debug(f"brokenfibers={brokenfibers}")
         fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
 
+    # for arc lamp images, we can predict where we expect to see spots on the CCD image
+    # given an input traceset (variable tset), and use the comparison between the prediction
+    # and actual spots locations to derive a first correction to the coordinates saved in the traceset
+    # this is disabled by the option --no-large-shift-scan
     if args.arc_lamps and (not args.no_large_shift_scan) :
 
         log.info("for arc lamps, find a first solution by comparing expected spots positions with detections over the whole CCD")
@@ -513,6 +517,10 @@ def fit_trace_shifts(image, args):
         xcoef[:,0] += delta_xref
         ycoef[:,0] += delta_yref
 
+    # for continuum images, we can predict where we expect to see spectral traces on the CCD image
+    # given an input traceset (variable tset), and use the comparison between the prediction
+    # and actual spectral traces to derive a first correction to the X coordinates saved in the traceset
+    # this is disabled by the option --no-large-shift-scan
     if args.continuum  and (not args.no_large_shift_scan) :
         log.info("for continuum or LED exposures, find a first solution on delta_X by comparing a wide cross-dispersion profile with expectations")
         delta_xref = compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fibers=fibers)
