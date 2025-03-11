@@ -1349,6 +1349,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     #- Apply point source flux correction
     ccalibration /= point_source_correction[:,None]
+    ccalibivar *= (point_source_correction[:,None])**2
 
     log.info(f"{camera} interpolate calibration over Ca and Na ISM lines")
     # do this after convolution with resolution
