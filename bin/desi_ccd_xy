@@ -2,6 +2,7 @@
 
 import numpy as np
 import astropy.io.fits as pyfits
+from astropy.table import Table
 import specter.psf
 import sys
 import argparse
@@ -18,16 +19,29 @@ def readpsf(filename) :
         return specter.psf.SpotGridPSF(filename)
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--psf', type = str, default = None, required = True,
-                    help = 'path of psf file')
+parser.add_argument('--psf', type = str, default = None, required = True, nargs = "*",
+                    help = 'path of psf files')
 parser.add_argument('--fiber', type = int, default = None, required = True,
                     help = 'fiber for psf1')
 parser.add_argument('--wavelength', type = float, default = 6000., required = False,
                     help = 'wavelength')
+parser.add_argument('-o','--outtable', type = str, default = None, required = False,
+                    help = 'output table')
 
 args        = parser.parse_args()
 
+xx=[]
+yy=[]
+for filename in args.psf :
+    psf=readpsf(filename)
+    x,y=psf.xy(args.fiber%500,args.wavelength)
+    print("x,y",x,y)
+    xx.append(x)
+    yy.append(y)
 
-psf=readpsf(args.psf)
-xy=psf.xy(args.fiber%500,args.wavelength)
-print("xy=",xy)
+if args.outtable is not None :
+    t=Table()
+    t["X"]=np.array(xx)
+    t["Y"]=np.array(yy)
+    print(t)
+    t.write(args.outtable,overwrite=True)

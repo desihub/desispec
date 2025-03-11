@@ -22,7 +22,7 @@ from desispec.io import read_image
 from desispec.io import shorten_filename
 from desiutil.log import get_logger
 from desispec.util import parse_int_args
-from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y,list_of_expected_spot_positions
+from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y,list_of_expected_spot_positions,compute_x_offset_from_central_band_cross_dispersion_profile
 from desispec.large_trace_shifts import detect_spots_in_image,match_same_system
 
 def parse(options=None):
@@ -60,7 +60,7 @@ Two methods are implemented.
     parser.add_argument('--degyy', type = int, default = 0, required=False,
                         help = 'polynomial degree for y shifts along y')
     parser.add_argument('--continuum', action='store_true',
-                        help = 'only fit shifts along x for continuum input image')
+                        help = 'only fit shifts along x for continuum or LED input image')
     parser.add_argument('--auto', action='store_true',
                         help = 'choose best method (sky,continuum or just internal calib) from the FLAVOR keyword in the input image header')
 
@@ -72,7 +72,8 @@ Two methods are implemented.
                         help = "width of cross-dispersion profile")
     parser.add_argument('--ccd-rows-rebin', type = int, default = 4 , required=False,
                         help = "rebinning of CCD rows to run faster")
-
+    parser.add_argument('--no-large-shift-scan', action="store_true",
+                        help = "do not perform a large shift scan for arc lamp or continuum exposures")
     args = parser.parse_args(options)
 
     return args
@@ -459,15 +460,21 @@ def fit_trace_shifts(image, args):
             args.sky = True
         log.info("wavelength calib, internal={}, sky={} , arc_lamps={}".format(internal_wavelength_calib,args.sky,args.arc_lamps))
 
-    if args.arc_lamps :
+    cfinder = CalibFinder([image.meta])
+    fibers=np.arange(tset.nspec)
+    if cfinder.haskey("BROKENFIBERS") :
+        brokenfibers=parse_int_args(cfinder.value("BROKENFIBERS"))%500
+        log.debug(f"brokenfibers={brokenfibers}")
+        fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
+
+    # for arc lamp images, we can predict where we expect to see spots on the CCD image
+    # given an input traceset (variable tset), and use the comparison between the prediction
+    # and actual spots locations to derive a first correction to the coordinates saved in the traceset
+    # this is disabled by the option --no-large-shift-scan
+    if args.arc_lamps and (not args.no_large_shift_scan) :
 
         log.info("for arc lamps, find a first solution by comparing expected spots positions with detections over the whole CCD")
-        cfinder = CalibFinder([image.meta])
-        fibers=np.arange(tset.nspec)
-        if cfinder.haskey("BROKENFIBERS") :
-            brokenfibers=parse_int_args(cfinder.value("BROKENFIBERS"))%500
-            log.debug(f"brokenfibers={brokenfibers}")
-            fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
+
         xref,yref = list_of_expected_spot_positions(tset,fibers)
         xin,yin   = detect_spots_in_image(image)
 
@@ -509,6 +516,16 @@ def fit_trace_shifts(image, args):
         log.info(f"apply best shift delta x = {delta_xref} , delta y = {delta_yref} to traceset")
         xcoef[:,0] += delta_xref
         ycoef[:,0] += delta_yref
+
+    # for continuum images, we can predict where we expect to see spectral traces on the CCD image
+    # given an input traceset (variable tset), and use the comparison between the prediction
+    # and actual spectral traces to derive a first correction to the X coordinates saved in the traceset
+    # this is disabled by the option --no-large-shift-scan
+    if args.continuum  and (not args.no_large_shift_scan) :
+        log.info("for continuum or LED exposures, find a first solution on delta_X by comparing a wide cross-dispersion profile with expectations")
+        delta_xref = compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fibers=fibers)
+        log.info(f"apply best shift delta x = {delta_xref} to traceset")
+        xcoef[:,0] += delta_xref
 
     spectrum_filename = args.spectrum
     continuum_subtract = False
@@ -556,6 +573,7 @@ def fit_trace_shifts(image, args):
         wave_for_dy=wave_xy
 
     else :
+
 
         # internal calibration method that does not use the psf
         # nor a prior set of lines. this method is much faster

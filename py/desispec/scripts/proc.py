@@ -558,7 +558,7 @@ def main(args=None, comm=None):
                     cmd += " --psf {}".format(inpsf)
                     cmd += " --degxx 2 --degxy 0"
                     if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT'] :
-                        cmd += " --continuum"
+                        cmd += " --continuum --no-large-shift-scan"
                     else :
                         cmd += " --degyx 2 --degyy 0"
                     if args.obstype in ['SCIENCE', 'SKY']:
