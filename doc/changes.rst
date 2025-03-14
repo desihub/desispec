@@ -2,16 +2,51 @@
 desispec Change Log
 ===================
 
-0.68.2 (unreleased)
+0.69.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.69.0 (2025-03-14)
+-------------------
+
+Algorithms:
+
+* Fix bug in fiber aperature correction impacting ivar [PR `#2452`_]
+* Fix fiber aperture correction: normalization and sky fibers [PR `#2454`_]
+* Add option to select good overscan region in preproc [PR `#2438`_]
+* Trace shifts accomodate large offsets [PRs `#2440`_. `#2444`_]
+
+Pipeline:
+
+* Allow ``desi_proc_tilenight`` to submit new redshift jobs even if
+  tilenight exists [PR `#2441`_]
+* Resolve unknown statuses in the dashboard [PR `#2442`_]
+* Fix tsnr afterburner bug causing crash on nights with no good data [PR `#2447`_]
+* Allow user to specify exposures or tiles to resubmit [PR `#2450`_]
+
+Cleanup:
 
 * Fix installation when using desiutil/3.5.0, dropping support of
   `python setup.py test` as a side-effect [PR `#2437`_]
-* `$DESI_SPECTRO_REDUX` default to `$DESI_ROOT/spectro/redux` for
-  `desispec.io.findfile` [PR `#2448`_]
+* Prevent error when read_spectra sees unexpected extension [PR `#2339`_]
+* Update readthedocs configuration [PR `#2446`_]
+* ``$DESI_SPECTRO_REDUX`` default to ``$DESI_ROOT/spectro/redux`` for
+  ``desispec.io.findfile`` [PR `#2448`_]
 
 .. _`#2437`: https://github.com/desihub/desispec/pull/2437
+.. _`#2438`: https://github.com/desihub/desispec/pull/2438
+.. _`#2439`: https://github.com/desihub/desispec/pull/2439
+.. _`#2440`: https://github.com/desihub/desispec/pull/2440
+.. _`#2441`: https://github.com/desihub/desispec/pull/2441
+.. _`#2442`: https://github.com/desihub/desispec/pull/2442
+.. _`#2444`: https://github.com/desihub/desispec/pull/2444
+.. _`#2446`: https://github.com/desihub/desispec/pull/2446
+.. _`#2447`: https://github.com/desihub/desispec/pull/2447
 .. _`#2448`: https://github.com/desihub/desispec/pull/2448
+.. _`#2450`: https://github.com/desihub/desispec/pull/2450
+.. _`#2452`: https://github.com/desihub/desispec/pull/2452
+.. _`#2454`: https://github.com/desihub/desispec/pull/2454
 
 0.68.1 (2024-11-08)
 -------------------
