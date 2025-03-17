@@ -128,6 +128,18 @@ def get_findfile_argparser():
 
     return parser
 
+
+_valid_compression_types = ['NONE','GZ']
+
+def compression() :
+    if "DESI_COMPRESSION" in os.environ :
+        compression_type = os.environ["DESI_COMPRESSION"].upper()
+        if compression_type in _valid_compression_types :
+            return compression_type
+        else :
+            raise KeyError(f"Invalid compression type '{compression_type}' from environment variable DESI_COMPRESSION. It must be among {_valid_compression_types}")
+    return "GZ" # the default compression level
+
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
         healpix=None, nside=64, band=None, spectrograph=None,
@@ -178,6 +190,18 @@ def findfile(filetype, night=None, expid=None, camera=None,
         exists; otherwise it returns the normal read/write path.
     """
     log = get_logger()
+
+    comptype=compression()
+
+    if comptype=="GZ" :
+        compsuffix=".gz"
+    elif comptype=="NONE"  :
+        compsuffix=""
+    else :
+        raise KeyError(f"unknown compression type '{comptype}'")
+
+    log.info(f"compression type = '{comptype}' and compression suffix = '{compsuffix}'")
+
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
     location = dict(
@@ -208,28 +232,28 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # Note: fibermap files will eventually move to preproc.
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
-        preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits.gz',
-        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits.gz',
+        preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits{compsuffix}',
+        preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits{compsuffix}',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
         # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
         # Note: psfboot has been deprecated, but not ready to be removed yet.
         #
-        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits.gz',
-        cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits.gz',
-        fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits.gz',
-        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits.gz',
-        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits.gz',
+        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits{compsuffix}',
+        cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits{compsuffix}',
+        fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits{compsuffix}',
+        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits{compsuffix}',
+        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits{compsuffix}',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         fitpsf='{specprod_dir}/exposures/{night}/{expid:08d}/fit-psf-{camera}-{expid:08d}.fits',
         qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
-        sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits.gz',
-        sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits.gz',
+        sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits{compsuffix}',
+        sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits{compsuffix}',
         skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
-        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits.gz',
-        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits.gz',
-        stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits.gz',
+        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits{compsuffix}',
+        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits{compsuffix}',
+        stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits{compsuffix}',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #
@@ -244,7 +268,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
-        biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
+        biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits{compsuffix}',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
         ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.yaml',
@@ -255,7 +279,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
         rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
         rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
-        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{healpix}.fits.gz',
+        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{healpix}.fits{compsuffix}',
         redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{healpix}.fits',
         qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
         qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_qn-{survey}-{faprogram}-{healpix}.fits',
@@ -267,7 +291,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.h5',
         rrmodel_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/rrmodel-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
-        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits.gz',
+        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits{compsuffix}',
         redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         qso_mgii_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_mgii-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
@@ -278,7 +302,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
         rrmodel_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrmodel-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
-        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits.gz',
+        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits{compsuffix}',
         redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         qso_mgii_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/qso_mgii-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         qso_qn_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/qso_qn-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
@@ -438,7 +462,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
         'groupname':groupname, 'subgroup':subgroup, 'version':version,
         'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month
+        'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month,
+        'compsuffix':compsuffix
         }
 
     #- survey and faprogram should be lower, but don't trip on None
