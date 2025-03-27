@@ -549,7 +549,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
                 else:
                     log.info(f"Found an arc-flat set but with at least one issue.")
             else:
-                log.error(f'arc/flat time diff too large (>{max_mjd_dt}): {np.abs(arcstart-flatend)=}, {np.abs(flatstart-arcend)=}')
+                log.info(f'arc/flat time diff too large (>{max_mjd_dt}): {np.abs(arcstart-flatend)=}, {np.abs(flatstart-arcend)=}')
 
     ## If there are no complete_sets, then fall back to just arc sets
     ## if there are no arc sets either, then immediately return empty table
