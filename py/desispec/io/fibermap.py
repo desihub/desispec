@@ -163,7 +163,11 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('STD_FIBER_DEC',              'f4',          'deg', 'Standard deviation (over exposures) of DEC',   'coadd'),
                     ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean of PSF_TO_FIBER_SPECFLUX',                'coadd'),
                     ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
-                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
+                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),
+                    ('IN_COADD_B',                 'bool',           '', 'Was this exposure included in B coadd',        'coadd'),
+                    ('IN_COADD_R',                 'bool',           '', 'Was this exposure included in R coadd',        'coadd'),
+                    ('IN_COADD_Z',                 'bool',           '', 'Was this exposure included in Z coadd',        'coadd'),
+                    )
 
 # dict to allow unit tests etc that augment fibermaps to look up the
 # correct dtype based upon the column name
@@ -1286,7 +1290,7 @@ def annotate_fibermap(fibermap):
     """
     if not isinstance(fibermap, fits.BinTableHDU):
         raise ValueError("Input fibermap has unexpected type!")
-    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8'}
+    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8', 'L': 'bool'}
     log = get_logger()
     column_names = [row[0] for row in fibermap_columns]
     fh = fibermap.header
