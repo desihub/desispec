@@ -514,6 +514,32 @@ class TestIO(unittest.TestCase):
                 match = np.all(fibermap[name] == frame.fibermap[name])
                 self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
+    def test_read_frame_as_spectra(self):
+        """Test desispec.io.read_frame_as_spectra
+        """
+        from ..io import read_frame_as_spectra, write_frame
+        from .util import get_frame_data
+        frame = get_frame_data()
+        frame.meta['CAMERA'] = 'r0'
+        frame.meta['NIGHT'] = 20201212
+        frame.meta['EXPID'] = 1234
+        frame.meta['TILEID'] = 4444
+        frame.meta['FLAVOR'] = 'science'
+
+        frame.mask[0,0] = 10
+
+        write_frame(self.testfile, frame)
+        sp = read_frame_as_spectra(self.testfile)
+
+        for key, value in frame.meta.items():
+            self.assertEqual(sp.meta[key], value)
+
+        #- Values agree after float64 -> float32 -> float64 conversion
+        self.assertTrue(np.all(sp.flux['r'] == frame.flux.astype('f4').astype('f8')))
+        self.assertTrue(np.all(sp.ivar['r'] == frame.ivar.astype('f4').astype('f8')))
+        self.assertTrue(np.all(sp.mask['r'] == frame.mask))
+
+
     def test_sky_rw(self):
         """Test reading and writing sky files.
         """

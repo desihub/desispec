@@ -492,7 +492,7 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         extra = {band : {"CHI2PIX" : fr.chi2pix}}
 
     spec = Spectra(bands, {band : fr.wave}, {band : fr.flux}, {band : fr.ivar},
-        mask=mask, resolution_data=res, fibermap=fmap, meta=fr.meta,
+        mask=mask, resolution_data=res, fibermap=fmap, meta=dict(fr.meta),
         extra=extra, single=single, scores=fr.scores)
 
     return spec
