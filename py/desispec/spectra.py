@@ -867,7 +867,8 @@ def _remove_tile_keywords(headers):
 
     Note: modified input headers in-place
     """
-    tile_keywords = ['TILEID', 'TILERA', 'TILEDEC', 'FIELDROT', 'FA_RUN', 'REQRA', 'REQDEC',
+    tile_keywords = ['TILEID', 'TILERA', 'TILEDEC', 'FIELDROT', 'FA_RUN', 'FA_HA',
+                     'NOWTIME', 'SVNDM', 'SVNMTL', 'REQRA', 'REQDEC',
                      'PMTIME', 'RUNDATE', 'FAARGS', 'MTLTIME', 'EBVFAC']
 
     for hdr in headers:
