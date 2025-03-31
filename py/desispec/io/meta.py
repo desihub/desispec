@@ -509,14 +509,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
         log.debug("download('%s', single_thread=True)", filepath)
         filepath = download(filepath, single_thread=True)[0]
 
+    if readonly:
+        filepath = get_readonly_filepath(filepath)
+
     try:
         filepath = checkgzip(filepath,readonly)
         exists = True
     except FileNotFoundError:
         exists = False
-
-    if readonly:
-        filepath = get_readonly_filepath(filepath)
 
     if return_exists:
         return filepath, exists
