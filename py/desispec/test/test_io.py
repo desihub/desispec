@@ -814,6 +814,8 @@ class TestIO(unittest.TestCase):
 
         # canonical case is gzipped, but if non-gzipped version exists
         # return that instead
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3, readonly=True)
+        file1 = findfile('sky', **kwargs)
         assert file1.endswith('.gz')
         os.makedirs(os.path.dirname(file1), exist_ok=True)
         file1nogzip = file1[:-3]
@@ -824,17 +826,17 @@ class TestIO(unittest.TestCase):
 
         # and also the reverse: canonical non-gzip will return gzip if
         # for whatever reason that exists
-        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010, readonly=True)
         self.assertFalse(file4.endswith('.gz'))
         file5 = file4 + '.gz'
         os.makedirs(os.path.dirname(file5), exist_ok=True)
         fx = open(file5, 'w')
         fx.close()
-        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010, readonly=True)
         self.assertEqual(file6, file5)  #- not file4
 
         # url1 = filepath2url(file1)
-        url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+        url1 = file1.replace(os.environ['DESI_ROOT_READONLY'], 'https://data.desi.lbl.gov/desi')
         url2 = os.path.join('https://data.desi.lbl.gov/desi',
                             'spectro', 'redux', os.environ['SPECPROD'], 'exposures',
                             str(kwargs['night']),'{expid:08d}'.format(**kwargs),
@@ -1395,7 +1397,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'a01234567b89r89'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -1403,7 +1405,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'a01235679b8r48z4'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 5, 6, 7, 9]
@@ -1413,7 +1415,7 @@ class TestIO(unittest.TestCase):
                          completespectros)
 
         # the following three arent officially
-        # supported but should pass this function 
+        # supported but should pass this function
         camword = 'a01234567b89r89z89'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -1421,7 +1423,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'b0a12'
         allspectros = [0, 1, 2]
         completespectros = [1, 2]
@@ -1429,7 +1431,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'z9a543b1r2'
         allspectros = [1, 2, 3, 4, 5, 9]
         completespectros = [3, 4, 5]
@@ -1437,7 +1439,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
     def test_all_impacted_cameras(self):
         """Test desispec.io.util.all_impacted_cameras
         """
@@ -1784,5 +1786,3 @@ class TestIO(unittest.TestCase):
         os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
         self.assertEqual(specprod_root(),
                          os.path.expandvars('/blat/foo/$SPECPROD'))
-
-
