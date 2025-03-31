@@ -18,7 +18,7 @@ from desiutil.log import get_logger
 
 from desispec.util import parse_int_args
 
-def checkgzip(filename, raise_error_if_alt_exists = False):
+def checkgzip(filename, readonly=True):
     """
     Check for existence of filename, with or without .gz extension
 
@@ -26,7 +26,7 @@ def checkgzip(filename, raise_error_if_alt_exists = False):
         filename (str): filename to check for
 
    Options:
-        raise_error_if_alt_exists: If True, raises IOError if alternative file (.gz or not) exists
+        readonly: If False, raises IOError if alternative file exists (.gz or not), default is True
 
     Returns path of existing file without or without .gz,
     or raises FileNotFoundError if neither exists
@@ -40,8 +40,8 @@ def checkgzip(filename, raise_error_if_alt_exists = False):
         altfilename = filename + '.gz'
 
     if os.path.exists(altfilename):
-        if raise_error_if_alt_exists :
-            raise IOError(f'Requested {filename} but {altfilename} exists. Either remove {altfilename}, or change request, or check env. variable DESI_COMPRESSION')
+        if not readonly :
+            raise IOError(f'Requested {filename} but {altfilename} exists. Either change code to set argument readonly=True in call to checkgzip (possibly via call to findfile), or remove {altfilename}, or change request, or check env. variable DESI_COMPRESSION')
         return altfilename
     else:
         raise FileNotFoundError(f'Neither {filename} nor {altfilename}')

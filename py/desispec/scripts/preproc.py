@@ -294,7 +294,7 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
                 raise KeyError(mess)
         expid = img.meta['EXPID']
         outfile = io.findfile('preproc', night=night,expid=expid,camera=camera,
-                              outdir=outdir,raise_error_if_alt_exists=True)
+                              outdir=outdir)
 
     tmpfile = get_tempfilename(outfile)
     io.write_image(tmpfile, img)
