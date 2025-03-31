@@ -18,12 +18,15 @@ from desiutil.log import get_logger
 
 from desispec.util import parse_int_args
 
-def checkgzip(filename):
+def checkgzip(filename, raise_error_if_alt_exists = False):
     """
     Check for existence of filename, with or without .gz extension
 
     Args:
         filename (str): filename to check for
+
+   Options:
+        raise_error_if_alt_exists: If True, raises IOError if alternative file (.gz or not) exists
 
     Returns path of existing file without or without .gz,
     or raises FileNotFoundError if neither exists
@@ -37,6 +40,8 @@ def checkgzip(filename):
         altfilename = filename + '.gz'
 
     if os.path.exists(altfilename):
+        if raise_error_if_alt_exists :
+            raise IOError(f'Requested {filename} but {altfilename} exists. Either remove {altfilename}, or change request, or check env. variable DESI_COMPRESSION')
         return altfilename
     else:
         raise FileNotFoundError(f'Neither {filename} nor {altfilename}')
@@ -731,21 +736,21 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
-    Takes a camword as input and returns any spectrograph represented 
+    Takes a camword as input and returns any spectrograph represented
     within that camword in a sorted list. By default this includes partial
-    spectrographs (with one or two cameras represented). But if 
-    full_spectros_only is set to True, only spectrographs with all 
+    spectrographs (with one or two cameras represented). But if
+    full_spectros_only is set to True, only spectrographs with all
     cameras represented are given.
 
     Args:
         camword, str. The camword of all cameras.
-        full_spectros_only, bool. Default is False. Flag to specify if you 
-                                  want all spectrographs with any cameras 
-                                  existing in the camword (the default) or 
+        full_spectros_only, bool. Default is False. Flag to specify if you
+                                  want all spectrographs with any cameras
+                                  existing in the camword (the default) or
                                   if you only want fully populated spectrographs.
 
     Returns:
-        spectros, list. A sorted list of integer spectrograph numbers 
+        spectros, list. A sorted list of integer spectrograph numbers
                         represented in the camword input.
     """
     ## Normalize the camword
@@ -1151,4 +1156,3 @@ def backup_filename(filename):
     os.rename(filename, altfile)
 
     return altfile
-

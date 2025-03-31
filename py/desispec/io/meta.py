@@ -147,7 +147,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir=None, specprod_dir=None, specprod=None,
         tiles_dir=None, outdir=None,
         download=False, return_exists=False,
-        readonly=False, logfile=False):
+        readonly=False, logfile=False,
+        raise_error_if_alt_exists=False):
     """Returns location where file should be
 
     Args:
@@ -178,6 +179,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         return_exists: if True, also return whether the file exists
         readonly: if True, return read-only version of path if possible
         logfile: if True, returns the pathname of the log instead of the data product itself
+        raise_error_if_alt_exists: If True, raises IOError if alternative file (.gz or not) exists.
 
     Returns filename, or (filename, exists) if return_exists=True
 
@@ -200,7 +202,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else :
         raise KeyError(f"unknown compression type '{comptype}'")
 
-    log.info(f"compression type = '{comptype}' and compression suffix = '{compsuffix}'")
+    log.debug(f"compression type = '{comptype}' and compression suffix = '{compsuffix}'")
 
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
@@ -510,7 +512,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         filepath = download(filepath, single_thread=True)[0]
 
     try:
-        filepath = checkgzip(filepath)
+        filepath = checkgzip(filepath,raise_error_if_alt_exists = raise_error_if_alt_exists)
         exists = True
     except FileNotFoundError:
         exists = False
