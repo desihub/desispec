@@ -129,16 +129,24 @@ def get_findfile_argparser():
     return parser
 
 
-_valid_compression_types = ['NONE','GZ']
+def get_fits_compression_suffix() :
+    """Return the prefered suffix for the compression of fits images.
+       Can be set with the environment variable DESI_COMPRESSION with values NONE or GZ.
+    """
 
-def compression() :
-    if "DESI_COMPRESSION" in os.environ :
-        compression_type = os.environ["DESI_COMPRESSION"].upper()
-        if compression_type in _valid_compression_types :
-            return compression_type
-        else :
-            raise KeyError(f"Invalid compression type '{compression_type}' from environment variable DESI_COMPRESSION. It must be among {_valid_compression_types}")
-    return "GZ" # the default compression level
+    if not "DESI_COMPRESSION" in os.environ :
+        return ".gz" # the default compression level
+
+    compression_type = os.environ["DESI_COMPRESSION"].upper()
+    valid_compression_types=["NONE","GZ"]
+    if compression_type not in valid_compression_types :
+        raise KeyError(f"Invalid compression type '{compression_type}' from environment variable DESI_COMPRESSION. It must be among {valid_compression_types}")
+    if compression_type=="GZ" :
+        return ".gz"
+    elif compression_type=="NONE"  :
+        return ""
+    else :
+        raise KeyError(f"unknown compression type '{comptype}'")
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
@@ -188,19 +196,16 @@ def findfile(filetype, night=None, expid=None, camera=None,
     Notes:
         The readonly option uses $DESI_ROOT_READONLY if it is set and
         exists; otherwise it returns the normal read/write path.
+        Also, desispec allows to compress or not fits files (controlled with $DESI_COMPRESSION).
+        If findfile would return a (un)compressed file (like FILE.fits.gz) but the alternate already exists
+        (FILE.fits), it will return the alternate filename is the option readonly is True but
+        will raise an IOError otherwise (in order to avoid having both FILE.fits and FILE.fits.gz on disk).
+
     """
     log = get_logger()
 
-    comptype=compression()
-
-    if comptype=="GZ" :
-        compsuffix=".gz"
-    elif comptype=="NONE"  :
-        compsuffix=""
-    else :
-        raise KeyError(f"unknown compression type '{comptype}'")
-
-    log.debug(f"compression type = '{comptype}' and compression suffix = '{compsuffix}'")
+    compsuffix=get_fits_compression_suffix()
+    log.debug(f"compression suffix = '{compsuffix}'")
 
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
