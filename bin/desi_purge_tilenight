@@ -9,7 +9,7 @@ if __name__ == '__main__':
     args.tiles = [int(t) for t in args.tiles.split(',')]
 
     purge_tilenight(args.tiles, args.night,
-                    dry_run=(not args.not_dry_run))
+                    dry_run=(not args.not_dry_run), attic=args.no_attic)
 
     if not args.not_dry_run:
         print('\nThat was a dry run; if you really want to do those actions,')
