@@ -35,6 +35,8 @@ def get_parser():
                         help="Night to remove")
     parser.add_argument("--not-dry-run", action="store_true",
                         help="Actually remove files and directories instead of just logging what would be done")
+    parser.add_argument("--no-attic", action="store_true",
+                        help="delete files directly and do not copy them to attic")
 
     return parser
 
