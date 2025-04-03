@@ -38,7 +38,7 @@ def get_parser():
 
     return parser
 
-def purge_night(night, dry_run=True):
+def purge_night(night, dry_run=True, no_attic=False):
     """
     Removes all files assosciated with tiles on a given night.
 
@@ -52,6 +52,7 @@ def purge_night(night, dry_run=True):
         tiles, list of int. Tile to remove from current prod.
         night, int. Night that tiles were observed.
         dry_run, bool. If True, only prints actions it would take
+        no_attic, bool. If True, delete files directly and do not copy them to attic
 
     Note: does not yet remove healpix redshifts touching this tile
     """
@@ -92,7 +93,7 @@ def purge_night(night, dry_run=True):
     nightdirs += sorted(glob.glob(f'run/scripts/tiles/pernight/*/{night}'))
 
     for dirpath in nightdirs:
-        remove_directory(dirpath, dry_run=dry_run)
+        remove_directory(dirpath, dry_run=dry_run, no_attic=no_attic)
 
     #- Individual files
     processing_table = findfile('processing_table', night=night, specprod=specprod)
