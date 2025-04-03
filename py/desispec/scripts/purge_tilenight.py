@@ -57,8 +57,10 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
                         os.path.join(specprod_root(), 'attic'))
                 else:  # relative path
                     attic_dir = os.path.join('attic', dirname)
+                if not dirname.startswith('/'):  # use absolute path for symlinks
+                    dirname = os.path.join(os.getcwd(), dirname)
                 log.info(f"Copying {dirname} to attic")
-                shutil.copytree(dirname, attic_dir, dirs_exist_ok=True)
+                shutil.copytree(dirname, attic_dir, dirs_exist_ok=True, symlinks=True)
             log.info(f"Removing: {dirname}")
             shutil.rmtree(dirname)
     else:
