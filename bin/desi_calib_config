@@ -4,22 +4,40 @@ import yaml
 import os,sys
 import argparse
 import datetime
+import ast
+from copy import deepcopy
+import subprocess
+
+def safe_eval(s):
+    try:
+        return ast.literal_eval(s)
+    except (ValueError, SyntaxError):
+        return s
 
 def load_yaml(file_path):
     with open(file_path, 'r') as file:
-        #data = yaml.safe_load(file)
-        # convert to ordered dict?
         return yaml.safe_load(file)
 
+# Define a custom representer for lists
+class CustomRepresenter(yaml.representer.SafeRepresenter):
+    def represent_list(self, data, depth=0):
+        # Apply flow style only for a given depth
+        if depth >= 1:
+            return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+        else:
+            return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+
+# Add the custom representer to the SafeDumper
+CustomRepresenter.add_representer(list, CustomRepresenter.represent_list)
+
+# Define a custom dumper that uses the custom representer
+class CustomDumper(yaml.SafeDumper):
+    pass
+CustomDumper.add_representer(list, CustomRepresenter.represent_list)
+
 def save_yaml(data, file_path):
-
-    # add to yaml a representer of ordered dict
-    #def ordered_dict_representer(self, value):
-    #    return self.represent_mapping('tag:yaml.org,2002:map', value.items())
-    #yaml.add_representer(OrderedDict, ordered_dict_representer)
-
     with open(file_path, 'w') as file:
-        yaml.safe_dump(data, file, default_flow_style=False,sort_keys=False)
+        yaml.dump_all([data], file, Dumper=CustomDumper,sort_keys=False)
 
 def yes_or_no(question):
     yn = input(question.replace("?","").strip()+" (y/n)? ")
@@ -29,13 +47,10 @@ def yes_or_no(question):
 
 def main():
 
-    parser = argparse.ArgumentParser(
-        description="DESI spectroscopic calibration configuration editor",
-    )
-    parser.add_argument('yaml_file', type = str,
-                        help = 'path of yaml file to modify')
+    parser = argparse.ArgumentParser(description="DESI spectroscopic calibration configuration editor")
+    parser.add_argument('yaml_file', type = str, help = 'path of yaml file to modify')
 
-    args        = parser.parse_args()
+    args = parser.parse_args()
     if not os.path.isfile(args.yaml_file) :
         print(f"The file {args.yaml_file} does not exist.")
         return
@@ -61,7 +76,7 @@ def main():
         config_name=datetime.datetime.now().strftime('V%Y%m%d')
         iterator=1
         while config_name in configuration_names :
-            config_name=datetime.datetime.now().strftime('V%Y%m%d')+f"-{iter}"
+            config_name=datetime.datetime.now().strftime('V%Y%m%d')+f"-{iterator}"
             iterator += 1
 
         while yes_or_no(f"Is '{config_name}' OK?")=="n" :
@@ -84,9 +99,9 @@ def main():
         print(f"Starting from a copy of '{previous_config_name}' to '{config_name}'")
         # would like to insert at the beginning, so need a full copy:
         new_data = dict()
-        new_data[config_name]=camid_data[previous_config_name].copy()
+        new_data[config_name]=deepcopy(camid_data[previous_config_name])
         for c in camid_data.keys() :
-            new_data[c] = camid_data[c].copy()
+            new_data[c] = camid_data[c]
         data[camid] = new_data
         camid_data  = data[camid]
 
@@ -116,11 +131,11 @@ def main():
         if akey == "q" :
             sys.exit(0)
         if akey == "s" :
-            #yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
-            #if yn == "y" :
-            #    outfilename=args.yaml_file
-            #else :
-            outfilename = input(f"Enter output file name: ")
+            yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
+            if yn == "y" :
+                outfilename=args.yaml_file
+            else :
+                outfilename = input(f"Enter output file name: ")
             break
         if akey == "r" :
             ikeys = input(f"Enter key(s) to remove:")
@@ -141,24 +156,24 @@ def main():
                 print(f"ERROR Cannot split '{kv}' as key:value\n")
                 continue
             k=kv2[0].strip()
-            v=kv2[1].strip()
-            try :
-                v=int(v)
-            except ValueError :
-                pass
-            if not type(v)==int :
-                try :
-                    v=float(v)
-                except ValueError :
-                    pass
+            v=safe_eval(kv2[1].strip())
             configuration_data[k]=v
             print(f"Set {k}:{v} with type {type(v)}")
     #print("Will write",outfilename)
     #sys.exit(12)
     #print("Updated content of the YAML file:")
     #print(yaml.dump(data, default_flow_style=False))
-    save_yaml(data, outfilename)
-    print(f"Changes saved to {outfilename}")
+    save_yaml(data, outfilename+"-tmp")
+    print("Changes:")
+    res=subprocess.call(["diff",args.yaml_file,outfilename+"-tmp"])
+    print()
+    if yes_or_no("OK?") == "y" :
+        os.rename(outfilename+"-tmp",outfilename)
+        print(f"Changes saved to {outfilename}")
+    else :
+        os.unlink(outfilename+"-tmp")
+        print(f"Aborting")
+
     sys.exit(12)
 
 if __name__ == "__main__":
