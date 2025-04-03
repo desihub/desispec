@@ -85,6 +85,19 @@ def main():
                 break
         print(f"Will edit '{config_name}'")
 
+    configuration_data=camid_data[config_name]
+    print()
+    for key,val in configuration_data.items() :
+        print(f'{key}:{val}')
+    print()
+    for key,val in configuration_data.items() :
+        print(f'{key}:{val}')
+        krm=input('(k)eep,(r)emove or (m)odify ? ')
+        while krm.lower() not in ['k','r','m'] :
+            krm = input("Please type 'k', 'r' or 'm'? ")
+        sys.exit(12)
+
+
     sys.exit(12)
 
     #print("Updated content of the YAML file:")
