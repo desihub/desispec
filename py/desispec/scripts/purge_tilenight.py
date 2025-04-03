@@ -51,14 +51,15 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
         if dry_run:
             log.info(f"Dry_run set, so not performing any action.")
         else:
-            log.info(f"Removing: {dirname}")
             if not no_attic:
                 if dirname.startswith('/'):  # absolute path (a la Anthony)
                     attic_dir = dirname.replace(specprod_root(),
                         os.path.join(specprod_root(), 'attic'))
                 else:  # relative path (a la Stephen)
                     attic_dir = os.path.join('attic', dirname)
+                log.info(f"Copying {dirname} to attic")
                 shutil.copytree(dirname, attic_dir, dirs_exist_ok=True)
+            log.info(f"Removing: {dirname}")
             shutil.rmtree(dirname)
     else:
         log.info(f"Directory {dirname} doesn't exist, so no action required.")
