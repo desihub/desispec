@@ -15,8 +15,19 @@ def safe_eval(s):
         return s
 
 def load_yaml(file_path):
+
+    # save as header the first lines starting woith '#'
+    header=""
     with open(file_path, 'r') as file:
-        return yaml.safe_load(file)
+        lines=file.readlines()
+        for line in lines :
+            if line[0]=="#" :
+                header += line
+            else :
+                break
+
+    with open(file_path, 'r') as file:
+        return yaml.safe_load(file),header
 
 # Define a custom representer for lists
 class CustomRepresenter(yaml.representer.SafeRepresenter):
@@ -35,8 +46,9 @@ class CustomDumper(yaml.SafeDumper):
     pass
 CustomDumper.add_representer(list, CustomRepresenter.represent_list)
 
-def save_yaml(data, file_path):
+def save_yaml(data, header, file_path):
     with open(file_path, 'w') as file:
+        file.write(header+"\n")
         yaml.dump_all([data], file, Dumper=CustomDumper,sort_keys=False)
 
 def yes_or_no(question):
@@ -55,7 +67,8 @@ def main():
         print(f"The file {args.yaml_file} does not exist.")
         return
 
-    data = load_yaml(args.yaml_file)
+    data,header = load_yaml(args.yaml_file)
+
     camids = list(data.keys())
     if len(camids) == 0 :
         print("There are no entries in the YAML file. There needs to be at least one defining the camera id")
@@ -163,7 +176,7 @@ def main():
     #sys.exit(12)
     #print("Updated content of the YAML file:")
     #print(yaml.dump(data, default_flow_style=False))
-    save_yaml(data, outfilename+"-tmp")
+    save_yaml(data, header, outfilename+"-tmp")
     print("Changes:")
     res=subprocess.call(["diff",args.yaml_file,outfilename+"-tmp"])
     print()
