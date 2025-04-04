@@ -130,11 +130,14 @@ def main():
 
     configuration_data=camid_data[config_name]
 
+    haderror=False
     while True :
-        print("----------------")
-        print()
-        for key,val in configuration_data.items() :
-            print(f'{key}:{val}')
+        if not haderror :
+            print("----------------")
+            print()
+            for key,val in configuration_data.items() :
+                print(f'{key}:{val}')
+        haderror=False
         print()
         akey=input('(a)dd or modify, (r)emove, (s)ave or (q)quit? ').lower()
         print(akey)
@@ -163,19 +166,50 @@ def main():
                 print("Removing",k)
                 configuration_data.pop(k)
         if akey == "a" :
-            kv = input(f"Enter a 'key:value' : ")
+            kv = input(f"Enter a key:value or key:[value,'comment'] : ")
             kv2=kv.split(":")
             if len(kv2) != 2:
-                print(f"ERROR Cannot split '{kv}' as key:value\n")
+                print(f"\nERROR Cannot split '{kv}' as key:value\n")
+                haderror=True
                 continue
             k=kv2[0].strip()
             v=safe_eval(kv2[1].strip())
+
+            # before writing, check the type of v
+            if type(v) == list :
+                if len(v) != 2 :
+                    print(f"\nERROR with entry '{kv}', lists must have a length of 2")
+                    haderror=True
+                    continue
+                if type(v[1]) != str :
+                    print(f"\nERROR with entry '{kv}', second item in list must be a string")
+                    haderror=True
+                    continue
+                if type(v[0]) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
+                    haderror=True
+                    continue
+            else :
+                if type(v) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
+                    print("and not:")
+                    print(type(v))
+                    haderror=True
+                    continue
+                if type(v) == str :
+                    if len(v.split(" "))!=1 :
+                        print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+                        haderror=True
+                        continue
+                    if '[' in v or ']' in v :
+                        print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                        haderror=True
+                        continue
+
             configuration_data[k]=v
-            print(f"Set {k}:{v} with type {type(v)}")
-    #print("Will write",outfilename)
-    #sys.exit(12)
-    #print("Updated content of the YAML file:")
-    #print(yaml.dump(data, default_flow_style=False))
+            vtype=type(v)
+            print(f"Set {k}:{v} with type {vtype}")
+
     save_yaml(data, header, outfilename+"-tmp")
     print("Changes:")
     res=subprocess.call(["diff",args.yaml_file,outfilename+"-tmp"])
