@@ -4,7 +4,7 @@ desispec.scripts.purge_tilenight
 
 """
 import argparse
-from desispec.io.meta import findfile
+from desispec.io.meta import findfile, specprod_root
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table, write_table
@@ -30,9 +30,11 @@ def get_parser():
             help="Tiles to remove from current prod. (comma separated)")
     parser.add_argument("--not-dry-run", action="store_true",
             help="set to actually perform action rather than print actions")
+    parser.add_argument("--no-attic", action="store_true",
+            help="delete files directly and do not copy them to attic")
     return parser
 
-def remove_directory(dirname, dry_run=True):
+def remove_directory(dirname, dry_run=True, no_attic=False):
     """
     Remove the given directory from the file system
 
@@ -40,6 +42,7 @@ def remove_directory(dirname, dry_run=True):
         dirname, str. Full pathname to the directory you want to remove
         dru_run, bool. True if you want to print actions instead of performing them.
                        False to actually perform them.
+        no_attic, bool. If True, delete files directly and do not copy them to attic
     """
     log = get_logger()
     if os.path.exists(dirname):
@@ -48,12 +51,22 @@ def remove_directory(dirname, dry_run=True):
         if dry_run:
             log.info(f"Dry_run set, so not performing any action.")
         else:
+            if not no_attic:
+                if dirname.startswith('/'):  # absolute path
+                    attic_dir = dirname.replace(specprod_root(),
+                        os.path.join(specprod_root(), 'attic'))
+                else:  # relative path
+                    attic_dir = os.path.join('attic', dirname)
+                    # use absolute path for symlinks
+                    dirname = os.path.join(os.getcwd(), dirname)
+                log.info(f"Copying {dirname} to attic")
+                shutil.copytree(dirname, attic_dir, dirs_exist_ok=True, symlinks=True)
             log.info(f"Removing: {dirname}")
             shutil.rmtree(dirname)
     else:
         log.info(f"Directory {dirname} doesn't exist, so no action required.")
 
-def purge_tilenight(tiles, night, dry_run=True):
+def purge_tilenight(tiles, night, dry_run=True, no_attic=False):
     """
     Removes all files assosciated with tiles on a given night.
 
@@ -67,6 +80,7 @@ def purge_tilenight(tiles, night, dry_run=True):
         tiles, list of int. Tile to remove from current prod.
         night, int. Night that tiles were observed.
         dry_run, bool. If True, only prints actions it would take
+        no_attic, bool. If True, delete files directly and do not copy them to attic
 
     Note: does not yet remove healpix redshifts touching this tile
     """
@@ -82,6 +96,7 @@ def purge_tilenight(tiles, night, dry_run=True):
 
     log.info(f'Purging night {night} tiles {tiles}')
     future_cumulatives = {}
+
     for tile in tiles:
         log.info(f'Purging tile {tile}')
         exptable = etable[etable['TILEID'] == tile]
@@ -94,7 +109,7 @@ def purge_tilenight(tiles, night, dry_run=True):
                 dirname = os.path.dirname(findfile(filetype=ftype, night=night,
                                                    expid=expid, camera='b0',
                                                    spectrograph=0, tile=tile))
-                remove_directory(dirname, dry_run)
+                remove_directory(dirname, dry_run, no_attic)
 
             groupname = 'perexp'
             ftype = 'redrock'
@@ -102,7 +117,7 @@ def purge_tilenight(tiles, night, dry_run=True):
                                                expid=expid, camera='b0',
                                                spectrograph=0, tile=tile,
                                                groupname=groupname))
-            remove_directory(dirname, dry_run)
+            remove_directory(dirname, dry_run, no_attic)
 
         ## Remove the pernight redshift directory if it exists
         groupname = 'pernight'
@@ -110,7 +125,7 @@ def purge_tilenight(tiles, night, dry_run=True):
         dirname = os.path.dirname(findfile(filetype=ftype, night=night,
                                            camera='b0', spectrograph=0,
                                            tile=tile, groupname=groupname))
-        remove_directory(dirname, dry_run)
+        remove_directory(dirname, dry_run, no_attic)
 
         ## Look at all cumulative redshifts and remove any that would include the
         ## give tile-night data (any THRUNIGHT on or after the night given)
@@ -125,7 +140,7 @@ def purge_tilenight(tiles, night, dry_run=True):
                 thrunight_int = int(thrunight)
                 if thrunight_int >= night:
                     dirname = os.path.join(tiledirname,thrunight)
-                    remove_directory(dirname, dry_run)
+                    remove_directory(dirname, dry_run, no_attic)
                     if thrunight_int > night:
                         if thrunight_int in future_cumulatives:
                             future_cumulatives[thrunight_int].append(tile)
