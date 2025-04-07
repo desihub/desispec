@@ -176,35 +176,36 @@ def main():
             v=safe_eval(kv2[1].strip())
 
             # before writing, check the type of v
-            if type(v) == list :
-                if len(v) != 2 :
-                    print(f"\nERROR with entry '{kv}', lists must have a length of 2")
-                    haderror=True
-                    continue
-                if type(v[1]) != str :
-                    print(f"\nERROR with entry '{kv}', second item in list must be a string")
-                    haderror=True
-                    continue
-                if type(v[0]) not in [ int , float , str ]:
-                    print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
-                    haderror=True
-                    continue
-            else :
-                if type(v) not in [ int , float , str ]:
-                    print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
-                    print("and not:")
-                    print(type(v))
-                    haderror=True
-                    continue
-                if type(v) == str :
-                    if len(v.split(" "))!=1 :
-                        print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+            if k != 'COMMENT' : # more flexible for the comment string
+                if type(v) == list :
+                    if len(v) != 2 :
+                        print(f"\nERROR with entry '{kv}', lists must have a length of 2")
                         haderror=True
                         continue
-                    if '[' in v or ']' in v :
-                        print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                    if type(v[1]) != str :
+                        print(f"\nERROR with entry '{kv}', second item in list must be a string")
                         haderror=True
                         continue
+                    if type(v[0]) not in [ int , float , str ]:
+                        print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
+                        haderror=True
+                        continue
+                else :
+                    if type(v) not in [ int , float , str ]:
+                        print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
+                        print("and not:")
+                        print(type(v))
+                        haderror=True
+                        continue
+                    if type(v) == str :
+                        if len(v.split(" "))!=1 :
+                            print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+                            haderror=True
+                            continue
+                        if '[' in v or ']' in v :
+                            print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                            haderror=True
+                            continue
 
             configuration_data[k]=v
             vtype=type(v)
