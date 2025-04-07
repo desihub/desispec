@@ -376,7 +376,12 @@ class CalibFinder() :
         Returns:
             data found in yaml file
         """
-        return self.data[key]
+        val=self.data[key]
+        if type(val)==list :
+            if len(val)!=2 :
+                raise ValueError(f"Error reading {val}: list should have length=2 [value,comment]")
+            val=val[0]
+        return val
 
     def findfile(self,key) :
         """
@@ -385,7 +390,7 @@ class CalibFinder() :
         Returns:
             path to calibration file
         """
-        return os.path.join(self.directory,self.data[key])
+        return os.path.join(self.directory,self.value(key))
 
     def badfibers(self,keys=badfiber_keywords) :
         """
