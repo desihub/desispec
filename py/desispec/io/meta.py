@@ -198,14 +198,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
         exists; otherwise it returns the normal read/write path.
         Also, desispec allows to compress or not fits files (controlled with $DESI_COMPRESSION).
         If findfile would return a (un)compressed file (like FILE.fits.gz) but the alternate already exists
-        (FILE.fits), it will return the alternate filename is the option readonly is True but
+        (FILE.fits), it will return the alternate filename if the option readonly is True but
         will raise an IOError otherwise (in order to avoid having both FILE.fits and FILE.fits.gz on disk).
 
     """
     log = get_logger()
 
     compsuffix=get_fits_compression_suffix()
-    log.debug(f"compression suffix = '{compsuffix}'")
+    log.debug("compression suffix = '%s'", compsuffix)
 
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
