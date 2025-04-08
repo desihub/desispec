@@ -1,441 +1,450 @@
 #!/usr/bin/env python
 
-
-import sys,os
-import argparse
 import yaml
-import numpy as np
-import copy
-import traceback
-import glob
-from shutil import copyfile
-from datetime import datetime,timedelta
-from desispec.calibfinder import CalibFinder
-from desiutil.log import get_logger
+import os,sys
+import argparse
+import datetime
+#import ast
+from copy import deepcopy
+import subprocess
+from prompt_toolkit import prompt
 
-class ConfigEditor(object) :
+from desispec.calibfinder import CalibFinder,sm2sp
 
-    def __init__(self):
-        parser = argparse.ArgumentParser(
-            description="DESI spectroscopic calibration configuration editor",
-            usage="""desi_calib_config <command> [options]
+def safe_eval(s):
+    """
+    Safely evaluates a string containing a Python literal or returns the original string if evaluation fails.
 
-            Where supported commands are (use desi_calib_config <command> --help for details):
-            add      Create a new configuration.
-            update   Update an existing configuration.
-            test     Run a test to verify the configuration.
-            """)
+    Args:
+        s (str): The string to evaluate.
 
+    Returns:
+        The evaluated Python object if successful, otherwise the original string.
+    """
+    try:
+        return yaml.safe_load(s)
+    except (yaml.YAMLError, ValueError):
+        return s
 
-        parser.add_argument("command", help="Subcommand to run")
-        # parse_args defaults to [1:] for args, but you need to
-        # exclude the rest of the args too, or validation will fail
-        args = parser.parse_args(sys.argv[1:2])
-        if not hasattr(self, args.command):
-            print("Unrecognized command")
-            parser.print_help()
-            sys.exit(1)
+def load_yaml(file_path):
+    """
+    Loads a YAML file and extracts the header comments.
 
+    Args:
+        file_path (str): Path to the YAML file.
 
-        if "DESI_SPECTRO_CALIB" not in os.environ :
-            print("Need to have the environment variable DESI_SPECTRO_CALIB set!")
-            sys.exit(12)
+    Returns:
+        tuple: A tuple containing the loaded YAML data and the header comments.
+    """
+    # save as header the first lines starting woith '#'
+    header=""
+    with open(file_path, 'r') as file:
+        lines=file.readlines()
+        for line in lines :
+            if line[0]=="#" :
+                header += line
+            else :
+                break
 
-        self.calib_dir = os.environ["DESI_SPECTRO_CALIB"]
+    with open(file_path, 'r') as file:
+        return yaml.safe_load(file),header
 
-        # parse SPX SMY table
-        self.SM2SP=dict()
-        self.SP2SM=dict()
-        filename = os.path.join(self.calib_dir,"spec/smsp.txt")
-        with open(filename) as file :
-            for line in file.readlines() :
-                vals=line.strip().split(" ")
-                if len(vals)!=2 :
+# Define a custom representer for lists
+class CustomRepresenter(yaml.representer.SafeRepresenter):
+    def represent_list(self, data, depth=0):
+        """
+        Represents a list in YAML format with flow style based on depth.
+
+        Args:
+            data (list): The list to represent.
+            depth (int): The depth level for determining flow style.
+
+        Returns:
+            yaml.nodes.SequenceNode: The YAML node representing the list.
+        """
+        # Apply flow style only for a given depth
+        if depth >= 1:
+            return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+        else:
+            return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+
+# Add the custom representer to the SafeDumper
+CustomRepresenter.add_representer(list, CustomRepresenter.represent_list)
+
+# Define a custom dumper that uses the custom representer
+class CustomDumper(yaml.SafeDumper):
+    pass
+CustomDumper.add_representer(list, CustomRepresenter.represent_list)
+
+def save_yaml(data, header, file_path):
+    """
+    Saves data to a YAML file with a header.
+
+    Args:
+        data (dict): The data to save.
+        header (str): The header comments to include at the top of the file.
+        file_path (str): Path to the output YAML file.
+    """
+    with open(file_path, 'w') as file:
+        file.write(header+"\n")
+        yaml.dump_all([data], file, Dumper=CustomDumper,sort_keys=False)
+
+def yes_or_no(question):
+    """
+    Prompts the user for a yes/no response.
+
+    Args:
+        question (str): The question to ask the user.
+
+    Returns:
+        str: 'y' for yes, 'n' for no.
+    """
+    yn = prompt(question.replace("?","").strip()+" (y/n)? ")
+    while yn.lower() not in ['y','n'] :
+        yn = prompt("Please type 'y' or 'n'? ")
+    return yn
+
+def input_date(message) :
+    """
+    Prompts the user to enter a date in YYYYMMDD format.
+
+    Args:
+        message (str): The prompt message to display to the user.
+
+    Returns:
+        str: The entered date in YYYYMMDD format.
+    """
+    while(True) :
+        yyyymmdd = safe_eval(prompt(message.strip().replace(":","")+": "))
+        message  = "Please use YYYYMMDD format: "
+        if type(yyyymmdd) != int :
+            continue
+        yyyymmdd = int(yyyymmdd)
+        yy = yyyymmdd//10000
+        if yy<2000 or yy>3000 :
+            print(f"Invalid year {yy}")
+            continue
+        mm = (yyyymmdd-yy*10000)//100
+        if mm<1 or mm >12 :
+            print(f"Invalid month {mm}")
+            continue
+        dd = yyyymmdd%100
+        if dd<1 or dd>31 :
+            print(f"Invalid day {dd}")
+            continue
+        break
+    return str(yyyymmdd) # convert back to str
+
+def input_keyval() :
+    """
+    Prompts the user to enter a key-value pair.
+
+    Returns:
+        tuple: A tuple containing the key and the value.
+    """
+    while(True) :
+        kv = prompt(f"Enter a key:value or key:[value,'comment'] : ")
+        kv2=kv.split(":")
+        if len(kv2) != 2:
+            print(f"\nERROR Cannot split '{kv}' as key:value\n")
+            haderror=True
+            continue
+        k=kv2[0].strip()
+        v=safe_eval(kv2[1].strip())
+        #print(f"type of {v} is",type(v))
+
+        if k != 'COMMENT' : # more flexible for the comment string
+            if type(v) == list :
+                if len(v) != 2 :
+                    print(f"\nERROR with entry '{kv}', lists must have a length of 2")
+                    haderror=True
                     continue
-                SP=vals[0]
-                SM=vals[1]
-                if SP[0:2].upper() != "SP" : raise ValueError("I cannot interpret correctly {} line '{}'".format(filename,line))
-                if SM[0:2].upper() != "SM" : raise ValueError("I cannot interpret correctly {} line '{}'".format(filename,line))
-                self.SM2SP[SM.upper()]=SP.upper()
-                self.SP2SM[SP.upper()]=SM.upper()
-
-        # use dispatch pattern to invoke method with same name
-        getattr(self, args.command)()
-
-    def parse_spectro(self,spectro_string):
-        if spectro_string.upper().find("SM")>=0 :
-            SM = spectro_string.upper()
-            SP = self.SM2SP[SM]
-        elif spectro_string.upper().find("SP")>=0 :
-            SP = spectro_string.upper()
-            SM = self.SP2SM[SP]
-        else :
-            raise ValueError("cannot intrepret {} as SPX or SMY".format(spectro_string))
-        return SP,SM
-
-    def parse_dict(self,dict_string) :
-        res=dict()
-        for keyval in dict_string.split(",") :
-            kv=keyval.split("=")
-            if len(kv)!=2 :
-                raise ValueError("cannot interpret {} as dictionary entry of the form key=val".format(keyval))
-            res[kv[0]]=kv[1]
-        return res
-
-    def test_yaml_file(self,yaml_filename) :
-
-        log = get_logger()
-
-        with open(yaml_filename,"r") as file:
-            data   = yaml.safe_load(file)
-
-            for camid in data :
-
-                date_begin=[]
-                date_end=[]
-                for version in data[camid] :
-                    log.debug("checking {} version {} in {}".format(camid,version,os.path.basename(yaml_filename)))
-                    # check for mandatory keys
-                    for k in ['DATE-OBS-BEGIN','DETECTOR'] :
-                        if not k in data[camid][version] :
-                            log.error("no {} in version {} of {}".format(k,version,yaml_filename))
-                            raise KeyError("no {} in version {} of {}".format(k,version,yaml_filename))
-                    # for filenames check they exist
-                    for k in ["PSF","FIBERFLAT","BIAS","DARK","MASK","PIXFLAT","FLUXCALIB"] :
-                        if k in data[camid][version] :
-                            calib_filename = os.path.join(self.calib_dir,data[camid][version][k])
-                            if not os.path.isfile(calib_filename) :
-                                log.error("cannot open {}".format(calib_filename))
-                                raise IOError("cannot open {}".format(calib_filename))
-                            else :
-                                log.debug("checked {}".format(calib_filename))
-
-                    # now cook up a header that matches this version and see if the calibfinder works with it
-                    head = dict()
-                    night = int(data[camid][version]['DATE-OBS-BEGIN'])
-                    if night < 20191211 :
-                        log.debug("skip config with DATE-OBS-BEGIN = {} < 20191211".format(night))
+                if type(v[1]) != str :
+                    print(f"\nERROR with entry '{kv}', second item in list must be a string")
+                    haderror=True
+                    continue
+                if type(v[0]) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
+                    haderror=True
+                    continue
+            else :
+                if type(v) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
+                    print("and not:")
+                    print(type(v))
+                    haderror=True
+                    continue
+                if type(v) == str :
+                    if len(v.split(" "))!=1 :
+                        print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+                        haderror=True
                         continue
-                    yyyy = night//10000
-                    mm = (night%10000)//100
-                    dd = night%100
-                    head["DATE-OBS"]="{:04d}-{:02d}-{:02d}T18:06:21.268371-05:00".format(yyyy,mm,dd)
-                    # decoding camid ...
-                    vals=camid.split("-")
-                    sm=vals[0].upper()
-                    sp=self.SM2SP[sm]
-                    specid=int(sm.replace("SM",""))
-                    spectro=int(sp[2])
-                    band=vals[1].lower()
-                    camera="{}{}".format(band,spectro)
-                    head["CAMERA"]=camera
-                    head["SPECID"]=specid
-
-                    for k in ["DETECTOR","CCDCFG","CCDTMING","NIGHT"] :
-                        if k in data[camid][version] :
-                            head[k]=data[camid][version][k]
-                    log.debug("header={}".format(head))
-
-                    # try to get this calib
-                    cfinder = CalibFinder([head,],yaml_file=yaml_filename)
-
-
-
-
-
-    def add(self):
-        parser = argparse.ArgumentParser(description="Add a new configuration, starting from the most recent one and adding/replacing requested keywords",
-                                         usage="desi_calib_config add [options] (use --help for details).")
-
-        parser.add_argument("--spectro", type=str, required=True, default=None,
-                            help="either SPX or SMY ")
-
-        parser.add_argument("--camera-arm", required=True, default=None,
-                            help="b, r or z")
-
-        parser.add_argument("--name", required=False, default=None,
-                            help="configuration name (default is VYYYYMMDD with YYYYMMDD given by date-obsj-begin argument)")
-
-        parser.add_argument("--date-obs-begin", required=True, default=None,
-                            help="date of beginning of validity of this config YYYYMMDD (mandatory)")
-
-        parser.add_argument("--entries", required=True, default=None,
-                            help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
-        parser.add_argument("--rm-entries", required=False, default=None,
-                            help="coma separated list of keys to remove")
-        parser.add_argument("--comments", required=False, default=None,
-                            help="add this comment")
-        parser.add_argument("-o","--ofilename", required=False, default=None,
-                            help="write to this file")
-
-        parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
-
-        parser.add_argument("--force",action="store_true",help="create a new config with the given date-obs-begin even if there is an existing one with the same date or more recent")
-
-
-        args = parser.parse_args(sys.argv[2:])
-
-        self.add_or_update(args,add_new_version=True)
-
-    def update(self):
-        parser = argparse.ArgumentParser(description="Update an existing configuration",
-                                         usage="desi_calib_config update [options] (use --help for details)")
-
-
-        parser.add_argument("--spectro", type=str, required=True, default=None,
-                            help="either SPX or SMY ")
-
-        parser.add_argument("--camera-arm", required=True, default=None,
-                            help="b, r or z")
-
-        parser.add_argument("--name", required=True, default=None,
-                            help="configuration version name, 'all' will modify all configs")
-
-        parser.add_argument("--entries", required=True, default=None,
-                            help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
-        parser.add_argument("--rm-entries", required=False, default=None,
-                            help="coma separated list of keys to remove")
-        parser.add_argument("--comments", required=False, default=None,
-                            help="add this comment")
-        parser.add_argument("-o","--ofilename", required=False, default=None,
-                            help="write to this file")
-
-        parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
-
-        args = parser.parse_args(sys.argv[2:])
-
-        self.add_or_update(args,add_new_version=False)
-
-
-    def add_or_update(self,args,add_new_version):
-
-        log = get_logger()
-
-        if args.ofilename is None and not args.overwrite :
-            print("need either an output filename or --overwrite (use --help for details)")
-            sys.exit(12)
-
-        entries = self.parse_dict(args.entries)
-
-        if add_new_version :
-
-            if "DATE-OBS-BEGIN" in entries :
-                print("please remove DATE-OBS-BEGIN from the entries")
-                print("use argument --date-obs-begin instead")
-                sys.exit(12)
-
-            date=datetime.strptime(str(args.date_obs_begin), "%Y%m%d")
-            thedaybefore = date - timedelta(days=1)
-            previous_config_date_obs_end = thedaybefore.year*10000+thedaybefore.month*100+thedaybefore.day
-            log.debug("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
-            if args.name is None :
-                args.name = "V{}".format(args.date_obs_begin)
-
-        SP,SM   = self.parse_spectro(args.spectro)
-        camera  = args.camera_arm.lower()+"{:d}".format(int(SP[-1]))
-        # yaml file
-        cameraid     = "{}-{}".format(SM.lower(),args.camera_arm.lower())
-        yaml_file = "{}/spec/{}/{}.yaml".format(self.calib_dir,SM.lower(),cameraid)
-        log.debug("yaml file is {}".format(yaml_file))
-        if not os.path.isfile(yaml_file) :
-            log.error("no file {}".format(yaml_file))
-            raise IOError("no file {}".format(yaml_file))
-
-
-        stream = open(yaml_file, 'r')
-        data   = yaml.safe_load(stream)
-        stream.close()
-        if not cameraid in data :
-            log.error("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
-            raise KeyError("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
-        data=data[cameraid]
-        dates=[]
-        versions=[]
-        for version in data :
-            dates.append(data[version]["DATE-OBS-BEGIN"])
-            versions.append(version)
-
-        if add_new_version :
-            reference_version=versions[np.argmax(dates)]
-            if args.name in versions :
-                log.error("There is already a configuration named '{}' in {}".format(args.name,yaml_file))
-                sys.exit(12)
-        else :
-            reference_version = args.name
-            if reference_version != 'all' :
-                if not reference_version in data :
-                    log.error("No configuration named '{}' in {}".format(reference_version,yaml_file))
-                    sys.exit(12)
-        if add_new_version :
-            if data[reference_version]["DATE-OBS-BEGIN"] >= args.date_obs_begin :
-                log.warning("There is a another version with DATE-OBS-BEGIN {} >= {}".format(data[reference_version]["DATE-OBS-BEGIN"],args.date_obs_begin))
-                if not args.force :
-                    print("Use --force to add a new version anyway")
-                    sys.exit(12)
-
-
-            log.debug("Will copy the most recent version {}".format(reference_version))
-
-        # write "by hand" because we want to keep all the comments,
-        # the indentation, and the ordering
-
-        if args.overwrite and args.ofilename is None :
-            args.ofilename = yaml_file
-
-        tmp_filename = args.ofilename+".tmp"
-
-        copyfile(yaml_file,tmp_filename)
-
-        if reference_version == 'all' :
-            reference_versions = reversed(versions)
-        else :
-            reference_versions = [reference_version]
-
-        for reference_version in reference_versions :
-
-            in_reference_version = False
-            in_some_version   = False
-
-            lines_in_header = []
-            lines_in_reference_version = []
-            lines_in_other_version  = []
-
-
-
-            with open(tmp_filename,'r') as ifile :
-                for line in ifile.readlines() :
-
-                    in_reference_version_header = False
-                    for version in versions :
-                        if line.find(version)>=0 and line.find("#")<0:
-                            in_some_version = True
-                            if version == reference_version or reference_version == 'all' :
-                                in_reference_version = True
-                                in_reference_version_header = True
-                            else :
-                                in_reference_version = False
-                    if in_reference_version_header : continue
-
-                    if in_reference_version :
-                        lines_in_reference_version.append(line)
-                    else :
-                        if not in_some_version :
-                            lines_in_header.append(line)
-                        else:
-                            lines_in_other_version.append(line)
-
-
-
-
-            entries_to_remove = []
-            if args.rm_entries is not None :
-                entries_to_remove = args.rm_entries.split(",")
-
-            with open(tmp_filename,'w') as ofile :
-
-                # write header
-                for line in lines_in_header :
-                    ofile.write(line)
-
-                if add_new_version :
-                    # write new version
-                    ofile.write("\n {}:\n\n".format(args.name))
-                else :
-                    # update version
-                    ofile.write(" {}:\n".format(reference_version))
-
-                if args.comments is not None :
-                    # add comments
-                    ofile.write (" # {}\n".format(args.comments))
-
-                if add_new_version :
-                    ofile.write("\n")
-                    ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
-
-                keys = entries.keys()
-                for line in lines_in_reference_version :
-
-                    if add_new_version : # otherwise we keep this
-                        if line.find("DATE-OBS-BEGIN")>=0 : continue
-                        if line.find("DATE-OBS-END")>=0 : continue
-
-                    if line.find("#")>=0 :
-                        ofile.write(line)
+                    if '[' in v or ']' in v :
+                        print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                        haderror=True
                         continue
+        break
 
-                    is_a_new_entry=False
-                    for k in keys :
-                        if line.split(":")[0].find(k)>=0 :
-                            ofile.write("  {}: {}\n".format(k,entries[k]))
-                            entries.pop(k)
-                            is_a_new_entry=True
-                            break
-                    if not is_a_new_entry :
-                        if len(line.strip())>0 :
-                            k=line.split(":")[0].strip()
-                            if k in entries_to_remove :
-                                ofile.write("  # {}: (removed)\n".format(k))
-                            else :
-                                ofile.write(line)
+    return k,v
 
-                for k in entries :
-                    ofile.write("  {} : {}\n".format(k,entries[k]))
-                ofile.write("\n\n")
+def input_value(key) :
+    """
+    Prompts the user to enter a value for a given key.
 
-                if add_new_version :
-                    # write most recent version but change or add DATE-OBS-END
-                    ofile.write(" {}:\n".format(reference_version))
-                    for line in lines_in_reference_version :
-                        if line.find("DATE-OBS-END")>=0 : continue
-                        ofile.write(line)
-                        if line.find("DATE-OBS-BEGIN")>=0 :
-                            ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
+    Args:
+        key (str): The key for which the value is being entered.
 
-                # now rewrite older versions
-                for line in lines_in_other_version :
-                    ofile.write(line)
+    Returns:
+        The entered value.
+    """
+    while(True) :
+        v = safe_eval(prompt(f"{key}: "))
+        if key != 'COMMENT' : # more flexible for the comment string
+            if type(v) == list :
+                if len(v) != 2 :
+                    print(f"\nERROR with entry '{v}', lists must have a length of 2")
+                    haderror=True
+                    continue
+                if type(v[1]) != str :
+                    print(f"\nERROR with entry '{v}', second item in list must be a string")
+                    haderror=True
+                    continue
+                if type(v[0]) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{v}', first item in list must be a int , float or string")
+                    haderror=True
+                    continue
+            else :
+                if type(v) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{v}', value must be a int , float , string or list")
+                    print("and not:")
+                    print(type(v))
+                    haderror=True
+                    continue
+                if type(v) == str :
+                    if len(v.split(" "))!=1 :
+                        print(f"\nERROR with entry '{v}', value cannot have spaces unless it is a list with '[]'")
+                        haderror=True
+                        continue
+                    if '[' in v or ']' in v :
+                        print(f"\nERROR with entry '{v}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                        haderror=True
+                        continue
+        break
 
-        # now check at least it's a valid yaml file
-        # (will raise an exception if fails)
+    return v
+
+def edit_configuration(configuration_data):
+    """
+    Edits the configuration data interactively.
+
+    Args:
+        configuration_data (dict): The configuration data to edit.
+    """
+    haderror=False
+    while True :
+        keys_to_edit = []
+
+        if not haderror :
+            print("----------------")
+            print()
+            for key,val in configuration_data.items() :
+                print(f'{key}:{val}')
+                if val=="EDIT" :
+                    keys_to_edit.append(key)
+        haderror=False
+        print()
+        if len(keys_to_edit)> 0 :
+            key=keys_to_edit[0]
+            if key in ["DATE-OBS-BEGIN","DATE-OBS-END"] :
+                configuration_data[key]=input_date(f"{key}: ")
+            else :
+                configuration_data[key]=input_value(key)
+            continue
+
+        akey=prompt('(a)dd or modify entry, (r)emove, (s)ave or (q)quit? ').lower()
+        print(akey)
+        action_keys=['a','r','s','q']
+        while akey not in action_keys :
+            akey = prompt(f"Please type a key in {action_keys}: ")
+        if akey == "q" :
+            sys.exit(0)
+        if akey == "s" :
+            break
+        if akey == "r" :
+            ikeys = prompt(f"Enter key(s) to remove:")
+            keys=[]
+            tmp = ikeys.split(" ")
+            for t in tmp :
+                tmp2 = t.strip().split(",")
+                for t2 in tmp2 :
+                   keys.append(t2)
+            print(keys)
+            for k in keys :
+                print("Removing",k)
+                configuration_data.pop(k)
+        if akey == "a" :
+            k,v = input_keyval()
+            configuration_data[k]=v
+
+
+def test_calibration_finder(data,filename) :
+    """
+    Tests the calibration finder with the provided data and filename.
+
+    Args:
+        data (dict): The configuration data.
+        filename (str): The path to the calibration file.
+
+    Returns:
+        bool: True if the test succeeds, False otherwise.
+    """
+    test_succeeded = True
+    if "DESI_SPECTRO_CALIB" in os.environ.keys() :
         try :
-            self.test_yaml_file(tmp_filename)
-        except Exception as e:
-            traceback.format_exc()
-            print(e)
-            print("Something is wrong in the yaml file, sorry about that. The output file {} has not been written.".format(args.ofilename))
-            sys.exit(12)
-        os.rename(tmp_filename,args.ofilename)
+            basefilename=os.path.basename(filename)
+            tmp=basefilename.split(".")[0].split("-")
+            if len(tmp)==2 :
+                smid=tmp[0]
+                arm=tmp[1]
+                spid=sm2sp(smid).lower().replace("sp","")
+                camera=f"{arm}{spid}"
+                expected_filename="{}/spec/{}/{}".format(os.environ["DESI_SPECTRO_CALIB"],smid,basefilename)
+                filename1=os.path.realpath(expected_filename)
+                filename2=os.path.realpath(filename)
+                if filename1 == filename2 :
+                    header={}
+                    for k in ["DETECTOR","CCDCFG","CCDTMING"] :
+                        header[k]=data[k]
+                    header["NIGHT"]=data["DATE-OBS-BEGIN"]
+                    header["CAMERA"]=camera
+                    header["SPECID"]=smid.lower().replace("sm","")
+                    print(f"Testing the calibration finder with header={header}")
+                    cfinder=CalibFinder([header],filename)
+                    # now check some files
+                    for k in ["PSF","BIAS","PIXFLAT","MASK","FIBERFLAT","FLUXCALIB","SKYCORR","SKYGRADPCA","TPCORRPARAM"] :
+                        if cfinder.haskey(k) :
+                            filename=cfinder.findfile(k)
+                            if not os.path.isfile(filename) :
+                                raise IOError(f"Missing {k} file {filename}")
+                else :
+                    print("(no test of the calibration finder because the expected and edited yaml files are not the same)")
+                    print(f" expected: {filename1}")
+                    print(f" edited  : {filename2}")
 
-        print("wrote {}".format(args.ofilename))
+        except Exception as e :
+            print("ERROR while testing the calibration finder:",e)
+            test_succeeded = False
+        if test_succeeded :
+            print("OK")
+    return test_succeeded
 
-    def test(self):
-        parser = argparse.ArgumentParser(description="Test the configurations",
-                                         usage="desi_calib_config test")
+def main():
+    """
+    Main function to run the DESI spectroscopic calibration configuration editor.
+    """
+    parser = argparse.ArgumentParser(description="DESI spectroscopic calibration configuration editor")
+    parser.add_argument('yaml_file', type = str, help = 'path of yaml file to modify')
 
-        parser.add_argument("-i","--ifile", type=str, nargs="*", required=False, default=None,
-                            help="test this yaml file (s)(default is all sm*.yaml")
+    args = parser.parse_args()
+    if not os.path.isfile(args.yaml_file) :
+        print(f"The file {args.yaml_file} does not exist.")
+        return
 
-        args = parser.parse_args(sys.argv[2:])
+    data,header = load_yaml(args.yaml_file)
 
-        if args.ifile is not None and len(args.ifile)>0 :
-            filenames = args.ifile
+    camids = list(data.keys())
+    if len(camids) == 0 :
+        print("There are no entries in the YAML file. There needs to be at least one defining the camera id")
+        sys.exit(12)
+    if len(camids) > 1 :
+        camid=prompt(f"Which camid do you want to edit among {camids}? ")
+        while camid not in camids :
+            camid=prompt(f"Please choose one among {camids}? ")
+    else :
+        camid=camids[0]
+    camid_data=data[camid]
+
+    configuration_names = list(camid_data.keys())
+    print(f"Current configuration names for {camid} in the YAML file:")
+    print(configuration_names)
+
+    previous_config_name = None
+    if yes_or_no("Do you want to create a new configuration?") == "y" :
+        config_name=datetime.datetime.now().strftime('V%Y%m%d')
+        iterator=1
+        while config_name in configuration_names :
+            config_name=datetime.datetime.now().strftime('V%Y%m%d')+f"-{iterator}"
+            iterator += 1
+
+        while yes_or_no(f"Is '{config_name}' OK?")=="n" :
+            while True :
+                config_name=prompt("Enter a new config name: ")
+                if config_name in configuration_names :
+                    print(f"Sorry {config_name} already exists")
+                else :
+                    break
+        print(config_name)
+        previous_config_name=configuration_names[0]
+        yn = yes_or_no(f"Do you want to start from a copy of '{previous_config_name}' ?")
+        if yn == "n" :
+            while True :
+                previous_config_name=prompt(f"Choose a previous configuration among {configuration_names}: ")
+                if previous_config_name not in configuration_names :
+                    print(f"'{previous_config_name}' is not in the list.")
+                else :
+                    break
+        print(f"Starting from a copy of '{previous_config_name}' to '{config_name}'")
+        # would like to insert at the beginning, so need a full copy:
+        new_data = dict()
+        new_data[config_name]=deepcopy(camid_data[previous_config_name])
+        for k in ["DATE-OBS-BEGIN","COMMENT"] :
+            new_data[config_name][k]="EDIT" # force edit of this entry
+        for c in camid_data.keys() :
+            new_data[c] = camid_data[c]
+        data[camid] = new_data
+        camid_data  = data[camid]
+
+    else :
+        while True :
+            config_name=prompt(f"Pick a configuration to modify: ")
+            if config_name not in configuration_names :
+                print(f"'{config_name}' is not in the list:")
+                print(configuration_names)
+            else :
+                break
+        print(f"Will edit '{config_name}'")
+
+    while True :
+
+        edit_configuration(camid_data[config_name])
+
+        if previous_config_name is not None :
+            if yes_or_no(f"Change DATE-OBS-END of previous config {previous_config_name}?") == "y" :
+                yyyymmdd = input_date("Enter DATE-OBS-END: ")
+                camid_data[previous_config_name]["DATE-OBS-END"]=yyyymmdd
+
+        yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
+        if yn == "y" :
+            outfilename=args.yaml_file
         else :
+            outfilename=prompt(f"Enter output file name: ")
 
-            filenames = np.sort(glob.glob("{}/spec/sm*/sm*.yaml".format(self.calib_dir)))
+        save_yaml(data, header, outfilename+"-tmp")
+        print("Changes:")
+        res=subprocess.call(["diff",args.yaml_file,outfilename+"-tmp"])
+        print()
 
-        for filename in filenames :
-            try :
-                self.test_yaml_file(filename)
-                print("Checked {}".format(filename))
-            except Exception as e:
-                print("Something is wrong with {}".format(filename))
+        if yes_or_no("OK?") == "y" :
+            test_succeeded = test_calibration_finder(camid_data[config_name],outfilename+"-tmp")
+            if test_succeeded or ( yes_or_no("Save anyway?") == "y" ):
+                os.rename(outfilename+"-tmp",outfilename)
+                print(f"Changes saved to {outfilename}")
+                return 0
+
+        os.unlink(outfilename+"-tmp")
+        print(f"Resume editing")
 
 
 
-
-
-
-
-
-if __name__ == '__main__':
-    p = ConfigEditor()
+if __name__ == "__main__":
+    main()
