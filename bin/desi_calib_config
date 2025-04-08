@@ -236,6 +236,13 @@ def test_calibration_finder(data,filename) :
                     header["SPECID"]=smid.lower().replace("sm","")
                     print(f"Testing the calibration finder with header={header}")
                     cfinder=CalibFinder([header],filename)
+                    # now check some files
+                    for k in ["PSF","BIAS","PIXFLAT","MASK","FIBERFLAT","FLUXCALIB","SKYCORR","SKYGRADPCA","TPCORRPARAM"] :
+                        if cfinder.haskey(k) :
+                            filename=cfinder.findfile(k)
+                            if not os.path.isfile(filename) :
+                                raise IOError(f"Missing {k} file {filename}")
+
         except Exception as e :
             print("ERROR while testing the calibration finder:",e)
             test_succeeded = False
