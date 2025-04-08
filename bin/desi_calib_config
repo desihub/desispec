@@ -8,6 +8,8 @@ import ast
 from copy import deepcopy
 import subprocess
 
+from desispec.calibfinder import CalibFinder,sm2sp
+
 def safe_eval(s):
     try:
         return ast.literal_eval(s)
@@ -56,7 +58,6 @@ def yes_or_no(question):
     while yn.lower() not in ['y','n'] :
         yn = input("Please type 'y' or 'n'? ")
     return yn
-
 
 def edit_configuration(configuration_data):
 
@@ -137,6 +138,33 @@ def edit_configuration(configuration_data):
             print(f"Set {k}:{v} with type {vtype}")
 
 
+def test_calibration_finder(data,filename) :
+    test_succeeded = True
+    if "DESI_SPECTRO_CALIB" in os.environ.keys() :
+        try :
+            basefilename=os.path.basename(filename)
+            tmp=basefilename.split(".")[0].split("-")
+            if len(tmp)==2 :
+                smid=tmp[0]
+                arm=tmp[1]
+                spid=sm2sp(smid).lower().replace("sp","")
+                camera=f"{arm}{spid}"
+                expected_filename="{}/spec/{}/{}".format(os.environ["DESI_SPECTRO_CALIB"],smid,basefilename)
+                filename1=os.path.realpath(expected_filename)
+                filename2=os.path.realpath(basefilename)
+                if filename1 == filename2 :
+                    header={}
+                    for k in ["DETECTOR","CCDCFG","CCDTMING"] :
+                        header[k]=data[k]
+                    header["NIGHT"]=data["DATE-OBS-BEGIN"]
+                    header["CAMERA"]=camera
+                    header["SPECID"]=smid.lower().replace("sm","")
+                    print(f"Testing the calibration finder with header={header}")
+                    cfinder=CalibFinder([header],filename)
+        except Exception as e :
+            print("ERROR while testing the calibration finder:",e)
+            test_succeeded = False
+    return test_succeeded
 def main():
 
     parser = argparse.ArgumentParser(description="DESI spectroscopic calibration configuration editor")
@@ -222,10 +250,13 @@ def main():
         print("Changes:")
         res=subprocess.call(["diff",args.yaml_file,outfilename+"-tmp"])
         print()
+
         if yes_or_no("OK?") == "y" :
-            os.rename(outfilename+"-tmp",outfilename)
-            print(f"Changes saved to {outfilename}")
-            return 0
+            test_succeeded = test_calibration_finder(camid_data[config_name],outfilename+"-tmp")
+            if test_succeeded or ( yes_or_no("Save anyway?") == "y" ):
+                os.rename(outfilename+"-tmp",outfilename)
+                print(f"Changes saved to {outfilename}")
+                return 0
 
         os.unlink(outfilename+"-tmp")
         print(f"Resume editing")
