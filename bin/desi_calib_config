@@ -4,7 +4,7 @@ import yaml
 import os,sys
 import argparse
 import datetime
-import ast
+#import ast
 from copy import deepcopy
 import subprocess
 from prompt_toolkit import prompt
@@ -22,8 +22,8 @@ def safe_eval(s):
         The evaluated Python object if successful, otherwise the original string.
     """
     try:
-        return ast.literal_eval(s)
-    except (ValueError, SyntaxError):
+        return yaml.safe_load(s)
+    except (yaml.YAMLError, ValueError):
         return s
 
 def load_yaml(file_path):
@@ -151,6 +151,7 @@ def input_keyval() :
             continue
         k=kv2[0].strip()
         v=safe_eval(kv2[1].strip())
+        #print(f"type of {v} is",type(v))
 
         if k != 'COMMENT' : # more flexible for the comment string
             if type(v) == list :
