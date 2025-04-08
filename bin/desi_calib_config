@@ -7,6 +7,7 @@ import datetime
 import ast
 from copy import deepcopy
 import subprocess
+from prompt_toolkit import prompt
 
 from desispec.calibfinder import CalibFinder,sm2sp
 
@@ -98,9 +99,9 @@ def yes_or_no(question):
     Returns:
         str: 'y' for yes, 'n' for no.
     """
-    yn = input(question.replace("?","").strip()+" (y/n)? ")
+    yn = prompt(question.replace("?","").strip()+" (y/n)? ")
     while yn.lower() not in ['y','n'] :
-        yn = input("Please type 'y' or 'n'? ")
+        yn = prompt("Please type 'y' or 'n'? ")
     return yn
 
 def input_date(message) :
@@ -114,7 +115,7 @@ def input_date(message) :
         str: The entered date in YYYYMMDD format.
     """
     while(True) :
-        yyyymmdd = safe_eval(input(message.strip().replace(":","")+": "))
+        yyyymmdd = safe_eval(prompt(message.strip().replace(":","")+": "))
         message  = "Please use YYYYMMDD format: "
         if type(yyyymmdd) != int :
             continue
@@ -142,7 +143,7 @@ def input_keyval() :
         tuple: A tuple containing the key and the value.
     """
     while(True) :
-        kv = input(f"Enter a key:value or key:[value,'comment'] : ")
+        kv = prompt(f"Enter a key:value or key:[value,'comment'] : ")
         kv2=kv.split(":")
         if len(kv2) != 2:
             print(f"\nERROR Cannot split '{kv}' as key:value\n")
@@ -196,7 +197,7 @@ def input_value(key) :
         The entered value.
     """
     while(True) :
-        v = safe_eval(input(f"{key}: "))
+        v = safe_eval(prompt(f"{key}: "))
         if key != 'COMMENT' : # more flexible for the comment string
             if type(v) == list :
                 if len(v) != 2 :
@@ -259,17 +260,17 @@ def edit_configuration(configuration_data):
                 configuration_data[key]=input_value(key)
             continue
 
-        akey=input('(a)dd or modify entry, (r)emove, (s)ave or (q)quit? ').lower()
+        akey=prompt('(a)dd or modify entry, (r)emove, (s)ave or (q)quit? ').lower()
         print(akey)
         action_keys=['a','r','s','q']
         while akey not in action_keys :
-            akey = input(f"Please type a key in {action_keys}: ")
+            akey = prompt(f"Please type a key in {action_keys}: ")
         if akey == "q" :
             sys.exit(0)
         if akey == "s" :
             break
         if akey == "r" :
-            ikeys = input(f"Enter key(s) to remove:")
+            ikeys = prompt(f"Enter key(s) to remove:")
             keys=[]
             tmp = ikeys.split(" ")
             for t in tmp :
@@ -355,9 +356,9 @@ def main():
         print("There are no entries in the YAML file. There needs to be at least one defining the camera id")
         sys.exit(12)
     if len(camids) > 1 :
-        camid=input(f"Which camid do you want to edit among {camids}? ")
+        camid=prompt(f"Which camid do you want to edit among {camids}? ")
         while camid not in camids :
-            camid=input(f"Please choose one among {camids}? ")
+            camid=prompt(f"Please choose one among {camids}? ")
     else :
         camid=camids[0]
     camid_data=data[camid]
@@ -376,7 +377,7 @@ def main():
 
         while yes_or_no(f"Is '{config_name}' OK?")=="n" :
             while True :
-                config_name=input("Enter a new config name: ")
+                config_name=prompt("Enter a new config name: ")
                 if config_name in configuration_names :
                     print(f"Sorry {config_name} already exists")
                 else :
@@ -386,7 +387,7 @@ def main():
         yn = yes_or_no(f"Do you want to start from a copy of '{previous_config_name}' ?")
         if yn == "n" :
             while True :
-                previous_config_name=input(f"Choose a previous configuration among {configuration_names}: ")
+                previous_config_name=prompt(f"Choose a previous configuration among {configuration_names}: ")
                 if previous_config_name not in configuration_names :
                     print(f"'{previous_config_name}' is not in the list.")
                 else :
@@ -404,7 +405,7 @@ def main():
 
     else :
         while True :
-            config_name=input(f"Pick a configuration to modify: ")
+            config_name=prompt(f"Pick a configuration to modify: ")
             if config_name not in configuration_names :
                 print(f"'{config_name}' is not in the list:")
                 print(configuration_names)
@@ -425,7 +426,7 @@ def main():
         if yn == "y" :
             outfilename=args.yaml_file
         else :
-            outfilename=input(f"Enter output file name: ")
+            outfilename=prompt(f"Enter output file name: ")
 
         save_yaml(data, header, outfilename+"-tmp")
         print("Changes:")
