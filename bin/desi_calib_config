@@ -164,6 +164,8 @@ def test_calibration_finder(data,filename) :
         except Exception as e :
             print("ERROR while testing the calibration finder:",e)
             test_succeeded = False
+        if test_succeeded :
+            print("OK")
     return test_succeeded
 def main():
 
@@ -193,6 +195,7 @@ def main():
     print(f"Current configuration names for {camid} in the YAML file:")
     print(configuration_names)
 
+    previous_config_name = None
     if yes_or_no("Do you want to create a new configuration?") == "y" :
         config_name=datetime.datetime.now().strftime('V%Y%m%d')
         iterator=1
@@ -239,6 +242,11 @@ def main():
     while True :
 
         edit_configuration(camid_data[config_name])
+
+        if previous_config_name is not None :
+            if yes_or_no(f"Change DATE-OBS-END of previous config {previous_config_name}?") == "y" :
+                yyyymmdd = input("Enter DATE-OBS-END: ")
+                camid_data[previous_config_name]["DATE-OBS-END"]=yyyymmdd
 
         yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
         if yn == "y" :
