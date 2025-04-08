@@ -41,6 +41,7 @@ class TestIO(unittest.TestCase):
                        "DESI_SPECTRO_DATA": None,
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
+                       "DESI_COMPRESSION": None,
                        }
         cls.testEnv = {'SPECPROD': cls.specprod,
                        "DESI_ROOT": cls.testDir,
@@ -48,6 +49,7 @@ class TestIO(unittest.TestCase):
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
                        "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
                        "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       "DESI_COMPRESSION": None,
                        }
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
@@ -55,7 +57,12 @@ class TestIO(unittest.TestCase):
         for e in cls.origEnv:
             if e in os.environ:
                 cls.origEnv[e] = os.environ[e]
-            os.environ[e] = cls.testEnv[e]
+
+            #- Set test environment, handling cases like $DESI_COMPRESSION that should not be set
+            if cls.testEnv[e] is not None:
+                os.environ[e] = cls.testEnv[e]
+            elif e in os.environ:
+                del os.environ[e]
 
     def setUp(self):
         #- clear DESI_ROOT_READONLY cache leftover from other tests
@@ -74,7 +81,10 @@ class TestIO(unittest.TestCase):
 
         # restore environment variables if test changed them
         for key, value in self.testEnv.items():
-            os.environ[key] = value
+            if value is not None:
+                os.environ[key] = value
+            elif key in os.environ:
+                del os.environ[key]
 
     @classmethod
     def tearDownClass(cls):
@@ -84,10 +94,10 @@ class TestIO(unittest.TestCase):
             if os.path.exists(testfile):
                 os.remove(testfile)
         for e in cls.origEnv:
-            if cls.origEnv[e] is None:
-                del os.environ[e]
-            else:
+            if cls.origEnv[e] is not None:
                 os.environ[e] = cls.origEnv[e]
+            elif e in os.environ:
+                del os.environ[e]
 
         if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
