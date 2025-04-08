@@ -59,18 +59,134 @@ def yes_or_no(question):
         yn = input("Please type 'y' or 'n'? ")
     return yn
 
+def input_date(message) :
+    while(True) :
+        yyyymmdd = safe_eval(input(message.strip().replace(":","")+": "))
+        message  = "Please use YYYYMMDD format: "
+        if type(yyyymmdd) != int :
+            continue
+        yyyymmdd = int(yyyymmdd)
+        yy = yyyymmdd//10000
+        if yy<2000 or yy>3000 :
+            print(f"Invalid year {yy}")
+            continue
+        mm = (yyyymmdd-yy*10000)//100
+        if mm<1 or mm >12 :
+            print(f"Invalid month {mm}")
+            continue
+        dd = yyyymmdd%100
+        if dd<1 or dd>31 :
+            print(f"Invalid day {dd}")
+            continue
+        break
+    return str(yyyymmdd) # convert back to str
+
+def input_keyval() :
+
+    while(True) :
+        kv = input(f"Enter a key:value or key:[value,'comment'] : ")
+        kv2=kv.split(":")
+        if len(kv2) != 2:
+            print(f"\nERROR Cannot split '{kv}' as key:value\n")
+            haderror=True
+            continue
+        k=kv2[0].strip()
+        v=safe_eval(kv2[1].strip())
+
+        if k != 'COMMENT' : # more flexible for the comment string
+            if type(v) == list :
+                if len(v) != 2 :
+                    print(f"\nERROR with entry '{kv}', lists must have a length of 2")
+                    haderror=True
+                    continue
+                if type(v[1]) != str :
+                    print(f"\nERROR with entry '{kv}', second item in list must be a string")
+                    haderror=True
+                    continue
+                if type(v[0]) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
+                    haderror=True
+                    continue
+            else :
+                if type(v) not in [ int , float , str ]:
+                    print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
+                    print("and not:")
+                    print(type(v))
+                    haderror=True
+                    continue
+                if type(v) == str :
+                    if len(v.split(" "))!=1 :
+                        print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+                        haderror=True
+                        continue
+                    if '[' in v or ']' in v :
+                        print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                        haderror=True
+                        continue
+
+    return k,v
+
+def input_value(key) :
+
+    while(True) :
+        print("Enter a key:value or key:[value,'comment']")
+        v = safe_eval(input(f"{key}: "))
+        if type(v) == list :
+            if len(v) != 2 :
+                print(f"\nERROR with entry '{kv}', lists must have a length of 2")
+                haderror=True
+                continue
+            if type(v[1]) != str :
+                print(f"\nERROR with entry '{kv}', second item in list must be a string")
+                haderror=True
+                continue
+            if type(v[0]) not in [ int , float , str ]:
+                print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
+                haderror=True
+                continue
+        else :
+            if type(v) not in [ int , float , str ]:
+                print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
+                print("and not:")
+                print(type(v))
+                haderror=True
+                continue
+            if type(v) == str :
+                if len(v.split(" "))!=1 :
+                    print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
+                    haderror=True
+                    continue
+                if '[' in v or ']' in v :
+                    print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
+                    haderror=True
+                    continue
+
+    return v
+
 def edit_configuration(configuration_data):
 
     haderror=False
     while True :
+        keys_to_edit = []
+
         if not haderror :
             print("----------------")
             print()
             for key,val in configuration_data.items() :
                 print(f'{key}:{val}')
+                if val=="EDIT" :
+                    keys_to_edit.append(key)
         haderror=False
         print()
-        akey=input('(a)dd or modify, (r)emove, (s)ave or (q)quit? ').lower()
+        if len(keys_to_edit)> 0 :
+            key=keys_to_edit[0]
+            if key in ["DATE-OBS-BEGIN","DATE-OBS-END"] :
+                configuration_data[key]=input_date(f"{key}: ")
+            else :
+                configuration_data[key]=input_value(key)
+            continue
+
+        akey=input('(a)dd or modify entry, (r)emove, (s)ave or (q)quit? ').lower()
         print(akey)
         action_keys=['a','r','s','q']
         while akey not in action_keys :
@@ -92,50 +208,8 @@ def edit_configuration(configuration_data):
                 print("Removing",k)
                 configuration_data.pop(k)
         if akey == "a" :
-            kv = input(f"Enter a key:value or key:[value,'comment'] : ")
-            kv2=kv.split(":")
-            if len(kv2) != 2:
-                print(f"\nERROR Cannot split '{kv}' as key:value\n")
-                haderror=True
-                continue
-            k=kv2[0].strip()
-            v=safe_eval(kv2[1].strip())
-
-            # before writing, check the type of v
-            if k != 'COMMENT' : # more flexible for the comment string
-                if type(v) == list :
-                    if len(v) != 2 :
-                        print(f"\nERROR with entry '{kv}', lists must have a length of 2")
-                        haderror=True
-                        continue
-                    if type(v[1]) != str :
-                        print(f"\nERROR with entry '{kv}', second item in list must be a string")
-                        haderror=True
-                        continue
-                    if type(v[0]) not in [ int , float , str ]:
-                        print(f"\nERROR with entry '{kv}', first item in list must be a int , float or string")
-                        haderror=True
-                        continue
-                else :
-                    if type(v) not in [ int , float , str ]:
-                        print(f"\nERROR with entry '{kv}', value must be a int , float , string or list")
-                        print("and not:")
-                        print(type(v))
-                        haderror=True
-                        continue
-                    if type(v) == str :
-                        if len(v.split(" "))!=1 :
-                            print(f"\nERROR with entry '{kv}', value cannot have spaces unless it is a list with '[]'")
-                            haderror=True
-                            continue
-                        if '[' in v or ']' in v :
-                            print(f"\nERROR with entry '{kv}', value interpreted as str but contains [,]. Please make sure the string values in the list are between '' so that the entry can be interpreted as a list with a string element.")
-                            haderror=True
-                            continue
-
+            k,v = input_keyval()
             configuration_data[k]=v
-            vtype=type(v)
-            print(f"Set {k}:{v} with type {vtype}")
 
 
 def test_calibration_finder(data,filename) :
@@ -167,6 +241,7 @@ def test_calibration_finder(data,filename) :
         if test_succeeded :
             print("OK")
     return test_succeeded
+
 def main():
 
     parser = argparse.ArgumentParser(description="DESI spectroscopic calibration configuration editor")
@@ -224,6 +299,7 @@ def main():
         # would like to insert at the beginning, so need a full copy:
         new_data = dict()
         new_data[config_name]=deepcopy(camid_data[previous_config_name])
+        new_data[config_name]["DATE-OBS-BEGIN"]="EDIT" # force edit of this entry
         for c in camid_data.keys() :
             new_data[c] = camid_data[c]
         data[camid] = new_data
@@ -245,7 +321,7 @@ def main():
 
         if previous_config_name is not None :
             if yes_or_no(f"Change DATE-OBS-END of previous config {previous_config_name}?") == "y" :
-                yyyymmdd = input("Enter DATE-OBS-END: ")
+                yyyymmdd = input_date("Enter DATE-OBS-END: ")
                 camid_data[previous_config_name]["DATE-OBS-END"]=yyyymmdd
 
         yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
