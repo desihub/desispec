@@ -138,10 +138,10 @@ def get_fits_compression_suffix() :
         return ".gz" # the default compression level
 
     compression_type = os.environ["DESI_COMPRESSION"].upper()
-    valid_compression_types=["NONE","GZ"]
+    valid_compression_types=["NONE","GZ","GZIP"]
     if compression_type not in valid_compression_types :
         raise KeyError(f"Invalid compression type '{compression_type}' from environment variable DESI_COMPRESSION. It must be among {valid_compression_types}")
-    if compression_type=="GZ" :
+    if compression_type in ["GZ","GZIP"] :
         return ".gz"
     elif compression_type=="NONE"  :
         return ""
