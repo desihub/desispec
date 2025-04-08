@@ -301,6 +301,12 @@ def test_calibration_finder(data,filename) :
     test_succeeded = True
     if "DESI_SPECTRO_CALIB" in os.environ.keys() :
         try :
+
+            if "DESI_SPECTRO_DARK" in  os.environ.keys() :
+                # do not use DESI_SPECTRO_DARK info which can result
+                # in errors unrelated to the edition of DESI_SPECTRO_CALIB
+                os.environ.pop("DESI_SPECTRO_DARK")
+
             basefilename=os.path.basename(filename)
             tmp=basefilename.split(".")[0].split("-")
             if len(tmp)==2 :
