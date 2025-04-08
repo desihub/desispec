@@ -1037,6 +1037,64 @@ class TestIO(unittest.TestCase):
         filename = findfile('tiles', specprod='blat')
         self.assertEqual(filename, os.environ['DESI_SPECTRO_REDUX']+f'/blat/tiles-blat.fits')
 
+    def test_findfile_with_compression(self):
+        """Test desispec.io.meta.findfile with or without compression.
+        """
+        from ..io.meta import findfile
+        # from ..io.download import filepath2url
+
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
+        if "DESI_COMPRESSION" in os.environ :
+            os.environ.pop("DESI_COMPRESSION")
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file2_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="GZIP"
+        file3_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="gzip"
+        file4_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="NONE"
+        file5_should_not_be_gzip = findfile('sky', **kwargs)
+
+        # testing if $DESI_COMPRESSION is not set, default is .gz
+        assert(file1_should_be_gzip.find(".gz")>=0)
+        # testing $DESI_COMPRESSION= 'gz', 'none', 'GZ', 'NONE', and 'None' all work as expected
+        assert(file1_should_be_gzip==file2_should_be_gzip)
+        assert(file1_should_be_gzip==file3_should_be_gzip)
+        assert(file1_should_be_gzip==file4_should_be_gzip)
+        assert(file5_should_not_be_gzip.find(".gz")<0)
+        # testing the pre-existence of an alternate file has expected behavior
+        # if readonly=True, alternate file is returned
+        # if readonly=False, raises error
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3, readonly=True)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        dirname1=os.path.dirname(file1_should_be_gzip)
+        if not os.path.isdir(dirname1) :
+            os.makedirs(dirname1)
+        with open(file1_should_be_gzip, "w"): pass # equivalent of touch
+        os.environ["DESI_COMPRESSION"]="NONE"
+        # it should be the gzip version because this file already exists
+        # despite the value of the environment variable
+        file2_should_be_gzip = findfile('sky', **kwargs)
+        assert(file1_should_be_gzip==file2_should_be_gzip)
+        # same test without readonly mode should raise an error that we are going to catch
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        dirname1=os.path.dirname(file1_should_be_gzip)
+        if not os.path.isdir(dirname1) :
+            os.makedirs(dirname1)
+        with open(file1_should_be_gzip, "w"): pass # equivalent of touch
+        os.environ["DESI_COMPRESSION"]="NONE"
+        # it should raise an error because the gzip version already exists and
+        # we don't want two different versions of the same file
+        hasfailed=False
+        try :
+            file2_should_fail = findfile('sky', **kwargs)
+        except IOError as e :
+            hasfailed=True
+        assert(hasfailed)
 
     def test_desi_root_readonly(self):
         """test $DESI_ROOT_READONLY + findfile"""
