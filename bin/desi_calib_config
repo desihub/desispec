@@ -11,13 +11,30 @@ import subprocess
 from desispec.calibfinder import CalibFinder,sm2sp
 
 def safe_eval(s):
+    """
+    Safely evaluates a string containing a Python literal or returns the original string if evaluation fails.
+
+    Args:
+        s (str): The string to evaluate.
+
+    Returns:
+        The evaluated Python object if successful, otherwise the original string.
+    """
     try:
         return ast.literal_eval(s)
     except (ValueError, SyntaxError):
         return s
 
 def load_yaml(file_path):
+    """
+    Loads a YAML file and extracts the header comments.
 
+    Args:
+        file_path (str): Path to the YAML file.
+
+    Returns:
+        tuple: A tuple containing the loaded YAML data and the header comments.
+    """
     # save as header the first lines starting woith '#'
     header=""
     with open(file_path, 'r') as file:
@@ -34,6 +51,16 @@ def load_yaml(file_path):
 # Define a custom representer for lists
 class CustomRepresenter(yaml.representer.SafeRepresenter):
     def represent_list(self, data, depth=0):
+        """
+        Represents a list in YAML format with flow style based on depth.
+
+        Args:
+            data (list): The list to represent.
+            depth (int): The depth level for determining flow style.
+
+        Returns:
+            yaml.nodes.SequenceNode: The YAML node representing the list.
+        """
         # Apply flow style only for a given depth
         if depth >= 1:
             return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
@@ -49,17 +76,43 @@ class CustomDumper(yaml.SafeDumper):
 CustomDumper.add_representer(list, CustomRepresenter.represent_list)
 
 def save_yaml(data, header, file_path):
+    """
+    Saves data to a YAML file with a header.
+
+    Args:
+        data (dict): The data to save.
+        header (str): The header comments to include at the top of the file.
+        file_path (str): Path to the output YAML file.
+    """
     with open(file_path, 'w') as file:
         file.write(header+"\n")
         yaml.dump_all([data], file, Dumper=CustomDumper,sort_keys=False)
 
 def yes_or_no(question):
+    """
+    Prompts the user for a yes/no response.
+
+    Args:
+        question (str): The question to ask the user.
+
+    Returns:
+        str: 'y' for yes, 'n' for no.
+    """
     yn = input(question.replace("?","").strip()+" (y/n)? ")
     while yn.lower() not in ['y','n'] :
         yn = input("Please type 'y' or 'n'? ")
     return yn
 
 def input_date(message) :
+    """
+    Prompts the user to enter a date in YYYYMMDD format.
+
+    Args:
+        message (str): The prompt message to display to the user.
+
+    Returns:
+        str: The entered date in YYYYMMDD format.
+    """
     while(True) :
         yyyymmdd = safe_eval(input(message.strip().replace(":","")+": "))
         message  = "Please use YYYYMMDD format: "
@@ -82,7 +135,12 @@ def input_date(message) :
     return str(yyyymmdd) # convert back to str
 
 def input_keyval() :
+    """
+    Prompts the user to enter a key-value pair.
 
+    Returns:
+        tuple: A tuple containing the key and the value.
+    """
     while(True) :
         kv = input(f"Enter a key:value or key:[value,'comment'] : ")
         kv2=kv.split(":")
@@ -128,7 +186,15 @@ def input_keyval() :
     return k,v
 
 def input_value(key) :
+    """
+    Prompts the user to enter a value for a given key.
 
+    Args:
+        key (str): The key for which the value is being entered.
+
+    Returns:
+        The entered value.
+    """
     while(True) :
         v = safe_eval(input(f"{key}: "))
         if key != 'COMMENT' : # more flexible for the comment string
@@ -166,7 +232,12 @@ def input_value(key) :
     return v
 
 def edit_configuration(configuration_data):
+    """
+    Edits the configuration data interactively.
 
+    Args:
+        configuration_data (dict): The configuration data to edit.
+    """
     haderror=False
     while True :
         keys_to_edit = []
@@ -215,6 +286,16 @@ def edit_configuration(configuration_data):
 
 
 def test_calibration_finder(data,filename) :
+    """
+    Tests the calibration finder with the provided data and filename.
+
+    Args:
+        data (dict): The configuration data.
+        filename (str): The path to the calibration file.
+
+    Returns:
+        bool: True if the test succeeds, False otherwise.
+    """
     test_succeeded = True
     if "DESI_SPECTRO_CALIB" in os.environ.keys() :
         try :
@@ -256,7 +337,9 @@ def test_calibration_finder(data,filename) :
     return test_succeeded
 
 def main():
-
+    """
+    Main function to run the DESI spectroscopic calibration configuration editor.
+    """
     parser = argparse.ArgumentParser(description="DESI spectroscopic calibration configuration editor")
     parser.add_argument('yaml_file', type = str, help = 'path of yaml file to modify')
 
