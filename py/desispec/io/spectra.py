@@ -922,4 +922,3 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
                 spectra = spectra[ii]
 
     return spectra
-
