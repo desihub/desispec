@@ -346,8 +346,9 @@ class CalibFinder() :
 
             log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
-                log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
-                raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
+                message="Duplicate possible calibration data. Please fix this ambiguity. Maybe set DATE-OBS-END in previous config?"
+                log.error(message)
+                raise KeyError(message)
             found=True
             matching_data=data[version]
 
