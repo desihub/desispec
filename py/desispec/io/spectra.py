@@ -196,7 +196,7 @@ def read_spectra(
     targetids=None,
     rows=None,
     skip_hdus=None,
-    rrmodel=False,
+    return_models=False,
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -216,7 +216,7 @@ def read_spectra(
         targetids (list): Optional, list of targetids to read from file, if present.
         rows (list): Optional, list of rows to read from file
         skip_hdus (list): Optional, list/set/tuple of HDUs to skip
-        rrmodel (bool): Optional, if True will alo read best-fit redrock models (default False)
+        return_models (bool): Optional, if True will alo read best-fit redrock models (default False)
                         Also, it assumes that model is saved as rrmodel-??, in similar way ad coadd
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
@@ -394,13 +394,15 @@ def read_spectra(
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
     
-    if rrmodel:
+    model_targetids = None # for the sanity checks in the end
+    if return_models:
         rrmodel_file = infile.replace('coadd','rrmodel')
         t0 = time.time()
         if model is None:
             model = dict()
         if os.path.exists(rrmodel_file):
             rrhdus = fitsio.FITS(rrmodel_file, mode="r")
+            model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"] # for sanity check
             ind_models = []
             # getting indices of model extensions
             for k in range(len(rrhdus)):
@@ -454,8 +456,11 @@ def read_spectra(
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
-            print(f'INFO: length of found tids = {len(found_targetids)}')
-            print(f'INFO: new length of rows = {len(rows)}')
+        #consistency check between targetids (perhaps this is not necessary)
+        if model_targetids is not None and not np.all(input_targetids == model_targetids):
+            rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in model_targetids])
+            spec = spec[rows]
+            log.debug("ordering corrected matching model targetids=%s", rows)
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):

@@ -1029,7 +1029,7 @@ def stack(speclist):
         _remove_tile_keywords(headers)
 
     sp = Spectra(bands, wave, flux, ivar,
-        mask=mask, model=mode, resolution_data=rdat,
+        mask=mask, model=model, resolution_data=rdat,
         fibermap=fibermap, exp_fibermap=exp_fibermap,
         meta=headers[0], extra=extra, scores=scores,
         extra_catalog=extra_catalog,
