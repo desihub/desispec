@@ -196,7 +196,7 @@ def read_spectra(
     targetids=None,
     rows=None,
     skip_hdus=None,
-    rrmodel=False
+    rrmodel=False,
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -395,21 +395,30 @@ def read_spectra(
     log.info(iotime.format("read", infile, duration))
     
     if rrmodel:
-        t0 = time.time():
-        rrhdus = fitsio.FITS(infile.replace('coadd','rrmodel'), mode="r")
+        rrmodel_file = infile.replace('coadd','rrmodel')
+        t0 = time.time()
         if model is None:
-            model = {}
-            for i, band in enumerate(bands):
-                log.debug('Reading %s_MODEL',%(band.upper()))
-                model[band] = _read_image(rrhdus, i+1, 'np.float32', rows=rows)
-
-            
-
-
+            model = dict()
+        if os.path.exists(rrmodel_file):
+            rrhdus = fitsio.FITS(rrmodel_file, mode="r")
+            ind_models = []
+            # getting indices of model extensions
+            for k in range(len(rrhdus)):
+                hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
+                if "MODEL" in hdu_name:
+                    ind_models.append(k)
+            for ind, band in zip(ind_models,bands):
+                log.debug('Reading %s_MODEL'%(band.upper()))
+                model[band] = _read_image(rrhdus, ind, np.float32, rows=rows)
+            rrhdus.close()
+            duration = time.time() - t0
+            log.info(iotime.format("read", rrmodel_file, duration))
+        else:
+            print(f'ERROR: {rrmodel_file} does not exist, so not returning redrock models')
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
-
+    
     spec = Spectra(
         bands,
         wave,
