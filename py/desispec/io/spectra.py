@@ -196,6 +196,7 @@ def read_spectra(
     targetids=None,
     rows=None,
     skip_hdus=None,
+    rrmodel=False
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -215,6 +216,8 @@ def read_spectra(
         targetids (list): Optional, list of targetids to read from file, if present.
         rows (list): Optional, list of rows to read from file
         skip_hdus (list): Optional, list/set/tuple of HDUs to skip
+        rrmodel (bool): Optional, if True will alo read best-fit redrock models (default False)
+                        Also, it assumes that model is saved as rrmodel-??, in similar way ad coadd
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
@@ -294,6 +297,7 @@ def read_spectra(
     extra = None
     extra_catalog = None
     scores = None
+    model = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
     # extension name to determine where to put the data.  We don't
@@ -389,6 +393,18 @@ def read_spectra(
     hdus.close()
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
+    
+    if rrmodel:
+        t0 = time.time():
+        rrhdus = fitsio.FITS(infile.replace('coadd','rrmodel'), mode="r")
+        if model is None:
+            model = {}
+            for i, band in enumerate(bands):
+                log.debug('Reading %s_MODEL',%(band.upper()))
+                model[band] = _read_image(rrhdus, i+1, 'np.float32', rows=rows)
+
+            
+
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
@@ -399,6 +415,7 @@ def read_spectra(
         wave,
         flux,
         ivar,
+        model=model,
         mask=mask,
         resolution_data=res,
         fibermap=fmap,
@@ -416,20 +433,20 @@ def read_spectra(
         from desispec.util import ordered_unique
         #- Input targetids that we found in the file, in the order they appear in targetids
         ii = np.isin(targetids, spec.fibermap['TARGETID'])
-        found_targetids = ordered_unique(targetids[ii])
+        found_targetids =  ordered_unique(targetids[ii])
         log.debug('found_targetids=%s', found_targetids)
 
         #- Unique targetids of input file in the order they first appear
-        input_targetids = ordered_unique(spec.fibermap['TARGETID'])
+        input_targetids = np.copy(spec.fibermap['TARGETID'])
         log.debug('input_targetids=%s', np.asarray(input_targetids))
-
         #- Only reorder if needed
         if not np.all(input_targetids == found_targetids):
-            rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
+            rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in found_targetids])
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
-
+            print(f'INFO: length of found tids = {len(found_targetids)}')
+            print(f'INFO: new length of rows = {len(rows)}')
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):

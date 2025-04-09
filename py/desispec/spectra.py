@@ -45,6 +45,8 @@ class Spectra(object):
         Dictionary of arrays specifying the flux for each spectrum.
     ivar : :class:`dict`
         Dictionary of arrays specifying the inverse variance.
+    model : :class:`dict`, optional
+        Dictionary of arrays specifying the best-fit redrock model.
     mask : :class:`dict`, optional
         Dictionary of arrays specifying the bitmask.
     resolution_data : :class:`dict`, optional
@@ -76,7 +78,7 @@ class Spectra(object):
     wavelength_unit = Unit('Angstrom')
     flux_density_unit = Unit('10-17 erg cm-2 s-1 AA-1')
 
-    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
+    def __init__(self, bands=[], wave={}, flux={}, ivar={}, model=None, mask=None,
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None,
             single=False, scores=None, scores_comments=None,
@@ -120,6 +122,9 @@ class Spectra(object):
                     raise RuntimeError("flux array number of spectra for band {} does not match fibermap".format(b))
             if ivar[b].shape != flux[b].shape:
                 raise RuntimeError("ivar array dimensions do not match flux for band {}".format(b))
+            if model is not None:
+                if model[b].shape != flux[b].shape:
+                    raise RuntimeError("model array dimensions do not match flux for band {}".format(b))
             if mask is not None:
                 if mask[b].shape != flux[b].shape:
                     raise RuntimeError("mask array dimensions do not match flux for band {}".format(b))
@@ -171,6 +176,11 @@ class Spectra(object):
         self.wave = {}
         self.flux = {}
         self.ivar = {}
+        
+        if model is None:
+            self.model = None
+        else:
+            self.model = {}
 
         if mask is None:
             self.mask = None
@@ -193,6 +203,8 @@ class Spectra(object):
             self.wave[b] = np.copy(wave[b])
             self.flux[b] = np.copy(flux[b].astype(self._ftype))
             self.ivar[b] = np.copy(ivar[b].astype(self._ftype))
+            if model is not None:
+                self.model[b] = np.copy(model[b].astype(np.float32))
             if mask is not None:
                 self.mask[b] = np.copy(mask[b])
             if resolution_data is not None:
@@ -290,6 +302,7 @@ class Spectra(object):
         flux = dict()
         ivar = dict()
         wave = dict()
+        model = dict() if self.model is not None else None
         mask = dict() if self.mask is not None else None
         rdat = dict() if self.resolution_data is not None else None
         extra = dict() if self.extra is not None else None
@@ -298,6 +311,8 @@ class Spectra(object):
             flux[band] = self.flux[band][index].copy()
             ivar[band] = self.ivar[band][index].copy()
             wave[band] = self.wave[band].copy()
+            if self.model is not None:
+                model[band] = self.model[band][index].copy()
             if self.mask is not None:
                 mask[band] = self.mask[band][index].copy()
             if self.resolution_data is not None:
@@ -331,7 +346,7 @@ class Spectra(object):
             scores = None
 
         sp = Spectra(bands, wave, flux, ivar,
-            mask=mask, resolution_data=rdat,
+            model=model, mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
             meta=self.meta, extra=extra, single=self._single,
             scores=scores, extra_catalog=extra_catalog,
@@ -454,6 +469,17 @@ class Spectra(object):
             if self.mask is None:
                 add_mask = True
 
+        # Are we adding redrock model data in this update?
+
+        add_model = False
+        if other.model is None:
+            if self.model is not None:
+                raise RuntimeError("existing spectra has a model, cannot "
+                    "update it to a spectra with no model")
+        else:
+            if self.model is None:
+                add_model = True
+
         # Are we adding resolution data in this update?
 
         ndiag = {}
@@ -553,6 +579,10 @@ class Spectra(object):
         if add_mask or self.mask is not None:
             newmask = {}
 
+        newmodel = None
+        if add_model or self.model is not None:
+            newmodel = {}
+
         newres = None
         newR = None
         if add_res or self.resolution_data is not None:
@@ -573,6 +603,8 @@ class Spectra(object):
                 newwave[b] = other.wave[b].astype(self._ftype)
             newflux[b] = np.zeros( (nold + nnew, nwave), dtype=self._ftype)
             newivar[b] = np.zeros( (nold + nnew, nwave), dtype=self._ftype)
+            if newmodel is not None:
+                newmodel[b] = np.zeros( (nold + nnew, nwave), dtype=np.float32)
             if newmask is not None:
                 newmask[b] = np.zeros( (nold + nnew, nwave), dtype=np.uint32)
                 newmask[b][:,:] = specmask["NODATA"]
@@ -593,6 +625,8 @@ class Spectra(object):
             for b in self.bands:
                 newflux[b][:nold,:] = self.flux[b]
                 newivar[b][:nold,:] = self.ivar[b]
+                if self.model is not None:
+                    newmodel[b][:nold,:] = self.model[b]
                 if self.mask is not None:
                     newmask[b][:nold,:] = self.mask[b]
                 elif add_mask:
@@ -612,6 +646,8 @@ class Spectra(object):
             for b in other.bands:
                 newflux[b][row,:] = other.flux[b][s,:].astype(self._ftype)
                 newivar[b][row,:] = other.ivar[b][s,:].astype(self._ftype)
+                if other.model is not None:
+                    newmodel[b][row,:] = other.model[b][s,:].astype(np.float32)
                 if other.mask is not None:
                     newmask[b][row,:] = other.mask[b][s,:]
                 else:
@@ -642,6 +678,8 @@ class Spectra(object):
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
                 newivar[b][nold:,:] = other.ivar[b][indx_new].astype(self._ftype)
+                if other.model is not None:
+                    newmodel[b][nold:,:] = other.model[b][indx_new].astype(np.float32)
                 if other.mask is not None:
                     newmask[b][nold:,:] = other.mask[b][indx_new]
                 else:
@@ -669,6 +707,7 @@ class Spectra(object):
         self.flux = newflux
         self.ivar = newivar
         self.mask = newmask
+        self.model = newmodel
         self.resolution_data = newres
         self.R = newR
         self.extra = newextra
@@ -803,6 +842,7 @@ class Spectra(object):
         flux = dict()
         ivar = dict()
         mask = dict()
+        model = None
         resolution_data = None
         extra = None
         for i, band in enumerate(bands):
@@ -827,12 +867,17 @@ class Spectra(object):
                     resolution_data = {band: sl[i].meta['resolution_data'].copy()}
                 else:
                     resolution_data[band] = sl[i].meta['resolution_data'].copy()
+            if 'model' in sl[i].meta:
+                if model is None:
+                    model = {band: sl[i].meta['model'].copy()}
+                else:
+                    model[band] = sl[i].meta['model'].copy()
             if 'extra' in sl[i].meta:
                 if extra is None:
                     extra = {band: sl[i].meta['extra'].copy()}
                 else:
                     extra[band] = sl[i].meta['extra'].copy()
-        return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, mask=mask,
+        return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, model=model, mask=mask,
                    resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
                    meta=meta, extra=extra, single=single, scores=scores,
                    scores_comments=scores_comments, extra_catalog=extra_catalog)
@@ -929,7 +974,11 @@ def stack(speclist):
         flux[band] = np.vstack([sp.flux[band] for sp in speclist])
         ivar[band] = np.vstack([sp.ivar[band] for sp in speclist])
         wave[band] = speclist[0].wave[band].copy()
-
+    
+    if speclist[0].model is not None:
+        model = dict()
+        for band in bands:
+            model[band] = np.vstack([sp.model[band] for sp in speclist])
     if speclist[0].mask is not None:
         mask = dict()
         for band in bands:
@@ -980,7 +1029,7 @@ def stack(speclist):
         _remove_tile_keywords(headers)
 
     sp = Spectra(bands, wave, flux, ivar,
-        mask=mask, resolution_data=rdat,
+        mask=mask, model=mode, resolution_data=rdat,
         fibermap=fibermap, exp_fibermap=exp_fibermap,
         meta=headers[0], extra=extra, scores=scores,
         extra_catalog=extra_catalog,
