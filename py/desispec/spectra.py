@@ -979,6 +979,9 @@ def stack(speclist):
         model = dict()
         for band in bands:
             model[band] = np.vstack([sp.model[band] for sp in speclist])
+    else:
+        model = None
+
     if speclist[0].mask is not None:
         mask = dict()
         for band in bands:
