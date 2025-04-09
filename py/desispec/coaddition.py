@@ -850,7 +850,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
         windict[b] = windices
 
     # targets
-    targets = np.copy(spectra.fibermap["TARGETID"])
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget = targets.size
     log.debug("number of targets= {}".format(ntarget))
 
