@@ -29,7 +29,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
-from .util import get_tempfilename, addkeys
+from .util import get_tempfilename, addkeys, replace_prefix
 from . import iotime
 
 from .frame import read_frame
@@ -242,7 +242,7 @@ def read_spectra(
         raise IOError("{} is not a file".format(infile))
     
     if return_models:
-        rrmodel_file = desispec.io.util.replace_prefix(infile, 'coadd', 'rrmodel')
+        rrmodel_file = replace_prefix(infile, 'coadd', 'rrmodel')
         if not os.path.isfile(rrmodel_file):
             raise IOError("{} does not exist".format(rrmodel_file))
 
@@ -265,11 +265,7 @@ def read_spectra(
     if targetids is not None:
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
-        #rows = np.where(np.isin(file_targetids, targetids))[0]
-        rows = []
-        for tid in targetids:
-            xx = np.where(file_targetids == tid)[0]
-            rows = rows + xx.tolist()
+        rows = np.where(np.isin(file_targetids, targetids))[0]
 
         if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
             exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
@@ -404,7 +400,7 @@ def read_spectra(
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
     
-    model_targetids = None # for the sanity checks in the end
+    model_targetids = None # for the sanity checks between fibermap and model targetids
     if return_models:
         t0 = time.time()
         if model is None:
@@ -413,8 +409,11 @@ def read_spectra(
         rrhdus = fitsio.FITS(rrmodel_file, mode="r")
         model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"]# for sanity check
         model_targetids = np.asarray(model_targetids)
-        ind_models = []
+        if rows is not None and len(rows)>0:
+            model_targetids = model_targetids[rows]
+
         # getting indices of model extensions
+        ind_models = []
         for k in range(len(rrhdus)):
             hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
             if "MODEL" in hdu_name:
@@ -426,6 +425,10 @@ def read_spectra(
         duration = time.time() - t0
         log.info(iotime.format("read", rrmodel_file, duration))
     
+    # sanity check between targetids in fibermap and model catalog
+    if fmap is not None and model_targetids is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
+
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
@@ -453,23 +456,23 @@ def read_spectra(
         from desispec.util import ordered_unique
         #- Input targetids that we found in the file, in the order they appear in targetids
         ii = np.isin(targetids, spec.fibermap['TARGETID'])
-        found_targetids =  ordered_unique(targetids[ii])
+        found_targetids = ordered_unique(targetids[ii])
         log.debug('found_targetids=%s', found_targetids)
 
         #- Unique targetids of input file in the order they first appear
-        input_targetids = np.asarray(np.copy(spec.fibermap['TARGETID']))
+        input_targetids = ordered_unique(spec.fibermap['TARGETID'])
         log.debug('input_targetids=%s', np.asarray(input_targetids))
-        #- Only reorder if needed
+        
+        #- Only reorder if needed 
+        #using np.array_equal as it's safer and more clean and will not give error in future numpy versions
         if not np.array_equal(input_targetids, found_targetids):
-            rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in found_targetids])
+            rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
+
         #consistency check between targetids (perhaps this is not necessary)
-        if model_targetids is not None and not np.array_equal(input_targetids, model_targetids):
-            rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in model_targetids])
-            spec = spec[rows]
-            log.debug("ordering corrected matching model targetids=%s", rows)
+        
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):
