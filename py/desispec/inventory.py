@@ -1,18 +1,5 @@
 """
-target_inventory.h5
-    NGROUPS = targets are subdivided by TGROUP = TARGETID % NGROUPS
-    tiles
-        TGROUP = Table TARGETID, TILEID, LASTNIGHT, FIBER
-    healpix
-        TGROUP = Table TARGETID, SURVEY, PROGRAM, HEALPIX
-    radec
-        HEALPIX = Table TARGETID, TARGET_RA, TARGET_DEC
-
-
-desispec.inventory.create_inventory(...)
-desispec.inventory.update_inventory(...)
-desispec.inventory.target_tiles(targetid, radecradius=None, inventory_file=None) -> Table TARGETID, TILEID, LASTNIGHT, FIBER
-desispec.inventory.target_pix(targetid, radecradius=None, inventory_file=None) -> Table TARGETID, SURVEY, PROGRAM, HEALPIX
+desispec.inventory - TARGETID -> (SURVEY,PROGRAM,HEALPIX) and (TILEID,FIBER)
 """
 
 import os
