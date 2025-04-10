@@ -107,6 +107,9 @@ desispec API
 .. automodule:: desispec.interpolation
     :members:
 
+.. automodule:: desispec.inventory
+    :members:
+
 .. automodule:: desispec.io
     :members:
 
