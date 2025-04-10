@@ -132,6 +132,12 @@ def write_spectra(outfile, spec, units=None):
             hdu.header["BUNIT"] = ((u.Unit(units, format='fits'))**-2).to_string('fits')
         hdu.data = spec.ivar[band].astype("f4")
         all_hdus.append(hdu)
+    
+        #adding support to save models if available
+        if spec.model is not None:
+            hdu = fits.ImageHDU(name="{}_MODEL".format(band.upper()))
+            hdu.data = spec.model[band].astype("f4")
+            all_hdus.append(hdu)
 
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
