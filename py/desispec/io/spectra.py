@@ -29,7 +29,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
-from .util import get_tempfilename, addkeys
+from .util import get_tempfilename, addkeys, replace_prefix
 from . import iotime
 
 from .frame import read_frame
@@ -132,7 +132,7 @@ def write_spectra(outfile, spec, units=None):
             hdu.header["BUNIT"] = ((u.Unit(units, format='fits'))**-2).to_string('fits')
         hdu.data = spec.ivar[band].astype("f4")
         all_hdus.append(hdu)
-
+    
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
             hdu = fits.ImageHDU(name="{}_MASK".format(band.upper()))
@@ -196,6 +196,7 @@ def read_spectra(
     targetids=None,
     rows=None,
     skip_hdus=None,
+    return_models=False,
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -215,6 +216,8 @@ def read_spectra(
         targetids (list): Optional, list of targetids to read from file, if present.
         rows (list): Optional, list of rows to read from file
         skip_hdus (list): Optional, list/set/tuple of HDUs to skip
+        return_models (bool): Optional, if True will also read best-fit redrock models (default False)
+                        Also, it assumes that model is saved as rrmodel-??, in similar way as coadd
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
@@ -237,6 +240,11 @@ def read_spectra(
     infile = os.path.abspath(infile)
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
+    
+    if return_models:
+        rrmodel_file = replace_prefix(infile, 'coadd', 'rrmodel')
+        if not os.path.isfile(rrmodel_file):
+            raise IOError("{} does not exist".format(rrmodel_file))
 
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
@@ -258,6 +266,7 @@ def read_spectra(
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
         rows = np.where(np.isin(file_targetids, targetids))[0]
+
         if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
             exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
             exp_rows = np.where(np.isin(exp_targetids, targetids))[0]
@@ -294,6 +303,7 @@ def read_spectra(
     extra = None
     extra_catalog = None
     scores = None
+    model = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
     # extension name to determine where to put the data.  We don't
@@ -389,16 +399,46 @@ def read_spectra(
     hdus.close()
     duration = time.time() - t0
     log.info(iotime.format("read", infile, duration))
+    
+    model_targetids = None # for the sanity checks between fibermap and model targetids
+    if return_models:
+        t0 = time.time()
+        if model is None:
+            model = dict()
+        # read rrmodel file
+        rrhdus = fitsio.FITS(rrmodel_file, mode="r")
+        model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"]# for sanity check
+        model_targetids = np.asarray(model_targetids)
+        if rows is not None and len(rows)>0:
+            model_targetids = model_targetids[rows]
+
+        # getting indices of model extensions
+        ind_models = []
+        for k in range(len(rrhdus)):
+            hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
+            if "MODEL" in hdu_name:
+                ind_models.append(k)
+            for ind, band in zip(ind_models,bands):
+                log.debug('Reading %s_MODEL'%(band.upper()))
+                model[band] = _read_image(rrhdus, ind, np.float32, rows=rows)
+        rrhdus.close()
+        duration = time.time() - t0
+        log.info(iotime.format("read", rrmodel_file, duration))
+    
+    # sanity check between targetids in fibermap and model catalog
+    if fmap is not None and model_targetids is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
-
+    
     spec = Spectra(
         bands,
         wave,
         flux,
         ivar,
+        model=model,
         mask=mask,
         resolution_data=res,
         fibermap=fmap,
@@ -422,14 +462,17 @@ def read_spectra(
         #- Unique targetids of input file in the order they first appear
         input_targetids = ordered_unique(spec.fibermap['TARGETID'])
         log.debug('input_targetids=%s', np.asarray(input_targetids))
-
-        #- Only reorder if needed
-        if not np.all(input_targetids == found_targetids):
+        
+        #- Only reorder if needed 
+        #using np.array_equal as it's safer and more clean and will not give error in future numpy versions
+        if not np.array_equal(input_targetids, found_targetids):
             rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
 
+        #consistency check between targetids (perhaps this is not necessary)
+        
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):
