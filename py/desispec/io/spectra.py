@@ -216,8 +216,8 @@ def read_spectra(
         targetids (list): Optional, list of targetids to read from file, if present.
         rows (list): Optional, list of rows to read from file
         skip_hdus (list): Optional, list/set/tuple of HDUs to skip
-        return_models (bool): Optional, if True will alo read best-fit redrock models (default False)
-                        Also, it assumes that model is saved as rrmodel-??, in similar way ad coadd
+        return_models (bool): Optional, if True will also read best-fit redrock models (default False)
+                        Also, it assumes that model is saved as rrmodel-??, in similar way as coadd
         select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
 
     Returns (Spectra):
@@ -240,6 +240,11 @@ def read_spectra(
     infile = os.path.abspath(infile)
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
+    
+    if return_models:
+        rrmodel_file = desispec.io.util.replace_prefix(infile, 'coadd', 'rrmodel')
+        if not os.path.isfile(rrmodel_file):
+            raise IOError("{} does not exist".format(rrmodel_file))
 
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
@@ -260,7 +265,12 @@ def read_spectra(
     if targetids is not None:
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
-        rows = np.where(np.isin(file_targetids, targetids))[0]
+        #rows = np.where(np.isin(file_targetids, targetids))[0]
+        rows = []
+        for tid in targetids:
+            xx = np.where(file_targetids == tid)[0]
+            rows = rows + xx.tolist()
+
         if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
             exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
             exp_rows = np.where(np.isin(exp_targetids, targetids))[0]
@@ -396,27 +406,26 @@ def read_spectra(
     
     model_targetids = None # for the sanity checks in the end
     if return_models:
-        rrmodel_file = infile.replace('coadd','rrmodel')
         t0 = time.time()
         if model is None:
             model = dict()
-        if os.path.exists(rrmodel_file):
-            rrhdus = fitsio.FITS(rrmodel_file, mode="r")
-            model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"] # for sanity check
-            ind_models = []
-            # getting indices of model extensions
-            for k in range(len(rrhdus)):
-                hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
-                if "MODEL" in hdu_name:
-                    ind_models.append(k)
+        # read rrmodel file
+        rrhdus = fitsio.FITS(rrmodel_file, mode="r")
+        model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"]# for sanity check
+        model_targetids = np.asarray(model_targetids)
+        ind_models = []
+        # getting indices of model extensions
+        for k in range(len(rrhdus)):
+            hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
+            if "MODEL" in hdu_name:
+                ind_models.append(k)
             for ind, band in zip(ind_models,bands):
                 log.debug('Reading %s_MODEL'%(band.upper()))
                 model[band] = _read_image(rrhdus, ind, np.float32, rows=rows)
-            rrhdus.close()
-            duration = time.time() - t0
-            log.info(iotime.format("read", rrmodel_file, duration))
-        else:
-            print(f'ERROR: {rrmodel_file} does not exist, so not returning redrock models')
+        rrhdus.close()
+        duration = time.time() - t0
+        log.info(iotime.format("read", rrmodel_file, duration))
+    
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
@@ -448,16 +457,16 @@ def read_spectra(
         log.debug('found_targetids=%s', found_targetids)
 
         #- Unique targetids of input file in the order they first appear
-        input_targetids = np.copy(spec.fibermap['TARGETID'])
+        input_targetids = np.asarray(np.copy(spec.fibermap['TARGETID']))
         log.debug('input_targetids=%s', np.asarray(input_targetids))
         #- Only reorder if needed
-        if not np.all(input_targetids == found_targetids):
+        if not np.array_equal(input_targetids, found_targetids):
             rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in found_targetids])
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
         #consistency check between targetids (perhaps this is not necessary)
-        if model_targetids is not None and not np.all(input_targetids == model_targetids):
+        if model_targetids is not None and not np.array_equal(input_targetids, model_targetids):
             rows = np.concatenate([np.where(input_targetids == tid)[0] for tid in model_targetids])
             spec = spec[rows]
             log.debug("ordering corrected matching model targetids=%s", rows)

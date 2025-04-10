@@ -46,7 +46,7 @@ class Spectra(object):
     ivar : :class:`dict`
         Dictionary of arrays specifying the inverse variance.
     model : :class:`dict`, optional
-        Dictionary of arrays specifying the best-fit redrock model.
+        Dictionary of arrays specifying the best-fit spectra model.
     mask : :class:`dict`, optional
         Dictionary of arrays specifying the bitmask.
     resolution_data : :class:`dict`, optional
