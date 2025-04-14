@@ -316,11 +316,15 @@ class CalibFinder() :
             if dateobs < datebegin :
                 log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
-            if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
-                dateend=int(data[version]["DATE-OBS-END"])
-                if dateobs > dateend :
-                    log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
-                    continue
+            if "DATE-OBS-END" in data[version] :
+                try:
+                    dateend=int(data[version]["DATE-OBS-END"])
+                    if dateobs > dateend :
+                        log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,dateend,dateobs))
+                        continue
+                except ValueError as e :
+                    if not data[version]["DATE-OBS-END"].lower() == "none" :
+                        raise(e)
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
                 continue
