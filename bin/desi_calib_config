@@ -374,6 +374,7 @@ def main():
     print(f"Current configuration names for {camid} in the YAML file:")
     print(configuration_names)
 
+    last_config_name = None
     previous_config_name = None
     if yes_or_no("Do you want to create a new configuration?") == "y" :
         config_name=datetime.datetime.now().strftime('V%Y%m%d')
@@ -390,7 +391,8 @@ def main():
                 else :
                     break
         print(config_name)
-        previous_config_name=configuration_names[0]
+        last_config_name=configuration_names[0]
+        previous_config_name=last_config_name
         yn = yes_or_no(f"Do you want to start from a copy of '{previous_config_name}' ?")
         if yn == "n" :
             while True :
@@ -427,10 +429,10 @@ def main():
 
         edit_configuration(camid_data[config_name])
 
-        if previous_config_name is not None :
-            if yes_or_no(f"Change DATE-OBS-END of previous config {previous_config_name}?") == "y" :
+        if last_config_name is not None :
+            if yes_or_no(f"Change DATE-OBS-END of previous config {last_config_name}?") == "y" :
                 yyyymmdd = input_date("Enter DATE-OBS-END: ")
-                camid_data[previous_config_name]["DATE-OBS-END"]=yyyymmdd
+                camid_data[last_config_name]["DATE-OBS-END"]=yyyymmdd
 
         yn = yes_or_no(f"Overwrite '{args.yaml_file}'?")
         if yn == "y" :
