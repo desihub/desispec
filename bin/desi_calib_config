@@ -405,6 +405,9 @@ def main():
         new_data[config_name]=deepcopy(camid_data[previous_config_name])
         for k in ["DATE-OBS-BEGIN","COMMENT"] :
             new_data[config_name][k]="EDIT" # force edit of this entry
+        if "DATE-OBS-END" in new_data[config_name].keys() :
+            new_data[config_name].pop("DATE-OBS-END")
+
         for c in camid_data.keys() :
             new_data[c] = camid_data[c]
         data[camid] = new_data
