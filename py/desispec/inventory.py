@@ -254,6 +254,20 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
 def update_inventory(filename, specprod=None):
     raise NotImplementedError
 
+def _create_header(radec, specprod):
+    header = dict()
+    if radec is not None:
+        header['RA'] = radec[0]
+        header['DEC'] = radec[1]
+        header['RADIUS'] = radec[2]
+
+    if specprod is None:
+        header['SPECPROD'] = os.getenv('SPECPROD', default='Unknown')
+    else:
+        header['SPECPROD'] = specprod
+
+    return header
+
 def target_tiles(targetids=None, radec=None, filename=None, inventory=None, specprod=None):
     """
     Return table of TARGETID,TILEID,LASTNIGHT,FIBER
@@ -297,14 +311,17 @@ def target_tiles(targetids=None, radec=None, filename=None, inventory=None, spec
                 results.append(Table(data[data['TARGETID'] == tid]))
 
     if len(results)>0:
-        return vstack(results)
+        result = vstack(results)
     else:
         blank = Table()
         blank.add_column(Column(name='TARGETID', dtype=int))
         blank.add_column(Column(name='LASTNIGHT', dtype='int32'))
         blank.add_column(Column(name='FIBER', dtype='int32'))
         blank.add_column(Column(name='TILEID', dtype='int32'))
-        return blank
+        result = blank
+
+    result.meta.update(_create_header(radec, specprod))
+    return result
 
 def db_target_tiles(targetids=None, radec=None, specprod=None):
     """
@@ -344,6 +361,7 @@ WHERE q3c_radial_query(p.ra, p.dec, {ra}, {dec}, {radius_deg});
         rows = cur.fetchall()
 
     result = Table(rows=rows, names=('TARGETID', 'LASTNIGHT', 'FIBER', 'TILEID'))
+    result.meta.update(_create_header(radec, specprod))
     return result
 
 def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
@@ -380,14 +398,17 @@ def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
             results.append(Table(data[data['TARGETID'] == tid]))
 
     if len(results)>0:
-        return vstack(results)
+        result = vstack(results)
     else:
         blank = Table()
         blank.add_column(Column(name='TARGETID', dtype=int))
         blank.add_column(Column(name='SURVEY', dtype='S7'))
         blank.add_column(Column(name='PROGRAM', dtype='S6'))
         blank.add_column(Column(name='HEALPIX', dtype=int))
-        return blank
+        result = blank
+
+    result.meta.update(_create_header(radec, specprod))
+    return result
 
 def db_target_healpix(targetids=None, radec=None, specprod=None):
     """
@@ -420,6 +441,7 @@ WHERE q3c_radial_query(p.ra, p.dec, {ra}, {dec}, {radius_deg});
         rows = cur.fetchall()
 
     result = Table(rows=rows, names=('TARGETID', 'SURVEY', 'PROGRAM', 'HEALPIX'))
+    result.meta.update(_create_header(radec, specprod))
     return result
 
 
@@ -443,7 +465,7 @@ def radec2targetids(radec, filename=None, specprod=None):
     if filename is None:
         filename = _get_default_inventory_filename(specprod)
 
-    ra, dec, radius_arcsec = ra_dec_radius
+    ra, dec, radius_arcsec = radec
     radius_radians = radius_arcsec * np.pi / (3600*180.)
     nside = 64
     vec = ang2vec(ra, dec, lonlat=True)
@@ -493,7 +515,7 @@ def _get_default_inventory_filename(specprod=None):
     else:
         raise IOError(f'Unable to find {basefile}')
 
-def _parse_radec(radec):
+def parse_radec_string(radec):
     """
     interpret radec as (RA,DEC) or (RA,DEC,RADIUS)
     """
@@ -501,7 +523,7 @@ def _parse_radec(radec):
     if len(tmp) == 2:
         ra = float(tmp[0])
         dec = float(tmp[1])
-        radius = 5. / 3600.         # 5 arcsec -> degrees
+        radius = 10.0         # default 10 arcsec
     elif len(tmp) == 3:
         ra = float(tmp[0])
         dec = float(tmp[1])
@@ -549,7 +571,7 @@ def main():
         assert (args.targetids is None) or (args.ra_dec_radius is None)
 
         if args.radec is not None:
-            ra_dec_radius = _parse_radec(args.radec)
+            ra_dec_radius = parse_radec_string(args.radec)
         else:
             ra_dec_radius = None
 
