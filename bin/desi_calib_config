@@ -133,7 +133,7 @@ def input_date(message) :
             print(f"Invalid day {dd}")
             continue
         break
-    return str(yyyymmdd) # convert back to str
+    return yyyymmdd # return integer
 
 def input_keyval() :
     """
