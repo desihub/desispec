@@ -221,31 +221,31 @@ def read_spectra(
     """
     Read Spectra object from FITS file.
 
-    This reads data written by the write_spectra function.  A new Spectra
+    This reads data written by the write_spectra function. A new Spectra
     object is instantiated and returned.
-
+    
     Args:
-        infile (str): path to read
-        single (bool): if True, keep spectra as single precision in memory.
-        targetids (list): Optional, list of targetids to read from file, if present.
-        rows (list): Optional, list of rows to read from file
-        skip_hdus (list): Optional, list/set/tuple of HDUs to skip
-        return_models (bool): Optional, if True will also read best-fit redrock models (default False)
-                        (loads directly from infile if _MODEL HDUs exist; otherwise, will look for corresponding rrmodel-*.fits file, otherwise raise IOError)
-        return_redshifts (bool): Optional, if True will also read redshift table for targets (default False)
-                        (loads directly from infile if REDSHIFTS HDU exists; otherwise, will look for corresponding redrock-*.fits file, otherwise raise IOError)
-        select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
-
-    Returns (Spectra):
-        The object containing the data read from disk.
-
-    `skip_hdus` options are FIBERMAP, EXP_FIBERMAP, SCORES, EXTRA_CATALOG, MASK, RESOLUTION;
-    where MASK and RESOLUTION mean to skip those for all cameras.
-    Note that WAVE, FLUX, and IVAR are always required.
-
-    If a table HDU is not listed in `select_columns`, all of its columns will be read
-
-    User can optionally specify targetids OR rows, but not both
+        infile (str): Path to read.
+        single (bool): If True, keep spectra as single precision in memory.
+        targetids (list, optional): List of targetids to read from file, if present.
+        rows (list, optional): List of rows to read from file.
+        skip_hdus (list, optional): List/set/tuple of HDUs to skip.
+            Options: ``FIBERMAP``, ``EXP_FIBERMAP``, ``SCORES``, ``EXTRA_CATALOG``,
+            ``MASK``, ``RESOLUTION``. ``WAVE``, ``FLUX``, and ``IVAR`` are always required.
+        return_models (bool, optional): If True, also read best-fit redrock models.
+            Loads directly from ``infile`` if ``*_MODEL`` HDUs exist; otherwise,
+            looks for a corresponding ``rrmodel-*.fits`` file. Raises IOError if neither found.
+        return_redshifts (bool, optional): If True, also read redshift table for targets.
+            Loads directly from ``infile`` if ``REDSHIFTS`` HDU exists; otherwise,
+            looks for corresponding ``redrock-*.fits`` file. Raises IOError if neither found.
+        select_columns (dict, optional): Dictionary mapping HDU names to column names to read.
+            If a table HDU is not listed, all of its columns will be read.
+    
+    Returns:
+        Spectra: The object containing the data read from disk.
+    
+    Notes:
+        User can optionally specify either ``targetids`` or ``rows``, but not both.
     """
     log = get_logger()
     infile = checkgzip(infile)
