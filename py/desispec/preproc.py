@@ -638,15 +638,15 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword, filename))
     return False
 
-def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,
-        threshold=25000., smooth=100):
+def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, reading_to_the_left, col_width=300,
+                                threshold=25000., smooth=100 ):
     """
     Find overscan columns that might be impacted by a trail from bright cosmic
 
     Args:
         rawimage: numpy 2D array of raw image
         ov_col: tuple(yslice, xslice) from parse_sec_keyword('BIASSECx') defining overscan region
-
+        reading_to_the_left: if true, charges are moved to the left, i.e. toward lower column indices
     Options:
         col_width: number of pixels from overscan region to consider
         threshold: ADU threshold for what might cause a problematic trail
@@ -657,14 +657,9 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
     column-summed and row median-filtered from the active region of the CCD
     next to the overscan region.
     """
-    # define a band in the active CCD region next to the overscan
-    left_amp = ov_col[1].start < rawimage.shape[1]//2
-    if left_amp :
-        if ov_col[1].start > rawimage.shape[1]//4 : # overscan is on the right of the active region
-            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
-        else : # overscan is on the left of the active region which happens for some 2 amp read mode.
-            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
-    else :
+    if reading_to_the_left : # overscan is on the right of the active region
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+    else : # overscan is on the left of the active region
         active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
 
     # measure sum over columns in band
@@ -1117,8 +1112,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_col[j]=o
             rdnoise[j]=r
 
+        # find whether the CCD is read towards the left of the right
+        # by comparing the column indices of the active CCD pixels
+        # and the overscan (which always comes after)
+        tmp_DATASEC = parse_sec_keyword(header["DATASEC"+amp])
+        tmp_BIASSEC = parse_sec_keyword(header["BIASSEC"+amp])
+        reading_to_the_left = tmp_DATASEC[1].stop <= tmp_BIASSEC[1].start
+        if reading_to_the_left :
+            log.debug(f"Amplifier {amp} reading to the left")
+        else :
+            log.debug(f"Amplifier {amp} reading to the right")
+
         # find rows impacted by a large cosmic charge deposit
-        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col, reading_to_the_left = reading_to_the_left)
 
         if use_overscan_row:
             # also mask overscan rows that are entirely masked in the active region
