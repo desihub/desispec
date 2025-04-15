@@ -45,8 +45,6 @@ class Spectra(object):
         Dictionary of arrays specifying the flux for each spectrum.
     ivar : :class:`dict`
         Dictionary of arrays specifying the inverse variance.
-    model : :class:`dict`, optional
-        Dictionary of arrays specifying the best-fit spectra model.
     mask : :class:`dict`, optional
         Dictionary of arrays specifying the bitmask.
     resolution_data : :class:`dict`, optional
@@ -64,11 +62,15 @@ class Spectra(object):
         floating point arrays.  The top-level is a dictionary over bands
         and each value is a dictionary containing string keys and values
         which are arrays of the same size as the flux array.
+    model : :class:`dict`, optional
+        Dictionary of arrays specifying the best-fit spectra model.
     single : :class:`bool`, optional
         If ``True``, store flux,ivar,resolution data in memory as single
         precision (np.float32).
     scores :
         QA scores table.
+    redshifts :
+        best-fit redshift table.
     scores_comments :
         dict[column] = comment to include in output file
     extra_catalog : numpy or astropy Table, optional
@@ -78,10 +80,10 @@ class Spectra(object):
     wavelength_unit = Unit('Angstrom')
     flux_density_unit = Unit('10-17 erg cm-2 s-1 AA-1')
 
-    def __init__(self, bands=[], wave={}, flux={}, ivar={}, model=None, mask=None,
+    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
             resolution_data=None, fibermap=None, exp_fibermap=None,
-            meta=None, extra=None,
-            single=False, scores=None, scores_comments=None,
+            meta=None, extra=None, model=None,
+            single=False, scores=None, redshifts=None, scores_comments=None,
             extra_catalog=None):
 
         self._bands = bands
@@ -172,6 +174,10 @@ class Spectra(object):
             self.extra_catalog = extra_catalog.copy()
         else:
             self.extra_catalog = None
+        if redshifts is not None:
+            self.redshifts = redshifts.copy()
+        else:
+            self.redshifts = None
 
         self.wave = {}
         self.flux = {}
@@ -345,11 +351,16 @@ class Spectra(object):
         else:
             scores = None
 
+        if self.redshifts is not None:
+            redshifts = self.redshifts[index].copy()
+        else:
+            redshifts = None
+
         sp = Spectra(bands, wave, flux, ivar,
-            model=model, mask=mask, resolution_data=rdat,
+            mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
-            meta=self.meta, extra=extra, single=self._single,
-            scores=scores, extra_catalog=extra_catalog,
+            meta=self.meta, extra=extra, model=model, single=self._single,
+            scores=scores, redshifts=redshifts, extra_catalog=extra_catalog,
         )
         return sp
 
@@ -564,6 +575,13 @@ class Spectra(object):
             if hasattr(self.scores, 'meta'):
                 newscores.meta.update(self.scores.meta)
 
+        newredshifts = None
+        if self.redshifts is not None:
+            newredshifts = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.redshifts.dtype))
+            if hasattr(self.redshifts, 'meta'):
+                newscores.meta.update(self.redshifts.meta)
+                
         newextra_catalog = None
         if self.extra_catalog is not None:
             newextra_catalog = encode_table(np.zeros( (nold + nnew, ),
@@ -617,8 +635,8 @@ class Spectra(object):
 
         if nold > 0:
             # We have some data (i.e. we are not starting with an empty Spectra)
-            for newtable, original_table in zip([newfmap, newscores, newextra_catalog],
-                                           [self.fibermap, self.scores, self.extra_catalog]):
+            for newtable, original_table in zip([newfmap, newscores, newredshifts, newextra_catalog],
+                                           [self.fibermap, self.scores, self.redshifts, self.extra_catalog]):
                 if original_table is not None:
                     newtable[:nold] = original_table
 
@@ -664,8 +682,8 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            for newtable, othertable in zip([newfmap, newscores, newextra_catalog],
-                                           [other.fibermap, other.scores, other.extra_catalog]):
+            for newtable, othertable in zip([newfmap, newscores, newredshifts, newextra_catalog],
+                                           [other.fibermap, other.scores, other.redshifts, other.extra_catalog]):
                 if othertable is not None:
                     if newtable.dtype == othertable.dtype:
                         newtable[nold:] = othertable[indx_new]
@@ -712,6 +730,7 @@ class Spectra(object):
         self.R = newR
         self.extra = newextra
         self.scores = newscores
+        self.redshifts = newredshifts
         self.extra_catalog = newextra_catalog
 
         return
@@ -845,6 +864,7 @@ class Spectra(object):
         model = None
         resolution_data = None
         extra = None
+        redshifts = None
         for i, band in enumerate(bands):
             wave[band] = sl[i].spectral_axis.to(cls.wavelength_unit).value.copy()
             flux[band] = sl[i].flux.to(cls.flux_density_unit).value.copy()
@@ -879,7 +899,7 @@ class Spectra(object):
                     extra[band] = sl[i].meta['extra'].copy()
         return cls(bands=bands, wave=wave, flux=flux, ivar=ivar, model=model, mask=mask,
                    resolution_data=resolution_data, fibermap=fibermap, exp_fibermap=exp_fibermap,
-                   meta=meta, extra=extra, single=single, scores=scores,
+                   meta=meta, extra=extra, single=single, scores=scores, redshifts=redshifts,
                    scores_comments=scores_comments, extra_catalog=extra_catalog)
 
 def _is_multitile(headers):
@@ -1027,14 +1047,19 @@ def stack(speclist):
     else:
         scores = None
 
+    if speclist[0].redshifts is not None:
+        redshifts = _stack_fibermaps([sp.redshifts for sp in speclist])
+    else:
+        redshifts = None
+
     headers = [sp.meta.copy() for sp in speclist]
     if _is_multitile(headers):
         _remove_tile_keywords(headers)
 
     sp = Spectra(bands, wave, flux, ivar,
-        mask=mask, model=model, resolution_data=rdat,
+        mask=mask, resolution_data=rdat,
         fibermap=fibermap, exp_fibermap=exp_fibermap,
-        meta=headers[0], extra=extra, scores=scores,
-        extra_catalog=extra_catalog,
+        meta=headers[0], extra=extra, model=model, scores=scores,
+        redshifts=redshifts, extra_catalog=extra_catalog,
     )
     return sp
