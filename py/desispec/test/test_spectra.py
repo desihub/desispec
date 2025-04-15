@@ -166,6 +166,10 @@ class TestSpectra(unittest.TestCase):
         self.extra_catalog = Table()
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
+        self.redshifts = Table()
+        self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
+        self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
+        self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
 
     def tearDown(self):
         if os.path.exists(self.fileio):
@@ -447,19 +451,19 @@ class TestSpectra(unittest.TestCase):
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap1, exp_fibermap=self.efmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp2 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap2, exp_fibermap=self.efmap2,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp3 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap3, exp_fibermap=self.efmap3,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         spx = stack([sp1, sp2, sp3])
@@ -477,6 +481,7 @@ class TestSpectra(unittest.TestCase):
         self.assertEqual(len(spx.fibermap), 3*self.nspec)
         self.assertEqual(len(spx.exp_fibermap), 3*2*self.nspec)
         self.assertEqual(len(spx.extra_catalog), 3*self.nspec)
+        self.assertEqual(len(spx.redshifts), 3*self.nspec)
 
         #- Stacking also works if optional params are None
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
@@ -531,7 +536,7 @@ class TestSpectra(unittest.TestCase):
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap1, exp_fibermap=self.efmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp2 = sp1[0:self.nspec-1]
@@ -545,6 +550,7 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))
             self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
             self.assertEqual(sp2.extra[band]['FOO'].shape, sp2.flux[band].shape)
+            self.assertEqual(len(sp2.redshifts), self.nspec-1)
 
         self.assertEqual(len(sp2.scores['BLAT']), self.nspec-1)
 
