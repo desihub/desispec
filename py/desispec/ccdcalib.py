@@ -674,7 +674,14 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
                 camhdr = fx[camera].read_header()
 
             cf = CalibFinder([rawhdr, camhdr],fallback_on_dark_not_found=True)
-            defaultbias = cf.findfile('BIAS')
+            try:
+                defaultbias = cf.findfile('BIAS')
+            except KeyError as ex:
+                nfail+=1
+                log.error(f'{rank=}, {camera=} raised {type(ex)} exception {ex}')
+                for line in traceback.format_exception(*sys.exc_info()):
+                    log.error('  '+line.strip())
+                continue
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
             try:
