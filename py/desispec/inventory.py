@@ -206,7 +206,7 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
     print(f'Loading {len(tiledirs)} tiles')
     with multiprocessing.Pool(nproc) as pool:
         results = pool.map(_inventory_tiledir, tiledirs)
-    
+
     for tiletable, hpixtable, radectable in results:
         tiles.append(tiletable)
         healpix.append(hpixtable)
@@ -223,7 +223,7 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
     tmpfile = outfile+'.tmp'
     with h5py.File(tmpfile, 'w') as hx:
         hx.attrs['ngroups'] = ngroups
-       
+
         group = 'targetid_tiles'
         print(f'Writing {group}')
         hx.create_group(group)
