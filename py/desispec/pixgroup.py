@@ -130,7 +130,7 @@ class FrameLite(object):
     This is intended for I/O without the overheads of float32 -> float64
     conversion, correcting endianness, etc.
     '''
-    def __init__(self, wave, flux, ivar, mask, resolution_data, fibermap, header, scores=None):
+    def __init__(self, wave, flux, ivar, mask, resolution_data, fibermap, header, scores=None, model=None, redshifts=None):
         '''
         Create a new FrameLite object
 
@@ -145,6 +145,8 @@ class FrameLite(object):
 
         Options:
             scores: table of QA scores
+            model: 2D[nspec, nwave] spectral models
+            redshifts: table of best-fit redshifts
         '''
         self.wave = wave
         self.flux = flux
@@ -155,6 +157,8 @@ class FrameLite(object):
         self.header = header
         self.meta = header  #- for compatibility with Frame objects
         self.scores = scores
+        self.model = model
+        self.redshifts = redshifts
 
     def __getitem__(self, index):
         '''Return a subset of the original FrameLight'''
@@ -165,10 +169,22 @@ class FrameLite(object):
             scores = self.scores[index]
         else:
             scores = None
+            
+        if self.redshifts is not None:
+            redshifts = self.redshifts[index]
+        else:
+            redshifts = None
+            
+        if self.model is not None:
+            model = {}
+            for b in self.flux.keys():
+                model[b] = self.model[b][index]
+        else:
+            model = None
 
         return FrameLite(self.wave, self.flux[index], self.ivar[index],
             self.mask[index], self.resolution_data[index], self.fibermap[index],
-            self.header, scores)
+            self.header, scores, model, redshifts)
 
     @classmethod
     def read(cls, filename):
@@ -184,6 +200,10 @@ class FrameLite(object):
             resolution_data = fx['RESOLUTION'].read()
             fibermap = fx['FIBERMAP'].read()
             fmhdr = fx['FIBERMAP'].read_header()
+            if "MODEL" in fx:
+                model = fx["MODEL"].read()
+            else:
+                model = None
 
             for col in ['SURVEY', 'PROGRAM']:
                 if col in fmhdr and col not in header:
@@ -198,6 +218,11 @@ class FrameLite(object):
             else:
                 scores = None
 
+            if "REDSHIFTS" in fx:
+                redshifts = Table(fx["REDSHIFTS"].read())
+            else:
+                redshifts = None
+                
         #- Add extra fibermap columns NIGHT, EXPID, TILEID
         nspec = len(fibermap)
         night = np.tile(header['NIGHT'], nspec).astype('i4')
@@ -217,7 +242,7 @@ class FrameLite(object):
         fibermap['TILEID'] = tileid
         addkeys(fibermap.meta, fmhdr)
 
-        fr = FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores)
+        fr = FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores, model, redshifts)
         fr.filename = filename
         return fr
 
@@ -227,7 +252,7 @@ class SpectraLite(object):
     Lightweight spectra I/O object for regrouping
     '''
     def __init__(self, bands, wave, flux, ivar, mask, resolution_data,
-            fibermap, exp_fibermap=None, scores=None):
+            fibermap, exp_fibermap=None, scores=None, model=None, redshifts=None):
         '''
         Create a SpectraLite object
 
@@ -243,6 +268,8 @@ class SpectraLite(object):
         Options:
             exp_fibermap: per-exposure fibermap table
             scores: scores table, applies to all bands
+            model: 2D[nspec, nwave] spectral models
+            redshifts: table of best-fit redshifts
         '''
 
         self.bands = bands[:]
@@ -281,6 +308,11 @@ class SpectraLite(object):
         self.resolution_data = resolution_data.copy()
         self.fibermap = Table(fibermap)
 
+        if model is not None:
+            self.model = model.copy()
+        else:
+            self.model = None
+            
         #- optional tables
         if exp_fibermap is not None:
             self.exp_fibermap = Table(exp_fibermap)
@@ -292,6 +324,11 @@ class SpectraLite(object):
         else:
             self.scores = None
 
+        if redshifts is not None:
+            self.redshifts = Table(redshifts)
+        else:
+            self.redshifts = None
+            
         #- for compatibility with full Spectra objects
         self.meta = None
         self.extra = None
@@ -350,11 +387,19 @@ class SpectraLite(object):
         ivar = dict()
         mask = dict()
         resolution_data = dict()
+
+        if self.model is not None and other.model is not None:
+            model = {}
+        else:
+            model = None
+            
         for band in self.bands:
             flux[band] = np.vstack([self.flux[band], other.flux[band]])
             ivar[band] = np.vstack([self.ivar[band], other.ivar[band]])
             mask[band] = np.vstack([self.mask[band], other.mask[band]])
             resolution_data[band] = np.vstack([self.resolution_data[band], other.resolution_data[band]])
+            if self.model is not None and other.model is not None:
+                model[band] = np.vstack([self.model[band], other.model[band]])
 
         fibermap = vstack([self.fibermap, other.fibermap])
         if self.scores is not None:
@@ -362,13 +407,18 @@ class SpectraLite(object):
         else:
             scores = None
 
+        if self.redshifts is not None and other.redshifts is not None:
+            redshifts = np.hstack([self.redshifts, other.redshifts])
+        else:
+            redshifts = None
+
         if self.exp_fibermap is not None:
             exp_fibermap = np.hstack([self.exp_fibermap, other.exp_fibermap])
         else:
             exp_fibermap = None
 
         return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
-                fibermap, exp_fibermap=exp_fibermap, scores=scores)
+                fibermap, exp_fibermap=exp_fibermap, scores=scores, model=model, redshifts=redshifts)
 
     def write(self, filename, header=None):
         '''
@@ -411,6 +461,11 @@ class SpectraLite(object):
             scores.meta['EXTNAME'] = 'SCORES'
             hdus.append(fits.convenience.table_to_hdu(scores))
 
+        if self.redshifts is not None:
+            redshifts = Table(self.redshifts)
+            redshifts.meta['EXTNAME'] = 'REDSHIFTS'
+            hdus.append(fits.convenience.table_to_hdu(redshifts))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
@@ -427,6 +482,9 @@ class SpectraLite(object):
                     header=dict(BUNIT='10**-17 erg/(s cm2 Angstrom)'))
             fitsio.write(tmpout, self.ivar[band], extname=upperband+'_IVAR',
                 header=dict(BUNIT='10**+34 (s2 cm4 Angstrom2) / erg2'))
+            if self.model is not None:
+                fitsio.write(tmpout, self.model[band], extname=upperband+'_MODEL',
+                    header=dict(BUNIT='10**-17 erg/(s cm2 Angstrom)'))
             fitsio.write(tmpout, self.mask[band], extname=upperband+'_MASK', compress='gzip')
             fitsio.write(tmpout, self.resolution_data[band], extname=upperband+'_RESOLUTION')
 
@@ -453,6 +511,11 @@ class SpectraLite(object):
             mask = dict()
             resolution_data = dict()
             fibermap = fx['FIBERMAP'].read()
+            model_exists = any("_MODEL" in fx)
+            if model_exists:
+                model = {}
+            else:
+                model = None
             if 'EXP_FIBERMAP' in fx:
                 exp_fibermap = fx['EXP_FIBERMAP'].read()
             else:
@@ -463,6 +526,11 @@ class SpectraLite(object):
             else:
                 scores = None
 
+            if 'REDSHIFTS' in fx:
+                redshifts = fx['REDSHIFTS'].read()
+            else:
+                redshifts = None
+
             bands = ['b', 'r', 'z']
             for band in bands:
                 upperband = band.upper()
@@ -471,9 +539,11 @@ class SpectraLite(object):
                 ivar[band] = fx[upperband+'_IVAR'].read()
                 mask[band] = fx[upperband+'_MASK'].read()
                 resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
+                if model is not None:
+                    model[band] = fx[upperband+'_MODEL'].read()
 
         return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
-                fibermap, exp_fibermap=exp_fibermap, scores=scores)
+                fibermap, exp_fibermap=exp_fibermap, scores=scores, model=model, redshifts=redshifts)
 
 def add_missing_frames(frames):
     '''
