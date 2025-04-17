@@ -47,4 +47,4 @@ def main(args=None, comm=None):
         comm = MPI.COMM_WORLD
 
     del args.__dict__['mpi']
-    sys.exit(compute_nightly_bias(**args.__dict__, comm=comm)
+    sys.exit(compute_nightly_bias(**args.__dict__, comm=comm))
