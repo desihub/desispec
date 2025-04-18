@@ -6,7 +6,6 @@ functions for bin/desi_compute_nightly_bias script
 """
 
 import argparse
-import sys
 
 from desispec.ccdcalib import compute_nightly_bias
 from desispec.io.util import decode_camword, parse_cameras
@@ -47,4 +46,4 @@ def main(args=None, comm=None):
         comm = MPI.COMM_WORLD
 
     del args.__dict__['mpi']
-    sys.exit(compute_nightly_bias(**args.__dict__, comm=comm))
+    return compute_nightly_bias(**args.__dict__, comm=comm)
