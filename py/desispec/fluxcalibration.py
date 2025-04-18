@@ -1170,7 +1170,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         calibration = B*0
         try:
             calibration[w]=cholesky_solve(A_pos_def, B[w])
-        except np.linalg.linalg.LinAlgError :
+        except np.linalg.LinAlgError :
             log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 

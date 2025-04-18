@@ -475,7 +475,7 @@ def compute_sky_linear(
         parameter_covar=cholesky_invert(A)
         # the above is too slow
         # maybe invert per block, sandwich by R
-    except np.linalg.linalg.LinAlgError :
+    except np.linalg.LinAlgError :
         log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
         parameter_covar = np.linalg.pinv(A)
 
