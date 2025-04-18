@@ -495,7 +495,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     # AR sanity check
     if bkgsub_science_cameras_str is not None:
         bkgsub_science_cameras = bkgsub_science_cameras_str.split(",")
-        if not np.all(np.in1d(bkgsub_science_cameras_str.split(","), cameras)):
+        if not np.all(np.isin(bkgsub_science_cameras_str.split(","), cameras)):
             raise ValueError("cameras_bkgsub_science={} not in b,r,z".format(bkgsub_science_cameras_str))
 
     # AR get existing campets
@@ -1674,7 +1674,7 @@ def create_petalnz_pdf(
     tileids, ii = np.unique(tileids, return_index=True)
     surveys = surveys[ii]
     # AR cutting on sv1, sv2, sv3, main
-    sel = np.in1d(surveys, ["sv1", "sv2", "sv3", "main"])
+    sel = np.isin(surveys, ["sv1", "sv2", "sv3", "main"])
     if sel.sum() != sel.size:
         log.info(
             "removing {}/{} tileids corresponding to surveys={}, different than sv1, sv2, sv3, main".format(
@@ -1688,7 +1688,7 @@ def create_petalnz_pdf(
     for survey in np.unique(surveys):
         fn = os.path.join(os.getenv("DESI_SURVEYOPS"), "ops", "tiles-{}.ecsv".format(survey))
         t = Table.read(fn)
-        reject = (surveys == survey) & (~np.in1d(tileids, t["TILEID"]))
+        reject = (surveys == survey) & (~np.isin(tileids, t["TILEID"]))
         if reject.sum() > 0:
             log.warning(
                 "ignoring tiles={} which have survey={} but are not present in {}".format(

@@ -808,7 +808,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     fibermap_header.extend(fa_header, unique=True)
     if pm is not None:
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
-        keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
+        keep = np.isin(pm['LOCATION'], fa['LOCATION'])
         pm = pm[keep]
         pm.sort('LOCATION')
         log.info('%d/%d fibers in coordinates file', len(pm), len(fa))
@@ -942,7 +942,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
 
         #- Set fiber status bits
-        missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
+        missing = np.isin(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
         missing |= (fibermap['FIBER_X']==0.0) & (fibermap['FIBER_Y']==0.0)
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
@@ -1093,7 +1093,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             truefmax = fibermax - 1
             log.info(f'Masking fibers from {fibermin} to {truefmax} for camera {camera} because of badamp entry '+\
                      f'{camera}{petal}{amplifier}')
-            ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
+            ampfiblocs = np.isin(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
     #- mask the fibers defined by bad fibers
@@ -1152,7 +1152,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     log.info(message)
     #- now add the keywords to FIBERSTATUS
     for key in badfibers_keywords_and_maskbits.keys() :
-        selection = np.in1d(fibermap["FIBER"],badfibers[key])
+        selection = np.isin(fibermap["FIBER"],badfibers[key])
         fibermap["FIBERSTATUS"][selection] |= badfibers_keywords_and_maskbits[key]
 
     #- NaN are a pain; reset to dummy values

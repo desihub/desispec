@@ -1105,7 +1105,7 @@ def get_tilecov(
         lastnight = int(datetime.now().strftime("%Y%m%d"))
     # AR files
     allowed_surveys = ["sv1", "sv2", "sv3", "main", "catchall"]
-    sel = ~np.in1d(surveys.split(","), allowed_surveys)
+    sel = ~np.isin(surveys.split(","), allowed_surveys)
     if sel.sum() > 0:
         msg = "surveys={} not in allowed_surveys={}".format(
             ",".join([survey for survey in np.array(surveys.split(","))[sel]]),
@@ -1169,14 +1169,14 @@ def get_tilecov(
     if verbose:
         log.info("starting from {} tiles".format(len(tiles)))
     if programs is not None:
-        sel = np.in1d(tiles["PROGRAM"], programs.split(","))
+        sel = np.isin(tiles["PROGRAM"], programs.split(","))
         if verbose:
             log.info("considering {} tiles after cutting on PROGRAM={}".format(sel.sum(), programs))
     if indesi:
         sel &= tiles["IN_DESI"]
         if verbose:
             log.info("considering {} tiles after cutting on IN_DESI".format(sel.sum()))
-    sel &= np.in1d(tiles["TILEID"], exps["TILEID"])
+    sel &= np.isin(tiles["TILEID"], exps["TILEID"])
     if verbose:
         log.info("considering {} tiles after cutting on NIGHT <= {}".format(sel.sum(), lastnight))
     tiles = tiles[sel]
@@ -1198,7 +1198,7 @@ def get_tilecov(
     for i in range(len(tiles)):
         i_radecrad = [tiles["RA"][i], tiles["DEC"][i], tile_radius_deg]
         i_pixs = hp_in_cap(nside, i_radecrad, inclusive=True, fact=4)
-        sel = np.in1d(pixs, i_pixs)
+        sel = np.isin(pixs, i_pixs)
         if verbose:
             log.info("fraction of TILEID={} covered by TILEID={}: {:.2f}".format(tileid, tiles[i]["TILEID"], sel.mean()))
         pix_ntiles[sel] += 1
