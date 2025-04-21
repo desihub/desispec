@@ -178,7 +178,7 @@ def read_emlines_inputs(
     if targetids is None:
         targetids = bit_targetids
     else:
-        targetids = targetids[np.isintargetids, bit_targetids)]
+        targetids = targetids[np.isin(targetids, bit_targetids)]
     nspec = len(targetids)
     log.info("Dealing with {} spectra".format(nspec))
 
