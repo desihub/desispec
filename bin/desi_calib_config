@@ -144,13 +144,14 @@ def input_keyval() :
     """
     while(True) :
         kv = prompt(f"Enter a key:value or key:[value,'comment'] : ")
-        kv2=kv.split(":")
-        if len(kv2) != 2:
+        #kv2=kv.split(":")
+        i=kv.find(":")
+        if i <= 0 :
             print(f"\nERROR Cannot split '{kv}' as key:value\n")
             haderror=True
             continue
-        k=kv2[0].strip()
-        v=safe_eval(kv2[1].strip())
+        k=kv[:i]
+        v=safe_eval(kv[i+1:].strip())
         #print(f"type of {v} is",type(v))
 
         if k != 'COMMENT' : # more flexible for the comment string
