@@ -256,7 +256,7 @@ class TestIO(unittest.TestCase):
 
         t = Table()
         t['a'] = ['a', 'b', '']
-        t['x'] = [1.0, 2.0, np.NaN]
+        t['x'] = [1.0, 2.0, np.nan]
         t['blat'] = [10, 20, 30]
         t['rows'] = np.arange(len(t), dtype=np.int16)
         t.meta['EXTNAME'] = 'TABLE'

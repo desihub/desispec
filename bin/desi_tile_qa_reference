@@ -50,7 +50,7 @@ def get_prog_pass0(tileids, program):
     tiles = Table.read(os.path.join(os.getenv('DESI_SURVEYOPS'), "ops", "tiles-main.ecsv"))
     # tiles = Table.read(os.path.join(os.getenv("DESI_ROOT"), "survey", "ops", "surveyops", "trunk", "ops", "tiles-main.ecsv"))
     sel = (tiles["PASS"] == 0) & (tiles["PROGRAM"] == program.upper())
-    return np.in1d(tileids, tiles["TILEID"][sel])
+    return np.isin(tileids, tiles["TILEID"][sel])
 
 def main():
 

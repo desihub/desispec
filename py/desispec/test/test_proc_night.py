@@ -213,7 +213,7 @@ class TestProcNight(unittest.TestCase):
 
         ## test that the code runs
         updatedtable2, nsubmits = update_and_recursively_submit(proctable2, submits=0, dry_run_level=4)
-        self.assertFalse(np.any(np.in1d(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
+        self.assertFalse(np.any(np.isin(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
                         msg='No TIMEOUTs in nominal resubmission')
 
         ## now test that the resubmission works by forcing the failure in redshift job
@@ -224,7 +224,7 @@ class TestProcNight(unittest.TestCase):
         updatedtable2, nsubmits = update_and_recursively_submit(proctable2,
                                                                 submits=0,
                                                                 dry_run_level=4)
-        self.assertFalse(np.any(np.in1d(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
+        self.assertFalse(np.any(np.isin(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
                         msg='Cross night resubmission should leave no TIMEOUTs')
 
         ## now set the tilenight from the earlier night as bad

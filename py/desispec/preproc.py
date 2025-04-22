@@ -1000,7 +1000,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         amps_with_readnoise_per_row = cfinder.value("READNOISEPERROW").split(",")
         log.info("Read noise per row (keyword READNOISEPERROW) for amps {}".format(amps_with_readnoise_per_row))
         # check that those amps exist otherwise throw an error
-        if not np.all(np.in1d(amps_with_readnoise_per_row,amp_ids)) :
+        if not np.all(np.isin(amps_with_readnoise_per_row,amp_ids)) :
             mess = "Some 'READNOISEPERROW' amps {} are not in {}.".format(amps_with_readnoise_per_row,amp_ids)
             log.error(mess)
             raise KeyError(mess)

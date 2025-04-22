@@ -608,7 +608,7 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
 
     ## If the cache exists, use it speed up the search over tiles and nights
     if nights is not None and np.all(
-            np.in1d(nights, list(_full_ptab_cache.keys()))):
+            np.isin(nights, list(_full_ptab_cache.keys()))):
         log.info(f'Using cached processing table rows')
         tablist = []
         for night in nights:

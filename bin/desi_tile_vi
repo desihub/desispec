@@ -203,9 +203,9 @@ def main():
 
     ok = np.repeat(True,tileids.size)
     if requested_tileids is not None :
-        ok &= np.in1d(tileids,requested_tileids)
+        ok &= np.isin(tileids,requested_tileids)
     if requested_nights is not None :
-        ok &= np.in1d(nights,requested_nights)
+        ok &= np.isin(nights,requested_nights)
     tileids = tileids[ok]
     nights  = nights[ok]
 

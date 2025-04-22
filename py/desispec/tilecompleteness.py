@@ -267,7 +267,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 def reorder_columns(table) :
     neworder=['TILEID','SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','UPDATED']
 
-    if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
+    if not np.all(np.isin(neworder,table.dtype.names)) or not np.all(np.isin(table.dtype.names,neworder)) :
         log = get_logger()
         log.critical("error, mismatch of some keys")
         log.critical("new: {}".format(sorted(neworder)))
@@ -339,7 +339,7 @@ def merge_tile_completeness_table(previous_table, new_table):
     #
     # Keep all tiles that are not in new_table.
     #
-    keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"], new_table["TILEID"]))[0])
+    keep_from_previous = list(np.where(~np.isin(previous_table["TILEID"], new_table["TILEID"]))[0])
     nsame = len(keep_from_previous)
 
     add_from_new = []

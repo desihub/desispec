@@ -151,7 +151,7 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
         fibermap = empty_fibermap(fibers.size)
         fibermap["FIBER"] = fibers
     else :
-        indices = np.arange(fibermap["FIBER"].size)[np.in1d(fibermap["FIBER"],fibers)]
+        indices = np.arange(fibermap["FIBER"].size)[np.isin(fibermap["FIBER"],fibers)]
         fibermap = fibermap[:][indices]
 
     return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, sigma=frame_sigma , fibers=fibers, meta=image.meta, fibermap=fibermap)

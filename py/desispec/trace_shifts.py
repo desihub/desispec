@@ -11,7 +11,7 @@ import sys
 import argparse
 import time
 import numpy as np
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve

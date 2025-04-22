@@ -688,10 +688,10 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
 
         sp = read_spectra(filename, single=single)
         if targets is not None:
-            keep = np.in1d(sp.fibermap['TARGETID'], targets)
+            keep = np.isin(sp.fibermap['TARGETID'], targets)
             sp = sp[keep]
         if fibers is not None:
-            keep = np.in1d(sp.fibermap['FIBER'], fibers)
+            keep = np.isin(sp.fibermap['FIBER'], fibers)
             sp = sp[keep]
 
         if sp.num_spectra() > 0:
@@ -704,7 +704,7 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
                 rr = Table.read(rrfile, 'REDSHIFTS')
 
                 #- Trim rr to only have TARGETIDs in filtered spectra sp
-                keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
+                keep = np.isin(rr['TARGETID'], sp.fibermap['TARGETID'])
                 rr = rr[keep]
 
                 #- match the Redrock entries to the spectra fibermap entries

@@ -120,7 +120,7 @@ def main(args=None) :
     if args.selected_calibration_stars is not None :
         table=Table.read(args.selected_calibration_stars)
         good=table["VALID"]==1
-        good_models = np.in1d( model_fibers , table["FIBER"][good] )
+        good_models = np.isin( model_fibers , table["FIBER"][good] )
         log.info("Selected {} good stars on {}, fibers = {}, from {}".format(
             np.sum(good_models), camera, model_fibers[good_models], args.selected_calibration_stars))
         model_flux   = model_flux[good_models]
@@ -234,7 +234,7 @@ def main(args=None) :
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
     if stdcheck:
         fibermap_std_indices = np.where(isStdStar(fibermap))[0]
-        if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
+        if np.any(~np.isin(model_fibers%500, fibermap_std_indices)):
             target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
             colname =  target_colnames[0]
             for i in model_fibers%500:
