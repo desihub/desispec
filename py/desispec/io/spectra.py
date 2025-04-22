@@ -763,7 +763,7 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
     but not used.
     """
     #- What columns should we group by to split by file?
-    specgroup, keycols = determine_specgroup(targets.dtype.names)
+    specgroup, keycols = determine_specgroup(targets.colnames)
     if specgroup == 'healpix':
         filecolumns = ('HEALPIX', 'SURVEY', 'PROGRAM')
     elif specgroup in ('tiles', 'cumulative'):
@@ -947,6 +947,10 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     #- support HPXPIXEL or HEALPIX in input targets table
     if 'HPXPIXEL' in targets.colnames:
         targets.rename_column('HPXPIXEL', 'HEALPIX')
+
+    #- support FIBER or PETAL_LOC=FIBER//500
+    if 'FIBER' in targets.colnames and 'PETAL_LOC' not in targets.colnames:
+        targets['PETAL_LOC'] = targets['FIBER']//500
 
     #- if not specified, get specprod from header or $SPECPROD
     if specprod is None:

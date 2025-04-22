@@ -729,10 +729,14 @@ class TestSpectra(unittest.TestCase):
         from desispec.io.spectra import determine_specgroup as spgrp
         self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC'])[0],
                          'cumulative')
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER'])[0],
+                         'cumulative')
         self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX'])[0],
                          'healpix')
         #- tiles/cumulative trumps healpix
         self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HEALPIX'])[0],
+                         'cumulative')
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER', 'SUREY', 'PROGRAM', 'HEALPIX'])[0],
                          'cumulative')
 
         with self.assertRaises(ValueError):
