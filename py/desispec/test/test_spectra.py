@@ -87,7 +87,9 @@ class TestSpectra(unittest.TestCase):
 
         #- Test data and files to work with
         os.chdir(self.testDir)
-        self.fileio = "test_spectra.fits"
+        self.fileio = "spectra-test.fits"
+        self.coaddfile = "coadd-test.fits"
+        self.redshiftfile = "redrock-test.fits"
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"
         self.meta = {
@@ -167,18 +169,15 @@ class TestSpectra(unittest.TestCase):
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
         self.redshifts = Table()
+        self.redshifts["TARGETID"] = self.fmap1["TARGETID"]
         self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
         self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
         self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
 
     def tearDown(self):
-        if os.path.exists(self.fileio):
-            os.remove(self.fileio)
-        if os.path.exists(self.fileappend):
-            os.remove(self.fileappend)
-        if os.path.exists(self.filebuild):
-            os.remove(self.filebuild)
-        pass
+        for filename in (self.fileio, self.coaddfile, self.redshiftfile, self.fileappend, self.filebuild):
+            if os.path.exists(filename):
+                os.remove(filename)
 
     def verify(self, spec, fmap):
         for key, val in self.meta.items():
@@ -363,6 +362,59 @@ class TestSpectra(unittest.TestCase):
         self.assertIsNone(test.scores)
         self.assertIsNone(test.R)
         self.assertIsNotNone(test.fibermap) #- fibermap not skipped
+
+    def test_read_redshifts(self):
+
+        # manually create the spectra and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
+
+        write_spectra(self.coaddfile, spec)        # coadd-*.fits
+        self.redshifts.write(self.redshiftfile)    # redrock-*.fits
+
+        #- Test reading redshifts from a companion redrock*.fits file
+        test = read_spectra(self.coaddfile, return_redshifts=True)
+        self.assertTrue(test.redshifts is not None)
+        self.assertEqual(len(test.redshifts), len(self.redshifts))
+
+        #- ... while filtering on TARGETID
+        targetids = spec.fibermap['TARGETID'][2:4]
+        test = read_spectra(self.coaddfile, return_redshifts=True, targetids=targetids)
+        self.assertEqual(len(test.fibermap), 2)
+        self.assertEqual(len(test.redshifts), 2)
+        self.assertTrue(np.all(test.fibermap['TARGETID'] == test.redshifts['TARGETID']))
+
+        #- ... or filtering on rows
+        rows = [1,3]
+        test = read_spectra(self.coaddfile, return_redshifts=True, rows=rows)
+        self.assertEqual(len(test.fibermap), len(rows))
+        self.assertEqual(len(test.redshifts), len(rows))
+        self.assertTrue(np.all(test.fibermap['TARGETID'] == test.redshifts['TARGETID']))
+
+        #- Test reading redshifts from the spectra file itself without a companion redrock*.fits file
+        os.remove(self.redshiftfile)
+        spec.redshifts = self.redshifts
+        write_spectra(self.coaddfile, spec)
+
+        test = read_spectra(self.coaddfile, return_redshifts=True)
+        self.assertTrue(test.redshifts is not None)
+        self.assertEqual(len(test.redshifts), len(self.redshifts))
+
+        #- ... while filtering on TARGETID
+        targetids = spec.fibermap['TARGETID'][2:4]
+        test = read_spectra(self.coaddfile, return_redshifts=True, targetids=targetids)
+        self.assertEqual(len(test.fibermap), 2)
+        self.assertEqual(len(test.redshifts), 2)
+        self.assertTrue(np.all(test.fibermap['TARGETID'] == test.redshifts['TARGETID']))
+
+        #- ... or filtering on rows
+        rows = [1,3]
+        test = read_spectra(self.coaddfile, return_redshifts=True, rows=rows)
+        self.assertEqual(len(test.fibermap), len(rows))
+        self.assertEqual(len(test.redshifts), len(rows))
+        self.assertTrue(np.all(test.fibermap['TARGETID'] == test.redshifts['TARGETID']))
+
 
     def test_empty(self):
 
@@ -788,7 +840,7 @@ class TestSpectra(unittest.TestCase):
             sp = read_spectra_parallel(targets[ii], nproc=2)
             self.assertTrue(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))
 
-        #-  match_order=False won't preser order, but saves memory
+        #-  match_order=False won't preserve order, but saves memory
         ii = [0,3,1,2]
         sp = read_spectra_parallel(targets[ii], nproc=2, match_order=False)
         self.assertFalse(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))

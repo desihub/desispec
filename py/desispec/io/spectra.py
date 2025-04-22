@@ -496,9 +496,10 @@ def read_spectra(
                 else:
                     log.warning('Unable to find template version info in redrock headers')
 
-            redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
-            if rows is not None and len(rows)>0:
-                redrock_targetids = redrock_targetids[rows]
+            if rows is not None:
+                redshifts = redshifts[rows]
+                redrock_targetids = np.asarray(redshifts["TARGETID"]) # for sanity check
+
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
 
