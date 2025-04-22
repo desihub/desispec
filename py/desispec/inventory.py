@@ -501,19 +501,21 @@ def _get_default_inventory_filename(specprod=None):
     Returns filepath to inventory file (which may not yet exist)
     """
     import desispec.io
-    basefile = 'target_inventory.h5'
-    file1 = os.path.join(desispec.io.specprod_root(specprod, readonly=True), basefile)
-    file2 = os.path.join(desispec.io.specprod_root('daily', readonly=True), basefile)
-    file3 = desispec.io.get_readonly_filepath(os.path.abspath(os.path.join('.', basefile)))
 
-    if os.path.exists(file1):
-        return file1
-    elif os.path.exists(file2):
-        return file2
-    elif os.path.exists(file3):
-        return file3
+    #- Build list of several places where the inventory files might exist
+    files = list()
+    files.append(os.path.join(desispec.io.specprod_root(specprod, readonly=True), 'target_inventory.h5'))
+    inventory_dir = os.getenv('DESI_TARGET_INVENTORY_DIR')
+    if inventory_dir is not None and os.path.isdir(inventory_dir):
+        files.append(os.path.join(inventory_dir, f'target_inventory-{specprod}.h5'))
+
+    #- Return the first inventory file found
+    for filename in files:
+        if os.path.exists(filename):
+            return filename
+    #- Raise an error if none are found
     else:
-        raise IOError(f'Unable to find {basefile}')
+        raise IOError(f'Unable to find {specprod} inventory file')
 
 def parse_radec_string(radec):
     """
