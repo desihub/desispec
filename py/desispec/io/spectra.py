@@ -484,6 +484,18 @@ def read_spectra(
         t0 = time.time()
         if redshifts is None:
             redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
+            #- support earlier productions where header info was in HDU 0 instead of REDSHIFTS
+            if 'TEMNAM00' not in redshifts.meta:
+                hdr0 = fits.getheader(redrock_file, 0)
+                if 'TEMNAM00' in hdr0:
+                    log.info('Adding redrock template version info from HDU 0')
+                    if 'EXTNAME' in hdr0:
+                        del hdr0['EXTNAME']
+
+                    addkeys(redshifts.meta, hdr0)
+                else:
+                    log.warning('Unable to find template version info in redrock headers')
+
             redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
             if rows is not None and len(rows)>0:
                 redrock_targetids = redrock_targetids[rows]
