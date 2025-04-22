@@ -749,12 +749,15 @@ def determine_specgroup(colnames):
     and keycols is list of columns to use for unique primary key.
     """
     colnames = set(colnames) # for faster lookup
-    if ('TILEID' in colnames and
-        'LASTNIGHT' in colnames and
-        'PETAL_LOC' in colnames):
-        return 'cumulative', ('TARGETID', 'TILEID', 'LASTNIGHT')
+    if ('TILEID' in colnames) and ('LASTNIGHT') in colnames:
+        if ('PETAL_LOC' in colnames) and ('TARGETID' in colnames):
+            return 'cumulative', ('TILEID', 'LASTNIGHT', 'PETAL_LOC', 'TARGETID')
+        elif 'FIBER' in colnames:
+            return 'cumulative', ('TILEID', 'LASTNIGHT', 'FIBER')
+        else:
+            raise ValueError(f'TILEID+LASTNIGHT requires either FIBER or PETAL_LOC+TARGETID')
     elif 'HEALPIX' in colnames:
-        return 'healpix', ('TARGETID', 'HEALPIX', 'SURVEY', 'PROGRAM')
+        return 'healpix', ('HEALPIX', 'SURVEY', 'PROGRAM', 'TARGETID')
     else:
         raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
 
@@ -875,18 +878,28 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
 
     log = get_logger()
 
+    targets = Table(targets, copy=False)
+    if ('PETAL_LOC' not in targets.colnames) and ('FIBER' in targets.colnames):
+        targets['PETAL_LOC'] = targets['FIBER']//500
+
     spectra = list()
     for zz in targets.group_by(('TILEID', 'LASTNIGHT', 'PETAL_LOC')).groups:
         tileid = zz['TILEID'][0]
         night = zz['LASTNIGHT'][0]
         spectro = zz['PETAL_LOC'][0]
-        targetids = np.array(zz['TARGETID'])
+        if 'TARGETID' in zz.colnames:
+            targetids = np.array(zz['TARGETID'])
+        else:
+            targetids = None
 
         specfile = findfile(prefix, night=night, tile=tileid,
                             spectrograph=spectro, readonly=True,
                             specprod=specprod)
         log.debug('Reading spectra from %s', specfile)
         sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
+        if targetids is None and 'FIBER' in zz.colnames:
+            keep = np.isin(sp.fibermap['FIBER'], zz['FIBER'])
+            sp = sp[keep]
 
         if sp.num_targets() == 0:
             log.warning(f'No matching targets found in {specfile}')
@@ -910,10 +923,20 @@ def _readspec_tiles(targets, prefix, rdspec_kwargs, specprod=None):
 
     spectra = stack_spectra(spectra)
 
-    assert np.all(spectra.fibermap['TARGETID']  == targets['TARGETID'])
-    assert np.all(spectra.fibermap['LASTNIGHT'] == targets['LASTNIGHT'])
-    assert np.all(spectra.fibermap['PETAL_LOC'] == targets['PETAL_LOC'])
-    assert np.all(spectra.fibermap['TILEID']    == targets['TILEID'])
+    #- if input TARGETID or FIBER are not same order as files, reorder
+    if 'TARGETID' in targets.colnames:
+        if not np.all(spectra.fibermap['TARGETID']  == targets['TARGETID']):
+            ii = argmatch(spectra.fibermap['TARGETID'], targets['TARGETID'])
+            spectra = spectra[ii]
+
+    elif 'FIBER' in targets.colnames:
+        if not np.all(spectra.fibermap['FIBER']  == targets['FIBER']):
+            ii = argmatch(spectra.fibermap['FIBER'], targets['FIBER'])
+            spectra = spectra[ii]
+
+    for col in ('TARGETID', 'FIBER', 'LASTNIGHT', 'PETAL_LOC', 'TILEID'):
+        if (col in targets.colnames) and (col in spectra.fibermap.colnames):
+            assert np.all(spectra.fibermap[col] == targets[col]), f'Column {col} order mismatch'
 
     return spectra
 
@@ -992,7 +1015,7 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
             ok = False
 
     if not ok:
-        msg = 'Unable to find SURVEY and/or PROGRAM for healpix targets'
+        msg = 'Unable to find required columns'
         log.critical(msg)
         raise ValueError(msg)
 

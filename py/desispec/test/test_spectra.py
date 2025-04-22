@@ -727,16 +727,16 @@ class TestSpectra(unittest.TestCase):
     def test_determine_specgroup(self):
         """test parallel spectra I/O"""
         from desispec.io.spectra import determine_specgroup as spgrp
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC'])[0],
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'TARGETID'])[0],
                          'cumulative')
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER'])[0],
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER'])[0],  #- FIBER doesn't require TARGETID
                          'cumulative')
-        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX'])[0],
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
                          'healpix')
         #- tiles/cumulative trumps healpix
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SUREY', 'PROGRAM', 'HEALPIX'])[0],
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
                          'cumulative')
-        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER', 'SUREY', 'PROGRAM', 'HEALPIX'])[0],
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER', 'SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
                          'cumulative')
 
         with self.assertRaises(ValueError):
@@ -844,6 +844,7 @@ class TestSpectra(unittest.TestCase):
         sp2.fibermap['TILEID'] = 2000
         sp2.fibermap['LASTNIGHT'] = night
         sp2.fibermap['PETAL_LOC'] = 1
+        sp2.fibermap['FIBER'] += 500
         sp2.fibermap['TARGETID'] = 2000 + np.arange(nspec)
         file2 = findfile('coadd', groupname='cumulative', tile=2000,
                          night=night, spectrograph=1)
@@ -858,12 +859,24 @@ class TestSpectra(unittest.TestCase):
         targets['TILEID'] = [1000,1000,2000,2000]
         targets['LASTNIGHT'] = night
         targets['PETAL_LOC'] = [0,0,1,1]
+        targets['FIBER'] = [1,0,502,501]
 
+        #- basic usage
         spectra = read_spectra_parallel(targets, nproc=2)
         self.assertEqual(len(spectra), len(targets))
         self.assertTrue(np.all(spectra.fibermap['TARGETID'] == targets['TARGETID']))
         for key in targets.colnames:
             self.assertTrue(np.all(spectra.fibermap[key] == targets[key]))
+
+        #- read with FIBER instead of PETAL_LOC
+        tx = targets['TARGETID', 'TILEID', 'LASTNIGHT', 'FIBER']
+        spectra = read_spectra_parallel(tx, nproc=2)
+        self.assertTrue(np.all(spectra.fibermap['TARGETID'] == targets['TARGETID']))
+
+        #- read with FIBER without TARGETID
+        tx = targets['TILEID', 'LASTNIGHT', 'FIBER']
+        spectra = read_spectra_parallel(tx, nproc=2)
+        self.assertTrue(np.all(spectra.fibermap['FIBER'] == targets['FIBER']))
 
         #- read serially instead of parallel
         spectra2 = read_spectra_parallel(targets, nproc=1)
