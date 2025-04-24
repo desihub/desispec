@@ -315,12 +315,16 @@ def target_tiles(targetids=None, radec=None, filename=None, inventory=None, spec
     else:
         blank = Table()
         blank.add_column(Column(name='TARGETID', dtype=int))
+        blank.add_column(Column(name='TILEID', dtype='int32'))
         blank.add_column(Column(name='LASTNIGHT', dtype='int32'))
         blank.add_column(Column(name='FIBER', dtype='int32'))
-        blank.add_column(Column(name='TILEID', dtype='int32'))
         result = blank
 
     result.meta.update(_create_header(radec, specprod))
+
+    #- standardize column order
+    result = result['TARGETID', 'TILEID', 'LASTNIGHT', 'FIBER']
+
     return result
 
 def db_target_tiles(targetids=None, radec=None, specprod=None):
