@@ -26,6 +26,8 @@ from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, di
 from desispec.io.raw import read_raw_primary_header
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
+from desispec.util import header2night
+from desispec.io import findfile
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
@@ -34,7 +36,7 @@ from desispec.workflow.batch import get_config
 
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
-                 scale=False, exptime=None):
+                      scale=False, exptime=None, min_vccdsec=0):
     """
     Compute classic dark model from input dark images
 
@@ -48,7 +50,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         nocosmic (bool): use medians instead of cosmic identification
         scale (bool): apply scale correction for EM0 teststand data
         exptime (float): write EXPTIME header keyword; all inputs must match
-
+        min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
     Note: if bias is None, no bias correction is applied.  If it is a single
     file, then use that bias for all darks.  If it is a list, it must have
     len(rawfiles) and gives the per-file bias to use.
@@ -90,8 +92,9 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if exptime is not None:
             if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
-                log.error(message)
-                raise ValueError(message)
+                log.warning(message)
+                fitsfile.close()
+                continue
 
         if first_image_header is None :
             first_image_header = fitsfile[camera].header
@@ -99,6 +102,14 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             if fitsfile[camera].header['VCCDSEC']<first_image_header['VCCDSEC']:
                 first_image_header['VCCDSEC']=fitsfile[camera].header['VCCDSEC']
                 first_image_header['VCCDON']=fitsfile[camera].header['VCCDON']
+
+        if 'VCCDSEC' in first_image_header :
+            vccdsec = float(first_image_header['VCCDSEC'])
+            log.info(f"{filename} VCCDSEC={vccdsec} sec = {vccdsec/3600} hours")
+            if vccdsec < min_vccdsec :
+                log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
+                fitsfile.close()
+                continue
 
         fitsfile.close()
 
@@ -113,6 +124,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 raise RuntimeError(message)
         else:
             thisbias = True
+
+        if thisbias is False :
+            night=header2night(primary_header)
+            expid=primary_header["EXPID"]
+            biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
+            if os.path.isfile(biasnight) :
+                thisbias = biasnight
+        if thisbias is not False :
+            log.info(f"Using BIAS={thisbias}")
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
