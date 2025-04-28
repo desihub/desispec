@@ -770,6 +770,33 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     # Return
     return sorted(nights)
 
+def get_lastnight(tileid, specprod=None):
+    """
+    Return the lastnight in SPECPROD/tiles/cumulative/TILEID/NIGHT
+
+    Args:
+        tileid (int): DESI Tile ID
+
+    Options:
+        specprod (str): overrides $SPECPROD
+
+    Returns lastnight (int), or raises ValueError if no night found for that tile
+    """
+    tiledir = os.path.join(specprod_root(specprod), 'tiles', 'cumulative', str(tileid))
+    if not os.path.isdir(tiledir):
+        raise ValueError(f'{tiledir} not found')
+
+    nightdirs = sorted(glob.glob(f'{tiledir}/20??????'))
+    nights = [os.path.basename(path) for path in nightdirs]
+    nights = [int(x) for x in nights if x.isdigit()]
+    if len(nights) == 0:
+        raise ValueError(f'No nights found in {tiledir}/YEARMMDD')
+
+    lastnight = nights[-1]
+
+    return lastnight
+
+
 def shorten_filename(filename):
     """Attempt to shorten filename to fit in FITS header without CONTINUE
 

@@ -1854,3 +1854,30 @@ class TestIO(unittest.TestCase):
         os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
         self.assertEqual(specprod_root(),
                          os.path.expandvars('/blat/foo/$SPECPROD'))
+
+    def test_get_lastnight(self):
+        from ..io.meta import get_lastnight
+        #- Create some directories to test
+        reduxdir = self.testDir + '/test_get_lastnight'
+        os.environ['DESI_SPECTRO_REDUX'] = reduxdir
+        os.environ['SPECPROD'] = 'blat'
+        os.makedirs(f'{reduxdir}/blat/tiles/cumulative/1000/20201010')
+        os.makedirs(f'{reduxdir}/blat/tiles/cumulative/1000/20201012')
+        os.makedirs(f'{reduxdir}/blat/tiles/cumulative/1000/2021xxxx')
+        os.makedirs(f'{reduxdir}/blat/tiles/cumulative/1234')
+        os.makedirs(f'{reduxdir}/foo/tiles/cumulative/2000/20210506')
+
+        self.assertEqual(get_lastnight(1000), 20201012)
+        self.assertEqual(get_lastnight(2000, specprod='foo'), 20210506)
+
+        #- prod exists, tile does not
+        with self.assertRaises(ValueError):
+            lastnight = get_lastnight(1111)
+
+        #= tile exists, but has no processed nights
+        with self.assertRaises(ValueError):
+            lastnight = get_lastnight(1234)
+
+        #= prod doesn't exist
+        with self.assertRaises(ValueError):
+            lastnight = get_lastnight(1234, specprod='bizbat')
