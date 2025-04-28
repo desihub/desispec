@@ -610,7 +610,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             os.makedirs(outdir, exist_ok=True)
             cmds = []
             for campet in bkgsub_science_campets:
-                cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu 1 --cameras {} --bkgsub-for-science".format(
+                cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu 1 --cameras {} --bkgsub-for-science --model-variance --no-traceshift".format(
                     night, dark_expid, outdir, campet,
                 )
                 log.info("run: {}".format(cmd))
