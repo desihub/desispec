@@ -111,6 +111,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 fitsfile.close()
                 continue
 
+        for k in ['DETECTOR','CCDCFG','CCDTMING'] :
+            v1=first_image_header[k].strip().upper()
+            v2=fitsfile[camera].header[k].strip().upper()
+            if v1 != v2 :
+                mess=(f"{filename} k={v1} != {v2}")
+                log.error(mess)
+                raise mess
+
+
         fitsfile.close()
 
         if bias is not None:
