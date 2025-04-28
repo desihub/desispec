@@ -1473,8 +1473,8 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     fibers, zs, dchi2s, faflavors = np.array(fibers), np.array(zs), np.array(dchi2s), np.array(faflavors, dtype=str)
     # AR plot
     plot_faflavors = ["all", "mainbackup", "mainbright", "maindark"]
-    ylim = (-1.1, 1.1)
-    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
+    ylim = (-1.1, 1.2)
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7])
     fig = plt.figure(figsize=(20, 5))
     gs = gridspec.GridSpec(1, len(plot_faflavors), wspace=0.1)
     for ip, plot_faflavor in enumerate(plot_faflavors):
