@@ -1501,6 +1501,13 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
             ["orange", "b"]
         ):
             ax.scatter(fibers[sel], np.log10(0.1 + zs[sel]), c=color, s=1, alpha=alpha, label="{} ({} fibers)".format(selname, sel.sum()))
+
+        # AR display petal ids
+        for petal in range(10):
+            if petal % 2 == 0:
+                ax.axvspan(petal * 500, (petal + 1) * 500, color="k", alpha=0.05, zorder=0)
+            ax.text(petal * 500 + 250, -1.09, str(petal), color="k", fontsize=10, ha="center")
+
         ax.grid()
         ax.set_title(title)
         ax.set_xlabel("FIBER")
@@ -1511,6 +1518,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
         ax.set_yticks(np.log10(0.1 + yticks))
         ax.set_yticklabels(yticks.astype(str))
         ax.legend(loc=2, markerscale=10)
+
     plt.savefig(tmp_outpng, bbox_inches="tight")
     plt.close()
 
