@@ -916,6 +916,7 @@ def get_lastnight(tileid, specprod=None):
 
     return lastnight
 
+
 def shorten_filename(filename):
     """Attempt to shorten filename to fit in FITS header without CONTINUE
 
