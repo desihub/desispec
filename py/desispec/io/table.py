@@ -14,7 +14,7 @@ def read_table(filename, ext=None, rows=None, columns=None):
     Reads a FITS table into an astropy Table, avoiding masked columns
 
     Args:
-        filename (str): full path to input fits file
+        filename (str or fitsio.FITS): full path to input fits file, or open fitsio.FITS object
 
     Options:
         ext (str or int): EXTNAME or extension number to read
@@ -26,8 +26,16 @@ def read_table(filename, ext=None, rows=None, columns=None):
     fitsio and then converts to a Table.
     """
 
-    filename = checkgzip(filename)
-    data, header = fitsio.read(filename, ext=ext, header=True, rows=rows, columns=columns)
+    if isinstance(filename, fitsio.FITS):
+        if ext is None:
+            ext = 1
+
+        data = filename[ext].read()
+        header = filename[ext].read_header()
+    else:
+        filename = checkgzip(filename)
+        data, header = fitsio.read(filename, ext=ext, header=True, rows=rows, columns=columns)
+
     table = Table(data)
     if 'EXTNAME' in header:
         table.meta['EXTNAME'] = header['EXTNAME']
