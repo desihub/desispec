@@ -1464,7 +1464,7 @@ def make_tile_qa_plot(
     # AR Z vs. FIBER plot
     ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (-1.1, 1.1)
-    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7])
     # AR identifying non-assigned/sky/broken fibers
     # AR    (equivalent of OBJTYPE!="TGT" in fiberassign-TILEID.fits.gz)
     # AR    undirect way, as not all columns are here...
