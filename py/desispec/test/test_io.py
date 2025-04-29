@@ -298,6 +298,17 @@ class TestIO(unittest.TestCase):
         tx = read_table(testfile, columns=('a', 'blat'))
         self.assertEqual(tx.colnames, ['a', 'blat'])
 
+        #- Read from filename or open fitsio.FITS object
+        with fitsio.FITS(testfile, 'r') as fp:
+            for ext in (None, 'TABLE', 'KUMQUAT'):
+                t2 = read_table(fp, 'KUMQUAT')
+                self.assertTrue(np.all(t['a'] == t2['a']))
+                self.assertTrue(np.all((t['x'] == t2['x']) | np.isnan(t['x'])))
+                self.assertTrue(np.all(t['blat'] == t2['blat']))
+                self.assertTrue(np.all(t['rows'] == t2['rows']))
+                self.assertEqual(t.meta, t2.meta)
+
+
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
     @unittest.skipIf(sys.platform == 'darwin', "Skipping memmap test on Mac.")
