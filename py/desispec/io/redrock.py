@@ -54,6 +54,11 @@ def read_redrock_targetcat(tcat, fmcols=None, specprod=None):
     #- Copy structure of tcat (but not data) in case we need to add columns
     tcat = Table(tcat, copy=False)
 
+    #- Convert bytes -> strings for comparison operation consistency
+    for col in list(tcat.colnames):
+        if tcat[col].dtype.kind == 'S':  #- bytes='S', str='U' (unicode)
+            tcat[col] = tcat[col].astype(str)
+
     #- Add PETAL_LOC = FIBER//500 if needed
     if ('FIBER' in tcat.colnames) and ('PETAL_LOC' not in tcat.colnames):
         tcat['PETAL_LOC'] = tcat['FIBER']//500
