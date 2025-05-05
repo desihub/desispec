@@ -218,7 +218,7 @@ def read_crosstalk_parameters(parameter_filename = None) :
     log.debug("params= {}".format(params))
     return params
 
-def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None):
+def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None,parameter_filename=None):
     """Apply a fiber cross talk correction. Modifies frame.flux and frame.ivar.
 
     Args:
@@ -227,19 +227,22 @@ def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None):
         xyset, optional : desispec.xytraceset.XYTraceSet object with trace
             coordinates to shift the spectra
             (automatically found with calibration finder otherwise)
+        parameter_filename, optional : path to yaml file with correction parameters
     """
     log=get_logger()
 
+    cfinder = None
+    if parameter_filename is None :
+        cfinder = CalibFinder([frame.meta])
+        if cfinder.haskey("FIBERCROSSTALK") :
+            parameter_filename = cfinder.findfile("FIBERCROSSTALK")
+            log.debug("Using custom file "+parameter_filename)
 
-    cfinder = CalibFinder([frame.meta])
-    if cfinder.haskey("FIBERCROSSTALK") :
-        parameter_filename = cfinder.findfile("FIBERCROSSTALK")
-        log.debug("Using custom file "+parameter_filename)
-    else :
-        parameter_filename = None
     params = read_crosstalk_parameters(parameter_filename = parameter_filename)
 
     if xyset is None :
+        if cfinder is None :
+            cfinder = CalibFinder([frame.meta])
         psf_filename = cfinder.findfile("PSF")
         xyset  = read_xytraceset(psf_filename)
 
