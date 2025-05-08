@@ -133,7 +133,7 @@ def get_zbins():
     return np.arange(zmin, zmax, dz).round(2)
 
 
-def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
+def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS", nolya=False):
     """
     For a given tracer, returns the selection used for the tile QA n(z):
         - (fstatus_key & bad_qafstatus_mask) == 0
@@ -144,6 +144,8 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
         tracer: "BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG_LOP", or "QSO" (string)
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         sel: selected tracer sample (boolean array)
@@ -158,6 +160,9 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
     # AR ELG_LOP : excluding ELG_LOP x QSO
     if tracer == "ELG_LOP":
         sel &= (d["DESI_TARGET"] & desi_mask["QSO"]) == 0
+    # AR QSO : excluding Lya if asked
+    if (tracer == "QSO") & (nolya):
+        sel &= d["PRIORITY"] == desi_mask["QSO"].priorities["UNOBS"]
     return sel
 
 
@@ -187,7 +192,7 @@ def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
 
 
 def get_zhists(
-    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None
+    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None, nolya=False
 ):
     """
     Returns the fractional, per tileid, n(z) for a given tracer.
@@ -199,6 +204,8 @@ def get_zhists(
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET, DELTACHI2, SPECTYPE, Z
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
         tileid_key (optional, defaults to None): column name for TILEID (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         tuple: A tuple containing:
@@ -219,7 +226,7 @@ def get_zhists(
     nbin = len(bins) - 1
 
     # AR restricting to valid fibers + selecting tracer
-    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key)
+    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key, nolya=nolya)
 
     # AR making hist for each TILEID
     if tileid_key is None:
