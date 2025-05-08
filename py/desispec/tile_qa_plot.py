@@ -1421,9 +1421,8 @@ def make_tile_qa_plot(
         # AR n(z), for the tracers for that program
         tracers = [
             tracer
-            for tracer in list(config["tile_qa_plot"]["tracers"].keys())
-            if config["tile_qa_plot"]["tracers"][tracer]["program"]
-            == hdr["FAPRGRM"].upper()
+            for tracer in config["tile_qa_plot"]["tracers"]
+            if hdr["FAPRGRM"].upper() in config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
         ]
         cols = plt.rcParams["axes.prop_cycle"].by_key()["color"][: len(tracers)]
 
