@@ -96,6 +96,25 @@ def assert_tracer(tracer):
         )
 
 
+# AR pick the first listed program
+def get_tracer_nz_program(tracer):
+    """
+    Returns the PROGRAM used to store the tracer reference n(z).
+
+    Args:
+        tracer: BGS_BRIGHT, BGS_FAINT, LRG, LGE, ELG_LOP, QSO (str)
+
+    Returns:
+        program (str)
+
+    Note:
+        Pick the first listed in the qa config file.
+    """
+
+    config = get_qa_config()
+    return config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")[0]
+
+
 def get_tracer_zminmax(tracer):
     """
     Returns some fiducial redshift range per tracer to compute basic stats.
