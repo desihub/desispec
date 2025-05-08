@@ -1333,6 +1333,12 @@ def make_tile_qa_plot(
     if tsnr2_key is None:
         tsnr2_key = config["tile_qa_plot"]["tsnr2_key"]
 
+    # AR all programs that can be used for the n(z)
+    all_nz_programs = []
+    for tracer in config["tile_qa_plot"]["tracers"]:
+        all_nz_programs += config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
+    all_nz_programs = np.unique(all_nz_programs)
+
     # SB derive output file name, handling case if ".fits" appears in path
     if pngoutfile is None:
         base = os.path.splitext(os.path.basename(tileqafits))[0]
@@ -1413,7 +1419,7 @@ def make_tile_qa_plot(
 
     # AR n(z)
     # AR n(z): plotting only if main survey
-    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].lower() != "backup" :
+    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].upper() in all_nz_programs:
 
         # AR n(z): reference
         ref = Table.read(os.path.join(refdir, "qa-reference-nz.ecsv"))
