@@ -96,6 +96,25 @@ def assert_tracer(tracer):
         )
 
 
+# AR pick the first listed program
+def get_tracer_nz_program(tracer):
+    """
+    Returns the PROGRAM used to store the tracer reference n(z).
+
+    Args:
+        tracer: BGS_BRIGHT, BGS_FAINT, LRG, LGE, ELG_LOP, QSO (str)
+
+    Returns:
+        program (str)
+
+    Note:
+        Pick the first listed in the qa config file.
+    """
+
+    config = get_qa_config()
+    return config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")[0]
+
+
 def get_tracer_zminmax(tracer):
     """
     Returns some fiducial redshift range per tracer to compute basic stats.
@@ -133,7 +152,7 @@ def get_zbins():
     return np.arange(zmin, zmax, dz).round(2)
 
 
-def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
+def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS", nolya=False):
     """
     For a given tracer, returns the selection used for the tile QA n(z):
         - (fstatus_key & bad_qafstatus_mask) == 0
@@ -144,6 +163,8 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
         tracer: "BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG_LOP", or "QSO" (string)
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         sel: selected tracer sample (boolean array)
@@ -158,6 +179,9 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
     # AR ELG_LOP : excluding ELG_LOP x QSO
     if tracer == "ELG_LOP":
         sel &= (d["DESI_TARGET"] & desi_mask["QSO"]) == 0
+    # AR QSO : excluding Lya if asked
+    if (tracer == "QSO") & (nolya):
+        sel &= d["PRIORITY"] == desi_mask["QSO"].priorities["UNOBS"]
     return sel
 
 
@@ -187,7 +211,7 @@ def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
 
 
 def get_zhists(
-    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None
+    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None, nolya=False
 ):
     """
     Returns the fractional, per tileid, n(z) for a given tracer.
@@ -199,6 +223,8 @@ def get_zhists(
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET, DELTACHI2, SPECTYPE, Z
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
         tileid_key (optional, defaults to None): column name for TILEID (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         tuple: A tuple containing:
@@ -219,7 +245,7 @@ def get_zhists(
     nbin = len(bins) - 1
 
     # AR restricting to valid fibers + selecting tracer
-    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key)
+    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key, nolya=nolya)
 
     # AR making hist for each TILEID
     if tileid_key is None:
@@ -1307,6 +1333,12 @@ def make_tile_qa_plot(
     if tsnr2_key is None:
         tsnr2_key = config["tile_qa_plot"]["tsnr2_key"]
 
+    # AR all programs that can be used for the n(z)
+    all_nz_programs = []
+    for tracer in config["tile_qa_plot"]["tracers"]:
+        all_nz_programs += config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
+    all_nz_programs = np.unique(all_nz_programs)
+
     # SB derive output file name, handling case if ".fits" appears in path
     if pngoutfile is None:
         base = os.path.splitext(os.path.basename(tileqafits))[0]
@@ -1387,7 +1419,7 @@ def make_tile_qa_plot(
 
     # AR n(z)
     # AR n(z): plotting only if main survey
-    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].lower() != "backup" :
+    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].upper() in all_nz_programs:
 
         # AR n(z): reference
         ref = Table.read(os.path.join(refdir, "qa-reference-nz.ecsv"))
@@ -1395,9 +1427,8 @@ def make_tile_qa_plot(
         # AR n(z), for the tracers for that program
         tracers = [
             tracer
-            for tracer in list(config["tile_qa_plot"]["tracers"].keys())
-            if config["tile_qa_plot"]["tracers"][tracer]["program"]
-            == hdr["FAPRGRM"].upper()
+            for tracer in config["tile_qa_plot"]["tracers"]
+            if hdr["FAPRGRM"].upper() in config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
         ]
         cols = plt.rcParams["axes.prop_cycle"].by_key()["color"][: len(tracers)]
 
