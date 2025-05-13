@@ -11,18 +11,22 @@ This script computes the reference n(z) and per-fiber TSNR2, used by the per-cum
 
 
 import os, sys
+from glob import glob
+import fitsio
 import argparse
-from astropy.table import Table
+from astropy.table import Table, vstack
 import fitsio
 import numpy as np
 import yaml
 from importlib import resources
 from desispec.tile_qa_plot import (
     get_qa_config,
+    get_tracer_nz_program,
     get_zbins,
     get_zhists,
     get_qa_badmsks,
 )
+from desitarget.geomask import match_to
 import matplotlib.pyplot as plt
 from desiutil.log import get_logger
 
@@ -42,15 +46,89 @@ def parse(options=None):
     args = parser.parse_args()
     return args
 
-def get_prog_pass0(tileids, program):
+
+def read_ref_data(program):
     """
-    Identifies tileids from PASS=0 for a given program (DARK, BRIGHT).
-    Purposely not cutting on IN_DESI, as this can evolve with time, if a tile gets discarded.
+    Read reference data to get the reference n(z).
     """
-    tiles = Table.read(os.path.join(os.getenv('DESI_SURVEYOPS'), "ops", "tiles-main.ecsv"))
-    # tiles = Table.read(os.path.join(os.getenv("DESI_ROOT"), "survey", "ops", "surveyops", "trunk", "ops", "tiles-main.ecsv"))
-    sel = (tiles["PASS"] == 0) & (tiles["PROGRAM"] == program.upper())
-    return np.isin(tileids, tiles["TILEID"][sel])
+
+    config = get_qa_config()
+    all_programs = []
+    for tracer in config["tile_qa_plot"]["tracers"]:
+        all_programs += config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
+    assert program in all_programs
+
+    # AR DARK1B / LGE: pick three daily tiles
+    if program == "DARK1B":
+        specprod = "daily"
+        tileids = [100803, 100808, 100826]
+        lastnights = [20250506, 20250506, 20250506]
+    # AR other: pick the same tiles as originally in everest
+    # AR but now in loa
+    else:
+        specprod = "loa"
+        fn = os.path.join(
+            os.getenv("DESI_ROOT"),
+            "spectro", "redux", specprod,
+            "tiles-{}.csv".format(specprod)
+        )
+        t = Table.read(fn)
+        sel = t["LASTNIGHT"] <= 20210709
+        sel &= (t["SURVEY"] == "main") & (t["PROGRAM"] == program.lower())
+        fn = os.path.join(
+            os.getenv("DESI_SURVEYOPS"),
+            "ops",
+            "tiles-main.ecsv"
+        )
+        t2 = Table.read(fn)
+        sel2 = (t2["PROGRAM"] == program) & (t2["PASS"] == 0)
+        t2 = t2[sel2]
+        sel &= np.in1d(t["TILEID"], t2["TILEID"])
+        tileids, lastnights = t["TILEID"][sel], t["LASTNIGHT"][sel]
+
+    fns = [
+        os.path.join(
+            os.getenv("DESI_ROOT"),
+            "spectro", "redux", specprod, "tiles", "cumulative",
+            str(tileid), str(lastnight),
+            "tile-qa-{}-thru{}.fits".format(tileid, lastnight)
+        ) for tileid, lastnight in zip(tileids, lastnights)
+    ]
+    ds = []
+    for fn in fns:
+
+        tileid = fitsio.read_header(fn, "FIBERQA")["TILEID"]
+        tileidpad = "{:06d}".format(tileid)
+
+        d = Table(fitsio.read(fn, "FIBERQA"))
+        d["TILEID"] = tileid
+
+        # AR add some fiberassign keys
+        fa_fn = os.path.join(
+            os.getenv("DESI_TARGET"),
+            "fiberassign", "tiles", "trunk", tileidpad[:3],
+            "fiberassign-{}.fits.gz".format(tileidpad)
+        )
+        fa_d = Table(fitsio.read(fa_fn, "FIBERASSIGN"))
+
+        # AR there s been some fiber swapping at some point (3402, 3429)...
+        # AR and it can happen that a tile-qa file only has 9 or less petals..
+        # AR - match by targetid, to propagate per-target info
+        # AR - match by fiber, to propagate per-target info
+        ii = match_to(fa_d["TARGETID"], d["TARGETID"])
+        assert np.all(fa_d["TARGETID"][ii] == d["TARGETID"])
+        for key in ["PRIORITY"]:
+            d[key] = fa_d[key][ii]
+        ii = match_to(fa_d["FIBER"], d["FIBER"])
+        assert np.all(fa_d["FIBER"][ii] == d["FIBER"])
+        for key in ["FIBERASSIGN_X", "FIBERASSIGN_Y"]:
+            d[key] = fa_d[key][ii]
+
+        ds.append(d)
+    d = vstack(ds)
+
+    return d
+
 
 def main():
 
@@ -65,19 +143,6 @@ def main():
     outroot_nz = os.path.join(args.outdir, "qa-reference-nz")
     outroot_tsnr2 = os.path.join(args.outdir, "qa-reference-tsnr2")
 
-    # AR input files
-    # AR in the analysis below, we restrict to PASS=0, i.e. not overlapping tiles (statement true for everest)
-    # AR i.e. we discard ~4% of the tiles
-    # AR so that we are sure the n(z) are not biased because of re-obs decision (though that should be marginal)
-    infns = {
-        prog : os.path.join(
-            os.getenv("DESI_ROOT"), "spectro", "redux", "everest", "zcatalog", "ztile-main-{}-cumulative.fits".format(
-                prog.lower(),
-            )
-        )
-        for prog in ["DARK", "BRIGHT"]
-    }
-
     # AR config params
     config = get_qa_config()
     dchi2_min = config["tile_qa_plot"]["dchi2_min"]
@@ -86,62 +151,42 @@ def main():
     # AR n(z): tracers
     tracers = list(config["tile_qa_plot"]["tracers"].keys())
 
+    # AR reference data (from loa + 3 daily tiles for dark1b)
+    # AR pick the first program for each tracer
+    programs = np.unique([get_tracer_nz_program(tracer) for tracer in tracers])
+    ref_d = {program: read_ref_data(program) for program in programs}
+
     # AR n(z): redshift grid
     bins = get_zbins()
     nbin = len(bins) - 1
 
-    # AR n(z): preparing the table
-    nz = Table()
-    keys = ["TRACER", "ZMIN", "ZMAX", "N_MEAN", "N_MEAN_STD"]
-    for key in keys:
-        tmparr = []
-        for tracer in tracers:
-            if key == "TRACER":
-                tmparr += [tracer for i in range(nbin)]
-            elif key == "ZMIN":
-                tmparr += bins[:-1].tolist()
-            elif key == "ZMAX":
-                tmparr += bins[1:].tolist()
-            else:
-                tmparr += [0.0 for i in range(nbin)]
-        nz[key] = np.array(tmparr)
-
     # AR n(z): looping over tracers
-    nightmin, nightmax = 99999999, 0
+    all_nz = []
     for tracer in tracers:
 
-        program = config["tile_qa_plot"]["tracers"][tracer]["program"]
-        d = Table.read(infns[program], hdu="ZCATALOG")
-        sel = get_prog_pass0(d["TILEID"], program)
-        log.info("nz {} : cutting on PASS=0, keeping {:.1f}% of the data".format(
-                program, 100 * sel.mean(),
-            )
-        )
-        d = d[sel]
-
-        # AR first/last night
-        nights = np.unique(Table.read(infns[program], hdu="EXP_FIBERMAP")["NIGHT"])
-        if nights[0] < nightmin:
-            nightmin = nights[0]
-        if nights[-1] > nightmax:
-            nightmax = nights[-1]
+        # AR pick the first listed program here
+        program = get_tracer_nz_program(tracer)
+        d = ref_d[program].copy()
 
         # AR making hist for each TILEID
         tileids = np.unique(d["TILEID"])
-        _, zhists = get_zhists(tileids, tracer, dchi2_min, d, fstatus_key="COADD_FIBERSTATUS", tileid_key="TILEID")
+        _, zhists = get_zhists(tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key="TILEID", nolya=True)
 
         # AR compressing stats for all TILEIDs
-        sel = nz["TRACER"] == tracer
-        nz["N_MEAN"][sel] = zhists.mean(axis=1).round(4)
-        nz["N_MEAN_STD"][sel] = zhists.std(axis=1).round(
+        nz = Table()
+        nz["TRACER"] = [tracer for _ in range(nbin)]
+        nz["ZMIN"], nz["ZMAX"] = bins[:-1], bins[1:]
+        nz["N_MEAN"] = zhists.mean(axis=1).round(4)
+        nz["N_MEAN_STD"] = zhists.std(axis=1).round(
             4
         )  # AR I think it s correct to *not* divide by sqrt(ntile)
+        all_nz.append(nz)
+
+    nz = vstack(all_nz)
 
     # AR n(z): writing to ecsv
     hdr = fitsio.FITSHDR()
     hdr["DCHI2MIN"] = dchi2_min
-    hdr["NIGHTMIN"] = nightmin
-    hdr["NIGHTMAX"] = nightmax
     nz.meta = dict(hdr)
     nz.write("{}.ecsv".format(outroot_nz), format="ascii.ecsv", overwrite=True)
 
@@ -159,6 +204,8 @@ def main():
         ax.grid(True)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
+        ax.set_xlim(-0.1, 6)
+        ax.set_ylim(0, 0.25)
         plt.savefig("{}.png".format(outroot_nz), bbox_inches="tight")
         plt.close()
 
@@ -167,96 +214,42 @@ def main():
     mydict = {key: [] for key in keys}
     badqa_val, _ = get_qa_badmsks()
     #
-    for program in ["BRIGHT", "DARK"]:
+    d = ref_d["DARK"].copy()
 
-        # AR TSNR2: reading (cutting on COADD_FIBERSTATUS and PASS=0)
-        d = Table.read(infns[program], hdu="ZCATALOG")
-        sel = (d["COADD_FIBERSTATUS"] & badqa_val) == 0
-        sel &= get_prog_pass0(d["TILEID"], program)
-        log.info("TSNR2 {} : cutting on COADD_FIBERSTATUS=0 and PASS=0, keeping {:.1f}% of the data".format(
-                program, 100 * sel.mean(),
-            )
-        )
-        d = d[sel]
+    # AR TSNR2: reading (cutting on COADD_FIBERSTATUS and PASS=0)
+    sel = (d["QAFIBERSTATUS"] & badqa_val) == 0
+    d = d[sel]
 
-        # AR TNR2_LRG: populating
-        for key in keys:
-            if key == "PROGRAM":
-                mydict["PROGRAM"] += [program for i in range(len(d))]
-            else:
-                mydict[key] += d[key].tolist()
-
-    # AR TNR2_LRG: converting to numpy array
+    fiber_d = Table()
+    fiber_d["FIBER"] = np.arange(5000, dtype=int)
+    keys = ["FIBERASSIGN_X", "FIBERASSIGN_Y", "TSNR2_LRG"]
     for key in keys:
-        mydict[key] = np.array(mydict[key])
-
-    # AR TSRN2_LRG: initializing
-    tsnr2 = Table()
-    for key in [
-        "FIBER",
-        "FIBERASSIGN_X",
-        "FIBERASSIGN_Y",
-        "{}_BRIGHT".format(tsnr2_key),
-        "{}_DARK".format(tsnr2_key),
-    ]:
-        if key == "FIBER":
-            tsnr2[key] = np.arange(5000, dtype=int)
-        else:
-            tsnr2[key] = np.nan + np.zeros(5000, dtype=float)
+        fiber_d[key] = np.nan
 
     # AR TSNR2: median value per fiber
     for i in range(5000):
-        sel = mydict["FIBER"] == i
+        sel = d["FIBER"] == i
         if sel.sum() > 0:
-            for key in ["FIBERASSIGN_X", "FIBERASSIGN_Y"]:
-                tsnr2[key][i] = np.nanmedian(mydict[key][sel])
-        for program in ["BRIGHT", "DARK"]:
-            selp = (sel) & (mydict["PROGRAM"] == program)
-            if selp.sum() > 0:
-                tsnr2["{}_{}".format(tsnr2_key, program)][i] = np.nanmedian(
-                    mydict[tsnr2_key][selp]
-                )
-
-    # AR TSNR2: rounding
-    for key in [
-        "FIBERASSIGN_X",
-        "FIBERASSIGN_Y",
-        "{}_BRIGHT".format(tsnr2_key),
-        "{}_DARK".format(tsnr2_key),
-    ]:
-        tsnr2[key] = np.round(tsnr2[key], 2)
-
-    # AR TSNR2: writing to ecsv
-    hdr = fitsio.FITSHDR()
-    hdr["NIGHTMIN"] = nightmin
-    hdr["NIGHTMAX"] = nightmax
-    tsnr2.meta = dict(hdr)
-    tsnr2.write("{}.ecsv".format(outroot_tsnr2), format="ascii.ecsv", overwrite=True)
+            for key in keys:
+                fiber_d[key][i] = np.nanmedian(d[key][sel]).round(2)
+    fiber_d.write("{}.ecsv".format(outroot_tsnr2), overwrite=True)
 
     # AR TSNR2: control plot
     if args.plot:
-        for program in ["BRIGHT", "DARK"]:
-            fig, ax = plt.subplots()
-            sc = ax.scatter(
-                tsnr2["FIBERASSIGN_X"],
-                tsnr2["FIBERASSIGN_Y"],
-                c=tsnr2["{}_{}".format(tsnr2_key, program)],
-                s=5,
-            )
-            ax.set_title(
-                "PROGRAM={}\nNIGHTMIN={} , NIGHTMAX={}".format(
-                    program, nightmin, nightmax,
-                )
-            )
-            ax.set_xlabel("FIBERASSIGN_X [mm]")
-            ax.set_ylabel("FIBERASSIGN_Y [mm]")
-            ax.grid(True)
-            cbar = plt.colorbar(sc)
-            cbar.set_label(tsnr2_key)
-            plt.savefig(
-                "{}-{}.png".format(outroot_tsnr2, program), bbox_inches="tight",
-            )
-            plt.close()
+        fig, ax = plt.subplots()
+        sc = ax.scatter(
+            fiber_d["FIBERASSIGN_X"],
+            fiber_d["FIBERASSIGN_Y"],
+            c=fiber_d["TSNR2_LRG"],
+            s=5,
+        )
+        ax.set_xlabel("FIBERASSIGN_X [mm]")
+        ax.set_ylabel("FIBERASSIGN_Y [mm]")
+        ax.grid()
+        cbar = plt.colorbar(sc)
+        cbar.set_label("TSNR2_LRG")
+        plt.savefig("{}.png".format(outroot_tsnr2), bbox_inches="tight")
+        plt.close()
 
 
 if __name__ == "__main__":
