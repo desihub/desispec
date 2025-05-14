@@ -1287,7 +1287,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
 
         #read all calib files to get dates of changes
-        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
+        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/sm*-?.yaml')
         all_config_data={}
         for y_file in yaml_filenames:
             with open(y_file) as f:
@@ -1297,6 +1297,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
         change_dates={k:[] for k in all_config_data.keys()}
         for speckey,data in all_config_data.items():
+
             required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
             required_keys.sort(key=lambda x:int(x[1]['DATE-OBS-BEGIN']),reverse=True)
             usever,useval=required_keys[0]
