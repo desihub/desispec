@@ -521,19 +521,20 @@ def _get_default_inventory_filename(specprod=None):
     else:
         raise IOError(f'Unable to find {specprod} inventory file')
 
-def parse_radec_string(radec):
+def parse_radec(radec):
     """
-    interpret radec as (RA,DEC) or (RA,DEC,RADIUS)
+    interpret radec as RA,DEC or RA,DEC,RADIUS (str, list, or tuple)
     """
-    tmp = radec.split(',')
-    if len(tmp) == 2:
-        ra = float(tmp[0])
-        dec = float(tmp[1])
+    if isinstance(radec, str):
+        radec = radec.split(',')
+    if len(radec) == 2:
+        ra = float(radec[0])
+        dec = float(radec[1])
         radius = 10.0         # default 10 arcsec
-    elif len(tmp) == 3:
-        ra = float(tmp[0])
-        dec = float(tmp[1])
-        radius = float(tmp[2])
+    elif len(radec) == 3:
+        ra = float(radec[0])
+        dec = float(radec[1])
+        radius = float(radec[2])
     else:
         raise ValueError(f'{radec=} should be "ra,dec" or "ra,dec,radius"')
 
@@ -577,7 +578,7 @@ def main():
         assert (args.targetids is None) or (args.ra_dec_radius is None)
 
         if args.radec is not None:
-            ra_dec_radius = parse_radec_string(args.radec)
+            ra_dec_radius = parse_radec(args.radec)
         else:
             ra_dec_radius = None
 
