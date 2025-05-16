@@ -886,6 +886,18 @@ def coadd_cameras(spectra):
     mask[~bad] = 0
 
     wavebands = "".join(sbands)
+    
+    wave, uniq = np.unique(wave, return_index=True)
+    flux = flux[:, uniq]
+    ivar = ivar[:, uniq]
+    mask = mask[:, uniq]
+    if has_model:
+        model = model[:, uniq]
+        model_counts = model_counts[:, uniq]
+    if has_res:
+        rdata = rdata[:, :, uniq]
+        rnorm = rnorm[:, :, uniq]
+
 
     if has_model:
         model[model_counts > 0] /= model_counts[model_counts > 0]
@@ -900,15 +912,15 @@ def coadd_cameras(spectra):
         model_dict = {wavebands + "_MODEL": model}
     else:
         model_dict = None
-
+    
     wave_combined, flux_combined, ivar_combined = {wavebands: wave}, {wavebands: flux}, {wavebands: ivar}
     if has_mask:
         mask_combined = {wavebands: mask}
     else:
         mask_combined = None
-        
+    
     res = Spectra(
-        bands= wavebands,
+        bands= [wavebands],
         wave=wave_combined,
         flux=flux_combined,
         ivar=ivar_combined,
