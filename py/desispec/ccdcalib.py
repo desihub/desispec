@@ -112,7 +112,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 log.error(message)
                 raise RuntimeError(message)
         else:
-            thisbias = False
+            thisbias = True
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
