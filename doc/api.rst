@@ -158,6 +158,9 @@ desispec API
 .. automodule:: desispec.io.raw
     :members:
 
+.. automodule:: desispec.io.redrock
+    :members:
+
 .. automodule:: desispec.io.sky
     :members:
 
