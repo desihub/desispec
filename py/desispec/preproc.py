@@ -66,7 +66,7 @@ def get_readout_mode(header):
         return "4Amp"
     elif ampids in [set('AB'), set('CD'), set('12'), set('34')]:
         return "2AmpLeftRight"
-    elif ampids in [set('AC'), set('BD'), set('13'), set('24')]:
+    elif ampids in [set('AC'), set('AD'), set('BC'), set('BD'), set('13'), set('24')]: # includes cross-read mode
         return "2AmpUpDown"
     else:
         log = get_logger()
