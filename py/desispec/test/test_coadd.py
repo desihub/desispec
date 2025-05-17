@@ -286,30 +286,6 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.mask['b'] == 0))
 
 
-    def test_coadd_cameras_with_cosmic(self):
-        """Test coadding cameras that have a cosmic ray"""
-        nspec, nwave = 3, 100
-        bands = ['b', 'r', 'z']
-        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
-
-        # simplify ivar and flux to make test math easier
-        for i, b in enumerate(bands):
-            s1.flux[b][:, :] = 1.0
-            s1.ivar[b][:, :] = 1.0
-
-            # add unidentified cosmic on a single spectrum
-            COSMIC = 1e6
-            s1.flux[b][i, nwave//2] = COSMIC
-
-        # All the same targets
-        s1.fibermap['TARGETID'] = 10
-        s2 = coadd_cameras(s1, cosmics_nsig=4)
-        # but since there were good spectra, the final mask is still 0
-        self.assertTrue(np.all(s2.mask['brz'] == 0))
-        # check flux is correct
-        self.assertTrue(np.all(s2.flux['brz'] == 1))
-        # ideally i should check the ivars, but it's too complex :)
-
 
     def test_coadd_single(self):
         """Test coaddition of a single spectrum which should be no-op"""
@@ -459,7 +435,7 @@ class TestCoadd(unittest.TestCase):
         rng = np.random.default_rng(4343)
         s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
         s1.fibermap['TARGETID'] = [10] * nspec
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
+        s2 = coadd_cameras(s1)
         model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
         edge_nmask = 2 
         # we will ignore pixels next to the edges of spectrum
@@ -489,7 +465,7 @@ class TestCoadd(unittest.TestCase):
                                                           s1.wave[band])
             for i in range(nspec):
                 s1.flux[band][i] = Resolution(resol[i]) @ model0[band]
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
+        s2 = coadd_cameras(s1)
         resmat2 = Resolution(s2.resolution_data['brz'][0])
         resmod = resmat2@model0_brz
         self.assertTrue(np.allclose(resmod[~edge_mask],
@@ -535,6 +511,8 @@ class TestCoadd(unittest.TestCase):
                 # otherwise it should be or'ed
                 self.assertTrue(np.bitwise_or.reduce(cur_m) ==
                                 s2.mask['brz'][0][curpix])
+
+
 
     def test_coadd_cameras_badfiberstatus(self):
         """
