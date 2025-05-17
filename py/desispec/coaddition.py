@@ -821,17 +821,28 @@ def coadd_cameras(spectra):
     tolerance = 1e-4
     mwave = [np.mean(spectra.wave[b]) for b in bands]
     sbands = np.array(bands)[np.argsort(mwave)]
-    windict = {}
-    
     log.debug("wavelength sorted cameras= {}".format(sbands))
-    
+    windict = {}
+
     for b in sbands:
         if wave is None:
             wave = spectra.wave[b]
         else:
             wave = np.append(wave, spectra.wave[b][spectra.wave[b] > wave[-1] + tolerance])
-    nwave = wave.size
+    
+    # check alignment, caching band wavelength grid indices as we go
+    for b in spectra.bands:
+        imin = np.argmin(np.abs(spectra.wave[b][0] - wave))
+        windices = np.arange(imin, imin + len(spectra.wave[b]), dtype=int)
+        dwave = spectra.wave[b] - wave[windices]
+        if np.any(np.abs(dwave) > tolerance):
+            msg = "Input wavelength grids (band '{}') are not aligned. Use --lin-step or --log10-step to resample to a common grid.".format(
+                b)
+            log.error(msg)
+            raise ValueError(msg)
 
+    nwave = wave.size
+    
     flux = np.zeros((ntarget, nwave))
     ivar = np.zeros((ntarget, nwave))
     mask = np.zeros((ntarget, nwave), dtype=np.int32)
@@ -862,28 +873,45 @@ def coadd_cameras(spectra):
         iv = spectra.ivar[b]
         m = spectra.mask[b] if has_mask else np.zeros_like(f, dtype=np.int32)
 
-        flux[:, iband] += iv * f
-        ivar[:, iband] += iv
-        mask[:, iband] |= m
+        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
+            fiberstatus = spectra.fibermap['FIBERSTATUS']
+        else:
+            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
 
-        if has_model and f"{b}_MODEL" in spectra.model:
-            model_band = spectra.model[f"{b}_MODEL"]
-            model[:, iband] += model_band
-            model_counts[:, iband] += 1
+        good_fiberstatus = use_for_coadd(fiberstatus, b)
 
-        if has_res:
-            res = spectra.resolution_data[b]
-            for i in range(ntarget):
-                raccum, rnorm_i = _resolution_coadd(res[i:i+1], iv[i:i+1])
+        for i in range(ntarget):
+            if not good_fiberstatus[i]:
+                continue
+
+            flux[i, iband] += iv[i] * f[i]
+            ivar[i, iband] += iv[i]
+            
+            if has_mask:
+                # accumulate all of the bad pixel masks we have
+                # we will zero out those if we end up with ivar>0 in the result
+                valid = iv[i] > 0  # only where this band contributed
+                tmpmask = spectra.mask[b][i]
+                mask[i, iband][valid] |= tmpmask[valid]
+
+            if has_model and f"{b}_MODEL" in spectra.model:
+                model_band = spectra.model[f"{b}_MODEL"]
+                model[i, iband] += model_band[i]
+                model_counts[i, iband] += 1
+
+            if has_res:
+                res = spectra.resolution_data[b][i]
+                iv_i = iv[i:i+1]
+                raccum, rnorm_i = _resolution_coadd(res[np.newaxis, :, :], iv_i)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
                 rdata[i, offset:offset+ndiag, iband] += raccum
                 rnorm[i, offset:offset+ndiag, iband] += rnorm_i
-
+    
     bad = ivar == 0
     flux[~bad] /= ivar[~bad]
     flux[bad] = 0
-    mask[~bad] = 0
+    mask[bad] = 0 # only clear masks for invalid pixels
 
     wavebands = "".join(sbands)
     
@@ -909,7 +937,7 @@ def coadd_cameras(spectra):
         mask_combined = {wavebands: mask}
     else:
         mask_combined = None
-    
+        
     res = Spectra(
         bands= [wavebands],
         wave=wave_combined,
