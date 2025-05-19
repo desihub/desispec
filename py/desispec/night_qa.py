@@ -1402,7 +1402,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
 def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group="cumulative"):
     """
     For a given night, create a Z vs. FIBER plot for all SKY fibers, and one for
-        each of the main backup/bright/dark programs
+        each of the main backup/bright{1b}/dark{1b} programs
 
     Args:
         outpdf: output pdf file (string)
@@ -1441,8 +1441,9 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
         )
         if len(fns) > 0:
             hdr = fitsio.read_header(fns[0], 0)
+            # AR merge bright+bright1b, dark+dark1b
             if "FAFLAVOR" in hdr:
-                faflavor = hdr["FAFLAVOR"]
+                faflavor = hdr["FAFLAVOR"].replace("1b", "")
         log.info("identified FAFLAVOR for {}: {}".format(tileid, faflavor))
         # AR
         fns = []
@@ -1484,7 +1485,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
             title = "NIGHT = {}\nAll tiles ({} fibers)".format(night, len(fibers))
         else:
             faflavor_sel = faflavors == plot_faflavor
-            title = "NIGHT = {}\nFAFLAVOR={} ({} fibers)".format(night, plot_faflavor, faflavor_sel.sum())
+            title = "NIGHT = {}\nFAFLAVOR={}{} ({} fibers)".format(night, plot_faflavor, "{1b}", faflavor_sel.sum())
         if faflavor_sel.sum() < 5000:
             alpha = 0.3
         else:
