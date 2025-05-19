@@ -1560,9 +1560,10 @@ def plot_newlya(
         * The plotted y-values are: (N_newlya_observed / N_newlya_expected) - 1.
         * The expected numbers are based on all main dark tiles (from daily) up to May 26th 2022.
         * The 1-2-3-sigma regions reflect the approximate scatter of those data.
+        * For the new Lya plot, we merge dark and dark1b tiles.
     """
     #
-    n_dark_passids = 7
+    n_dark_passids = 9
     if ntilecovs.shape[1] != n_dark_passids:
         msg = "ntilecovs.shape[1] = {} is different than n_dark_passids = {}".format(
             ntilecovs.shape[1], n_dark_passids,
@@ -1575,6 +1576,10 @@ def plot_newlya(
         mean_ntilecovs += (i + 1) * ntilecovs[:, i]
     # AR expected number of newlya
     # AR based on main dark tiles (from daily) up to May 26th 2022
+    # TODO: AR so far we "ignore" passes 7+8, for simplicity
+    #       AR we do not have significant stats for those
+    #       AR but we expect ~zero new Lyas for those,
+    #       AR so it should be reasonable
     def expect_newlyas(ntilecovs):
         return (
             ntilecovs[:, 0] * 287.7 +
@@ -1678,7 +1683,7 @@ def create_petalnz_pdf(
     tmp_outpdf = get_tempfilename(outpdf)
 
     petals = np.arange(10, dtype=int)
-    n_dark_passids = 7
+    n_dark_passids = 9 # dark+dark1b
     # AR safe
     tileids, ii = np.unique(tileids, return_index=True)
     surveys = surveys[ii]
@@ -1727,7 +1732,7 @@ def create_petalnz_pdf(
                 )
     tileids, surveys = tileids[sel], surveys[sel]
     # AR gather all infos from the zmtl*fits files
-    # AR and few extra infos for dark tiles for Ly-a:
+    # AR and few extra infos for dark/dark1b tiles for Ly-a:
     # AR - PRIORITY from the redrock*fits EXP_FIBERMAP
     # AR - nb of previously observed overlapping tiles
     ds = {"bright" : [], "dark" : []}
@@ -1743,7 +1748,7 @@ def create_petalnz_pdf(
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
-        faprgrm = hdr["FAPRGRM"].lower()
+        faprgrm = hdr["FAPRGRM"].lower().replace("1b", "") # AR merge bright+bright1b, dark+dark1b
         if faprgrm not in ["bright", "dark"]:
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
@@ -1783,7 +1788,7 @@ def create_petalnz_pdf(
                     for msk in ["BGS_BRIGHT", "BGS_FAINT"]:
                         sel |= (d["BGS_TARGET"] & bgs_mask[msk]) > 0
                 if faprgrm == "dark":
-                    for msk in ["LRG", "ELG", "QSO"]:
+                    for msk in ["LGE", "LRG", "ELG", "QSO"]:
                         sel |= (d["DESI_TARGET"] & desi_mask[msk]) > 0
                 log.info("selecting {} tracer targets from {}".format(sel.sum(), fn))
                 d = d[sel]
@@ -1822,8 +1827,9 @@ def create_petalnz_pdf(
                     # AR pix_ntilecovs is the number of hp pixels covered by NTILE
                     # AR be careful as ntilecov=1 (i.e. covered by one tile) is
                     # AR    stored in the 0-index, etc.
+                    # AR consider DARK+DARK1B
                     if pix_ntilecovs is None:
-                        _, pix_ntilecovs, _, _, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
+                        _, pix_ntilecovs, _, _, _ = get_tilecov(tileid, surveys=survey, programs="DARK,DARK1B", lastnight=night)
                         d["NTILECOV"] = np.zeros(len(d) * n_dark_passids).reshape((len(d), n_dark_passids))
                         for ntilecov in range(n_dark_passids):
                             sel = pix_ntilecovs == 1 + ntilecov
@@ -1837,7 +1843,7 @@ def create_petalnz_pdf(
     faprgrms, tracers = [], []
     for faprgrm, faprgrm_tracers in zip(
         ["bright", "dark"],
-        [["BGS_BRIGHT", "BGS_FAINT"], ["LRG", "ELG", "QSO"]],
+        [["BGS_BRIGHT", "BGS_FAINT"], ["LGE", "LRG", "ELG", "QSO"]],
     ):
         if len(ds[faprgrm]) > 0:
             ds[faprgrm] = vstack(ds[faprgrm])
@@ -1866,7 +1872,9 @@ def create_petalnz_pdf(
             xlim, ylim = (-0.2, 1.5), (0, 5.0)
         else:
             faprgrm, mask, dtkey = "dark", desi_mask, "DESI_TARGET"
-            if tracer == "LRG":
+            if tracer == "LGE":
+                xlim, ylim = (-0.2, 2), (0, 3.0)
+            elif tracer == "LRG":
                 xlim, ylim = (-0.2, 2), (0, 3.0)
             elif tracer == "ELG":
                 xlim, ylim = (-0.2, 3), (0, 3.0)
@@ -1879,6 +1887,7 @@ def create_petalnz_pdf(
     colors = {
         "BGS_BRIGHT" : "purple",
         "BGS_FAINT" : "c",
+        "LGE" : "pink",
         "LRG" : "r",
         "ELG" : "b",
         "QSO" : "orange",
@@ -1903,15 +1912,15 @@ def create_petalnz_pdf(
                 gs = gridspec.GridSpec(1, 4, wspace=0.5)
                 title = "SURVEY={} : {} tiles from {}".format(
                     survey,
-                    " and ".join(["{} {}".format(ntiles_surv[faprgrm], faprgrm.upper()) for faprgrm in faprgrms]),
+                    " and ".join(["{} {}{}".format(ntiles_surv[faprgrm], faprgrm.upper(), "{1B}") for faprgrm in faprgrms]),
                     night,
                 )
                 if "dark" in ntiles_surv:
                     tmpn = ntiles_surv["dark"]
                 else:
                     tmpn = 0
-                title_dark = "SURVEY={} : {} DARK tiles from {}".format(
-                    survey, tmpn, night,
+                title_dark = "SURVEY={} : {} DARK{} tiles from {}".format(
+                    survey, tmpn, "{1B}", night
                 )
                 # AR fraction of ~VALID fibers, bright+dark together
                 ax = plt.subplot(gs[0])
@@ -1973,7 +1982,7 @@ def create_petalnz_pdf(
                 ax.grid()
                 # AR - newly identified Ly-a = f(ntilecov)
                 ax = plt.subplot(gs[3])
-                xlim, ylim = (0.5, 6.5), (-2.5, 2.5)
+                xlim, ylim = (0.5, 8.5), (-2.5, 2.5)
                 nvalifiber_norm = 3900
                 if "dark" in faprgrms:
                     faprgrm = "dark"
@@ -2048,12 +2057,13 @@ def create_petalnz_pdf(
                                 label="{} PETAL_LOC = {}".format(tracer, petal),
                             )
                             ax.set_title(
-                                "{} {}-{} tiles from {}".format(
+                                "{} {}-{}{} tiles from {}".format(
                                     ntiles_surv[faprgrm],
                                     survey.upper(),
                                     faprgrm.upper(),
+                                    "{1B}",
                                     night,
-                                )
+                                ), fontsize=10
                             )
                             ax.set_xlabel("Z")
                             if petal == 0:
