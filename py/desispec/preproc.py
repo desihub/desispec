@@ -54,6 +54,7 @@ def get_readout_mode(header):
     "4Amp" means all 4 amps (ABCD) were used for CCD readout;
     "2AmpLeftRight" means 1 left amp (AC) and 1 right amp (BD) were used;
     "2AmpUpDown" means 1 upper amp (CD) and one lower (AB) were used.
+    Cross-combinations A+D or B+C are also considered "2AmpUpDown"
     """
 
     # Amp arrangement:
