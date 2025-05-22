@@ -57,7 +57,7 @@ except KeyError:
 
 if args.nights is not None:
     nights = parse_int_args(args.nights)
-    ok = np.in1d(exposure_table["NIGHT"],nights)
+    ok = np.isin(exposure_table["NIGHT"],nights)
     exposure_table = exposure_table[ok]
 
 tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)

@@ -157,18 +157,18 @@ def main():
                             + f" so skipping this step")
 
     # AR expids, tileids, surveys
-    if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], steps_tbd).sum() > 0:
+    if np.isin(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], steps_tbd).sum() > 0:
         expids, tileids, surveys = get_surveys_night_expids(args.night)
 
     # AR dark expid
-    if np.in1d(["dark", "badcol"], steps_tbd).sum() > 0:
+    if np.isin(["dark", "badcol"], steps_tbd).sum() > 0:
         dark_expid = get_dark_night_expid(args.night, args.prod)
 
     if "morningdark" in steps_tbd:
         morningdark_expid = get_morning_dark_night_expid(args.night, args.prod)
 
     # AR CTE detector expid
-    if np.in1d(["ctedet", "ctedetrowbyrow"], steps_tbd).sum() > 0:
+    if np.isin(["ctedet", "ctedetrowbyrow"], steps_tbd).sum() > 0:
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
     # AR dark

@@ -15,7 +15,7 @@ from desispec.io import read_stdstar_models,read_frame,read_fiberflat,read_sky
 from desispec.io.util import get_tempfilename
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
-from desiutil.log import get_logger
+from desispec.fiberfluxcorr import flat_to_psf_flux_correction
 
 def parse(options=None):
 
@@ -125,6 +125,10 @@ def main(args=None):
             message="wavelength mismatch: frame.wave=[{},{}] and analysis range = [{},{}]".format(frame.wave[0],frame.wave[-1],args.wavemin,args.wavemax)
             log.error(message)
             raise RuntimeError(message)
+        
+        # apply point source correction to flux
+        psf_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm=1.1)
+        frame.flux *= psf_correction[:,None]
 
         rivar = np.sum(frame.ivar[indices][:,jj]*(frame.mask[indices][:,jj]==0),axis=1)
         rflux = np.sum(frame.ivar[indices][:,jj]*frame.flux[indices][:,jj]*(frame.mask[indices][:,jj]==0),axis=1)

@@ -73,4 +73,8 @@ class TestSky(unittest.TestCase):
         spectra = self._get_spectra()
 
         xyset = read_xytraceset(self.psffile)
-        correct_fiber_crosstalk(spectra,xyset=xyset)
+
+        from importlib import resources
+        parameter_filename = resources.files('desispec').joinpath("data/fiber-crosstalk.yaml")
+
+        correct_fiber_crosstalk(spectra,xyset=xyset,parameter_filename=parameter_filename)

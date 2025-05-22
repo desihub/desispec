@@ -259,7 +259,7 @@ def update_table(table1,table2,keys) :
             v1=[i+j for i,j in zip(v1,table1[k].astype(str))]
             v2=[i+j for i,j in zip(v2,table2[k].astype(str))]
 
-    replace = np.in1d(v1,v2)
+    replace = np.isin(v1,v2)
     keep = ~replace
 
     log.info("keep {} entries, replace {}, add {}".format(np.sum(keep),np.sum(replace),len(table2)-np.sum(replace)))
@@ -412,7 +412,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                 log.warning("cannot find prod. exposure table {}".format(pipe_exptab_filename))
                 continue
             pipe_exptab = load_table(tablename=pipe_exptab_filename, tabletype="exptable", suppress_logging=True)
-            missing = (~(np.in1d(pipe_exptab["EXPID"],exp_summary["EXPID"])))&(pipe_exptab["TILEID"]>0)
+            missing = (~(np.isin(pipe_exptab["EXPID"],exp_summary["EXPID"])))&(pipe_exptab["TILEID"]>0)
             nmissing=np.sum(missing)
             if nmissing>0:
                 for i in np.where(missing)[0] :
@@ -567,8 +567,8 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
               'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
               'EFFTIME_BACKUP_GFA']
 
-    if not np.all(np.in1d(exp_summary.dtype.names, neworder)):
-        missing = ~np.in1d(exp_summary.dtype.names, neworder)
+    if not np.all(np.isin(exp_summary.dtype.names, neworder)):
+        missing = ~np.isin(exp_summary.dtype.names, neworder)
         msg = "Missing keys, '{}' in new order list!".format(np.array(exp_summary.dtype.names)[missing])
         log.critical(msg)
         log.critical("new order list:",sorted(neworder))
@@ -1261,16 +1261,16 @@ def main():
                 #
                 if args.expids is not None:
                     expids = parse_int_args(args.expids)
-                    selection &= np.in1d(exposure_table["EXPID"], expids)
+                    selection &= np.isin(exposure_table["EXPID"], expids)
                 if args.nights is not None:
                     nights = parse_int_args(args.nights)
-                    selection &= np.in1d(exposure_table["NIGHT"], nights)
+                    selection &= np.isin(exposure_table["NIGHT"], nights)
                 if len(gfa_nights) > 0:
-                    selection &= np.in1d(exposure_table["NIGHT"], gfa_nights)
+                    selection &= np.isin(exposure_table["NIGHT"], gfa_nights)
                 # consider only the tiles observed in this selection of exposures
                 tiles=np.unique(exposure_table["TILEID"][selection])
                 # keep all exposures of those tiles
-                selection = np.in1d(exposure_table["TILEID"],tiles)
+                selection = np.isin(exposure_table["TILEID"],tiles)
 
             new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
             if os.path.isfile(args.tile_completeness) :

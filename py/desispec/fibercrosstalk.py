@@ -15,7 +15,7 @@ from scipy.signal import fftconvolve
 from desiutil.log import get_logger
 
 from desispec.io import read_xytraceset
-from desispec.calibfinder import findcalibfile
+from desispec.calibfinder import CalibFinder
 from desispec.maskbits import specmask,fibermask
 
 def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,asymptotic_power_law_index = 2.5):
@@ -201,7 +201,7 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat=None,fracti
 
 
 
-def read_crosstalk_parameters() :
+def read_crosstalk_parameters(parameter_filename = None) :
     """
     Reads the crosstalk parameters in desispec/data/fiber-crosstalk.yaml
 
@@ -209,7 +209,8 @@ def read_crosstalk_parameters() :
        nested dictionary with parameters per camera
     """
     log=get_logger()
-    parameter_filename = resources.files('desispec').joinpath("data/fiber-crosstalk.yaml")
+    if parameter_filename is None :
+        parameter_filename = resources.files('desispec').joinpath("data/fiber-crosstalk.yaml")
     log.info("read parameters in {}".format(parameter_filename))
     stream = open(parameter_filename, 'r')
     params = yaml.safe_load(stream)
@@ -217,7 +218,7 @@ def read_crosstalk_parameters() :
     log.debug("params= {}".format(params))
     return params
 
-def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None):
+def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None,parameter_filename=None):
     """Apply a fiber cross talk correction. Modifies frame.flux and frame.ivar.
 
     Args:
@@ -226,13 +227,23 @@ def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None):
         xyset, optional : desispec.xytraceset.XYTraceSet object with trace
             coordinates to shift the spectra
             (automatically found with calibration finder otherwise)
+        parameter_filename, optional : path to yaml file with correction parameters
     """
     log=get_logger()
 
-    params = read_crosstalk_parameters()
+    cfinder = None
+    if parameter_filename is None :
+        cfinder = CalibFinder([frame.meta])
+        if cfinder.haskey("FIBERCROSSTALK") :
+            parameter_filename = cfinder.findfile("FIBERCROSSTALK")
+            log.debug("Using custom file "+parameter_filename)
+
+    params = read_crosstalk_parameters(parameter_filename = parameter_filename)
 
     if xyset is None :
-        psf_filename = findcalibfile([frame.meta,],"PSF")
+        if cfinder is None :
+            cfinder = CalibFinder([frame.meta])
+        psf_filename = cfinder.findfile("PSF")
         xyset  = read_xytraceset(psf_filename)
 
     log.info("compute kernels")

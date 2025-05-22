@@ -19,7 +19,7 @@ def parse(options=None):
             default='a0123456789', help='list of cameras to process')
     p.add_argument('-o', '--outdir', type=str,
             help='output directory')
-    p.add_argument('--nzeros', type=int, default=25,
+    p.add_argument('--nzeros', type=int, default=50,
             help='max number of input ZEROS to use (saves memory) [%(default)s]')
     p.add_argument('--minzeros', type=int, default=15,
             help='minimum number of good ZEROs required [%(default)s]')

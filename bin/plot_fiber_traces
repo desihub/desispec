@@ -90,7 +90,7 @@ if args.image is not None :
     if args.mask:
         mask = fitsio.read(args.image, 'MASK')
         # img *= (mask==0)
-        img[mask!=0] = np.NaN
+        img[mask!=0] = np.nan
 
     plt.imshow(img,origin="lower",vmin=vmin,vmax=vmax,aspect="auto")
 

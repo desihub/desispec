@@ -489,7 +489,7 @@ def main(args=None, comm=None) :
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
 
-    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
+    if not np.isin(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves

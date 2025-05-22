@@ -328,11 +328,13 @@ def test_calibration_finder(data,filename) :
                     print(f"Testing the calibration finder with header={header}")
                     cfinder=CalibFinder([header],filename)
                     # now check some files
-                    for k in ["PSF","BIAS","PIXFLAT","MASK","FIBERFLAT","FLUXCALIB","SKYCORR","SKYGRADPCA","TPCORRPARAM"] :
+                    for k in ["PSF","BIAS","PIXFLAT","MASK","FIBERFLAT","FLUXCALIB","SKYCORR","SKYGRADPCA","TPCORRPARAM","FIBERCROSSTALK"] :
                         if cfinder.haskey(k) :
                             filename=cfinder.findfile(k)
                             if not os.path.isfile(filename) :
                                 raise IOError(f"Missing {k} file {filename}")
+                            else :
+                                print(f"{k} {filename} OK")
                 else :
                     print("(no test of the calibration finder because the expected and edited yaml files are not the same)")
                     print(f" expected: {filename1}")

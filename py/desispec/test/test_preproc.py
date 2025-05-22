@@ -273,13 +273,19 @@ class TestPreProc(unittest.TestCase):
             )
         self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
 
-        #- bad combos raise exception
-        with self.assertRaises(ValueError):
-            hdr = dict(
-                BIASSECA=self.header['BIASSECA'],
-                BIASSECD=self.header['BIASSECD'],
-                )
-            get_readout_mode(hdr)
+        #- cross corner combinations AD and BC are considered "2AmpUpDown"
+        hdr = dict(
+            BIASSECA=self.header['BIASSECA'],
+            BIASSECD=self.header['BIASSECD'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
+        hdr = dict(
+            BIASSECB=self.header['BIASSECB'],
+            BIASSECC=self.header['BIASSECC'],
+            )
+        self.assertEqual(get_readout_mode(hdr), "2AmpUpDown")
+
 
     def test_bias(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=False)

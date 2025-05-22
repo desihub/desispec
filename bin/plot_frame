@@ -85,7 +85,7 @@ for filename in args.infile :
     if fibers is None :
         fibers = frame.fibermap["FIBER"]
 
-    selection = np.in1d(frame.fibermap["FIBER"],fibers)
+    selection = np.isin(frame.fibermap["FIBER"],fibers)
     if args.focal_plane and frame.fibermap is not None :
         x.append(frame.fibermap["FIBERASSIGN_X"][selection])
         y.append(frame.fibermap["FIBERASSIGN_Y"][selection])
@@ -114,7 +114,7 @@ for filename in args.infile :
     if fibers is None :
         fibers = fibers_in_frame
     else :
-        selection = np.in1d(fibers_in_frame,fibers)
+        selection = np.isin(fibers_in_frame,fibers)
 
 
         if np.sum(selection)==0 :
@@ -123,7 +123,7 @@ for filename in args.infile :
             print("for convenience, I add X*500 to the fiber numbers")
             fibers = fibers%500+500*(fibers_in_frame[0]//500)
             print("will show fibers =",list(fibers))
-            selection = np.in1d(fibers_in_frame,fibers)
+            selection = np.isin(fibers_in_frame,fibers)
             if np.sum(selection)==0 :
                 print("still empty selection!")
                 sys.exit(12)
@@ -131,7 +131,7 @@ for filename in args.infile :
         frame = frame[selection]
         if len(fibers) > np.sum(selection) :
             print("not all requested fibers are in frame")
-            fibers = fibers[np.in1d(fibers,fibers_in_frame)]
+            fibers = fibers[np.isin(fibers,fibers_in_frame)]
             print("will show only {}".format(fibers))
 
     if args.no_mask :

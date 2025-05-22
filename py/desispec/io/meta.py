@@ -882,7 +882,7 @@ def faflavor2program(faflavor):
     dark |= faflavor == 'sv1elgqso'
     dark |= faflavor == 'sv1lrgqso'
     dark |= faflavor == 'sv1lrgqso2'
-    dark |= np.in1d(
+    dark |= np.isin(
         faflavor,
         np.char.add(
             "special",
@@ -900,7 +900,7 @@ def faflavor2program(faflavor):
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
     bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
-    bright |= np.in1d(
+    bright |= np.isin(
         faflavor,
         np.char.add(
             "special",

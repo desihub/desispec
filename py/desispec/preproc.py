@@ -54,6 +54,7 @@ def get_readout_mode(header):
     "4Amp" means all 4 amps (ABCD) were used for CCD readout;
     "2AmpLeftRight" means 1 left amp (AC) and 1 right amp (BD) were used;
     "2AmpUpDown" means 1 upper amp (CD) and one lower (AB) were used.
+    Cross-combinations A+D or B+C are also considered "2AmpUpDown"
     """
 
     # Amp arrangement:
@@ -66,7 +67,7 @@ def get_readout_mode(header):
         return "4Amp"
     elif ampids in [set('AB'), set('CD'), set('12'), set('34')]:
         return "2AmpLeftRight"
-    elif ampids in [set('AC'), set('BD'), set('13'), set('24')]:
+    elif ampids in [set('AC'), set('AD'), set('BC'), set('BD'), set('13'), set('24')]: # includes cross-read mode
         return "2AmpUpDown"
     else:
         log = get_logger()
@@ -1000,7 +1001,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         amps_with_readnoise_per_row = cfinder.value("READNOISEPERROW").split(",")
         log.info("Read noise per row (keyword READNOISEPERROW) for amps {}".format(amps_with_readnoise_per_row))
         # check that those amps exist otherwise throw an error
-        if not np.all(np.in1d(amps_with_readnoise_per_row,amp_ids)) :
+        if not np.all(np.isin(amps_with_readnoise_per_row,amp_ids)) :
             mess = "Some 'READNOISEPERROW' amps {} are not in {}.".format(amps_with_readnoise_per_row,amp_ids)
             log.error(mess)
             raise KeyError(mess)

@@ -383,7 +383,7 @@ def mask32(mask):
         return np.asarray(mask, dtype='u4')
 
     elif mask.dtype in (
-        np.dtype('bool'), np.dtype('bool8'),
+        np.dtype('bool'),
         np.dtype('i2'),  np.dtype('u2'),
         np.dtype('>i2'), np.dtype('>u2'),
         np.dtype('<i2'), np.dtype('<u2'),

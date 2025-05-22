@@ -333,7 +333,7 @@ class Spectra(object):
 
             exp_fibermap = None
             if self.exp_fibermap is not None:
-                j = np.in1d(self.exp_fibermap['TARGETID'], fibermap['TARGETID'])
+                j = np.isin(self.exp_fibermap['TARGETID'], fibermap['TARGETID'])
                 exp_fibermap = self.exp_fibermap[j].copy()
         else:
             fibermap = None

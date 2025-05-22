@@ -7,7 +7,7 @@ desispec.scripts.trace_shifts
 import os, sys
 import argparse
 import numpy as np
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from importlib import resources

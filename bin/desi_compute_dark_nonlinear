@@ -128,9 +128,9 @@ else:
     #- Trim to just the requested days/nights
     keep = np.zeros(len(speclog), dtype=bool)
     if args.nights is not None and len(args.nights)>0 :
-        keep |= np.in1d(speclog["NIGHT"],args.nights)
+        keep |= np.isin(speclog["NIGHT"],args.nights)
     if args.days is not None and len(args.days)>0 :
-        keep |= np.in1d(speclog["DAY"],args.days)
+        keep |= np.isin(speclog["DAY"],args.days)
 
     speclog = speclog[keep]
     tmpfile = speclog_file + '.tmp-' + str(os.getpid())

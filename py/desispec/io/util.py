@@ -123,7 +123,8 @@ def native_endian(data):
     if data.dtype.isnative:
         return data
     else:
-        return data.byteswap().newbyteorder()
+        # return data.byteswap().newbyteorder()   # numpy<2
+        return data.byteswap().view(data.dtype.newbyteorder('native'))  # works with numpy 2
 
 def add_columns(data, colnames, colvals):
     '''
