@@ -299,7 +299,7 @@ def coadd_fibermap(fibermap, onetile=False):
         if not 'MEAN_MJD' in tfmap.dtype.names :
             xx = Column(np.zeros(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MEAN_MJD')
-    
+
     if 'FIBERSTATUS' in tfmap.dtype.names :
         tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
     if not  'COADD_FIBERSTATUS' in tfmap.dtype.names :
@@ -337,19 +337,19 @@ def coadd_fibermap(fibermap, onetile=False):
             compute_coadds = ~good_coadds
             # if all inputs were bad, COADD_FIBERSTATUS is OR of inputs instead of AND
             tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_or.reduce(exp_fibermap[fiberstatus_key][jj])
-        
+
         #- For FIBER_RA/DEC quantities, only average over good coordinates.
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
         if 'FIBER_RA' in exp_fibermap.colnames and 'FIBER_DEC' in exp_fibermap.colnames:
             good_coords = (exp_fibermap['FIBER_RA'][jj]!=0)|(exp_fibermap['FIBER_DEC'][jj]!=0)
-            
+
             #- Check whether entries with good coordinates exist (if not use all coordinates)
             if np.count_nonzero(good_coords)>0:
                 compute_coords = good_coords
             else:
                 compute_coords = ~good_coords
-                
+
             #- Check for edge case where good_coadds and good_coords do not overlap:
             #  if they overlap, use both conditions; otherwise compute coordinates over good_coords
             if np.count_nonzero(compute_coadds&compute_coords)>0:
@@ -358,7 +358,7 @@ def coadd_fibermap(fibermap, onetile=False):
                 #TODO - decide if it's worth adding the following Warning message to the log
                 #print(f"Warning: TARGETID lacks overlap between good_coadds and good_coords: {tid}")
                 compute_coadds_coords = compute_coords
-                        
+
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
         if 'NIGHT' in exp_fibermap.colnames:
@@ -397,7 +397,7 @@ def coadd_fibermap(fibermap, onetile=False):
                 vals=exp_fibermap[k][jj][compute_coadds]
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
-                        
+
         # MIN_, MAX_MJD over exposures used in the coadd
         if 'MJD' in exp_fibermap.colnames :
             vals=exp_fibermap['MJD'][jj][compute_coadds]
@@ -405,9 +405,9 @@ def coadd_fibermap(fibermap, onetile=False):
             tfmap['MAX_MJD'][i] = np.max(vals)
             tfmap['MEAN_MJD'][i] = np.mean(vals)
 
-        # Error propagation of IVAR values when taking an unweighted MEAN 
+        # Error propagation of IVAR values when taking an unweighted MEAN
         #- (Note 1: IVAR will be 0.0 if any of ivar[compute_coadds]=0)
-        #- (Note 2: these columns are place-holder for possible future use)    
+        #- (Note 2: these columns are place-holder for possible future use)
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR',
                   'DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
             if k in exp_fibermap.colnames :
@@ -512,7 +512,7 @@ def _iterative_masker(vec,
 def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     """
     Mask cosmics in multiple spectra
-    
+
     Args:
         wave (numpy.ndarray): 1d array of wavelengths
         flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
@@ -716,10 +716,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             spectra_mask = np.zeros(spectra.flux[b].shape, dtype=int)
 
         tmask = np.zeros((ntarget, nwave), dtype=spectra_mask.dtype)
-        trdata = np.zeros(
-            (ntarget, spectra.resolution_data[b].shape[1], nwave),
-            dtype=spectra.resolution_data[b].dtype)
-
+        if spectra.resolution_data is not None :
+            trdata = np.zeros(
+                (ntarget, spectra.resolution_data[b].shape[1], nwave),
+                dtype=spectra.resolution_data[b].dtype)
+        else :
+            trdata = None
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
         else:
@@ -764,8 +766,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             weights = weights / (tivar[i] + (tivar[i] == 0))
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
-            trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
-                                                weights)[0]
+            if spectra.resolution_data is not None :
+                trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
+                                                    weights)[0]
             # note we ignore the resolution matrix norm (sum of weights)
             # because weights already were normalized
 
@@ -779,7 +782,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
         spectra.ivar[b] = tivar
         if spectra.mask is not None:
             spectra.mask[b] = tmask
-        spectra.resolution_data[b] = trdata
+        if spectra.resolution_data is not None :
+            spectra.resolution_data[b] = trdata
 
     if spectra.scores is not None:
         orig_scores = Table(spectra.scores.copy())
