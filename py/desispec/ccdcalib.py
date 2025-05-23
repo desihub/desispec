@@ -115,9 +115,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             v1=first_image_header[k].strip().upper()
             v2=fitsfile[camera].header[k].strip().upper()
             if v1 != v2 :
-                mess=(f"{filename} k={v1} != {v2}")
-                log.error(mess)
-                raise mess
+                mess=(f"skip {filename} k={v2} != {v1} (from first file)")
+                log.warning(mess)
+                continue
+        v1=float(first_image_header["CCDTEMP"])
+        v2=float(fitsfile[camera].header["CCDTEMP"])
+        if np.abs(v1-v2)>4. : # more than 4 deg off
+            mess=(f"skip {filename} k={v2} != {v1} (from first file)")
+            log.warning(mess)
+            continue
 
 
         fitsfile.close()
