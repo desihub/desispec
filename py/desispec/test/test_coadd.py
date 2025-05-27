@@ -452,7 +452,7 @@ class TestCoadd(unittest.TestCase):
         s1 = self._random_spectra(nspec, nwave, with_mask=True)
         s1.resolution_data = None
         s1.R = None
-        coadd(s1)
+        coadd(s1)  # shouldn't crash, even without resolution data
         
     def test_coadd_cameras_resolution(self):
         """Test proper behaviour of resolution matrix
