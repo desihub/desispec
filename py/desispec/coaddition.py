@@ -892,11 +892,11 @@ def coadd_cameras(spectra):
                 # we will zero out those if we end up with ivar>0 in the result
                 mask[i, iband] |= m[i]
 
-            if has_model and f"{b}_MODEL" in spectra.model:
-                model_band = spectra.model[f"{b}_MODEL"]
-                model[i, iband] += model_band[i]
+            if has_model:
+                model_band = spectra.model[f"{b}"][i]
+                model[i, iband] += model_band
                 model_counts[i, iband] += 1
-
+             
             if has_res:
                 res = spectra.resolution_data[b][i]
                 iv_i = iv[i:i+1]
@@ -918,7 +918,7 @@ def coadd_cameras(spectra):
 
     if has_model:
         model[model_counts > 0] /= model_counts[model_counts > 0]
-
+        
     if has_res:
         rdata /= rnorm + (rnorm == 0)
         rdict = {wavebands: rdata}
