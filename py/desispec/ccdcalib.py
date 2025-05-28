@@ -34,9 +34,8 @@ from desiutil.depend import add_dependencies
 
 from desispec.workflow.batch import get_config
 
-
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
-                      exptime=None, min_vccdsec=0):
+                      exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None):
     """
     Compute classic dark model from input dark images
 
@@ -50,6 +49,9 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         nocosmic (bool): use medians instead of cosmic identification
         exptime (float): write EXPTIME header keyword; all inputs must match
         min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
+        max_temperature_diff (float) : maximal CCD temperature difference
+        reference_header (dict) : reference header that defines the valid hardware configuration
+                                (default is the most recent one)
 
     Note: if bias is None, the bias will be looked for in
     $DESI_SPECTRO_REDUX/$SPECPROD/calibnight then $DESI_SPECTRO_CALIB
@@ -60,16 +62,33 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     """
 
     log = get_logger()
-    log.info("read images ...")
+
 
     shape=None
     images=[]
-    first_image_header = None
     if nocosmic :
         masks=None
     else :
         masks=[]
 
+
+    if reference_header is None :
+        log.info("first pass to find the most recent header ...")
+        for ifile, filename in enumerate(rawfiles):
+            log.info(filename)
+            fitsfile=pyfits.open(filename)
+            if not camera in fitsfile : continue
+            header=fitsfile[camera].header
+            if reference_header is None :
+                reference_header = header
+            else :
+                if header["EXPID"] > reference_header["EXPID"] :
+                    reference_header = header
+            fitsfile.close()
+        log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} DETECTOR={reference_header['DETECTOR']}")
+
+
+    log.info("read images ...")
     exptimes=[]
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
@@ -77,6 +96,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         # collect exposure times
         primary_header = read_raw_primary_header(filename)
         fitsfile=pyfits.open(filename)
+        if not camera in fitsfile :
+            log.warning(f'No camera {camera} in {filename}')
+            continue
+
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -89,6 +112,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             log.error(message)
             raise ValueError(message)
 
+        valid=True
+
         if exptime is not None:
             if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
@@ -96,37 +121,41 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 fitsfile.close()
                 continue
 
-        if first_image_header is None :
-            first_image_header = fitsfile[camera].header
-        elif 'VCCDSEC' in first_image_header and 'VCCDSEC' in fitsfile[camera].header:
-            if fitsfile[camera].header['VCCDSEC']<first_image_header['VCCDSEC']:
-                first_image_header['VCCDSEC']=fitsfile[camera].header['VCCDSEC']
-                first_image_header['VCCDON']=fitsfile[camera].header['VCCDON']
+        header = fitsfile[camera].header
 
-        if 'VCCDSEC' in first_image_header :
-            vccdsec = float(first_image_header['VCCDSEC'])
+
+        if 'VCCDSEC' in header :
+            vccdsec = float(header['VCCDSEC'])
             log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
             if vccdsec < min_vccdsec :
                 log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
                 fitsfile.close()
                 continue
 
+        valid=True
         for k in ['DETECTOR','CCDCFG','CCDTMING'] :
-            v1=first_image_header[k].strip().upper()
-            v2=fitsfile[camera].header[k].strip().upper()
+            v1=reference_header[k].strip().upper()
+            v2=header[k].strip().upper()
             if v1 != v2 :
-                mess=(f"skip {filename} k={v2} != {v1} (from first file)")
+                mess=(f"skip {filename} k={v2} != {v1} (from reference header)")
                 log.warning(mess)
-                continue
-        v1=float(first_image_header["CCDTEMP"])
-        v2=float(fitsfile[camera].header["CCDTEMP"])
-        if np.abs(v1-v2)>4. : # more than 4 deg off
-            mess=(f"skip {filename} k={v2} != {v1} (from first file)")
+                fitsfile.close()
+                valid=False
+                break
+        if not valid : continue
+
+
+        v1=float(reference_header["CCDTEMP"])
+        v2=float(header["CCDTEMP"])
+        if np.abs(v1-v2)>max_temperature_diff :
+            mess=(f"skip {filename} k={v2} different from {v1} (from reference header)")
             log.warning(mess)
+            fitsfile.close()
             continue
 
 
-        fitsfile.close()
+        log.info(f"Preprocessing {filename} ...")
+
 
         if bias is not None:
             if isinstance(bias, str):
@@ -152,11 +181,11 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
                 mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
-        # propagate gains to first_image_header
+        # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
             k="GAIN"+a
-            if k in img.meta and k not in first_image_header:
-                first_image_header[k] = img.meta[k]
+            if k in img.meta and k not in reference_header:
+                reference_header[k] = img.meta[k]
 
         if shape is None :
             shape=img.pix.shape
@@ -228,8 +257,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         "GAINA", "GAINB", "GAINC", "GAIND",
         "VCCDSEC","VCCDON"
         ] :
-        if key in first_image_header :
-            hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
+        if key in reference_header :
+            hdulist[0].header[key] = (reference_header[key],reference_header.comments[key])
 
     if exptime is not None:
         hdulist[0].header['EXPTIME'] = exptime
