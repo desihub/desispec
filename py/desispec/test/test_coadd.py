@@ -470,6 +470,20 @@ class TestCoadd(unittest.TestCase):
         resmod = resmat2@model0_brz
         self.assertTrue(np.allclose(resmod[~edge_mask],
                                     s2.flux['brz'][0][~edge_mask]))
+    
+    def test_coadd_cameras_model(self):
+        """
+        Check models are properly coadded by coadd_cameras
+        """
+        nspec, nwave = 4, 1000
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4343)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        s1.model = {b:np.random.normal(size=(nspec, nwave)) for b in bands}
+        s1.fibermap['TARGETID'] = [10] * nspec
+        s2 = coadd_cameras(s1)
+        self.assertTrue(s2.model is not None and np.sum(s2.model["brz"]>0)>0)
+
 
     def test_coadd_cameras_mask(self):
         """
