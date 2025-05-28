@@ -495,27 +495,30 @@ class TestCoadd(unittest.TestCase):
                 s1.mask[band][i] = np.floor(2.**rng.integers(-1, 4,
                                                              size=len(pixels[band]))).astype(int)
                 for j, curpix in enumerate(pixels[band]):
-                    if s1.ivar[band][i][j] > 0:
-                        if curpix not in mask_dict[i]:
-                            mask_dict[i][curpix] = []
-                        mask_dict[i][curpix].append(s1.mask[band][i][j])
-                        # create all the masks contributing to pixel
+                    if curpix not in mask_dict[i]:
+                        mask_dict[i][curpix] = []
+                    mask_dict[i][curpix].append(s1.mask[band][i][j])
+                    # create all the masks contributing to pixel
         
         s2 = coadd_cameras(s1)
         
         #checking masks of each coadded spectra
         for k in range(nspec):
             for curpix in range(len(pixels0)):
-                cur_m = np.array(mask_dict[k].get(curpix, [])) 
-                if s2.ivar['brz'][k][curpix] == 0:
-                    # if there is a zero mask pix
-                    # the output should be zeromask
-                    self.assertTrue(s2.mask['brz'][k][curpix] == 0)
-                elif len(cur_m)>0:
-                    # otherwise it should be or'ed
-                    self.assertTrue(np.bitwise_or.reduce(cur_m) ==
-                                s2.mask['brz'][k][curpix])
-    
+                cur_m = np.array(mask_dict[k].get(curpix, []))
+                mask_val = s2.mask['brz'][k][curpix]
+                ivar_val = s2.ivar['brz'][k][curpix]
+
+                if ivar_val > 0:
+                    # DESI convention: good pixels must have mask = 0
+                    self.assertEqual(mask_val, 0)
+                elif len(cur_m) > 0:
+                    # ivar == 0 → mask should be OR of input masks
+                    self.assertEqual(mask_val, np.bitwise_or.reduce(cur_m))
+                else:
+                    # ivar == 0 and no contributing masks → mask should still be 0
+                    self.assertEqual(mask_val, 0)
+
     def test_coadd_cameras_badfiberstatus(self):
         """
         Check that coadd_cameras return zero if there all the
