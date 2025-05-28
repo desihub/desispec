@@ -890,10 +890,8 @@ def coadd_cameras(spectra):
             if has_mask:
                 # accumulate all of the bad pixel masks we have
                 # we will zero out those if we end up with ivar>0 in the result
-                valid = iv[i] > 0  # only where this band contributed
-                tmpmask = m[i]
-                mask[i, iband][valid] |= tmpmask[valid]
-            
+                mask[i, iband] |= m[i]
+
             if has_model and f"{b}_MODEL" in spectra.model:
                 model_band = spectra.model[f"{b}_MODEL"]
                 model[i, iband] += model_band[i]
@@ -911,6 +909,7 @@ def coadd_cameras(spectra):
     bad = ivar == 0
     flux[~bad] /= ivar[~bad]
     flux[bad] = 0
+    mask[~bad] = 0 # good pixels should have zero mask
 
     wavebands = "".join(sbands)
     
