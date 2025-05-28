@@ -286,30 +286,6 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.mask['b'] == 0))
 
 
-    def test_coadd_cameras_with_cosmic(self):
-        """Test coadding cameras that have a cosmic ray"""
-        nspec, nwave = 3, 100
-        bands = ['b', 'r', 'z']
-        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
-
-        # simplify ivar and flux to make test math easier
-        for i, b in enumerate(bands):
-            s1.flux[b][:, :] = 1.0
-            s1.ivar[b][:, :] = 1.0
-
-            # add unidentified cosmic on a single spectrum
-            COSMIC = 1e6
-            s1.flux[b][i, nwave//2] = COSMIC
-
-        # All the same targets
-        s1.fibermap['TARGETID'] = 10
-        s2 = coadd_cameras(s1, cosmics_nsig=4)
-        # but since there were good spectra, the final mask is still 0
-        self.assertTrue(np.all(s2.mask['brz'] == 0))
-        # check flux is correct
-        self.assertTrue(np.all(s2.flux['brz'] == 1))
-        # ideally i should check the ivars, but it's too complex :)
-
 
     def test_coadd_single(self):
         """Test coaddition of a single spectrum which should be no-op"""
@@ -467,7 +443,7 @@ class TestCoadd(unittest.TestCase):
         rng = np.random.default_rng(4343)
         s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
         s1.fibermap['TARGETID'] = [10] * nspec
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
+        s2 = coadd_cameras(s1)
         model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
         edge_nmask = 2 
         # we will ignore pixels next to the edges of spectrum
@@ -497,25 +473,39 @@ class TestCoadd(unittest.TestCase):
                                                           s1.wave[band])
             for i in range(nspec):
                 s1.flux[band][i] = Resolution(resol[i]) @ model0[band]
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
+        s2 = coadd_cameras(s1)
         resmat2 = Resolution(s2.resolution_data['brz'][0])
         resmod = resmat2@model0_brz
         self.assertTrue(np.allclose(resmod[~edge_mask],
                                     s2.flux['brz'][0][~edge_mask]))
+    
+    def test_coadd_cameras_model(self):
+        """
+        Check if models are properly coadded by coadd_cameras
+        """
+        nspec, nwave = 4, 1000
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4343)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        s1.model = {b:np.random.normal(size=(nspec, nwave)) for b in bands} # adding a random model to the spectra
+        s1.fibermap['TARGETID'] = [10] * nspec
+        s2 = coadd_cameras(s1)
+        self.assertTrue(s2.model is not None and np.sum(s2.model["brz"]>0)>0) # just checking if model is returned and contains non-zero elements
+
 
     def test_coadd_cameras_mask(self):
         """
-        Check masks are properly coadded by coadd_cameras
+        Check if masks are properly coadded by coadd_cameras
         """
         nspec, nwave = 4, 1000
         bands = ['b', 'r', 'z']
         rng = np.random.default_rng(4343)
         s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
         s1.fibermap['TARGETID'] = [10] * nspec
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
+        s2 = coadd_cameras(s1)
         pixels0 = np.arange(len(s2.wave['brz']))
         pixels = {}
-        mask_dict = {}
+        mask_dict = [{} for _ in range(nspec)] # each spectra is independent of each other
         for band in bands:
             pixels[band] = scipy.interpolate.interp1d(s2.wave['brz'],
                                                       pixels0, kind='nearest',
@@ -527,22 +517,28 @@ class TestCoadd(unittest.TestCase):
                 s1.mask[band][i] = np.floor(2.**rng.integers(-1, 4,
                                                              size=len(pixels[band]))).astype(int)
                 for j, curpix in enumerate(pixels[band]):
-                    if curpix not in mask_dict:
-                        mask_dict[curpix] = []
-                    mask_dict[curpix].append(s1.mask[band][i, j])
+                    if curpix not in mask_dict[i]:
+                        mask_dict[i][curpix] = []
+                    mask_dict[i][curpix].append(s1.mask[band][i][j])
                     # create all the masks contributing to pixel
-
-        s2 = coadd_cameras(s1, cosmics_nsig=0)
-        for curpix in range(len(pixels0)):
-            cur_m = np.array(mask_dict[curpix])
-            if cur_m.min() == 0:
-                # if there is a zero mask pix
-                # the output should be zeromask
-                self.assertTrue(s2.mask['brz'][0][curpix] == 0)
-            else:
-                # otherwise it should be or'ed
-                self.assertTrue(np.bitwise_or.reduce(cur_m) ==
-                                s2.mask['brz'][0][curpix])
+        
+        s2 = coadd_cameras(s1)
+        
+        #checking masks of each coadded spectra
+        for k in range(nspec):
+            for curpix in range(len(pixels0)):
+                cur_m = np.array(mask_dict[k].get(curpix, []))
+                mask_val = s2.mask['brz'][k][curpix]
+                ivar_val = s2.ivar['brz'][k][curpix]
+                if ivar_val > 0:
+                    # DESI convention: good pixels must have mask = 0
+                    self.assertEqual(mask_val, 0)
+                elif len(cur_m) > 0:
+                    # ivar == 0  mask should be OR of input masks, there are contributing pixels
+                    self.assertEqual(mask_val, np.bitwise_or.reduce(cur_m))
+                else:
+                    # ivar == 0 and there are no contributing pixels in coadding, mask should still be 0
+                    self.assertEqual(mask_val, 0)
 
     def test_coadd_cameras_badfiberstatus(self):
         """

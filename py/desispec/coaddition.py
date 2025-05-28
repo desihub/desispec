@@ -798,49 +798,43 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 
-def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
+def coadd_cameras(spectra):
     """
-    Return coadd across both exposures and cameras
+    Coadd flux, ivar, and resolution (and model, if available) 
+    across all bands (cameras) for a given Spectra object.
 
     Args:
-       spectra: desispec.spectra.Spectra object
+        spectra: desispec.spectra.Spectra (Input spectra object to coadd)
+        
+    Returns:
+        desispec.spectra.Spectra
+        Coadded Spectra object (new object).
 
-    Options:
-       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
-       onetile: bool, if True, inputs are from a single tile
-
-    If `onetile` is True, additional tile-specific columns
-    like LOCATION and FIBER are included the FIBERMAP; otherwise
-    these are only in the EXP_FIBERMAP since for the same target they could
-    be different on different tiles.
-
-    Note: unlike `coadd`, this does not modify the input spectra object
+    Note: unlike `coadd`, this does not modify the input spectra object, rather write a new Spectrum object.
     """
 
-    #check_alignement_of_camera_wavelength(spectra)
-
     log = get_logger()
+    t0 = time.time()
 
-    # ordering
-    mwave = [np.mean(spectra.wave[b]) for b in spectra.bands]
-    sbands = np.array(
-        spectra.bands)[np.argsort(mwave)]  # bands sorted by inc. wavelength
-    log.debug("wavelength sorted cameras= {}".format(sbands))
+    bands = spectra.bands
+    ntarget = spectra.flux[bands[0]].shape[0]
+    log.debug("number of targets = %d", ntarget)
 
-    # create wavelength array
+    # Build combined wavelength grid
     wave = None
-    tolerance = 0.0001  #A , tolerance
+    tolerance = 1e-4
+    mwave = [np.mean(spectra.wave[b]) for b in bands]
+    sbands = np.array(bands)[np.argsort(mwave)]
+    log.debug("wavelength sorted cameras= {}".format(sbands))
+    windict = {}
+
     for b in sbands:
         if wave is None:
             wave = spectra.wave[b]
         else:
-            wave = np.append(
-                wave, spectra.wave[b][spectra.wave[b] > wave[-1] + tolerance])
-    nwave = wave.size
-
+            wave = np.append(wave, spectra.wave[b][spectra.wave[b] > wave[-1] + tolerance])
+    
     # check alignment, caching band wavelength grid indices as we go
-    windict = {}
-    number_of_overlapping_cameras = np.zeros(nwave)
     for b in spectra.bands:
         imin = np.argmin(np.abs(spectra.wave[b][0] - wave))
         windices = np.arange(imin, imin + len(spectra.wave[b]), dtype=int)
@@ -850,67 +844,39 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
                 b)
             log.error(msg)
             raise ValueError(msg)
-        number_of_overlapping_cameras[windices] += 1
-        windict[b] = windices
 
-    # targets
-    targets = ordered_unique(spectra.fibermap["TARGETID"])
-    ntarget = targets.size
-    log.debug("number of targets= {}".format(ntarget))
+    nwave = wave.size
+    
+    # defining arrays for coadded data
+    flux = np.zeros((ntarget, nwave))
+    ivar = np.zeros((ntarget, nwave))
+    mask = np.zeros((ntarget, nwave), dtype=np.int32)
 
-    max_ndiag = 0
-    if spectra.resolution_data is not None:
-        for b in sbands:
-            max_ndiag = max(max_ndiag, spectra.resolution_data[b].shape[1])
-    log.debug("ndiag=%d", max_ndiag)
+    has_mask = spectra.mask is not None
+    has_res = spectra.resolution_data is not None
+    has_model = spectra.model is not None
 
-    b = sbands[0]
-    flux = np.zeros((ntarget, nwave), dtype=spectra.flux[b].dtype)
-    ivar = np.zeros((ntarget, nwave), dtype=spectra.ivar[b].dtype)
-    # these are accumulator variables for final results
+    if has_model:
+        print(f'INFO: MODELS found, so coadding them as well..')
+        model = np.zeros((ntarget, nwave))
+        model_counts = np.zeros((ntarget, nwave))
 
-    # this is a special accumulation variables for cases where all pixels
-    # are masked and then we still compute the final results assuming no masking
-    flux_unmasked = np.zeros((ntarget, nwave), dtype=spectra.flux[b].dtype)
-    ivar_unmasked = np.zeros((ntarget, nwave), dtype=spectra.ivar[b].dtype)
+    if has_res:
+        max_ndiag = max([spectra.resolution_data[b].shape[1] for b in bands])
+        rdata = np.zeros((ntarget, max_ndiag, nwave))
+        rnorm = np.zeros_like(rdata)
 
-    spectra_mask = {}
-    if spectra.mask is None:
-        for b in spectra.bands:
-            # this is superfluous
-            # but makes logic clearer allowing to directly use spectra_mask
-            # instead of constantly checking if spectra.mask is None
-            spectra_mask[b] = np.zeros(spectra.flux[b].shape, dtype=int)
-    else:
-        for b in spectra.bands:
-            spectra_mask[b] = spectra.mask[b]
-
-    # this is an accumulator variable for the masks
-    mask = np.zeros((ntarget, nwave), dtype=spectra_mask[b].dtype)
-    # note that this will OR accumulate masks
-    # and we will zero out those if the final ivar is > 0
-    # which meant we had some good pixels in the stack
-
-    if spectra.resolution_data is not None:
-        rdata = np.zeros((ntarget, max_ndiag, nwave),
-                         dtype=spectra.resolution_data[b].dtype)
-        rdata_unmasked = np.zeros_like(rdata)
-        rdata_norm = np.zeros_like(rdata)
-        rdata_norm_unmasked = np.zeros_like(rdata)
-    else:
-        rdata = None
-
-    band_ndiag = None
-    # number of diagonals in the resolution matrix for the current band
-    # we set it here to None to avoid the warning in the case of no resolution data
-    for b in spectra.bands:
+    for b in sbands:
         log.debug("coadding band '{}'".format(b))
+        wband = spectra.wave[b]
+        start = np.searchsorted(wave, wband[0])
+        end = start + len(wband)
+        iband = slice(start, end)
+        windict[b] = iband
 
-        # indices
-        windices = windict[b]
-
-        if spectra.resolution_data is not None:
-            band_ndiag = spectra.resolution_data[b].shape[1]
+        f = spectra.flux[b]
+        iv = spectra.ivar[b]
+        m = spectra.mask[b] if has_mask else np.zeros_like(f, dtype=np.int32)
 
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
@@ -919,132 +885,89 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False):
 
         good_fiberstatus = use_for_coadd(fiberstatus, b)
 
-        for i, tid in enumerate(targets):
-            jj = np.where((spectra.fibermap["TARGETID"] == tid)
-                          & good_fiberstatus)[0]
-
-            # if all spectra were flagged as bad (FIBERSTATUS != 0), continue
-            # to next target, leaving tflux and tivar=0 for this target
-            if len(jj) == 0:
+        for i in range(ntarget):
+            if not good_fiberstatus[i]:
                 continue
 
-            ivarjj_orig = spectra.ivar[b][jj]
-            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[b][jj] == 0)
-
-            if cosmics_nsig is not None and cosmics_nsig > 0:
-                cosmic_mask = _mask_cosmics(spectra.wave[b],
-                                            spectra.flux[b][jj],
-                                            ivarjj_masked,
-                                            cosmics_nsig=cosmics_nsig,
-                                            tid=tid,
-                                            camera=b)
-                ivarjj_masked[cosmic_mask] = 0
-
-            ivar[i, windices] += np.sum(ivarjj_masked, axis=0)
-            flux[i, windices] += np.sum(ivarjj_masked * spectra.flux[b][jj],
-                                        axis=0)
-            ivar_unmasked[i, windices] += np.sum(ivarjj_orig, axis=0)
-            flux_unmasked[i, windices] += np.sum(ivarjj_orig *
-                                                 spectra.flux[b][jj],
-                                                 axis=0)
-            if spectra.resolution_data is not None:
-                # do two calculations of the resolution matrices
-                # one under assumption of masked ivars and another
-                # under original ivars
-                new_accum, new_norm = _resolution_coadd(
-                    spectra.resolution_data[b][jj], ivarjj_masked)
-                new_accum1, new_norm1 = _resolution_coadd(
-                    spectra.resolution_data[b][jj], ivarjj_orig)
-                cur_off = (max_ndiag - band_ndiag) // 2
-                cur_rdata_pos = (i, slice(cur_off,
-                                          max_ndiag - cur_off), windices)
-                rdata[cur_rdata_pos] += new_accum.T
-                rdata_norm[cur_rdata_pos] += new_norm.T
-                rdata_unmasked[cur_rdata_pos] += new_accum1.T
-                rdata_norm_unmasked[cur_rdata_pos] += new_norm1.T
-
-            if spectra.mask is not None:
+            flux[i, iband] += iv[i] * f[i]
+            ivar[i, iband] += iv[i]
+            
+            if has_mask:
                 # accumulate all of the bad pixel masks we have
                 # we will zero out those if we end up with ivar>0 in the result
-                tmpmask = np.bitwise_or.reduce(spectra.mask[b][jj], axis=0)
-                mask[i, windices] = mask[i, windices] | tmpmask
+                mask[i, iband] |= m[i]
 
-    # this is most likely from masked pixels
-    # we try to use flux_unmasked, ivar_unmasked for these
+            if has_model:
+                # coadding models
+                model_band = spectra.model[f"{b}"][i]
+                model[i, iband] += model_band
+                model_counts[i, iband] += 1
+             
+            if has_res:
+                #coadding resolution
+                res = spectra.resolution_data[b][i]
+                iv_i = iv[i:i+1]
+                raccum, rnorm_i = _resolution_coadd(res[np.newaxis, :, :], iv_i)
+                ndiag = raccum.shape[0]
+                offset = (max_ndiag - ndiag) // 2
+                rdata[i, offset:offset+ndiag, iband] += raccum
+                rnorm[i, offset:offset+ndiag, iband] += rnorm_i
+    
     bad = ivar == 0
-    flux[bad] = flux_unmasked[bad]
-    ivar[bad] = ivar_unmasked[bad]
-    mask[~bad] = 0
-    # for non-bad pixels the mask must be zero
-
-    norm = (ivar + (ivar == 0))
-    # note here we add ivar==0 not 'bad' to ivar
-    # because we have just changed ivar by replacing some of those
-    # but it's possible that we still have some ivar==0 pixels
-
-    flux[:] = flux / norm
+    flux[~bad] /= ivar[~bad] # normalization
     # this is final step in weighted mean calculation
     # division by the sum of inverse variances
+    flux[bad] = 0
+    mask[~bad] = 0 # good pixels should have zero mask
 
-    if rdata is not None:
+    wavebands = "".join(sbands)
+    
+    # just sanity chack that wavelength is an increasing array
+    assert np.all(np.diff(wave) > 0)
+
+    if has_model:
+        model[model_counts > 0] /= model_counts[model_counts > 0] # normalization
+        
+    if has_res:
         # we need to the same procedure for the resolution matrices
         # as we did for fluxes
-        bad = rdata_norm == 0
-        rdata[bad] = rdata_unmasked[bad]
-        rdata_norm[bad] = rdata_norm_unmasked[bad]
-        rdata[:] = rdata / (rdata_norm + (rdata_norm == 0))
-
-    if 'COADD_NUMEXP' in spectra.fibermap.colnames:
-        fibermap = spectra.fibermap
-        exp_fibermap = spectra.exp_fibermap
+        rdata /= rnorm + (rnorm == 0)
+        rdict = {wavebands: rdata}
     else:
-        fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap,
-                                                onetile=onetile)
+        rdict = None
 
-    bands = ""
-    for b in sbands:
-        bands += b
-
-    if spectra.mask is not None:
-        dmask = {
-            bands: mask,
-        }
+    if has_model:
+        model_dict = {wavebands: model}
     else:
-        dmask = None
-
-    if rdata is not None:
-        rdata = {bands: rdata}
-
-    res = Spectra(bands=[
-        bands,
-    ],
-                  wave={
-                      bands: wave,
-                  },
-                  flux={
-                      bands: flux,
-                  },
-                  ivar={
-                      bands: ivar,
-                  },
-                  mask=dmask,
-                  resolution_data=rdata,
-                  fibermap=fibermap,
-                  exp_fibermap=exp_fibermap,
-                  meta=spectra.meta,
-                  extra=spectra.extra,
-                  scores=None)
-
-    if spectra.scores is not None:
-        orig_scores = spectra.scores.copy()
-        orig_scores['TARGETID'] = spectra.fibermap['TARGETID']
+        model_dict = None
+    
+    wave_combined, flux_combined, ivar_combined = {wavebands: wave}, {wavebands: flux}, {wavebands: ivar}
+    if has_mask:
+        mask_combined = {wavebands: mask}
     else:
-        orig_scores = None
+        mask_combined = None
+       
+    res = Spectra(
+        bands= [wavebands],
+        wave=wave_combined,
+        flux=flux_combined,
+        ivar=ivar_combined,
+        mask=mask_combined,
+        resolution_data=rdict,
+        model=model_dict,
+        fibermap=spectra.fibermap,
+        exp_fibermap=spectra.exp_fibermap,
+        meta=spectra.meta,
+        extra=spectra.extra,
+        scores=spectra.scores,
+        redshifts=spectra.redshifts,
+        
+    )
 
-    compute_coadd_scores(res, orig_scores, update_coadd=True)
-
+    duration = time.time() - t0
+    print(f"INFO: coadding spectra across cameras took: {duration:.3f} [sec]")
+    
     return res
-
 
 def get_resampling_matrix(global_grid,local_grid,sparse=False):
     """Build the rectangular matrix that linearly resamples from the global grid to a local grid.

@@ -433,7 +433,7 @@ def read_spectra(
                     if model is None:
                         model = {}
                     model[band] = _read_image(hdus, h, ftype, rows=rows)
-                elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
+                elif type != "MASK" and type != "RESOLUTION" and type != "MODEL" and type not in skip_hdus:
                     # this must be an "extra" HDU
                     log.debug('Reading extra HDU %s', name)
                     if extra is None:
@@ -480,12 +480,14 @@ def read_spectra(
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
 
     redrock_targetids = None # for the sanity checks between fibermap and redshift targetids
+
     if return_redshifts:
         t0 = time.time()
         if redshifts is None:
             redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
             redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
             if rows is not None and len(rows)>0:
+                redshifts = redshifts[rows]
                 redrock_targetids = redrock_targetids[rows]
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
