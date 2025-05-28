@@ -843,6 +843,7 @@ def coadd_cameras(spectra):
 
     nwave = wave.size
     
+    # defining arrays for coadded data
     flux = np.zeros((ntarget, nwave))
     ivar = np.zeros((ntarget, nwave))
     mask = np.zeros((ntarget, nwave), dtype=np.int32)
@@ -893,11 +894,13 @@ def coadd_cameras(spectra):
                 mask[i, iband] |= m[i]
 
             if has_model:
+                # coadding models
                 model_band = spectra.model[f"{b}"][i]
                 model[i, iband] += model_band
                 model_counts[i, iband] += 1
              
             if has_res:
+                #coadding resolution
                 res = spectra.resolution_data[b][i]
                 iv_i = iv[i:i+1]
                 raccum, rnorm_i = _resolution_coadd(res[np.newaxis, :, :], iv_i)
@@ -907,7 +910,9 @@ def coadd_cameras(spectra):
                 rnorm[i, offset:offset+ndiag, iband] += rnorm_i
     
     bad = ivar == 0
-    flux[~bad] /= ivar[~bad]
+    flux[~bad] /= ivar[~bad] # normalization
+    # this is final step in weighted mean calculation
+    # division by the sum of inverse variances
     flux[bad] = 0
     mask[~bad] = 0 # good pixels should have zero mask
 
@@ -917,9 +922,11 @@ def coadd_cameras(spectra):
     assert np.all(np.diff(wave) > 0)
 
     if has_model:
-        model[model_counts > 0] /= model_counts[model_counts > 0]
+        model[model_counts > 0] /= model_counts[model_counts > 0] # normalization
         
     if has_res:
+        # we need to the same procedure for the resolution matrices
+        # as we did for fluxes
         rdata /= rnorm + (rnorm == 0)
         rdict = {wavebands: rdata}
     else:
