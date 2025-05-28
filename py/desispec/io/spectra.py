@@ -433,7 +433,7 @@ def read_spectra(
                     if model is None:
                         model = {}
                     model[band] = _read_image(hdus, h, ftype, rows=rows)
-                elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
+                elif type != "MASK" and type != "RESOLUTION" and type != "MODEL" and type not in skip_hdus:
                     # this must be an "extra" HDU
                     log.debug('Reading extra HDU %s', name)
                     if extra is None:
