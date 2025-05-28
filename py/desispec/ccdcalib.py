@@ -36,7 +36,7 @@ from desispec.workflow.batch import get_config
 
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
-                      scale=False, exptime=None, min_vccdsec=0):
+                      exptime=None, min_vccdsec=0):
     """
     Compute classic dark model from input dark images
 
@@ -48,7 +48,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     Options:
         bias (str or list): bias file to use, or list of bias files
         nocosmic (bool): use medians instead of cosmic identification
-        scale (bool): apply scale correction for EM0 teststand data
         exptime (float): write EXPTIME header keyword; all inputs must match
         min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
     Note: if bias is None, no bias correction is applied.  If it is a single
@@ -71,6 +70,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     else :
         masks=[]
 
+    exptimes=[]
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
 
@@ -105,7 +105,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         if 'VCCDSEC' in first_image_header :
             vccdsec = float(first_image_header['VCCDSEC'])
-            log.info(f"{filename} VCCDSEC={vccdsec} sec = {vccdsec/3600} hours")
+            log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
             if vccdsec < min_vccdsec :
                 log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
                 fitsfile.close()
@@ -146,8 +146,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
             if os.path.isfile(biasnight) :
                 thisbias = biasnight
-        if thisbias is not False :
-            log.info(f"Using BIAS={thisbias}")
+        log.debug(f"BIAS={thisbias}")
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
@@ -165,8 +164,17 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         images.append(img.pix.ravel()/thisexptime)
         if masks is not None :
             masks.append(img.mask.ravel())
+        exptimes.append(thisexptime)
+
+
+    if len(images)==0 :
+        log.error("No images left after selection")
+        raise RuntimeError("No images left after selection")
 
     images=np.array(images)
+    exptimes=np.array(exptimes)
+    assert(images.shape[0] == exptimes.size)
+
     if masks is not None :
         masks=np.array(masks)
         smask=np.sum(masks,axis=0)
@@ -176,26 +184,19 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info("compute median image ...")
     medimage=masked_median(images,masks)
 
-    if scale :
-        log.info("compute a scale per image ...")
-        sm2=np.sum((smask==0)*medimage**2)
-        ok=(medimage>0.6*np.median(medimage))*(smask==0)
-        for i,image in enumerate(rawfiles) :
-            s=np.sum((smask==0)*medimage*image)/sm2
-            #s=np.median(image[ok]/medimage[ok])
-            log.info("image %d scale = %f"%(i,s))
-            images[i] /= s
-        log.info("recompute median image after scaling ...")
-        medimage=masked_median(images,masks)
-
     if True :
         log.info("compute mask ...")
         ares=np.abs(images-medimage)
         nsig=4.
         mask=(ares<nsig*1.4826*np.median(ares,axis=0))
+
         # average (not median)
-        log.info("compute average ...")
-        meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+        #log.info("compute average ...")
+        #meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+
+        # better is optimal weights (here images have been divided by exptimes beforehand)
+        log.info("compute weighted average ...")
+        meanimage=np.sum(images*(exptimes[:,None]**2)*mask,axis=0)/np.sum((exptimes[:,None]**2)*mask,axis=0)
         meanimage=meanimage.reshape(shape)
     else :
         meanimage=medimage.reshape(shape)
