@@ -50,15 +50,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         nocosmic (bool): use medians instead of cosmic identification
         exptime (float): write EXPTIME header keyword; all inputs must match
         min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
-    Note: if bias is None, no bias correction is applied.  If it is a single
-    file, then use that bias for all darks.  If it is a list, it must have
-    len(rawfiles) and gives the per-file bias to use.
+
+    Note: if bias is None, the bias will be looked for in
+    $DESI_SPECTRO_REDUX/$SPECPROD/calibnight then $DESI_SPECTRO_CALIB
 
     Note: this computes a classic dark model without any non-linear terms.
     see bin/compute_dark_nonlinear for current DESI dark model.
 
-    TODO: separate algorithm from I/O
     """
+
     log = get_logger()
     log.info("read images ...")
 
