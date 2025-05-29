@@ -655,6 +655,42 @@ def parse_fibers(fiber_string, include_end=False) :
     """
     return parse_int_args(fiber_string, include_end)
 
+def parse_nights(nights_string, include_end=False) :
+    """
+    Short func that parses a string containing a comma separated list of
+    YYYYMMDD, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        nights_string (str) : list of integers or integer ranges
+
+    Options:
+        include_end (bool): if True, include end-value in ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    unless `include_end` is True, which then returns 1,2,3,4,5
+    """
+    import datetime
+
+    tmpvalues =  parse_int_args(nights_string, include_end)
+    # now keep only valid YYYYMMDD
+    values=[]
+    for value in tmpvalues :
+        year=value//10000
+        month=(value//100)%100
+        day=value%100
+        if month<1 or month>12 or day<1 or day>31: continue
+        # now check in more detail
+        try :
+            datetime.datetime(year=year,month=month,day=day)
+            values.append(value)
+        except ValueError :
+            pass
+    return values
+
 def ordered_unique(ar, return_index=False):
     """Find the unique elements of an array in the order they first appear
 
