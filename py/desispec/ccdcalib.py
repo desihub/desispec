@@ -50,8 +50,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         exptime (float): write EXPTIME header keyword; all inputs must match
         min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
         max_temperature_diff (float) : maximal CCD temperature difference
-        reference_header (dict) : reference header that defines the valid hardware configuration
-                                (default is the most recent one)
+        reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
 
     Note: if bias is None, the bias will be looked for in
     $DESI_SPECTRO_REDUX/$SPECPROD/calibnight then $DESI_SPECTRO_CALIB
