@@ -35,7 +35,8 @@ from desiutil.depend import add_dependencies
 from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
-                      exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None):
+                      exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
+                      save_preproc=True, output_specprod_dir=None):
     """
     Compute classic dark model from input dark images
 
@@ -51,6 +52,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
         max_temperature_diff (float) : maximal CCD temperature difference
         reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
+        save_preproc (bool) : save preprocessed images
+        output_specprod_dir (str) : specify output specprod directory used to save preproc images
+
+
 
     Note: if bias is None, the bias will be looked for in
     $DESI_SPECTRO_REDUX/$SPECPROD/calibnight then $DESI_SPECTRO_CALIB
@@ -168,17 +173,36 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         else:
             thisbias = True
 
+        night=header2night(primary_header)
+        expid=primary_header["EXPID"]
+
         if thisbias is False :
-            night=header2night(primary_header)
-            expid=primary_header["EXPID"]
             biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
             if os.path.isfile(biasnight) :
                 thisbias = biasnight
+            else :
+                message=f"Missing mandatory biasnight file {biasnight}"
+                log.error(message)
+                raise RuntimeError(message)
         log.debug(f"BIAS={thisbias}")
 
-        # read raw data and preprocess them
-        img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+        preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
+
+        if not os.path.isfile(preproc_filename) and output_specprod_dir is not None :
+            preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=output_specprod_dir)
+
+        if os.path.isfile(preproc_filename) :
+            log.info(f"Reading existing {preproc_filename}")
+            img = io.read_image(preproc_filename)
+        else :
+            # read raw data and preprocess them
+            img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
+                              mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+
+            if save_preproc :
+                # is saved in output_specprod_dir if not None
+                io.write_image(preproc_filename,img)
+                log.info(f"Wrote {preproc_filename}")
 
         # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
