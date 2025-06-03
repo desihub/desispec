@@ -51,6 +51,9 @@ parser.add_argument('--min-hours-since-vccd-on', type=float, default=4., require
                     help='Minimum time (in hours) since voltages were turned on')
 parser.add_argument('--specprod', type=str, default=None, required=False,
                     help='Specify specprod to use nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB.')
+parser.add_argument('--save-preproc', action='store_true', help='save intermediate preproc files')
+parser.add_argument('--output-specprod-dir', type=str, default=None, required=False,
+                    help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
 
 
 log  = get_logger()
@@ -151,4 +154,6 @@ compute_dark_file(args.image, args.outfile, camera=args.camera, bias=args.bias,
                   nocosmic=args.nocosmic,
                   min_vccdsec=(args.min_hours_since_vccd_on * 3600.),
                   max_temperature_diff=args.max_temperature_diff,
-                  reference_header=reference_header)
+                  reference_header=reference_header,
+                  save_preproc=args.save_preproc,
+                  output_specprod_dir=args.output_specprod_dir)
