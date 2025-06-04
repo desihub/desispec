@@ -1116,7 +1116,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     scale /= mscale
     median_calib *= mscale
 
-
+    # Iteratively fit and reject outliers
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
 
@@ -1127,10 +1127,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-
     nout_tot=0
 
     for iteration in range(20) :
+
+        # NOTE: this fitting code is replicated later with a final fit with updated errors
 
         # fit mean calibration
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
@@ -1295,9 +1296,10 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     log.info("{} n flux values excluded = {}".format(camera, nout_tot))
 
     # solve once again to get deconvolved variance
-    # by we now want to remove the large error floor that was set
+    # but we now want to remove the large error floor that was set
     # at the begining to remove outliers
     # so we restart from the original ivar, but keep the information about the masked pixels
+    # NOTE: this copies the fitting code above in the iteration fit+clip loop
     current_ivar=stdstars.ivar*(current_ivar>0)
     sqrtw=np.sqrt(current_ivar)
     for star in range(nstds) :
