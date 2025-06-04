@@ -30,7 +30,7 @@ from astropy.table import Table
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.")
 
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i', '--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
@@ -52,7 +52,7 @@ def parse(options=None):
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--nostdcheck', dest='nostdcheck',
                         help='Do not check the standards against flags in the FIBERMAP; just use objects in the model file', action='store_true')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o', '--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
                         help='path of QA file.')

@@ -92,7 +92,7 @@ def read_stdstar_models(filename):
         filename (str): File containing standard star models.
 
     Returns:
-        read_stdstar_models (tuple): flux[nspec, nwave], wave[nwave], fibers[nspec]
+        read_stdstar_models (tuple): flux[nspec, nwave], wave[nwave], fibers[nspec], metadata[nspec]
     """
     log = get_logger()
     t0 = time.time()
