@@ -32,7 +32,7 @@ def parse(options=None):
                         help='YEARMMDD nights to use (coma separated or with : to define a range)')
     parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                         help = 'output median image filename')
-    parser.add_argument('--camera',type = str, required = True,
+    parser.add_argument('-c','--camera',type = str, required = True,
                         help = 'header HDU (int or string)')
     parser.add_argument('--first-expid', type=int, default = None, required=False,
                         help='First EXPID to include (to use in combination with --nights option)')
