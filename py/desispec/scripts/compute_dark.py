@@ -29,7 +29,7 @@ def parse(options=None):
     parser.add_argument('-i','--image', type = str, default = None, required = False, nargs="*",
                         help = 'path of raws image fits files (or use --nights)')
     parser.add_argument('-n','--nights', type=str, default = None, required=False,
-                        help='YEARMMDD nights to use (coma separated or with : to define a range)')
+                        help='YEARMMDD nights to use (coma separated or with : to define a range. integers that do not correspond to valid dates are ignored)')
     parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                         help = 'output median image filename')
     parser.add_argument('-c','--camera',type = str, required = True,
