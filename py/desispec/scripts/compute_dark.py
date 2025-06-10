@@ -1,0 +1,171 @@
+#!/usr/bin/env python
+
+import os
+import argparse
+import numpy as np
+
+
+import astropy.io.fits as pyfits
+from astropy.table import Table,vstack
+
+from desiutil.log import get_logger
+
+from desispec.ccdcalib import compute_dark_file
+from desispec.util import parse_nights
+from desispec.io.util import get_speclog
+from desispec.io import findfile
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="Compute a master dark",
+                                     epilog='''
+                                     Input is a list of raw dark images, possibly with various exposure times.
+                                     Raw images are preprocessed without dark,mask correction.
+                                     However gains are applied so the output is in electrons/sec.
+                                     We first compute a masked median of the preprocessed images divided by their exposure time.
+                                     Then mask outlier pixels, and then compute the dark with optimal weights (propto. exptime).
+                                     We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.''')
+
+    parser.add_argument('-i','--image', type = str, default = None, required = False, nargs="*",
+                        help = 'path of raws image fits files (or use --nights)')
+    parser.add_argument('-n','--nights', type=str, default = None, required=False,
+                        help='YEARMMDD nights to use (coma separated or with : to define a range)')
+    parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                        help = 'output median image filename')
+    parser.add_argument('--camera',type = str, required = True,
+                        help = 'header HDU (int or string)')
+    parser.add_argument('--first-expid', type=int, default = None, required=False,
+                        help='First EXPID to include (to use in combination with --nights option)')
+    parser.add_argument('--last-expid', type=int, default = None, required=False,
+                        help='Last EXPID to include (to use in combination with --nights option)')
+    parser.add_argument('--min-exptime', type=float, default = 500,
+                        help='minimal exposure time to consider')
+    parser.add_argument('--max-exptime', type=float, default = None,
+                        help='maximal exposure time to consider')
+    parser.add_argument('--max-temperature-diff', type=float, default = 4. ,
+                        help='maximal difference of CCD temperature to consider')
+    parser.add_argument('--bias', type = str, default = None, required=False,
+                         help = 'specify a bias image calibration file (standard preprocessing calibration is turned off)')
+    parser.add_argument('--nocosmic', action = 'store_true',
+                        help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
+    parser.add_argument('--min-hours-since-vccd-on', type=float, default=4., required=False,
+                        help='Minimum time (in hours) since voltages were turned on')
+    parser.add_argument('--specprod', type=str, default=None, required=False,
+                        help='Specify specprod to use nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB.')
+    parser.add_argument('--save-preproc', action='store_true', help='save intermediate preproc files')
+    parser.add_argument('--output-specprod-dir', type=str, default=None, required=False,
+                        help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
+
+    #- uses sys.argv if options=None
+    args = parser.parse_args(options)
+
+    return args
+
+def main(args=None):
+
+    if not isinstance(args, argparse.Namespace):
+        args = parse(args)
+
+    log  = get_logger()
+
+
+    if args.specprod is not None :
+        os.environ["SPECPROD"] = args.specprod
+
+    # first find the exposures if they are not given in input
+    if args.nights is not None and args.image is not None :
+        log.error("Cannot specify both --nights and --image arguments")
+        return 1
+    if args.nights is None and args.image is None :
+        log.error("Need to specify input using either the --nights or --image argument")
+        return 1
+
+    if args.nights is not None :
+
+        for k in ["DESI_SPECTRO_DATA","DESI_SPECTRO_REDUX","SPECPROD"] :
+            if k not in os.environ :
+                log.error(f"args.nights specified but variable {k} is not set so we cannot find the exposures.")
+                if k=="SPECPROD" :
+                    log.error("consider using argument --specprod.")
+                return 1
+
+        nights = parse_nights(args.nights)
+        log.info(f"Will look for dark exposures in nights: {nights}")
+        tables = []
+        missing_nights = []
+        for night in nights :
+            filename = findfile("exposure_table",night=night)
+            if os.path.isfile(filename) :
+                tmp_table=Table.read(filename)
+                if len(tmp_table)==0 : continue
+                # only keep useful rows to avoid issues with columns
+                table = Table()
+                for k in ["NIGHT","EXPID","MJD-OBS","OBSTYPE","EXPTIME"] :
+                    if k=="MJD-OBS" :
+                        table["MJD"]=tmp_table[k]
+                    else :
+                        table[k]=tmp_table[k]
+                tables.append(table)
+            else :
+                log.warning(f"No exposure table for {night}")
+                nightdir=os.path.join(os.environ["DESI_SPECTRO_DATA"],str(night))
+                if not os.path.isdir(nightdir) :
+                    log.warning(f"No data directory {nightdir}")
+                    continue
+                missing_nights.append(night)
+        if len(missing_nights)>0 :
+            log.info(f"Computing speclog for nights without exposure tables ({missing_nights})")
+            tmp_table = get_speclog(missing_nights)
+            if len(tmp_table)>0 :
+                table = Table()
+                for k in ["NIGHT","EXPID","MJD","OBSTYPE","EXPTIME"] :
+                    table[k]=tmp_table[k]
+                for i in range(len(table)) :
+                    table["OBSTYPE"][i]=table["OBSTYPE"][i].lower()
+                tables.append(table)
+        if len(tables)>0 :
+            table=vstack(tables)
+        else :
+            log.error(f"empty list of exposures")
+            return 1
+        valid=(table["OBSTYPE"]=="dark")
+        log.info(f"{np.sum(valid)} dark exposures")
+        valid &= (table["EXPTIME"]>=args.min_exptime)
+        log.info(f"{np.sum(valid)} dark exposures with EXPTIME>={args.min_exptime}")
+        if args.first_expid is not None :
+            valid &= (table["EXPID"]>=args.first_expid)
+            log.info(f"{np.sum(valid)} dark exposures with EXPID>={args.first_expid}")
+        if args.last_expid is not None :
+            valid &= (table["EXPID"]<=args.last_expid)
+            log.info(f"{np.sum(valid)} dark exposures with EXPID<={args.last_expid}")
+        print(table[valid])
+        args.image = []
+        for e in np.where(valid)[0] :
+            filename = findfile("raw",night=table["NIGHT"][e],expid=table["EXPID"][e])
+            args.image.append(filename)
+
+    # find the most recent exposure with the camera and read its header
+    reference_header = None
+    ii=np.argsort(table[valid]["EXPID"])[::-1]
+    for i in ii :
+        fitsfile=pyfits.open(args.image[i])
+        if not args.camera in fitsfile :
+            fitsfile.close()
+            continue
+        reference_header = fitsfile[args.camera].header
+        fitsfile.close()
+        break
+    if reference_header is None :
+        log.error(f"No exposure has the camera {camera}.")
+        return 1
+
+    log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} DETECTOR={reference_header['DETECTOR']}")
+
+    compute_dark_file(args.image, args.outfile, camera=args.camera, bias=args.bias,
+                      nocosmic=args.nocosmic,
+                      min_vccdsec=(args.min_hours_since_vccd_on * 3600.),
+                      max_temperature_diff=args.max_temperature_diff,
+                      reference_header=reference_header,
+                      save_preproc=args.save_preproc,
+                      output_specprod_dir=args.output_specprod_dir)
+    return 0
