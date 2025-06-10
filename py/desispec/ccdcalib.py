@@ -58,7 +58,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
 
     Note: if bias is None, the bias will be looked for in $DESI_SPECTRO_REDUX/$SPECPROD/calibnight, and will raise
-    an error if no bias is found.
+    an error if no nightly bias is found.
 
     Note: this computes a classic dark model without any non-linear terms.
     see bin/compute_dark_nonlinear for current DESI dark model.
