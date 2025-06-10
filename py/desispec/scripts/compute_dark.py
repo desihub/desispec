@@ -12,8 +12,9 @@ from desiutil.log import get_logger
 
 from desispec.ccdcalib import compute_dark_file
 from desispec.util import parse_nights
-from desispec.io.util import get_speclog
+from desispec.io.util import get_speclog,erow_to_goodcamword,decode_camword
 from desispec.io import findfile
+from desispec.workflow.tableio import load_table
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -104,8 +105,21 @@ def main(args=None):
         for night in nights :
             filename = findfile("exposure_table",night=night)
             if os.path.isfile(filename) :
-                tmp_table=Table.read(filename)
+                tmp_table=load_table(filename)
                 if len(tmp_table)==0 : continue
+
+                # keep only valid exposures
+                keep = (tmp_table['LASTSTEP'] != 'ignore')
+                tmp_table = tmp_table[keep]
+                if len(tmp_table)==0 : continue
+
+                # keep only exposure with this args.camera valid
+                keep = np.repeat(True,len(tmp_table))
+                for i,entry in enumerate(tmp_table) :
+                    keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
+                tmp_table = tmp_table[keep]
+                if len(tmp_table)==0 : continue
+
                 # only keep useful rows to avoid issues with columns
                 table = Table()
                 for k in ["NIGHT","EXPID","MJD-OBS","OBSTYPE","EXPTIME"] :
