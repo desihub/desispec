@@ -53,7 +53,7 @@ def parse(options=None):
     parser.add_argument('--specprod', type=str, default=None, required=False,
                         help='Specify specprod to use nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB.')
     parser.add_argument('--save-preproc', action='store_true', help='save intermediate preproc files')
-    parser.add_argument('--output-specprod-dir', type=str, default=None, required=False,
+    parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
 
     #- uses sys.argv if options=None
@@ -167,5 +167,5 @@ def main(args=None):
                       max_temperature_diff=args.max_temperature_diff,
                       reference_header=reference_header,
                       save_preproc=args.save_preproc,
-                      output_specprod_dir=args.output_specprod_dir)
+                      preproc_dark_dir=args.preproc_dark_dir)
     return 0

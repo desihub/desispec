@@ -36,7 +36,7 @@ from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, output_specprod_dir=None):
+                      save_preproc=True, preproc_dark_dir=None):
     """
     Compute classic dark model from input dark images
 
@@ -53,7 +53,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         max_temperature_diff (float) : maximal CCD temperature difference
         reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
         save_preproc (bool) : save preprocessed images
-        output_specprod_dir (str) : specify output specprod directory used to save preproc images
+        preproc_dark_dir (str) : specify output directory used to save preproc images
 
 
 
@@ -188,8 +188,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
 
-        if not os.path.isfile(preproc_filename) and output_specprod_dir is not None :
-            preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=output_specprod_dir)
+        if not os.path.isfile(preproc_filename) and preproc_dark_dir is not None :
+            preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=preproc_dark_dir)
 
         if os.path.isfile(preproc_filename) :
             log.info(f"Reading existing {preproc_filename}")
@@ -200,7 +200,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                               mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
             if save_preproc :
-                # is saved in output_specprod_dir if not None
+                # is saved in preproc_dark_dir if not None
                 io.write_image(preproc_filename,img)
                 log.info(f"Wrote {preproc_filename}")
 
