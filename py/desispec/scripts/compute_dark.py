@@ -30,6 +30,10 @@ def parse(options=None):
                         help = 'path of raws image fits files (or use --nights)')
     parser.add_argument('-n','--nights', type=str, default = None, required=False,
                         help='YEARMMDD nights to use (coma separated or with : to define a range. integers that do not correspond to valid dates are ignored)')
+    parser.add_argument('--reference-night', type=int, default = None, required=False,
+                        help='YEARMMDD reference night defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-expid)')
+    parser.add_argument('--reference-expid', type=int, default = None, required=False,
+                        help='reference expid defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-night)')
     parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                         help = 'output median image filename')
     parser.add_argument('-c','--camera',type = str, required = True,
@@ -78,6 +82,10 @@ def main(args=None):
         return 1
     if args.nights is None and args.image is None :
         log.error("Need to specify input using either the --nights or --image argument")
+        return 1
+
+    if args.reference_night is not None and args.reference_expid is not None :
+        log.error("Cannot use --reference-night and --reference-expid at the same time.")
         return 1
 
     if args.nights is not None :
@@ -145,10 +153,30 @@ def main(args=None):
             args.image.append(filename)
 
     # find the most recent exposure with the camera and read its header
+    # unless reference_expid or reference_night is set
     reference_header = None
-    ii=np.argsort(table[valid]["EXPID"])[::-1]
-    for i in ii :
-        fitsfile=pyfits.open(args.image[i])
+    reference_header_possible_filenames = []
+    if args.reference_expid is not None :
+        selection=np.where(table[valid]["EXPID"]==args.reference_expid)[0]
+        if selection.size == 0 :
+            log.error(f"Reference expid {args.reference_expid} is not in the list of input darks")
+            return 1
+        reference_header_possible_filenames.append(args.image[selection[0]])
+    elif args.reference_night is not None :
+        selection=np.where(table[valid]["NIGHT"]==args.reference_night)[0]
+        if selection.size == 0 :
+            log.error(f"No dark during reference night {args.reference_night} in input list")
+            return 1
+        indices=np.argsort(table[valid]["EXPID"][selection])[::-1]
+        for index in indices :
+            reference_header_possible_filenames.append(args.image[selection[index]])
+    else :
+        indices=np.argsort(table[valid]["EXPID"])[::-1]
+        for index in indices :
+            reference_header_possible_filenames.append(args.image[index])
+
+    for filename in reference_header_possible_filenames :
+        fitsfile=pyfits.open(filename)
         if not args.camera in fitsfile :
             fitsfile.close()
             continue
