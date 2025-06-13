@@ -500,10 +500,14 @@ def main(args=None, comm=None):
             rawfilename=findfile('raw', args.night, args.expid, readonly=True)
             head=fitsio.read_header(rawfilename,1)
             exptime=head["EXPTIME"]
+            #ics_program=head["PROGRAM"]
         if comm is not None :
             exptime = comm.bcast(exptime, root=0)
+            #ics_program = comm.bcast(ics_program, root=0)
 
-        if exptime > 270 and exptime < 330 :
+        ## TODO: make this a desi_proc flag rather than selecting on exptime or program
+        #if 'calib dark' in ics_program.lower():
+        if np.abs(exptime - 300) < 2.0 or np.abs(exptime - 1200) < 2.0:
             timer.start('inspect_dark')
             if rank == 0 :
                 log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
@@ -530,7 +534,7 @@ def main(args=None, comm=None):
 
             timer.stop('inspect_dark')
         elif rank == 0:
-            log.warning(f'Not running desi_inspect_dark for DARK with exptime={exptime:.1f}')
+            log.warning(f'Not running desi_inspect_dark for DARK with ICS PROGRAM={ics_program}')
 
     #-------------------------------------------------------------------------
     #- Traceshift

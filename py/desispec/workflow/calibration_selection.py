@@ -177,6 +177,7 @@ def select_valid_calib_exposures(etable, allow_any_laststep=None):
             obseration types include CTE information and aren't redundant with
             column 'OBSTYPE'.
      """
+    log = get_logger()
     ## Select only good exposures, except for obstypes in allow_any_laststep
     laststep_mask = (etable['LASTSTEP'] == 'all')
     if allow_any_laststep is not None:
@@ -193,9 +194,10 @@ def select_valid_calib_exposures(etable, allow_any_laststep=None):
                 and matches_exptime(erow['EXPTIME'], 0.):
             good_exptimes.append(True)
             exptype.append('zero')
-        ## Any 300s dark is valid
+        ## Any 300s or 1200s darks are valid
         elif erow['OBSTYPE'] == 'dark' \
-                and matches_exptime(erow['EXPTIME'], 300.):
+             and (matches_exptime(erow['EXPTIME'], 300.)
+                  or matches_exptime(erow['EXPTIME'], 1200.)):
             good_exptimes.append(True)
             exptype.append('dark')
         ## only 5s arcs labeled "short Arcs all" have correct lamps
@@ -228,6 +230,17 @@ def select_valid_calib_exposures(etable, allow_any_laststep=None):
     outtable = etable[np.array(good_exptimes)]
     exptype = np.array(exptype)
 
+    ## if multiple valid darks, subselect to "best"
+    isdark = (exptype == 'dark')
+    if np.sum(isdark) > 1:
+        log.info(f"Identified {np.sum(isdark)} dark(s) with appropriate efftimes. Looking for calib darks")
+        darktab = outtable[isdark]
+        iscalibdark = np.array(['calib dark' in prog.lower() for prog in darktab['PROGRAM']])
+        if np.sum(iscalibdark) > 0:
+            log.info(f"Identified {np.sum(iscalibdark)} calib dark(s). Returning just those.")
+            calibdarks =  darktab[iscalibdark]
+            outtable = vstack([outtable[~isdark], calibdarks])
+            exptype = np.append(exptype[~isdark], calibdarks['OBSTYPE'].data)
     ## Make sure the list creations above are at consistent
     assert len(outtable) == len(exptype), ("output table and exposure types "
                                            + "should be the same length")
