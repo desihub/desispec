@@ -284,6 +284,9 @@ desispec API
 .. automodule:: desispec.scripts.coadd_spectra
     :members:
 
+.. automodule:: desispec.scripts.compute_dark
+    :members:
+
 .. automodule:: desispec.scripts.compute_tsnr_ensemble
     :members:
 
@@ -445,7 +448,7 @@ desispec API
 
 .. automodule:: desispec.scripts.zcatalog_wrap
     :members:
-       
+
 .. automodule:: desispec.scripts.zproc
     :members:
 
