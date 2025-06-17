@@ -73,9 +73,11 @@ jobs:
               env:
                 DESIUTIL_VERSION: 3.5.1
                 DESIMODEL_VERSION: 0.19.3
+                DESITARGET_VERSION: main
               run: |
                 python -m pip install desiutil==${DESIUTIL_VERSION}
                 python -m pip install git+https://github.com/desihub/desimodel.git@${DESIMODEL_VERSION}
+                python -m pip install git+https://github.com/desihub/desitarget.git@${DESITARGET_VERSION}
             - name: Install desimodel data
               env:
                 DESIMODEL_DATA: branches/test-0.19
@@ -112,14 +114,16 @@ jobs:
                 python -m pip cache remove fitsio
                 python -m pip cache remove numba
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}' 'numba${{ matrix.numba-version }}'
-                python -m pip install pytest
+                python -m pip install pytest pytest-cov coveralls
             - name: Install DESI dependencies
               env:
                 DESIUTIL_VERSION: 3.5.1
                 DESIMODEL_VERSION: 0.19.3
+                DESITARGET_VERSION: 3.2.0
               run: |
                 python -m pip install desiutil==${DESIUTIL_VERSION}
                 python -m pip install git+https://github.com/desihub/desimodel.git@${DESIMODEL_VERSION}
+                python -m pip install git+https://github.com/desihub/desitarget.git@${DESITARGET_VERSION}
             - name: Install desimodel data
               env:
                 DESIMODEL_DATA: branches/test-0.19
