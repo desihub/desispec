@@ -54,6 +54,7 @@ def get_readout_mode(header):
     "4Amp" means all 4 amps (ABCD) were used for CCD readout;
     "2AmpLeftRight" means 1 left amp (AC) and 1 right amp (BD) were used;
     "2AmpUpDown" means 1 upper amp (CD) and one lower (AB) were used.
+    Cross-combinations A+D or B+C are also considered "2AmpUpDown"
     """
 
     # Amp arrangement:
@@ -66,7 +67,7 @@ def get_readout_mode(header):
         return "4Amp"
     elif ampids in [set('AB'), set('CD'), set('12'), set('34')]:
         return "2AmpLeftRight"
-    elif ampids in [set('AC'), set('BD'), set('13'), set('24')]:
+    elif ampids in [set('AC'), set('AD'), set('BC'), set('BD'), set('13'), set('24')]: # includes cross-read mode
         return "2AmpUpDown"
     else:
         log = get_logger()
@@ -597,7 +598,7 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
             expid = header['EXPID']
             camera = header['CAMERA'].lower()
             if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
-                biasnight = findfile('biasnight', night, expid, camera)
+                biasnight = findfile('biasnight', night, expid, camera, readonly=True)
                 if os.path.exists(biasnight):
                     log.info(f'Using {night} nightly bias for {expid} {camera}')
                     filename = biasnight
@@ -638,15 +639,15 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword, filename))
     return False
 
-def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300,
-        threshold=25000., smooth=100):
+def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, reading_to_the_left, col_width=300,
+                                threshold=25000., smooth=100 ):
     """
     Find overscan columns that might be impacted by a trail from bright cosmic
 
     Args:
         rawimage: numpy 2D array of raw image
         ov_col: tuple(yslice, xslice) from parse_sec_keyword('BIASSECx') defining overscan region
-
+        reading_to_the_left: if true, charges are moved to the left, i.e. toward lower column indices
     Options:
         col_width: number of pixels from overscan region to consider
         threshold: ADU threshold for what might cause a problematic trail
@@ -657,14 +658,9 @@ def find_overscan_cosmic_trails(rawimage, ov_col, overscan_values, col_width=300
     column-summed and row median-filtered from the active region of the CCD
     next to the overscan region.
     """
-    # define a band in the active CCD region next to the overscan
-    left_amp = ov_col[1].start < rawimage.shape[1]//2
-    if left_amp :
-        if ov_col[1].start > rawimage.shape[1]//4 : # overscan is on the right of the active region
-            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
-        else : # overscan is on the left of the active region which happens for some 2 amp read mode.
-            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
-    else :
+    if reading_to_the_left : # overscan is on the right of the active region
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+    else : # overscan is on the left of the active region
         active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
 
     # measure sum over columns in band
@@ -1005,7 +1001,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         amps_with_readnoise_per_row = cfinder.value("READNOISEPERROW").split(",")
         log.info("Read noise per row (keyword READNOISEPERROW) for amps {}".format(amps_with_readnoise_per_row))
         # check that those amps exist otherwise throw an error
-        if not np.all(np.in1d(amps_with_readnoise_per_row,amp_ids)) :
+        if not np.all(np.isin(amps_with_readnoise_per_row,amp_ids)) :
             mess = "Some 'READNOISEPERROW' amps {} are not in {}.".format(amps_with_readnoise_per_row,amp_ids)
             log.error(mess)
             raise KeyError(mess)
@@ -1117,8 +1113,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_col[j]=o
             rdnoise[j]=r
 
+        # find whether the CCD is read towards the left of the right
+        # by comparing the column indices of the active CCD pixels
+        # and the overscan (which always comes after)
+        tmp_DATASEC = parse_sec_keyword(header["DATASEC"+amp])
+        tmp_BIASSEC = parse_sec_keyword(header["BIASSEC"+amp])
+        reading_to_the_left = tmp_DATASEC[1].stop <= tmp_BIASSEC[1].start
+        if reading_to_the_left :
+            log.debug(f"Amplifier {amp} reading to the left")
+        else :
+            log.debug(f"Amplifier {amp} reading to the right")
+
         # find rows impacted by a large cosmic charge deposit
-        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col)
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col, reading_to_the_left = reading_to_the_left)
 
         if use_overscan_row:
             # also mask overscan rows that are entirely masked in the active region

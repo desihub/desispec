@@ -613,14 +613,14 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
             exptable = Table.read(explist, format='ascii')
 
         if night is not None:
-            keep = np.in1d(exptable['NIGHT'], night)
+            keep = np.isin(exptable['NIGHT'], night)
             exptable = exptable[keep]
 
     # - Filter exposure tables by exposure IDs or by tileid
     # - Note: If exptable was created from --expid --night --tileid these should
     # - have no effect, but are left in for code flow simplicity
     if expid is not None:
-        keep = np.in1d(exptable['EXPID'], expid)
+        keep = np.isin(exptable['EXPID'], expid)
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
@@ -657,7 +657,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
     if group == 'cumulative':
         log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
         allexp = read_minimal_science_exptab_cols()
-        keep = np.in1d(allexp['TILEID'], tileids)
+        keep = np.isin(allexp['TILEID'], tileids)
         exptable = allexp[keep]
         ## Ensure we only include data for nights up to and including specified nights
         if (night is not None):

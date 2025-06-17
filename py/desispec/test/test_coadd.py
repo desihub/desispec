@@ -445,6 +445,14 @@ class TestCoadd(unittest.TestCase):
         resmat2 = Resolution(s1.resolution_data['b'][0])
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
+
+    def test_coadd_no_resolution(self):
+        """Test coaddition when there is no resolution data"""
+        nspec, nwave = 20, 30
+        s1 = self._random_spectra(nspec, nwave, with_mask=True)
+        s1.resolution_data = None
+        s1.R = None
+        coadd(s1)  # shouldn't crash, even without resolution data
         
     def test_coadd_cameras_resolution(self):
         """Test proper behaviour of resolution matrix

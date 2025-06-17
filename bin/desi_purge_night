@@ -6,4 +6,4 @@ from desispec.scripts.purge_night import get_parser, purge_night
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
-    purge_night(args.night, dry_run=(not args.not_dry_run))
+    purge_night(args.night, dry_run=(not args.not_dry_run), no_attic=args.no_attic)

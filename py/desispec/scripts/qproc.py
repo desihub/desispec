@@ -339,7 +339,7 @@ def main(args=None):
 
     if args.fibers is not None :
         fibers  = parse_fibers(args.fibers)
-        ii = np.arange(qframe.fibers.size)[np.in1d(qframe.fibers,fibers)]
+        ii = np.arange(qframe.fibers.size)[np.isin(qframe.fibers,fibers)]
         if ii.size == 0 :
             log.error("no such fibers in frame,")
             log.error("fibers are in range [{}:{}]".format(qframe.fibers[0],qframe.fibers[-1]+1))

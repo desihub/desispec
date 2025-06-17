@@ -557,16 +557,19 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                 tnight = tile_prows[tile_prows['JOBDESC']=='tilenight'][0]
             elif 'poststdstar' in tile_prows['JOBDESC']:
                 poststdstars = tile_prows[tile_prows['JOBDESC']=='poststdstar']
-                tnight = tile_prows[tile_prows['JOBDESC']=='poststdstar'][-1]
+                tnight = poststdstars[-1]
                 ## Try to gather all the expids, but if that fails just move on
                 ## with the EXPID's from the last entry. This only happens in daily
                 ## for old proctabs and doesn't matter for cumulative redshifts
-                if len(tnight) > 1:
+                if len(poststdstars) > 1:
                     try:
+                        ## If more than one poststdstar, combine all EXPIDs for fake tilenight job
                         tnight['EXPID'] = np.sort(np.concatenate(poststdstars['EXPID']))
                     except:
+                        ## Log a warning but don't do anything since this only
+                        ## impacts documentation and not data reduction
                         log.warning(f"Tried and failed to populate full EXPIDs for: {dict(tnight)}")
-                        pass
+
             ## if spectra processed, check for redshifts and remove any found
             if tnight is not None:
                 for cur_ztype in cur_z_submit_types.copy():

@@ -27,7 +27,8 @@ def parse(options=None):
     parser.add_argument('--badfiber-table', type = str, default = None, required = False, help = 'output table with list of bad fibers (because of bad columns)')
     parser.add_argument('--badcol-table', type = str, default = None, required = False, help = 'output table with list of bad columns')
     parser.add_argument('--plot', action = 'store_true', help = 'plot the profiles')
-    parser.add_argument('--threshold', type = float , default = 0.005, required = False, help = 'threshold in electrons/sec to flag columns.')
+    parser.add_argument('--threshold', type = float , default = 0.005, required = False, help = 'threshold in electrons/sec to flag columns. '
+                                                                                                + 'Note not exptime dependent. Always multiplied by 300.')
     parser.add_argument('--sigma', type = float , default = 6, required = False, help = 'required statistical significance of column detection')
     parser.add_argument('--psf', type = str , default = None, required = False, help = 'specify psf file for trace coordinates, default is automatically found.')
     parser.add_argument('--dist', type = float , default = 3., required = False, help = 'min distance in pixels between fiber trace and bad column')
@@ -53,7 +54,11 @@ def main(args=None):
 
     exptime = head["EXPTIME"]
     log.info("Exposure time = {:.1f} sec".format(exptime))
-    threshold_electrons = args.threshold*exptime
+    log.info("NOT scaling threshold by exposure time.")
+    ## we have no evidence that the bad column counts scale with time,
+    ## DON'T scale with exposure time
+    #threshold_electrons = args.threshold*exptime
+    threshold_electrons = args.threshold*300 # equivalent to above for 300s dark
     log.info("Threshold in electrons = {:.2f}".format(threshold_electrons))
     log.info("Threshold significance > {:.2f} sigma".format(args.sigma))
 

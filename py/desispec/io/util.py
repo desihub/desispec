@@ -18,12 +18,15 @@ from desiutil.log import get_logger
 
 from desispec.util import parse_int_args
 
-def checkgzip(filename):
+def checkgzip(filename, readonly=True):
     """
     Check for existence of filename, with or without .gz extension
 
     Args:
         filename (str): filename to check for
+
+   Options:
+        readonly: If False, raises IOError if alternative file exists (.gz or not), default is True
 
     Returns path of existing file without or without .gz,
     or raises FileNotFoundError if neither exists
@@ -37,6 +40,8 @@ def checkgzip(filename):
         altfilename = filename + '.gz'
 
     if os.path.exists(altfilename):
+        if not readonly :
+            raise IOError(f'Requested {filename} but {altfilename} exists. Either change code to set argument readonly=True in call to checkgzip (possibly via call to findfile), or remove {altfilename}, or change request, or check env. variable DESI_COMPRESSION')
         return altfilename
     else:
         raise FileNotFoundError(f'Neither {filename} nor {altfilename}')
@@ -118,7 +123,8 @@ def native_endian(data):
     if data.dtype.isnative:
         return data
     else:
-        return data.byteswap().newbyteorder()
+        # return data.byteswap().newbyteorder()   # numpy<2
+        return data.byteswap().view(data.dtype.newbyteorder('native'))  # works with numpy 2
 
 def add_columns(data, colnames, colvals):
     '''
@@ -1159,4 +1165,3 @@ def backup_filename(filename):
     os.rename(filename, altfile)
 
     return altfile
-

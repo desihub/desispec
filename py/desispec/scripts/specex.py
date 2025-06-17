@@ -187,7 +187,7 @@ def main(args=None, comm=None):
                 tset = read_xytraceset(inpsffile)
 
             badfibers = get_badamp_fibers(hdr, tset, verbose=(rank==0))
-            selection   = ~np.in1d(allfibers,badfibers)
+            selection   = ~np.isin(allfibers,badfibers)
             ngoodfibers = np.sum(selection)
             if ngoodfibers<2 :
                 badamps = hdr['BADAMPS']

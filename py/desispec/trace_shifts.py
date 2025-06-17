@@ -11,7 +11,7 @@ import sys
 import argparse
 import time
 import numpy as np
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
@@ -1507,3 +1507,42 @@ def list_of_expected_spot_positions(traceset,fibers=None,max_number_of_lines=50)
     xspot=np.hstack(xspot)
     yspot=np.hstack(yspot)
     return xspot,yspot
+
+
+def compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fibers=None,halfwidth=50) :
+    log=get_logger()
+    bands=7 # measure delta_x in 7 horizontal bands of 100 pixel wide each and return the median offset
+    bandwidth=100
+    hb=bands//2
+    n0=image.pix.shape[0]
+    n1=image.pix.shape[1]
+    ivar=image.ivar*(image.mask==0)
+    if fibers is None :
+        fibers = np.arange(tset.nspec)
+    delta_x_array=[]
+    for b in range(-hb,hb+1) :
+        begin=int(n0//2+(b-0.5)*bandwidth)
+        end=begin+bandwidth
+
+        sw=np.sum(ivar[begin:end,:],axis=0)
+        swf=np.sum(image.pix[begin:end,:]*ivar[begin:end,:])
+        prof=(swf/(sw+(sw==0)))
+        y=int(n0//2+b*bandwidth)
+        xc=np.array([tset.x_vs_y(fiber,y) for fiber in fibers])
+        oversample=4
+        ox=np.arange(n1*oversample)/oversample
+        xx=np.arange(n1)
+        sigma=1.5 # pixel, approximate
+        mprof=np.exp(-(ox[:,None]-xc[None,:])**2/2./sigma**2).sum(axis=1)
+        norm = 1./np.sqrt(np.sum(prof**2)*(np.sum(mprof**2)/oversample))
+        ddx=np.linspace(-halfwidth,halfwidth,4*halfwidth+1)
+        xcorr=np.zeros(ddx.size)
+        for i,dx in enumerate(ddx) :
+            xcorr[i]=np.sum(prof*np.interp(xx,ox+dx,mprof))
+        xcorr *= norm
+        imax=np.argmax(xcorr)
+        log.info("horizontal band {}:{} delta x = {:.1f} pixels".format(begin,end,ddx[imax]))
+        delta_x_array.append(ddx[imax])
+    delta_x = np.median(delta_x_array)
+    log.info("median delta x = {:.1f} pixels".format(delta_x))
+    return delta_x

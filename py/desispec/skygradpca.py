@@ -248,9 +248,7 @@ def make_all_pcs(specprod, minnight=20200101,
         dictionary[camera, petal] containing the corresponding SkyGradPCA
         object.
     """
-    exps = Table.read(os.path.join(
-        os.environ['DESI_SPECTRO_REDUX'], specprod,
-        f'exposures-{specprod}.csv'))
+    exps = Table.read(desispec.io.findfile('exposures_csv', specprod=specprod))
     m = ((exps['NIGHT'] >= minnight) &
          (exps['SKY_MAG_R_SPEC'] < 19.5) &
          (exps['EXPTIME'] > 60) &
@@ -261,10 +259,8 @@ def make_all_pcs(specprod, minnight=20200101,
     combos = [[c, p] for c in cameras for p in petals]
     fnall = []
     for c, p in combos:
-        fn = [os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                           specprod, 'exposures', f'{e["NIGHT"]:08d}',
-                           f'{e["EXPID"]:08d}',
-                           f'sframe-{c}{p}-{e["EXPID"]:08d}.fits')
+        fn = [desispec.io.findfile('sframe', night=e["NIGHT"], expid=e["EXPID"],
+                                   camera=f'{c}{p}', specprod=specprod)
               for e in exps]
         fnall.append(fn)
 

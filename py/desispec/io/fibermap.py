@@ -63,8 +63,8 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('TARGET_RA',                  'f8',          'deg', 'Barycentric right ascension in ICRS',          'empty'),
                     ('TARGET_DEC',                 'f8',          'deg', 'Barycentric declination in ICRS',              'empty'),
                     ('DESINAME',              (str, 22),             '', 'Human readable identifier of a sky location',  'empty'),
-                    ('PMRA',                       'f4',    'mas yr^-1', 'Proper motion in the +RA direction',           'empty'),
-                    ('PMDEC',                      'f4',    'mas yr^-1', 'Proper motion in the +Dec direction',          'empty'),
+                    ('PMRA',                       'f4',     'mas yr-1', 'Proper motion in the +RA direction',           'empty'),
+                    ('PMDEC',                      'f4',     'mas yr-1', 'Proper motion in the +Dec direction',          'empty'),
                     ('REF_EPOCH',                  'f4',           'yr', 'Reference epoch for Gaia/Tycho astrometry',    'empty'),
                     ('LAMBDA_REF',                 'f4',     'Angstrom', 'Wavelength at which fiber was centered',       'empty'),
                     ('FA_TARGET',                  'i8',             '', 'Fiberassign internal target bitmask',          'empty'),
@@ -163,7 +163,11 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('STD_FIBER_DEC',              'f4',          'deg', 'Standard deviation (over exposures) of DEC',   'coadd'),
                     ('MEAN_PSF_TO_FIBER_SPECFLUX', 'f4',             '', 'Mean of PSF_TO_FIBER_SPECFLUX',                'coadd'),
                     ('MEAN_FIBER_X',               'f4',           'mm', 'Mean (over exposures) fiber CS5 X location',   'coadd'),
-                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),)
+                    ('MEAN_FIBER_Y',               'f4',           'mm', 'Mean (over exposures) fiber CS5 Y location',   'coadd'),
+                    ('IN_COADD_B',                 'bool',           '', 'Was this exposure included in B coadd',        'coadd'),
+                    ('IN_COADD_R',                 'bool',           '', 'Was this exposure included in R coadd',        'coadd'),
+                    ('IN_COADD_Z',                 'bool',           '', 'Was this exposure included in Z coadd',        'coadd'),
+                    )
 
 # dict to allow unit tests etc that augment fibermaps to look up the
 # correct dtype based upon the column name
@@ -554,7 +558,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     if 'TILEID' in rawheader:
         tileid = rawheader['TILEID']
         rawfafile, exists = findfile('fiberassign', night=night, expid=expid,
-                tile=tileid, return_exists=True)
+                tile=tileid, return_exists=True, readonly=True)
         if not exists:
             log.error("%s not found; looking in earlier exposures", rawfafile)
             rawfafile = find_fiberassign_file(night, expid, tileid=tileid)
@@ -804,7 +808,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     fibermap_header.extend(fa_header, unique=True)
     if pm is not None:
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
-        keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
+        keep = np.isin(pm['LOCATION'], fa['LOCATION'])
         pm = pm[keep]
         pm.sort('LOCATION')
         log.info('%d/%d fibers in coordinates file', len(pm), len(fa))
@@ -938,7 +942,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
 
         #- Set fiber status bits
-        missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
+        missing = np.isin(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
         missing |= (fibermap['FIBER_X']==0.0) & (fibermap['FIBER_Y']==0.0)
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
@@ -1089,7 +1093,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             truefmax = fibermax - 1
             log.info(f'Masking fibers from {fibermin} to {truefmax} for camera {camera} because of badamp entry '+\
                      f'{camera}{petal}{amplifier}')
-            ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
+            ampfiblocs = np.isin(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
     #- mask the fibers defined by bad fibers
@@ -1148,7 +1152,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     log.info(message)
     #- now add the keywords to FIBERSTATUS
     for key in badfibers_keywords_and_maskbits.keys() :
-        selection = np.in1d(fibermap["FIBER"],badfibers[key])
+        selection = np.isin(fibermap["FIBER"],badfibers[key])
         fibermap["FIBERSTATUS"][selection] |= badfibers_keywords_and_maskbits[key]
 
     #- NaN are a pain; reset to dummy values
@@ -1286,7 +1290,7 @@ def annotate_fibermap(fibermap):
     """
     if not isinstance(fibermap, fits.BinTableHDU):
         raise ValueError("Input fibermap has unexpected type!")
-    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8'}
+    tforms = {'B': 'u1', 'I': 'i2', 'J': 'i4', 'K': 'i8', 'E': 'f4', 'D': 'f8', 'L': 'bool'}
     log = get_logger()
     column_names = [row[0] for row in fibermap_columns]
     fh = fibermap.header

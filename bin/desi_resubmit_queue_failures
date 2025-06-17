@@ -25,6 +25,14 @@ def parse_args():  # options=None):
 
     parser.add_argument("-n","--night", type=str, default=None,
                         required=False, help="The night you want processed.")
+    parser.add_argument("-e","--expids", type=str, default=None,
+                        required=False, help="The exposure ids to resubmit (along "
+                                             + "with the jobs they depend on)."
+                                             + " Should be a comma separated list.")
+    parser.add_argument("-t","--tileids", type=str, default=None,
+                        required=False, help="The tile ids to resubmit (along "
+                                             + "with the jobs they depend on)."
+                                             + " Should be a comma separated list.")
     parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
                         help="Directory name where the output processing table should be saved.")
     parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
@@ -50,6 +58,11 @@ def parse_args():  # options=None):
                              "--resub-states explicitly.")
 
     args = parser.parse_args()
+
+    if args.expids is not None:
+        args.expids = np.array([eid.strip() for eid in args.expids.split(',')]).astype(int)
+    if args.tileids is not None:
+        args.tileids = np.array([tid.strip() for tid in args.tileids.split(',')]).astype(int)
 
     if args.resub_states is not None:
         ## User should never provide custom list of states and request to remove FAILED
@@ -91,7 +104,8 @@ if __name__ == '__main__':
                                                      no_resub_failed=args.no_resub_failed,
                                                      ptab_name=ptable_pathname,
                                                      dry_run_level=args.dry_run_level,
-                                                     reservation=args.reservation)
+                                                     reservation=args.reservation,
+                                                     expids=args.expids, tileids=args.tileids)
 
     if args.dry_run_level < 3:
         write_table(ptable, tablename=ptable_pathname)

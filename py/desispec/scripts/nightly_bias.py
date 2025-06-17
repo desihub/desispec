@@ -6,6 +6,7 @@ functions for bin/desi_compute_nightly_bias script
 """
 
 import argparse
+
 from desispec.ccdcalib import compute_nightly_bias
 from desispec.io.util import decode_camword, parse_cameras
 
@@ -18,7 +19,7 @@ def parse(options=None):
             default='a0123456789', help='list of cameras to process')
     p.add_argument('-o', '--outdir', type=str,
             help='output directory')
-    p.add_argument('--nzeros', type=int, default=25,
+    p.add_argument('--nzeros', type=int, default=50,
             help='max number of input ZEROS to use (saves memory) [%(default)s]')
     p.add_argument('--minzeros', type=int, default=15,
             help='minimum number of good ZEROs required [%(default)s]')
@@ -45,4 +46,4 @@ def main(args=None, comm=None):
         comm = MPI.COMM_WORLD
 
     del args.__dict__['mpi']
-    compute_nightly_bias(**args.__dict__, comm=comm)
+    return compute_nightly_bias(**args.__dict__, comm=comm)

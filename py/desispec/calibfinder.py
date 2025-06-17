@@ -316,11 +316,15 @@ class CalibFinder() :
             if dateobs < datebegin :
                 log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
-            if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
-                dateend=int(data[version]["DATE-OBS-END"])
-                if dateobs > dateend :
-                    log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
-                    continue
+            if "DATE-OBS-END" in data[version] :
+                try:
+                    dateend=int(data[version]["DATE-OBS-END"])
+                    if dateobs > dateend :
+                        log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,dateend,dateobs))
+                        continue
+                except ValueError as e :
+                    if not data[version]["DATE-OBS-END"].lower() == "none" :
+                        raise(e)
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
                 continue
@@ -346,8 +350,9 @@ class CalibFinder() :
 
             log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
-                log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
-                raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
+                message="Duplicate possible calibration data. Please fix this ambiguity. Maybe set DATE-OBS-END in previous config?"
+                log.error(message)
+                raise KeyError(message)
             found=True
             matching_data=data[version]
 
@@ -376,7 +381,12 @@ class CalibFinder() :
         Returns:
             data found in yaml file
         """
-        return self.data[key]
+        val=self.data[key]
+        if type(val)==list :
+            if len(val)!=2 :
+                raise ValueError(f"Error reading {val}: list should have length=2 [value,comment]")
+            val=val[0]
+        return val
 
     def findfile(self,key) :
         """
@@ -385,7 +395,7 @@ class CalibFinder() :
         Returns:
             path to calibration file
         """
-        return os.path.join(self.directory,self.data[key])
+        return os.path.join(self.directory,self.value(key))
 
     def badfibers(self,keys=badfiber_keywords) :
         """
@@ -539,8 +549,8 @@ class CalibFinder() :
                 dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
                 bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
                 if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
-                    log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
-                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                    log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file {dark_filename} not found in {self.dark_directory}")
+                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file  {dark_filename} not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
             if not self.fallback_on_dark_not_found:

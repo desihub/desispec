@@ -1169,7 +1169,8 @@ def all_calibs_submitted(accounted_for, do_cte_flats):
 def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
                                   resubmission_states=None,
                                   no_resub_failed=False, ptab_name=None,
-                                  dry_run_level=0, reservation=None):
+                                  dry_run_level=0, reservation=None,
+                                  expids=None, tileids=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -1194,6 +1195,8 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
             4 Doesn't write, submit jobs, or query Slurm.
             5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        expids: list of ints. The exposure ids to resubmit (along with the jobs they depend on).
+        tileids: list of ints. The tile ids to resubmit (along with the jobs they depend on).
 
     Returns:
         tuple: A tuple containing:
@@ -1207,6 +1210,17 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
+    if tileids is not None and expids is not None:
+        msg = f"Provided both expids and tilesids. Please only provide one."
+        log.critical(msg)
+        raise AssertionError(msg)
+    elif tileids is not None:
+        msg = f"Only resubmitting the following tileids and the jobs they depend on: {tileids=}"
+        log.info(msg)
+    elif expids is not None:
+        msg = f"Only resubmitting the following expids and the jobs they depend on: {expids=}"
+        log.info(msg)
+
     if resubmission_states is None:
         resubmission_states = get_resubmission_states(no_resub_failed=no_resub_failed)
 
@@ -1219,9 +1233,23 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
     log.info(np.array(cols))
     for row in proc_table:
         log.info(np.array(row[cols]))
+
+    ## If expids or tileids are given, subselect to the processing table rows
+    ## that included those exposures or tiles otherwise just list all indices
+    ## NOTE: Other rows can still be submitted if the selected rows depend on them
+    ## we hand the entire table to recursive_submit_failed(), which will walk the
+    ## entire dependency tree as necessary.
+    if expids is not None:
+        select_ptab_rows = np.where([np.any(np.isin(prow_eids, expids)) for prow_eids in proc_table['EXPID']])[0]
+    elif tileids is not None:
+        select_ptab_rows = np.where(np.isin(proc_table['TILEID'], tileids))[0]
+    else:
+        select_ptab_rows = np.arange(len(proc_table))
+
     log.info("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
-    for rown in range(len(proc_table)):
+    ## Loop over all requested rows and resubmit those that have failed
+    for rown in select_ptab_rows:
         if proc_table['STATUS'][rown] in resubmission_states:
             proc_table, submits = recursive_submit_failed(rown=rown, proc_table=proc_table,
                                                           submits=submits, max_resubs=max_resubs,
@@ -1293,7 +1321,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         all_valid_states = list(resubmission_states.copy())
         good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
         all_valid_states.extend(good_states)
-        othernight_idep_qid_lookup = {}
+        othernight_idep_row_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 if idep // 1000 != row['INTID'] // 1000:
@@ -1319,9 +1347,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
                         return proc_table, submits
                     else:
-                        ## otherwise all is good, just update the cache to use this
+                        ## otherwise if incomplete, just update the cache to use this
                         ## in the next stage
-                        othernight_idep_qid_lookup[idep] = entry['LATEST_QID']
+                        othernight_idep_row_lookup[idep] = entry
                         update_full_ptab_cache(reftab)
                 else:
                     msg = f"Internal ID: {idep} not in id_to_row_map. " \
@@ -1348,18 +1376,25 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                                                                   reservation=reservation,
                                                                   dry_run_level=dry_run_level)
                 ## Now that we've resubmitted the dependency if necessary,
-                ## add the most recent QID to the list
-                qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+                ## add the most recent QID to the list assuming it isn't COMPLETED
+                if still_a_dependency(proc_table[id_to_row_map[idep]]):
+                    qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
+                else:
+                    log.info(f"{idep} is COMPLETED. Not submitting as a dependency.")
             else:
                 ## Since we verified above that the cross night QID is still
                 ## either pending or successful, add that to the list of QID's
-                qdeps.append(othernight_idep_qid_lookup[idep])
+                if still_a_dependency(othernight_idep_row_lookup[idep]):
+                    qdeps.append(othernight_idep_row_lookup[idep]['LATEST_QID'])
+                else:
+                    log.info(f"{idep} is COMPLETED. Not submitting as a dependency.")
 
         qdeps = np.atleast_1d(qdeps)
-        if len(qdeps) > 0:
-            proc_table['LATEST_DEP_QID'][rown] = qdeps
-        else:
-            log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
+        proc_table['LATEST_DEP_QID'][rown] = qdeps
+        if len(qdeps) < len(ideps):
+            log.warning(f"Number of internal dependencies was {len(ideps)} but number "
+                        + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
+                        + " This is expected if the ideps were status=COMPLETED")
 
     proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
                                            strictly_successful=True, dry_run=dry_run_level)

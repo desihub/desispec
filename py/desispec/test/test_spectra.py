@@ -142,6 +142,7 @@ class TestSpectra(unittest.TestCase):
         self.mask = {}
         self.res = {}
         self.extra = {}
+        self.model = {}
 
         for s in range(self.nspec):
             self.wave['b'] = np.linspace(3500, 5800, self.nwave, dtype=float)
@@ -151,6 +152,7 @@ class TestSpectra(unittest.TestCase):
                 self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
+                self.model[b] = np.copy(self.flux[b])
                 self.mask[b] = np.tile(np.arange(2, dtype=np.uint32),
                     (self.nwave * self.nspec) // 2).reshape( (self.nspec, self.nwave) )
                 self.res[b] = np.zeros( (self.nspec, self.ndiag, self.nwave),
@@ -164,6 +166,10 @@ class TestSpectra(unittest.TestCase):
         self.extra_catalog = Table()
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
+        self.redshifts = Table()
+        self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
+        self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
+        self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
 
     def tearDown(self):
         if os.path.exists(self.fileio):
@@ -183,6 +189,8 @@ class TestSpectra(unittest.TestCase):
             nt.assert_array_almost_equal(spec.wave[band], self.wave[band])
             nt.assert_array_almost_equal(spec.flux[band], self.flux[band])
             nt.assert_array_almost_equal(spec.ivar[band], self.ivar[band])
+            if spec.model is not None:
+                nt.assert_array_almost_equal(spec.model[band], self.model[band])
             nt.assert_array_equal(spec.mask[band], self.mask[band])
             nt.assert_array_almost_equal(spec.resolution_data[band], self.res[band])
             if spec.extra is not None:
@@ -441,21 +449,21 @@ class TestSpectra(unittest.TestCase):
     def test_stack(self):
         """Test desispec.spectra.stack"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res,
+            mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap1, exp_fibermap=self.efmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp2 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res,
+            mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap2, exp_fibermap=self.efmap2,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp3 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res,
+            mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap3, exp_fibermap=self.efmap3,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         spx = stack([sp1, sp2, sp3])
@@ -463,6 +471,8 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(spx.flux[band].shape[0], 3*self.nspec)
             self.assertEqual(spx.flux[band].shape[1], self.nwave)
             self.assertEqual(spx.ivar[band].shape[0], 3*self.nspec)
+            self.assertEqual(spx.model[band].shape[0], 3*self.nspec)
+            self.assertEqual(spx.model[band].shape[1], self.nwave)
             self.assertEqual(spx.mask[band].shape[0], 3*self.nspec)
             self.assertEqual(spx.resolution_data[band].shape[0], 3*self.nspec)
             self.assertTrue(np.all(spx.flux[band][0:self.nspec] == sp1.flux[band]))
@@ -471,6 +481,7 @@ class TestSpectra(unittest.TestCase):
         self.assertEqual(len(spx.fibermap), 3*self.nspec)
         self.assertEqual(len(spx.exp_fibermap), 3*2*self.nspec)
         self.assertEqual(len(spx.extra_catalog), 3*self.nspec)
+        self.assertEqual(len(spx.redshifts), 3*self.nspec)
 
         #- Stacking also works if optional params are None
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
@@ -523,9 +534,9 @@ class TestSpectra(unittest.TestCase):
     def test_slice(self):
         """Test desispec.spectra.__getitem__"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res,
+            mask=self.mask, model=self.model, resolution_data=self.res,
             fibermap=self.fmap1, exp_fibermap=self.efmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores,
+            meta=self.meta, extra=self.extra, scores=self.scores, redshifts=self.redshifts,
             extra_catalog=self.extra_catalog)
 
         sp2 = sp1[0:self.nspec-1]
@@ -533,11 +544,13 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.flux[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.ivar[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
+            self.assertEqual(sp2.model[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
             self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))
             self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
             self.assertEqual(sp2.extra[band]['FOO'].shape, sp2.flux[band].shape)
+            self.assertEqual(len(sp2.redshifts), self.nspec-1)
 
         self.assertEqual(len(sp2.scores['BLAT']), self.nspec-1)
 
@@ -546,6 +559,7 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.flux[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.ivar[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
+            self.assertEqual(sp2.model[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
             self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))

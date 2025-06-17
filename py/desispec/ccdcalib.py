@@ -112,7 +112,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 log.error(message)
                 raise RuntimeError(message)
         else:
-            thisbias = False
+            thisbias = True
 
         # read raw data and preprocess them
         img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
@@ -674,7 +674,14 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
                 camhdr = fx[camera].read_header()
 
             cf = CalibFinder([rawhdr, camhdr],fallback_on_dark_not_found=True)
-            defaultbias = cf.findfile('BIAS')
+            try:
+                defaultbias = cf.findfile('BIAS')
+            except KeyError as ex:
+                nfail+=1
+                log.error(f'{rank=}, {camera=} raised {type(ex)} exception {ex}')
+                for line in traceback.format_exception(*sys.exc_info()):
+                    log.error('  '+line.strip())
+                continue
 
             log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
             try:
@@ -1280,7 +1287,7 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         obslist=load_table(f"{os.getenv('DESI_SPECTRO_DARK')}/exp_dark_zero.csv")
 
         #read all calib files to get dates of changes
-        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/*.yaml')
+        yaml_filenames=glob.glob(os.getenv('DESI_SPECTRO_CALIB')+'/spec/sm*/sm*-?.yaml')
         all_config_data={}
         for y_file in yaml_filenames:
             with open(y_file) as f:
@@ -1290,8 +1297,9 @@ def make_regular_darks(outdir=None, lastnight=None, cameras=None, window=30,
         #extract only the main keys which are dates except for the very first one (could elsewise check on OBS-BEGIN), only mildly more complicated
         change_dates={k:[] for k in all_config_data.keys()}
         for speckey,data in all_config_data.items():
+
             required_keys=[(k,{k2:v2 for (k2,v2) in v.items() if k2 in ['DATE-OBS-BEGIN','DATE-OBS-END','DETECTOR','CCDTMING','CCDCFG','AMPLIFIERS']}) for k,v in data.items()]
-            required_keys.sort(key=lambda x:x[1]['DATE-OBS-BEGIN'],reverse=True)
+            required_keys.sort(key=lambda x:int(x[1]['DATE-OBS-BEGIN']),reverse=True)
             usever,useval=required_keys[0]
             for newver,newval in required_keys[1:]:
                 usenew=True
