@@ -81,12 +81,14 @@ jobs:
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
                 DESITARGET_VERSION: main
+                REDROCK_VERSION: 0.20.4
               run: |
                 python -m pip install desiutil==${DESIUTIL_VERSION}
                 python -m pip install git+https://github.com/desihub/specter.git@${SPECTER_VERSION}
                 python -m pip install git+https://github.com/desihub/gpu_specter.git@${GPU_SPECTER_VERSION}
                 python -m pip install git+https://github.com/desihub/desimodel.git@${DESIMODEL_VERSION}
                 python -m pip install git+https://github.com/desihub/desitarget.git@${DESITARGET_VERSION}
+                python -m pip install git+https://github.com/desihub/redrock.git@${REDROCK_VERSION}
             - name: Install desimodel data
               env:
                 DESIMODEL_DATA: branches/test-0.19
@@ -134,12 +136,14 @@ jobs:
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
                 DESITARGET_VERSION: 3.2.0
+                REDROCK_VERSION: 0.20.4
               run: |
                 python -m pip install desiutil==${DESIUTIL_VERSION}
                 python -m pip install git+https://github.com/desihub/desimodel.git@${DESIMODEL_VERSION}
                 python -m pip install git+https://github.com/desihub/specter.git@${SPECTER_VERSION}
                 python -m pip install git+https://github.com/desihub/gpu_specter.git@${GPU_SPECTER_VERSION}
                 python -m pip install git+https://github.com/desihub/desitarget.git@${DESITARGET_VERSION}
+                python -m pip install git+https://github.com/desihub/redrock.git@${REDROCK_VERSION}
             - name: Install desimodel data
               env:
                 DESIMODEL_DATA: branches/test-0.19
