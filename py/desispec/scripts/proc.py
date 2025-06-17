@@ -534,7 +534,7 @@ def main(args=None, comm=None):
 
             timer.stop('inspect_dark')
         elif rank == 0:
-            log.warning(f'Not running desi_inspect_dark for DARK with ICS PROGRAM={ics_program}')
+            log.warning(f'Not running desi_inspect_dark for DARK with EXPTIME={exptime:.1f}')
 
     #-------------------------------------------------------------------------
     #- Traceshift
