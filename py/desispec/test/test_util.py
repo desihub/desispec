@@ -438,6 +438,32 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(type(value), bool)
         self.assertEqual(value, False)
 
+    def test_parse_int_args(self):
+        self.assertEqual(list(util.parse_int_args('1:3')), [1,2])
+        self.assertEqual(list(util.parse_int_args('1:3,0,8,5,10-12')), [1,2,0,8,5,10,11])
+        self.assertEqual(list(util.parse_int_args('5:8', include_end=True)), [5,6,7,8])
+        self.assertEqual(list(util.parse_int_args('5-8', include_end=True)), [5,6,7,8])
+        self.assertEqual(list(util.parse_int_args('5..8', include_end=True)), [5,6,7,8])
+
+    def test_parse_nights(self):
+        #- spans month boundary, no leap year
+        self.assertEqual(list(util.parse_nights('20250227:20250303')),
+                         [20250227, 20250228, 20250301, 20250302])
+        #- spans month boundary on a leap year
+        self.assertEqual(list(util.parse_nights('20240227:20240303')),
+                         [20240227, 20240228, 20240229, 20240301, 20240302])
+        #- spans year boundary
+        self.assertEqual(list(util.parse_nights('20241231:20250102')),
+                         [20241231,20250101])
+        #- include_end
+        self.assertEqual(list(util.parse_nights('20240227:20240303', include_end=True)),
+                         [20240227, 20240228, 20240229, 20240301, 20240302, 20240303])
+        #- must be a date
+        self.assertEqual(list(util.parse_nights('1:5')), [])
+        #- other forms
+        self.assertEqual(list(util.parse_nights('20240227:20240302,20250101')),
+                         [20240227, 20240228, 20240229, 20240301, 20250101])
+
     def test_argmatch(self):
         #- basic argmatch
         a = np.array([1,3,2,4])
