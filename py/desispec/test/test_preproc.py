@@ -5,6 +5,7 @@ import os
 import os.path
 import warnings
 from astropy.io import fits
+from astropy.utils.exceptions import AstropyUserWarning
 import numpy as np
 import shutil
 from importlib import resources
@@ -326,21 +327,23 @@ class TestPreProc(unittest.TestCase):
         self.assertTrue(np.all(image.mask[10:20,10:20] & ccdmask.PIXFLATLOW))
 
     def test_io(self):
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='R1')
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='z9')
-        self.header['CAMERA'] = 'B3'
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+            io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
+            io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='R1')
+            io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='z9')
+            self.header['CAMERA'] = 'B3'
+            io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
 
-        b0 = io.read_raw(self.rawfile, 'b0')
-        #b1 = io.read_raw(self.rawfile, 'b1')
-        #r1 = io.read_raw(self.rawfile, 'r1')
-        #z9 = io.read_raw(self.rawfile, 'Z9')
+            b0 = io.read_raw(self.rawfile, 'b0')
+            #b1 = io.read_raw(self.rawfile, 'b1')
+            #r1 = io.read_raw(self.rawfile, 'r1')
+            #z9 = io.read_raw(self.rawfile, 'Z9')
 
-        self.assertEqual(b0.meta['CAMERA'], 'b0')
-        #self.assertEqual(b1.meta['CAMERA'], 'b1')
-        #self.assertEqual(r1.meta['CAMERA'], 'r1')
-        #self.assertEqual(z9.meta['CAMERA'], 'z9')
+            self.assertEqual(b0.meta['CAMERA'], 'b0')
+            #self.assertEqual(b1.meta['CAMERA'], 'b1')
+            #self.assertEqual(r1.meta['CAMERA'], 'r1')
+            #self.assertEqual(z9.meta['CAMERA'], 'z9')
 
     def test_32_64(self):
         '''

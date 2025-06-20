@@ -40,8 +40,8 @@ def get_nights_in_date_range(first_night, last_night):
     etab_files = sorted(glob.glob(glob_path))
     nights = []
     for n in etab_files:
-        # - nights are 202YMMDD
-        if re.match('^202\d{5}$', n):
+        # - nights are 20YYMMDD
+        if re.match(r'^20\d{6}$', n):
             nights.append(int(n))
 
     nights = np.array(nights)
@@ -71,7 +71,7 @@ def get_nights_to_process(production_yaml, verbose=False):
     returns a list of int nights.
 
     Args:
-        production_yaml (str or dict): Production yaml or pathname of the 
+        production_yaml (str or dict): Production yaml or pathname of the
             yaml file that defines the production.
         verbose (bool): Whether to be verbose in log outputs.
 
@@ -87,7 +87,7 @@ def get_nights_to_process(production_yaml, verbose=False):
             config = yaml.safe_load(yamlfile)
     else:
         config = production_yaml
-            
+
     all_nights, first_night = None, None
     if 'NIGHTS' in config and 'LAST_NIGHT' in config:
         log.error(f"Both NIGHTS and LAST_NIGHT specified. Using NIGHTS "
