@@ -670,8 +670,11 @@ def parse_nights(nights_string, include_end=False) :
         1D numpy array listing all of the integers given in the list,
         including enumerations of ranges given.
 
-    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
-    unless `include_end` is True, which then returns 1,2,3,4,5
+    Note: this follows python-style ranges, i.e. 20250101-20250103
+    returns [20250101, 20250102] unless `include_end` is True,
+    which then returns [20250101, 20250102, 20250103].
+    Ranges that span month and year boundaries are handled correctly,
+    including leap-years.
     """
     import datetime
 
@@ -689,7 +692,7 @@ def parse_nights(nights_string, include_end=False) :
             values.append(value)
         except ValueError :
             pass
-    return values
+    return np.array(values)
 
 def ordered_unique(ar, return_index=False):
     """Find the unique elements of an array in the order they first appear
