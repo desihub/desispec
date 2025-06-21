@@ -71,8 +71,8 @@ def reformat_processing_tables(nights=None, night_range=None, orig_filetype='csv
     proctab_template = proctab_template.replace('.csv', f'.{orig_filetype}')
     nights_with_proctables = list()
     for ptabfn in glob.glob(proctab_template):
-        ## nights are 202YMMDD
-        matches = re.findall('202\d{5}', os.path.basename(ptabfn))
+        ## nights are 20YYMMDD
+        matches = re.findall(r'20\d{6}', os.path.basename(ptabfn))
         if len(matches) == 1:
             n = int(matches[0])
             nights_with_proctables.append(n)

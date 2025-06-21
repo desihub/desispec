@@ -75,7 +75,7 @@ def determine_calibrations_to_proc(etable, do_cte_flats=True,
     ## If no rows, stop here
     if len(full_etable) == 0:
         return full_etable[[]]
-    
+
     ## Selecting cals, so remove science exposures
     cal_etable = full_etable[full_etable['OBSTYPE'] != 'science']
 
@@ -231,7 +231,11 @@ def select_valid_calib_exposures(etable, allow_any_laststep=None):
     exptype = np.array(exptype)
 
     ## if multiple valid darks, subselect to "best"
-    isdark = (exptype == 'dark')
+    if len(exptype) > 0:
+        # Avoid a warning if exptype is empty.
+        isdark = (exptype == 'dark')
+    else:
+        isdark = np.array([False])
     if np.sum(isdark) > 1:
         log.info(f"Identified {np.sum(isdark)} dark(s) with appropriate efftimes. Looking for calib darks")
         darktab = outtable[isdark]

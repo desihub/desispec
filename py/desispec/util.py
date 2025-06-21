@@ -530,7 +530,8 @@ def combine_ivar(ivar1, ivar2):
 
     #- Convert back to python float if input was scalar
     if isinstance(ivar1, (float, numbers.Integral)):
-        return float(ivar)
+        # Fix "Conversion of an array with ndim > 0 to a scalar is deprecated"
+        return float(ivar[0])
     #- If input was 0-dim numpy array, convert back to 0-di
     elif ivar1.ndim == 0:
         return np.asarray(ivar[0])

@@ -255,7 +255,7 @@ def cameras_from_raw_data(rawdata):
     else:
         fx = rawdata
 
-    recam = re.compile('^[brzBRZ][\d]$')
+    recam = re.compile(r'^[brzBRZ][\d]$')
     cameras = list()
     for hdu in fx.hdu_list:
         if recam.match(hdu.get_extname()):

@@ -5,7 +5,7 @@ desispec.workflow.timing
 """
 import os, glob, json
 import time, datetime
-
+import pytz
 import numpy as np
 
 from desiutil.log import get_logger
@@ -18,7 +18,7 @@ def what_night_is_it():
     """
     Return the current night
     """
-    d = datetime.datetime.utcnow() - datetime.timedelta(7 / 24 + 0.5)
+    d = datetime.datetime.now(tz=pytz.timezone('UTC')) - datetime.timedelta(7 / 24 + 0.5)
     tonight = int(d.strftime('%Y%m%d'))
     return tonight
 
