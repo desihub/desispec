@@ -26,15 +26,17 @@ from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, di
 from desispec.io.raw import read_raw_primary_header
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
+from desispec.util import header2night
+from desispec.io import findfile
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
 from desispec.workflow.batch import get_config
 
-
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
-                 scale=False, exptime=None):
+                      exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
+                      save_preproc=True, preproc_dark_dir=None):
     """
     Compute classic dark model from input dark images
 
@@ -46,35 +48,62 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     Options:
         bias (str or list): bias file to use, or list of bias files
         nocosmic (bool): use medians instead of cosmic identification
-        scale (bool): apply scale correction for EM0 teststand data
         exptime (float): write EXPTIME header keyword; all inputs must match
+        min_vccdsec (float) : minimal time (in sec) after CCD bias voltage was turned on
+        max_temperature_diff (float) : maximal CCD temperature difference
+        reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
+        save_preproc (bool) : save preprocessed images
+        preproc_dark_dir (str) : specify output directory used to save preproc images
 
-    Note: if bias is None, no bias correction is applied.  If it is a single
-    file, then use that bias for all darks.  If it is a list, it must have
-    len(rawfiles) and gives the per-file bias to use.
+
+
+    Note: if bias is None, the bias will be looked for in $DESI_SPECTRO_REDUX/$SPECPROD/calibnight, and will raise
+    an error if no nightly bias is found.
 
     Note: this computes a classic dark model without any non-linear terms.
     see bin/compute_dark_nonlinear for current DESI dark model.
 
-    TODO: separate algorithm from I/O
     """
+
     log = get_logger()
-    log.info("read images ...")
+
 
     shape=None
     images=[]
-    first_image_header = None
     if nocosmic :
         masks=None
     else :
         masks=[]
 
+
+    if reference_header is None :
+        log.info("first pass to find the most recent header ...")
+        for ifile, filename in enumerate(rawfiles):
+            log.info(filename)
+            fitsfile=pyfits.open(filename)
+            if not camera in fitsfile : continue
+            header=fitsfile[camera].header
+            if reference_header is None :
+                reference_header = header
+            else :
+                if header["EXPID"] > reference_header["EXPID"] :
+                    reference_header = header
+            fitsfile.close()
+        log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} DETECTOR={reference_header['DETECTOR']}")
+
+
+    log.info("read images ...")
+    exptimes=[]
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
 
         # collect exposure times
         primary_header = read_raw_primary_header(filename)
         fitsfile=pyfits.open(filename)
+        if not camera in fitsfile :
+            log.warning(f'No camera {camera} in {filename}')
+            continue
+
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -87,20 +116,50 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             log.error(message)
             raise ValueError(message)
 
+        valid=True
+
         if exptime is not None:
             if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
-                log.error(message)
-                raise ValueError(message)
+                log.warning(message)
+                fitsfile.close()
+                continue
 
-        if first_image_header is None :
-            first_image_header = fitsfile[camera].header
-        elif 'VCCDSEC' in first_image_header and 'VCCDSEC' in fitsfile[camera].header:
-            if fitsfile[camera].header['VCCDSEC']<first_image_header['VCCDSEC']:
-                first_image_header['VCCDSEC']=fitsfile[camera].header['VCCDSEC']
-                first_image_header['VCCDON']=fitsfile[camera].header['VCCDON']
+        header = fitsfile[camera].header
 
-        fitsfile.close()
+
+        if 'VCCDSEC' in header :
+            vccdsec = float(header['VCCDSEC'])
+            log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
+            if vccdsec < min_vccdsec :
+                log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
+                fitsfile.close()
+                continue
+
+        valid=True
+        for k in ['DETECTOR','CCDCFG','CCDTMING'] :
+            v1=reference_header[k].strip().upper()
+            v2=header[k].strip().upper()
+            if v1 != v2 :
+                mess=(f"skip {filename} k={v2} != {v1} (from reference header)")
+                log.warning(mess)
+                fitsfile.close()
+                valid=False
+                break
+        if not valid : continue
+
+
+        v1=float(reference_header["CCDTEMP"])
+        v2=float(header["CCDTEMP"])
+        if np.abs(v1-v2)>max_temperature_diff :
+            mess=(f"skip {filename} k={v2} different from {v1} (from reference header)")
+            log.warning(mess)
+            fitsfile.close()
+            continue
+
+
+        log.info(f"Preprocessing {filename} ...")
+
 
         if bias is not None:
             if isinstance(bias, str):
@@ -114,15 +173,42 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         else:
             thisbias = True
 
-        # read raw data and preprocess them
-        img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+        night=header2night(primary_header)
+        expid=primary_header["EXPID"]
 
-        # propagate gains to first_image_header
+        if thisbias is False :
+            biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
+            if os.path.isfile(biasnight) :
+                thisbias = biasnight
+            else :
+                message=f"Missing mandatory biasnight file {biasnight}"
+                log.error(message)
+                raise RuntimeError(message)
+        log.debug(f"BIAS={thisbias}")
+
+        preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
+
+        if not os.path.isfile(preproc_filename) and preproc_dark_dir is not None :
+            preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=preproc_dark_dir)
+
+        if os.path.isfile(preproc_filename) :
+            log.info(f"Reading existing {preproc_filename}")
+            img = io.read_image(preproc_filename)
+        else :
+            # read raw data and preprocess them
+            img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
+                              mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+
+            if save_preproc :
+                # is saved in preproc_dark_dir if not None
+                io.write_image(preproc_filename,img)
+                log.info(f"Wrote {preproc_filename}")
+
+        # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
             k="GAIN"+a
-            if k in img.meta and k not in first_image_header:
-                first_image_header[k] = img.meta[k]
+            if k in img.meta and k not in reference_header:
+                reference_header[k] = img.meta[k]
 
         if shape is None :
             shape=img.pix.shape
@@ -130,8 +216,17 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         images.append(img.pix.ravel()/thisexptime)
         if masks is not None :
             masks.append(img.mask.ravel())
+        exptimes.append(thisexptime)
+
+
+    if len(images)==0 :
+        log.error("No images left after selection")
+        raise RuntimeError("No images left after selection")
 
     images=np.array(images)
+    exptimes=np.array(exptimes)
+    assert(images.shape[0] == exptimes.size)
+
     if masks is not None :
         masks=np.array(masks)
         smask=np.sum(masks,axis=0)
@@ -141,26 +236,19 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info("compute median image ...")
     medimage=masked_median(images,masks)
 
-    if scale :
-        log.info("compute a scale per image ...")
-        sm2=np.sum((smask==0)*medimage**2)
-        ok=(medimage>0.6*np.median(medimage))*(smask==0)
-        for i,image in enumerate(rawfiles) :
-            s=np.sum((smask==0)*medimage*image)/sm2
-            #s=np.median(image[ok]/medimage[ok])
-            log.info("image %d scale = %f"%(i,s))
-            images[i] /= s
-        log.info("recompute median image after scaling ...")
-        medimage=masked_median(images,masks)
-
     if True :
         log.info("compute mask ...")
         ares=np.abs(images-medimage)
         nsig=4.
         mask=(ares<nsig*1.4826*np.median(ares,axis=0))
+
         # average (not median)
-        log.info("compute average ...")
-        meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+        #log.info("compute average ...")
+        #meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+
+        # better is optimal weights (here images have been divided by exptimes beforehand)
+        log.info("compute weighted average ...")
+        meanimage=np.sum(images*(exptimes[:,None]**2)*mask,axis=0)/np.sum((exptimes[:,None]**2)*mask,axis=0)
         meanimage=meanimage.reshape(shape)
     else :
         meanimage=medimage.reshape(shape)
@@ -192,8 +280,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         "GAINA", "GAINB", "GAINC", "GAIND",
         "VCCDSEC","VCCDON"
         ] :
-        if key in first_image_header :
-            hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
+        if key in reference_header :
+            hdulist[0].header[key] = (reference_header[key],reference_header.comments[key])
 
     if exptime is not None:
         hdulist[0].header['EXPTIME'] = exptime
