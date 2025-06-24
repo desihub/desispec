@@ -464,6 +464,12 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(util.parse_nights('20240227:20240302,20250101')),
                          [20240227, 20240228, 20240229, 20240301, 20250101])
 
+    def test_get_night_range(self):
+        self.assertEqual(list(util.get_night_range(20240228, before=2, after=3)),
+                         [20240226,20240227,20240228,20240229,20240301,20240302])
+        self.assertEqual(list(util.get_night_range(20251231, before=1, after=1)),
+                         [20251230,20251231,20260101])
+
     def test_argmatch(self):
         #- basic argmatch
         a = np.array([1,3,2,4])

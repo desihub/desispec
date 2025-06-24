@@ -397,10 +397,11 @@ def mask32(mask):
 
 def night2ymd(night):
     """
-    parse night YEARMMDD string into tuple of integers (year, month, day)
+    parse night YEARMMDD into tuple of integers (year, month, day)
     """
-    assert isinstance(night, str), 'night is not a string'
-    assert len(night) == 8, f'invalid YEARMMDD night string {night=}'
+    night = str(night) # support both in and str input
+    if len(night) != 8:
+        raise ValueError(f'invalid YEARMMDD night string {night=}')
 
     year = int(night[0:4])
     month = int(night[4:6])
@@ -415,10 +416,16 @@ def night2ymd(night):
 
 def night2dateobj(night):
     """
-    parse night YEARMMDD string into a datetime.date object
+    parse night YEARMMDD into a datetime.date object
     """
     year, mm, dd = night2ymd(night)
     return datetime.date(year=year, month=mm, day=dd)
+
+def dateobj2night(dateobj):
+    """
+    Convert datetime.date object into YEARMMDD int
+    """
+    return int(ymd2night(dateobj.year, dateobj.month, dateobj.day))
 
 def difference_nights(firstnight, secondnight):
     """
@@ -682,17 +689,34 @@ def parse_nights(nights_string, include_end=False) :
     # now keep only valid YYYYMMDD
     values=[]
     for value in tmpvalues :
-        year=value//10000
-        month=(value//100)%100
-        day=value%100
-        if month<1 or month>12 or day<1 or day>31: continue
-        # now check in more detail
-        try :
-            datetime.datetime(year=year,month=month,day=day)
+        try:
+            #- basic checks on month/day ranges and ability to convert to datetime.date
+            date = night2dateobj(value)
+            #- success, so add to list of values
             values.append(value)
-        except ValueError :
+        except ValueError:
             pass
     return np.array(values)
+
+def get_night_range(night, before, after):
+    """
+    Generate an array of YEARMMDD ints for a range of nights before and after a given night.
+
+    Args:
+        night (int): reference YEARMMDD night
+        before (int): number of nights before `night` to include
+        after (int): number of nights after `night` to include
+
+    Returns:
+        array of YEARMMDD night integers
+
+    Example: get_night_range(20250501, 2, 3) -> [20250428, 20250430, 20250501, 20250502, 20250503, 20250504],
+    i.e. two nights before, the night requested, and 3 nights after.
+    """
+    nightobj = night2dateobj(night)
+    firstnight = dateobj2night(nightobj - datetime.timedelta(days=before))
+    lastnight = dateobj2night(nightobj + datetime.timedelta(days=after))
+    return parse_nights(f'{firstnight}:{lastnight}', include_end=True)
 
 def ordered_unique(ar, return_index=False):
     """Find the unique elements of an array in the order they first appear
