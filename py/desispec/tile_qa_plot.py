@@ -1477,7 +1477,7 @@ def make_tile_qa_plot(
         ax.legend(loc=1, ncol=1)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
-        if hdr["FAPRGRM"].lower() == "bright":
+        if hdr["FAPRGRM"].lower() in ["bright", "bright1b"]:
             ax.set_xlim(-0.1, 1.5)
             ax.set_ylim(0, 0.4)
         else:
