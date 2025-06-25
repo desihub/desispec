@@ -487,6 +487,7 @@ def read_spectra(
             redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
             if rows is not None and len(rows)>0:
                 redrock_targetids = redrock_targetids[rows]
+                redshifts = redshifts[rows]
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
 
