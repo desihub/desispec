@@ -87,7 +87,9 @@ class TestSpectra(unittest.TestCase):
 
         #- Test data and files to work with
         os.chdir(self.testDir)
-        self.fileio = "test_spectra.fits"
+        # this has to start with "coadd" for reading redshifts
+        self.fileio = "coadd-test_spectra.fits"
+        self.fileio_rr = "redrock-test_spectra.fits"
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"
         self.meta = {
@@ -170,10 +172,13 @@ class TestSpectra(unittest.TestCase):
         self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
         self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
         self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
+        self.redshifts["TARGETID"] = self.fmap1["TARGETID"].copy()
 
     def tearDown(self):
         if os.path.exists(self.fileio):
             os.remove(self.fileio)
+        if os.path.exists(self.fileio_rr):
+            os.remove(self.fileio_rr)
         if os.path.exists(self.fileappend):
             os.remove(self.fileappend)
         if os.path.exists(self.filebuild):
@@ -299,6 +304,37 @@ class TestSpectra(unittest.TestCase):
         # targetid 10 doesn't appear because it wasn't in the input file, ok
         self.assertListEqual(comp_subset.fibermap['TARGETID'].tolist(),
                              [2, 2, 4, 4, 4, 0, 0, 0, 0])
+
+        # repeat the previous test, but also reading the redshifts (redrock) table
+        write_spectra(self.fileio, spec)
+        self.redshifts["TARGETID"] = spec.fibermap["TARGETID"].copy()
+        self.redshifts.write(self.fileio_rr, format='fits')
+        comp_subset = read_spectra(self.fileio, targetids=targetids,
+                                   return_redshifts=True)
+        self.assertListEqual(comp_subset.fibermap['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
+        self.assertListEqual(comp_subset.redshifts['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
+
+        # repeat the previous test, but now reading the redshifts from an HDU
+        # in the spectra file (not the redrock file)
+        os.remove(self.fileio_rr)
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
+            redshifts=self.redshifts)
+        spec.fibermap['TARGETID'] = (np.arange(self.nspec) // 2) * 2 # [0, 0, 2, 2, 4, 4] for nspec=6
+        spec.fibermap['TARGETID'][-1] = 5
+        spec.redshifts["TARGETID"] = spec.fibermap["TARGETID"].copy()
+        write_spectra(self.fileio, spec)
+        comp_subset = read_spectra(self.fileio, targetids=targetids,
+                                   return_redshifts=True)
+        self.assertListEqual(comp_subset.fibermap['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
+        self.assertListEqual(comp_subset.redshifts['TARGETID'].tolist(),
+                             [2, 2, 4, 4, 4, 0, 0, 0, 0])
+        # revert for later tests
+        spec.redshifts = None
 
         # make sure coadded spectra with FIBERMAP vs. EXP_FIBERMAP works
         tid = 555666
@@ -1054,3 +1090,12 @@ class TestSpectra(unittest.TestCase):
             np.random.shuffle(ii)
             sp = read_spectra_parallel(targets[ii], nproc=1)
             self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
+
+if __name__ == '__main__':
+    # Sometimes ya just wanna run pdb on a single test...
+    TestSpectra.setUpClass()
+    ts = TestSpectra()
+    ts.setUp()
+    ts.test_read_targetids()
+    ts.tearDown()
+    TestSpectra.tearDownClass()

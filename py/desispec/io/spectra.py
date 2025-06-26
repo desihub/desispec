@@ -399,7 +399,7 @@ def read_spectra(
                     ).as_array()
                 )
                 addkeys(redshifts.meta, hdus[h].read_header())
-                    
+
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -492,8 +492,7 @@ def read_spectra(
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
     if fmap is not None and redshifts is not None:
-        redrock_targetids = redshifts["TARGETID"]
-        np.testing.assert_array_equal(fmap["TARGETID"], redrock_targetids)
+        np.testing.assert_array_equal(fmap["TARGETID"], redshifts["TARGETID"])
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
@@ -539,9 +538,12 @@ def read_spectra(
             spec = spec[rows]
 
         # consistency check between targetids
-        np.testing.assert_array_equal(spec.fibermap["TARGETID"], targetids)
+        # This check is incorrect: see test_spectra.py : test_read_targetids
+        # for thorough testing of a number of different cases.
+        #   np.testing.assert_array_equal(spec.fibermap["TARGETID"], targetids)
         if return_redshifts:
-            np.testing.assert_array_equal(spec.redshifts["TARGETID"], targetids)
+            np.testing.assert_array_equal(spec.fibermap["TARGETID"],
+                                          spec.redshifts["TARGETID"])
 
     return spec
 
