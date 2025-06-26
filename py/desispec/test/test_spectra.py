@@ -87,7 +87,8 @@ class TestSpectra(unittest.TestCase):
 
         #- Test data and files to work with
         os.chdir(self.testDir)
-        self.fileio = "test_spectra.fits"
+        self.fileio = "coadd_test.fits"
+        self.redrockfile = "redrock_test.fits"
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"
         self.meta = {
@@ -167,9 +168,10 @@ class TestSpectra(unittest.TestCase):
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
         self.redshifts = Table()
+        self.redshifts['TARGETID'] = self.fmap1['TARGETID']
         self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
-        self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
-        self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
+        self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10)).astype(np.float32)
+        self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec).astype(np.float32)
 
     def tearDown(self):
         if os.path.exists(self.fileio):
@@ -326,6 +328,11 @@ class TestSpectra(unittest.TestCase):
         subset = read_spectra(self.fileio, rows=rows)
         self.assertTrue(np.all(spec.fibermap[rows] == subset.fibermap))
 
+        #- out of order works too
+        rows = [2,0]
+        subset = read_spectra(self.fileio, rows=rows)
+        self.assertTrue(np.all(spec.fibermap[rows] == subset.fibermap))
+
         with self.assertRaises(ValueError):
             subset = read_spectra(self.fileio, rows=rows, targetids=[1,2])
 
@@ -363,6 +370,70 @@ class TestSpectra(unittest.TestCase):
         self.assertIsNone(test.scores)
         self.assertIsNone(test.R)
         self.assertIsNotNone(test.fibermap) #- fibermap not skipped
+
+    def test_read_redshifts(self):
+        """Test reading redshifts within a the same spectra file"""
+        # create spectra with redshifts and write
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, exp_fibermap=self.fmap1,
+            redshifts=self.redshifts)
+
+        write_spectra(self.fileio, spec)
+        test = read_spectra(self.fileio, return_redshifts=True)
+        self.assertTrue(np.all(spec.redshifts == test.redshifts))
+
+        # reading with subsets also applies to redshifts, even out of order
+        rows = [0,2]
+        test = read_spectra(self.fileio, return_redshifts=True, rows=rows)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(spec.redshifts[rows] == test.redshifts))
+
+        rows = [1,0]
+        test = read_spectra(self.fileio, return_redshifts=True, rows=rows)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(spec.redshifts[rows] == test.redshifts))
+
+        rows = [2,1]
+        targetids = spec.fibermap['TARGETID'][rows]
+        test = read_spectra(self.fileio, return_redshifts=True, targetids=targetids)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(spec.redshifts[rows] == test.redshifts))
+
+    def test_read_redrock_redshifts(self):
+        """Test reading redshifts from a neighboring redrock file"""
+        # create spectra and redrock file
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, meta=self.meta, exp_fibermap=self.fmap1)
+
+        #- double check that self.fmap1 and self.redshifts are consistent
+        self.assertEqual(len(self.redshifts), len(self.fmap1))
+        self.assertTrue(np.all(self.redshifts['TARGETID'] == self.fmap1['TARGETID']))
+
+        write_spectra(self.fileio, spec)
+        self.redshifts.write(self.redrockfile)
+
+        # should find redshifts from redrock file
+        test = read_spectra(self.fileio, return_redshifts=True)
+        self.assertTrue(np.all(self.redshifts == test.redshifts))
+
+        # reading with subsets also applies to redshifts, even out of order
+        rows = [0,2]
+        test = read_spectra(self.fileio, return_redshifts=True, rows=rows)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(self.redshifts[rows] == test.redshifts))
+
+        rows = [1,0]
+        test = read_spectra(self.fileio, return_redshifts=True, rows=rows)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(self.redshifts[rows] == test.redshifts))
+
+        rows = [2,1]
+        targetids = spec.fibermap['TARGETID'][rows]
+        test = read_spectra(self.fileio, return_redshifts=True, targetids=targetids)
+        self.assertEqual(len(rows), len(test.redshifts))
+        self.assertTrue(np.all(self.redshifts[rows] == test.redshifts))
 
     def test_empty(self):
 
