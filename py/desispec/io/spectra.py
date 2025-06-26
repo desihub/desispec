@@ -479,12 +479,11 @@ def read_spectra(
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
 
-    if return_redshifts:
+    if return_redshifts and redshifts is None:
         t0 = time.time()
-        if redshifts is None:
-            redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
-            if rows is not None and len(rows)>0:
-                redshifts = redshifts[rows]
+        redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
+        if rows is not None and len(rows)>0:
+            redshifts = redshifts[rows]
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
 
