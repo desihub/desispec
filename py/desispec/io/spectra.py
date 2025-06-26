@@ -479,23 +479,21 @@ def read_spectra(
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
 
-    redrock_targetids = None # for the sanity checks between fibermap and redshift targetids
     if return_redshifts:
         t0 = time.time()
         if redshifts is None:
             redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
-            redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
             if rows is not None and len(rows)>0:
-                redrock_targetids = redrock_targetids[rows]
                 redshifts = redshifts[rows]
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
 
-    # sanity check between targetids in fibermap and model catalog
+    # sanity check between targetids in fibermap and model catalog/redshifts
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
-    if fmap is not None and redrock_targetids is not None:
-        np.testing.assert_array_equal(fmap["TARGETID"], redrock_targetids)   
+    if fmap is not None and redshifts is not None:
+        redrock_targetids = redshifts["TARGETID"]
+        np.testing.assert_array_equal(fmap["TARGETID"], redrock_targetids)
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
@@ -540,8 +538,11 @@ def read_spectra(
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
 
-        #consistency check between targetids (perhaps this is not necessary)
-        
+        # consistency check between targetids
+        np.testing.assert_array_equal(spec.fibermap["TARGETID"], targetids)
+        if return_redshifts:
+            np.testing.assert_array_equal(spec.redshifts["TARGETID"], targetids)
+
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):
