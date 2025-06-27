@@ -299,7 +299,7 @@ def coadd_fibermap(fibermap, onetile=False):
         if not 'MEAN_MJD' in tfmap.dtype.names :
             xx = Column(np.zeros(ntarget, dtype=dtype))
             tfmap.add_column(xx,name='MEAN_MJD')
-    
+
     if 'FIBERSTATUS' in tfmap.dtype.names :
         tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
     if not  'COADD_FIBERSTATUS' in tfmap.dtype.names :
@@ -337,19 +337,19 @@ def coadd_fibermap(fibermap, onetile=False):
             compute_coadds = ~good_coadds
             # if all inputs were bad, COADD_FIBERSTATUS is OR of inputs instead of AND
             tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_or.reduce(exp_fibermap[fiberstatus_key][jj])
-        
+
         #- For FIBER_RA/DEC quantities, only average over good coordinates.
         #  There is a bug that some "missing" coordinates were set to FIBER_RA=FIBER_DEC=0
         #  (we are assuming there are not valid targets at exactly 0,0; only missing coords)
         if 'FIBER_RA' in exp_fibermap.colnames and 'FIBER_DEC' in exp_fibermap.colnames:
             good_coords = (exp_fibermap['FIBER_RA'][jj]!=0)|(exp_fibermap['FIBER_DEC'][jj]!=0)
-            
+
             #- Check whether entries with good coordinates exist (if not use all coordinates)
             if np.count_nonzero(good_coords)>0:
                 compute_coords = good_coords
             else:
                 compute_coords = ~good_coords
-                
+
             #- Check for edge case where good_coadds and good_coords do not overlap:
             #  if they overlap, use both conditions; otherwise compute coordinates over good_coords
             if np.count_nonzero(compute_coadds&compute_coords)>0:
@@ -358,7 +358,7 @@ def coadd_fibermap(fibermap, onetile=False):
                 #TODO - decide if it's worth adding the following Warning message to the log
                 #print(f"Warning: TARGETID lacks overlap between good_coadds and good_coords: {tid}")
                 compute_coadds_coords = compute_coords
-                        
+
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
         if 'NIGHT' in exp_fibermap.colnames:
@@ -397,7 +397,7 @@ def coadd_fibermap(fibermap, onetile=False):
                 vals=exp_fibermap[k][jj][compute_coadds]
                 # STD removes mean offset, not same as RMS
                 tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
-                        
+
         # MIN_, MAX_MJD over exposures used in the coadd
         if 'MJD' in exp_fibermap.colnames :
             vals=exp_fibermap['MJD'][jj][compute_coadds]
@@ -405,9 +405,9 @@ def coadd_fibermap(fibermap, onetile=False):
             tfmap['MAX_MJD'][i] = np.max(vals)
             tfmap['MEAN_MJD'][i] = np.mean(vals)
 
-        # Error propagation of IVAR values when taking an unweighted MEAN 
+        # Error propagation of IVAR values when taking an unweighted MEAN
         #- (Note 1: IVAR will be 0.0 if any of ivar[compute_coadds]=0)
-        #- (Note 2: these columns are place-holder for possible future use)    
+        #- (Note 2: these columns are place-holder for possible future use)
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR',
                   'DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
             if k in exp_fibermap.colnames :
@@ -512,7 +512,7 @@ def _iterative_masker(vec,
 def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     """
     Mask cosmics in multiple spectra
-    
+
     Args:
         wave (numpy.ndarray): 1d array of wavelengths
         flux (numpy.ndarray): 2d array of fluxes (from Spectra object)
@@ -796,12 +796,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
 
 def coadd_cameras(spectra):
     """
-    Coadd flux, ivar, and resolution (and model, if available) 
+    Coadd flux, ivar, and resolution (and model, if available)
     across all bands (cameras) for a given Spectra object.
 
     Args:
         spectra: desispec.spectra.Spectra (Input spectra object to coadd)
-        
+
     Returns:
         desispec.spectra.Spectra
         Coadded Spectra object (new object).
@@ -813,6 +813,8 @@ def coadd_cameras(spectra):
     t0 = time.time()
 
     bands = spectra.bands
+    allwave = np.concatenate([spectra.wave[b] for b in bands])
+
     ntarget = spectra.flux[bands[0]].shape[0]
     log.debug("number of targets = %d", ntarget)
 
@@ -829,7 +831,7 @@ def coadd_cameras(spectra):
             wave = spectra.wave[b]
         else:
             wave = np.append(wave, spectra.wave[b][spectra.wave[b] > wave[-1] + tolerance])
-    
+
     # check alignment, caching band wavelength grid indices as we go
     for b in spectra.bands:
         imin = np.argmin(np.abs(spectra.wave[b][0] - wave))
@@ -842,7 +844,29 @@ def coadd_cameras(spectra):
             raise ValueError(msg)
 
     nwave = wave.size
-    
+    overlap_flag = {}
+
+    for i, b in enumerate(bands):
+        wave_b = spectra.wave[b]
+        flag = np.zeros_like(wave_b, dtype=int)
+
+        # Check overlap with previous band
+        if i > 0:
+            wave_prev = spectra.wave[bands[i - 1]]
+            # Mark overlapping pixels in current band
+            for j, w in enumerate(wave_b):
+                if np.any(np.abs(w - wave_prev) <= tolerance):
+                    flag[j] = 1
+
+        # Check overlap with next band
+        if i < len(bands) - 1:
+            wave_next = spectra.wave[bands[i + 1]]
+            for j, w in enumerate(wave_b):
+                if np.any(np.abs(w - wave_next) <= tolerance):
+                    flag[j] = 1
+
+        overlap_flag[b] = flag
+
     # defining arrays for coadded data
     flux = np.zeros((ntarget, nwave))
     ivar = np.zeros((ntarget, nwave))
@@ -869,6 +893,7 @@ def coadd_cameras(spectra):
         end = start + len(wband)
         iband = slice(start, end)
         windict[b] = iband
+        no_overlap = (overlap_flag[b]==0)
 
         f = spectra.flux[b]
         iv = spectra.ivar[b]
@@ -884,10 +909,13 @@ def coadd_cameras(spectra):
         for i in range(ntarget):
             if not good_fiberstatus[i]:
                 continue
+            flux[i, iband][no_overlap] =  f[i][no_overlap]
+            ivar[i, iband][no_overlap] =  iv[i][no_overlap]
 
-            flux[i, iband] += iv[i] * f[i]
-            ivar[i, iband] += iv[i]
-            
+            flux[i, iband][~no_overlap] += iv[i][~no_overlap] * f[i][~no_overlap]
+            ivar[i, iband][~no_overlap] += iv[i][~no_overlap]
+
+
             if has_mask:
                 # accumulate all of the bad pixel masks we have
                 # we will zero out those if we end up with ivar>0 in the result
@@ -898,7 +926,7 @@ def coadd_cameras(spectra):
                 model_band = spectra.model[f"{b}"][i]
                 model[i, iband] += model_band
                 model_counts[i, iband] += 1
-             
+
             if has_res:
                 #coadding resolution
                 res = spectra.resolution_data[b][i]
@@ -908,8 +936,9 @@ def coadd_cameras(spectra):
                 offset = (max_ndiag - ndiag) // 2
                 rdata[i, offset:offset+ndiag, iband] += raccum
                 rnorm[i, offset:offset+ndiag, iband] += rnorm_i
-    
+
     bad = ivar == 0
+
     flux[~bad] /= ivar[~bad] # normalization
     # this is final step in weighted mean calculation
     # division by the sum of inverse variances
@@ -917,13 +946,13 @@ def coadd_cameras(spectra):
     mask[~bad] = 0 # good pixels should have zero mask
 
     wavebands = "".join(sbands)
-    
+
     # just sanity chack that wavelength is an increasing array
     assert np.all(np.diff(wave) > 0)
 
     if has_model:
         model[model_counts > 0] /= model_counts[model_counts > 0] # normalization
-        
+
     if has_res:
         # we need to the same procedure for the resolution matrices
         # as we did for fluxes
@@ -936,13 +965,13 @@ def coadd_cameras(spectra):
         model_dict = {wavebands: model}
     else:
         model_dict = None
-    
+
     wave_combined, flux_combined, ivar_combined = {wavebands: wave}, {wavebands: flux}, {wavebands: ivar}
     if has_mask:
         mask_combined = {wavebands: mask}
     else:
         mask_combined = None
-       
+
     res = Spectra(
         bands= [wavebands],
         wave=wave_combined,
@@ -957,12 +986,12 @@ def coadd_cameras(spectra):
         extra=spectra.extra,
         scores=spectra.scores,
         redshifts=spectra.redshifts,
-        
+
     )
 
     duration = time.time() - t0
     print(f"INFO: coadding spectra across cameras took: {duration:.3f} [sec]")
-    
+
     return res
 
 def get_resampling_matrix(global_grid,local_grid,sparse=False):
