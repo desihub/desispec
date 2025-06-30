@@ -873,7 +873,7 @@ def faflavor2program(faflavor):
     faflavor = np.atleast_1d(faflavor).astype(str)
 
     #- Default FAPRGRM is "other"
-    faprogram = np.tile('other', len(faflavor)).astype('U6')
+    faprogram = np.tile('other', len(faflavor)).astype('U8')
 
     #- FAFLAVOR options that map to FAPRGM='dark'
     #- Note: some sv1 tiles like 80605 had "cmx" in the faflavor name
