@@ -51,7 +51,7 @@ def parse(options=None):
     parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
     parser.add_argument('--program', type=str, nargs='+', required=False,
-                        default=['dark', 'bright', 'dark1b'],
+                        default=['dark', 'bright', 'dark1b', 'bright1b'],
                         help='look only at tiles from these programs')
 
     args = None
@@ -118,8 +118,9 @@ def print_summary(new, orig):
     programs = {'dark': new['FAFLAVOR'] == 'maindark',
                 'bright': new['FAFLAVOR'] == 'mainbright',
                 'dark1b': new['FAFLAVOR'] == 'maindark1b',
+                'bright1b': new['FAFLAVOR'] == 'mainbright1b',
                 'other': ((new['SURVEY'] == 'main') &
-                          (~np.isin(new['FAPRGRM'], ['dark', 'bright', 'dark1b'])))}
+                          (~np.isin(new['FAPRGRM'], ['dark', 'bright', 'dark1b', 'bright1b'])))}
     for class0 in classes:
         for program0 in programs:
             m = classes[class0] & programs[program0]
