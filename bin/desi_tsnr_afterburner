@@ -170,6 +170,9 @@ def update_targ_info(entry, targ_in):
     if entry['GOALTYPE'] in ('unknown', 'other'):
         entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
+    if entry['GOALTYPE'] in ['dark1b', 'bright1b']:
+        entry['GOALTYPE'] = entry['GOALTYPE'].replace('1b', '')
+
     return entry
 
 
