@@ -50,7 +50,7 @@ class TestCoadd(unittest.TestCase):
                                mask=None,
                                resolution_data=rdat,
                                fibermap=fmap)
-        
+
     def _random_spectra(self, ns=3, nw=10, seed=74273, with_mask=False,
                         bands=('b',)):
 
@@ -101,7 +101,7 @@ class TestCoadd(unittest.TestCase):
             if with_mask:
                 mask[band] = np.zeros((ns, nw), dtype=int)
             resolution_data[band] = rdat.copy()
-            
+
         return Spectra(
                 bands=bands,
                 wave=wave,
@@ -115,7 +115,7 @@ class TestCoadd(unittest.TestCase):
 
     def test_cosmic_masking_blank(self):
         """
-        Ensure the masking works fine even if we have a few 
+        Ensure the masking works fine even if we have a few
         fully masked spectra (ivar=0) in the set
         """
         rng = np.random.default_rng(133)
@@ -167,7 +167,7 @@ class TestCoadd(unittest.TestCase):
         npix, nspec = 1000, 10
         wave = np.arange(npix)
         ivar = np.ones((nspec, npix)) * 100
-        model0 = (wave - (wave)**2 / npix) 
+        model0 = (wave - (wave)**2 / npix)
         flux = model0 * np.linspace(1, 2, nspec)[:, None] + (
                 rng.normal(size=(nspec, npix)) / np.sqrt(ivar))
         COSMIC = 1e6
@@ -216,7 +216,7 @@ class TestCoadd(unittest.TestCase):
                                     cosmics_nsig=cosmics_nsig)
 
         self.assertTrue(np.all(~cosmic_mask))
-    
+
     def test_coadd(self):
         """Test coaddition"""
         nspec, nwave = 3, 10
@@ -305,7 +305,7 @@ class TestCoadd(unittest.TestCase):
         """Test coaddition with a masked pixel triggering #2372"""
         nspec, nwave = 1, 10
         # check middle pixel and edge pixel
-        for mpix in [0,5]: 
+        for mpix in [0,5]:
             s1 = self._random_spectra(nspec, nwave, with_mask=True)
             s1.mask['b'][0, mpix] = 1
             s1.ivar['b'][0, mpix] = 0
@@ -323,7 +323,7 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(mod1[nonmasked], mod2[nonmasked]))
             self.assertTrue(s1.mask['b'][0, mpix] > 0)
             self.assertTrue(s1.ivar['b'][0, mpix] == 0)
-            
+
     def test_coadd_cameras_single_mask(self):
         """Test coaddition with a masked pixel triggering #2372
         Now with coadd_cameras
@@ -346,7 +346,7 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(s2.flux['b'][0][nonmask], spec0[nonmask]))
             self.assertTrue(np.all(s2.ivar['b'][0][nonmask] == ivar0[nonmask]))
             self.assertTrue(np.all((mod1 == mod2)[nonmask]))
-        
+
     def test_coadd_full_mask(self):
         """
         Test coadd with one spectrum fully masked
@@ -356,7 +356,7 @@ class TestCoadd(unittest.TestCase):
         flux0 = s1.flux['b'][0] * 1
         rng = np.random.default_rng(4343)
         ivar = rng.uniform(size=s1.ivar['b'].shape)
-        resol = rng.uniform(size=s1.resolution_data['b'].shape)        
+        resol = rng.uniform(size=s1.resolution_data['b'].shape)
         s1.ivar['b'] = ivar * 1
         s1.resolution_data['b'] = resol * 1
         # fully mask second exposure
@@ -368,10 +368,10 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(flux0, s1.flux['b'][0]))
         self.assertTrue(np.allclose(ivar[0], s1.ivar['b'][0]))
         self.assertTrue(np.allclose(resol[0], s1.resolution_data['b'][0]))
-        
+
     def test_coadd_skip_cosmics(self):
         """
-        Test coadd with two spectra masked.  
+        Test coadd with two spectra masked.
         Here with 3 spectra mask_cosmics should start,
         but with two masked spectra, it should bail out
         this tests the behaviour
@@ -421,12 +421,12 @@ class TestCoadd(unittest.TestCase):
         resmat2 = Resolution(s1.resolution_data['b'][0])
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
-        
+
     def test_coadd_cameras_resolution(self):
         """Test proper behaviour of resolution matrix
         i.e. if all input spectra were D_i = R_i * M
         coadd must satisfy the same condition
-        protection against #2372 
+        protection against #2372
         Here we just ignore the pixels touched by the spectrum edges from either
         arm.
         """
@@ -437,7 +437,7 @@ class TestCoadd(unittest.TestCase):
         s1.fibermap['TARGETID'] = [10] * nspec
         s2 = coadd_cameras(s1)
         model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
-        edge_nmask = 2 
+        edge_nmask = 2
         # we will ignore pixels next to the edges of spectrum
         edge_mask = np.zeros(len(model0_brz), dtype=bool)
         step = s2.wave['brz'][1] - s2.wave['brz'][0]
@@ -448,7 +448,7 @@ class TestCoadd(unittest.TestCase):
             edge_mask = edge_mask | (np.abs(s2.wave['brz'] -
                                             s1.wave[band][-1]) <
                                      (edge_nmask + 0.1) * step)
-            
+
         model0 = {}
         for band in bands:
             ivar = rng.uniform(size=s1.ivar[band].shape)
@@ -468,9 +468,40 @@ class TestCoadd(unittest.TestCase):
         s2 = coadd_cameras(s1)
         resmat2 = Resolution(s2.resolution_data['brz'][0])
         resmod = resmat2@model0_brz
+
+        # Create overlap mask consistent with coadd_cameras logic
+        tolerance = 1e-5  # or use the same tolerance as in your coadd_cameras
+
+        overlap_flag = np.zeros_like(s2.wave['brz'], dtype=bool)
+        wave_brz = s2.wave['brz']
+
+        for i in range(len(bands) - 1):
+            b1, b2 = bands[i], bands[i + 1]
+            w1 = s1.wave[b1]
+            w2 = s1.wave[b2]
+
+            # Find wavelengths in w1 that are close to any in w2
+            for w in w1:
+                if np.any(np.abs(w2 - w) < tolerance):
+                    # Find index in coadded wave where this w occurs
+                    idx = np.argmin(np.abs(wave_brz - w))
+                    if np.abs(wave_brz[idx] - w) < tolerance:
+                        overlap_flag[idx] = True
+
+            for w in w2:
+                if np.any(np.abs(w1 - w) < tolerance):
+                    idx = np.argmin(np.abs(wave_brz - w))
+                    if np.abs(wave_brz[idx] - w) < tolerance:
+                        overlap_flag[idx] = True
+
+        # Remove edge pixels
+        mask = (~edge_mask) & (overlap_flag == 1)
+        # Now assert only on the overlapping + non-edge pixels
+        self.assertTrue(np.allclose(resmod[mask], s2.flux['brz'][0][mask]))
+
         self.assertTrue(np.allclose(resmod[~edge_mask],
-                                    s2.flux['brz'][0][~edge_mask]))
-    
+                        s2.flux['brz'][0][~edge_mask]))
+
     def test_coadd_cameras_model(self):
         """
         Check if models are properly coadded by coadd_cameras
@@ -513,9 +544,9 @@ class TestCoadd(unittest.TestCase):
                         mask_dict[i][curpix] = []
                     mask_dict[i][curpix].append(s1.mask[band][i][j])
                     # create all the masks contributing to pixel
-        
+
         s2 = coadd_cameras(s1)
-        
+
         #checking masks of each coadded spectra
         for k in range(nspec):
             for curpix in range(len(pixels0)):
@@ -534,8 +565,11 @@ class TestCoadd(unittest.TestCase):
 
     def test_coadd_cameras_badfiberstatus(self):
         """
-        Check that coadd_cameras return zero if there all the
-        spectra are terminally bad
+        Check that coadd_cameras must return the same
+        COADD_FIBERSTATUS or FIBERSTATUS for both spectra object
+        The idea is that if a spectrum has these bits set as non-zero
+        just follow the same logic of coadding as others. This case needs special attention
+        only in case we coadding across EXPOSURES, not CAMERAS
         """
         nspec, nwave = 4, 1000
         bands = ['b', 'r', 'z']
@@ -544,8 +578,11 @@ class TestCoadd(unittest.TestCase):
         s1.fibermap['FIBERSTATUS'] = (fibermask.BADAMPB | fibermask.BADAMPR |
                                       fibermask.BADAMPZ)
         s2 = coadd_cameras(s1)
-        self.assertTrue(np.all(s2.ivar['brz'][0] == 0))
-        self.assertTrue(np.all(s2.flux['brz'][0] == 0))
+        self.assertTrue(np.all(s1.fibermap["FIBERSTATUS"] == s2.fibermap["FIBERSTATUS"]))
+        if "COADD_FIBERSTATUS" in s1.fibermap.dtype.names:
+            self.assertTrue(np.all(s1.fibermap["COADD_FIBERSTATUS"] == s2.fibermap["COADD_FIBERSTATUS"]))
+        #self.assertTrue(np.all(s2.ivar['brz'][0] == 0))
+        #self.assertTrue(np.all(s2.flux['brz'][0] == 0))
 
     def test_coadd_nonfatal_fibermask(self):
         """Test coaddition with non-fatal fiberstatus masks"""
@@ -627,7 +664,7 @@ class TestCoadd(unittest.TestCase):
         s1 = self._random_spectra(1,20)
         wave = np.linspace(4000, 6000, 10)
         s2 = spectroperf_resample_spectra(s1,wave=wave)
-        
+
     def test_fast_resample(self):
         """Test fast_resample"""
         s1 = self._random_spectra(1,20)
@@ -1073,7 +1110,7 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(len(s1.fibermap), nspec)
 
         s1.fibermap['FIBERSTATUS'] = fibermask.RESTRICTED
- 
+
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec)
@@ -1311,6 +1348,7 @@ class TestCoadd(unittest.TestCase):
 
         # Check flux
         coadds = coadd_cameras(self.spectra)
+
         self.assertEqual(len(coadds.wave['brz']), 7781)
         self.assertTrue(np.all(coadds.flux['brz'][0] == 1))
 
@@ -1318,6 +1356,7 @@ class TestCoadd(unittest.TestCase):
         tol = 0.0001
         wave = coadds.wave['brz']
         idx_overlap = (5760 <= wave) & (wave <= 5800+tol) | (7520 <= wave) & (wave <= 7620+tol)
+
         self.assertTrue(np.allclose(coadds.ivar['brz'][0][idx_overlap], 2))
         self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 1.))
 

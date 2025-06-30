@@ -813,7 +813,10 @@ def coadd_cameras(spectra):
     t0 = time.time()
 
     bands = spectra.bands
-    allwave = np.concatenate([spectra.wave[b] for b in bands])
+
+    if len(bands)==1:
+        print(f'INFO: single band is provided, no coadding done, returning the same spectra object')
+        return spectra
 
     ntarget = spectra.flux[bands[0]].shape[0]
     log.debug("number of targets = %d", ntarget)
@@ -899,51 +902,72 @@ def coadd_cameras(spectra):
         iv = spectra.ivar[b]
         m = spectra.mask[b] if has_mask else np.zeros_like(f, dtype=np.int32)
 
-        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
-            fiberstatus = spectra.fibermap['FIBERSTATUS']
-        else:
-            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
-
-        good_fiberstatus = use_for_coadd(fiberstatus, b)
+        # True for pixels in b that are non-overlapping
+        no_overlap = (overlap_flag[b] == 0)
 
         for i in range(ntarget):
-            if not good_fiberstatus[i]:
-                continue
-            flux[i, iband][no_overlap] =  f[i][no_overlap]
-            ivar[i, iband][no_overlap] =  iv[i][no_overlap]
 
-            flux[i, iband][~no_overlap] += iv[i][~no_overlap] * f[i][~no_overlap]
-            ivar[i, iband][~no_overlap] += iv[i][~no_overlap]
+            # Non-overlapping: directly copy
+            flux[i, iband][no_overlap] = f[i][no_overlap]
+            ivar[i, iband][no_overlap] = iv[i][no_overlap]
 
-
+            # for masks, models and resolution matrix
+            # (in no overlap regions, simple copying)
             if has_mask:
-                # accumulate all of the bad pixel masks we have
-                # we will zero out those if we end up with ivar>0 in the result
-                mask[i, iband] |= m[i]
+                mask[i, iband][no_overlap] = m[i][no_overlap]
 
             if has_model:
-                # coadding models
-                model_band = spectra.model[f"{b}"][i]
-                model[i, iband] += model_band
-                model_counts[i, iband] += 1
+                model[i, iband][no_overlap] = spectra.model[f"{b}"][i][no_overlap]
+                model_counts[i, iband][no_overlap] = 1
 
             if has_res:
-                #coadding resolution
-                res = spectra.resolution_data[b][i]
+                res = spectra.resolution_data[b][i][np.newaxis, :, :]
                 iv_i = iv[i:i+1]
-                raccum, rnorm_i = _resolution_coadd(res[np.newaxis, :, :], iv_i)
+                raccum, rnorm_i = _resolution_coadd(res, iv_i)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
-                rdata[i, offset:offset+ndiag, iband] += raccum
-                rnorm[i, offset:offset+ndiag, iband] += rnorm_i
+                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = raccum[:, no_overlap]
+                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = rnorm_i[:, no_overlap]
 
-    bad = ivar == 0
+            # Overlapping: accumulate (inverse variance weighted sum)
+            overlap = ~no_overlap
 
-    flux[~bad] /= ivar[~bad] # normalization
-    # this is final step in weighted mean calculation
-    # division by the sum of inverse variances
-    flux[bad] = 0
-    mask[~bad] = 0 # good pixels should have zero mask
+            # coadding flux and ivar
+            flux[i, iband][overlap] += iv[i][overlap] * f[i][overlap]
+            ivar[i, iband][overlap] += iv[i][overlap]
+
+            if has_mask:
+                # coadding mask
+                mask[i, iband][overlap] |= m[i][overlap]
+
+            if has_model:
+                # coadding model (basically same as non overlap region, as there is no error associated with model)
+                model[i, iband][overlap] += spectra.model[f"{b}"][i][overlap]
+                model_counts[i, iband][overlap] += 1
+
+            if has_res:
+                # coadding resolution
+                res = spectra.resolution_data[b][i][np.newaxis, :, :]
+                iv_i = iv[i:i+1]
+                raccum, rnorm_i = _resolution_coadd(res, iv_i)
+                ndiag = raccum.shape[0]
+                offset = (max_ndiag - ndiag) // 2
+                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] = raccum[:, overlap]
+                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] = rnorm_i[:, overlap]
+
+    overlap_pixel_mask = np.zeros_like(flux, dtype=bool)
+    for b in bands:
+        band_indices = np.arange(windict[b].start, windict[b].stop)
+        overlap_pixel_mask[:, band_indices] = overlap_flag[b][None, :]
+
+    # Only normalize overlapping pixels
+    # For non-overlapping (already direct copied), skip normalization
+    overlap_pixels = (overlap_pixel_mask == 1)
+
+    normalize_mask =  (overlap_pixels)
+    flux[normalize_mask] /= (ivar[normalize_mask] + (ivar[normalize_mask] == 0)) #
+
+    mask[ivar > 0] = 0
 
     wavebands = "".join(sbands)
 
@@ -956,7 +980,8 @@ def coadd_cameras(spectra):
     if has_res:
         # we need to the same procedure for the resolution matrices
         # as we did for fluxes
-        rdata /= rnorm + (rnorm == 0)
+        rdata_norm_pixels = overlap_pixels[0]
+        rdata[:, :, rdata_norm_pixels] /= rnorm[:, :, rdata_norm_pixels] + (rnorm[:, :, rdata_norm_pixels] == 0)
         rdict = {wavebands: rdata}
     else:
         rdict = None
