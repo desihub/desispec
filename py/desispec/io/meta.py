@@ -918,9 +918,15 @@ def faflavor2program(faflavor):
     backup  = faflavor == 'sv1backup1'
     backup |= np.char.endswith(faflavor, 'backup')
 
+    # extension programs (dark1b, bright1b)
+    dark1b = np.char.endswith(faflavor, 'dark1b')
+    bright1b = np.char.endswith(faflavor, 'bright1b')
+
     faprogram[dark] = 'dark'
     faprogram[bright] = 'bright'
     faprogram[backup] = 'backup'
+    faprogram[dark1b] = 'dark1b'
+    faprogram[bright1b] = 'bright1b'
 
     if scalar_input:
         return str(faprogram[0])
