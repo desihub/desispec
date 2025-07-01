@@ -469,36 +469,6 @@ class TestCoadd(unittest.TestCase):
         resmat2 = Resolution(s2.resolution_data['brz'][0])
         resmod = resmat2@model0_brz
 
-        # Create overlap mask consistent with coadd_cameras logic
-        tolerance = 1e-5  # or use the same tolerance as in your coadd_cameras
-
-        overlap_flag = np.zeros_like(s2.wave['brz'], dtype=bool)
-        wave_brz = s2.wave['brz']
-
-        for i in range(len(bands) - 1):
-            b1, b2 = bands[i], bands[i + 1]
-            w1 = s1.wave[b1]
-            w2 = s1.wave[b2]
-
-            # Find wavelengths in w1 that are close to any in w2
-            for w in w1:
-                if np.any(np.abs(w2 - w) < tolerance):
-                    # Find index in coadded wave where this w occurs
-                    idx = np.argmin(np.abs(wave_brz - w))
-                    if np.abs(wave_brz[idx] - w) < tolerance:
-                        overlap_flag[idx] = True
-
-            for w in w2:
-                if np.any(np.abs(w1 - w) < tolerance):
-                    idx = np.argmin(np.abs(wave_brz - w))
-                    if np.abs(wave_brz[idx] - w) < tolerance:
-                        overlap_flag[idx] = True
-
-        # Remove edge pixels
-        mask = (~edge_mask) & (overlap_flag == 1)
-        # Now assert only on the overlapping + non-edge pixels
-        self.assertTrue(np.allclose(resmod[mask], s2.flux['brz'][0][mask]))
-
         self.assertTrue(np.allclose(resmod[~edge_mask],
                         s2.flux['brz'][0][~edge_mask]))
 

@@ -807,6 +807,7 @@ def coadd_cameras(spectra):
         Coadded Spectra object (new object).
 
     Note: unlike `coadd`, this does not modify the input spectra object, rather write a new Spectrum object.
+    This is coadding across cameras, NOT exposures.
     """
 
     log = get_logger()
@@ -847,8 +848,11 @@ def coadd_cameras(spectra):
             raise ValueError(msg)
 
     nwave = wave.size
-    overlap_flag = {}
 
+    # creating a dictionary for each band to assign
+    # which pixels are overlapping with other bands
+    # it masked life easier tracking everything when normalizing the pixels
+    overlap_flag = {}
     for i, b in enumerate(bands):
         wave_b = spectra.wave[b]
         flag = np.zeros_like(wave_b, dtype=int)
@@ -911,24 +915,6 @@ def coadd_cameras(spectra):
             flux[i, iband][no_overlap] = f[i][no_overlap]
             ivar[i, iband][no_overlap] = iv[i][no_overlap]
 
-            # for masks, models and resolution matrix
-            # (in no overlap regions, simple copying)
-            if has_mask:
-                mask[i, iband][no_overlap] = m[i][no_overlap]
-
-            if has_model:
-                model[i, iband][no_overlap] = spectra.model[f"{b}"][i][no_overlap]
-                model_counts[i, iband][no_overlap] = 1
-
-            if has_res:
-                res = spectra.resolution_data[b][i][np.newaxis, :, :]
-                iv_i = iv[i:i+1]
-                raccum, rnorm_i = _resolution_coadd(res, iv_i)
-                ndiag = raccum.shape[0]
-                offset = (max_ndiag - ndiag) // 2
-                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = raccum[:, no_overlap]
-                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = rnorm_i[:, no_overlap]
-
             # Overlapping: accumulate (inverse variance weighted sum)
             overlap = ~no_overlap
 
@@ -936,62 +922,74 @@ def coadd_cameras(spectra):
             flux[i, iband][overlap] += iv[i][overlap] * f[i][overlap]
             ivar[i, iband][overlap] += iv[i][overlap]
 
+            # for masks, models and resolution matrix
+            # (in no overlapping regions, simple copying)
+            # in overlapping regions, inverse variance weighted mean
             if has_mask:
                 # coadding mask
-                mask[i, iband][overlap] |= m[i][overlap]
+                mask[i, iband][no_overlap] = m[i][no_overlap] # non-overlapping, simple copy
+                mask[i, iband][overlap] |= m[i][overlap] # overlapping, OR logic
 
             if has_model:
+                model[i, iband][no_overlap] = spectra.model[f"{b}"][i][no_overlap]
+                model_counts[i, iband][no_overlap] = 1
+
                 # coadding model (basically same as non overlap region, as there is no error associated with model)
                 model[i, iband][overlap] += spectra.model[f"{b}"][i][overlap]
                 model_counts[i, iband][overlap] += 1
 
             if has_res:
-                # coadding resolution
                 res = spectra.resolution_data[b][i][np.newaxis, :, :]
                 iv_i = iv[i:i+1]
                 raccum, rnorm_i = _resolution_coadd(res, iv_i)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
-                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] = raccum[:, overlap]
-                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] = rnorm_i[:, overlap]
 
+                # non-overlapping regions, simple copying
+                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = res[0][:, no_overlap]
+                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, no_overlap] = 1.0
+
+                # non-overlapping regions, weighted mean
+                rdata[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] += raccum[:, overlap]
+                rnorm[i, offset:offset+ndiag, iband.start:iband.stop][:, overlap] += rnorm_i[:, overlap]
+
+    # in the combined unique wave pixels
+    # which pixels have two measurements due to overlapping
     overlap_pixel_mask = np.zeros_like(flux, dtype=bool)
     for b in bands:
         band_indices = np.arange(windict[b].start, windict[b].stop)
         overlap_pixel_mask[:, band_indices] = overlap_flag[b][None, :]
 
-    # Only normalize overlapping pixels
+    # Only normalize on overlapping pixels (basically inverse variance weighted mean)
     # For non-overlapping (already direct copied), skip normalization
-    overlap_pixels = (overlap_pixel_mask == 1)
+    normalize_mask = (overlap_pixel_mask == 1)
+    flux[normalize_mask] /= (ivar[normalize_mask] + (ivar[normalize_mask] == 0))
 
-    normalize_mask =  (overlap_pixels)
-    flux[normalize_mask] /= (ivar[normalize_mask] + (ivar[normalize_mask] == 0)) #
-
-    mask[ivar > 0] = 0
+    mask[ivar > 0] = 0 # mask =0 means good pixels
 
     wavebands = "".join(sbands)
+
+    # combined dictionaries
+    wave_combined, flux_combined, ivar_combined = {wavebands: wave}, {wavebands: flux}, {wavebands: ivar}
 
     # just sanity chack that wavelength is an increasing array
     assert np.all(np.diff(wave) > 0)
 
-    if has_model:
-        model[model_counts > 0] /= model_counts[model_counts > 0] # normalization
-
     if has_res:
         # we need to the same procedure for the resolution matrices
         # as we did for fluxes
-        rdata_norm_pixels = overlap_pixels[0]
+        rdata_norm_pixels = normalize_mask[0] # all rows of normalize mask are basically same
         rdata[:, :, rdata_norm_pixels] /= rnorm[:, :, rdata_norm_pixels] + (rnorm[:, :, rdata_norm_pixels] == 0)
         rdict = {wavebands: rdata}
     else:
         rdict = None
 
     if has_model:
+        model[model_counts > 0] /= model_counts[model_counts > 0] # normalization
         model_dict = {wavebands: model}
     else:
         model_dict = None
 
-    wave_combined, flux_combined, ivar_combined = {wavebands: wave}, {wavebands: flux}, {wavebands: ivar}
     if has_mask:
         mask_combined = {wavebands: mask}
     else:
@@ -1011,7 +1009,6 @@ def coadd_cameras(spectra):
         extra=spectra.extra,
         scores=spectra.scores,
         redshifts=spectra.redshifts,
-
     )
 
     duration = time.time() - t0
