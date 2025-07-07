@@ -12,6 +12,7 @@ import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from importlib import resources
 from scipy.signal import fftconvolve
+from astropy.table import Table
 
 import specter.psf
 
@@ -467,6 +468,9 @@ def fit_trace_shifts(image, args):
         log.debug(f"brokenfibers={brokenfibers}")
         fibers=fibers[np.isin(fibers, brokenfibers, invert=True)]
 
+    # shift of traces in PSF
+    delta_xref=0.
+    delta_yref=0.
     # for arc lamp images, we can predict where we expect to see spots on the CCD image
     # given an input traceset (variable tset), and use the comparison between the prediction
     # and actual spots locations to derive a first correction to the coordinates saved in the traceset
@@ -488,9 +492,7 @@ def fit_trace_shifts(image, args):
         bestindices=None
         bestdistances=None
 
-        # shift of traces in PSF
-        delta_xref=0.
-        delta_yref=0.
+
 
         # iterate over max allowed distance
         for maxdistance in [ 4*fibersep,2*fibersep,fibersep ] :
@@ -645,14 +647,16 @@ def fit_trace_shifts(image, args):
 
     # write this for debugging
     if args.outoffsets :
-        file=open(args.outoffsets,"w")
-        file.write("# axis wave fiber x y delta error polval (axis 0=y axis1=x)\n")
-        for e in range(dy.size) :
-            file.write("0 %f %d %f %f %f %f %f\n"%(wave_for_dy[e],fiber_for_dy[e],x_for_dy[e],y_for_dy[e],dy[e],ey[e],dy_mod[e]))
-        for e in range(dx.size) :
-            file.write("1 %f %d %f %f %f %f %f\n"%(wave_for_dx[e],fiber_for_dx[e],x_for_dx[e],y_for_dx[e],dx[e],ex[e],dx_mod[e]))
-        file.close()
-        log.info("wrote offsets in ASCII file %s"%args.outoffsets)
+        t = Table()
+        t["AXIS"]=np.hstack([np.zeros(dy.size),np.ones(dx.size)])
+        t["WAVELENGTH"]=np.hstack([wave_for_dy,wave_for_dx])
+        t["FIBER"]=np.hstack([fiber_for_dy,fiber_for_dx])
+        t["X"]=np.hstack([x_for_dy,x_for_dx])
+        t["Y"]=np.hstack([y_for_dy,y_for_dx])
+        t["DELTA"]=np.hstack([dy+delta_yref,dx+delta_xref])
+        t["ERROR"]=np.hstack([ey,ex])
+        t.write(args.outoffsets,overwrite=True)
+        log.info("wrote offsets table in %s"%args.outoffsets)
 
 
 

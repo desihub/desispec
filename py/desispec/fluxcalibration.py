@@ -1116,7 +1116,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     scale /= mscale
     median_calib *= mscale
 
-
+    # Iteratively fit and reject outliers
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
 
@@ -1127,10 +1127,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-
     nout_tot=0
 
     for iteration in range(20) :
+
+        # NOTE: this fitting code is replicated later with a final fit with updated errors
 
         # fit mean calibration
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
@@ -1295,7 +1296,25 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     log.info("{} n flux values excluded = {}".format(camera, nout_tot))
 
     # solve once again to get deconvolved variance
-    #calibration,calibcovar=cholesky_solve_and_invert(A.todense(),B)
+    # but we now want to remove the large error floor that was set
+    # at the begining to remove outliers
+    # so we restart from the original ivar, but keep the information about the masked pixels
+    # NOTE: this copies the fitting code above in the iteration fit+clip loop
+    current_ivar=stdstars.ivar*(current_ivar>0)
+    sqrtw=np.sqrt(current_ivar)
+    for star in range(nstds) :
+        if badfiber[star] : continue
+        R = stdstars.R[star]
+        # diagonal sparse matrix with content = sqrt(ivar)*flat
+        D1.setdiag(sqrtw[star]*scale[star])
+        D2.setdiag(model_flux[star])
+        sqrtwmodelR = D1.dot(R.dot(D2)) # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*scale*R*diag(model_flux)*calib )
+        A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
+    #- Add a weak prior that calibration = median_calib
+    #- to keep A well conditioned
+    minivar = np.min(current_ivar[current_ivar>0])
+    epsilon = minivar/10000
+    A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
     calibcovar=np.linalg.inv(A)
     calibvar=np.diagonal(calibcovar)
     log.info("{} mean(var)={:f}".format(camera, np.mean(calibvar)))

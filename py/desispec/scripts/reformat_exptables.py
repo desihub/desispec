@@ -93,7 +93,7 @@ def reformat_exposure_tables(nights=None, night_range=None, path_to_data=None,
     nights_with_data = list()
     for n in listpath(path_to_data):
         # - nights are 20YYMMDD
-        if re.match('^202\d{5}$', n):
+        if re.match(r'^20\d{6}$', n):
             nights_with_data.append(n)
 
     ## If unpecified or given "all", set nights to all nights with data

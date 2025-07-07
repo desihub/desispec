@@ -716,10 +716,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             spectra_mask = np.zeros(spectra.flux[b].shape, dtype=int)
 
         tmask = np.zeros((ntarget, nwave), dtype=spectra_mask.dtype)
-        trdata = np.zeros(
-            (ntarget, spectra.resolution_data[b].shape[1], nwave),
-            dtype=spectra.resolution_data[b].dtype)
-
+        if spectra.resolution_data is not None :
+            trdata = np.zeros(
+                (ntarget, spectra.resolution_data[b].shape[1], nwave),
+                dtype=spectra.resolution_data[b].dtype)
+        else :
+            trdata = None
         if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
             fiberstatus = spectra.fibermap['FIBERSTATUS']
         else:
@@ -764,8 +766,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             weights = weights / (tivar[i] + (tivar[i] == 0))
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
-            trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
-                                                weights)[0]
+            if spectra.resolution_data is not None :
+                trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
+                                                    weights)[0]
             # note we ignore the resolution matrix norm (sum of weights)
             # because weights already were normalized
 
@@ -779,7 +782,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
         spectra.ivar[b] = tivar
         if spectra.mask is not None:
             spectra.mask[b] = tmask
-        spectra.resolution_data[b] = trdata
+        if spectra.resolution_data is not None :
+            spectra.resolution_data[b] = trdata
 
     if spectra.scores is not None:
         orig_scores = Table(spectra.scores.copy())

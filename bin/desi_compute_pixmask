@@ -43,6 +43,9 @@ parser.add_argument('--specprod-dir', type = str, default = None, required = Tru
 parser.add_argument('--save-preproc', action = 'store_true',
                     help = 'save preproc file (default is false)')
 
+parser.add_argument('--min-exptime', type = float , default = 1000. , required = False,
+                    help = 'minimum exposure time of dark exposures')
+
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output mask filename')
 
@@ -68,6 +71,8 @@ parser.add_argument('--threshold', type = float, default = 0.007, required = Fal
 parser.add_argument('--use-only-morning-darks', action = 'store_true',
                     help = 'only use morning darks')
 
+parser.add_argument('--ignore-pixflat', action = 'store_true',
+                    help = 'dont set mask bit for anomalous pixflat')
 
 args = parser.parse_args()
 log  = get_logger()
@@ -151,9 +156,9 @@ for raw_filename in raw_filenames :
     primary_header = read_raw_primary_header(raw_filename)
     exptime = primary_header["EXPTIME"]
 
-    if exptime<900:
+    if exptime<args.min_exptime:
         expid = primary_header["EXPID"]
-        log.warning(f"Discard dark exposure {expid} because EXPTIME={exptime} <900s")
+        log.warning(f"Discard dark exposure {expid} because EXPTIME={exptime} <{args.min_exptime}s")
         continue
 
     extname=f'{(args.camera)}'.upper()
@@ -296,16 +301,17 @@ else:
     log.critical(msg)
     raise ValueError(msg)
 
-log.info("flat field threshold")
-if len(pixflat_filenames)>0 :
-    for pixflat_filename in np.unique(pixflat_filenames) :
-        print(f"Reading {pixflat_filename}")
-        with pyfits.open(pixflat_filename) as fitsfile :
-            flat = fitsfile[0].data
-            badlow=(flat<0.5)
-            badhigh=(flat>1.15) # means it's a bad pixels
-            mask[badlow]  |= ccdmask.PIXFLATLOW
-            mask[badhigh] |= ccdmask.BAD
+if not args.ignore_pixflat :
+    log.info("flat field threshold")
+    if len(pixflat_filenames)>0 :
+        for pixflat_filename in np.unique(pixflat_filenames) :
+            print(f"Reading {pixflat_filename}")
+            with pyfits.open(pixflat_filename) as fitsfile :
+                flat = fitsfile[0].data
+                badlow=(flat<0.5)
+                badhigh=(flat>1.15) # means it's a bad pixels
+                mask[badlow]  |= ccdmask.PIXFLATLOW
+                mask[badhigh] |= ccdmask.BAD
 
 log.info("incorporate previous mask")
 #Incorporate a previously created mask using a bitwise OR

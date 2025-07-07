@@ -239,6 +239,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits{compsuffix}',
         preproc_for_cte = '{specprod_dir}/preproc/{night}/{expid:08d}/ctepreproc-{camera}-{expid:08d}.fits{compsuffix}',
+        preproc_for_dark = '{specprod_dir}/dark_preproc/{night}/{expid:08d}/dark_preproc-{camera}-{expid:08d}.fits',
         tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
@@ -872,7 +873,7 @@ def faflavor2program(faflavor):
     faflavor = np.atleast_1d(faflavor).astype(str)
 
     #- Default FAPRGRM is "other"
-    faprogram = np.tile('other', len(faflavor)).astype('U6')
+    faprogram = np.tile('other', len(faflavor)).astype('U8')
 
     #- FAFLAVOR options that map to FAPRGM='dark'
     #- Note: some sv1 tiles like 80605 had "cmx" in the faflavor name
@@ -917,9 +918,15 @@ def faflavor2program(faflavor):
     backup  = faflavor == 'sv1backup1'
     backup |= np.char.endswith(faflavor, 'backup')
 
+    # extension programs (dark1b, bright1b)
+    dark1b = np.char.endswith(faflavor, 'dark1b')
+    bright1b = np.char.endswith(faflavor, 'bright1b')
+
     faprogram[dark] = 'dark'
     faprogram[bright] = 'bright'
     faprogram[backup] = 'backup'
+    faprogram[dark1b] = 'dark1b'
+    faprogram[bright1b] = 'bright1b'
 
     if scalar_input:
         return str(faprogram[0])

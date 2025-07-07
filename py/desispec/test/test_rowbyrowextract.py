@@ -1,6 +1,6 @@
 """Some simple unit tests of qproc/rowbyrowextract.py"""
-
-from pkg_resources import resource_filename
+from importlib.resources import files
+# from pkg_resources import resource_filename
 import numpy as np
 from specter.psf import load_psf
 from desispec import io
@@ -8,7 +8,8 @@ from desispec.qproc import rowbyrowextract
 
 
 def test_rowbyrowextract():
-    psf = load_psf(resource_filename("specter.test", "t/psf-gausshermite2.fits"))
+    # psf = load_psf(resource_filename("specter.test", "t/psf-gausshermite2.fits"))
+    psf = load_psf(str(files('specter.test') / 't' / 'psf-gausshermite2.fits'))
     shape = (psf.npix_y, psf.npix_x)
     pix = np.zeros(shape, dtype='f4')
     ivar = np.ones(shape, dtype='f4')
