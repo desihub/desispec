@@ -816,7 +816,7 @@ def coadd_cameras(spectra):
     bands = spectra.bands
 
     if len(bands)==1:
-        print(f'INFO: single band is provided, no coadding done, returning the same spectra object')
+        log.info('single band is provided, no coadding done, returning the same spectra object')
         return spectra
 
     ntarget = spectra.flux[bands[0]].shape[0]
@@ -884,7 +884,7 @@ def coadd_cameras(spectra):
     has_model = spectra.model is not None
 
     if has_model:
-        print(f'INFO: MODELS found, so coadding them as well..')
+        log.info('MODELS found, so coadding them as well..')
         model = np.zeros((ntarget, nwave))
         model_counts = np.zeros((ntarget, nwave))
 
@@ -995,6 +995,10 @@ def coadd_cameras(spectra):
     else:
         mask_combined = None
 
+    #- Syntax note: "spectra.blat.copy() if spectra.blat is not None else None"
+    #- will make a copy of the input tables/arrays while also handling the case
+    #- where they might be None without crashing on None.copy().
+
     res = Spectra(
         bands= [wavebands],
         wave=wave_combined,
@@ -1003,16 +1007,16 @@ def coadd_cameras(spectra):
         mask=mask_combined,
         resolution_data=rdict,
         model=model_dict,
-        fibermap=spectra.fibermap,
-        exp_fibermap=spectra.exp_fibermap,
-        meta=spectra.meta,
-        extra=spectra.extra,
-        scores=spectra.scores,
-        redshifts=spectra.redshifts,
+        fibermap=spectra.fibermap.copy() if spectra.fibermap is not None else None,
+        exp_fibermap=spectra.exp_fibermap.copy() if spectra.exp_fibermap is not None else None,
+        meta=spectra.meta.copy() if spectra.meta is not None else None,
+        extra=spectra.extra.copy() if spectra.extra is not None else None,
+        scores=spectra.scores.copy() if spectra.scores is not None else None,
+        redshifts=spectra.redshifts.copy() if spectra.redshifts is not None else None,
     )
 
     duration = time.time() - t0
-    print(f"INFO: coadding spectra across cameras took: {duration:.3f} [sec]")
+    log.info(f"coadding spectra across cameras took: {duration:.3f} [sec]")
 
     return res
 
