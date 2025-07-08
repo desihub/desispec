@@ -236,7 +236,7 @@ def parse(options=None):
     parser.add_argument('--survey', type=str, default='main',
             help = 'Only archive tiles with this SURVEY (default=%(default)s)')
     parser.add_argument('--program', type=str, default=None,
-            help = 'Only archive tiles with this PROGRAM')
+            help = 'Only archive tiles with this PROGRAM (default accepts any PROGRAM)')
     parser.add_argument('--badpetals', type=str,
             help = 'Comma separated list of known bad petals not in production but archived from earlier prod')
     parser.add_argument('--specstatus', type=str,
