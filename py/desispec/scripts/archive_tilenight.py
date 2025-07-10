@@ -295,8 +295,10 @@ def main(options=None):
     os.chdir(reduxdir)
 
     tiles = Table.read(args.specstatus)
-    if 'PROGRAM' not in tiles.colnames:
-        tiles['PROGRAM'] = faflavor2program(tiles['FAFLAVOR'])
+    if 'PROGRAM' in tiles.colnames:
+        tile_program = tiles['PROGRAM']
+    else:
+        tile_program = faflavor2program(tiles['FAFLAVOR'])
 
     keep = np.ones(len(tiles), dtype=bool)
 
@@ -305,7 +307,7 @@ def main(options=None):
 
     if args.program is not None:
         log.info(f'Filtering to PROGRAM={args.program}')
-        keep &= (tiles['PROGRAM'] == args.program)
+        keep &= (tile_program == args.program)
     else:
         log.info(f'Allowing any value of PROGRAM')
 
@@ -330,6 +332,9 @@ def main(options=None):
         keep &= np.isin(tiles['TILEID'], tileids)
 
     archivetiles = tiles[keep]
+
+    #- add PROGRAM column for printing convenience, but don't modify original tiles
+    archivetiles['PROGRAM'] = tile_program[keep]
 
     archivedate = datetime.datetime.now().strftime('%Y%m%d')
     ntiles = len(archivetiles)
