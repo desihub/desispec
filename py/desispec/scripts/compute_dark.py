@@ -186,29 +186,35 @@ def main(args=None):
         exptable.sort('EXPID')
         print(exptable)
 
-        # assemble corresponding images
+        # check which images can be found
         args.images = []
         file_exists = np.ones(len(exptable), dtype=bool)
         for e in range(len(exptable)):
             filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
-            if os.path.exists(filename):
-                args.images.append(filename)
-            else:
+            if os.path.exists(filename)==False:
                 # "Missing" files can occur due to a mismatch between the NIGHT header keyword
                 # and the directory in which the file is found, e.g. 20250620/00298589/desi-00298589.fits.fz
                 # has header NIGHT=20250619, but also FLAVOR=science instead of FLAVOR=dark
                 file_exists[e] = False
                 log.error(f'Skipping missing file {filename}')
-
+        
+        # Trim to found files and max number of exposures 
         if not np.all(file_exists):
             exptable = exptable[file_exists]
-            exptable=closest_exposures(exptable,arg.reference_night,arg.max_exposures)
+            exptable=closest_exposures(exptable,args.reference_night,args.max_exposures)
             log.info(f'Using {len(exptable)} exposures of the {np.sum(valid)} available for this time range to build {args.camera}')
             print(exptable)
         else:
-            exptable=closest_exposures(exptable,arg.reference_night,arg.max_exposures)
+            exptable=closest_exposures(exptable,args.reference_night,args.max_exposures)
             log.info(f'Using {len(exptable)} exposures of the {np.sum(valid)} available for this time range to build {args.camera}')
             print(exptable)
+        
+        # assembly the images
+        args.images = []
+        for e in range(len(exptable)):
+            filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
+            args.images.append(filename)
+
     # find the most recent exposure with the camera and read its header
     # unless reference_expid or reference_night is set
     reference_header = None
