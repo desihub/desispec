@@ -16,6 +16,8 @@ import collections
 import numbers
 import datetime
 
+from astropy.time import Time
+from astropy.table import Table
 import numpy as np
 
 import subprocess as sp
@@ -815,3 +817,21 @@ def argmatch(a, b):
                 raise RuntimeError(f'argmatch failure for unknown reason {a[col]=} {match_indices=} {a[col][match_indices]=} != {b[col]=}')
 
     return match_indices
+
+def closest_exposures(table,night,expnumber):
+    """
+    Finds the closest number of exposures to a reference night in an expoosure table
+
+    Args:
+        table: exposure table (astropy.table.Table)
+        night: reference night in YYYYMMDD format (int)
+        expnumber: maximum number of exposures to include in the table (int)
+    
+    Returns:
+        Exposure Table of the closest X exposures the reference night (astropy.table.Table)
+    """
+    date=Time(f'{str(night)[:4]}-{str(night)[4:6]}-{str(night+1)[6:]}T12:00:00')
+    table['MJDFROMREF']=np.abs(table['MJD']-date.mjd)
+    table.sort('MJDFROMREF')
+    table.remove_column('MJDFROMREF')
+    return(table[:expnumber])

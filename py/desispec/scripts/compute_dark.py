@@ -11,7 +11,7 @@ from astropy.table import Table,vstack
 from desiutil.log import get_logger
 
 from desispec.ccdcalib import compute_dark_file
-from desispec.util import parse_nights, get_night_range
+from desispec.util import parse_nights, get_night_range, closest_exposures
 from desispec.io.util import get_speclog,erow_to_goodcamword,decode_camword
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
@@ -39,6 +39,8 @@ def parse(options=None):
                         help = 'Number of nights after reference-night to include')
     parser.add_argument('--reference-expid', type=int, default = None, required=False,
                         help='reference expid defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-night)')
+    parser.add_argument('--max-exposures', type=int, default = 50 ,
+                        help='maximum number of exposures to use from a given reference night')
     parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                         help = 'output median image filename')
     parser.add_argument('-c','--camera',type = str, required = True,
@@ -200,9 +202,13 @@ def main(args=None):
 
         if not np.all(file_exists):
             exptable = exptable[file_exists]
-            log.info(f"{len(exptable)} exposures will be used to build the {args.camera} dark")
+            exptable=closest_exposures(exptable,arg.reference_night,arg.max_exposures)
+            log.info(f'Using {len(exptable)} exposures of the {np.sum(valid)} available for this time range to build {args.camera}')
             print(exptable)
-
+        else:
+            exptable=closest_exposures(exptable,arg.reference_night,arg.max_exposures)
+            log.info(f'Using {len(exptable)} exposures of the {np.sum(valid)} available for this time range to build {args.camera}')
+            print(exptable)
     # find the most recent exposure with the camera and read its header
     # unless reference_expid or reference_night is set
     reference_header = None
