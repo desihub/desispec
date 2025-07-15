@@ -829,6 +829,14 @@ def closest_exposures(table,night,expnumber):
     
     Returns:
         Exposure Table of the closest X exposures the reference night (astropy.table.Table)
+    
+    The exposure table should contain an least an 'MJD' column. 
+    This was designed for compute_dark.py exposure table which contains the columns:
+        NIGHT
+        EXPID
+        MJD
+        OBSTYPE
+        EXPTIME
     """
     date=Time(f'{str(night)[:4]}-{str(night)[4:6]}-{str(night+1)[6:]}T12:00:00')
     table['MJDFROMREF']=np.abs(table['MJD']-date.mjd)
