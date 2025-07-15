@@ -17,6 +17,7 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root, findfile
+from desispec.io.meta import faflavor2program
 from desitarget.targetmask import zwarn_mask
 
 def check_missing_zmtl(tiledir, archivetileroot):
@@ -232,6 +233,10 @@ def parse(options=None):
                    '/global/cfs/cdirs/desi/spectro/redux/daily, '
                    'or simply prod version, like daily. '
                    'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+    parser.add_argument('--survey', type=str, default='main',
+            help = 'Only archive tiles with this SURVEY (default=%(default)s)')
+    parser.add_argument('--program', type=str, default=None,
+            help = 'Only archive tiles with this PROGRAM (default accepts any PROGRAM)')
     parser.add_argument('--badpetals', type=str,
             help = 'Comma separated list of known bad petals not in production but archived from earlier prod')
     parser.add_argument('--specstatus', type=str,
@@ -290,8 +295,23 @@ def main(options=None):
     os.chdir(reduxdir)
 
     tiles = Table.read(args.specstatus)
-    log.info('Archiving tiles with SURVEY=main|sv3, QA=good')
-    keep = (tiles['SURVEY'] == 'main') | (tiles['SURVEY'] == 'sv3')
+    if 'PROGRAM' in tiles.colnames:
+        tile_program = tiles['PROGRAM']
+    else:
+        tile_program = faflavor2program(tiles['FAFLAVOR'])
+
+    keep = np.ones(len(tiles), dtype=bool)
+
+    log.info(f'Archiving tiles with SURVEY={args.survey}')
+    keep &= (tiles['SURVEY'] == args.survey)
+
+    if args.program is not None:
+        log.info(f'Filtering to PROGRAM={args.program}')
+        keep &= (tile_program == args.program)
+    else:
+        log.info(f'Allowing any value of PROGRAM')
+
+    log.info('Filtering to QA=good')
     keep &= (tiles['QA'] == 'good')
     if not args.rearchive:
         log.info('Requiring ZDONE=false (use --rearchive to override)')
@@ -313,6 +333,9 @@ def main(options=None):
 
     archivetiles = tiles[keep]
 
+    #- add PROGRAM column for printing convenience, but don't modify original tiles
+    archivetiles['PROGRAM'] = tile_program[keep]
+
     archivedate = datetime.datetime.now().strftime('%Y%m%d')
     ntiles = len(archivetiles)
     if ntiles == 0:
@@ -320,6 +343,8 @@ def main(options=None):
         sys.exit(0)
 
     log.info(f'Archiving {ntiles} tiles using ARCHIVEDATE={archivedate}')
+
+    archivetiles['TILEID', 'LASTNIGHT', 'SURVEY', 'PROGRAM', 'NEXP', 'EFFTIME_SPEC', 'OBSSTATUS', 'QA', 'USER', 'QANIGHT', 'ZDONE'].pprint_all()
 
     #- find and read exposures table for that specprod
     specprod = os.path.basename(reduxdir)
