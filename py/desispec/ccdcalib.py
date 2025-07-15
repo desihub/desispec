@@ -36,7 +36,7 @@ from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, preproc_dark_dir=None):
+                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=80):
     """
     Compute classic dark model from input dark images
 
@@ -54,7 +54,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
         save_preproc (bool) : save preprocessed images
         preproc_dark_dir (str) : specify output directory used to save preproc images
-
+        max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the first max_dark_exposures are used
 
 
     Note: if bias is None, the bias will be looked for in $DESI_SPECTRO_REDUX/$SPECPROD/calibnight, and will raise
@@ -66,15 +66,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     """
 
     log = get_logger()
-
-
-    shape=None
-    images=[]
-    if nocosmic :
-        masks=None
-    else :
-        masks=[]
-
 
     if reference_header is None :
         log.info("first pass to find the most recent header ...")
@@ -91,9 +82,14 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             fitsfile.close()
         log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} DETECTOR={reference_header['DETECTOR']}")
 
-
-    log.info("read images ...")
-    exptimes=[]
+    log.info("reading images ...")
+    shape=None
+    images=[]
+    if nocosmic :
+        masks=None
+    else :
+        masks=[]
+    exptimes, mjds=[], []
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
 
@@ -127,7 +123,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         header = fitsfile[camera].header
 
-
         if 'VCCDSEC' in header :
             vccdsec = float(header['VCCDSEC'])
             log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
@@ -148,7 +143,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 break
         if not valid : continue
 
-
         v1=float(reference_header["CCDTEMP"])
         v2=float(header["CCDTEMP"])
         if np.abs(v1-v2)>max_temperature_diff :
@@ -157,9 +151,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             fitsfile.close()
             continue
 
-
         log.info(f"Preprocessing {filename} ...")
-
 
         if bias is not None:
             if isinstance(bias, str):
@@ -217,11 +209,18 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if masks is not None :
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
-
+        mjds.append(float(img.meta['MJD-OBS']))
 
     if len(images)==0 :
         log.error("No images left after selection")
         raise RuntimeError("No images left after selection")
+    elif len(images) > max_dark_exposures:
+        log.warning(f"More than {max_dark_exposures} dark exposures found, using only the first {max_dark_exposures}")
+        sel = np.argsort(np.abs(mjds-float(reference_header['MJD-OBS'])))[:max_dark_exposures]
+        images = images[sel]
+        if masks is not None:
+            masks = masks[sel]
+        exptimes = exptimes[sel]
 
     images=np.array(images)
     exptimes=np.array(exptimes)
@@ -296,6 +295,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info(f"Wrote {outfile}")
 
     log.info(f"done")
+    ## end of function compute_dark_file
 
 
 def compute_bias_file(rawfiles, outfile, camera, explistfile=None,

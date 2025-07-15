@@ -16,7 +16,7 @@ from desispec.io.util import get_speclog,erow_to_goodcamword,decode_camword
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 
-def parse(options=None):
+def compute_dark_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="Compute a master dark",
                                      epilog='''
@@ -65,11 +65,130 @@ def parse(options=None):
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
     parser.add_argument('--dry-run', action='store_true', help="Print which images would be used, but don't compute dark")
+    parser.add_argument('--max-dark-exposures', type=int, default=80, required=False,
+                        help='Maximum number of dark exposures to use. Default is 80. If more than this number of exposures are found, ' \
+                        'the script will downselect to the closest exposures in time up to this limit.')
 
+    return parser
+
+
+def parse(options=None):
+    # parse the command line arguments
+    parser = compute_dark_parser()
+    
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
 
     return args
+
+def get_stacked_dark_exposure_table(args):
+    """
+    Get the exposure table for the dark exposures to be used.
+    If --nights is specified, it will return the exposures for those nights.
+    If --reference-night is specified, it will return the exposures around that night.
+    If --images is specified, it will return the exposures corresponding to those images.
+    """
+    log  = get_logger()
+    # check all required environment variables, then return error if any are missing
+    envok = True
+    for k in ["DESI_SPECTRO_DATA","DESI_SPECTRO_REDUX","SPECPROD"] :
+        if k not in os.environ :
+            envok = False
+            log.error(f"args.nights/referene_night specified but variable {k} is not set so we cannot find the exposures.")
+            if k=="SPECPROD" :
+                log.error("consider using argument --specprod.")
+
+    if not envok:
+        return None
+
+    if args.nights is None:
+        nights = get_night_range(args.reference_night, args.before, args.after)
+    else:
+        nights = parse_nights(args.nights)
+
+    log.info(f"Will look for dark exposures in nights: {nights}")
+    tables = []
+    missing_nights = []
+    for night in nights :
+        filename = findfile("exposure_table",night=night)
+        if os.path.isfile(filename) :
+            tmp_table=load_table(filename, suppress_logging=True)
+            if len(tmp_table)==0 : continue
+
+            # keep only valid exposures
+            keep = (tmp_table['LASTSTEP'] != 'ignore')
+            tmp_table = tmp_table[keep]
+            if len(tmp_table)==0 : continue
+
+            # keep only exposure with this args.camera valid
+            keep = np.repeat(True,len(tmp_table))
+            for i,entry in enumerate(tmp_table) :
+                keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
+            tmp_table = tmp_table[keep]
+            if len(tmp_table)==0 : continue
+
+            # only keep useful rows to avoid issues with columns
+            table = tmp_table['NIGHT', 'EXPID', 'MJD-OBS', 'OBSTYPE', 'EXPTIME']
+            table.rename_column('MJD-OBS', 'MJD')
+            tables.append(table)
+        else :
+            log.warning(f"No exposure table for {night}")
+            nightdir=os.path.join(os.environ["DESI_SPECTRO_DATA"],str(night))
+            if not os.path.isdir(nightdir) :
+                log.warning(f"No data directory {nightdir}")
+                continue
+            missing_nights.append(night)
+    if len(missing_nights)>0 :
+        log.info(f"Computing speclog for nights without exposure tables ({missing_nights})")
+        tmp_table = get_speclog(missing_nights)
+        if len(tmp_table)>0 :
+            table = Table()
+            for k in ["NIGHT","EXPID","MJD","OBSTYPE","EXPTIME"] :
+                table[k]=tmp_table[k]
+            for i in range(len(table)) :
+                table["OBSTYPE"][i]=table["OBSTYPE"][i].lower()
+            tables.append(table)
+    if len(tables)>0 :
+        exptable=vstack(tables)
+    else :
+        log.error(f"empty list of exposures")
+        return None
+
+    valid=(exptable["OBSTYPE"]=="dark")
+    log.info(f"{np.sum(valid)} dark exposures")
+    valid &= (exptable["EXPTIME"]>=args.min_exptime)
+    log.info(f"{np.sum(valid)} dark exposures with EXPTIME>={args.min_exptime}")
+    if args.first_expid is not None :
+        valid &= (exptable["EXPID"]>=args.first_expid)
+        log.info(f"{np.sum(valid)} dark exposures with EXPID>={args.first_expid}")
+    if args.last_expid is not None :
+        valid &= (exptable["EXPID"]<=args.last_expid)
+        log.info(f"{np.sum(valid)} dark exposures with EXPID<={args.last_expid}")
+
+    # trim to valid exposures
+    exptable = exptable[valid]
+    exptable.sort('EXPID')
+    print(exptable)
+
+    # assemble corresponding images
+    args.images = []
+    file_exists = np.ones(len(exptable), dtype=bool)
+    for e in range(len(exptable)):
+        filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
+        if not os.path.exists(filename):
+            # "Missing" files can occur due to a mismatch between the NIGHT header keyword
+            # and the directory in which the file is found, e.g. 20250620/00298589/desi-00298589.fits.fz
+            # has header NIGHT=20250619, but also FLAVOR=science instead of FLAVOR=dark
+            file_exists[e] = False
+            log.error(f'Skipping missing file {filename}')
+
+    if not np.all(file_exists):
+        exptable = exptable[file_exists]
+        log.info(f"{len(exptable)} exposures will be used to build the {args.camera} dark")
+        print(exptable)
+
+    return exptable
+
 
 def main(args=None):
 
@@ -102,106 +221,21 @@ def main(args=None):
     # first find the exposures if they are not given in input
     exptable = None
     if args.images is None:
-
-        # check all required environment variables, then return error if any are missing
-        envok = True
-        for k in ["DESI_SPECTRO_DATA","DESI_SPECTRO_REDUX","SPECPROD"] :
-            if k not in os.environ :
-                envok = False
-                log.error(f"args.nights/referene_night specified but variable {k} is not set so we cannot find the exposures.")
-                if k=="SPECPROD" :
-                    log.error("consider using argument --specprod.")
-
-        if not envok:
+        # if no images are given, we need to find the exposures
+        exptable = get_stacked_dark_exposure_table(args)
+        if exptable is None or len(exptable) == 0:
+            log.error("No valid exposures found for dark frame computation.")
             return 1
-
-        if args.nights is None:
-            nights = get_night_range(args.reference_night, args.before, args.after)
-        else:
-            nights = parse_nights(args.nights)
-
-        log.info(f"Will look for dark exposures in nights: {nights}")
-        tables = []
-        missing_nights = []
-        for night in nights :
-            filename = findfile("exposure_table",night=night)
-            if os.path.isfile(filename) :
-                tmp_table=load_table(filename, suppress_logging=True)
-                if len(tmp_table)==0 : continue
-
-                # keep only valid exposures
-                keep = (tmp_table['LASTSTEP'] != 'ignore')
-                tmp_table = tmp_table[keep]
-                if len(tmp_table)==0 : continue
-
-                # keep only exposure with this args.camera valid
-                keep = np.repeat(True,len(tmp_table))
-                for i,entry in enumerate(tmp_table) :
-                    keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
-                tmp_table = tmp_table[keep]
-                if len(tmp_table)==0 : continue
-
-                # only keep useful rows to avoid issues with columns
-                table = tmp_table['NIGHT', 'EXPID', 'MJD-OBS', 'OBSTYPE', 'EXPTIME']
-                table.rename_column('MJD-OBS', 'MJD')
-                tables.append(table)
-            else :
-                log.warning(f"No exposure table for {night}")
-                nightdir=os.path.join(os.environ["DESI_SPECTRO_DATA"],str(night))
-                if not os.path.isdir(nightdir) :
-                    log.warning(f"No data directory {nightdir}")
-                    continue
-                missing_nights.append(night)
-        if len(missing_nights)>0 :
-            log.info(f"Computing speclog for nights without exposure tables ({missing_nights})")
-            tmp_table = get_speclog(missing_nights)
-            if len(tmp_table)>0 :
-                table = Table()
-                for k in ["NIGHT","EXPID","MJD","OBSTYPE","EXPTIME"] :
-                    table[k]=tmp_table[k]
-                for i in range(len(table)) :
-                    table["OBSTYPE"][i]=table["OBSTYPE"][i].lower()
-                tables.append(table)
-        if len(tables)>0 :
-            exptable=vstack(tables)
-        else :
-            log.error(f"empty list of exposures")
-            return 1
-
-        valid=(exptable["OBSTYPE"]=="dark")
-        log.info(f"{np.sum(valid)} dark exposures")
-        valid &= (exptable["EXPTIME"]>=args.min_exptime)
-        log.info(f"{np.sum(valid)} dark exposures with EXPTIME>={args.min_exptime}")
-        if args.first_expid is not None :
-            valid &= (exptable["EXPID"]>=args.first_expid)
-            log.info(f"{np.sum(valid)} dark exposures with EXPID>={args.first_expid}")
-        if args.last_expid is not None :
-            valid &= (exptable["EXPID"]<=args.last_expid)
-            log.info(f"{np.sum(valid)} dark exposures with EXPID<={args.last_expid}")
-
-        # trim to valid exposures
-        exptable = exptable[valid]
-        exptable.sort('EXPID')
-        print(exptable)
 
         # assemble corresponding images
         args.images = []
-        file_exists = np.ones(len(exptable), dtype=bool)
-        for e in range(len(exptable)):
-            filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
+        for row in exptable:
+            filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"])
             if os.path.exists(filename):
                 args.images.append(filename)
             else:
-                # "Missing" files can occur due to a mismatch between the NIGHT header keyword
-                # and the directory in which the file is found, e.g. 20250620/00298589/desi-00298589.fits.fz
-                # has header NIGHT=20250619, but also FLAVOR=science instead of FLAVOR=dark
-                file_exists[e] = False
                 log.error(f'Skipping missing file {filename}')
-
-        if not np.all(file_exists):
-            exptable = exptable[file_exists]
-            log.info(f"{len(exptable)} exposures will be used to build the {args.camera} dark")
-            print(exptable)
+                return 1
 
     # find the most recent exposure with the camera and read its header
     # unless reference_expid or reference_night is set
@@ -257,5 +291,6 @@ def main(args=None):
                       max_temperature_diff=args.max_temperature_diff,
                       reference_header=reference_header,
                       save_preproc=args.save_preproc,
-                      preproc_dark_dir=args.preproc_dark_dir)
+                      preproc_dark_dir=args.preproc_dark_dir,
+                      max_dark_exposures=args.max_dark_exposures)
     return 0
