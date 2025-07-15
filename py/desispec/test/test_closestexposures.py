@@ -1,6 +1,6 @@
 import unittest
 import importlib.resources
-from closestexposures import closest_exposures
+from desispec.util import closest_exposures
 import numpy as np
 from astropy.table import Table
 
