@@ -265,7 +265,7 @@ def main(args=None, comm=None):
         #- are determined to be worse than the default, so check existence
         #- of output files separately.
         result, success = runcmd(desispec.scripts.nightly_bias.main,
-                args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
+                args=cmd.split()[1:], inputs=[], outputs=[], check_return=True, comm=comm)
 
         #- check for biasnight or biasnighttest output files
         missing_biasnight = 0
@@ -317,7 +317,10 @@ def main(args=None, comm=None):
     if args.expid is None:
         if comm is not None:
             all_error_counts = comm.gather(error_count, root=0)
-            error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+            if rank == 0:
+                error_count = int(np.sum(all_error_counts))  # all_error_counts is None on other ranks
+
+            error_count = comm.bcast(error_count, root=0)
 
         if rank == 0:
             log.info('No expid given so stopping now')
