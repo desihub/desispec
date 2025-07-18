@@ -7,7 +7,6 @@ from desispec.scripts import compute_dark
 from desispec.workflow.desi_proc_funcs import assign_mpi
 import numpy as np
 
-
 from desiutil.log import get_logger
 
 from desispec.util import runcmd
@@ -17,7 +16,7 @@ from mpi4py import MPI
 
 
 def dark_night_parser():
-    parser = compute_dark_parser()
+    parser = compute_dark.compute_dark_parser()
 
     parser.description="Compute the dark night for a given --reference-night or list of nights",
     parser.usage='desi_compute_dark_night.py [options] -r YYYYMMDD -c CAMWORD',

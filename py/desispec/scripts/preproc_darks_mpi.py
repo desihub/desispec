@@ -5,6 +5,7 @@ import argparse
 from desispec.io.image import write_image
 from desispec.io.raw import process_raw, read_raw_primary_header
 from desispec.scripts.zproc import distribute_ranks_to_blocks
+from desispec.scripts.compute_dark import compute_dark_parser
 from desispec.workflow.desi_proc_funcs import assign_mpi
 import numpy as np
 from astropy.io import fits
