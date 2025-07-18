@@ -346,10 +346,6 @@ def main(args=None):
         #- convert list of lists -> list
         redrockfiles = list(itertools.chain.from_iterable(redrockfiles))
 
-    ################################
-    redrockfiles = redrockfiles[:2]
-    ################################
-
     nfiles = len(redrockfiles)
     if nfiles == 0:
         msg = f'No redrock files found in {indir}'
