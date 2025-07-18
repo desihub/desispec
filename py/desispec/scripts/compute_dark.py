@@ -65,8 +65,8 @@ def compute_dark_parser():
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
     parser.add_argument('--dry-run', action='store_true', help="Print which images would be used, but don't compute dark")
-    parser.add_argument('--max-dark-exposures', type=int, default=80, required=False,
-                        help='Maximum number of dark exposures to use. Default is 80. If more than this number of exposures are found, ' \
+    parser.add_argument('--max-dark-exposures', type=int, default=200, required=False,
+                        help='Maximum number of dark exposures to use. Default is 200. If more than this number of exposures are found, ' \
                         'the script will downselect to the closest exposures in time up to this limit.')
 
     return parser
@@ -81,7 +81,7 @@ def parse(options=None):
 
     return args
 
-def get_stacked_dark_exposure_table(args):
+def get_stacked_dark_exposure_table(args, skip_camera_check=False):
     """
     Get the exposure table for the dark exposures to be used.
     If --nights is specified, it will return the exposures for those nights.
@@ -121,10 +121,11 @@ def get_stacked_dark_exposure_table(args):
             if len(tmp_table)==0 : continue
 
             # keep only exposure with this args.camera valid
-            keep = np.repeat(True,len(tmp_table))
-            for i,entry in enumerate(tmp_table) :
-                keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
-            tmp_table = tmp_table[keep]
+            if not skip_camera_check:
+                keep = np.repeat(True,len(tmp_table))
+                for i,entry in enumerate(tmp_table) :
+                    keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
+                tmp_table = tmp_table[keep]
             if len(tmp_table)==0 : continue
 
             # only keep useful rows to avoid issues with columns
@@ -151,7 +152,7 @@ def get_stacked_dark_exposure_table(args):
     if len(tables)>0 :
         exptable=vstack(tables)
     else :
-        log.error(f"empty list of exposures")
+        log.error(f"empty list of dark exposures")
         return None
 
     valid=(exptable["OBSTYPE"]=="dark")

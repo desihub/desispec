@@ -151,32 +151,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             fitsfile.close()
             continue
 
-        log.info(f"Preprocessing {filename} ...")
-
-        if bias is not None:
-            if isinstance(bias, str):
-                thisbias = bias
-            elif isinstance(bias, (list, tuple, np.array)):
-                thisbias = bias[ifile]
-            else:
-                message = 'bias should be None, str, list, or tuple, not {}'.format(type(bias))
-                log.error(message)
-                raise RuntimeError(message)
-        else:
-            thisbias = True
-
         night=header2night(primary_header)
         expid=primary_header["EXPID"]
 
-        if thisbias is False :
-            biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
-            if os.path.isfile(biasnight) :
-                thisbias = biasnight
-            else :
-                message=f"Missing mandatory biasnight file {biasnight}"
-                log.error(message)
-                raise RuntimeError(message)
-        log.debug(f"BIAS={thisbias}")
+        log.info(f"Preprocessing {filename} ...")
 
         preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
 
@@ -187,14 +165,36 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
         else :
+            if bias is not None:
+                if isinstance(bias, str):
+                    thisbias = bias
+                elif isinstance(bias, (list, tuple, np.array)):
+                    thisbias = bias[ifile]
+                else:
+                    message = 'bias should be None, str, list, or tuple, not {}'.format(type(bias))
+                    log.error(message)
+                    raise RuntimeError(message)
+            else:
+                thisbias = True
+
+            if thisbias is False :
+                biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
+                if os.path.isfile(biasnight) :
+                    thisbias = biasnight
+                else :
+                    message=f"Missing mandatory biasnight file {biasnight}"
+                    log.error(message)
+                    raise RuntimeError(message)
+            log.debug(f"BIAS={thisbias}")
+            
             # read raw data and preprocess them
             img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                              mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+                            mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
-            if save_preproc :
-                # is saved in preproc_dark_dir if not None
-                io.write_image(preproc_filename,img)
-                log.info(f"Wrote {preproc_filename}")
+    if save_preproc :
+        # is saved in preproc_dark_dir if not None
+        io.write_image(preproc_filename,img)
+        log.info(f"Wrote {preproc_filename}")
 
         # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :

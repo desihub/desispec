@@ -1,0 +1,9 @@
+#!/usr/bin/env python
+
+'''
+Preprocesses all relevant dark exposures for a given night, list of nights, or list of exposures. 
+'''
+
+import sys
+from desispec.scripts import preproc_darks_mpi
+sys.exit(preproc_darks_mpi.main(preproc_darks_mpi.parse()))
