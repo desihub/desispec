@@ -8,6 +8,7 @@ Lawrence Berkeley National Lab
 Fall 2015
 
 substantially updated Fall 2023
+updated again Summer 2025
 """
 
 from __future__ import absolute_import, division, print_function
@@ -148,7 +149,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
     emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
     qso_mgii_cols = ['IS_QSO_MGII']
-    qso_qn_cols = ['Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
+    qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW', 'ZWARN_NEW', 'SPECTYPE_NEW', 'SUBTYPE_NEW', 'CHI2_NEW', 'DELTACHI2_NEW', 'COEFF_NEW']
 
     tsnr2cols = list(tsnr2.dtype.names)
     tsnr2cols.remove('TARGETID')
@@ -474,15 +475,16 @@ def main(args=None):
         zqual['GOOD_Z_LRG'] &= is_lrg
         zqual['GOOD_Z_ELG'] &= is_elg
 
-        # GOOD_Z_QSO: True if Z_QSO is a confident redshift; it only applies to the Z_QSO column
-        # definition: False if it is not a QSO target or if it is a QSO target but fails QSO redshift quality cut; True if it is a QSO target and passes QSO redshift quality cut
+        # GOOD_Z_QSO: True only if it is a QSO target AND passes the QSO redshift quality cut; it only applies to the Z_QSO column
         zqual['GOOD_Z_QSO'] &= is_qso
+        
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts as the per-target class and GOOD_SPEC requirements are added here
 
-        mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG']
-        zqual['Z_CONF'][mask] = 2  # Z_CONF=2: highly confident; definition: if Z is a confident redshift
+        mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+        zqual['Z_CONF'][mask] = 2  # Z_CONF=2: highly confident
 
         mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
-        zqual['Z_CONF'][mask] = 1  # Z_CONF=1: less confident and Z is likely to be a catastrophically wrong redshift; definition: if the criteria for 2 is not met but has GOOD_SPEC==True and ZWARN==0
+        zqual['Z_CONF'][mask] = 1  # Z_CONF=1: less confident and Z is likely to be a catastrophically wrong redshift
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
@@ -492,7 +494,23 @@ def main(args=None):
 
     zcat = hstack([zcat, zqual], join_type='exact')
 
-    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z', 'ZERR', 'ZWARN', 'CHI2', 'SPECTYPE', 'SUBTYPE', 'DELTACHI2', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'TSNR2_BGS', 'TSNR2_ELG', 'TSNR2_LRG', 'TSNR2_LYA', 'TSNR2_QSO', 'GOOD_SPEC', 'Z_CONF', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    # Create "best redshift" columns
+    z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
+    for col in z_cols:
+        zcat[col+'_BEST'] = zcat[col].copy()
+
+    # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs significantly from Z
+    z_diff_threshold = 0.00333
+    mask = (zcat['GOOD_Z_QSO']==True) & (np.abs(zcat['Z']-zcat['Z_QSO'])>z_diff_threshold*(1+zcat['Z_QSO']))
+    zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
+    for col in z_cols:
+        if col!='Z':
+            zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
+
+    # Add EFFTIME_SPEC; definition from Equation 22 of Guy et al. 2023 (arxiv:2209.14482)
+    zcat['EFFTIME_SPEC'] = 12.15 * zcat['TSNR2_LRG']
+
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET' 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
