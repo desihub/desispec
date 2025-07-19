@@ -15,7 +15,7 @@ from desiutil.dust import ext_odonnell
 from desiutil.dust import ebv as dust_ebv
 from desiutil.log import get_logger
 from desispec.emlinefit import get_rf_em_waves
-from .util import checkgzip
+from .util import checkgzip, get_tempfilename
 
 def get_targetids(d, bitnames, log=None):
     """
@@ -355,13 +355,14 @@ def write_emlines(
     for i_emname, emname in enumerate(emnames):
         hdr["RFWAVE{:02d}".format(i_emname)] = ",".join(get_rf_em_waves(emname).astype(str))
 
-    # AR write to fits
+    # AR write to fits via tempfile to avoid corrupted final file in case of a crash
     if os.path.isfile(output):
         log.info("Removing existing {}".format(output))
         os.remove(output)
-    fd = fitsio.FITS(output, "rw")
-    fd.write(d, extname="EMLINEFIT", header=hdr)
-    fd.close()
+    tmpfile = get_tempfilename(output)
+    with fitsio.FITS(tmpfile, "rw") as fd:
+        fd.write(d, extname="EMLINEFIT", header=hdr)
+    os.rename(tmpfile, output)
 
 
 def plot_emlines(
