@@ -40,7 +40,7 @@ def compute_broadband_flux(spectrum_wave,spectrum_flux,transmission_wave,transmi
     # wavelength grid combining both grids in transmission_wave region
     wave=np.unique(np.hstack([spectrum_wave[kk],transmission_wave]))
     # value is product of interpolated values
-    val=np.interp(wave,spectrum_wave[ii],spectrum_flux[ii])*np.interp(wave,transmission_wave[jj],transmission_value[jj])
+    val=np.interp(wave,spectrum_wave[ii],spectrum_flux[ii])*np.interp(wave,transmission_wave[jj],transmission_value[jj]) * wave
 
     trapeze_area = (val[1:]+val[:-1])*(wave[1:]-wave[:-1])/2.
     return np.sum(trapeze_area)
