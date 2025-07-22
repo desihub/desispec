@@ -974,7 +974,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
                     fx.write('\nif [ $? -eq 0 ]; then\n')
                     fx.write('  echo nightlybias succeeded at $(date)\n')
                     fx.write('else\n')
-                    fx.write('  echo FAILED: nightlybias failed; stopping at $(date)\n')
+                    fx.write('  echo FAILED: nightlybias failed, stopping at $(date)\n')
                     fx.write('  exit 1\n')
                     fx.write('fi\n')
 

@@ -23,7 +23,7 @@ import subprocess as sp
 from desiutil.log import get_logger, INFO
 
 
-def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False):
+def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False, check_return=False):
     """
     Runs a command (function or script), checking for inputs and outputs
 
@@ -37,6 +37,7 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
         outputs : list of output filenames that should be created
         clobber : if True, run even if outputs already exist
         comm : MPI communicator to pass to cmd(..., comm=comm)
+        check_return : if True, check return value of function and require 0 or None for success
 
     Returns:
         (result, success)
@@ -49,6 +50,7 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
       * If spawned as a script, return (returncode, (returncode==0)).
       * If function raises an exception, return (exception, False).
       * If function returns result but outputs are missing, return (result, False).
+      * If check_return is True and function result != (0 or None), return (result, False)
       * If function returns result and all outputs are present, return (result, True).
     """
 
@@ -146,7 +148,12 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
                 result = cmd(*args)
             else:
                 result = cmd(*args, comm=comm)
-        else:
+
+            if check_return:
+                if result not in (0, None):
+                    success = False
+
+        else: # not a callable function, spawn as script
             result = sp.call(cmdstr, shell=True)
             success = (result == 0)
 
