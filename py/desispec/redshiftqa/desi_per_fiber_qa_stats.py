@@ -84,17 +84,13 @@ for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
 
     # Apply masks
     if tracer=='LRG':
-        tmp1 = Table(fitsio.read(os.path.join('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_lrg_1.1.1_basic.fits'), columns=['TARGETID']))
-        tmp2 = Table(fitsio.read(os.path.join('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_lrg_1.1.1_lrgmask_v1.1.fits.gz')))
-        lrgmask = hstack([tmp1, tmp2])
+        lrgmask = Table(fitsio.read('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_lrg_1.1.1_lrgmask_v1.1_with_targetid.fits'))
         lrgmask = lrgmask[lrgmask['lrg_mask']==0]
         mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
         print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
         cat = cat[mask]
     elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
-        tmp1 = Table(fitsio.read(os.path.join('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_elg_1.1.1_basic.fits'), columns=['TARGETID']))
-        tmp2 = Table(fitsio.read(os.path.join('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_elg_1.1.1_elgmask_v1.fits.gz')))
-        elgmask = hstack([tmp1, tmp2])
+        elgmask = Table(fitsio.read('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_elg_1.1.1_elgmask_v1_with_targetid.fits'))
         elgmask = elgmask[elgmask['elg_mask']==0]
         mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
         print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
