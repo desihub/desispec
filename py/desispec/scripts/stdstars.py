@@ -263,13 +263,9 @@ def main(args=None, comm=None) :
         log.info("reading %s"%filename)
         flat=io.read_fiberflat(filename)
         camera=safe_read_key(flat.header,"CAMERA").strip().lower()
-
-        # NEED TO ADD MORE CHECKS
-        if camera in flats:
-            log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
-            #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
-        else :
-            flats[camera]=flat[starfibers%500]
+        if not camera in flats :
+            flats[camera] = []
+        flats[camera].append(flat[starfibers%500])
 
     # if color is not specified we decide on the fly
     color = args.color
@@ -349,11 +345,10 @@ def main(args=None, comm=None) :
             frames.pop(cam)
             continue
 
-        flat = flats[cam][keep_stds]
-
         for i in range(len(frames[cam])):
             frame = frames[cam][i][keep_stds]
             sky = skies[cam][i][keep_stds]
+            flat = flats[cam][i][keep_stds]
 
             #- don't use masked or ivar=0 data
             frame.ivar *= (frame.mask == 0)

@@ -5,10 +5,11 @@
 Get the normalized best template to do flux calibration.
 
 desi_fit_stdstars
-    --indir INDIR
-    --fiberflat FILENAME
-    --models STDSTAR_MODELS
-    --fibermapdir FMDIR
+    --delta-color MAX_DELTACOLOR
+    --frames FRAME_FILES
+    --skymodels SKY_FILES
+    --fiberflats FF_FILES
+    --starmodels STDSTAR_MODELS
     --spectrograph N
     --outfile X
 """
