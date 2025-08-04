@@ -7,20 +7,20 @@ Broadband flux and magnitudes.
 
 import numpy as np
 
-def compute_broadband_flux(spectrum_wave,spectrum_flux,transmission_wave,transmission_value) :
+def compute_broadband_photon_flux(spectrum_wave,spectrum_flux,transmission_wave,transmission_value) :
     """
-    Computes broadband flux
+    Computes the broadband photon flux with arbitrary normalization
 
     Args:
 
-     spectrum_wave: 1D numpy array (Angstrom)
-     spectrum_flux: 1D numpy array is some input density unit, same size as spectrum_wave
-     transmission_wave: 1D numpy array (Angstrom)
-     transmission_value: 1D numpy array , dimensionless, same size as transmission_wave
+     spectrum_wave: wavelength array for spectrum_flux (Angstrom); 1D numpy array
+     spectrum_flux: spectral energy distribution (in 1e-17 * ergs/s/cm2/A); 1D numpy array with the same size as spectrum_wave
+     transmission_wave: wavelength array for transmission_value (Angstrom)
+     transmission_value: total transmission (dimensionless); 1D numpy array with the same size as transmission_wave
 
     Returns:
 
-     integrated flux (unit= A x (input density unit)) , scalar
+     total photon flux with arbitrary normalization; scalar
     """
 
     # same size
@@ -70,19 +70,19 @@ def compute_ab_mag(spectrum_wave,spectrum_flux,transmission_wave,transmission_va
 
     Args:
 
-     spectrum_wave: 1D numpy array (Angstrom)
-     spectrum_flux: 1D numpy array (in units of 1e-17 ergs/s/cm2/A), same size as spectrum_wave
-     transmission_wave: 1D numpy array (Angstrom)
-     transmission_value: 1D numpy array , dimensionless, same size as transmission_wave
+     spectrum_wave: wavelength array for spectrum_flux (Angstrom); 1D numpy array
+     spectrum_flux: spectral energy distribution (in 1e-17 * ergs/s/cm2/A); 1D numpy array with the same size as spectrum_wave
+     transmission_wave: wavelength array for transmission_value (Angstrom)
+     transmission_value: total transmission (dimensionless); 1D numpy array with the same size as transmission_wave
 
     Returns:
 
      mag (float scalar)
     """
 
-    numerator   = 1e-17*compute_broadband_flux(spectrum_wave,spectrum_flux,transmission_wave,transmission_value)
+    numerator   = 1e-17*compute_broadband_photon_flux(spectrum_wave,spectrum_flux,transmission_wave,transmission_value)
     # use same wavelength grid for denominator to limit interpolation biases
-    denominator = compute_broadband_flux(spectrum_wave,ab_flux_in_ergs_s_cm2_A(spectrum_wave),transmission_wave,transmission_value)
+    denominator = compute_broadband_photon_flux(spectrum_wave,ab_flux_in_ergs_s_cm2_A(spectrum_wave),transmission_wave,transmission_value)
 
     # may return NaN
     return - 2.5 * np.log10(numerator/denominator)
