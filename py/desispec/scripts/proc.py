@@ -1134,15 +1134,15 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
-            orig_frame = desispec.io.read_frame(framefile)
+            roframefile = findfile('frame', args.night, args.expid, camera, readonly=True)
+            orig_frame = desispec.io.read_frame(roframefile)
 
             #- Make a copy so that we can apply fiberflat
             fr = deepcopy(orig_frame)
 
             if np.any(fr.fibermap['OBJTYPE'] == 'SKY'):
                 log.info('{} sky fibers already set; skipping'.format(
-                    os.path.basename(framefile)))
+                    os.path.basename(roframefile)))
                 continue
 
             #- Apply fiberflat then select random fibers below a flux cut
@@ -1158,6 +1158,8 @@ def main(args=None, comm=None):
             orig_frame.fibermap['OBJTYPE'][iisky] = 'SKY'
             orig_frame.fibermap['DESI_TARGET'][iisky] |= desi_mask.SKY
 
+            #- Get the writable path to frame file and write it out
+            framefile = findfile('frame', args.night, args.expid, camera)
             desispec.io.write_frame(framefile, orig_frame)
 
         timer.stop('picksky')
