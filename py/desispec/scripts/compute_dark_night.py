@@ -28,6 +28,8 @@ def dark_night_parser():
     parser.remove_argument('--camera')  # remove the camera argument
     parser.add_argument('-c', '--camword', type=str, default='a0123456789', required=False,
                         help='Camera word defining the cameras to process. Default is all cameras (a0123456789).')
+    parser.add_argument('--mpi', action='store_true', default=False,
+                        help='Run in MPI mode, using all available ranks. Default is False.')
     return parser
 
 
@@ -76,21 +78,21 @@ def main(args=None):
     
     del args.camword  # not necessary, but remove camword from args to avoid confusion in compute_dark.main 
 
-    # original_bias = args.bias
+    original_bias = args.bias
     error_count = 0
     for camera in requested_cameras[rank::size]:
-        # ## define the bias explicitly
-        # if original_bias is None:
-        #     args.bias = findfile("biasnight", night=night, camera=camera)
+        ## define the bias explicitly
+        if original_bias is None:
+            args.bias = findfile("biasnight", night=night, camera=camera)
 
         ## assign camera to the rest of the arguments and pass them into compute_dark.main
-        ## don't explciitly list inputs since there are many and aren't yet known
+        ## don't explciitly list dark inputs since there are many and aren't yet known
         outfile = findfile("darknight", night=night, camera=camera)
         args.camera = camera
         log.info(f'Rank {rank} Running desi_compute_dark for camera: {camera}, outfile: {outfile}')
         # with stdouterr_redirected(darklog, comm=comm):
         result, success = runcmd(compute_dark.main, comm=comm, args=args,
-                                    inputs=[], outputs=[outfile])
+                                    inputs=[args.bias], outputs=[outfile])
 
         if not success:
             log.error(f'Rank {rank} failed for camera {camera}, outfile: {outfile}')

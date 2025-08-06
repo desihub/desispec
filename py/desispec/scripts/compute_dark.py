@@ -110,7 +110,7 @@ def get_stacked_dark_exposure_table(args, skip_camera_check=False):
     tables = []
     missing_nights = []
     for night in nights :
-        filename = findfile("exposure_table",night=night)
+        filename = findfile("exposure_table",night=night, readonly=True)
         if os.path.isfile(filename) :
             tmp_table=load_table(filename, suppress_logging=True)
             if len(tmp_table)==0 : continue
