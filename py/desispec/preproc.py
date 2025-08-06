@@ -615,10 +615,14 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
                 raise ValueError("no calibration data was found")
             if cfinder.haskey(keyword) :
                 filename = cfinder.findfile(keyword)
-                depend.setdep(header, calkey, shorten_filename(filename))
             else :
                 depend.setdep(header, calkey, 'None')
                 return False # we say in the calibration data we don't need this
+
+        if filename is None :
+            depend.setdep(header, calkey, 'None')
+        else :
+            depend.setdep(header, calkey, shorten_filename(filename))
 
     elif isinstance(entry,str) :
         filename = entry
