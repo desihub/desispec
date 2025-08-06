@@ -4,6 +4,8 @@ desispec.scripts.proc_joint_fit
 
 """
 import time
+
+from desispec.workflow.batch_writer import create_desi_proc_batch_script
 start_imports = time.time()
 
 #- enforce a batch-friendly matplotlib backend
@@ -37,8 +39,7 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script, \
-                                              find_most_recent
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, find_most_recent
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, update_args_with_headers
 
 stop_imports = time.time()
