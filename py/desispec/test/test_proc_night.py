@@ -11,6 +11,7 @@ import shutil
 import importlib
 import yaml
 
+from desispec.workflow.batch_writer import get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import desispec.workflow.exptable
@@ -18,8 +19,8 @@ import desispec.workflow.proctable
 from desispec.workflow.processing import update_and_recursively_submit
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.redshifts import get_ztile_script_pathname
-from desispec.workflow.desi_proc_funcs import \
-    get_desi_proc_tilenight_batch_file_pathname, get_desi_proc_batch_file_path
+from desispec.workflow.batch_writer import \
+    get_desi_proc_batch_file_path
 from desispec.io import findfile
 from desispec.test.util import link_rawdata
 

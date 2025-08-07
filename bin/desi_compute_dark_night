@@ -1,0 +1,9 @@
+#!/usr/bin/env python
+
+'''
+Computes a nightly dark frames for camword and night and save them to calibnight directory.
+'''
+
+import sys
+from desispec.scripts import compute_dark_night
+sys.exit(compute_dark_night.main(compute_dark_night.parse()))

@@ -8,7 +8,7 @@ import numpy as np
 
 from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword
-from desispec.workflow.desi_proc_funcs import determine_resources
+from desispec.workflow.batch import determine_resources
 from desiutil.log import get_logger
 
 import desispec.io
