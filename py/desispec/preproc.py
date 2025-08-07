@@ -194,13 +194,15 @@ def calc_overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def subtract_peramp_overscan(image, hdr, cfinder):
+def subtract_peramp_overscan(image, hdr, cfinder=None):
     """Subtract per-amp overscan using BIASSEC* keywords
 
     Args:
         image: 2D image array, modified in-place
         hdr: FITS header with BIASSEC[ABCD] or BIASSEC[1234] keywords
-        cfinder: CalibFinder for this image
+
+    Options:
+        cfinder: CalibFinder for this image, used for GOODBIASSEC override
 
     Note: currently used in desispec.ccdcalib.compute_bias_file to model
     bias image, but not preproc itself (which subtracts that bias, and
@@ -209,7 +211,7 @@ def subtract_peramp_overscan(image, hdr, cfinder):
     amp_ids = get_amp_ids(hdr)
     for a,amp in enumerate(amp_ids) :
         ii=parse_sec_keyword(hdr['BIASSEC'+amp])
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
             ii = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
         s0,s1=ii[0],ii[1]
         for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
@@ -613,10 +615,14 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
                 raise ValueError("no calibration data was found")
             if cfinder.haskey(keyword) :
                 filename = cfinder.findfile(keyword)
-                depend.setdep(header, calkey, shorten_filename(filename))
             else :
                 depend.setdep(header, calkey, 'None')
                 return False # we say in the calibration data we don't need this
+
+        if filename is None :
+            depend.setdep(header, calkey, 'None')
+        else :
+            depend.setdep(header, calkey, shorten_filename(filename))
 
     elif isinstance(entry,str) :
         filename = entry
@@ -808,11 +814,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
+    need_cfinder = (mask is True) or (dark is True) or (pixflat is True)
+
     cfinder = None
-    if ccd_calibration_filename is not False:
+    if ccd_calibration_filename is not False and need_cfinder:
         cfinder = CalibFinder([header, primary_header],
                               yaml_file=ccd_calibration_filename,
                               fallback_on_dark_not_found=fallback_on_dark_not_found)
+    else:
+        cfinder = None
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
@@ -1018,13 +1028,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         use_overscan_row = use_overscan_row_orig
         no_overscan_per_row = no_overscan_per_row_orig
 
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):
             use_overscan_row = False
             no_overscan_per_row = True
 
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
             ov_col = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
             log.info(f"Camera {camera} amp {amp} using GOODBIASSEC instead of BIASSEC")
         if 'ORSEC'+amp in header.keys():

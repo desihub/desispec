@@ -268,7 +268,7 @@ def main(args=None, comm=None):
         #- are determined to be worse than the default, so check existence
         #- of output files separately.
         result, success = runcmd(desispec.scripts.nightly_bias.main,
-                args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
+                args=cmd.split()[1:], inputs=[], outputs=[], check_return=True, comm=comm)
 
         #- check for biasnight or biasnighttest output files
         missing_biasnight = 0
@@ -320,7 +320,10 @@ def main(args=None, comm=None):
     if args.expid is None:
         if comm is not None:
             all_error_counts = comm.gather(error_count, root=0)
-            error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+            if rank == 0:
+                error_count = int(np.sum(all_error_counts))  # all_error_counts is None on other ranks
+
+            error_count = comm.bcast(error_count, root=0)
 
         if rank == 0:
             log.info('No expid given so stopping now')
@@ -1134,15 +1137,15 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
-            orig_frame = desispec.io.read_frame(framefile)
+            roframefile = findfile('frame', args.night, args.expid, camera, readonly=True)
+            orig_frame = desispec.io.read_frame(roframefile)
 
             #- Make a copy so that we can apply fiberflat
             fr = deepcopy(orig_frame)
 
             if np.any(fr.fibermap['OBJTYPE'] == 'SKY'):
                 log.info('{} sky fibers already set; skipping'.format(
-                    os.path.basename(framefile)))
+                    os.path.basename(roframefile)))
                 continue
 
             #- Apply fiberflat then select random fibers below a flux cut
@@ -1158,6 +1161,8 @@ def main(args=None, comm=None):
             orig_frame.fibermap['OBJTYPE'][iisky] = 'SKY'
             orig_frame.fibermap['DESI_TARGET'][iisky] |= desi_mask.SKY
 
+            #- Get the writable path to frame file and write it out
+            framefile = findfile('frame', args.night, args.expid, camera)
             desispec.io.write_frame(framefile, orig_frame)
 
         timer.stop('picksky')

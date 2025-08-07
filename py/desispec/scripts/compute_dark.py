@@ -273,7 +273,7 @@ def main(args=None):
         fitsfile.close()
         break
     if reference_header is None :
-        log.error(f"No exposure has the camera {args.camera}.")
+        log.critical(f"No exposure has the camera {args.camera}.")
         return 1
 
     assert args.camera.upper() == reference_header['CAMERA'].upper()

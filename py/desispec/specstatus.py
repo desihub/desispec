@@ -52,7 +52,7 @@ def update_specstatus(specstatus, tiles, update_only=False,
     #- Confirm that they have the same columns except QA-specific ones
     tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE'])
     if tilecol != set(specstatus.colnames):
-        log.error('Column mismatch: {tiles.colnames} vs. {specstatus.colnames}')
+        log.error(f'Column mismatch: {tiles.colnames} vs. {specstatus.colnames}')
         raise ValueError('Incompatible specstatus and tiles columns')
 
     #- even if present in tiles, specstatus trumps for these columns
