@@ -13,8 +13,7 @@ from desispec.workflow.tableio import load_table, write_table
 from astropy.table import Table, vstack
 from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
 from desispec.workflow.proctable import default_prow, get_pdarks_from_ptable
-import vstack
-import nunpy as np
+import numpy as np
 
 from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword
 from desispec.scripts.link_calibnight import derive_include_exclude
