@@ -866,7 +866,7 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     try:
         cfinder = CalibFinder([primary_hdr, hdr],fallback_on_dark_not_found=True)
     except KeyError:
-        log.warning(f"Didn't find calib config for {camera}; continuing without checking for GOODBIASSEC")
+        log.warning(f"Didn't find calib config for {primary_hdr['CAMERA']}; continuing without checking for GOODBIASSEC")
         cfinder = None
 
     #- subtract constant per-amp overscan region

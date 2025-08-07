@@ -182,6 +182,7 @@ def process_raw(primary_header, rawimage, header, camera, fibermapfile=None, **k
     *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
     documentation for details.
     '''
+    log = get_logger()
     #- Check if NIGHT keyword is present and valid; fix if needed
     #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
     try:
