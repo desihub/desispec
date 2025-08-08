@@ -8,7 +8,7 @@ import json
 from astropy.io import fits
 from astropy.table import Table, join
 from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
-from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_biaspdark_script_pathname, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
+from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime

@@ -342,7 +342,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         log.info("Done with update_exposure_table.\n\n")
 
     ## Load in the files defined above
-    ptable = load_table(tablename=proc_table_pathname, tabletyps='proctable')
+    ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
 
     ## Now that the exposure table is updated, check if we need to run biases and/or preproc darks
     if n_nights_darks is None:

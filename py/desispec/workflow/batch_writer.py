@@ -345,7 +345,7 @@ def create_biaspdark_batch_script(night, expids,
 
         ## we're using MPI for this job, so set OMP_NUM_THREADS to 1
         fx.write("export OMP_NUM_THREADS=1\n")
-        fx.write(f'# using {nodes*batch_config['cores_per_node']} cores on {nodes} nodes\n\n')
+        fx.write(f'# using {nodes*batch_config["cores_per_node"]} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
 
@@ -454,7 +454,7 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
 
         ## we're using MPI for this job, so set OMP_NUM_THREADS to 1
         fx.write("export OMP_NUM_THREADS=1\n")
-        fx.write(f'# using {nodes*batch_config['cores_per_node']} cores on {nodes} nodes\n\n')
+        fx.write(f'# using {nodes*batch_config["cores_per_node"]} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
 

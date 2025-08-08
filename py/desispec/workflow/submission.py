@@ -151,9 +151,9 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         camword (str): Camera word defining the cameras to process.
         badcamword (str): Camera word defining the bad cameras.
         badamps (list, optional): List of bad amps to exclude. Default is None.
-        exp_table_path (str, optional): Path to the exposure table file.
+        exp_table_path (str, optional): Path to the exposure table files.
                                             If None, will search for it.
-        proc_table_path (str, optional): Path to the processing table file.
+        proc_table_path (str, optional): Path to the processing table files. 
                                             If None, will search for it.
         override_path (str, optional): Path to the override file.
                                             If None, will search for it.
@@ -174,10 +174,11 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     log = get_logger()
    
     ## Determine where the processing table will be written
+    proc_table_pathname = findfile('processing_table', night=night, readonly=True)
     if proc_table_path is None:
         proc_table_path = os.path.dirname(proc_table_pathname)
     else:
-        proc_table_name = os.path.basename(findfile('processing_table', night=night, readonly=True))
+        proc_table_name = os.path.basename(proc_table_pathname)
         proc_table_pathname = os.path.join(proc_table_path, proc_table_name)
     if dry_run_level < 3:
         os.makedirs(proc_table_path, exist_ok=True)
@@ -195,11 +196,13 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         return ptable
 
     ## Determine where the exposure table will be written
+    exp_table_pathname = findfile('exposure_table', night=night, readonly=True)
     if exp_table_path is None:
-        exp_table_pathname = findfile('exposure_table', night=night, readonly=True)
-        exp_table_path = os.path.dirname(exp_table_pathname)
+        exp_table_path = os.path.dirname(os.path.dirname(exp_table_pathname))
     else:
-        exp_table_pathname = os.path.join(exp_table_path, f"{night//100}", f'exposure_table_{night}.csv')
+        exp_table_name = os.path.basename(exp_table_pathname)
+        exp_month_dir = os.path.basename(os.path.dirname(exp_table_pathname))
+        exp_table_pathname = os.path.join(exp_table_path, exp_month_dir, exp_table_name)
     if not os.path.exists(exp_table_pathname):
         raise IOError(f"Exposure table: {exp_table_pathname} not found. Exiting this night.")
     
@@ -234,11 +237,14 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             sleep_and_report(sub_wait_time,
                              message_suffix=f"to slow down the queue submission rate",
                              dry_run=dry_run_level>0, logfunc=log.info)
+    else:
+        files_to_link = set()
+        
 
     zero_expids = np.array(etable[etable['OBSTYPE'] == 'zero']['EXPID'].data, dtype=int)
 
     linked_bias = 'biasnight' in files_to_link
-    dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBTYPE']) and 'zero' in proc_obstypes and len(zero_expids) > 0
+    dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
     dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 # 'darknight' not in files_to_link and
 
     # dep = None
@@ -362,12 +368,12 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
     """
     log = get_logger()
     compdarkparser = compute_dark_parser()
-    options = ['--reference-night', str(reference_night)]
+    options = ['--reference-night', str(reference_night), '-o', 'dummy', '-c', 'b1']
     if n_nights_before is not None:
         options.extend(['--before', str(n_nights_before)])
     if n_nights_after is not None:
         options.extend(['--after', str(n_nights_after)])
-    compdarkargs = compdarkparser.parse_args(options=options)
+    compdarkargs = compdarkparser.parse_args(options)
 
     exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs, skip_camera_check=True)
     
@@ -378,8 +384,8 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
         ptable = submit_biasnight_and_preproc_darks(
             night=night, dark_expids=dark_expids, proc_obstypes=proc_obstypes,
             camword=camword, badcamword=badcamword, badamps=badamps,
-            exp_table_pathname=exp_table_pathname,
-            proc_table_pathname=proc_table_pathname,
+            exp_table_path=os.path.dirname(os.path.dirname(exp_table_pathname)),
+            proc_table_path=os.path.dirname(proc_table_pathname),
             specprod=specprod, path_to_data=path_to_data,
             sub_wait_time=sub_wait_time, dry_run_level=dry_run_level)
         if night == reference_night:
