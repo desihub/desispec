@@ -1,6 +1,6 @@
 """
 desispec.workflow.submision
-=======================
+===========================
 
 Utilities for working submitting jobs to slurm 
 """
@@ -29,11 +29,11 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
                         dry_run_level=0, queue=None, reservation=None,
                         check_outputs=True, system_name=None):
     """
-    Submit linkcal jobs for the current night.
-    This function will read the override file, determine what calibrations
-    have been done, and submit jobs to link the calibrations that are
-    specified in the override file.
-    It will also update the processing table with the new jobs.
+    Submit linkcal jobs for the current night. This function will read the override file,
+    determine what calibrations have been done, and submit jobs to link the calibrations 
+    that are specified in the override file. It will also update the processing table 
+    with the new jobs.
+
     Args:
         night (int): The night to process, in YYYYMMDD format.
         ptable (Table): Processing table to update with new jobs.
@@ -53,6 +53,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
     Returns:
         ptable (Table): Updated processing table with new jobs.
         files_to_link (set): Set of calibration files that will be linked.
+
     """
     log = get_logger()
 
@@ -170,6 +171,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
  
     Returns:
         ptable (Table): Updated processing table with new jobs.
+
     """
     log = get_logger()
    
@@ -365,6 +367,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
 
     Returns:
         ptable (Table): Updated processing table with new jobs.
+
     """
     log = get_logger()
     compdarkparser = compute_dark_parser()
