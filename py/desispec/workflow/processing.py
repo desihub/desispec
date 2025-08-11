@@ -720,7 +720,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     # script = f'{jobname}.slurm'
     # script_path = pathjoin(batchdir, script)
     if prow['JOBDESC'] in ['biasnight','pdark','biaspdark']:
-        script_path = get_biaspdark_script_pathname(night=prow['NIGHT'], expids=prow['EXPID'], 
+        script_pathname = get_desi_proc_batch_file_pathname(night=prow['NIGHT'], expids=prow['EXPID'], 
                                                     jobdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'])
         jobname = os.path.basename(script_path)
     elif prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
@@ -832,6 +832,14 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
         will not change during the execution of this function (but can be
         overwritten explicitly with the returned row if desired).
     """
+    log = get_logger()
+
+    if isinstance(calibjobs, Table):
+        calibjobs = generate_calibration_dict(calibjobs, include_files=include_files)
+    elif not isinstance(, dict):
+        log.error("prow must be a Table.Row or a dict")
+        raise TypeError("prow must be a Table.Row or a dict")
+    
     if prow['OBSTYPE'] in ['science', 'twiflat']:
         if calibjobs['nightlyflat'] is not None:
             dependency = calibjobs['nightlyflat']
@@ -879,17 +887,18 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             ## Also allows us to proceed even if jobs don't exist yet
             deps, proccamwords = [], []
             #for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            for filename in include_files:
-                job = filename_to_jobname(filename)
-                if job in ptab['JOBDESC']:
-                    ## add prow to dependencies
-                    deprow = ptab[ptab['JOBDESC']==job][0]
-                    deps.append(deprow)
-                    proccamwords.append(deprow['PROCCAMWORD'])
-                elif 'linkcal' in ptab['JOBDESC']:
-                    linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
-                    deps.append(linkcalprow)
-                    proccamwords.append(linkcalprow['PROCCAMWORD'])
+            if include_files is not None:
+                for filename in include_files:
+                    job = filename_to_jobname(filename)
+                    if job in ptab['JOBDESC']:
+                        ## add prow to dependencies
+                        deprow = ptab[ptab['JOBDESC']==job][0]
+                        deps.append(deprow)
+                        proccamwords.append(deprow['PROCCAMWORD'])
+                    elif 'linkcal' in ptab['JOBDESC']:
+                        linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
+                        deps.append(linkcalprow)
+                        proccamwords.append(linkcalprow['PROCCAMWORD'])
             if len(deps) > 0:
                 dependency = np.unique(deps)
             ## The proccamword for the linking job is the largest set available from the reference night
