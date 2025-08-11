@@ -15,9 +15,7 @@ from astropy.table import Table,vstack
 
 from desiutil.log import get_logger
 
-from desispec.ccdcalib import compute_dark_file, run_preproc_dark
-from desispec.util import parse_nights, get_night_range
-from desispec.io.util import get_speclog,erow_to_goodcamword,decode_camword, difference_camwords
+from desispec.io.util import decode_camword, difference_camwords
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 from desispec.scripts.compute_dark import get_stacked_dark_exposure_table

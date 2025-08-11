@@ -12,7 +12,6 @@ from desiutil.log import get_logger
 from desispec.util import runcmd
 from desispec.io.util import decode_camword
 from desispec.io import findfile
-from mpi4py import MPI
 
 
 def dark_night_parser():

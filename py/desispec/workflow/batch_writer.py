@@ -1,6 +1,6 @@
 """
 desispec.workflow.batch_writer
-=======================
+==============================
 
 Utilities for writing slurm batch scripts.
 """
