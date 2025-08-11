@@ -836,7 +836,7 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
 
     if isinstance(calibjobs, Table):
         calibjobs = generate_calibration_dict(calibjobs, include_files=include_files)
-    elif not isinstance(, dict):
+    elif not isinstance(calibjobs, dict):
         log.error("prow must be a Table.Row or a dict")
         raise TypeError("prow must be a Table.Row or a dict")
     
