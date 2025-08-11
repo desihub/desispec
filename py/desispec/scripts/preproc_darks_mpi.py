@@ -19,7 +19,6 @@ from desispec.io.util import decode_camword, difference_camwords
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 from desispec.scripts.compute_dark import get_stacked_dark_exposure_table
-from mpi4py import MPI
 
 
 def preproc_darks_parser():

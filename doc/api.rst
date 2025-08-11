@@ -545,6 +545,9 @@ desispec API
 .. automodule:: desispec.workflow.science_selection
     :members:
 
+.. automodule:: desispec.workflow.submission
+    :members:
+
 .. automodule:: desispec.workflow.tableio
     :members:
 
