@@ -454,7 +454,7 @@ def main(args=None):
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
-    zqual['Z_CONF'] = np.uint8(0)  # Z_CONF: 0 if no confidence
+    zqual['Z_CONF'] = np.uint8(0)  # Z_CONF=0: no confidence
     for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
         zqual[col] = zqual[col] & zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
 
@@ -482,11 +482,15 @@ def main(args=None):
         
         # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts as the per-target class and GOOD_SPEC requirements are added here
 
+        # Z_CONF=3: highly confident redshift; criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO) and pass the LSS redshift quality cuts
         mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
-        zqual['Z_CONF'][mask] = 2  # Z_CONF=2: highly confident
+        zqual['Z_CONF'][mask] = 3
 
+        # Z_CONF=2: placeholder
+
+        # Z_CONF=1: less confident redshift; criteria: the Z_CONF==3 criteria are not met, but GOOD_SPEC==True & ZWARN==0
         mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
-        zqual['Z_CONF'][mask] = 1  # Z_CONF=1: less confident and Z is likely to be a catastrophically wrong redshift
+        zqual['Z_CONF'][mask] = 1
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
