@@ -4,7 +4,7 @@ import os
 import argparse
 import numpy as np
 
-
+import fitsio
 import astropy.io.fits as pyfits
 from astropy.table import Table,vstack
 
@@ -60,8 +60,8 @@ def compute_dark_baseparser():
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
     parser.add_argument('--dry-run', action='store_true', help="If dry_run, print which images would be used, but don't compute dark.")
-    parser.add_argument('--max-dark-exposures', type=int, default=300, required=False,
-                        help='Maximum number of dark exposures to use. Default is 300. If more than this number of exposures are found, ' \
+    parser.add_argument('--max-dark-exposures', type=int, default=50, required=False,
+                        help='Maximum number of dark exposures to use. Default is 50. If more than this number of exposures are found, ' \
                         'the script will downselect to the closest exposures in time up to this limit.')
     parser.add_argument('--skip-camera-check', action='store_true', help="If True, doesn't check if camera exists for an exposure ahead of time.")
     parser.add_argument('--dont-search-filesystem', action='store_true', help="If True, doesn't search filesystem for exposures.")
@@ -273,14 +273,15 @@ def main(args=None, exptable=None):
         else:
             reference_header_possible_filenames.extend(args.images)
 
+    reference_header = None
     for filename in reference_header_possible_filenames :
-        fitsfile=pyfits.open(filename)
-        if not args.camera in fitsfile :
-            fitsfile.close()
+        try:
+            reference_header = fitsio.read_header(filename, ext=args.camera)
+        except OSError:
+            log.warning(f'No camera {args.camera} in {filename}')
             continue
-        reference_header = fitsfile[args.camera].header
-        fitsfile.close()
-        break
+        if reference_header is not None:
+            break
     if reference_header is None :
         log.critical(f"No exposure has the camera {args.camera}.")
         return 1

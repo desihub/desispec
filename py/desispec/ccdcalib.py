@@ -37,7 +37,7 @@ from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=300):
+                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=50):
     """
     Compute classic dark model from input dark images
 
@@ -98,7 +98,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
        # collect exposure times
         primary_header = read_raw_primary_header(filename)
         try:
-            header = fitsio.read_header(fn, ext=camera)
+            header = fitsio.read_header(filename, ext=camera)
         except OSError:
             log.warning(f'No camera {camera} in {filename}')
             continue
