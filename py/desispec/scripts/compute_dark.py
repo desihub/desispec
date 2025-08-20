@@ -16,7 +16,8 @@ from desispec.io.util import get_speclog,erow_to_goodcamword,decode_camword
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 
-def compute_dark_parser():
+
+def compute_dark_baseparser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="Compute a master dark",
                                      epilog='''
@@ -27,8 +28,6 @@ def compute_dark_parser():
                                      Then mask outlier pixels, and then compute the dark with optimal weights (propto. exptime).
                                      We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.''')
 
-    parser.add_argument('-i','--images', type = str, default = None, required = False, nargs="*",
-                        help = 'path of raws image fits files (or use --nights or --reference-night)')
     parser.add_argument('-n','--nights', type=str, default = None, required=False,
                         help='YEARMMDD nights to use (comma separated or with : to define a range. integers that do not correspond to valid dates are ignored)')
     parser.add_argument('-r', '--reference-night', type=int, default = None, required=False,
@@ -39,10 +38,6 @@ def compute_dark_parser():
                         help = 'Number of nights after reference-night to include')
     parser.add_argument('--reference-expid', type=int, default = None, required=False,
                         help='reference expid defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-night)')
-    parser.add_argument('-o','--outfile', type = str, default = None, required = True,
-                        help = 'output median image filename')
-    parser.add_argument('-c','--camera',type = str, required = True,
-                        help = 'header HDU (int or string)')
     parser.add_argument('--first-expid', type=int, default = None, required=False,
                         help='First EXPID to include (to use in combination with --nights option)')
     parser.add_argument('--last-expid', type=int, default = None, required=False,
@@ -64,11 +59,27 @@ def compute_dark_parser():
     parser.add_argument('--save-preproc', action='store_true', help='save intermediate preproc files')
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
-    parser.add_argument('--dry-run', action='store_true', help="Print which images would be used, but don't compute dark")
-    parser.add_argument('--max-dark-exposures', type=int, default=200, required=False,
-                        help='Maximum number of dark exposures to use. Default is 200. If more than this number of exposures are found, ' \
+    parser.add_argument('--dry-run', action='store_true', help="If dry_run, print which images would be used, but don't compute dark.")
+    parser.add_argument('--max-dark-exposures', type=int, default=300, required=False,
+                        help='Maximum number of dark exposures to use. Default is 300. If more than this number of exposures are found, ' \
                         'the script will downselect to the closest exposures in time up to this limit.')
+    parser.add_argument('--skip-camera-check', action='store_true', help="If True, doesn't check if camera exists for an exposure ahead of time.")
+    parser.add_argument('--dont-search-filesystem', action='store_true', help="If True, doesn't search filesystem for exposures.")
 
+    return parser
+
+
+def compute_dark_parser():
+    """
+    Takes the "base" argparser that is also used by desi_compute_dark_night and add specific args
+    """
+    parser = compute_dark_baseparser()
+    parser.add_argument('-i','--images', type = str, default = None, required = False, nargs="*",
+                        help = 'path of raws image fits files (or use --nights or --reference-night)')
+    parser.add_argument('-c','--camera',type = str, required = True,
+                        help = 'header HDU (int or string)')
+    parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                        help = 'output median image filename')
     return parser
 
 
@@ -81,7 +92,7 @@ def parse(options=None):
 
     return args
 
-def get_stacked_dark_exposure_table(args, skip_camera_check=False):
+def get_stacked_dark_exposure_table(args):
     """
     Get the exposure table for the dark exposures to be used.
     If --nights is specified, it will return the exposures for those nights.
@@ -120,17 +131,8 @@ def get_stacked_dark_exposure_table(args, skip_camera_check=False):
             tmp_table = tmp_table[keep]
             if len(tmp_table)==0 : continue
 
-            # keep only exposure with this args.camera valid
-            if not skip_camera_check:
-                keep = np.repeat(True,len(tmp_table))
-                for i,entry in enumerate(tmp_table) :
-                    keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
-                tmp_table = tmp_table[keep]
-            if len(tmp_table)==0 : continue
-
             # only keep useful rows to avoid issues with columns
             table = tmp_table['NIGHT', 'EXPID', 'MJD-OBS', 'OBSTYPE', 'EXPTIME']
-            table.rename_column('MJD-OBS', 'MJD')
             tables.append(table)
         else :
             log.warning(f"No exposure table for {night}")
@@ -139,13 +141,14 @@ def get_stacked_dark_exposure_table(args, skip_camera_check=False):
                 log.warning(f"No data directory {nightdir}")
                 continue
             missing_nights.append(night)
-    if len(missing_nights)>0 :
+    if len(missing_nights)>0 and args.dont_search_filesystem:
+        log.info(f"Found nights without exposure tables ({missing_nights}) "
+                 + "but told not to search for missing nights, so continuing without them.")
+    elif len(missing_nights)>0:
         log.info(f"Computing speclog for nights without exposure tables ({missing_nights})")
-        tmp_table = get_speclog(missing_nights)
+        table = get_speclog(missing_nights)
         if len(tmp_table)>0 :
-            table = Table()
-            for k in ["NIGHT","EXPID","MJD","OBSTYPE","EXPTIME"] :
-                table[k]=tmp_table[k]
+            table = table[["NIGHT","EXPID","MJD-OBS","OBSTYPE","EXPTIME"]]
             for i in range(len(table)) :
                 table["OBSTYPE"][i]=table["OBSTYPE"][i].lower()
             tables.append(table)
@@ -169,29 +172,30 @@ def get_stacked_dark_exposure_table(args, skip_camera_check=False):
     # trim to valid exposures
     exptable = exptable[valid]
     exptable.sort('EXPID')
-    print(exptable)
+    log.info(f"{len(exptable)} valid dark exposures found.")
 
     # assemble corresponding images
     args.images = []
     file_exists = np.ones(len(exptable), dtype=bool)
-    for e in range(len(exptable)):
-        filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
-        if not os.path.exists(filename):
-            # "Missing" files can occur due to a mismatch between the NIGHT header keyword
-            # and the directory in which the file is found, e.g. 20250620/00298589/desi-00298589.fits.fz
-            # has header NIGHT=20250619, but also FLAVOR=science instead of FLAVOR=dark
-            file_exists[e] = False
-            log.error(f'Skipping missing file {filename}')
+    if not args.dont_search_filesystem:
+        for e in range(len(exptable)):
+            filename = findfile("raw",night=exptable["NIGHT"][e],expid=exptable["EXPID"][e])
+            if not os.path.exists(filename):
+                # "Missing" files can occur due to a mismatch between the NIGHT header keyword
+                # and the directory in which the file is found, e.g. 20250620/00298589/desi-00298589.fits.fz
+                # has header NIGHT=20250619, but also FLAVOR=science instead of FLAVOR=dark
+                file_exists[e] = False
+                log.error(f'Skipping missing file {filename}')
 
     if not np.all(file_exists):
         exptable = exptable[file_exists]
         log.info(f"{len(exptable)} exposures will be used to build the {args.camera} dark")
-        print(exptable)
+        log.info(exptable)
 
     return exptable
 
 
-def main(args=None):
+def main(args=None, exptable=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
@@ -220,13 +224,18 @@ def main(args=None):
         return 1
 
     # first find the exposures if they are not given in input
-    exptable = None
     if args.images is None:
-        # if no images are given, we need to find the exposures
-        exptable = get_stacked_dark_exposure_table(args)
-        if exptable is None or len(exptable) == 0:
-            log.error("No valid exposures found for dark frame computation.")
-            return 1
+        if exptable is None:
+            # if no images are given, we need to find the exposures
+            exptable = get_stacked_dark_exposure_table(args)
+            keep = np.repeat(True,len(exptable))
+            for i,entry in enumerate(exptable) :
+                keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
+            exptable = exptable[keep]
+
+            if exptable is None or len(exptable) == 0:
+                log.error("No valid exposures found for dark frame computation.")
+                return 1
 
         # assemble corresponding images
         args.images = []

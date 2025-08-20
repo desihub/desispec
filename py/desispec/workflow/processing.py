@@ -8,7 +8,7 @@ import json
 from astropy.io import fits
 from astropy.table import Table, join
 from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
-from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
+from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_ccdcalib_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime
@@ -82,7 +82,7 @@ class ProcessingParams():
 #################################################
 ############ Script Functions ###################
 #################################################
-def batch_script_name(prow):
+def batch_script_pathname(prow):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, JOBDESC, PROCCAMWORD defined)
     and determines the script file pathname as defined by desi_proc's helper functions.
@@ -117,15 +117,17 @@ def get_jobdesc_to_file_map():
             filename of their expected outputs.
 
     """
-    return {'prestdstar': 'sframe',
+    return {'biasnight': 'biasnight',
+            'biaspdark': 'preproc_for_dark',
+            'pdark': 'preproc_for_dark',
+            'ccdcalib': 'ctecorrnight',
+            'arc': 'fitpsf',
+            'psfnight': 'psfnight',
+            'flat': 'fiberflat',
+            'nightlyflat': 'fiberflatnight',
+            'prestdstar': 'sframe',
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
-            'biaspdark': 'biasnight',
-            'ccdcalib': 'badcolumns',
-            'arc': 'fitpsf',
-            'flat': 'fiberflat',
-            'psfnight': 'psfnight',
-            'nightlyflat': 'fiberflatnight',
             'spectra': 'spectra_tile',
             'coadds': 'coadds_tile',
             'redshift': 'redrock_tile'}
@@ -198,6 +200,20 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
             existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
             prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
+    elif str(prow['JOBDESC']).endswith('pdark') and len(prow['EXPID']) > 1:
+        ## camera based, multi exposure
+        cameras = decode_camword(prow['PROCCAMWORD'])
+        nexps = len(prow['EXPID'])
+        n_desired = len(cameras)*nexps
+
+        missing_cameras = []
+        for cam in cameras:
+            for expid in prow['EXPID']:
+                if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid, camera=cam)):
+                    missing_cameras.append(cam)
+        completed = (len(missing_cameras) == 0)
+        if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
+            prow['PROCCAMWORD'] = create_camword(np.unique(missing_cameras))
     else:
         ## Otheriwse camera based
         cameras = decode_camword(prow['PROCCAMWORD'])
@@ -454,7 +470,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         #     log.error(err)
         #     raise ValueError(err)
         if dry_run > 1:
-            scriptpathname = batch_script_name(prow)
+            scriptpathname = batch_script_pathname(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
             cmd = desi_link_calibnight_command(prow, refnight, include)
             log.info("Command to be run: {}".format(cmd.split()))
@@ -482,8 +498,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             if 'steps' in extra_job_args:
                 do_biasnight = 'biasnight' in extra_job_args['steps']
                 do_pdark = 'pdark' in extra_job_args['steps']
-            script = create_biaspdark_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
-                                                   jobsdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'],
+            scriptpathname = create_biaspdark_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
+                                                   jobdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'],
                                                    do_biasnight=do_biasnight, do_pdark=do_pdark, 
                                                    queue=queue, system_name=system_name)
     elif prow['JOBDESC'] in ['ccdcalib']:
@@ -509,8 +525,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 dark_expid = extra_job_args['dark_expid']
             if 'cte_expids' in extra_job_args:
                 cte_expids = extra_job_args['cte_expids']
-            script = create_biaspdark_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
-                                                   jobsdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'],
+            scriptpathname = create_ccdcalib_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
+                                                   camword=prow['PROCCAMWORD'],
                                                    do_darknight=do_darknight, do_badcolumn=do_badcolumn, 
                                                    do_ctecorr=do_ctecorr, n_nights_before=n_nights_before, 
                                                    n_nights_after=n_nights_after,
@@ -548,15 +564,6 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 scriptpathname = scripts[0]
     else:
         if prow['JOBDESC'] != 'tilenight':
-            nightlybias, nightlycte, cte_expids = False, False, None
-            if 'nightlybias' in extra_job_args:
-                nightlybias = extra_job_args['nightlybias']
-            elif prow['JOBDESC'].lower() == 'nightlybias':
-                nightlybias = True
-            if 'nightlycte' in extra_job_args:
-                nightlycte = extra_job_args['nightlycte']
-            if 'cte_expids' in extra_job_args:
-                cte_expids = extra_job_args['cte_expids']
             ## run known joint jobs as joint even if unspecified
             ## in the future we can eliminate the need for "joint"
             if joint or prow['JOBDESC'].lower() in ['psfnight', 'nightlyflat']:
@@ -567,16 +574,12 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 if 'extra_cmd_args' in extra_job_args:
                     cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['extra_cmd_args']))
             else:
+                log.error("The code shouldn't reach this branch. Please check what you're" +
+                          f"requesting for jobs: {prow=}")
                 cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)
-                if nightlybias:
-                    cmd += ' --nightlybias'
-                if nightlycte:
-                    cmd += ' --nightlycte'
-                    if cte_expids is not None:
-                        cmd += ' --cte-expids '
-                        cmd += ','.join(np.atleast_1d(cte_expids).astype(str))
+
         if dry_run > 1:
-            scriptpathname = batch_script_name(prow)
+            scriptpathname = batch_script_pathname(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
             if prow['JOBDESC'] != 'tilenight':
                 log.info("Command to be run: {}".format(cmd.split()))
@@ -612,10 +615,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
                                                                use_specter=use_specter,
-                                                               system_name=system_name,
-                                                               nightlybias=nightlybias,
-                                                               nightlycte=nightlycte,
-                                                               cte_expids=cte_expids)
+                                                               system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
@@ -718,19 +718,14 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                 dep_str = ''
 
     # script = f'{jobname}.slurm'
-    # script_path = pathjoin(batchdir, script)
-    if prow['JOBDESC'] in ['biasnight','pdark','biaspdark']:
-        script_pathname = get_desi_proc_batch_file_pathname(night=prow['NIGHT'], expids=prow['EXPID'], 
-                                                    jobdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'])
-        jobname = os.path.basename(script_path)
-    elif prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
-        script_path = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+    # script_pathname = pathjoin(batchdir, script)
+    if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
+        script_pathname = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                         night=prow['NIGHT'], expid=np.min(prow['EXPID']))
-        jobname = os.path.basename(script_path)
+        jobname = os.path.basename(script_pathname)
     else:
-        batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
-        jobname = batch_script_name(prow)
-        script_path = pathjoin(batchdir, jobname)
+        script_pathname = batch_script_pathname(prow)
+        jobname = os.path.basename(script_pathname)
 
     batch_params = ['sbatch', '--parsable']
     if dep_str != '':
@@ -740,7 +735,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if reservation is not None:
         batch_params.append(f'--reservation={reservation}')
 
-    batch_params.append(f'{script_path}')
+    batch_params.append(f'{script_pathname}')
     submitted = True
     ## If dry_run give it a fake QID
     ## if a dependency has failed don't even try to submit the job because
@@ -835,7 +830,7 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
     log = get_logger()
 
     if isinstance(calibjobs, Table):
-        calibjobs = generate_calibration_dict(calibjobs, include_files=include_files)
+        calibjobs = generate_calibration_dict(calibjobs, files_to_link=include_files)
     elif not isinstance(calibjobs, dict):
         log.error("prow must be a Table.Row or a dict")
         raise TypeError("prow must be a Table.Row or a dict")
@@ -2101,40 +2096,56 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
     night = prow['NIGHT']
 
     compdarkparser = compute_dark_parser()
-    options = ['--reference-night', str(night)]
+    options = ['--reference-night', str(night), '-c', 'b1', '-o', 'temp',
+               '--skip-camera-check', '--dont-search-filesystem']
     if n_nights_before is not None:
         options.extend(['--before', str(n_nights_before)])
     if n_nights_after is not None:
         options.extend(['--after', str(n_nights_after)])
-    compdarkargs = compdarkparser.parse_args(options=options)
+    compdarkargs = compdarkparser.parse_args(options)
 
-    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs, skip_camera_check=True)
+    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
     dep_intids, dep_qids = [], []
     for night in np.unique(exptab_for_dark_night['NIGHT']):
-        nightly_expids = exptab_for_dark_night[exptab_for_dark_night['NIGHT'] == night]['EXPID'].data
+        nightly_expids = exptab_for_dark_night['EXPID'][exptab_for_dark_night['NIGHT'] == night].data
         
         ## Load in the files defined above
-        proc_table_pathname = findfile('proctable', night=night, readonly=True)
+        proc_table_pathname = findfile('processing_table', night=night, readonly=True)
         if proc_table_path is not None:
             proc_table_pathname = os.path.join(proc_table_path, os.path.basename(proc_table_pathname))
         
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable', suppress_logging=True)
         if len(ptable) == 0:
+            log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
             continue
         else:
-            darks = ptable[np.isin(darks['JOBDESC'], ['pdark', 'biaspdark'])]
+            darks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biaspdark', b'pdark']))]
             if len(darks) > 0:
-                darks = darks[darks['OBSTYPE'] == 'dark']
+                darks = darks[darks['OBSTYPE'] == b'dark']
+                if len(darks) == 0:
+                    log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
+                              + f"entries: jobdescs={ptable['JOBDESC'].data}, expids={ptable['EXPID'].data},"
+                              + f"obstypes={ptable['OBSTYPE'].data}. Continuing")
+            else:
+                log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
+                          + f"entries: jobdescs={ptable['JOBDESC'].data}, expids={ptable['EXPID'].data},"
+                          + f"obstypes={ptable['OBSTYPE'].data}. Continuing")
             for dark in darks:
-                if np.any(np.isin(dark['EXPID'], nightly_expids)):
+                if np.any(np.isin(dark['EXPID'].data, nightly_expids)):
                     dep_intids.append(dark['INTID'])
                     dep_qids.append(dark['LATEST_QID'])
 
     if len(dep_intids) > 0:
-        prow['INT_DEP_IDS'] = np.concatenate([prow['INT_DEP_IDS'], dep_intids])
-        ordering = np.argsort(prow['INT_DEP_IDS'])
-        prow['INT_DEP_IDS'] = prow['INT_DEP_IDS'][ordering]
-        prow['LATEST_DEP_QID'] = np.concatenate([prow['LATEST_DEP_QID'], dep_qids])[ordering]
+        ## Note originally used argsort so that INT_DEP_IDS order would correspond to
+        ## LATEST_DEP_QID order, but because we remove LATEST_DEP_QID's if completed,
+        ## these are not the same length. So now we just sort INT_DEP_IDS and leave
+        ## LATEST_DEP_QID as-is
+        prow['INT_DEP_IDS'] = np.sort(np.concatenate([prow['INT_DEP_IDS'], dep_intids]))
+        prow['LATEST_DEP_QID'] = np.concatenate([prow['LATEST_DEP_QID'], dep_qids])
+        ## LATEST_DEP_QID contains 1's for jobs that already had files completed outside
+        ## the normal pipeline. Ignore those otherwise Slurm gets confused
+        prow['LATEST_DEP_QID'] = prow['LATEST_DEP_QID'][prow['LATEST_DEP_QID']>1]
+
     return prow
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,

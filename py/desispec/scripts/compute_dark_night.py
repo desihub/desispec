@@ -15,16 +15,14 @@ from desispec.io import findfile
 
 
 def dark_night_parser():
-    parser = compute_dark.compute_dark_parser()
+    """
+    Takes the "base" argparser that is also used by desi_compute_dark_night and add specific args
+    """
+    parser = compute_dark.compute_dark_baseparser()
 
-    parser.description="Compute the dark night for a given --reference-night or list of nights",
-    parser.usage='desi_compute_dark_night.py [options] -r YYYYMMDD -c CAMWORD',
-    parser.epilog='''Input is a list of raw dark images, possibly with various exposure times.
-                    Raw images are preprocessed without dark,mask correction.
-                    However gains are applied so the output is in electrons/sec.
-                    '''
-    parser.remove_argument('--images')  # remove the images argument
-    parser.remove_argument('--camera')  # remove the camera argument
+    parser.description="Compute the dark night for a given --reference-night or list of nights"
+    parser.usage='desi_compute_dark_night.py [options] -r YYYYMMDD -c CAMWORD'
+    parser.epilog='Input is a night and camword'
     parser.add_argument('-c', '--camword', type=str, default='a0123456789', required=False,
                         help='Camera word defining the cameras to process. Default is all cameras (a0123456789).')
     parser.add_argument('--mpi', action='store_true', default=False,
@@ -86,15 +84,19 @@ def main(args=None):
 
         ## assign camera to the rest of the arguments and pass them into compute_dark.main
         ## don't explciitly list dark inputs since there are many and aren't yet known
-        outfile = findfile("darknight", night=night, camera=camera)
+        args.images = None
+        args.outfile = findfile("darknight", night=night, camera=camera)
         args.camera = camera
-        log.info(f'Rank {rank} Running desi_compute_dark for camera: {camera}, outfile: {outfile}')
+        log.info(f'Rank {rank} Running desi_compute_dark for camera: {camera}, outfile: {args.outfile}')
+        ## for now let's not do log redirecting, and we don't need to pass the comm since each
+        ## rank is running their own serial command
         # with stdouterr_redirected(darklog, comm=comm):
-        result, success = runcmd(compute_dark.main, comm=comm, args=args,
-                                    inputs=[args.bias], outputs=[outfile])
-
+        #result, success = runcmd(compute_dark.main, comm=comm, args=args,
+        #                            inputs=[args.bias], outputs=[args.outfile])
+        result, success = runcmd(compute_dark.main, args=args,
+                                    inputs=[args.bias], outputs=[args.outfile])
         if not success:
-            log.error(f'Rank {rank} failed for camera {camera}, outfile: {outfile}')
+            log.error(f'Rank {rank} failed for camera {camera}, outfile: {args.outfile}')
             error_count += 1
      
     if comm is not None:

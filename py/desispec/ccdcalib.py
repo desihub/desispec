@@ -11,6 +11,7 @@ import subprocess
 import yaml
 
 import astropy.io.fits as pyfits
+import fitsio
 from astropy.table import vstack as table_vstack
 from astropy.time import Time
 import numpy as np
@@ -36,7 +37,7 @@ from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=80):
+                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=300):
     """
     Compute classic dark model from input dark images
 
@@ -54,7 +55,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
         save_preproc (bool) : save preprocessed images
         preproc_dark_dir (str) : specify output directory used to save preproc images
-        max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the first max_dark_exposures are used
+        max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the nearest max_dark_exposures in mjd are used
 
 
     Note: if bias is None, the bias will be looked for in $DESI_SPECTRO_REDUX/$SPECPROD/calibnight, and will raise
@@ -89,18 +90,19 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         masks=None
     else :
         masks=[]
-    exptimes, mjds=[], []
+    exptimes=[]
     valid_inputs = np.ones(len(rawfiles), dtype=bool)  # track which inputs are actually used
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
 
-        # collect exposure times
+       # collect exposure times
         primary_header = read_raw_primary_header(filename)
-        fitsfile=pyfits.open(filename)
-        if not camera in fitsfile :
+        try:
+            header = fitsio.read_header(fn, ext=camera)
+        except OSError:
             log.warning(f'No camera {camera} in {filename}')
             continue
-
+            
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -119,18 +121,14 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
                 log.warning(message)
-                fitsfile.close()
                 valid_inputs[ifile] = False
                 continue
-
-        header = fitsfile[camera].header
 
         if 'VCCDSEC' in header :
             vccdsec = float(header['VCCDSEC'])
             log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
             if vccdsec < min_vccdsec :
                 log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
-                fitsfile.close()
                 valid_inputs[ifile] = False
                 continue
 
@@ -141,7 +139,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             if v1 != v2 :
                 mess=(f"skip {filename} k={v2} != {v1} (from reference header)")
                 log.warning(mess)
-                fitsfile.close()
                 valid=False
                 break
 
@@ -154,14 +151,30 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if np.abs(v1-v2)>max_temperature_diff :
             mess=(f"skip {filename} k={v2} different from {v1} (from reference header)")
             log.warning(mess)
-            fitsfile.close()
             valid_inputs[ifile] = False
             continue
 
-        night=header2night(primary_header)
-        expid=primary_header["EXPID"]
-
-        log.info(f"Preprocessing {filename} ...")
+        if bias is not None:
+            if isinstance(bias, str):
+                thisbias = bias
+            elif isinstance(bias, (list, tuple, np.array)):
+                thisbias = bias[ifile]
+            else:
+                message = 'bias should be None, str, list, or tuple, not {}'.format(type(bias))
+                log.error(message)
+                raise RuntimeError(message)
+        else:
+            thisbias = True
+        
+        if thisbias is False :
+            biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
+            if os.path.isfile(biasnight) :
+                thisbias = biasnight
+            else :
+                message=f"Missing mandatory biasnight file {biasnight}"
+                log.error(message)
+                raise RuntimeError(message)
+        log.debug(f"BIAS={thisbias}")
 
         preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
 
@@ -172,36 +185,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
         else :
-            if bias is not None:
-                if isinstance(bias, str):
-                    thisbias = bias
-                elif isinstance(bias, (list, tuple, np.array)):
-                    thisbias = bias[ifile]
-                else:
-                    message = 'bias should be None, str, list, or tuple, not {}'.format(type(bias))
-                    log.error(message)
-                    raise RuntimeError(message)
-            else:
-                thisbias = True
-
-            if thisbias is False :
-                biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
-                if os.path.isfile(biasnight) :
-                    thisbias = biasnight
-                else :
-                    message=f"Missing mandatory biasnight file {biasnight}"
-                    log.error(message)
-                    raise RuntimeError(message)
-            log.debug(f"BIAS={thisbias}")
-            
+            log.warning(f"Missing {preproc_filename}, generating now.")
             # read raw data and preprocess them
             img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
-                            mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+                              mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
-    if save_preproc :
-        # is saved in preproc_dark_dir if not None
-        io.write_image(preproc_filename,img)
-        log.info(f"Wrote {preproc_filename}")
+            if save_preproc :
+                # is saved in preproc_dark_dir if not None
+                io.write_image(preproc_filename,img)
+                log.info(f"Wrote {preproc_filename}")
 
         # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
@@ -216,7 +208,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if masks is not None :
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
-        mjds.append(float(img.meta['MJD-OBS']))
 
     if len(images)==0 :
         log.error("No images left after selection")

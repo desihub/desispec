@@ -30,11 +30,11 @@ def preproc_darks_parser():
                                      However gains are applied so the output is in electrons/sec.
                                      ''')
 
-    parser.add_argument('-e','--expids', type = str, default = None, required = False, nargs="*",
-                        help = 'exposures to process, can be a list of expids or a single expid')
-    parser.add_argument('-n', '--night', type=int, default = None, required=False,
-                        help='YEARMMDD night defining the darks to run through preproc')
-    parser.add_argument('-c','--camword',type = str, required = True,
+    parser.add_argument('-e','--expids', type=str, default=None, required=False,
+                        help = 'exposures to process, can be a comma separated list of expids or a single expid')
+    parser.add_argument('-n', '--nights', type=str, default = None, required=False,
+                        help='Comma separated list of YEARMMDD nights where we find the darks to run through preproc')
+    parser.add_argument('-c','--camword', type=str, required = True,
                         help = 'header HDU (int or string)')
     parser.add_argument('--bias', type = str, default = None, required=False,
                          help = 'specify a bias image calibration file (standard preprocessing calibration is turned off)')
@@ -73,14 +73,17 @@ def main(args=None):
         os.environ["SPECPROD"] = args.specprod
 
     # check consistency of input options
-    if args.night is not None and args.expids is not None :
-        log.error("Cannot specify both --night and --expids arguments")
-        return 1
-
-    if args.expids is None and args.night is None:
+    if args.nights is not None and args.expids is not None :
+        log.info(f"Assuming all exposures in {args.expids} can be found in nights={args.nights}.")
+    elif args.expids is None and args.nights is None:
         log.error("Need to specify input using --expids or --night")
         return 1
 
+    if args.expids is not None:
+        args.expids = np.array(args.expids.split(',')).astype(int)
+    if args.nights is not None:
+        args.nights = np.array(args.nights.split(',')).astype(int)
+        
     ## get the requested cameras from the camword
     requested_cameras = set(decode_camword(args.camword))
     if len(requested_cameras) == 0:
@@ -92,41 +95,47 @@ def main(args=None):
         ## Use the compute_dark_night parser to get the exposure table
         ## so that we have consistent exposure selection via default values
         ## for number of nights nbefore and after the reference night
-        if args.night is not None:
-            opts = ['--nights', str(args.night)]
-        elif args.expids is not None:
-            opts = ['--expids', ' '.join(map(str, args.expids))]
+        if args.nights is None:
+            ## camera and outfile are required, so give dummy values for those
+            opts = ['--expids', ' '.join(args.expids.astype(str)), '-o', 'temp', '-c', 'b1',
+                    '--skip-camera-check', '--dont-search-filesystem']
+            compdark_parser = compute_dark_parser()
+            compdark_args = compdark_parser.parse_args(opts)
+            exptable = get_stacked_dark_exposure_table(args)
         else:
-            opts = []
-        compdark_parser = compute_dark_parser()
-        compdark_args = compdark_parser.parse_args(opts)
-        exptable = get_stacked_dark_exposure_table(args, skip_camera_check=True)
-        # exptablename = findfile("exposure_table", specprod=args.specprod, night=args.night)
-        # exptable = load_table(tablename=exptablename, tabletype="exposure_table")
+            exptables = []
+            for night in np.unique(args.nights):
+                tabname = findfile('exposure_table', night=night, readonly=True)
+                exptables.append(load_table(tablename=tabname, tabletype='exposure_table', suppress_logging=True))
+            exptable = vstack(exptables)
+            if not np.all(np.isin(args.expids, exptable['EXPID'].data)):
+                log.error(f"Not all expids in {args.expids} found on nights {args.nights}")
+            exptable = exptable[np.isin(exptable['EXPID'].data, args.expids)]
         # assemble corresponding images
-        expids, camlists, files = [], [], []
+        expids, camlists, files, nights = [], [], [], []
         if args.expids is not None:
             exptable = exptable[np.isin(exptable["EXPID"], args.expids)]
         for row in exptable:
-            filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"])
+            filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"], readonly=True)
             if os.path.exists(filename):
                 goodcams = set(decode_camword(difference_camwords(row["CAMWORD"], row["BADCAMWORD"])))
                 camlist = list(goodcams.intersection(requested_cameras))
                 if len(camlist) > 0:
-                    camlists.append(list(goodcams.intersection(requested_cameras)))
+                    camlists.append(camlist)
                     expids.append(row["EXPID"])
+                    nights.append(row["NIGHT"])
                     files.append(filename)
                 else:
                     log.warning(f'No requested cameras found in {filename} for expid {row["EXPID"]}')
             else:
                 log.error(f'Skipping missing file {filename}')
-        data = (expids, camlists, files)
+        data = (expids, nights, camlists, files)
     else:
         data = None
 
     # Broadcast data to all ranks
     data = comm.bcast(data, root=0)
-    expids, camlists, files = data
+    expids, nights, camlists, files = data
 
     if len(expids) == 0:
         log.error("No valid exposures found for dark frame computation.")
@@ -145,7 +154,7 @@ def main(args=None):
 
     ## Number of task is the total number of cameras to run preproc on plus one additional 
     ## task for each expid to handle the I/O of the files
-    lens = [len(cams)+1 for cams in camlist]
+    lens = [len(cams)+1 for cams in camlists]
     maxlens = np.max(lens)
     ntasks = np.sum(lens)
     # Files are only ~0.25Gb each, so shouldn't need to limit blocks. 
@@ -157,7 +166,8 @@ def main(args=None):
                             log=log, split_comm=True)
 
     ## looping over all the exposures, each communicator gets a subset
-    for expid, camlist, filename in zip(expids[block_num::nblocks], camlists[block_num::nblocks], files[block_num::nblocks]):
+    for expid, night, camlist, filename in zip(expids[block_num::nblocks], nights[block_num::nblocks],
+                                               camlists[block_num::nblocks], files[block_num::nblocks]):
         ## Each subcommunicator has enough ranks for the largest camera list
         ## give each rank a camera, skipping rank 0 which will handle the I/O and MPI
         ## and pad the remaining ranks with None so that scatter works
@@ -165,6 +175,8 @@ def main(args=None):
         if block_rank == 0:
             try:
                 primary_header = read_raw_primary_header(filename)
+                # Convert to a plain Header since CompImageHeader can't be pickled 
+                primary_header = fits.Header(primary_header)
             except:
                 primary_header = None
             fx = fits.open(filename, memmap=False)
@@ -173,11 +185,13 @@ def main(args=None):
 
             indices = [ list(range(i, ncam, block_size-1)) for i in range(block_size-1) ]
             all_data_header_cams = []
-            for camera in enumerate(final_camlist):
+            for camera in final_camlist:
                 rawimage = fx[camera.upper()].data
-                header = fx[camera.upper()].header
+                # Convert to a plain Header since CompImageHeader can't be pickled 
+                header = fits.Header(fx[camera.upper()].header)
                 all_data_header_cams.append((rawimage, header, camera))
 
+            all_data_header_cams = np.array(all_data_header_cams)
             broadcast_bundle = [None]
             for inds in indices:
                 broadcast_bundle.append(all_data_header_cams[inds])
@@ -187,6 +201,7 @@ def main(args=None):
         else:
             data_header_cams = None
             primary_header = None
+            broadcast_bundle = [None]
 
         ## broadcast the primary header 
         primary_header = block_comm.bcast(primary_header, root=0)
@@ -195,7 +210,7 @@ def main(args=None):
             continue
 
         ## scatter the work to the ranks
-        data_header_cams = comm.scatter(broadcast_bundle, root=0)
+        data_header_cams = block_comm.scatter(broadcast_bundle, root=0)
         if data_header_cams is None:
             log.info(f'No data_header_cams for rank {rank} block_rank {block_rank} block_num {block_num}')
             continue
@@ -207,16 +222,18 @@ def main(args=None):
             else:
                 continue
                 
-            if args.preproc_dark_dir is not None :
-                preproc_filename = findfile("preproc_for_dark",night=args.night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir)
+            if args.preproc_dark_dir is not None:
+                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir)
             else:
-                preproc_filename = findfile("preproc_for_dark",night=args.night,expid=expid,camera=camera)
+                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
             
             if os.path.exists(preproc_filename):
-                log.info(f"Preprocessed dark file {preproc_filename} already exists, skipping.")
+                log.info(f"Rank {rank} block_rank {block_rank} block_num {block_num}: "
+                         + f"Preprocessed dark file {preproc_filename} already exists, skipping.")
                 continue
             else:
-                log.info(f'Rank {rank} block_rank {block_rank} block_num {block_num} processing {filename} for camera {camera} (expid={expid})')   
+                log.info(f'Rank {rank} block_rank {block_rank} block_num {block_num}: '
+                         + f'Processing {filename} for camera {camera} (expid={expid})')   
                 img = process_raw(primary_header, rawimage, header, camera=camera, bias=thisbias, nocosmic=args.nocosmic,
                         mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 

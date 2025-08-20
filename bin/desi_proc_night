@@ -20,7 +20,7 @@ def parse_args():
                          + " tile, waiting for a complete set of cals, etc.")
      parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                          help="The basic data obstypes to submit for processing. " +
-                              "E.g. science, dark, twilight, flat, arc, zero.")
+                              "E.g. science, dark, flat, arc, zero.")
      parser.add_argument("--z-submit-types", type=str, default='cumulative', required=False,
                          help="The group types of redshifts that should be submitted with each exposure. If not "+
                               "specified, default  is 'cumulative'. If "+
@@ -58,6 +58,10 @@ def parse_args():
                          help="Time to wait between submissions.")
      parser.add_argument("--n-nights-darks", type=int, default=None, required=False,
                          help="Number of nights of darks to process. Default is to use the function's default.")
+     parser.add_argument("--badcamword", type=str, default=None, required=False,
+                         help="Badcamword to apply to all new data in the exposure tables and to apply to linkcal and biaspdark jobs.")
+     parser.add_argument("--badamps", type=str, default=None, required=False,
+                         help="Badamps to apply to all new data in the exposure tables and to apply to linkcal and biaspdark jobs.")
      # Code Flags
      parser.add_argument("--dry-run", action="store_true",
                          help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+

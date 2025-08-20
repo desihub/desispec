@@ -19,7 +19,6 @@ import re
 from socket import gethostname
 from astropy.table import Table, vstack
 
-## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.scripts.update_exptable import update_exposure_table
 from desispec.workflow.tableio import load_table, load_tables, write_table
 from desispec.workflow.utils import sleep_and_report, \
@@ -289,7 +288,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Require cal_override to exist if explcitly specified
     if override_pathname is None:
-        override_pathname = findfile('override', night=night)
+        override_pathname = findfile('override', night=night, readonly=True)
     elif not os.path.exists(override_pathname):
         raise IOError(f"Specified override file: "
                       f"{override_pathname} not found. Exiting this night.")
@@ -341,9 +340,21 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                               dry_run_level=dry_run_level, verbose=verbose)
         log.info("Done with update_exposure_table.\n\n")
 
-    ## Load in the files defined above
-    ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
+    ## Combine the table names and types for easier passing to io functions
+    table_pathnames = [exp_table_pathname, proc_table_pathname]
+    table_types = ['exptable', 'proctable']
 
+    ## Load in the files defined above
+    etable, init_ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
+    full_etable = etable.copy()
+
+    ## Set default camword for linkcal and biaspdark jobs that don't rely on specific exposures
+    if camword is None:
+        if len(etable) > 0:
+            camword = camword_union(etable['CAMWORD'])
+        else:
+            camword = 'a0123456789'
+            
     ## Now that the exposure table is updated, check if we need to run biases and/or preproc darks
     if n_nights_darks is None:
         n_nights_after_darks = None
@@ -352,8 +363,10 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         n_nights_after_darks = int((n_nights_darks-1) // 2)
         n_nights_before_darks = n_nights_darks - 1 - n_nights_after_darks
     proc_biasdark_obstypes = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    no_biaspdark = (len(ptable) == 0 or 'biaspdark' not in ptable['JOBDESC'])
+    no_biaspdark = (len(init_ptable) == 0 or 'biaspdark' not in init_ptable['JOBDESC'])
     darks_taken = (not still_acquiring or np.sum(etable['OBSTYPE']=='dark') > 1)
+
+    returned_ptable = None
     if proc_biasdark_obstypes and no_biaspdark and darks_taken:
         ## This will populate the processing table with the biases and preproc dark job if 
         ## it needed to submit them. It will do it for future and past nights relevant for 
@@ -364,25 +377,32 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             kwargs = {}
         else:
             kwargs = {'n_nights_before': n_nights_before_darks, 'n_nights_after': n_nights_after_darks}
-        submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes, 
-                           camword=camword, badcamword=badcamword, badamps=badamps,
-                           exp_table_pathname=exp_table_pathname,
-                           proc_table_pathname=proc_table_pathname,
-                           specprod=specprod, path_to_data=path_to_data,
-                           sub_wait_time=sub_wait_time, dry_run_level=dry_run_level, **kwargs)
+        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes, 
+                                                                        camword=camword, badcamword=badcamword, badamps=badamps,
+                                                                        exp_table_pathname=exp_table_pathname,
+                                                                        proc_table_pathname=proc_table_pathname,
+                                                                        specprod=specprod, path_to_data=path_to_data,
+                                                                        sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
+                                                                        queue=queue, system_name=system_name,
+                                                                        **kwargs)
         log.info("Done with submit_necessary_biasnights_and_preproc_darks.\n\n")
 
-    ## Combine the table names and types for easier passing to io functions
-    table_pathnames = [exp_table_pathname, proc_table_pathname]
-    table_types = ['exptable', 'proctable']
-
-    ## Load in the files defined above
-    etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
-    full_etable = etable.copy()
-
+    ## Load in the updated processing table if saved to disk, otherwise use what is in memory
+    if dry_run_level > 2:
+        if returned_ptable is None:
+            ptable = init_ptable
+        else:
+            ptable = returned_ptable
+    else:
+        ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
+    
     ## Quickly exit if we haven't processed the biasprdark job yet and we should have
-    if require_cals and 'biaspdark' not in ptable['JOBDESC'] and 'linkcal' not in ptable['JOBDESC'] \
-        and ('zero' in proc_obstypes or 'dark' in proc_obstypes):
+    jobtypes_requested = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
+    job_doesnt_exist = ('biaspdark' not in ptable['JOBDESC'] and 'linkcal' not in ptable['JOBDESC'])
+    # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
+    # ## otherwise assume it is available
+    #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
+    if require_cals and jobtypes_requested and job_doesnt_exist:
         log.critical("Bias and preproc dark job not found in processing table. "
                     + "We will need to wait for darks to be processed. "
                     + f"Exiting {night=}.")
@@ -400,8 +420,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Cut on OBSTYPES
     log.info(f"Processing the following obstypes: {proc_obstypes}")
-    ## zeros and darks handled seperately above, so remove them
-    proc_obstypes = np.array([obstype for obstype in proc_obstypes if obstype not in ['zero', 'dark']])
     good_types = np.isin(np.array(etable['OBSTYPE']).astype(str), proc_obstypes)
     etable = etable[good_types]
 
@@ -551,7 +569,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                                 n_nights_before_darks=n_nights_before_darks,
                                                 n_nights_after_darks=n_nights_after_darks,
                                                 proc_table_path=os.path.dirname(proc_table_pathname))
-
+    
     ## Require some minimal level of calibrations to process science exposures
     if require_cals and not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
         err = (f"Exiting because not all calibration files accounted for "
@@ -889,5 +907,5 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow, int_id = make_exposure_prow(cte_erow, int_id, calibjobs,
                                       jobdesc=jobdesc)
         prow, ptable = create_submit_add_and_save(prow, ptable)
-            
+
     return ptable, calibjobs, int_id

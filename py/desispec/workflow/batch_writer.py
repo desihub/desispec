@@ -125,7 +125,7 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     return os.path.join(path, name)
 
 
-def wrap_command_for_script(cmd, nodes, ntasks, threads_per_task):
+def wrap_command_for_script(cmd, nodes, ntasks, threads_per_task, stepname='step'):
     """
     Wraps a command for execution in a bash script using srun.
 
@@ -134,19 +134,20 @@ def wrap_command_for_script(cmd, nodes, ntasks, threads_per_task):
         nodes (int): Number of nodes to use.
         ntasks (int): Total number of tasks to use.
         threads_per_task (int): Number of threads per core.
+        stepname (str): Short name of command step for logging purposes only
 
     Returns:
         str: The wrapped command ready for inclusion in a bash script.
     """
     srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} --cpu-bind=cores {cmd}'
-    wrapped_cmd =  f'echo Running {srun}\n'
+    wrapped_cmd =  f'\necho Running {srun}\n'
     wrapped_cmd += f'{srun}\n\n'
 
     wrapped_cmd += 'if [ $? -eq 0 ]; then\n'
-    wrapped_cmd += '\techo pdark succeeded at $(date)\n'
+    wrapped_cmd += f'    echo {stepname} succeeded at $(date)\n'
     wrapped_cmd += 'else\n'
-    wrapped_cmd += '\techo FAILED: pdark failed, stopping at $(date)\n'
-    wrapped_cmd += '\texit 1\n'
+    wrapped_cmd += f'    echo FAILED: {stepname} failed, stopping at $(date)\n'
+    wrapped_cmd += '    exit 1\n'
     wrapped_cmd += 'fi\n'
     return wrapped_cmd
     
@@ -209,7 +210,6 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
     gpus_per_node = batch_config['gpus_per_node']
     ncameras = len(cameras)
 
-
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(),
                                                  forced_runtime=runtime,
                                                  system_name=system_name)
@@ -253,9 +253,9 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
 
 
 def create_biaspdark_batch_script(night, expids,
-                                 jobsdesc=None, camword='a0123456789',
+                                 jobdesc=None, camword='a0123456789',
                                  do_biasnight=False, do_pdark=False, 
-                                 queue='regular', system_name=None):
+                                 queue=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run biasnight
     and then preproc darks script.
@@ -263,7 +263,7 @@ def create_biaspdark_batch_script(night, expids,
     Args:
         night (str or int): The night in which the biaspdark script will be run.
         expids (list of int or np.array): The exposure id(s) for the data.
-        jobsdesc (str, optional): Description of the job to be performed. If None, will 
+        jobdesc (str, optional): Description of the job to be performed. If None, will 
             default to 'biaspdark' or 'pdark' depending on do_biasnight and do_pdark.
         camword (str): Camword of cameras to include in the processing.
         do_biasnight (bool): If True, run the nightly bias script first.
@@ -275,24 +275,36 @@ def create_biaspdark_batch_script(night, expids,
         scriptpathname (str): The full path name for the biaspdark batch script file.
     """
     log = get_logger()
-    if jobsdesc is None:
+    if jobdesc is None:
         if do_biasnight:
-            jobdesc = 'biaspdark'
+            if do_pdark:
+                jobdesc = 'biaspdark'
+            else:
+                jobdesc = 'biasnight'
         elif do_pdark:
             jobdesc = 'pdark'
         else:
             log.error('Must specify at least one of do_biasnight or do_pdark')
             raise ValueError('Must specify at least one of do_biasnight or do_pdark')
-    
+
+    ## Default to regular queue
+    if queue is None:
+        queue = 'regular'
+        
     scriptpathname = get_desi_proc_batch_file_pathname(night=night, exp=expids, 
                                                    jobdesc=jobdesc, cameras=camword)
-
+    scriptpathname += '.slurm'
     cameras = decode_camword(camword)
     ncameras = len(cameras)
     nexps = len(expids) if expids is not None else 1
+    expids = np.array(expids) if expids is not None else None
     batchdir = os.path.dirname(scriptpathname)
     os.makedirs(batchdir, exist_ok=True)
     jobname = os.path.basename(scriptpathname).removesuffix('.slurm')
+    
+    if do_pdark and expids is None:
+        log.error('Must provide exposure ids if requesting pdark')
+        raise ValueError('Must provide exposure ids if requesting pdark')
 
     ## If system name isn't specified, guess it
     if system_name is None:
@@ -303,26 +315,47 @@ def create_biaspdark_batch_script(night, expids,
     dark_ncores, nodes, runtime = determine_resources(ncameras, jobdesc='pdark', 
                                                         queue=queue, nexps=nexps, 
                                                         system_name=system_name)
+    threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
     script_body = ""
     # Run nightlybias first  
     if do_biasnight: 
-        tot_threads = batch_config['threads_per_core'] * batch_config['cores_per_node']
-        bias_threads_per_task = tot_threads // 8
         bias_ntasks, nodes, bias_runtime = determine_resources(ncameras, jobdesc='biasnight', 
                                                                     queue=queue, nexps=1, 
                                                                     system_name=system_name)
+        ## srun won't split a task across nodes, so for tasks that aren't evenly split
+        ## across nodes, make sure largest task count with number of threads
+        ## will still fit in a single node
+        if nodes > 1 and bias_ntasks % nodes != 0:
+            largest_ntasks_on_node = np.ceil(float(bias_ntasks)/float(nodes))
+            bias_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
+        else:
+            tot_threads = nodes * threads_on_node
+            bias_threads_per_task = int(np.floor(tot_threads // bias_ntasks))
+
         runtime += bias_runtime
         cmd = f'desi_proc --cameras {camword} -n {night} --nightlybias --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=bias_ntasks, threads_per_task=bias_threads_per_task)
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=bias_ntasks, threads_per_task=bias_threads_per_task, stepname='biasnight')
 
     # Then pdarks  
     if do_pdark: 
         ## if do_biasnight is True, then we need to run pdark with the same number of nodes
         if do_biasnight:
+            ## select up to one exp-cam pair per core
             dark_ntasks = min([ncameras*nexps, nodes*batch_config['cores_per_node']])
+            ## if fewer than one-to-one assign more than one core to each task (min of batch_config['threads_per_core']
+            ## since we don't use threads)
+            ## srun won't split a task across nodes, so for tasks that aren't evenly split
+            ## across nodes, make sure largest task count with number of threads
+            ## will still fit in a single node
+            if nodes > 1 and dark_ntasks % nodes != 0:
+                largest_ntasks_on_node = np.ceil(float(dark_ntasks)/float(nodes))
+                dark_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
+            else:
+                tot_threads = nodes * threads_on_node
+                dark_threads_per_task = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // dark_ntasks))
 
-        cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids)} --camword={camword} --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=batch_config['threads_per_core'])
+        cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
 
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
@@ -361,7 +394,7 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
                                  do_darknight=False, do_badcolumn=False, 
                                  do_ctecorr=False, n_nights_before=None, n_nights_after=None,
                                  dark_expid=None, cte_expids=None,
-                                 queue='regular', system_name=None):
+                                 queue=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run the 
     requested CCD calibration tasks
@@ -388,10 +421,14 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         log.critical('Must specify at least one of do_darknight, do_badcolumn, or do_ctecorr')
         raise ValueError('Must specify at least one of do_darknight, do_badcolumn, or do_ctecorr')
     jobdesc = 'ccdcalib'
+
+    ## Default to regular queue
+    if queue is	None:
+        queue =	'regular'
         
     scriptpathname = get_desi_proc_batch_file_pathname(night=night, exp=expids, 
                                                    jobdesc=jobdesc, cameras=camword)
-
+    scriptpathname += '.slurm'
     cameras = decode_camword(camword)
     ncameras = len(cameras)
     nexps = len(expids) if expids is not None else 1
@@ -412,26 +449,26 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
     script_body = ""
     # Run nightlybias first  
     if do_darknight: 
-        cmd = f'desi_compute_dark_night --reference_night={night} --camword={camword}'
+        cmd = f'desi_compute_dark_night --reference-night={night} --camword={camword}'
         if n_nights_before is not None:
             cmd += f' --before={n_nights_before}'
         if n_nights_after is not None:
             cmd += f' --after={n_nights_after}'
         cmd += ' --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task)
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='darknight')
 
     # Then pdarks  
     if do_badcolumn: 
         if dark_expid is None:
             dark_expid = expids[0]
         cmd = f'desi_proc -n {night} -c {camword} -e {dark_expid} --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task)
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='badcolumn')
 
     if do_ctecorr:
         if cte_expids is None:
             cte_expids = expids[1:]
         cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expids}"
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task)
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='ctecorr')
 
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)

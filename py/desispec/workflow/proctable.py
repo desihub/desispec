@@ -431,7 +431,7 @@ def get_pdarks_from_ptable(ptable):
         return np.array([])
     
     ## Select the two JOBDESC's that are relevant for dark preprocessing
-    darks = ptable[np.isin(darks['JOBDESC'], ['pdark', 'biaspdark'])]
+    darks = ptable[np.isin(ptable['JOBDESC'].data, ['pdark', 'biaspdark'])]
     ## Remove bias-only biapdark jobs by requiring OBSTYPE to be dark
     if len(darks) > 0:
         darks = darks[darks['OBSTYPE'] == 'dark']

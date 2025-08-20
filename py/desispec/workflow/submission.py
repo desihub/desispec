@@ -15,7 +15,8 @@ from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_
 from desispec.workflow.proctable import default_prow, get_pdarks_from_ptable
 import numpy as np
 
-from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword
+from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword, \
+camword_intersection, camword_union
 from desispec.scripts.link_calibnight import derive_include_exclude
 
 from desispec.io.meta import findfile
@@ -188,7 +189,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     ## Load in the files defined above
     ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
 
-    dark_expid_to_process = np.array([], dtype=int)
+    dark_expid_to_process = np.asarray(dark_expids)
     if len(ptable) > 0:
         processed_dark_expids = get_pdarks_from_ptable(ptable)
         dark_expid_to_process = np.setdiff1d(dark_expids, processed_dark_expids)
@@ -208,8 +209,18 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     if not os.path.exists(exp_table_pathname):
         raise IOError(f"Exposure table: {exp_table_pathname} not found. Exiting this night.")
     
-     ## Load in the files defined above
+    ## Load in the files defined above
     etable = load_table(tablename=exp_table_pathname, tabletype='exptable')
+
+    ## Remove exposures that we shouldn't process
+    bad = etable['LASTSTEP'] == 'ignore'
+    badetable = etable[bad]
+    if np.any(np.isin(dark_expid_to_process, badetable['EXPID'].data)):
+        baddarks = badetable[np.isin(badetable['EXPID'].data, dark_expid_to_process)]
+        log.critical(f"Asked to process exposure that has LASTSTEP=ignore: {baddarks}")
+        raise ValueError(f"Asked to process exposure that has LASTSTEP=ignore: {baddarks}")
+    
+    etable = etable[~bad]
 
     ## Require cal_override to exist if explcitly specified
     if override_path is None:
@@ -242,26 +253,32 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     else:
         files_to_link = set()
         
-
-    zero_expids = np.array(etable[etable['OBSTYPE'] == 'zero']['EXPID'].data, dtype=int)
-
+    zeros = etable[etable['OBSTYPE'] == 'zero']
+    zero_expids = np.array(zeros['EXPID'].data, dtype=int)
+    darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
+    
     linked_bias = 'biasnight' in files_to_link
     dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
     dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 # 'darknight' not in files_to_link and
 
-    # dep = None
-    # if linked_bias:
-    #     if 'linkcal' in ptable['JOBDESC']:
-    #         dep = [ptable[ptable['JOBDESC'] == 'linkcal'][0]]
-    #     else:
-    #         log.critical("Bias is supposed to be linked, but no linkcal job found in processing table.")
-    #         raise ValueError("Bias is supposed to be linked, but no linkcal job found in processing table.")
-    # elif dodarks and not dobias:
-    #     if 'biaspdark' in ptable['JOBDESC']:
-    #         dep = [ptable[ptable['JOBDESC'] == 'biaspdark'][0]]
-    #     else:
-    #         log.critical("Darks are supposed to be preprocessed, but bias job can be accounted for.")
-    #         raise ValueError("Darks are supposed to be preprocessed, but bias job can be accounted for.")
+    ## Next derive the full badcamword from that supplied plus the erows for the exposure type
+    if dobias:
+        expset = zeros
+    elif dodarks:
+        expset = darks
+    else:
+        expset = []
+    missingcamwords = []
+    for erow in expset:
+        zero_proccamword = erow_to_goodcamword(erow, suppress_logging=True, exclude_badamps=False)
+        missingcamwords.append(difference_camwords(camword, zero_proccamword))
+
+    if len(missingcamwords) > 0:
+        derived_badcam = camword_intersection(missingcamwords)
+        if badcamword is None:
+            badcamword = derived_badcam
+        else:
+            badcamword = camword_union([badcamword, derived_badcam])
 
     extra_job_args = {'steps': []}
     if dobias:
@@ -273,46 +290,35 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         int_id = np.max(ptable['INTID'])+1
     else:
         int_id = night_to_starting_iid(night=night)
+
     prow = None
-    ## If submit bias and darks, submit joint job
-    if dobias and dodarks:
-        log.info(f"Submitting biasnight and preproc_darks for night {night}.")
+    if dobias or dodarks:
         prow = default_prow()
         prow['INTID'] = int_id
-        prow['JOBDESC'] = 'biaspdark'
-        prow['OBSTYPE'] = 'dark'
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = night
-        prow['EXPID'] = dark_expid_to_process
-        prow = define_and_assign_dependency(prow, ptable)
         prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps, 
                                                      suppress_logging=True, exclude_badamps=True)
-    elif dobias:
+        
+    ## If submit bias and darks, submit joint job, otherwise submit one or the other
+    if dobias and dodarks:
         log.info(f"Submitting biaspdark for night {night}.")
-        prow = default_prow()
-        prow['INTID'] = int_id
         prow['JOBDESC'] = 'biaspdark'
+        prow['OBSTYPE'] = 'dark'
+        prow['EXPID'] = dark_expid_to_process
+    elif dobias:
+        log.info(f"Submitting biasnight for night {night}.")
+        prow['JOBDESC'] = 'biasnight'
         prow['OBSTYPE'] = 'zero'
-        prow['CALIBRATOR'] = 1
-        prow['NIGHT'] = night
         prow['EXPID'] = zero_expids[:1] # set as first zero expid
-        prow = define_and_assign_dependency(prow, ptable)
-        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps, 
-                                                     suppress_logging=True, exclude_badamps=True)   
     elif dodarks:
         log.info(f"Submitting pdark for night {night}.")
-        prow = default_prow()
-        prow['INTID'] = int_id
         prow['JOBDESC'] = 'pdark'
         prow['OBSTYPE'] = 'dark'
-        prow['CALIBRATOR'] = 1
-        prow['NIGHT'] = night
         prow['EXPID'] = dark_expid_to_process
-        prow = define_and_assign_dependency(prow, ptable)
-        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps, 
-                                                     suppress_logging=True, exclude_badamps=True) 
 
     if prow is not None:
+        prow = define_and_assign_dependency(prow, ptable)
         prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                     reservation=reservation,
                                     strictly_successful=True,
@@ -325,24 +331,22 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
         sleep_and_report(sub_wait_time,
                             message_suffix=f"to slow down the queue submission rate",
-                            dry_run=(dry_run_level>0), logfunc=log.info)
-        
-        ## Add the processing row to the processing table
-        ptable.add_row(prow)
+                            dry_run=(dry_run_level>0), logfunc=log.info)        
         log.info(f"Successfully submitted {prow['JOBDESC']} job submitted for night {night}.")
     else:
         log.info(f"No biasnight or preproc_darks jobs submitted for night {night}.")
-    
+
     return ptable
 
 
 def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes, 
-                           camword, badcamword, badamps=None,
-                           exp_table_pathname=None,
-                           proc_table_pathname=None,
-                           specprod=None, path_to_data=None,
-                           sub_wait_time=0.1, dry_run_level=0,
-                           n_nights_before=None, n_nights_after=None):
+                                                  camword, badcamword, badamps=None,
+                                                  exp_table_pathname=None,
+                                                  proc_table_pathname=None,
+                                                  specprod=None, path_to_data=None,
+                                                  sub_wait_time=0.1, dry_run_level=0,
+                                                  n_nights_before=None, n_nights_after=None,
+                                                  queue=None, system_name=None):
     """
     Submit biasnight and preproc_darks jobs for the given reference night.
     This function will read the override file, determine what calibrations
@@ -364,6 +368,8 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
         dry_run_level (int, optional): Level of dry run to perform. Default is 0.
         n_nights_before (int, optional): Number of nights before the reference night to process. Default is None.
         n_nights_after (int, optional): Number of nights after the reference night to process. Default is None.
+        queue (str): Queue to be used.
+        system_name (str, optional): name of batch system, e.g. cori-haswell, perlmutter
 
     Returns:
         ptable (Table): Updated processing table with new jobs.
@@ -371,14 +377,15 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
     """
     log = get_logger()
     compdarkparser = compute_dark_parser()
-    options = ['--reference-night', str(reference_night), '-o', 'dummy', '-c', 'b1']
+    options = ['--reference-night', str(reference_night), '-o', 'dummy', '-c', 'b1',
+               '--skip-camera-check', '--dont-search-filesystem']
     if n_nights_before is not None:
         options.extend(['--before', str(n_nights_before)])
     if n_nights_after is not None:
         options.extend(['--after', str(n_nights_after)])
     compdarkargs = compdarkparser.parse_args(options)
 
-    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs, skip_camera_check=True)
+    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
     
     refnight_ptable = None
     for night in np.unique(exptab_for_dark_night['NIGHT']):
@@ -390,7 +397,8 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
             exp_table_path=os.path.dirname(os.path.dirname(exp_table_pathname)),
             proc_table_path=os.path.dirname(proc_table_pathname),
             specprod=specprod, path_to_data=path_to_data,
-            sub_wait_time=sub_wait_time, dry_run_level=dry_run_level)
+            sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
+            queue=queue, system_name=system_name)
         if night == reference_night:
             refnight_ptable = ptable
     
