@@ -72,16 +72,18 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.info("first pass to find the most recent header ...")
         for ifile, filename in enumerate(rawfiles):
             log.info(filename)
-            fitsfile=pyfits.open(filename)
-            if not camera in fitsfile : continue
-            header=fitsfile[camera].header
+            try:
+                header = fitsio.read_header(filename, ext=camera)
+            except OSError:
+                log.warning(f'No camera {camera} in {filename}')
+                continue
             if reference_header is None :
                 reference_header = header
             else :
                 if header["EXPID"] > reference_header["EXPID"] :
                     reference_header = header
-            fitsfile.close()
-        log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} DETECTOR={reference_header['DETECTOR']}")
+
+    log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
 
     log.info("reading images ...")
     shape=None
@@ -166,13 +168,16 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         else:
             thisbias = True
         
+        night=header2night(primary_header)
+        expid=primary_header["EXPID"]
+
         if thisbias is False :
             biasnight = findfile("biasnight",night=night,expid=expid,camera=camera,readonly=True)
             if os.path.isfile(biasnight) :
                 thisbias = biasnight
             else :
                 message=f"Missing mandatory biasnight file {biasnight}"
-                log.error(message)
+                log.critical(message)
                 raise RuntimeError(message)
         log.debug(f"BIAS={thisbias}")
 
@@ -209,16 +214,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
 
+        if len(images) >= max_dark_exposures:
+            log.warning(f"Using only the first {max_dark_exposures} valid darks provided.")
+            break
+
     if len(images)==0 :
         log.error("No images left after selection")
         raise RuntimeError("No images left after selection")
-    elif len(images) > max_dark_exposures:
-        log.warning(f"More than {max_dark_exposures} dark exposures found, using only the first {max_dark_exposures}")
-        sel = np.argsort(np.abs(mjds-float(reference_header['MJD-OBS'])))[:max_dark_exposures]
-        images = images[sel]
-        if masks is not None:
-            masks = masks[sel]
-        exptimes = exptimes[sel]
 
     images=np.array(images)
     exptimes=np.array(exptimes)

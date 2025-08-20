@@ -75,6 +75,16 @@ def main(args=None):
     
     del args.camword  # not necessary, but remove camword from args to avoid confusion in compute_dark.main 
 
+    ## Only read in the exposure tables once and broadcast it to all ranks.
+    exptable = None
+    if rank == 0:
+        args.skip_camera_check = True  # we are going to run compute_dark for all cameras, so skip the camera check
+        args.dont_search_filesystem = True  # we are going to trust the exposure tables, so don't search the filesystem
+        exptable = compute_dark.get_stacked_dark_exposure_table(args)
+        args.skip_camera_check = False
+    if comm is not None:
+        exptable = comm.bcast(exptable, root=0)
+
     original_bias = args.bias
     error_count = 0
     for camera in requested_cameras[rank::size]:
@@ -93,7 +103,7 @@ def main(args=None):
         # with stdouterr_redirected(darklog, comm=comm):
         #result, success = runcmd(compute_dark.main, comm=comm, args=args,
         #                            inputs=[args.bias], outputs=[args.outfile])
-        result, success = runcmd(compute_dark.main, args=args,
+        result, success = runcmd(compute_dark.main, args=[args, exptable],
                                     inputs=[args.bias], outputs=[args.outfile])
         if not success:
             log.error(f'Rank {rank} failed for camera {camera}, outfile: {args.outfile}')

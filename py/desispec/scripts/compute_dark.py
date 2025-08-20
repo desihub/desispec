@@ -228,24 +228,29 @@ def main(args=None, exptable=None):
         if exptable is None:
             # if no images are given, we need to find the exposures
             exptable = get_stacked_dark_exposure_table(args)
+        if not args.skip_camera_check:
+            log.info(f"Subselecting exposures in exposure table in which {args.camera}.")
             keep = np.repeat(True,len(exptable))
             for i,entry in enumerate(exptable) :
                 keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
             exptable = exptable[keep]
 
-            if exptable is None or len(exptable) == 0:
-                log.error("No valid exposures found for dark frame computation.")
-                return 1
+        if exptable is None or len(exptable) == 0:
+            log.error("No valid exposures found for dark frame computation.")
+            return 1
 
         # assemble corresponding images
-        args.images = []
+        args.images, mjds = [], []
         for row in exptable:
             filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"])
             if os.path.exists(filename):
                 args.images.append(filename)
+                mjds.append(row["MJD-OBS"])
             else:
                 log.error(f'Skipping missing file {filename}')
                 return 1
+        args.images = np.array(args.images)
+        mjds = np.array(mjds)
 
     # find the most recent exposure with the camera and read its header
     # unless reference_expid or reference_night is set
@@ -288,7 +293,12 @@ def main(args=None, exptable=None):
 
     assert args.camera.upper() == reference_header['CAMERA'].upper()
 
-    log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
+    if exptable is not None and len(args.images) > args.max_dark_exposures:
+        log.warning(f"More than {args.max_dark_exposures} dark exposures found, sorting by time " 
+                    + f"difference in MJD-OBS to reference header "
+                    + f"MJD-OBS {reference_header['MJD-OBS']}")
+        sel = np.argsort(np.abs(mjds-float(reference_header['MJD-OBS'])))
+        args.images = args.images[sel]
 
     if args.dry_run:
         image_str = ' '.join(args.images)
