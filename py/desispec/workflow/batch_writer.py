@@ -150,6 +150,19 @@ def wrap_command_for_script(cmd, nodes, ntasks, threads_per_task, stepname='step
     wrapped_cmd += '    exit 1\n'
     wrapped_cmd += 'fi\n'
     return wrapped_cmd
+
+def wrapup_for_script():
+    """
+    Give the boiler plate ending to a DESI slurm script echo'ing that the job succeeded or failed
+    """
+    wrapped_cmd  = "\n\n"
+    wrapped_cmd += 'if [ $? -eq 0 ]; then\n'
+    wrapped_cmd += '    echo All done at $(date)\n'
+    wrapped_cmd += 'else\n'
+    wrapped_cmd += '    echo FAILED: Script failed, stopping at $(date)\n'
+    wrapped_cmd += '    exit 1\n'
+    wrapped_cmd += 'fi\n'
+    return wrapped_cmd
     
 
 def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
@@ -245,7 +258,8 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
 
         fx.write(f'\n# Link refnight to new night\n')
         fx.write(wrap_command_for_script(cmd, nodes, ntasks=ncores, threads_per_task=threads_per_core))
-
+        fx.write(wrapup_for_script())
+        
     print('Wrote {}'.format(scriptfile))
     print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
 
@@ -357,6 +371,7 @@ def create_biaspdark_batch_script(night, expids,
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
 
+    script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
 
@@ -461,15 +476,19 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
     if do_badcolumn: 
         if dark_expid is None:
             dark_expid = expids[0]
-        cmd = f'desi_proc -n {night} -c {camword} -e {dark_expid} --mpi'
+        cmd = f'desi_proc -n {night} --cameras {camword} -e {dark_expid} --mpi'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='badcolumn')
 
     if do_ctecorr:
-        if cte_expids is None:
+        if cte_expids is None and (do_darknight or do_badcolumn):
             cte_expids = expids[1:]
-        cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expids}"
+        else:
+            cte_expids = expids
+        cte_expstr = ','.join(np.array(expids).astype(str))
+        cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expstr}"
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='ctecorr')
 
+    script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
 

@@ -93,7 +93,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     else :
         masks=[]
     exptimes=[]
-    valid_inputs = np.ones(len(rawfiles), dtype=bool)  # track which inputs are actually used
+    files_used = []
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
 
@@ -123,7 +123,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             if round(exptime)  != round(thisexptime):
                 message = f'Input {filename} exptime {thisexptime} != requested exptime {exptime}'
                 log.warning(message)
-                valid_inputs[ifile] = False
                 continue
 
         if 'VCCDSEC' in header :
@@ -131,7 +130,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             log.info("{} VCCDSEC={:d} sec = {:.1f} hours".format(filename,int(vccdsec),vccdsec/3600))
             if vccdsec < min_vccdsec :
                 log.warning(f"ignore {filename} because VCCDSEC = {vccdsec} < {min_vccdsec}")
-                valid_inputs[ifile] = False
                 continue
 
         valid=True
@@ -145,7 +143,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 break
 
         if not valid :
-            valid_inputs[ifile] = False
             continue
 
         v1=float(reference_header["CCDTEMP"])
@@ -153,7 +150,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if np.abs(v1-v2)>max_temperature_diff :
             mess=(f"skip {filename} k={v2} different from {v1} (from reference header)")
             log.warning(mess)
-            valid_inputs[ifile] = False
             continue
 
         if bias is not None:
@@ -192,6 +188,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if os.path.isfile(preproc_filename) :
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
+            file_used = preproc_filename
         else :
             log.warning(f"Missing {preproc_filename}, generating now.")
             # read raw data and preprocess them
@@ -202,6 +199,9 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 # is saved in preproc_dark_dir if not None
                 io.write_image(preproc_filename,img)
                 log.info(f"Wrote {preproc_filename}")
+                file_used = preproc_filename
+            else:
+                file_used = filename
 
         # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
@@ -216,7 +216,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         if masks is not None :
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
-
+        files_used.append(file_used)
+        
         if len(images) >= max_dark_exposures:
             log.warning(f"Using only the first {max_dark_exposures} valid darks provided.")
             break
@@ -282,8 +283,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         "GAINA", "GAINB", "GAINC", "GAIND",
         "VCCDSEC","VCCDON"
         ] :
-        if key in reference_header :
-            hdulist[0].header[key] = (reference_header[key],reference_header.comments[key])
+        if key in reference_header.keys():
+            hdulist[0].header[key] = (reference_header[key],reference_header.get_comment(key))
 
     if exptime is not None:
         hdulist[0].header['EXPTIME'] = exptime
@@ -291,9 +292,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     hdulist[0].header["BUNIT"] = "electron/s"
     hdulist[0].header["EXTNAME"] = "DARK"
 
-    valid_rawfiles = [rawfiles[i] for i in range(len(rawfiles)) if valid_inputs[i]]
-
-    for i, filename in enumerate(valid_rawfiles):
+    for i, filename in enumerate(files_used):
         hdulist[0].header["INPUT%03d"%i]=os.path.basename(filename)
 
     hdulist.writeto(outfile, overwrite=True)

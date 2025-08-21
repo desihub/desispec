@@ -190,7 +190,7 @@ def get_stacked_dark_exposure_table(args):
     if not np.all(file_exists):
         exptable = exptable[file_exists]
         log.info(f"{len(exptable)} exposures will be used to build the {args.camera} dark")
-        log.info(exptable)
+        #log.info(exptable)
 
     return exptable
 
