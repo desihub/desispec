@@ -87,12 +87,12 @@ def get_exp2healpix_map(expfile, survey=None, program=None,
     exptab = exps['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
 
     #- From FRAMES, determine which petals actually have data
-    tilepetals_with_data = dict()
-    for tileid, camera in frames['TILEID', 'CAMERA']:
-        if tileid not in tilepetals_with_data:
-            tilepetals_with_data[tileid] = set()
+    exppetals_with_data = dict()
+    for expid, camera in frames['EXPID', 'CAMERA']:
+        if expid not in exppetals_with_data:
+            exppetals_with_data[expid] = set()
         petal = int(camera[1])
-        tilepetals_with_data[tileid].add(petal)
+        exppetals_with_data[expid].add(petal)
 
     #- read one tilepix file per TILEID to get healpix mapping
     tilepix = dict()
@@ -111,7 +111,7 @@ def get_exp2healpix_map(expfile, survey=None, program=None,
     for night, expid, tileid, survey, program in exptab['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM']:
         for petal_str in tilepix[str(tileid)]:
             petal = int(petal_str)
-            if petal in tilepetals_with_data[tileid]:
+            if petal in exppetals_with_data[expid]:
                 for healpix in tilepix[str(tileid)][petal_str]:
                     rows.append( (night, expid, tileid, survey, program, petal, healpix) )
 
