@@ -376,8 +376,20 @@ class TestPixGroup(unittest.TestCase):
         exp2hpix = get_exp2healpix_map(expfile, expids=[88056,88057])
         self.assertEqual(list(np.unique(exp2hpix['EXPID'])), [88056,88057])
 
-        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't
-        #- appear in map (but e.g. petal 1 should)
+        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't appear in map
+        #- tile 562 petal 0 was marked as bad for only a single exposure
+        #- other petals should appear for all exposures
+        exp2hpix = get_exp2healpix_map(expfile, survey='sv3', program='bright')
+        n0 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 0))
+        n1 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1))
+        n6 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6))
+        print(exp2hpix[exp2hpix['TILEID']==562])
+        self.assertGreater(n1, 0)
+        self.assertEqual(n0, n1-1)
+        self.assertEqual(n6, 0)
+
+        #- tile 562 petal 0 was marked as bad for exposure 88049 but still
+        #- good for other exposures.
         exp2hpix = get_exp2healpix_map(expfile, survey='sv3', program='bright')
         n1 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1))
         n6 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6))
