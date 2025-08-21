@@ -90,7 +90,7 @@ def main(args=None):
     for camera in requested_cameras[rank::size]:
         ## define the bias explicitly
         if original_bias is None:
-            args.bias = findfile("biasnight", night=night, camera=camera)
+            args.bias = findfile("biasnight", night=night, camera=camera, readonly=True)
 
         ## assign camera to the rest of the arguments and pass them into compute_dark.main
         ## don't explciitly list dark inputs since there are many and aren't yet known

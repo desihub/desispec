@@ -242,7 +242,7 @@ def main(args=None, exptable=None):
         # assemble corresponding images
         args.images, mjds = [], []
         for row in exptable:
-            filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"])
+            filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"], readonly=True)
             if os.path.exists(filename):
                 args.images.append(filename)
                 mjds.append(row["MJD-OBS"])
