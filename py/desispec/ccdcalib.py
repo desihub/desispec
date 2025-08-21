@@ -181,10 +181,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 raise RuntimeError(message)
         log.debug(f"BIAS={thisbias}")
 
-        preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
-
-        if not os.path.isfile(preproc_filename) and preproc_dark_dir is not None :
-            preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=preproc_dark_dir)
+        ## Identify the path to the preprocessed dark image
+        preproc_filename = None
+        if preproc_dark_dir is not None :
+            preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+                                        specprod_dir=preproc_dark_dir, readonly=True)
+        if preproc_filename is None or not os.path.isfile(preproc_filename):
+            preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True)
 
         if os.path.isfile(preproc_filename) :
             log.info(f"Reading existing {preproc_filename}")

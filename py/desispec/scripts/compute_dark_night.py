@@ -103,7 +103,7 @@ def main(args=None):
         # with stdouterr_redirected(darklog, comm=comm):
         #result, success = runcmd(compute_dark.main, comm=comm, args=args,
         #                            inputs=[args.bias], outputs=[args.outfile])
-        result, success = runcmd(compute_dark.main, args=[args, exptable],
+        result, success = runcmd(compute_dark.main, args=[args, exptable], expandargs=True,
                                     inputs=[args.bias], outputs=[args.outfile])
         if not success:
             log.error(f'Rank {rank} failed for camera {camera}, outfile: {args.outfile}')
