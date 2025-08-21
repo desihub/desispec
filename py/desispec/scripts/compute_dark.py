@@ -132,7 +132,7 @@ def get_stacked_dark_exposure_table(args):
             if len(tmp_table)==0 : continue
 
             # only keep useful rows to avoid issues with columns
-            table = tmp_table['NIGHT', 'EXPID', 'MJD-OBS', 'OBSTYPE', 'EXPTIME']
+            table = tmp_table['NIGHT', 'EXPID', 'MJD-OBS', 'OBSTYPE', 'EXPTIME', 'CAMWORD', 'BADCAMWORD', 'BADAMPS']
             tables.append(table)
         else :
             log.warning(f"No exposure table for {night}")

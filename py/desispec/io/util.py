@@ -979,18 +979,33 @@ def get_speclog(nights, rawdir=None):
     for night in nights:
         for filename in sorted(glob.glob(f'{rawdir}/{night}/*/desi-*.fits.fz')):
             hdr = fitsio.read_header(filename, 1)
+            speckeyword = 'CCDSPECS' if 'CCDSPECS' in hdr else 'SPCGRPHS'
+            specs = []
+            for sp in hdr[speckeyword].split(','):
+                spnum = sp.strip().lstrip('SP')
+                if spnum.isnumeric():
+                    specs.append(spnum)
+            if len(specs) > 0:
+                camword = 'a' + ''.join(sorted(specs))
+                badcamword = ''
+                badamps = ''
+            else:
+                continue
             rows.append([night, hdr['EXPID'], hdr['MJD-OBS'],
-                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME']])
+                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME'], camword, badcamword, badamps])
 
     if len(rows) > 0:
         speclog = Table(
-            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
             rows = rows,
             )
     else:
         speclog = Table(
-            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
-            dtype = [ int,     int,     float, str,      str,      float    ]
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
+            dtype = [ int,     int,     float, str,      str,      float,
+                     'S30',     'S30',        'S30' ],
             )
 
     return speclog
