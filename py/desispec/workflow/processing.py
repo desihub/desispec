@@ -1133,7 +1133,7 @@ def generate_calibration_dict(ptable, files_to_link=None):
     accounted_for = {'biasnight': False, 'darknight':False, 'badcolumns': False,
                      'ctecorrnight': False, 'psfnight': False,
                      'fiberflatnight': False}
-    calibjobs = {'biaspdark': None, 'ccdcalib': None, #'badcol': None,
+    calibjobs = {'biasnight': None, 'biaspdark': None, 'ccdcalib': None, #'badcol': None,
                  'psfnight': None, 'nightlyflat': None, 'linkcal': None}
 
     ptable_jobtypes = ptable['JOBDESC']
@@ -1152,15 +1152,23 @@ def generate_calibration_dict(ptable, files_to_link=None):
                     err = f"linkcal job exists but no files given: {files_to_link=}"
                     log.error(err)
                     raise ValueError(err)
-            elif jobtype == 'ccdcalib':
-                possible_ccd_files = set(['darknight', 'badcolumns', 'ctecorrnight'])
-                if files_to_link is None:
-                    files_accounted_for = possible_ccd_files
+            elif jobtype in ['biaspdark', 'ccdcalib']:
+                ## These are multi-step jobs, so assume what was processed
+                ## based on linking
+                if jobtype == 'biaspdark':
+                    ## we don't care about preproc_for_dark since we can still
+                    ## make a darknight without darks specifically from tonight
+                    possible_files = set(['biasnight']) 
                 else:
-                    files_accounted_for = possible_ccd_files.difference(files_to_link)
-                    ccd_files_linked = possible_ccd_files.intersection(files_to_link)
-                    log.info(f"Assuming existing ccdcalib job processed "
-                             + f"{files_accounted_for} since {ccd_files_linked} "
+                    possible_files = set(['darknight', 'badcolumns', 'ctecorrnight'])
+                    
+                if files_to_link is None:
+                    files_accounted_for = possible_files
+                else:
+                    files_accounted_for = possible_files.difference(files_to_link)
+                    files_linked = possible_files.intersection(files_to_link)
+                    log.info(f"Assuming existing {jobtype} job processed "
+                             + f"{files_accounted_for} since {files_linked} "
                              + f"are linked.")
                 for fil in files_accounted_for:
                     accounted_for[fil] = True
@@ -2093,10 +2101,10 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
         dict: Updated processing row with darknight dependencies.
     """
     log = get_logger()
-    night = prow['NIGHT']
+    refnight = prow['NIGHT']
 
     compdarkparser = compute_dark_parser()
-    options = ['--reference-night', str(night), '-c', 'b1', '-o', 'temp',
+    options = ['--reference-night', str(refnight), '-c', 'b1', '-o', 'temp',
                '--skip-camera-check', '--dont-search-filesystem']
     if n_nights_before is not None:
         options.extend(['--before', str(n_nights_before)])
@@ -2105,8 +2113,9 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
     compdarkargs = compdarkparser.parse_args(options)
 
     exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+    nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [refnight]))
     dep_intids, dep_qids = [], []
-    for night in np.unique(exptab_for_dark_night['NIGHT']):
+    for night in nights:
         nightly_expids = exptab_for_dark_night['EXPID'][exptab_for_dark_night['NIGHT'] == night].data
         
         ## Load in the files defined above
@@ -2116,24 +2125,20 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
         
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable', suppress_logging=True)
         if len(ptable) == 0:
-            log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
+            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
             continue
         else:
-            darks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biaspdark', b'pdark']))]
-            if len(darks) > 0:
-                darks = darks[darks['OBSTYPE'] == b'dark']
-                if len(darks) == 0:
-                    log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
-                              + f"entries: jobdescs={ptable['JOBDESC'].data}, expids={ptable['EXPID'].data},"
-                              + f"obstypes={ptable['OBSTYPE'].data}. Continuing")
-            else:
-                log.error(f"Expected pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
+            biasdarks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biasnight', b'biaspdark', b'pdark']))]
+            if len(biasdarks) == 0:
+                log.error(f"Expected biasnight, biaspdark, or pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
                           + f"entries: jobdescs={ptable['JOBDESC'].data}, expids={ptable['EXPID'].data},"
-                          + f"obstypes={ptable['OBSTYPE'].data}. Continuing")
-            for dark in darks:
-                if np.any(np.isin(dark['EXPID'].data, nightly_expids)):
-                    dep_intids.append(dark['INTID'])
-                    dep_qids.append(dark['LATEST_QID'])
+                          + f"obstypes={ptable['OBSTYPE'].data}. Continuing anyway")
+            for biasdark in biasdarks:
+                ## if bias for the reference night or if any darks in the job are used for
+                ## the darknight, we should depend on the job
+                if np.any(np.isin(biasdark['EXPID'].data, nightly_expids)) or (str(biasdark['JOBDESC']).startswith('bias') and night == refnight):
+                    dep_intids.append(biasdark['INTID'])
+                    dep_qids.append(biasdark['LATEST_QID'])
 
     if len(dep_intids) > 0:
         ## Note originally used argsort so that INT_DEP_IDS order would correspond to

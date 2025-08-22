@@ -363,11 +363,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         n_nights_after_darks = int((n_nights_darks-1) // 2)
         n_nights_before_darks = n_nights_darks - 1 - n_nights_after_darks
     proc_biasdark_obstypes = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    no_biaspdark = (len(init_ptable) == 0 or 'biaspdark' not in init_ptable['JOBDESC'])
+    no_bias = (len(init_ptable) == 0
+               or ('biasnight' not in init_ptable['JOBDESC'] and 'biaspdark' not in init_ptable['JOBDESC']) )
     darks_taken = (not still_acquiring or np.sum(etable['OBSTYPE']=='dark') > 1)
 
     returned_ptable = None
-    if proc_biasdark_obstypes and no_biaspdark and darks_taken:
+    if proc_biasdark_obstypes and no_bias and darks_taken:
         ## This will populate the processing table with the biases and preproc dark job if 
         ## it needed to submit them. It will do it for future and past nights relevant for 
         ## the current night's dark nights.
@@ -398,14 +399,16 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     
     ## Quickly exit if we haven't processed the biasprdark job yet and we should have
     jobtypes_requested = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    job_doesnt_exist = ('biaspdark' not in ptable['JOBDESC'] and 'linkcal' not in ptable['JOBDESC'])
+    job_exists = np.any(np.in1d(np.array([b'biasnight', b'biaspdark', b'linkcal']), ptable['JOBDESC'].data))
     # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
     # ## otherwise assume it is available
     #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
-    if require_cals and jobtypes_requested and job_doesnt_exist:
+    if require_cals and jobtypes_requested and not job_exists:
         log.critical("Bias and preproc dark job not found in processing table. "
                     + "We will need to wait for darks to be processed. "
                     + f"Exiting {night=}.")
+        import pdb
+        pdb.set_trace()
         sys.exit(1)
 
     ## For I/O efficiency, pre-populate exposure table and processing table caches

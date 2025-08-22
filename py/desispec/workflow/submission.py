@@ -386,9 +386,14 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
     compdarkargs = compdarkparser.parse_args(options)
 
     exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
-    
+
+    ## We might not have darks on the reference night, but we still want to process
+    ## the biasnight's
+    nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [reference_night]))
+
+    ## Loop over nights and submit biasnight or biaspdark jobs
     refnight_ptable = None
-    for night in np.unique(exptab_for_dark_night['NIGHT']):
+    for night in nights:
         log.info(f"Processing night {night} for biasnight and preproc_darks.")
         dark_expids = np.array(exptab_for_dark_night[exptab_for_dark_night['NIGHT'] == night]['EXPID'].data, dtype=int)
         ptable = submit_biasnight_and_preproc_darks(
