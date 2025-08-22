@@ -363,12 +363,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         n_nights_after_darks = int((n_nights_darks-1) // 2)
         n_nights_before_darks = n_nights_darks - 1 - n_nights_after_darks
     proc_biasdark_obstypes = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    no_bias = (len(init_ptable) == 0
+    no_bias_job = (len(init_ptable) == 0
                or ('biasnight' not in init_ptable['JOBDESC'] and 'biaspdark' not in init_ptable['JOBDESC']) )
-    darks_taken = (not still_acquiring or np.sum(etable['OBSTYPE']=='dark') > 1)
 
     returned_ptable = None
-    if proc_biasdark_obstypes and no_bias and darks_taken:
+    if proc_biasdark_obstypes and no_bias_job:
         ## This will populate the processing table with the biases and preproc dark job if 
         ## it needed to submit them. It will do it for future and past nights relevant for 
         ## the current night's dark nights.
@@ -407,8 +406,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         log.critical("Bias and preproc dark job not found in processing table. "
                     + "We will need to wait for darks to be processed. "
                     + f"Exiting {night=}.")
-        import pdb
-        pdb.set_trace()
         sys.exit(1)
 
     ## For I/O efficiency, pre-populate exposure table and processing table caches
