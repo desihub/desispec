@@ -326,7 +326,7 @@ def create_biaspdark_batch_script(night, expids,
 
     batch_config = batch.get_config(system_name)
 
-    dark_ncores, nodes, runtime = determine_resources(ncameras, jobdesc='pdark', 
+    dark_ntasks, nodes, runtime = determine_resources(ncameras, jobdesc='pdark', 
                                                         queue=queue, nexps=nexps, 
                                                         system_name=system_name)
     threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
@@ -356,18 +356,18 @@ def create_biaspdark_batch_script(night, expids,
         if do_biasnight:
             ## select up to one exp-cam pair per core
             dark_ntasks = min([ncameras*nexps, nodes*batch_config['cores_per_node']])
-            ## if fewer than one-to-one assign more than one core to each task (min of batch_config['threads_per_core']
-            ## since we don't use threads)
-            ## srun won't split a task across nodes, so for tasks that aren't evenly split
-            ## across nodes, make sure largest task count with number of threads
-            ## will still fit in a single node
-            if nodes > 1 and dark_ntasks % nodes != 0:
-                largest_ntasks_on_node = np.ceil(float(dark_ntasks)/float(nodes))
-                dark_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
-            else:
-                tot_threads = nodes * threads_on_node
-                dark_threads_per_task = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // dark_ntasks))
-
+        ## if fewer than one-to-one assign more than one core to each task (min of batch_config['threads_per_core']
+        ## since we don't use threads)
+        ## srun won't split a task across nodes, so for tasks that aren't evenly split
+        ## across nodes, make sure largest task count with number of threads
+        ## will still fit in a single node
+        if nodes > 1 and dark_ntasks % nodes != 0:
+            largest_ntasks_on_node = np.ceil(float(dark_ntasks)/float(nodes))
+            dark_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
+        else:
+            tot_threads = nodes * threads_on_node
+            dark_threads_per_task = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // dark_ntasks))
+            
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
 
@@ -456,21 +456,32 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         system_name = batch.default_system(jobdesc=jobdesc)
 
     batch_config = batch.get_config(system_name)
-    threads_per_core = batch_config['threads_per_core']
     ntasks, nodes, runtime = determine_resources(ncameras, jobdesc='ccdcalib', 
                                                  queue=queue, nexps=nexps, 
                                                  system_name=system_name)
-    threads_per_task = threads_per_core*nodes*(batch_config['cores_per_node'] // ntasks)
+    threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
+    threads_per_task = int(np.floor((nodes*threads_on_node) / ntasks))
     script_body = ""
     # Run nightlybias first  
-    if do_darknight: 
+    if do_darknight:
         cmd = f'desi_compute_dark_night --reference-night={night} --camword={camword}'
         if n_nights_before is not None:
             cmd += f' --before={n_nights_before}'
         if n_nights_after is not None:
             cmd += f' --after={n_nights_after}'
         cmd += ' --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='darknight')
+        ## darknight will hit memory limits if more than 15 are done on a
+        ## single node simultaneously
+        if float(ntasks)/float(nodes) > 15:
+            ## will need to run in two batches, so reduce the ntasks and add more runtime
+            runtime += 20 ## two loops of darks takes about 20 minutes
+            dn_ntasks = 15*nodes
+            threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
+            dn_threads_per_task = int(np.floor((nodes*threads_on_node) // dn_ntasks))
+        else:
+            runtime += 10 # one loop of darks takes about 10 minutes
+            dn_ntasks, dn_threads_per_task = ntasks, threads_per_task
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=dn_ntasks, threads_per_task=dn_threads_per_task, stepname='darknight')
 
     # Then pdarks  
     if do_badcolumn: 

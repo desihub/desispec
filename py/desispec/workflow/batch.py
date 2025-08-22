@@ -182,15 +182,18 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         ## Jobs are memory limited, so use 15 cores per node
         ## and split work of 30 cameras across 2 nodes
         nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
-        ncores, runtime = 15, 3 + 2*nexps # 15 cams per node, time scales with number of darks
+        ncores = 15
+        ## 8 minutes base plus 3 mins per loop over exposures
+        runtime = 8 + 3.*(float(nodes*config['cores_per_node'])/float(ncores))
     elif jobdesc in ('PDARK'):
         nodes = 1 
         # can do 1 core per camera per exp, but limit to cores available
-        ncores = min([ncameras*nexps, nodes*config['cores_per_node']]) 
-        runtime = 3 + 2*nexps
+        ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
+        ## 4 minutes base plus 3 mins per loop over exposures    
+        runtime = 4 + 3.*(float(nodes*config['cores_per_node'])/float(ncores))
     elif jobdesc == 'CCDCALIB':
         nodes = 1
-        ncores, runtime = ncameras, 10     
+        ncores, runtime = ncameras, 7 # 5 mins after perlmutter system scaling factor
     elif jobdesc == 'ZERO':
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
