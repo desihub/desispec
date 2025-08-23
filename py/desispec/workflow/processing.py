@@ -1141,7 +1141,29 @@ def generate_calibration_dict(ptable, files_to_link=None):
     for jobtype in calibjobs.keys():
         if jobtype in ptable_jobtypes:
             calibjobs[jobtype] = table_row_to_dict(ptable[ptable_jobtypes==jobtype][0])
-            log.info(f"Located {jobtype} job in exposure table: {calibjobs[jobtype]}")
+            log.info(f"Located {jobtype} job in processing table: {calibjobs[jobtype]}")
+            if jobtype in ['linkcal', 'biaspdark', 'ccdcalib'] and files_to_link is None:
+                night = int(ptable['NIGHT'][0]) ## jobtypes not empty, so has 1 or more rows
+                override_pathname = findfile('override', night=night, readonly=True)
+                overrides = load_override_file(filepathname=override_pathname)
+                cal_override = {}
+                if 'calibration' in overrides:
+                    cal_override = overrides['calibration']
+                orig_files_to_link = files_to_link
+                ## Determine calibrations that will be linked
+                if 'linkcal' in cal_override:
+                    files_to_link, files_not_linked = None, None
+                    if 'include' in cal_override['linkcal']:
+                        files_to_link = cal_override['linkcal']['include']
+                    if 'exclude' in cal_override['linkcal']:
+                        files_not_linked = cal_override['linkcal']['exclude']
+                    files_to_link, files_not_linked = derive_include_exclude(files_to_link,
+                                                                 files_not_linked)
+                    warn = f"linkcal job exists but no files given: {orig_files_to_link=}. " \
+                           + f"Used {override_pathname} to identify the following " \
+                           + f"linked files: {files_to_link}"
+                    log.warning(warn)
+                
             if jobtype == 'linkcal':
                 if files_to_link is not None and len(files_to_link) > 0:
                     log.info(f"Assuming existing linkcal job processed "
