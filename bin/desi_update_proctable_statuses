@@ -1,0 +1,88 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+import os
+import numpy as np
+
+from desiutil.log import get_logger
+from desispec.workflow.tableio import load_table, write_table
+from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.queue import update_from_queue
+
+
+def parse_args():  # options=None):
+    """
+    Get command line arguments for desi_update_proctable_statuses
+    """
+    parser = argparse.ArgumentParser(description="Update the STATUS of all jobs "
+                                                 + "in a DESI processing table by "
+                                                 + "querying Slurm.")
+
+    parser.add_argument("-n","--night", type=str, default=None,
+                        required=False, help="The night you want processed.")
+    parser.add_argument("-o","--outfile", type=str, default=None,
+                        required=False, help="Output filename, if different from default.")
+    parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
+                        help="Directory name where the output processing table should be saved.")
+    parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
+                        help="File format and extension for the exp and proc tables.")
+    parser.add_argument("--dry-run-level", type=int, default=0,
+                        help="What level of dry_run to perform, if any. Default is 0. "
+                              + "0 which runs the code normally. "
+                              + "1 writes all files but doesn't submit any jobs to Slurm. "
+                              + "2 writes tables but doesn't write scripts or submit anything. "
+                              + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
+                              + "4 Doesn't write, submit jobs, or query Slurm."
+                              + "5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.")
+    parser.add_argument("--check-complete-jobs", action="store_true",
+                        help="Query NERSC about jobs with STATUS 'COMPLETED'"
+                             + "in addition to all other jobs. Default is False, "
+                             + "which skips COMPLETED jobs.")
+    parser.add_argument("--show-updated-table", action="store_true",
+                        help="Print a subset of the columns from the ptable with updated statuses.")
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    log = get_logger()
+    ptable_pathname = args.proc_table_pathname
+    if ptable_pathname is None:
+        if args.night is None:
+            ValueError("Either night or --proc-table-path must be specified")
+        ## Determine where the processing table will be written
+        ptable_pathname = get_processing_table_pathname(prodmod=args.night,
+                                             extension=args.tab_filetype)
+
+    if not os.path.exists(ptable_pathname):
+        ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
+
+    if args.dry_run_level > 0:
+        log.info(f"{args.dry_run_level=}, so will be simulating some features."
+                 + f" See parser for what each level limits.")
+
+    ## Load in the files defined above
+    ptable = load_table(tablename=ptable_pathname, tabletype='proctable')
+    log.info(f"Identified ptable with {len(ptable)} entries.")
+    ptable = update_from_queue(ptable, dry_run_level=args.dry_run_level,
+                               check_complete_jobs=args.check_complete_jobs)
+
+    if args.dry_run_level < 3:
+        if args.outfile is not None:
+            outfile = args.outfile
+        else:
+            outfile = ptable_pathname
+        write_table(ptable, tablename=outfile)
+
+    if args.show_updated_table:
+        log.info("Updated processing table:")
+        cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
+                'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
+        log.info(np.array(cols))
+        for row in ptable:
+            log.info(np.array(row[cols]))
+        log.info("\n")
+       
+    log.info(f"Done updating STATUS column for processing table: {ptable_pathname}")

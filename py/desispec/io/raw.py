@@ -19,11 +19,42 @@ import desispec.io
 import desispec.io.util
 from . import iotime
 from desispec.util import header2night
-import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
+def read_raw_primary_header(filename):
+    '''Returns the primary header of a raw data image HDU list.
+
+    Parameters
+    ----------
+        filename: path of the DESI raw image
+
+    Returns
+    -------
+        fits header
+    '''
+    log = get_logger()
+
+    hdu = 0
+    primary_header = None
+
+    hdulist = fits.open(filename)
+
+    while True:
+        primary_header = hdulist[hdu].header
+        if "EXPTIME" in primary_header:
+            break
+        if len(hdulist) > hdu + 1:
+            if hdu > 0:
+                log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
+            hdu += 1
+        else:
+            msg = "Did not find header keyword EXPTIME in any HDU of %s!"
+            log.critical(msg, filename)
+            raise KeyError(msg % filename)
+
+    return primary_header
 
 def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     '''Returns preprocessed raw data from `camera` extension of `filename`.
@@ -62,6 +93,8 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
     documentation for details.
     '''
+    #- Deferred import for faster initial module import
+    import desispec.preproc
 
     log = get_logger()
 
@@ -70,25 +103,10 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
 
+    primary_header = read_raw_primary_header(filename)
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
-    hdu = 0
-    #
-    # primary_header will typically represent HDU 1 ('SPEC') since
-    # HDU 0 is empty.
-    #
-    while True:
-        primary_header = fx[hdu].header
-        if "EXPTIME" in primary_header: break
 
-        if len(fx) > hdu + 1:
-            if hdu > 0:
-                log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
-            hdu += 1
-        else:
-            msg = "Did not find header keyword EXPTIME in any HDU of %s!"
-            log.critical(msg, filename)
-            raise KeyError(msg % filename)
 
     #- Check if NIGHT keyword is present and valid; fix if needed
     #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
@@ -244,6 +262,10 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
         fibermap = fibermap[ii]
 
     cfinder = None
+    try:
+        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
+    except KeyError:
+        log.warning(f'calib config not found for {camera}; not masking fibers')
 
     camname = camera.upper()[0]
     if camname == 'B':
@@ -253,54 +275,55 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     else:
         badamp_bit = maskbits.fibermask.BADAMPZ
 
-    if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
+    # cfinder could be done when boostrapping darks for a new config
+    # early teststand data didn't have the FIBER column
+    if (cfinder is not None) and ('FIBER' in fibermap.dtype.names) :
 
         ## Mask fibers
-        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
         fibers  = fibermap['FIBER'].data
         for k in ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"] :
             log.debug("{}={}".format(k,cfinder.badfibers([k])))
 
         ## Mask bad fibers
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BROKENFIBERS"]))] |= maskbits.fibermask.BROKENFIBER
+        fibermap['FIBERSTATUS'][np.isin(fibers,cfinder.badfibers(["BROKENFIBERS"]))] |= maskbits.fibermask.BROKENFIBER
 
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADCOLUMNFIBERS"]))] |= badamp_bit
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"]))] |= maskbits.fibermask.LOWTRANSMISSION
+        fibermap['FIBERSTATUS'][np.isin(fibers,cfinder.badfibers(["BADCOLUMNFIBERS"]))] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.isin(fibers,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"]))] |= maskbits.fibermask.LOWTRANSMISSION
         # Also, for backward compatibility
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BROKENFIBERS"])%500)] |= maskbits.fibermask.BROKENFIBER
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADCOLUMNFIBERS"])%500)] |= badamp_bit
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"])%500)] |= maskbits.fibermask.LOWTRANSMISSION
+        fibermap['FIBERSTATUS'][np.isin(fibers%500,cfinder.badfibers(["BROKENFIBERS"])%500)] |= maskbits.fibermask.BROKENFIBER
+        fibermap['FIBERSTATUS'][np.isin(fibers%500,cfinder.badfibers(["BADCOLUMNFIBERS"])%500)] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.isin(fibers%500,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"])%500)] |= maskbits.fibermask.LOWTRANSMISSION
 
         # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADAMPFIBERS"]))] |= badamp_bit
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["EXCLUDEFIBERS"]))] |= badamp_bit # for backward compatibiliyu
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADAMPFIBERS"])%500)] |= badamp_bit
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["EXCLUDEFIBERS"])%500)] |= badamp_bit # for backward compatibiliyu
+        fibermap['FIBERSTATUS'][np.isin(fibers,cfinder.badfibers(["BADAMPFIBERS"]))] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.isin(fibers,cfinder.badfibers(["EXCLUDEFIBERS"]))] |= badamp_bit # for backward compatibiliyu
+        fibermap['FIBERSTATUS'][np.isin(fibers%500,cfinder.badfibers(["BADAMPFIBERS"])%500)] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.isin(fibers%500,cfinder.badfibers(["EXCLUDEFIBERS"])%500)] |= badamp_bit # for backward compatibiliyu
         if cfinder.haskey("EXCLUDEFIBERS") :
             log.warning("please use BADAMPFIBERS instead of EXCLUDEFIBERS")
 
     if np.sum(img.mask & maskbits.ccdmask.BADREADNOISE > 0) >= img.mask.size//4 :
         log.info("Propagate ccdmask.BADREADNOISE to fibermap FIBERSTATUS")
 
-        if cfinder is None :
-            cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
+        if cfinder is None:
+            log.warning(f'No calib config for {camera}; unable to load PSF to set FIBERSTATUS BADREADOISE')
+        else:
+            psf_filename = cfinder.findfile("PSF")
+            tset = desispec.io.read_xytraceset(psf_filename)
+            mean_wave =(tset.wavemin+tset.wavemax)/2.
+            xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
+            amp_ids = desispec.preproc.get_amp_ids(header)
 
-        psf_filename = cfinder.findfile("PSF")
-        tset = desispec.io.read_xytraceset(psf_filename)
-        mean_wave =(tset.wavemin+tset.wavemax)/2.
-        xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
-        amp_ids = desispec.preproc.get_amp_ids(header)
-
-        for amp in amp_ids :
-            kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
-            ntot = img.mask[kk].size
-            nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
-            if nbad / ntot > 0.5 :
-                # not just nbad>0 b/c/ there are always pixels with low QE
-                # that have increased readnoise after pixel flatfield
-                log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
-                badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
-                fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
+            for amp in amp_ids :
+                kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
+                ntot = img.mask[kk].size
+                nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
+                if nbad / ntot > 0.5 :
+                    # not just nbad>0 b/c/ there are always pixels with low QE
+                    # that have increased readnoise after pixel flatfield
+                    log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
+                    badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
+                    fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
 
     img.fibermap = fibermap
 

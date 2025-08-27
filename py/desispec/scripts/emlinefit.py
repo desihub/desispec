@@ -3,6 +3,7 @@ desispec.scripts.emlinefit
 ==========================
 
 """
+import sys
 from time import time
 from astropy.time import Time
 from desiutil.log import get_logger

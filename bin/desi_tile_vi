@@ -51,7 +51,7 @@ def parse(options=None):
     parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
     parser.add_argument('--program', type=str, nargs='+', required=False,
-                        default=['dark', 'bright'],
+                        default=['dark', 'bright', 'dark1b', 'bright1b'],
                         help='look only at tiles from these programs')
 
     args = None
@@ -117,8 +117,10 @@ def print_summary(new, orig):
     classes = {'new': newtiles, 'old': oldtiles, 'very old': veryoldtiles}
     programs = {'dark': new['FAFLAVOR'] == 'maindark',
                 'bright': new['FAFLAVOR'] == 'mainbright',
+                'dark1b': new['FAFLAVOR'] == 'maindark1b',
+                'bright1b': new['FAFLAVOR'] == 'mainbright1b',
                 'other': ((new['SURVEY'] == 'main') &
-                          (~np.isin(new['FAPRGRM'], ['dark', 'bright'])))}
+                          (~np.isin(new['FAPRGRM'], ['dark', 'bright', 'dark1b', 'bright1b'])))}
     for class0 in classes:
         for program0 in programs:
             m = classes[class0] & programs[program0]
@@ -203,9 +205,9 @@ def main():
 
     ok = np.repeat(True,tileids.size)
     if requested_tileids is not None :
-        ok &= np.in1d(tileids,requested_tileids)
+        ok &= np.isin(tileids,requested_tileids)
     if requested_nights is not None :
-        ok &= np.in1d(nights,requested_nights)
+        ok &= np.isin(nights,requested_nights)
     tileids = tileids[ok]
     nights  = nights[ok]
 

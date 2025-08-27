@@ -205,7 +205,7 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
     # Grab sky fibers on this frame
     if override_sky_targetids is not None:
         log.info('Overriding default sky fiber list using override_sky_targetids')
-        skyfibers = np.where(np.in1d(fibermap['TARGETID'], override_sky_targetids))[0]
+        skyfibers = np.where(np.isin(fibermap['TARGETID'], override_sky_targetids))[0]
         # we ignore OBJTYPEs
     else:
         oksky = (fibermap['OBJTYPE'] == 'SKY')
@@ -213,7 +213,7 @@ def get_sky_fibers(fibermap, override_sky_targetids=None, exclude_sky_targetids=
         skyfibers = np.where(oksky)[0]
         if exclude_sky_targetids is not None:
             log.info('Excluding default sky fibers using exclude_sky_targetids')
-            bads = np.in1d(fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
+            bads = np.isin(fibermap['TARGETID'][skyfibers], exclude_sky_targetids)
             skyfibers = skyfibers[~bads]
 
     assert np.max(skyfibers) < len(fibermap)  #- indices, not fiber numbers
@@ -475,7 +475,7 @@ def compute_sky_linear(
         parameter_covar=cholesky_invert(A)
         # the above is too slow
         # maybe invert per block, sandwich by R
-    except np.linalg.linalg.LinAlgError :
+    except np.linalg.LinAlgError :
         log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
         parameter_covar = np.linalg.pinv(A)
 

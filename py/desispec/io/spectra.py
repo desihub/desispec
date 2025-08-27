@@ -29,7 +29,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
-from .util import get_tempfilename, addkeys
+from .util import get_tempfilename, addkeys, replace_prefix
 from . import iotime
 
 from .frame import read_frame
@@ -61,6 +61,7 @@ def write_spectra(outfile, spec, units=None):
         The absolute path to the file that was written.
 
     """
+    t0 = time.time()
     log = get_logger()
     outfile = os.path.abspath(outfile)
 
@@ -132,7 +133,7 @@ def write_spectra(outfile, spec, units=None):
             hdu.header["BUNIT"] = ((u.Unit(units, format='fits'))**-2).to_string('fits')
         hdu.data = spec.ivar[band].astype("f4")
         all_hdus.append(hdu)
-
+    
         if spec.mask is not None:
             # hdu = fits.CompImageHDU(name="{}_MASK".format(band.upper()))
             hdu = fits.ImageHDU(name="{}_MASK".format(band.upper()))
@@ -149,6 +150,14 @@ def write_spectra(outfile, spec, units=None):
                 hdu = fits.ImageHDU(name="{}_{}".format(band.upper(), ex[0]))
                 hdu.data = ex[1].astype("f4")
                 all_hdus.append(hdu)
+        if spec.model is not None:
+            hdu = fits.ImageHDU(name="{}_MODEL".format(band.upper()))
+            if units is None:
+                hdu.header["BUNIT"] = "10**-17 erg/(s cm2 Angstrom)"
+            else:
+                hdu.header["BUNIT"] = units
+            hdu.data = spec.model[band].astype(np.float32)
+            all_hdus.append(hdu)
 
     if spec.scores is not None :
         scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
@@ -169,7 +178,11 @@ def write_spectra(outfile, spec, units=None):
         extra_catalog.meta['EXTNAME'] = 'EXTRA_CATALOG'
         all_hdus.append(fits.convenience.table_to_hdu(extra_catalog))
 
-    t0 = time.time()
+    if spec.redshifts is not None:
+        redshifts = encode_table(spec.redshifts)
+        redshifts.meta['EXTNAME'] = 'REDSHIFTS'
+        all_hdus.append(fits.convenience.table_to_hdu(redshifts))
+
     tmpfile = get_tempfilename(outfile)
     all_hdus.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, outfile)
@@ -196,6 +209,8 @@ def read_spectra(
     targetids=None,
     rows=None,
     skip_hdus=None,
+    return_models=False,
+    return_redshifts=False,
     select_columns={
         "FIBERMAP": None,
         "EXP_FIBERMAP": None,
@@ -206,27 +221,31 @@ def read_spectra(
     """
     Read Spectra object from FITS file.
 
-    This reads data written by the write_spectra function.  A new Spectra
+    This reads data written by the write_spectra function. A new Spectra
     object is instantiated and returned.
-
+    
     Args:
-        infile (str): path to read
-        single (bool): if True, keep spectra as single precision in memory.
-        targetids (list): Optional, list of targetids to read from file, if present.
-        rows (list): Optional, list of rows to read from file
-        skip_hdus (list): Optional, list/set/tuple of HDUs to skip
-        select_columns (dict): Optional, dictionary to select column names to be read. Default, all columns are read.
-
-    Returns (Spectra):
-        The object containing the data read from disk.
-
-    `skip_hdus` options are FIBERMAP, EXP_FIBERMAP, SCORES, EXTRA_CATALOG, MASK, RESOLUTION;
-    where MASK and RESOLUTION mean to skip those for all cameras.
-    Note that WAVE, FLUX, and IVAR are always required.
-
-    If a table HDU is not listed in `select_columns`, all of its columns will be read
-
-    User can optionally specify targetids OR rows, but not both
+        infile (str): Path to read.
+        single (bool): If True, keep spectra as single precision in memory.
+        targetids (list, optional): List of targetids to read from file, if present.
+        rows (list, optional): List of rows to read from file.
+        skip_hdus (list, optional): List/set/tuple of HDUs to skip.
+            Options: ``FIBERMAP``, ``EXP_FIBERMAP``, ``SCORES``, ``EXTRA_CATALOG``,
+            ``MASK``, ``RESOLUTION``. ``WAVE``, ``FLUX``, and ``IVAR`` are always required.
+        return_models (bool, optional): If True, also read best-fit redrock models.
+            Loads directly from ``infile`` if ``*_MODEL`` HDUs exist; otherwise,
+            looks for a corresponding ``rrmodel-*.fits`` file. Raises IOError if neither found.
+        return_redshifts (bool, optional): If True, also read redshift table for targets.
+            Loads directly from ``infile`` if ``REDSHIFTS`` HDU exists; otherwise,
+            looks for corresponding ``redrock-*.fits`` file. Raises IOError if neither found.
+        select_columns (dict, optional): Dictionary mapping HDU names to column names to read.
+            If a table HDU is not listed, all of its columns will be read.
+    
+    Returns:
+        Spectra: The object containing the data read from disk.
+    
+    Notes:
+        User can optionally specify either ``targetids`` or ``rows``, but not both.
     """
     log = get_logger()
     infile = checkgzip(infile)
@@ -241,6 +260,27 @@ def read_spectra(
     t0 = time.time()
     hdus = fitsio.FITS(infile, mode="r")
     nhdu = len(hdus)
+    hdu_names = [hdus[i].get_extname() for i in range(nhdu)]
+
+    if return_models:
+        model_ext_exists = any("MODEL" in name for name in hdu_names)
+        if not model_ext_exists:
+            rrmodel_file = replace_prefix(infile, 'coadd', 'rrmodel')
+            if not os.path.isfile(rrmodel_file):
+                raise IOError("{} does not exist".format(rrmodel_file))
+        else:
+            rrmodel_file = infile
+            print(f'INFO: MODEL HDUs exist in {rrmodel_file}, loading.')
+            
+    if return_redshifts:
+        redshift_ext_exists = "REDSHIFTS" in hdu_names
+        if not redshift_ext_exists:
+            redrock_file = replace_prefix(infile, 'coadd', 'redrock')
+            if not os.path.isfile(redrock_file):
+                raise IOError("{} does not exist".format(redrock_file))
+        else:
+            redrock_file = infile
+            print(f'INFO: REDSHIFTS HDU exists in {redrock_file}, loading.')
 
     if targetids is not None and rows is not None:
         raise ValueError('Set rows or targetids but not both')
@@ -258,6 +298,7 @@ def read_spectra(
         targetids = np.atleast_1d(targetids)
         file_targetids = hdus["FIBERMAP"].read(columns="TARGETID")
         rows = np.where(np.isin(file_targetids, targetids))[0]
+
         if 'EXP_FIBERMAP' in hdus and 'EXP_FIBERMAP' not in skip_hdus:
             exp_targetids = hdus["EXP_FIBERMAP"].read(columns="TARGETID")
             exp_rows = np.where(np.isin(exp_targetids, targetids))[0]
@@ -294,6 +335,8 @@ def read_spectra(
     extra = None
     extra_catalog = None
     scores = None
+    model = None
+    redshifts = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
     # extension name to determine where to put the data.  We don't
@@ -344,56 +387,116 @@ def read_spectra(
                     ).as_array()
                 )
                 addkeys(extra_catalog.meta, hdus[h].read_header())
+                
+        elif (return_redshifts) and (name == "REDSHIFTS"):
+            if name not in skip_hdus:
+                redshifts = encode_table(
+                    Table(
+                        hdus[h].read(
+                            rows=rows
+                        ),
+                        copy=True,
+                    ).as_array()
+                )
+                addkeys(redshifts.meta, hdus[h].read_header())
+
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
-            if mat is None:
-                raise RuntimeError(
-                    "FITS extension name {} does not contain the band".format(name)
+            if mat is not None:
+                band = mat.group(1).lower()
+                type = mat.group(2)
+                if band not in bands:
+                    bands.append(band)
+                if type == "WAVELENGTH":
+                    if wave is None:
+                        wave = {}
+                    # - Note: keep original float64 resolution for wavelength
+                    wave[band] = native_endian(hdus[h].read())
+                elif type == "FLUX":
+                    if flux is None:
+                        flux = {}
+                    flux[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type == "IVAR":
+                    if ivar is None:
+                        ivar = {}
+                    ivar[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type == "MASK" and type not in skip_hdus:
+                    if mask is None:
+                        mask = {}
+                    mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
+                elif type == "RESOLUTION" and type not in skip_hdus:
+                    if res is None:
+                        res = {}
+                    res[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif (return_models) and (type == "MODEL"):
+                    if model is None:
+                        model = {}
+                    model[band] = _read_image(hdus, h, ftype, rows=rows)
+                elif type != "MASK" and type != "RESOLUTION" and type != "MODEL" and type not in skip_hdus:
+                    # this must be an "extra" HDU
+                    log.debug('Reading extra HDU %s', name)
+                    if extra is None:
+                        extra = {}
+                    if band not in extra:
+                        extra[band] = {}
+                    extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
+            else:
+                log.warning(
+                    "FITS extension {} is not recognized and is ignored".format(name)
                 )
-            band = mat.group(1).lower()
-            type = mat.group(2)
-            if band not in bands:
-                bands.append(band)
-            if type == "WAVELENGTH":
-                if wave is None:
-                    wave = {}
-                # - Note: keep original float64 resolution for wavelength
-                wave[band] = native_endian(hdus[h].read())
-            elif type == "FLUX":
-                if flux is None:
-                    flux = {}
-                flux[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type == "IVAR":
-                if ivar is None:
-                    ivar = {}
-                ivar[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type == "MASK" and type not in skip_hdus:
-                if mask is None:
-                    mask = {}
-                mask[band] = _read_image(hdus, h, np.uint32, rows=rows)
-            elif type == "RESOLUTION" and type not in skip_hdus:
-                if res is None:
-                    res = {}
-                res[band] = _read_image(hdus, h, ftype, rows=rows)
-            elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
-                # this must be an "extra" HDU
-                log.debug('Reading extra HDU %s', name)
-                if extra is None:
-                    extra = {}
-                if band not in extra:
-                    extra[band] = {}
-
-                extra[band][type] = _read_image(hdus, h, ftype, rows=rows)
 
     hdus.close()
     duration = time.time() - t0
-    log.info(iotime.format("read", infile, duration))
+    log.info(iotime.format("read spectra from: ", infile, duration))
+    
+    model_targetids = None # for the sanity checks between fibermap and model targetids
+    if return_models:
+        t0 = time.time()
+        if model is None:
+            model = dict()
+            # read rrmodel file
+            rrhdus = fitsio.FITS(rrmodel_file, mode="r")
+            model_targetids = Table.read(rrmodel_file, hdu="REDSHIFTS")["TARGETID"]# for sanity check
+            model_targetids = np.asarray(model_targetids)
+            if rows is not None and len(rows)>0:
+                model_targetids = model_targetids[rows]
+    
+            # getting indices of model extensions
+            ind_models = []
+            for k in range(len(rrhdus)):
+                hdu_name = fitsio.FITS(rrmodel_file)[k].get_extname()
+                if "MODEL" in hdu_name:
+                    ind_models.append(k)
+                for ind, band in zip(ind_models,bands):
+                    log.debug('Reading %s_MODEL'%(band.upper()))
+                    model[band] = _read_image(rrhdus, ind, np.float32, rows=rows)
+            rrhdus.close()
+        duration = time.time() - t0
+        log.info(iotime.format("read MODELS from: ", rrmodel_file, duration))
+    
+    # sanity check between targetids in fibermap and model catalog
+    if fmap is not None and model_targetids is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
+
+    if return_redshifts and redshifts is None:
+        t0 = time.time()
+        redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
+        if rows is not None and len(rows)>0:
+            redshifts = redshifts[rows]
+        duration = time.time() - t0
+        log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
+
+    # sanity check between targetids in fibermap and model catalog/redshifts
+    if fmap is not None and model_targetids is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
+    if fmap is not None and redshifts is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], redshifts["TARGETID"])
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
-
+    
     spec = Spectra(
         bands,
         wave,
@@ -405,9 +508,11 @@ def read_spectra(
         exp_fibermap=expfmap,
         meta=meta,
         extra=extra,
+        model=model,
         extra_catalog=extra_catalog,
         single=single,
         scores=scores,
+        redshifts=redshifts,
     )
 
     # if needed, sort spectra to match order of targetids, which could be
@@ -422,13 +527,22 @@ def read_spectra(
         #- Unique targetids of input file in the order they first appear
         input_targetids = ordered_unique(spec.fibermap['TARGETID'])
         log.debug('input_targetids=%s', np.asarray(input_targetids))
-
-        #- Only reorder if needed
-        if not np.all(input_targetids == found_targetids):
+        
+        #- Only reorder if needed 
+        #using np.array_equal as it's safer and more clean and will not give error in future numpy versions
+        if not np.array_equal(input_targetids, found_targetids):
             rows = np.concatenate([np.where(spec.fibermap['TARGETID'] == tid)[0] for tid in targetids])
             log.debug("spec.fibermap['TARGETID'] = %s", np.asarray(spec.fibermap['TARGETID']))
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
+
+        # consistency check between targetids
+        # This check is incorrect: see test_spectra.py : test_read_targetids
+        # for thorough testing of a number of different cases.
+        #   np.testing.assert_array_equal(spec.fibermap["TARGETID"], targetids)
+        if return_redshifts:
+            np.testing.assert_array_equal(spec.fibermap["TARGETID"],
+                                          spec.redshifts["TARGETID"])
 
     return spec
 
@@ -492,7 +606,7 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         extra = {band : {"CHI2PIX" : fr.chi2pix}}
 
     spec = Spectra(bands, {band : fr.wave}, {band : fr.flux}, {band : fr.ivar},
-        mask=mask, resolution_data=res, fibermap=fmap, meta=fr.meta,
+        mask=mask, resolution_data=res, fibermap=fmap, meta=dict(fr.meta),
         extra=extra, single=single, scores=fr.scores)
 
     return spec
@@ -577,10 +691,10 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
 
         sp = read_spectra(filename, single=single)
         if targets is not None:
-            keep = np.in1d(sp.fibermap['TARGETID'], targets)
+            keep = np.isin(sp.fibermap['TARGETID'], targets)
             sp = sp[keep]
         if fibers is not None:
-            keep = np.in1d(sp.fibermap['FIBER'], fibers)
+            keep = np.isin(sp.fibermap['FIBER'], fibers)
             sp = sp[keep]
 
         if sp.num_spectra() > 0:
@@ -593,7 +707,7 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
                 rr = Table.read(rrfile, 'REDSHIFTS')
 
                 #- Trim rr to only have TARGETIDs in filtered spectra sp
-                keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
+                keep = np.isin(rr['TARGETID'], sp.fibermap['TARGETID'])
                 rr = rr[keep]
 
                 #- match the Redrock entries to the spectra fibermap entries
@@ -922,4 +1036,3 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
                 spectra = spectra[ii]
 
     return spectra
-

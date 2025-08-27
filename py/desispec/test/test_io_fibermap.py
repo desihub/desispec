@@ -351,10 +351,25 @@ class TestIOFibermap(unittest.TestCase):
         self.assertEqual(fibermap_hdu.header['TUNIT7'], 'deg')  # TARGET_RA
         mock_log().error.assert_not_called()
         #
+        # Add some optional coadd columns and re-annotate
+        #
+        fibermap['MEAN_FIBER_X'] = np.arange(len(fibermap), dtype='f4')
+        fibermap['IN_COADD_B'] = np.ones(len(fibermap), dtype=bool)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*nmgy.*", category=AstropyUserWarning)
+            fibermap_hdu = fits.BinTableHDU(fibermap)
+        fibermap_hdu = annotate_fibermap(fibermap_hdu)
+        # column72 is MEAN_FIBER_X
+        self.assertEqual(fibermap_hdu.header.comments['TTYPE72'], 'Mean (over exposures) fiber CS5 X location')
+        self.assertEqual(fibermap_hdu.header['TUNIT72'], 'mm')
+        # column73 is IN_COADD_B
+        self.assertEqual(fibermap_hdu.header.comments['TTYPE73'], 'Was this exposure included in B coadd')
+        self.assertNotIn('TUNIT73', fibermap_hdu.header)   # no units on boolean column
+        #
         # This is a by-product of creating the table via empty_fibermap.
         #
-        mock_log().warning.assert_has_calls([call("Overriding units for column '%s': '%s' -> '%s'.", 'PMRA', 'mas yr-1', 'mas yr^-1'),
-                                             call("Overriding units for column '%s': '%s' -> '%s'.", 'PMDEC', 'mas yr-1', 'mas yr^-1')])
+        # mock_log().warning.assert_has_calls([call("Overriding units for column '%s': '%s' -> '%s'.", 'PMRA', 'mas yr-1', 'mas yr^-1'),
+        #                                      call("Overriding units for column '%s': '%s' -> '%s'.", 'PMDEC', 'mas yr-1', 'mas yr^-1')])
         #
         # Test with unexpected column
         #

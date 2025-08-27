@@ -20,18 +20,21 @@ import importlib.resources
 import multiprocessing as mp
 
 import numpy as np
-from numpy.lib.recfunctions import append_fields
+from numpy.lib.recfunctions import append_fields, drop_fields
 
 import fitsio
 from astropy.table import Table, hstack, vstack
 
-from desiutil.log import get_logger
+from desiutil.log import get_logger, DEBUG
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
 from desispec.io.table import read_table
+from desispec.coaddition import coadd_fibermap
+from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desiutil.annotate import load_csv_units
+from desiutil.names import radec_to_desiname
 import desiutil.depend
 from desispec import validredshifts
 
@@ -119,13 +122,68 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
             log.warning("Skipping {} with SPGRP {} != group {}".format(
                 rrfile, hdr['SPGRP'], group))
             return None
+        try:
+            redshifts = fx['REDSHIFTS'].read()
+            zbest_file = False
+        except IOError:
+            #
+            # zbest files do not have an EXP_FIBERMAP HDU, so force a recoadd.
+            #
+            redshifts = fx['ZBEST'].read()
+            zbest_file = True
 
-        redshifts = Table(fx['REDSHIFTS'].read())
+        if recoadd_fibermap or zbest_file:
+            if zbest_file:
+                spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
+            else:
+                spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
+            log.info('Recoadding fibermap from %s.', os.path.basename(spectra_filename))
+            fibermap_orig = read_table(spectra_filename)
+            fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
+            if zbest_file:
+                fibermap.sort(['TARGETID'])
+        else:
+            fibermap = Table(fx['FIBERMAP'].read())
+            expfibermap = Table(fx['EXP_FIBERMAP'].read())
 
-        fibermap = Table(fx['FIBERMAP'].read())
-        expfibermap = Table(fx['EXP_FIBERMAP'].read())
+        assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
-        tsnr2 = Table(fx['TSNR2'].read())
+        try:
+            tsnr2 = fx['TSNR2'].read()
+        except IOError:
+            if zbest_file:
+                #
+                # zbest files do not have a TSNR2 HDU.
+                #
+                log.info('Computing TSNR2 from SCORES HDU in %s.', os.path.basename(spectra_filename))
+                scores = read_table(spectra_filename, ext='SCORES')
+                if 'TARGETID' not in scores.colnames:
+                    assert len(scores) == len(fibermap_orig)
+                    scores['TARGETID'] = fibermap_orig['TARGETID']
+                tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
+                tsnr2.sort(['TARGETID'])
+            else:
+                log.warning("Unable to obtain TSNR2 information for %s!", rrfile)
+                tsnr2 = None
+
+        if tsnr2 is not None:
+            assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+            #
+            # Fill missing columns with dummy values.
+            #
+            for band in ('B', 'R', 'Z', ''):
+                for targ in ('ELG', 'GPBBACKUP', 'GPBBRIGHT', 'GPBDARK', 'LYA', 'BGS', 'QSO', 'LRG'):
+                    if band:
+                        colname = f'TSNR2_{targ}_{band}'
+                    else:
+                        colname = f'TSNR2_{targ}'
+                    if colname not in tsnr2.dtype.names:  # This should work for both numpy arrays and Tables.
+                        log.warning("TSNR2 table is missing %s, filling with dummy values.", colname)
+                        if isinstance(tsnr2, Table):
+                            tsnr2[colname] = np.zeros((len(tsnr2), ), dtype=np.float32)
+                        else:
+                            tsnr2 = append_fields(tsnr2, colname,
+                                                  np.zeros(tsnr2.shape, dtype=np.float32), dtypes=np.float32)
 
     emline_file = rrfile.replace('/redrock-', '/emline-')
     qso_mgii_file = rrfile.replace('/redrock-', '/qso_mgii-')
@@ -161,6 +219,75 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         qso_mgii[qso_mgii_cols],
         qso_qn[qso_qn_cols]
         ], join_type='exact')
+
+    #
+    # These old columns show up in zbest files. They have been replaced with
+    # COADD_NUMEXP, COADD_NUMTILE, which are obtained from coadd_fibermapp()
+    # for zbest files.
+    #
+    for drop_col in ('NUMEXP', 'NUMTILE', 'NUMTARGET', 'HPXPIXEL', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z'):
+        if drop_col in data.colnames:
+            log.info("Removing column '%s' from %s ('ZCATALOG').", drop_col, os.path.basename(rrfile))
+            data.remove_column(drop_col)
+
+    if data['RELEASE'].dtype == np.dtype('>i4'):
+        log.info("Casting column 'RELEASE' in %s ('ZCATALOG') to 'int16'.", os.path.basename(rrfile))
+        data.replace_column('RELEASE', data['RELEASE'].astype(np.int16))
+
+    #
+    # Older files, including, but not limited to zbest files, may not have DESINAME and other columns.
+    #
+    for add_col in ('DESINAME', 'MEAN_PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC', 'FITMETHOD'):
+        if add_col not in data.colnames:
+            log.info("Adding missing column '%s' to %s ('ZCATALOG').", add_col, os.path.basename(rrfile))
+            if add_col == 'DESINAME':
+                i = data.colnames.index('TARGET_DEC')
+                if (np.isfinite(data['TARGET_RA']) & np.isfinite(data['TARGET_DEC'])).all():
+                    desiname = radec_to_desiname(data['TARGET_RA'], data['TARGET_DEC'])
+                else:
+                    log.warning("NaN detected in TARGET_RA, TARGET_DEC for %s ('ZCATALOG'), dummy values will be used!", os.path.basename(rrfile))
+                    desiname = np.array(['-'*22]*len(data))
+                    good_radec = np.where(np.isfinite(data['TARGET_RA']) & np.isfinite(data['TARGET_DEC']))[0]
+                    desiname[good_radec] = radec_to_desiname(data['TARGET_RA'][good_radec], data['TARGET_DEC'][good_radec])
+                data.add_column(desiname,
+                                index=i, name=add_col)
+            if add_col == 'MEAN_PSF_TO_FIBER_SPECFLUX':
+                log.warning("Adding missing column '%s' to %s ('ZCATALOG') with dummy values!", add_col, os.path.basename(rrfile))
+                i = data.colnames.index('MEAN_MJD')
+                data.add_column(np.zeros((len(data), ), dtype=np.float32),
+                                index=i, name=add_col)
+            if add_col == 'PLATE_RA':
+                try:
+                    i = data.colnames.index('SCND_TARGET')
+                except ValueError:
+                    i = data.colnames.index('MWS_TARGET')
+                data.add_column(data['TARGET_RA'],
+                                index=i, name=add_col)
+            if add_col == 'PLATE_DEC':
+                i = data.colnames.index('PLATE_RA')
+                data.add_column(data['TARGET_DEC'],
+                                index=i, name=add_col)
+            if add_col == 'FITMETHOD':
+                i = data.colnames.index('DESINAME')
+                data.add_column(np.array(['PCA'] * len(data)).astype(np.dtype('S4')),
+                                index=i, name=add_col)
+
+    for add_col in ('PSF_TO_FIBER_SPECFLUX', 'PLATE_RA', 'PLATE_DEC'):
+        if add_col not in expfibermap.colnames:
+            log.info("Adding missing column '%s' to %s ('EXP_FIBERMAP').", add_col, os.path.basename(rrfile))
+            if add_col == 'PSF_TO_FIBER_SPECFLUX':
+                log.warning("Adding missing column '%s' to %s ('EXP_FIBERMAP') with dummy values!", add_col, os.path.basename(rrfile))
+                i = expfibermap.colnames.index('FIBER_DEC')
+                expfibermap.add_column(np.zeros((len(expfibermap), ), dtype=np.float64),
+                                       index=i, name=add_col)
+            if add_col == 'PLATE_RA':
+                i = expfibermap.colnames.index('LAMBDA_REF')
+                expfibermap.add_column(expfibermap['FIBER_RA'],
+                                       index=i, name=add_col)
+            if add_col == 'PLATE_DEC':
+                i = expfibermap.colnames.index('PLATE_RA')
+                expfibermap.add_column(expfibermap['FIBER_DEC'],
+                                       index=i, name=add_col)
 
     #- Add group specific columns, recognizing some some of them may
     #- have already been inherited from the fibermap.
@@ -231,10 +358,13 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-i", "--indir",  type=str,
+    parser.add_argument("-i", "--indir",  type=str, default=None,
             help="input directory")
-    parser.add_argument("-o", "--outfile",type=str,
+    parser.add_argument("-o", "--outfile",type=str, default=None,
             help="output file")
+
+    parser.add_argument("--minimal", action='store_true',
+            help="only include minimal output columns")
     parser.add_argument("-t", "--tiles", type=str,
             help="ascii file with tileids to include (one per line)")
 
@@ -250,11 +380,15 @@ def parse(options=None):
             help="KEYWORD=VALUE entries to add to the output header")
     parser.add_argument('--patch-missing-ivar-w12', action='store_true',
             help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
-    parser.add_argument('--add-units', action='store_true',
-            help="Add units to output catalog from desidatamodel "
+    parser.add_argument('--recoadd-fibermap', action='store_true',
+            help="Re-coadd FIBERMAP from spectra files")
+    parser.add_argument('--do-not-add-units', action='store_true',
+            help="Don't add units to output catalog from desidatamodel "
                  "column descriptions")
     parser.add_argument('--nproc', type=int, default=1,
             help="Number of multiprocessing processes to use")
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help="Set log level to DEBUG.")
 
     args = parser.parse_args(options)
 
@@ -266,22 +400,28 @@ def main(args=None):
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
 
-    log=get_logger()
+    if args.verbose:
+        log=get_logger(DEBUG)
+    else:
+        log=get_logger()
 
     if args.outfile is None:
         args.outfile = io.findfile('zcatalog')
 
     #- If adding units, check dependencies before doing a lot of work
-    if args.add_units:
+    add_units = not args.do_not_add_units
+    if add_units:
         try:
             import desidatamodel
         except ImportError:
-            log.critical('Unable to import desidatamodel, required to add units (try "module load desidatamodel" first)')
-            sys.exit(1)
+            log.critical('Unable to import desidatamodel, required to add units.'
+                         + ' Try "module load desidatamodel" first or use '
+                         + '--do-not-add-units')
+            return 1
 
     survey = args.survey
 
-    if args.indir:
+    if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
@@ -301,26 +441,36 @@ def main(args=None):
     else:
         pertile = True
         tilefile = args.tiles if args.tiles is not None else io.findfile('tiles')
+        tilefile_format = 'fits'
         indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
         #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
         if indir.startswith('/global/cfs/cdirs'):
             indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
 
+        if not os.path.exists(tilefile):
+            log.warning(f'Tiles file {tilefile} does not exist. Trying CSV instead.')
+            tilefile = io.findfile('tiles_csv')
+            tilefile_format = 'ascii.csv'
+            if not os.path.exists(tilefile):
+                log.critical(f"Could not find a valid tiles file!")
+                return 1
+
         log.info(f'Loading tiles from {tilefile}')
-        tiles = Table.read(tilefile)
-        keep = tiles['SURVEY'] == survey
-        tiles = tiles[keep]
-        if len(tiles) == 0:
-            log.critical(f'No tiles kept after filtering by SURVEY={survey}')
-            sys.exit(1)
+        tiles = Table.read(tilefile, format=tilefile_format)
+        if args.survey is not None:
+            keep = tiles['SURVEY'] == args.survey
+            tiles = tiles[keep]
+            if len(tiles) == 0:
+                log.critical(f'No tiles kept after filtering by SURVEY={args.survey}')
+                return 1
 
         if args.program is not None:
             keep = tiles['PROGRAM'] == args.program
             tiles = tiles[keep]
             if len(tiles) == 0:
                 log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')
-                sys.exit(1)
+                return 1
 
         tileids = tiles['TILEID']
         log.info(f'Searching disk for redrock*.fits files from {len(tileids)} tiles')
@@ -341,7 +491,12 @@ def main(args=None):
             if len(tmp) > 0:
                 redrockfiles.append(tmp)
             else:
-                log.error(f'no redrock files found in {indir}/{tileid}')
+                log.warning(f'No redrock files found in {indir}/{tileid}. Checking for zbest files.')
+                tmp = sorted(glob.glob(f'{indir}/{tileid}/*/zbest-*.fits'))
+                if len(tmp) > 0:
+                    redrockfiles.append(tmp)
+                else:
+                    log.error(f'No redrock OR zbest files found in {indir}/{tileid}!')
 
         #- convert list of lists -> list
         redrockfiles = list(itertools.chain.from_iterable(redrockfiles))
@@ -384,8 +539,18 @@ def main(args=None):
     log.info('Stacking zcat')
     zcat = vstack(zcatdata, join_type='exact')
     desiutil.depend.mergedep(dependencies, zcat.meta)
-    log.info('Stacking exposure fibermaps')
-    expfm = np.hstack(exp_fibermaps)
+    if exp_fibermaps:
+        log.info('Stacking exposure fibermaps')
+        assert all([isinstance(e, Table) for e in exp_fibermaps])
+        try:
+            expfm = vstack(exp_fibermaps)
+        except Exception as e:
+            log.error(f'Unexpected exception when stacking exposure fibermaps!')
+            log.error(type(e))
+            log.error(e.args[0])
+            expfm = None
+    else:
+        expfm = None
 
     #- Add FIRSTNIGHT for tile-based cumulative catalogs
     #- (LASTNIGHT was added while reading from NIGHT header keyword)
@@ -571,7 +736,7 @@ def main(args=None):
         header['PROGRAM'] = args.program
 
     #- Add units if requested
-    if args.add_units:
+    if add_units:
         datamodeldir = str(importlib.resources.files('desidatamodel'))
         unitsfile = os.path.join(datamodeldir, 'data', 'column_descriptions.csv')
         log.info(f'Adding units from {unitsfile}')

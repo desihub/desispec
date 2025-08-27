@@ -78,6 +78,7 @@ def test_gauge_offsets() :
 
     # BLUE     RED	NIR
     # piston (mm)	tilt/X(deg)	tilt/Y(deg)	piston (mm)	tilt/X(deg)	tilt/Y(deg)	piston (mm)	tilt/X(deg)	tilt/Y(deg)
+    log=get_logger()
     plane={}
     plane["SM1"]=[0.076,-0.00722,-0.00722,0.055,-0.01690,0.0252,0.050,-0.01765,0.01377]
     plane["SM2"]=[0.022,0.0214,0.02661,0.043,0.00854,0.02465,0.042,0.02101,0.00988]

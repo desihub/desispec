@@ -8,6 +8,7 @@ import copy
 import numpy as np
 from desispec.maskbits import ccdmask
 from desispec import util
+from desiutil.log import get_logger
 
 class Image(object):
     def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
@@ -25,6 +26,7 @@ class Image(object):
             camera : e.g. 'b0', 'r1', 'z9'
             meta : dict-like metadata key/values, e.g. from FITS header
         """
+        log = get_logger()
         if pix.ndim != 2:
             raise ValueError('pix must be 2D, not {}D'.format(pix.ndim))
         if pix.shape != ivar.shape:
@@ -44,6 +46,16 @@ class Image(object):
         #- Optional parameters
         self.readnoise = readnoise
         self.camera = camera
+
+        #- set meta['CAMERA'] if camera is known
+        if self.meta is None:
+            self.meta = dict(CAMERA=camera)
+        elif 'CAMERA' not in self.meta:
+            self.meta['CAMERA'] = camera
+        elif (camera != 'unknown') and (self.meta['CAMERA'] != camera):
+            log.warning(f"Overriding {meta['CAMERA']=} with {camera=}")
+            self.meta['CAMERA'] = camera
+
 
     #- Allow image slicing
     def __getitem__(self, xyslice):

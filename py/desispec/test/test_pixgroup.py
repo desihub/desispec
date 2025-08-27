@@ -376,13 +376,30 @@ class TestPixGroup(unittest.TestCase):
         exp2hpix = get_exp2healpix_map(expfile, expids=[88056,88057])
         self.assertEqual(list(np.unique(exp2hpix['EXPID'])), [88056,88057])
 
-        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't
-        #- appear in map (but e.g. petal 1 should)
+        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't appear in map
+        #- tile 562 petal 0 was marked as bad for only a single exposure 88049
+        #- other petals should appear for all exposures
         exp2hpix = get_exp2healpix_map(expfile, survey='sv3', program='bright')
-        n1 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1))
-        n6 = np.sum((exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6))
+        is0 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 0)
+        is1 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1)
+        is6 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6)
+        n0 = np.sum(is0)
+        n1 = np.sum(is1)
+        n6 = np.sum(is6)
+        print(exp2hpix[exp2hpix['TILEID']==562])
+        self.assertGreater(n0, 0)
         self.assertGreater(n1, 0)
+        self.assertLess(n0, n1)
         self.assertEqual(n6, 0)
+
+        self.assertNotIn(88049, list(np.unique(exp2hpix['EXPID'][is0])))
+        self.assertIn(88049, list(np.unique(exp2hpix['EXPID'][is1])))
+        self.assertNotIn(88049, list(np.unique(exp2hpix['EXPID'][is6])))
+
+        self.assertIn(88056, list(np.unique(exp2hpix['EXPID'][is0])))
+        self.assertIn(88056, list(np.unique(exp2hpix['EXPID'][is1])))
+        self.assertNotIn(88056, list(np.unique(exp2hpix['EXPID'][is6])))
+
 
     def test_frames2spectra(self):
         """Test frames2spectra"""

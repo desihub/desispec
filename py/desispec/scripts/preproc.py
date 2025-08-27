@@ -76,7 +76,7 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--nodarktrail', action='store_true',
                         help = 'do not correct for dark trails if any')
     parser.add_argument('--no-overscan-per-row', action='store_true',
-                        help = 'do not perform an overscan subtraction per row (which can be otherwise turned on automatically for some images)')
+                        help = 'disable per-row overscan subtraction (which can be otherwise turned on automatically for some images)')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -219,11 +219,9 @@ def main(args=None):
     if args.ncpu > 1 and num_cameras>1:
         n = min(args.ncpu, num_cameras)
         log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
-        pool = mp.Pool(n)
-        failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
+        with mp.Pool(n) as pool:
+            failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
         num_failed = np.sum(failed)
-        pool.close()
-        pool.join()
     else:
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         num_failed = 0

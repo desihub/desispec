@@ -136,21 +136,31 @@ class TestFluxCalibration(unittest.TestCase):
         nwave = len(wave)
         nspec = 3
         flux = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
-        ivar = np.ones_like(flux)
-        origframe = Frame(wave, flux, ivar, spectrograph=0)
+        ivar = np.random.uniform(0.9, 1.1, size=flux.shape)
+        origframe = Frame(wave, flux.copy(), ivar.copy(), spectrograph=0)
 
-        #define fluxcalib object
-        calib = np.ones_like(origframe.flux)
+        # efine fluxcalib object
+        calib = np.random.uniform(.5, 1.5, size=origframe.flux.shape)
         mask = np.zeros(origframe.flux.shape, dtype=np.uint32)
-        calib[0] *= 0.5
-        calib[1] *= 1.5
+
+        ivar_big = 1e20 * np.ones_like(origframe.flux)
 
         # fc with essentially no error
-        fcivar = 1e20 * np.ones_like(origframe.flux)
-        fc = FluxCalib(origframe.wave, calib, fcivar,mask)
+        fc = FluxCalib(origframe.wave, calib, ivar_big, mask)
         frame = copy.deepcopy(origframe)
         apply_flux_calibration(frame, fc)
-        self.assertTrue(np.allclose(frame.ivar, calib**2))
+        self.assertTrue(np.allclose(frame.ivar, calib**2 * ivar))
+
+        # spectrum with essentially no error
+        # but large calibration error
+        # in this case the S/N should be the same as of the
+        # calibration vector
+        fc = FluxCalib(origframe.wave, calib, ivar, mask)
+        frame = copy.deepcopy(origframe)
+        frame.ivar = ivar_big
+        apply_flux_calibration(frame, fc)
+        self.assertTrue(np.allclose(frame.flux**2 * frame.ivar,
+                                    calib**2 * ivar))
 
         # origframe.flux=0 should result in frame.flux=0
         fcivar = np.ones_like(origframe.flux)

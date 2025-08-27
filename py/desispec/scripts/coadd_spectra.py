@@ -8,6 +8,7 @@ Coadd spectra
 from __future__ import absolute_import, division, print_function
 
 import os,sys
+import argparse
 import numpy as np
 from astropy.table import Table
 import fitsio
@@ -19,7 +20,6 @@ from desispec.pixgroup import frames2spectra
 from desispec.specscore import compute_coadd_scores
 
 def parse(options=None):
-    import argparse
 
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
     parser.add_argument("-i","--infile", type=str, nargs='+',
@@ -54,11 +54,11 @@ def parse(options=None):
     return args
 
 def main(args=None):
-
     log = get_logger()
 
-    if args is None:
-        args = parse()
+    #- Parse None or list of strings of command line opts
+    if not isinstance(args, argparse.Namespace):
+        args = parse(options=args)
 
     if args.lin_step is not None and args.log10_step is not None :
         log.critical("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")

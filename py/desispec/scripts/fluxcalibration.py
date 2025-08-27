@@ -30,7 +30,7 @@ from astropy.table import Table
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.")
 
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i', '--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
@@ -52,7 +52,7 @@ def parse(options=None):
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--nostdcheck', dest='nostdcheck',
                         help='Do not check the standards against flags in the FIBERMAP; just use objects in the model file', action='store_true')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o', '--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
                         help='path of QA file.')
@@ -120,7 +120,7 @@ def main(args=None) :
     if args.selected_calibration_stars is not None :
         table=Table.read(args.selected_calibration_stars)
         good=table["VALID"]==1
-        good_models = np.in1d( model_fibers , table["FIBER"][good] )
+        good_models = np.isin( model_fibers , table["FIBER"][good] )
         log.info("Selected {} good stars on {}, fibers = {}, from {}".format(
             np.sum(good_models), camera, model_fibers[good_models], args.selected_calibration_stars))
         model_flux   = model_flux[good_models]
@@ -234,7 +234,7 @@ def main(args=None) :
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
     if stdcheck:
         fibermap_std_indices = np.where(isStdStar(fibermap))[0]
-        if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
+        if np.any(~np.isin(model_fibers%500, fibermap_std_indices)):
             target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
             colname =  target_colnames[0]
             for i in model_fibers%500:

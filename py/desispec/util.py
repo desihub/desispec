@@ -23,7 +23,7 @@ import subprocess as sp
 from desiutil.log import get_logger, INFO
 
 
-def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False):
+def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False, check_return=False):
     """
     Runs a command (function or script), checking for inputs and outputs
 
@@ -37,6 +37,7 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
         outputs : list of output filenames that should be created
         clobber : if True, run even if outputs already exist
         comm : MPI communicator to pass to cmd(..., comm=comm)
+        check_return : if True, check return value of function and require 0 or None for success
 
     Returns:
         (result, success)
@@ -49,6 +50,7 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
       * If spawned as a script, return (returncode, (returncode==0)).
       * If function raises an exception, return (exception, False).
       * If function returns result but outputs are missing, return (result, False).
+      * If check_return is True and function result != (0 or None), return (result, False)
       * If function returns result and all outputs are present, return (result, True).
     """
 
@@ -146,7 +148,12 @@ def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, c
                 result = cmd(*args)
             else:
                 result = cmd(*args, comm=comm)
-        else:
+
+            if check_return:
+                if result not in (0, None):
+                    success = False
+
+        else: # not a callable function, spawn as script
             result = sp.call(cmdstr, shell=True)
             success = (result == 0)
 
@@ -383,7 +390,7 @@ def mask32(mask):
         return np.asarray(mask, dtype='u4')
 
     elif mask.dtype in (
-        np.dtype('bool'), np.dtype('bool8'),
+        np.dtype('bool'),
         np.dtype('i2'),  np.dtype('u2'),
         np.dtype('>i2'), np.dtype('>u2'),
         np.dtype('<i2'), np.dtype('<u2'),
@@ -397,10 +404,11 @@ def mask32(mask):
 
 def night2ymd(night):
     """
-    parse night YEARMMDD string into tuple of integers (year, month, day)
+    parse night YEARMMDD into tuple of integers (year, month, day)
     """
-    assert isinstance(night, str), 'night is not a string'
-    assert len(night) == 8, f'invalid YEARMMDD night string {night=}'
+    night = str(night) # support both in and str input
+    if len(night) != 8:
+        raise ValueError(f'invalid YEARMMDD night string {night=}')
 
     year = int(night[0:4])
     month = int(night[4:6])
@@ -415,10 +423,16 @@ def night2ymd(night):
 
 def night2dateobj(night):
     """
-    parse night YEARMMDD string into a datetime.date object
+    parse night YEARMMDD into a datetime.date object
     """
     year, mm, dd = night2ymd(night)
     return datetime.date(year=year, month=mm, day=dd)
+
+def dateobj2night(dateobj):
+    """
+    Convert datetime.date object into YEARMMDD int
+    """
+    return int(ymd2night(dateobj.year, dateobj.month, dateobj.day))
 
 def difference_nights(firstnight, secondnight):
     """
@@ -530,7 +544,8 @@ def combine_ivar(ivar1, ivar2):
 
     #- Convert back to python float if input was scalar
     if isinstance(ivar1, (float, numbers.Integral)):
-        return float(ivar)
+        # Fix "Conversion of an array with ndim > 0 to a scalar is deprecated"
+        return float(ivar[0])
     #- If input was 0-dim numpy array, convert back to 0-di
     elif ivar1.ndim == 0:
         return np.asarray(ivar[0])
@@ -654,6 +669,62 @@ def parse_fibers(fiber_string, include_end=False) :
     unless `include_end` is True, which then returns 1,2,3,4,5
     """
     return parse_int_args(fiber_string, include_end)
+
+def parse_nights(nights_string, include_end=False) :
+    """
+    Short func that parses a string containing a comma separated list of
+    YYYYMMDD, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        nights_string (str) : list of integers or integer ranges
+
+    Options:
+        include_end (bool): if True, include end-value in ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i.e. 20250101-20250103
+    returns [20250101, 20250102] unless `include_end` is True,
+    which then returns [20250101, 20250102, 20250103].
+    Ranges that span month and year boundaries are handled correctly,
+    including leap-years.
+    """
+    import datetime
+
+    tmpvalues =  parse_int_args(nights_string, include_end)
+    # now keep only valid YYYYMMDD
+    values=[]
+    for value in tmpvalues :
+        try:
+            #- basic checks on month/day ranges and ability to convert to datetime.date
+            date = night2dateobj(value)
+            #- success, so add to list of values
+            values.append(value)
+        except ValueError:
+            pass
+    return np.array(values)
+
+def get_night_range(night, before, after):
+    """
+    Generate an array of YEARMMDD ints for a range of nights before and after a given night.
+
+    Args:
+        night (int): reference YEARMMDD night
+        before (int): number of nights before `night` to include
+        after (int): number of nights after `night` to include
+
+    Returns:
+        array of YEARMMDD night integers
+
+    Example: get_night_range(20250501, 2, 3) -> [20250428, 20250430, 20250501, 20250502, 20250503, 20250504],
+    i.e. two nights before, the night requested, and 3 nights after.
+    """
+    nightobj = night2dateobj(night)
+    firstnight = dateobj2night(nightobj - datetime.timedelta(days=before))
+    lastnight = dateobj2night(nightobj + datetime.timedelta(days=after))
+    return parse_nights(f'{firstnight}:{lastnight}', include_end=True)
 
 def ordered_unique(ar, return_index=False):
     """Find the unique elements of an array in the order they first appear

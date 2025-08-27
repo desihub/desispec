@@ -1,0 +1,12 @@
+#!/usr/bin/env python
+
+"""
+Utility for returning the DESI NERSC location of a specified file
+"""
+
+from desispec.io.meta import findfile, get_findfile_argparser
+
+if __name__ == "__main__":
+    parser = get_findfile_argparser()
+    args = parser.parse_args()
+    print(findfile(**args.__dict__))

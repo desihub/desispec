@@ -180,7 +180,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         exposure_petalqa_tables.append(_rm_meta_keywords(exposure_petalqa_table))
 
     if len(exposure_fiberqa_tables)==0 :
-        log.error(f"no exposure qa data for tile {tile}")
+        log.error(f"no exposure qa data for tile {tileid}")
         return None, None
 
     # stack qa tables

@@ -91,7 +91,7 @@ def get_processing_table_column_defs(return_default_values=False,
     coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', defqid      ]
 
     colnames2 += [ 'SUBMIT_DATE', 'STATUS'     , 'SCRIPTNAME']
-    coltypes2 += [  int         , 'S14'        , 'S40'       ]
+    coltypes2 += [  int         , 'S14'        , 'S50'       ]
     coldeflt2 += [ -99          , 'UNSUBMITTED', ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
@@ -608,7 +608,7 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
 
     ## If the cache exists, use it speed up the search over tiles and nights
     if nights is not None and np.all(
-            np.in1d(nights, list(_full_ptab_cache.keys()))):
+            np.isin(nights, list(_full_ptab_cache.keys()))):
         log.info(f'Using cached processing table rows')
         tablist = []
         for night in nights:

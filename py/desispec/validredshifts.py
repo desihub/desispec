@@ -51,7 +51,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
 
     if extra_columns is None:
         extra_columns = ['TARGETID', 'Z', 'ZWARN', 'COADD_FIBERSTATUS']
-    output_columns = list(np.array(extra_columns)[~np.in1d(extra_columns, output_columns)]) + output_columns
+    output_columns = list(np.array(extra_columns)[~np.isin(extra_columns, output_columns)]) + output_columns
 
     ############################ Load data ############################
 

@@ -129,14 +129,14 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
             exptable = Table.read(explist, format='ascii')
 
         if nights is not None:
-            keep = np.in1d(exptable['NIGHT'], nights)
+            keep = np.isin(exptable['NIGHT'], nights)
             exptable = exptable[keep]
 
     # - Filter exposure tables by exposure IDs or by tileid
     # - Note: If exptable was created from --expids --nights --tileid these should
     # - have no effect, but are left in for code flow simplicity
     if expids is not None:
-        keep = np.in1d(exptable['EXPID'], expids)
+        keep = np.isin(exptable['EXPID'], expids)
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
@@ -192,7 +192,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
 
         if exptable is not None:
             expids = exptable['EXPID']
-            missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
+            missing_exps = np.isin(expids, newexptable['EXPID'], invert=True)
             if np.any(missing_exps):
                 log.warning(f'Identified {np.sum(missing_exps)} missing exposures '
                             + f'in the exposure cache. Resetting the cache to acquire'
@@ -203,7 +203,7 @@ def generate_tile_redshift_scripts(group, nights=None, tileid=None, expids=None,
                 latest_exptable = read_minimal_science_exptab_cols(tileids=tileids,
                                                                    reset_cache=True)
                 latest_exptable = latest_exptable[['EXPID', 'NIGHT', 'TILEID']]
-                missing_exps = np.in1d(expids, newexptable['EXPID'], invert=True)
+                missing_exps = np.isin(expids, newexptable['EXPID'], invert=True)
                 if np.any(missing_exps):
                     log.error(f'Identified {np.sum(missing_exps)} missing exposures '
                         + f'in the exposure cache even after updating. Using the '
