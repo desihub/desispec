@@ -85,6 +85,11 @@ def main(args=None):
     if comm is not None:
         exptable = comm.bcast(exptable, root=0)
 
+    if len(exptable) < args.min_dark_exposures:
+        log.critical(f"Number of possible dark exposures {len(exptable)} "
+                     + f"< required dark exposures ({args.min_dark_exposures}).")
+        return 1
+    
     original_bias = args.bias
     error_count = 0
     for camera in requested_cameras[rank::size]:

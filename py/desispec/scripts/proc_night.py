@@ -36,7 +36,7 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     set_calibrator_flag, make_exposure_prow, \
     all_calibs_submitted, \
     update_and_recursively_submit, update_accounted_for_with_linking, \
-    submit_redshifts, update_prow_with_darknight_deps
+    submit_redshifts, check_darknight_deps_and_update_prow
 from desispec.workflow.queue import update_from_queue, any_jobs_need_resubmission, \
     get_resubmission_states
 from desispec.io.util import decode_camword, difference_camwords, \
@@ -814,9 +814,14 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
             prow['CALIBRATOR'] = 1
 
             if do_darknight:
-                prow = update_prow_with_darknight_deps(prow, n_nights_before=n_nights_before_darks, 
-                                                       n_nights_after=n_nights_after_darks, 
-                                                       proc_table_path=proc_table_path)
+                prow = check_darknight_deps_and_update_prow(prow, n_nights_before=n_nights_before_darks, 
+                                                                          n_nights_after=n_nights_after_darks, 
+                                                                          proc_table_path=proc_table_path)
+                #if not enough_darks:
+                #    log.critical("Not enough darks for every camera. Stopping submission of calibrations "
+                #                 + "until this criteria is met.")
+                #    return ptable, calibjobs, int_id
+                
                 
             extra_job_args = {'steps': []}
             if do_darknight:

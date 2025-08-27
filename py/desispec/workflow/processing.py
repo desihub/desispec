@@ -37,7 +37,7 @@ from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
 from desispec.io.util import decode_camword, create_camword, \
-    difference_camwords, \
+    difference_camwords, erow_to_goodcamword, \
     camword_to_spectros, camword_union, camword_intersection, parse_badamps
 
 
@@ -2108,7 +2108,7 @@ def make_redshift_prow(prows, tnights, descriptor, internal_id):
 
     return redshift_prow
 
-def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=None,
+def check_darknight_deps_and_update_prow(prow, n_nights_before=None, n_nights_after=None,
                                     proc_table_path=None):
     """
     Update the processing row with the darknight dependencies.
@@ -2120,7 +2120,7 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
         proc_table_path (str): Path to the processing table files.
 
     Returns:
-        dict: Updated processing row with darknight dependencies.
+        dict: If sufficient cameras returns updated processing row with darknight dependencies, else the input prow
     """
     log = get_logger()
     refnight = prow['NIGHT']
@@ -2135,6 +2135,21 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
     compdarkargs = compdarkparser.parse_args(options)
 
     exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+    
+    ## AK: as of now we always have enough darks, we just don't know if they are viable, so this is wasted computation
+    ### First see if we have enough exposures for each camera to make a viable darknight
+    #camera_counter = {cam: 0 for cam in decode_camword(prow['PROCCAMWORD'])}
+    #for erow in exptab_for_dark_night:
+    #    for cam in decode_camword(erow_to_goodcamword(erow, suppress_logging=True, exclude_badamps=True)):
+    #        camera_counter[cam] += 1
+    #enough_darks = np.all([count >= compdarkargs.min_dark_exposures for count in camera_counter.values()])
+    #if not enough_darks:
+    #    log.critical("Requested to do darknights, but not all cameras have sufficienct darks:"
+    #                 + f" {camera_counter=}, min_dark_exposures={compdarkargs.min_dark_exposures}, "
+    #                 + f"{n_nights_before=}, {n_nights_after=}. Exiting without submitting ccdcalib job.")
+    #    return prow, enough_darks
+    
+    ## Since we have enough exposures, update the processing table row with dependencies
     nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [refnight]))
     dep_intids, dep_qids = [], []
     for night in nights:
@@ -2173,7 +2188,7 @@ def update_prow_with_darknight_deps(prow, n_nights_before=None, n_nights_after=N
         ## the normal pipeline. Ignore those otherwise Slurm gets confused
         prow['LATEST_DEP_QID'] = prow['LATEST_DEP_QID'][prow['LATEST_DEP_QID']>1]
 
-    return prow
+    return prow#, enough_darks
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,

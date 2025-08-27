@@ -47,7 +47,7 @@ def compute_dark_baseparser():
     parser.add_argument('--max-exptime', type=float, default = None,
                         help='maximal exposure time to consider')
     parser.add_argument('--max-temperature-diff', type=float, default = 4. ,
-                        help='maximal difference of CCD temperature to consider')
+                        help='maximal difference of CCD temperature to consider')    
     parser.add_argument('--bias', type = str, default = None, required=False,
                          help = 'specify a bias image calibration file (standard preprocessing calibration is turned off)')
     parser.add_argument('--nocosmic', action = 'store_true',
@@ -60,12 +60,14 @@ def compute_dark_baseparser():
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
     parser.add_argument('--dry-run', action='store_true', help="If dry_run, print which images would be used, but don't compute dark.")
+    parser.add_argument('--min-dark-exposures', type=int, default=4, required=False,
+                        help='Minimum number of dark exposures to use. Default is 4. If less than this number of exposures are valid, ' \
+                        'the script will raise an error and exit.')
     parser.add_argument('--max-dark-exposures', type=int, default=50, required=False,
                         help='Maximum number of dark exposures to use. Default is 50. If more than this number of exposures are found, ' \
                         'the script will downselect to the closest exposures in time up to this limit.')
     parser.add_argument('--skip-camera-check', action='store_true', help="If True, doesn't check if camera exists for an exposure ahead of time.")
     parser.add_argument('--dont-search-filesystem', action='store_true', help="If True, doesn't search filesystem for exposures.")
-
     return parser
 
 
@@ -105,7 +107,7 @@ def get_stacked_dark_exposure_table(args):
     for k in ["DESI_SPECTRO_DATA","DESI_SPECTRO_REDUX","SPECPROD"] :
         if k not in os.environ :
             envok = False
-            log.error(f"args.nights/referene_night specified but variable {k} is not set so we cannot find the exposures.")
+            log.error(f"args.nights/reference_night specified but variable {k} is not set so we cannot find the exposures.")
             if k=="SPECPROD" :
                 log.error("consider using argument --specprod.")
 
@@ -223,11 +225,18 @@ def main(args=None, exptable=None):
         log.error("Cannot use --reference-night and --reference-expid at the same time.")
         return 1
 
+    ## If we don't have the minimum number, exit now
+    if args.images is not None and len(arg,images) < args.min_dark_exposures:
+        log.critical(f"Number of possible dark exposures {len(args.images)} "
+                     + f"< required dark exposures ({args.min_dark_exposures}).")
+        return 1
+   
     # first find the exposures if they are not given in input
     if args.images is None:
         if exptable is None:
             # if no images are given, we need to find the exposures
             exptable = get_stacked_dark_exposure_table(args)
+        
         if not args.skip_camera_check:
             log.info(f"Subselecting exposures in exposure table in which {args.camera}.")
             keep = np.repeat(True,len(exptable))
@@ -235,8 +244,12 @@ def main(args=None, exptable=None):
                 keep[i] &= ( args.camera in decode_camword(erow_to_goodcamword(entry, suppress_logging=True, exclude_badamps=True)) )
             exptable = exptable[keep]
 
-        if exptable is None or len(exptable) == 0:
-            log.error("No valid exposures found for dark frame computation.")
+        if exptable is None:
+            log.critical(f"No dark exposures found for {args.camera}")
+            return 1
+        elif len(exptable) < args.min_dark_exposures:
+            log.critical(f"Number of possible dark exposures {len(exptable)} "
+                         + f"< required dark exposures ({args.min_dark_exposures}).")
             return 1
 
         # assemble corresponding images
@@ -265,11 +278,23 @@ def main(args=None, exptable=None):
     elif args.reference_night is not None :
         selection=np.where(exptable["NIGHT"]==args.reference_night)[0]
         if selection.size == 0 :
-            log.error(f"No dark during reference night {args.reference_night} in input list")
-            return 1
-        indices=np.argsort(exptable["EXPID"][selection])[::-1]
-        for index in indices :
-            reference_header_possible_filenames.append(args.images[selection[index]])
+            log.warning(f"No dark during reference night {args.reference_night} in input list. "
+                      + "Looking for a science exposure instead.")
+            etab = load_table(tabletype='exposure_table',
+                              tablename=findfile('exposure_table', night=args.reference_night))
+            boolsel = (etab['OBSTYPE'] == 'science') & (etab['LASTSTEP'] != 'ignore')
+            if boolsel.sum() > 0:
+                for scierow in etab[boolsel][::-1]:
+                    if args.camera in decode_camword(erow_to_goodcamword(scierow, suppress_logging=True, exclude_badamps=False)):
+                        reference_header_possible_filenames.append(findfile('raw', night=args.reference_night, expid=scierow['EXPID']))
+            if len(reference_header_possible_filenames) == 0:
+                log.warning(f"No dark during reference night {args.reference_night} in input list "
+                            + "AND no valid science exposures. Cannot proceed. Exiting.")
+                return 1
+        else:
+            indices=np.argsort(exptable["EXPID"][selection])[::-1]
+            for index in indices :
+                reference_header_possible_filenames.append(args.images[selection[index]])
     else :
         if exptable is not None:
             indices=np.argsort(exptable["EXPID"])[::-1]
@@ -313,5 +338,6 @@ def main(args=None, exptable=None):
                       reference_header=reference_header,
                       save_preproc=args.save_preproc,
                       preproc_dark_dir=args.preproc_dark_dir,
+                      min_dark_exposures=args.min_dark_exposures,
                       max_dark_exposures=args.max_dark_exposures)
     return 0

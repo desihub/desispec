@@ -192,7 +192,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     dark_expid_to_process = np.asarray(dark_expids)
     if len(ptable) > 0:
         processed_dark_expids = get_pdarks_from_ptable(ptable)
-        dark_expid_to_process = np.setdiff1d(dark_expids, processed_dark_expids)
+        dark_expid_to_process = np.setdiff1d(dark_expid_to_process, processed_dark_expids)
 
     if len(ptable) > 0 and 'biaspdark' in ptable['JOBDESC'] and len(dark_expid_to_process) == 0:
         log.info(f"Bias and all preproc darks are already accounted for on {night=}.")
@@ -256,7 +256,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zeros = etable[etable['OBSTYPE'] == 'zero']
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
-    
+
     linked_bias = 'biasnight' in files_to_link
     dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
     dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 # 'darknight' not in files_to_link and

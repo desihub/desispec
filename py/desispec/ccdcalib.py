@@ -37,7 +37,7 @@ from desispec.workflow.batch import get_config
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, preproc_dark_dir=None, max_dark_exposures=50):
+                      save_preproc=True, preproc_dark_dir=None, min_dark_exposures=4, max_dark_exposures=50):
     """
     Compute classic dark model from input dark images
 
@@ -55,6 +55,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         reference_header (dict) : reference header that defines the valid hardware configuration (default is the most recent one)
         save_preproc (bool) : save preprocessed images
         preproc_dark_dir (str) : specify output directory used to save preproc images
+        min_dark_exposures (int) : minimum number of dark exposures to use; if less are found to be valid code will raise an error and exit
         max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the nearest max_dark_exposures in mjd are used
 
 
@@ -85,7 +86,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
     log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
 
-    log.info("reading images ...")
+    log.info(f"reading images for {camera} ...")
     shape=None
     images=[]
     if nocosmic :
@@ -219,13 +220,18 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         files_used.append(file_used)
         
         if len(images) >= max_dark_exposures:
-            log.warning(f"Using only the first {max_dark_exposures} valid darks provided.")
+            log.warning(f"Using only the first {max_dark_exposures} valid darks provided for {camera}.")
             break
 
-    if len(images)==0 :
-        log.error("No images left after selection")
-        raise RuntimeError("No images left after selection")
-
+    if len(images) == 0:
+        log.critical(f"No images left after selection for {camera}")
+        raise RuntimeError(f"No images left after selection for {camera}")
+    if len(images) < min_dark_exposures:
+        msg = f"{len(images)} images left after selection for {camera}, which is less than " \
+              + f"{min_dark_exposures=}. Exiting without producing file."
+        log.critical(msg)
+        raise RuntimeError(msg)
+    
     images=np.array(images)
     exptimes=np.array(exptimes)
     assert(images.shape[0] == exptimes.size)
@@ -236,11 +242,11 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     else :
         smask=np.zeros(images[0].shape)
 
-    log.info("compute median image ...")
+    log.info(f"compute median image for {camera}...")
     medimage=masked_median(images,masks)
 
     if True :
-        log.info("compute mask ...")
+        log.info(f"compute mask  for {camera}...")
         ares=np.abs(images-medimage)
         nsig=4.
         mask=(ares<nsig*1.4826*np.median(ares,axis=0))
@@ -250,13 +256,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         #meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
 
         # better is optimal weights (here images have been divided by exptimes beforehand)
-        log.info("compute weighted average ...")
+        log.info(f"compute weighted average for {camera}...")
         meanimage=np.sum(images*(exptimes[:,None]**2)*mask,axis=0)/np.sum((exptimes[:,None]**2)*mask,axis=0)
         meanimage=meanimage.reshape(shape)
     else :
         meanimage=medimage.reshape(shape)
 
-    log.info("write result in %s ..."%outfile)
+    log.info(f"write result for {camera} in %s ..."%outfile)
     hdulist=pyfits.HDUList([pyfits.PrimaryHDU(meanimage.astype('float32'))])
 
     # copy some keywords
