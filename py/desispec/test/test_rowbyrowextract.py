@@ -1,6 +1,5 @@
 """Some simple unit tests of qproc/rowbyrowextract.py"""
 from importlib.resources import files
-# from pkg_resources import resource_filename
 import numpy as np
 from specter.psf import load_psf
 from desispec import io
