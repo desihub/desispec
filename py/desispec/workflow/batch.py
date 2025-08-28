@@ -9,7 +9,6 @@ import os
 from importlib import resources
 import yaml
 
-from desispec.workflow import batch
 from desiutil.log import get_logger
 
 _config_cache = dict()
@@ -145,9 +144,9 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         * runtime: int, the max time requested for the script in minutes for the processing.
     """
     if system_name is None:
-        system_name = batch.default_system(jobdesc=jobdesc)
+        system_name = default_system(jobdesc=jobdesc)
 
-    config = batch.get_config(system_name)
+    config = get_config(system_name)
     log = get_logger()
     jobdesc = jobdesc.upper()
 

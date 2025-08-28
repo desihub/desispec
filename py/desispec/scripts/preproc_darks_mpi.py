@@ -23,14 +23,14 @@ from desispec.scripts.compute_dark import get_stacked_dark_exposure_table
 
 def preproc_darks_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="Compute a preprocs for dark exposures used for dark creation",
+                                     description="Computes preprocs for dark exposures used for dark creation",
                                      epilog='''
-                                     Input is a list of raw dark images, possibly with various exposure times.
-                                     Raw images are preprocessed without dark,mask correction.
-                                     However gains are applied so the output is in electrons/sec.
+                                     Input is a list of dark expids. The raw images are preprocessed 
+                                     without dark,mask correction. However gains are applied so the output is in electrons/sec.
+                                     --expids and --camword are required, --nights are optional but improve I/O efficiency.
                                      ''')
 
-    parser.add_argument('-e','--expids', type=str, default=None, required=False,
+    parser.add_argument('-e','--expids', type=str, default=None, required=True,
                         help = 'exposures to process, can be a comma separated list of expids or a single expid')
     parser.add_argument('-n', '--nights', type=str, default = None, required=False,
                         help='Comma separated list of YEARMMDD nights where we find the darks to run through preproc')
@@ -41,9 +41,9 @@ def preproc_darks_parser():
     parser.add_argument('--nocosmic', action = 'store_true',
                         help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
     parser.add_argument('--specprod', type=str, default=None, required=False,
-                        help='Specify specprod to use nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB.')
+                        help='Specify specprod containing the nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB and identify exposures from DESI_SPECTRO_DATA.')
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
-                        help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
+                        help='Specify alternate specprod where we will save the preprocessed dark frame images are saved. Default is same input specprod. Resulting exposures will be save under <preproc_dark_dir>/dark_preproc/<NIGHT>/<EXPID>')
     parser.add_argument('--dry-run', action='store_true', help="Print which images would be used, but don't compute dark")
     parser.add_argument('--mpi', action='store_true', help="Run in MPI mode, distributing work across multiple processes.")
 
@@ -73,21 +73,18 @@ def main(args=None):
         os.environ["SPECPROD"] = args.specprod
 
     # check consistency of input options
-    if args.nights is not None and args.expids is not None :
+    if args.nights is not None and args.expids is not None and rank == 0:
         log.info(f"Assuming all exposures in {args.expids} can be found in nights={args.nights}.")
-    elif args.expids is None and args.nights is None:
-        log.error("Need to specify input using --expids or --night")
-        return 1
 
-    if args.expids is not None:
-        args.expids = np.array(args.expids.split(',')).astype(int)
+    args.expids = np.array(args.expids.split(',')).astype(int)
     if args.nights is not None:
         args.nights = np.array(args.nights.split(',')).astype(int)
         
     ## get the requested cameras from the camword
     requested_cameras = set(decode_camword(args.camword))
     if len(requested_cameras) == 0:
-        log.error(f'No cameras found in camword {args.camword}.')
+        if rank == 0:
+            log.error(f'No cameras found in camword {args.camword}.')
         return 1
 
     # first find the exposures if they are not given in input
@@ -138,13 +135,15 @@ def main(args=None):
     expids, nights, camlists, files = data
 
     if len(expids) == 0:
-        log.error("No valid exposures found for dark frame computation.")
+        if rank == 0:
+            log.error("No valid exposures found for dark frame computation.")
         return 1
 
     if args.dry_run:
         image_str = ' '.join(files)
-        log.info(f'Input images: {image_str}')
-        log.info('--dry-run mode, exiting before running preproc_darks')
+        if rank == 0:
+            log.info(f'Input images: {image_str}')
+            log.info('--dry-run mode, exiting before running preproc_darks')
         return 0
 
     if args.bias is None:
@@ -206,7 +205,7 @@ def main(args=None):
         ## broadcast the primary header 
         primary_header = block_comm.bcast(primary_header, root=0)
         if primary_header is None:
-            log.error(f'No primary header in {filename} for expid {expid}')
+            log.error(f'No primary header in {filename} for expid {expid} for rank {rank} block_rank {block_rank} block_num {block_num}')
             continue
 
         ## scatter the work to the ranks

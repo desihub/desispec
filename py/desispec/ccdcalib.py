@@ -179,14 +179,25 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.debug(f"BIAS={thisbias}")
 
         ## Identify the path to the preprocessed dark image
-        preproc_filename = None
+        default_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True)
+        default_exists = os.path.isfile(default_preproc_filename)
+        user_preproc_filename = None
+        user_exists = False
         if preproc_dark_dir is not None :
-            preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+            user_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
                                         specprod_dir=preproc_dark_dir, readonly=True)
-        if preproc_filename is None or not os.path.isfile(preproc_filename):
-            preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True)
+            user_exists = os.path.isfile(user_preproc_filename)
 
-        if os.path.isfile(preproc_filename) :
+        if user_exists:
+            preproc_filename = user_preproc_filename
+        elif default_exists:
+            preproc_filename = default_preproc_filename
+        elif preproc_dark_dir is not None:
+            preproc_filename = user_preproc_filename
+        else:
+            preproc_filename = default_preproc_filename
+            
+        if user_exists or default_exists:
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
             file_used = preproc_filename

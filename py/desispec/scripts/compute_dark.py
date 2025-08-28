@@ -150,7 +150,7 @@ def get_stacked_dark_exposure_table(args):
     elif len(missing_nights)>0:
         log.info(f"Computing speclog for nights without exposure tables ({missing_nights})")
         table = get_speclog(missing_nights)
-        if len(tmp_table)>0 :
+        if len(table)>0 :
             table = table[["NIGHT","EXPID","MJD-OBS","OBSTYPE","EXPTIME"]]
             for i in range(len(table)) :
                 table["OBSTYPE"][i]=table["OBSTYPE"][i].lower()
