@@ -143,6 +143,7 @@ def get_stacked_dark_exposure_table(args):
                 log.warning(f"No data directory {nightdir}")
                 continue
             missing_nights.append(night)
+
     if len(missing_nights)>0 and args.dont_search_filesystem:
         log.info(f"Found nights without exposure tables ({missing_nights}) "
                  + "but told not to search for missing nights, so continuing without them.")

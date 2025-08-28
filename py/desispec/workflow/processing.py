@@ -574,8 +574,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 if 'extra_cmd_args' in extra_job_args:
                     cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['extra_cmd_args']))
             else:
-                log.error("The code shouldn't reach this branch. Please check what you're" +
-                          f"requesting for jobs: {prow=}")
+                ## individual arcs and flats
                 cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)
 
         if dry_run > 1:

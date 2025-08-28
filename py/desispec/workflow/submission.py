@@ -62,7 +62,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
         ## Require cal_override to exist if explcitly specified
         if override_pathname is None:
             override_pathname = findfile('override', night=night)
-        elif not os.path.exists(override_pathname):
+        if not os.path.exists(override_pathname):
             raise IOError(f"Specified override file: "
                         f"{override_pathname} not found. Exiting this night.")
         ## Load calibration_override_file
@@ -128,7 +128,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
         ## Add the processing row to the processing table
         ptable.add_row(prow)
 
-        return ptable, files_to_link
+    return ptable, files_to_link
 
 
 def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes, 
@@ -136,10 +136,10 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                            exp_table_path=None,
                            proc_table_path=None,
                            override_path=None,
-                           psf_linking_without_fflat=False,
                            queue=None, reservation=None,
                            check_for_outputs=True, system_name=None,
                            specprod=None, path_to_data=None,
+                           psf_linking_without_fflat=None,
                            sub_wait_time=0.1, dry_run_level=0):
     """
     Submit a biasnight and/or preproc_darks jobs for the given night.
@@ -159,14 +159,15 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                                             If None, will search for it.
         override_path (str, optional): Path to the override file.
                                             If None, will search for it.
-        psf_linking_without_fflat (bool, optional): If True, allows linking
-                                                    psfnight without fiberflatnight.
         queue (str, optional): Slurm queue to submit jobs to. Default is None.
         reservation (str, optional): Slurm reservation to use. Default is None.
         check_for_outputs (bool, optional): If True, checks for job outputs before submitting. Default is True.
         system_name (str, optional): Name of the system to use for batch submission. Default is None.
         specprod (str, optional): Name of the spectroscopic production. Default is None.
         path_to_data (str, optional): Path to the data directory. Default is None.
+        psf_linking_without_fflat: bool. Default False. If set then the code
+            will NOT raise an error if asked to link psfnight calibrations
+            without fiberflatnight calibrations.
         sub_wait_time (float, optional): Time to wait between submissions. Default is 0.1 seconds.
         dry_run_level (int, optional): Level of dry run to perform. Default is 0.
  
@@ -242,8 +243,9 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     if 'linkcal' in cal_override and 'linkcal' not in ptable['JOBDESC']:
         proccamword = difference_camwords(camword, badcamword)
         ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
-                        psf_linking_without_fflat=psf_linking_without_fflat, proccamword=proccamword,
+                        proccamword=proccamword,
                         dry_run_level=dry_run_level, queue=queue, reservation=reservation,
+                        psf_linking_without_fflat=psf_linking_without_fflat,
                         check_outputs=check_for_outputs, system_name=system_name)
         if len(ptable) > 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
@@ -345,6 +347,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
                                                   proc_table_pathname=None,
                                                   specprod=None, path_to_data=None,
                                                   sub_wait_time=0.1, dry_run_level=0,
+                                                  psf_linking_without_fflat=None,
                                                   n_nights_before=None, n_nights_after=None,
                                                   queue=None, system_name=None):
     """
@@ -366,6 +369,9 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
         path_to_data (str, optional): Path to the data directory. Default is None.
         sub_wait_time (float, optional): Time to wait between submissions. Default is 0.1 seconds.
         dry_run_level (int, optional): Level of dry run to perform. Default is 0.
+        psf_linking_without_fflat: bool. Default False. If set then the code
+            will NOT raise an error if asked to link psfnight calibrations
+            without fiberflatnight calibrations.
         n_nights_before (int, optional): Number of nights before the reference night to process. Default is None.
         n_nights_after (int, optional): Number of nights after the reference night to process. Default is None.
         queue (str): Queue to be used.
@@ -403,6 +409,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
             proc_table_path=os.path.dirname(proc_table_pathname),
             specprod=specprod, path_to_data=path_to_data,
             sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
+            psf_linking_without_fflat=psf_linking_without_fflat,
             queue=queue, system_name=system_name)
         if night == reference_night:
             refnight_ptable = ptable
