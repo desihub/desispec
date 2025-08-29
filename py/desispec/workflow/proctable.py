@@ -420,18 +420,18 @@ def get_pdarks_from_ptable(ptable):
     if ptable is None:
         log.error("Processing table is None, can't extract dark exposures. Exiting.")
         return np.array([])
-
-    for col in ['EXPID', 'OBSTYPE', 'JOBDESC']:
-        if col not in ptable.colnames:
-            log.error(f"Processing table does not have {col} column, can't extract dark exposures. Exiting.")
-            return np.array([])
     
     if len(ptable) == 0:
         log.info("Processing table is empty, can't extract dark exposures. Exiting.")
         return np.array([])
     
+    for col in ['EXPID', 'OBSTYPE', 'JOBDESC']:
+        if col not in ptable.colnames:
+            log.error(f"Processing table does not have {col} column, can't extract dark exposures. Exiting.")
+            return np.array([])
+    
     ## Select the two JOBDESC's that are relevant for dark preprocessing
-    darks = ptable[np.isin(ptable['JOBDESC'].data, ['pdark', 'biaspdark'])]
+    darks = ptable[np.isin(ptable['JOBDESC'].data, [b'pdark', b'biaspdark'])]
     ## Remove bias-only biapdark jobs by requiring OBSTYPE to be dark
     if len(darks) > 0:
         darks = darks[darks['OBSTYPE'] == 'dark']

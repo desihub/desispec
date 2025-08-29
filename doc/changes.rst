@@ -5,6 +5,7 @@ desispec Change Log
 0.69.1 (unreleased)
 -------------------
 
+* Add nightly dark processing (PR `#2531`_)
 * Improve NumPy 2 support (PR `#2502`_).
 * Allow 1200s dark for bad col selection (PR `#2499`_).
 * Improve calibration uncertainty (PR `#2496`_).
