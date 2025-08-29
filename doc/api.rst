@@ -287,6 +287,9 @@ desispec API
 .. automodule:: desispec.scripts.compute_dark
     :members:
 
+.. automodule:: desispec.scripts.compute_dark_night
+    :members:
+
 .. automodule:: desispec.scripts.compute_tsnr_ensemble
     :members:
 
@@ -354,6 +357,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.preproc
+    :members:
+
+.. automodule:: desispec.scripts.preproc_darks_mpi
     :members:
 
 .. automodule:: desispec.scripts.proc
@@ -506,6 +512,9 @@ desispec API
 .. automodule:: desispec.workflow.batch
     :members:
 
+.. automodule:: desispec.workflow.batch_writer
+    :members:
+
 .. automodule:: desispec.workflow.calibration_selection
     :members:
 
@@ -534,6 +543,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.workflow.science_selection
+    :members:
+
+.. automodule:: desispec.workflow.submission
     :members:
 
 .. automodule:: desispec.workflow.tableio

@@ -949,7 +949,23 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.error(message)
                 raise ValueError(message)
         else:
-            dark_filename = cfinder.findfile("DARK")
+            night = header2night(header)
+            expid = header['EXPID']
+            camera = header['CAMERA'].lower()
+            found = False
+            if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
+                darknight = findfile('darknight', night, expid, camera, readonly=True)
+                if os.path.exists(darknight):
+                    log.info(f'Using {night} nightly dark for {expid} {camera}')
+                    dark_filename = darknight
+                    found = True
+                else:
+                    log.warning(f'{night} nightly dark not found; using default dark for {expid} {camera}')
+            else:
+                log.warning(f'SPECPROD not set; using default dark instead of nightly dark for {expid} {camera}')
+
+            if not found:
+                dark_filename = cfinder.findfile("DARK")
 
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')

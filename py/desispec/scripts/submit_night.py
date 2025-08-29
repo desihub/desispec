@@ -25,7 +25,7 @@ from desispec.workflow.processing import parse_previous_tables, get_type_and_til
                                         define_and_assign_dependency, create_and_submit, \
                                         checkfor_and_submit_joint_job, submit_tilenight_and_redshifts
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
-from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
+from desispec.workflow.batch_writer import get_desi_proc_batch_file_path
 from desispec.io.util import decode_camword, difference_camwords, create_camword
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime',

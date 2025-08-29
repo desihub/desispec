@@ -454,7 +454,11 @@ def decode_camword(camword):
                                 cameras, e.g. 'b0','r1',...
     """
     log = get_logger()
-    searchstr = camword
+    if camword is None:
+        log.error(f"Received camword=None to decode. Return empty list.")
+        searchstr = ''
+    else:
+        searchstr = camword
     camlist = []
     while len(searchstr) > 1:
         key = searchstr[0]
@@ -468,7 +472,7 @@ def decode_camword(camword):
             elif key in ['b','r','z']:
                 camlist.append(key+searchstr[0])
             else:
-                log.error(f"Couldn't understand key={key} in camword={camword}.")
+                log.critical(f"Couldn't understand key={key} in camword={camword}.")
                 raise ValueError(f"Couldn't understand key={key} in camword={camword}.")
             searchstr = searchstr[1:]
     return sorted(camlist)
@@ -581,6 +585,12 @@ def difference_camwords(fullcamword,badcamword,suppress_logging=False):
         str. A camword of cameras in fullcamword that are not in badcamword.
     """
     log = get_logger()
+
+    if badcamword is None:
+        badcamword = ''
+        if not suppress_logging:
+            log.info("No badcamword given, proceeding without badcamword removal")
+            
     full_cameras = decode_camword(fullcamword)
     bad_cameras = decode_camword(badcamword)
     for cam in bad_cameras:
@@ -624,9 +634,11 @@ def camword_union(camwords, full_spectros_only=False):
                     + f"{camwords=}, {type(camwords)=}, {len(camwords)=}")
     else:
         cams = set(decode_camword(camwords[0]))
-        for camword in camwords[1:]:
-            cams = cams.union(set(decode_camword(camword)))
-        camword = create_camword(list(cams))
+        if len(camwords) > 1:
+            for camword in camwords[1:]:
+                cams |= set(decode_camword(camword))
+                
+        camword = create_camword(sorted(list(cams)))
 
     if full_spectros_only:
         full_sps = np.sort(camword_to_spectros(camword,
@@ -658,7 +670,7 @@ def camword_intersection(camwords, full_spectros_only=False):
         for cw in camwords[1:]:
             cameras &= set(decode_camword(cw))
 
-    camword = parse_cameras(sorted(cameras))
+    camword = create_camword(sorted(list(cameras)))
 
     if full_spectros_only:
         spectros = camword_to_spectros(camword, full_spectros_only)
@@ -714,8 +726,12 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
                            input camera information.
     """
     log = get_logger()
+    
+    if badamps is None:
+        badamps = ''
+            
     if exclude_badamps and not suppress_logging:
-        if badamps is None:
+        if badamps == '':
             log.info("No badamps given, proceeding without badamp removal")
         elif obstype is None:
             log.info("No obstype given, will remove badamps.")
@@ -963,13 +979,34 @@ def get_speclog(nights, rawdir=None):
     for night in nights:
         for filename in sorted(glob.glob(f'{rawdir}/{night}/*/desi-*.fits.fz')):
             hdr = fitsio.read_header(filename, 1)
+            speckeyword = 'CCDSPECS' if 'CCDSPECS' in hdr else 'SPCGRPHS'
+            specs = []
+            for sp in hdr[speckeyword].split(','):
+                spnum = sp.strip().lstrip('SP')
+                if spnum.isnumeric():
+                    specs.append(spnum)
+            if len(specs) > 0:
+                camword = 'a' + ''.join(sorted(specs))
+                badcamword = ''
+                badamps = ''
+            else:
+                continue
             rows.append([night, hdr['EXPID'], hdr['MJD-OBS'],
-                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME']])
+                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME'], camword, badcamword, badamps])
 
-    speclog = Table(
-        names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
-        rows = rows,
-    )
+    if len(rows) > 0:
+        speclog = Table(
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
+            rows = rows,
+            )
+    else:
+        speclog = Table(
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
+            dtype = [ int,     int,     float, str,      str,      float,
+                     'S30',     'S30',        'S30' ],
+            )
 
     return speclog
 

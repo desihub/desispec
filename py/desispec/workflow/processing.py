@@ -7,6 +7,8 @@ import sys, os, glob
 import json
 from astropy.io import fits
 from astropy.table import Table, join
+from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
+from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_ccdcalib_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime
@@ -23,23 +25,19 @@ from desispec.workflow.queue import get_resubmission_states, update_from_queue, 
     queue_info_from_qids, get_queue_states_from_qids, update_queue_state_cache, \
     get_non_final_states
 from desispec.workflow.timing import what_night_is_it
-from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
-    create_desi_proc_batch_script, \
-    get_desi_proc_batch_file_path, \
-    get_desi_proc_tilenight_batch_file_pathname, \
-    create_desi_proc_tilenight_batch_script, create_linkcal_batch_script
+from desispec.workflow.batch_writer import get_desi_proc_batch_file_path
 from desispec.workflow.batch import parse_reservation
 from desispec.workflow.utils import pathjoin, sleep_and_report, \
     load_override_file
 from desispec.workflow.tableio import write_table, load_table
-from desispec.workflow.proctable import table_row_to_dict, erow_to_prow, \
+from desispec.workflow.proctable import get_pdarks_from_ptable, table_row_to_dict, erow_to_prow, \
     read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
     update_full_ptab_cache, default_prow, get_default_qid
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
 from desispec.io.util import decode_camword, create_camword, \
-    difference_camwords, \
+    difference_camwords, erow_to_goodcamword, \
     camword_to_spectros, camword_union, camword_intersection, parse_badamps
 
 
@@ -84,7 +82,7 @@ class ProcessingParams():
 #################################################
 ############ Script Functions ###################
 #################################################
-def batch_script_name(prow):
+def batch_script_pathname(prow):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, JOBDESC, PROCCAMWORD defined)
     and determines the script file pathname as defined by desi_proc's helper functions.
@@ -106,6 +104,7 @@ def batch_script_name(prow):
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
+
 def get_jobdesc_to_file_map():
     """
     Returns a mapping of job descriptions to the filenames of the output files
@@ -118,37 +117,21 @@ def get_jobdesc_to_file_map():
             filename of their expected outputs.
 
     """
-    return {'prestdstar': 'sframe',
+    return {'biasnight': 'biasnight',
+            'biaspdark': 'preproc_for_dark',
+            'pdark': 'preproc_for_dark',
+            'ccdcalib': 'ctecorrnight',
+            'arc': 'fitpsf',
+            'psfnight': 'psfnight',
+            'flat': 'fiberflat',
+            'nightlyflat': 'fiberflatnight',
+            'prestdstar': 'sframe',
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
-            'nightlybias': 'biasnight',
-            # 'ccdcalib': 'badcolumns',
-            'badcol': 'badcolumns',
-            'arc': 'fitpsf',
-            'flat': 'fiberflat',
-            'psfnight': 'psfnight',
-            'nightlyflat': 'fiberflatnight',
             'spectra': 'spectra_tile',
             'coadds': 'coadds_tile',
             'redshift': 'redrock_tile'}
 
-def get_file_to_jobdesc_map():
-    """
-    Returns a mapping of output filenames to job descriptions
-
-    Args:
-        None
-
-    Returns:
-        dict. Dictionary with keys as filename of their expected outputs to
-            the lowercase job descriptions
-            .
-
-    """
-    job_to_file_map = get_jobdesc_to_file_map()
-    job_to_file_map.pop('badcol') # these files can also be in a ccdcalib job
-    job_to_file_map.pop('nightlybias') # these files can also be in a ccdcalib job
-    return {value: key for key, value in job_to_file_map.items()}
 
 def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     """
@@ -217,6 +200,20 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
             existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
             prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
+    elif str(prow['JOBDESC']).endswith('pdark') and len(prow['EXPID']) > 1:
+        ## camera based, multi exposure
+        cameras = decode_camword(prow['PROCCAMWORD'])
+        nexps = len(prow['EXPID'])
+        n_desired = len(cameras)*nexps
+
+        missing_cameras = []
+        for cam in cameras:
+            for expid in prow['EXPID']:
+                if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid, camera=cam)):
+                    missing_cameras.append(cam)
+        completed = (len(missing_cameras) == 0)
+        if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
+            prow['PROCCAMWORD'] = create_camword(np.unique(missing_cameras))
     else:
         ## Otheriwse camera based
         cameras = decode_camword(prow['PROCCAMWORD'])
@@ -428,7 +425,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
         dry_run (int, optional): If nonzero, this is a simulated run. Default is 0.
             0 which runs the code normally.
-            1 writes all files but doesn't submit any jobs to Slurm.
+            1 writes all scripts but doesn't submit any jobs to Slurm.
             2 writes tables but doesn't write scripts or submit anything.
             3 Doesn't write or submit anything but queries Slurm normally for job status.
             4 Doesn't write, submit jobs, or query Slurm.
@@ -455,17 +452,96 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
     if extra_job_args is None:
         extra_job_args = {}
 
-    if prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
+    if prow['JOBDESC'] == 'linkcal':
+        refnight, include, exclude = -99, None, None
+        if 'refnight' in extra_job_args:
+            refnight = extra_job_args['refnight']
+        if 'include' in extra_job_args:
+            include = extra_job_args['include']
+        if 'exclude' in extra_job_args:
+            exclude = extra_job_args['exclude']
+        include, exclude = derive_include_exclude(include, exclude)
+        ## Fiberflatnights shouldn't to be generated with psfs from same time, so
+        ## shouldn't link psfs without also linking fiberflatnight
+        ## However, this should be checked at a higher level. If set here,
+        ## go ahead and do it
+        # if 'psfnight' in include and not 'fiberflatnight' in include:
+        #     err = "Must link fiberflatnight if linking psfnight"
+        #     log.error(err)
+        #     raise ValueError(err)
+        if dry_run > 1:
+            scriptpathname = batch_script_pathname(prow)
+            log.info("Output file would have been: {}".format(scriptpathname))
+            cmd = desi_link_calibnight_command(prow, refnight, include)
+            log.info("Command to be run: {}".format(cmd.split()))
+        else:
+            if refnight == -99:
+                err = f'For {prow=} asked to link calibration but not given' \
+                      + ' a valid refnight'
+                log.error(err)
+                raise ValueError(err)
+
+            cmd = desi_link_calibnight_command(prow, refnight, include)
+            log.info(f"Running: {cmd.split()}")
+            scriptpathname = create_linkcal_batch_script(newnight=prow['NIGHT'],
+                                                         cameras=prow['PROCCAMWORD'],
+                                                         queue=queue,
+                                                         cmd=cmd,
+                                                         system_name=system_name)
+    elif prow['JOBDESC'] in ['biasnight','pdark','biaspdark']:
+        if dry_run > 1:
+            scriptpathname = get_desi_proc_batch_file_pathname(night=prow['NIGHT'], exp=prow['EXPID'], 
+                                                   jobdesc=prow['JOBDESC'], cameras=prow['PROCCAMWORD'])
+        else:
+            log.info(f"Creating biaspdark script for: {prow}, {extra_job_args}")
+            do_biasnight, do_pdark = False, False
+            if 'steps' in extra_job_args:
+                do_biasnight = 'biasnight' in extra_job_args['steps']
+                do_pdark = 'pdark' in extra_job_args['steps']
+            scriptpathname = create_biaspdark_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
+                                                   jobdesc=prow['JOBDESC'], camword=prow['PROCCAMWORD'],
+                                                   do_biasnight=do_biasnight, do_pdark=do_pdark, 
+                                                   queue=queue, system_name=system_name)
+    elif prow['JOBDESC'] in ['ccdcalib']:
+        if dry_run > 1:
+            scriptpathname = get_desi_proc_batch_file_pathname(night=prow['NIGHT'], exp=prow['EXPID'], 
+                                                   jobdesc=prow['JOBDESC'], cameras=prow['PROCCAMWORD'])
+        else:
+            log.info(f"Creating ccdcalib script for: {prow}, {extra_job_args}")
+                                #  do_ctecorr=False, n_nights_before=None, n_nights_after=None,
+                                #  dark_expid=None, cte_expids=None
+            do_darknight, do_badcolumn, do_ctecorr = False, False, False
+            if 'steps' in extra_job_args:
+                do_darknight = 'darknight' in extra_job_args['steps']
+                do_badcolumn = 'badcolumn' in extra_job_args['steps']
+                do_ctecorr = 'ctecorr' in extra_job_args['steps']
+            n_nights_before, n_nights_after = None, None
+            if 'n_nights_before' in extra_job_args:
+                n_nights_before = extra_job_args['n_nights_before']
+            if 'n_nights_after' in extra_job_args:
+                n_nights_after = extra_job_args['n_nights_after']
+            dark_expid, cte_expids = None, None
+            if 'dark_expid' in extra_job_args:
+                dark_expid = extra_job_args['dark_expid']
+            if 'cte_expids' in extra_job_args:
+                cte_expids = extra_job_args['cte_expids']
+            scriptpathname = create_ccdcalib_batch_script(night=prow['NIGHT'], expids=prow['EXPID'],
+                                                   camword=prow['PROCCAMWORD'],
+                                                   do_darknight=do_darknight, do_badcolumn=do_badcolumn, 
+                                                   do_ctecorr=do_ctecorr, n_nights_before=n_nights_before, 
+                                                   n_nights_after=n_nights_after,
+                                                   dark_expid=dark_expid, cte_expids=cte_expids, 
+                                                   queue=queue, system_name=system_name)
+    elif prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
         if dry_run > 1:
             scriptpathname = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                                night=prow['NIGHT'], expid=prow['EXPID'][0])
-
             log.info("Output file would have been: {}".format(scriptpathname))
         else:
             #- run zmtl for cumulative redshifts but not others
             run_zmtl = (prow['JOBDESC'] == 'cumulative')
             no_afterburners = False
-            print(f"entering tileredshiftscript: {prow}")
+            log.info(f"Creating tile redshift script for: {prow}")
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
                                                                      nights=[prow['NIGHT']], expids=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,
@@ -486,54 +562,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 raise ValueError(msg)
             else:
                 scriptpathname = scripts[0]
-
-    elif prow['JOBDESC'] == 'linkcal':
-        refnight, include, exclude = -99, None, None
-        if 'refnight' in extra_job_args:
-            refnight = extra_job_args['refnight']
-        if 'include' in extra_job_args:
-            include = extra_job_args['include']
-        if 'exclude' in extra_job_args:
-            exclude = extra_job_args['exclude']
-        include, exclude = derive_include_exclude(include, exclude)
-        ## Fiberflatnights shouldn't to be generated with psfs from same time, so
-        ## shouldn't link psfs without also linking fiberflatnight
-        ## However, this should be checked at a higher level. If set here,
-        ## go ahead and do it
-        # if 'psfnight' in include and not 'fiberflatnight' in include:
-        #     err = "Must link fiberflatnight if linking psfnight"
-        #     log.error(err)
-        #     raise ValueError(err)
-        if dry_run > 1:
-            scriptpathname = batch_script_name(prow)
-            log.info("Output file would have been: {}".format(scriptpathname))
-            cmd = desi_link_calibnight_command(prow, refnight, include)
-            log.info("Command to be run: {}".format(cmd.split()))
-        else:
-            if refnight == -99:
-                err = f'For {prow=} asked to link calibration but not given' \
-                      + ' a valid refnight'
-                log.error(err)
-                raise ValueError(err)
-
-            cmd = desi_link_calibnight_command(prow, refnight, include)
-            log.info(f"Running: {cmd.split()}")
-            scriptpathname = create_linkcal_batch_script(newnight=prow['NIGHT'],
-                                                        cameras=prow['PROCCAMWORD'],
-                                                        queue=queue,
-                                                        cmd=cmd,
-                                                        system_name=system_name)
     else:
         if prow['JOBDESC'] != 'tilenight':
-            nightlybias, nightlycte, cte_expids = False, False, None
-            if 'nightlybias' in extra_job_args:
-                nightlybias = extra_job_args['nightlybias']
-            elif prow['JOBDESC'].lower() == 'nightlybias':
-                nightlybias = True
-            if 'nightlycte' in extra_job_args:
-                nightlycte = extra_job_args['nightlycte']
-            if 'cte_expids' in extra_job_args:
-                cte_expids = extra_job_args['cte_expids']
             ## run known joint jobs as joint even if unspecified
             ## in the future we can eliminate the need for "joint"
             if joint or prow['JOBDESC'].lower() in ['psfnight', 'nightlyflat']:
@@ -544,16 +574,11 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                 if 'extra_cmd_args' in extra_job_args:
                     cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['extra_cmd_args']))
             else:
+                ## individual arcs and flats
                 cmd = desi_proc_command(prow, system_name, use_specter, queue=queue)
-                if nightlybias:
-                    cmd += ' --nightlybias'
-                if nightlycte:
-                    cmd += ' --nightlycte'
-                    if cte_expids is not None:
-                        cmd += ' --cte-expids '
-                        cmd += ','.join(np.atleast_1d(cte_expids).astype(str))
+
         if dry_run > 1:
-            scriptpathname = batch_script_name(prow)
+            scriptpathname = batch_script_pathname(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
             if prow['JOBDESC'] != 'tilenight':
                 log.info("Command to be run: {}".format(cmd.split()))
@@ -589,10 +614,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                                                                jobdesc=prow['JOBDESC'],
                                                                queue=queue, cmdline=cmd,
                                                                use_specter=use_specter,
-                                                               system_name=system_name,
-                                                               nightlybias=nightlybias,
-                                                               nightlycte=nightlycte,
-                                                               cte_expids=cte_expids)
+                                                               system_name=system_name)
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
@@ -695,15 +717,14 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                 dep_str = ''
 
     # script = f'{jobname}.slurm'
-    # script_path = pathjoin(batchdir, script)
+    # script_pathname = pathjoin(batchdir, script)
     if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
-        script_path = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+        script_pathname = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                         night=prow['NIGHT'], expid=np.min(prow['EXPID']))
-        jobname = os.path.basename(script_path)
+        jobname = os.path.basename(script_pathname)
     else:
-        batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
-        jobname = batch_script_name(prow)
-        script_path = pathjoin(batchdir, jobname)
+        script_pathname = batch_script_pathname(prow)
+        jobname = os.path.basename(script_pathname)
 
     batch_params = ['sbatch', '--parsable']
     if dep_str != '':
@@ -713,7 +734,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if reservation is not None:
         batch_params.append(f'--reservation={reservation}')
 
-    batch_params.append(f'{script_path}')
+    batch_params.append(f'{script_pathname}')
     submitted = True
     ## If dry_run give it a fake QID
     ## if a dependency has failed don't even try to submit the job because
@@ -772,7 +793,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 ##########   Row Manipulations   ############
 #############################################
 def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
-                                 refnight=None):
+                                 refnight=None, include_files=None):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -792,6 +813,7 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             for prestdstar, stdstar,and poststdstar steps for
             science exposures.
         refnight, int. The reference night for linking jobs
+        include_files, list. List of filetypes to include in the linking
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except
@@ -804,6 +826,14 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
         will not change during the execution of this function (but can be
         overwritten explicitly with the returned row if desired).
     """
+    log = get_logger()
+
+    if isinstance(calibjobs, Table):
+        calibjobs = generate_calibration_dict(calibjobs, files_to_link=include_files)
+    elif not isinstance(calibjobs, dict):
+        log.error("prow must be a Table.Row or a dict")
+        raise TypeError("prow must be a Table.Row or a dict")
+    
     if prow['OBSTYPE'] in ['science', 'twiflat']:
         if calibjobs['nightlyflat'] is not None:
             dependency = calibjobs['nightlyflat']
@@ -811,10 +841,8 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['psfnight']
         elif calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        elif calibjobs['nightlybias'] is not None:
-            dependency = calibjobs['nightlybias']
-        elif calibjobs['badcol'] is not None:
-            dependency = calibjobs['badcol']
+        elif calibjobs['biaspdark'] is not None:
+            dependency = calibjobs['biaspdark']
         else:
             dependency = calibjobs['linkcal']
         if not use_tilenight:
@@ -824,32 +852,24 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['psfnight']
         elif calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        elif calibjobs['nightlybias'] is not None:
-            dependency = calibjobs['nightlybias']
-        elif calibjobs['badcol'] is not None:
-            dependency = calibjobs['badcol']
+        elif calibjobs['biaspdark'] is not None:
+            dependency = calibjobs['biaspdark']
         else:
             dependency = calibjobs['linkcal']
     elif prow['OBSTYPE'] == 'arc':
         if calibjobs['ccdcalib'] is not None:
             dependency = calibjobs['ccdcalib']
-        elif calibjobs['nightlybias'] is not None:
-            dependency = calibjobs['nightlybias']
-        elif calibjobs['badcol'] is not None:
-            dependency = calibjobs['badcol']
+        elif calibjobs['biaspdark'] is not None:
+            dependency = calibjobs['biaspdark']
         else:
             dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] in ['badcol', 'nightlybias', 'ccdcalib']:
+    elif prow['JOBDESC'] in ['badcol', 'nightlybias', 'ccdcalib', 'pdark']:
+        if calibjobs['biaspdark'] is not None:
+            dependency = calibjobs['biaspdark']
+        else:
+            dependency = calibjobs['linkcal']
+    elif prow['JOBDESC'] == 'biaspdark':
         dependency = calibjobs['linkcal']
-    elif prow['OBSTYPE'] == 'dark':
-        if calibjobs['ccdcalib'] is not None:
-            dependency = calibjobs['ccdcalib']
-        elif calibjobs['nightlybias'] is not None:
-            dependency = calibjobs['nightlybias']
-        elif calibjobs['badcol'] is not None:
-            dependency = calibjobs['badcol']
-        else:
-            dependency = calibjobs['linkcal']
     elif prow['JOBDESC'] == 'linkcal' and refnight is not None:
         dependency = None
         ## For link cals only, enable cross-night dependencies if available
@@ -859,19 +879,57 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             ## This isn't perfect because we may depend on jobs that aren't
             ## actually being linked
             ## Also allows us to proceed even if jobs don't exist yet
-            deps = []
-            for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
-                if job in ptab['JOBDESC']:
-                    ## add prow to dependencies
-                    deps.append(ptab[ptab['JOBDESC']==job][0])
+            deps, proccamwords = [], []
+            #for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
+            if include_files is not None:
+                for filename in include_files:
+                    job = filename_to_jobname(filename)
+                    if job in ptab['JOBDESC']:
+                        ## add prow to dependencies
+                        deprow = ptab[ptab['JOBDESC']==job][0]
+                        deps.append(deprow)
+                        proccamwords.append(deprow['PROCCAMWORD'])
+                    elif 'linkcal' in ptab['JOBDESC']:
+                        linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
+                        deps.append(linkcalprow)
+                        proccamwords.append(linkcalprow['PROCCAMWORD'])
             if len(deps) > 0:
-                dependency = deps
+                dependency = np.unique(deps)
+            ## The proccamword for the linking job is the largest set available from the reference night
+            ## but restricting back to those requested for the current night, if fewer cameras are available
+            if len(proccamwords) > 0:
+                prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
     else:
         dependency = None
 
     prow = assign_dependency(prow, dependency)
 
     return prow
+
+def filename_to_jobname(filename):
+    """
+    Convert a filename to the job name it corresponds to.
+    Example filenames include: 'biasnight', 'darknight', 'badcolumns', 'ctecorrnight', 'psfnight', 'fiberflatnight
+    Args:
+        filename, str. The name of the file to convert.
+
+    Returns:
+        str: The job name corresponding to the input filename.
+    """
+    if filename.startswith('biasnight'):
+        return 'biaspdark'
+    elif filename.startswith('darknight'):
+        return 'ccdcalib'    
+    elif filename.startswith('badcolumns'):
+        return 'ccdcalib'
+    elif filename.startswith('ctecorrnight'):
+        return 'ccdcalib'
+    if filename.startswith('psfnight'):
+        return 'psfnight'
+    elif filename.startswith('fiberflatnight'):
+        return 'nightlyflat'
+    else:
+        return 'tilenight'
 
 
 def assign_dependency(prow, dependency):
@@ -1071,10 +1129,10 @@ def generate_calibration_dict(ptable, files_to_link=None):
     """
     log = get_logger()
     job_to_file_map = get_jobdesc_to_file_map()
-    accounted_for = {'biasnight': False, 'badcolumns': False,
+    accounted_for = {'biasnight': False, 'darknight':False, 'badcolumns': False,
                      'ctecorrnight': False, 'psfnight': False,
                      'fiberflatnight': False}
-    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'badcol': None,
+    calibjobs = {'biasnight': None, 'biaspdark': None, 'ccdcalib': None, #'badcol': None,
                  'psfnight': None, 'nightlyflat': None, 'linkcal': None}
 
     ptable_jobtypes = ptable['JOBDESC']
@@ -1082,7 +1140,29 @@ def generate_calibration_dict(ptable, files_to_link=None):
     for jobtype in calibjobs.keys():
         if jobtype in ptable_jobtypes:
             calibjobs[jobtype] = table_row_to_dict(ptable[ptable_jobtypes==jobtype][0])
-            log.info(f"Located {jobtype} job in exposure table: {calibjobs[jobtype]}")
+            log.info(f"Located {jobtype} job in processing table: {calibjobs[jobtype]}")
+            if jobtype in ['linkcal', 'biaspdark', 'ccdcalib'] and files_to_link is None:
+                night = int(ptable['NIGHT'][0]) ## jobtypes not empty, so has 1 or more rows
+                override_pathname = findfile('override', night=night, readonly=True)
+                overrides = load_override_file(filepathname=override_pathname)
+                cal_override = {}
+                if 'calibration' in overrides:
+                    cal_override = overrides['calibration']
+                orig_files_to_link = files_to_link
+                ## Determine calibrations that will be linked
+                if 'linkcal' in cal_override:
+                    files_to_link, files_not_linked = None, None
+                    if 'include' in cal_override['linkcal']:
+                        files_to_link = cal_override['linkcal']['include']
+                    if 'exclude' in cal_override['linkcal']:
+                        files_not_linked = cal_override['linkcal']['exclude']
+                    files_to_link, files_not_linked = derive_include_exclude(files_to_link,
+                                                                 files_not_linked)
+                    warn = f"linkcal job exists but no files given: {orig_files_to_link=}. " \
+                           + f"Used {override_pathname} to identify the following " \
+                           + f"linked files: {files_to_link}"
+                    log.warning(warn)
+                
             if jobtype == 'linkcal':
                 if files_to_link is not None and len(files_to_link) > 0:
                     log.info(f"Assuming existing linkcal job processed "
@@ -1093,15 +1173,23 @@ def generate_calibration_dict(ptable, files_to_link=None):
                     err = f"linkcal job exists but no files given: {files_to_link=}"
                     log.error(err)
                     raise ValueError(err)
-            elif jobtype == 'ccdcalib':
-                possible_ccd_files = set(['biasnight', 'badcolumns', 'ctecorrnight'])
-                if files_to_link is None:
-                    files_accounted_for = possible_ccd_files
+            elif jobtype in ['biaspdark', 'ccdcalib']:
+                ## These are multi-step jobs, so assume what was processed
+                ## based on linking
+                if jobtype == 'biaspdark':
+                    ## we don't care about preproc_for_dark since we can still
+                    ## make a darknight without darks specifically from tonight
+                    possible_files = set(['biasnight']) 
                 else:
-                    files_accounted_for = possible_ccd_files.difference(files_to_link)
-                    ccd_files_linked = possible_ccd_files.intersection(files_to_link)
-                    log.info(f"Assuming existing ccdcalib job processed "
-                             + f"{files_accounted_for} since {ccd_files_linked} "
+                    possible_files = set(['darknight', 'badcolumns', 'ctecorrnight'])
+                    
+                if files_to_link is None:
+                    files_accounted_for = possible_files
+                else:
+                    files_accounted_for = possible_files.difference(files_to_link)
+                    files_linked = possible_files.intersection(files_to_link)
+                    log.info(f"Assuming existing {jobtype} job processed "
+                             + f"{files_accounted_for} since {files_linked} "
                              + f"are linked.")
                 for fil in files_accounted_for:
                     accounted_for[fil] = True
@@ -2018,6 +2106,88 @@ def make_redshift_prow(prows, tnights, descriptor, internal_id):
     redshift_prow = assign_dependency(redshift_prow,dependency=tnights)
 
     return redshift_prow
+
+def check_darknight_deps_and_update_prow(prow, n_nights_before=None, n_nights_after=None,
+                                    proc_table_path=None):
+    """
+    Update the processing row with the darknight dependencies.
+
+    Args:
+        prow (dict): Processing row to be updated.
+        n_nights_before (int, optional): Number of nights before the given night to include in the darknight calculation.
+        n_nights_after (int, optional): Number of nights after the given night to include in the darknight calculation.
+        proc_table_path (str): Path to the processing table files.
+
+    Returns:
+        dict: If sufficient cameras returns updated processing row with darknight dependencies, else the input prow
+    """
+    log = get_logger()
+    refnight = prow['NIGHT']
+
+    compdarkparser = compute_dark_parser()
+    options = ['--reference-night', str(refnight), '-c', 'b1', '-o', 'temp',
+               '--skip-camera-check', '--dont-search-filesystem']
+    if n_nights_before is not None:
+        options.extend(['--before', str(n_nights_before)])
+    if n_nights_after is not None:
+        options.extend(['--after', str(n_nights_after)])
+    compdarkargs = compdarkparser.parse_args(options)
+
+    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+    
+    ## AK: as of now we always have enough darks, we just don't know if they are viable, so this is wasted computation
+    ### First see if we have enough exposures for each camera to make a viable darknight
+    #camera_counter = {cam: 0 for cam in decode_camword(prow['PROCCAMWORD'])}
+    #for erow in exptab_for_dark_night:
+    #    for cam in decode_camword(erow_to_goodcamword(erow, suppress_logging=True, exclude_badamps=True)):
+    #        camera_counter[cam] += 1
+    #enough_darks = np.all([count >= compdarkargs.min_dark_exposures for count in camera_counter.values()])
+    #if not enough_darks:
+    #    log.critical("Requested to do darknights, but not all cameras have sufficienct darks:"
+    #                 + f" {camera_counter=}, min_dark_exposures={compdarkargs.min_dark_exposures}, "
+    #                 + f"{n_nights_before=}, {n_nights_after=}. Exiting without submitting ccdcalib job.")
+    #    return prow, enough_darks
+    
+    ## Since we have enough exposures, update the processing table row with dependencies
+    nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [refnight]))
+    dep_intids, dep_qids = [], []
+    for night in nights:
+        nightly_expids = exptab_for_dark_night['EXPID'][exptab_for_dark_night['NIGHT'] == night].data
+        
+        ## Load in the files defined above
+        proc_table_pathname = findfile('processing_table', night=night, readonly=True)
+        if proc_table_path is not None:
+            proc_table_pathname = os.path.join(proc_table_path, os.path.basename(proc_table_pathname))
+        
+        ptable = load_table(tablename=proc_table_pathname, tabletype='proctable', suppress_logging=True)
+        if len(ptable) == 0:
+            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
+            continue
+        else:
+            biasdarks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biasnight', b'biaspdark', b'pdark']))]
+            if len(biasdarks) == 0:
+                log.error(f"Expected biasnight, biaspdark, or pdark processing on {night=} for expids={nightly_expids}, but didn't find any "
+                          + f"entries: jobdescs={ptable['JOBDESC'].data}, expids={ptable['EXPID'].data},"
+                          + f"obstypes={ptable['OBSTYPE'].data}. Continuing anyway")
+            for biasdark in biasdarks:
+                ## if bias for the reference night or if any darks in the job are used for
+                ## the darknight, we should depend on the job
+                if np.any(np.isin(biasdark['EXPID'].data, nightly_expids)) or (str(biasdark['JOBDESC']).startswith('bias') and night == refnight):
+                    dep_intids.append(biasdark['INTID'])
+                    dep_qids.append(biasdark['LATEST_QID'])
+
+    if len(dep_intids) > 0:
+        ## Note originally used argsort so that INT_DEP_IDS order would correspond to
+        ## LATEST_DEP_QID order, but because we remove LATEST_DEP_QID's if completed,
+        ## these are not the same length. So now we just sort INT_DEP_IDS and leave
+        ## LATEST_DEP_QID as-is
+        prow['INT_DEP_IDS'] = np.sort(np.concatenate([prow['INT_DEP_IDS'], dep_intids]))
+        prow['LATEST_DEP_QID'] = np.concatenate([prow['LATEST_DEP_QID'], dep_qids])
+        ## LATEST_DEP_QID contains 1's for jobs that already had files completed outside
+        ## the normal pipeline. Ignore those otherwise Slurm gets confused
+        prow['LATEST_DEP_QID'] = prow['LATEST_DEP_QID'][prow['LATEST_DEP_QID']>1]
+
+    return prow#, enough_darks
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,

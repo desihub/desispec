@@ -6,6 +6,7 @@ desispec.workflow.timing
 import os, glob, json
 import time, datetime
 import pytz
+from desispec.io.util import get_tempfilename
 import numpy as np
 
 from desiutil.log import get_logger
@@ -210,3 +211,52 @@ def wait_for_cals(night):
         log.error(f'Night {night} cals not found')
 
     return calsdone
+
+
+def log_timer(timer, timingfile=None, comm=None):
+    """
+    Log timing info, optionally writing to json timingfile
+
+    Args:
+        timer: desiutil.timer.Timer object
+        timingfile (str): write json output to this file
+        comm: MPI communicator
+
+    Notes:
+        * If comm is not None, collect timers across ranks.
+        * If timingfile already exists, read and append timing then re-write.
+    """
+
+    log = get_logger()
+    if comm is not None:
+        timers = comm.gather(timer, root=0)
+        rank, size = comm.rank, comm.size
+    else:
+        timers = [timer,]
+        rank, size = 0, 1
+
+    if rank == 0:
+        from desiutil.timer import compute_stats
+        stats = compute_stats(timers)
+        if timingfile:
+            if os.path.exists(timingfile):
+                with open(timingfile) as fx:
+                    previous_stats = json.load(fx)
+
+                #- augment previous_stats with new entries, but don't overwrite old
+                for name in stats:
+                    if name not in previous_stats:
+                        previous_stats[name] = stats[name]
+
+                stats = previous_stats
+
+            tmpfile = get_tempfilename(timingfile)
+            with open(tmpfile, 'w') as fx:
+                json.dump(stats, fx, indent=2)
+            os.rename(tmpfile, timingfile)
+            log.info(f'Timing stats saved to {timingfile}')
+
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')

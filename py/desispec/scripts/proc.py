@@ -23,6 +23,9 @@ Examples at NERSC::
 """
 
 import time, datetime
+
+from desispec.workflow.batch_writer import create_desi_proc_batch_script
+from desispec.workflow.timing import log_timer
 start_imports = time.time()
 
 #- enforce a batch-friendly matplotlib backend
@@ -76,8 +79,8 @@ from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, \
-    update_args_with_headers, find_most_recent, log_timer
-from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
+    update_args_with_headers, find_most_recent
+from desispec.workflow.batch import determine_resources
 
 stop_imports = time.time()
 

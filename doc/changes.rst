@@ -5,6 +5,7 @@ desispec Change Log
 0.69.1 (unreleased)
 -------------------
 
+* Add nightly dark processing (PR `#2531`_)
 * Improve NumPy 2 support (PR `#2502`_).
 * Allow 1200s dark for bad col selection (PR `#2499`_).
 * Improve calibration uncertainty (PR `#2496`_).
@@ -33,6 +34,7 @@ desispec Change Log
 * Fix ``read_frame_as_spectra`` (PR `#2459`_).
 * Log error when arc/flat set are rejected due to large time difference (PR `#2457`_).
 
+.. _`#2531`: https://github.com/desihub/desispec/pull/2531
 .. _`#2502`: https://github.com/desihub/desispec/pull/2502
 .. _`#2499`: https://github.com/desihub/desispec/pull/2499
 .. _`#2496`: https://github.com/desihub/desispec/pull/2496
