@@ -64,8 +64,8 @@ def default_system(jobdesc=None, no_gpu=False):
     if 'NERSC_HOST' in os.environ:
         if os.environ['NERSC_HOST'] == 'perlmutter':
             ## HARDCODED: for now arcs and biases can't use gpu's, so use cpu's
-            if jobdesc in ['linkcal', 'arc', 'nightlybias', 'biaspdark', 'ccdcalib',
-                           'badcol', 'psfnight']:
+            if jobdesc in ['linkcal', 'arc', 'biasnight', 'biaspdark',
+                           'ccdcalib', 'badcol', 'psfnight', 'pdark' ]:
                 name = 'perlmutter-cpu'
             elif no_gpu:
                 name = 'perlmutter-cpu'
@@ -182,14 +182,15 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         ## and split work of 30 cameras across 2 nodes
         nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
         ncores = 15
-        ## 8 minutes base plus 3 mins per loop over exposures
-        runtime = 8 + 3.*(float(nodes*config['cores_per_node'])/float(ncores))
+        ## 8 minutes base plus 4 mins per loop over dark exposures
+        pdarkcores = min([ncameras*nexps, nodes*config['cores_per_node']])
+        runtime = 8 + 4.*(float(nodes*config['cores_per_node'])/float(pdarkcores))
     elif jobdesc in ('PDARK'):
         nodes = 1 
         # can do 1 core per camera per exp, but limit to cores available
         ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
-        ## 4 minutes base plus 3 mins per loop over exposures    
-        runtime = 4 + 3.*(float(nodes*config['cores_per_node'])/float(ncores))
+        ## 4 minutes base plus 4 mins per loop over dark exposures    
+        runtime = 4 + 4.*(float(nodes*config['cores_per_node'])/float(ncores))
     elif jobdesc == 'CCDCALIB':
         nodes = 1
         ncores, runtime = ncameras, 7 # 5 mins after perlmutter system scaling factor
