@@ -7,6 +7,7 @@ Script for science processing of a given DESI tile and night
 import sys
 import subprocess
 import time, datetime
+from desispec.workflow.batch_writer import create_desi_proc_tilenight_batch_script
 import numpy as np
 
 from os.path import dirname, abspath
@@ -21,7 +22,7 @@ import desispec.scripts.proc as proc
 import desispec.scripts.proc_joint_fit as proc_joint_fit
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_tilenight_parser
-from desispec.workflow.desi_proc_funcs import update_args_with_headers, create_desi_proc_tilenight_batch_script
+from desispec.workflow.desi_proc_funcs import update_args_with_headers
 
 import desispec.gpu
 

@@ -7,6 +7,7 @@ import sys, os, glob
 import json
 from astropy.io import fits
 from astropy.table import Table, join
+from desispec.workflow.batch_writer import create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime
@@ -21,11 +22,7 @@ from desispec.workflow.redshifts import get_ztile_script_pathname, \
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
-from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
-                                              create_desi_proc_batch_script, \
-                                              get_desi_proc_batch_file_path, \
-                                              get_desi_proc_tilenight_batch_file_pathname, \
-                                              create_desi_proc_tilenight_batch_script
+from desispec.workflow.batch_writer import get_desi_proc_batch_file_path
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict

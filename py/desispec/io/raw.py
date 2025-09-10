@@ -107,40 +107,6 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
 
-
-    #- Check if NIGHT keyword is present and valid; fix if needed
-    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
-    try:
-        tmp = int(primary_header['NIGHT'])
-    except (KeyError, ValueError, TypeError):
-        primary_header['NIGHT'] = (header2night(primary_header), 'Observing night')
-
-    try:
-        tmp = int(header['NIGHT'])
-    except (KeyError, ValueError, TypeError):
-        try:
-            header['NIGHT'] = (header2night(header), 'Observing night')
-        except (KeyError, ValueError, TypeError):
-            #- early teststand data only have NIGHT/timestamps in primary hdr
-            header['NIGHT'] = (primary_header['NIGHT'], 'Observing night')
-
-    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
-    primary_header['NIGHT'] = (int(primary_header['NIGHT']), 'Observing night')
-    header['NIGHT'] = (int(header['NIGHT']), 'Observing night')
-
-    if primary_header['NIGHT'] != header['NIGHT']:
-        msg = 'Primary header NIGHT=%d != camera header NIGHT=%d!'
-        log.critical(msg, primary_header['NIGHT'], header['NIGHT'])
-        raise ValueError(msg % (primary_header['NIGHT'], header['NIGHT']))
-
-    #- early data have >8 char FIBERASSIGN key; rename to match current data
-    if 'FIBERASSIGN' in primary_header:
-        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in primary_header.')
-        primary_header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
-
-    if 'FIBERASSIGN' in header:
-        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in header.')
-        header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
     #
     # A lot of this inheritance stuff is moot because real data files
     # have an empty HDU 0 with no interesting headers.
@@ -176,6 +142,80 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     fx.close()
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
+
+    fx.close()
+    return process_raw(primary_header, rawimage, header, camera=camera, fibermapfile=fibermapfile, **kwargs)
+
+def process_raw(primary_header, rawimage, header, camera, fibermapfile=None, **kwargs):
+    '''Returns preprocessed raw data rawimage.
+
+    Parameters
+    ----------
+    primary_header : :class:`astropy.io.fits.Header`
+        Primary header of the raw data file.
+    rawimage : :class:`numpy.ndarray`
+        2D ndarray of raw pixel data including overscans.
+    header : :class:`astropy.io.fits.Header`
+        Header of the camera extension of the raw data file.
+    camera : :class:`str`
+        Camera name (B0, R1, ... Z9) or FITS extension name.
+    fibermapfile : :class:`str`, optional
+        Read fibermap from this file; if ``None`` create blank fibermap.
+
+    Returns
+    -------
+    :class:`desispec.image.Image`
+        Image object with member variables pix, ivar, mask, readnoise.
+
+    Raises
+    ------
+    KeyError
+        If ``EXPTIME`` is not present in any header in `header`, or if
+        both ``NIGHT`` and ``DATE-OBS`` are missing from input headers.
+    ValueError
+        If ``NIGHT`` in the primary header does not match ``NIGHT`` in the
+        camera header.
+
+    Notes
+    -----
+    Other keyword arguments are passed to :func:`desispec.preproc.preproc`,
+    *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
+    documentation for details.
+    '''
+    log = get_logger()
+    #- Check if NIGHT keyword is present and valid; fix if needed
+    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
+    try:
+        tmp = int(primary_header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        primary_header['NIGHT'] = (header2night(primary_header), 'Observing night')
+
+    try:
+        tmp = int(header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        try:
+            header['NIGHT'] = (header2night(header), 'Observing night')
+        except (KeyError, ValueError, TypeError):
+            #- early teststand data only have NIGHT/timestamps in primary hdr
+            header['NIGHT'] = (primary_header['NIGHT'], 'Observing night')
+
+    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
+    primary_header['NIGHT'] = (int(primary_header['NIGHT']), 'Observing night')
+    header['NIGHT'] = (int(header['NIGHT']), 'Observing night')
+
+    if primary_header['NIGHT'] != header['NIGHT']:
+        msg = 'Primary header NIGHT=%d != camera header NIGHT=%d!'
+        log.critical(msg, primary_header['NIGHT'], header['NIGHT'])
+        raise ValueError(msg % (primary_header['NIGHT'], header['NIGHT']))
+
+    #- early data have >8 char FIBERASSIGN key; rename to match current data
+    if 'FIBERASSIGN' in primary_header:
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in primary_header.')
+        primary_header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
+
+    if 'FIBERASSIGN' in header:
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in header.')
+        header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
     #
     # Other cleanup of headers
     #
@@ -225,7 +265,6 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
             elif img.meta[key] != fibermap.meta[key]:
                 #- complain loudly, but don't crash and don't override
                 log.error('Inconsistent {}: raw header {} != fibermap header {}'.format(key, img.meta[key], fibermap.meta[key]))
-
 
     #- Trim to matching camera based upon PETAL_LOC, but that requires
     #- a mapping prior to 20191211
