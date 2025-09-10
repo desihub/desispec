@@ -179,13 +179,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.debug(f"BIAS={thisbias}")
 
         ## Identify the path to the preprocessed dark image
-        default_preproc_filename = checkgzip(findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True))
+        default_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True)
         default_exists = os.path.isfile(default_preproc_filename)
         user_preproc_filename = None
         user_exists = False
         if preproc_dark_dir is not None :
-            user_preproc_filename = checkgzip(findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
-                                        specprod_dir=preproc_dark_dir, readonly=True))
+            user_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+                                        specprod_dir=preproc_dark_dir, readonly=True)
             user_exists = os.path.isfile(user_preproc_filename)
 
         if user_exists:

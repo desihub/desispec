@@ -222,9 +222,9 @@ def main(args=None):
                 continue
                 
             if args.preproc_dark_dir is not None:
-                preproc_filename = checkgzip(findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir))
+                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir)
             else:
-                preproc_filename = checkgzip(findfile("preproc_for_dark",night=night,expid=expid,camera=camera))
+                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
             
             if os.path.exists(preproc_filename):
                 log.info(f"Rank {rank} block_rank {block_rank} block_num {block_num}: "
