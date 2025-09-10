@@ -23,7 +23,7 @@ from desispec.preproc import masked_median
 from desispec.preproc import parse_sec_keyword, get_amp_ids, get_readout_mode
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm, sm2sp
-from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords,create_camword
+from desispec.io.util import checkgzip, get_tempfilename, parse_cameras, decode_camword, difference_camwords,create_camword
 from desispec.io.raw import read_raw_primary_header
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
@@ -179,13 +179,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.debug(f"BIAS={thisbias}")
 
         ## Identify the path to the preprocessed dark image
-        default_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True)
+        default_preproc_filename = checkgzip(findfile("preproc_for_dark", night=night, expid=expid, camera=camera, readonly=True))
         default_exists = os.path.isfile(default_preproc_filename)
         user_preproc_filename = None
         user_exists = False
         if preproc_dark_dir is not None :
-            user_preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
-                                        specprod_dir=preproc_dark_dir, readonly=True)
+            user_preproc_filename = checkgzip(findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+                                        specprod_dir=preproc_dark_dir, readonly=True))
             user_exists = os.path.isfile(user_preproc_filename)
 
         if user_exists:

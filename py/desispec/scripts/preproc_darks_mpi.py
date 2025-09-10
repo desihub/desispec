@@ -15,7 +15,7 @@ from astropy.table import Table,vstack
 
 from desiutil.log import get_logger
 
-from desispec.io.util import decode_camword, difference_camwords
+from desispec.io.util import checkgzip, decode_camword, difference_camwords
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 from desispec.scripts.compute_dark import get_stacked_dark_exposure_table
@@ -222,9 +222,9 @@ def main(args=None):
                 continue
                 
             if args.preproc_dark_dir is not None:
-                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir)
+                preproc_filename = checkgzip(findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir))
             else:
-                preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
+                preproc_filename = checkgzip(findfile("preproc_for_dark",night=night,expid=expid,camera=camera))
             
             if os.path.exists(preproc_filename):
                 log.info(f"Rank {rank} block_rank {block_rank} block_num {block_num}: "
