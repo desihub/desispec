@@ -8,6 +8,7 @@ Lawrence Berkeley National Lab
 Fall 2015
 
 substantially updated Fall 2023
+updated again Summer 2025
 """
 
 from __future__ import absolute_import, division, print_function
@@ -35,6 +36,7 @@ from desispec.util import parse_keyval
 from desiutil.annotate import load_csv_units
 from desiutil.names import radec_to_desiname
 import desiutil.depend
+from desispec import validredshifts
 
 def load_sv1_ivar_w12(hpix, targetids):
     """
@@ -91,7 +93,7 @@ def _wrap_read_redrock(optdict):
     """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
 
-def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pertile=False, counter=None):
+def read_redrock(rrfile, group=None, pertile=False, counter=None):
     """
     Read a Redrock file, combining REDSHIFTS, FIBERMAP, and TSNR2 HDUs
 
@@ -100,8 +102,6 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
 
     Options:
         group (str): add group-specific columns for cumulative, pernight, healpix
-        readcoadd_fibermap (bool): recoadd fibermap from spectra file in same dir
-        minimal (bool): only propagate minimal subet of columns
         pertile (bool): input Redrock file is single tile (not healpix)
         counter (tuple): (i,n) log loading ith file out of n
 
@@ -185,41 +185,40 @@ def read_redrock(rrfile, group=None, recoadd_fibermap=False, minimal=False, pert
                             tsnr2 = append_fields(tsnr2, colname,
                                                   np.zeros(tsnr2.shape, dtype=np.float32), dtypes=np.float32)
 
-    if minimal:
-        # basic set of target information
-        fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
+    emline_file = rrfile.replace('/redrock-', '/emline-')
+    qso_mgii_file = rrfile.replace('/redrock-', '/qso_mgii-')
+    qso_qn_file = rrfile.replace('/redrock-', '/qso_qn-')
 
-        # add targeting columns
-        for colname in fibermap.dtype.names:
-            if colname.endswith('_TARGET') and colname != 'FA_TARGET':
-                fmcols.append(colname)
+    with fitsio.FITS(emline_file) as fx:
+        emline = Table(fx['EMLINEFIT'].read())
+    with fitsio.FITS(qso_mgii_file) as fx:
+        qso_mgii = Table(fx['MGII'].read())
+    with fitsio.FITS(qso_qn_file) as fx:
+        qso_qn = Table(fx['QN_RR'].read())
 
-        # add columns needed for uniqueness that differ for healpix vs. tiles
-        extracols = ['TILEID', 'LASTNIGHT', 'HEALPIX', 'SURVEY', 'PROGRAM']
-        for colname in extracols:
-            if colname in fibermap.dtype.names:
-                fmcols.append(colname)
+    assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+    assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+    assert np.all(redshifts['TARGETID'] == emline['TARGETID'])
+    assert np.all(redshifts['TARGETID'] == qso_mgii['TARGETID'])
+    assert np.all(redshifts['TARGETID'] == qso_qn['TARGETID'])
 
-        # NIGHT header -> fibermap LASTNIGHT
-        if ('LASTNIGHT' not in fmcols) and ('NIGHT' in hdr):
-            fibermap['LASTNIGHT'] = np.int32(hdr['NIGHT'])
-            fmcols.append('LASTNIGHT')
+    fmcols = list(fibermap.dtype.names)
+    fmcols.remove('TARGETID')
 
-        data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
+    qso_mgii_cols = ['IS_QSO_MGII']
+    qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW', 'ZWARN_NEW', 'SPECTYPE_NEW', 'SUBTYPE_NEW', 'CHI2_NEW', 'DELTACHI2_NEW', 'COEFF_NEW']
 
-    else:
-        fmcols = list(fibermap.dtype.names)
-        fmcols.remove('TARGETID')
-        if tsnr2 is not None:
-            tsnr2cols = list(tsnr2.dtype.names)
-            tsnr2cols.remove('TARGETID')
-            data = hstack([
-                Table(redshifts),
-                Table(fibermap[fmcols]),
-                Table(tsnr2[tsnr2cols]),
-                ])
-        else:
-            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+    tsnr2cols = list(tsnr2.dtype.names)
+    tsnr2cols.remove('TARGETID')
+    data = hstack([
+        redshifts,
+        fibermap[fmcols],
+        tsnr2[tsnr2cols],
+        emline[emline_cols],
+        qso_mgii[qso_mgii_cols],
+        qso_qn[qso_qn_cols]
+        ], join_type='exact')
 
     #
     # These old columns show up in zbest files. They have been replaced with
@@ -369,7 +368,7 @@ def parse(options=None):
     parser.add_argument("-t", "--tiles", type=str,
             help="ascii file with tileids to include (one per line)")
 
-    parser.add_argument("--survey", type=str,
+    parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
     parser.add_argument("--program", type=str,
             help="DESI program, e.g bright, dark")
@@ -420,15 +419,20 @@ def main(args=None):
                          + '--do-not-add-units')
             return 1
 
+    survey = args.survey
+
     if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
     elif args.group == 'healpix':
         pertile = False
-        survey = args.survey if args.survey is not None else "*"
         program = args.program if args.program is not None else "*"
         indir = os.path.join(io.specprod_root(), 'healpix')
+
+        #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        if indir.startswith('/global/cfs/cdirs'):
+            indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
 
         #- specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
         globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
@@ -508,16 +512,16 @@ def main(args=None):
     read_args = list()
     for ifile, rrfile in enumerate(redrockfiles):
         read_args.append(dict(rrfile=rrfile, group=args.group, pertile=pertile,
-                              recoadd_fibermap=args.recoadd_fibermap, minimal=args.minimal,
                               counter=(ifile+1, nfiles)))
 
     #- Read individual Redrock files
     if args.nproc>1:
         from multiprocessing import Pool
         with Pool(args.nproc) as pool:
-            results = pool.map(_wrap_read_redrock, read_args)
+            results = pool.map(_wrap_read_redrock, read_args, chunksize=1)
     else:
         results = [_wrap_read_redrock(a) for a in read_args]
+    log.info("Successfully read {} redrock files".format(nfiles))
 
     #- Stack catalogs
     zcatdata = list()
@@ -533,7 +537,7 @@ def main(args=None):
             exp_fibermaps.append(expfibermap)
 
     log.info('Stacking zcat')
-    zcat = vstack(zcatdata)
+    zcat = vstack(zcatdata, join_type='exact')
     desiutil.depend.mergedep(dependencies, zcat.meta)
     if exp_fibermaps:
         log.info('Stacking exposure fibermaps')
@@ -550,7 +554,7 @@ def main(args=None):
 
     #- Add FIRSTNIGHT for tile-based cumulative catalogs
     #- (LASTNIGHT was added while reading from NIGHT header keyword)
-    if args.group == 'cumulative' and expfm is not None and 'FIRSTNIGHT' not in zcat.colnames:
+    if args.group == 'cumulative' and 'FIRSTNIGHT' not in zcat.colnames:
         log.info('Adding FIRSTNIGHT per tile')
         icol = zcat.colnames.index('LASTNIGHT')
         zcat.add_column(np.zeros(len(zcat), dtype=np.int32),
@@ -568,12 +572,14 @@ def main(args=None):
 
     #- if TARGETIDs appear more than once, which one is best within this catalog?
     if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
+        # Add EFFTIME_SPEC; definition from Equation 22 of Guy et al. 2023 (arxiv:2209.14482)
+        zcat['EFFTIME_SPEC'] = 12.15 * zcat['TSNR2_LRG']
         log.info('Finding best spectrum for each target')
-        nspec, primary = find_primary_spectra(zcat)
+        nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
         zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
         zcat['ZCAT_PRIMARY'] = primary
     else:
-        log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
+        log.info('Missing TSNR2_LRG or ZWARN; not adding EFFTIME_SPEC, ZCAT_PRIMARY/_NSPEC')
 
     #- Used for fuji, should not be needed for later prods
     if args.patch_missing_ivar_w12:
@@ -608,8 +614,96 @@ def main(args=None):
                     except KeyError:
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
+    # Add redshift quality flags
+    zqual = validredshifts.actually_validate(zcat)
+    good_spec = validredshifts.get_good_fiberstatus(zcat)
+    good_spec &= zcat['OBJTYPE']=='TGT'
+    zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
+    zqual['Z_CONF'] = np.uint8(0)  # Z_CONF=0: no confidence
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        zqual[col] = zqual[col] & zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
+
+    # evaluate Z_CONF
+    if survey in ['main', 'sv1', 'sv2', 'sv3']:
+        if survey=='main':
+            desi_target_col = 'DESI_TARGET'
+        else:
+            desi_target_col = survey.upper()+'_DESI_TARGET'
+
+        # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
+        is_bgs = zcat[desi_target_col] & 2**60 > 0
+        is_lrg = zcat[desi_target_col] & 2**0 > 0
+        is_elg = zcat[desi_target_col] & 2**1 > 0
+        is_qso = zcat[desi_target_col] & 2**2 > 0
+
+        # GOOD_Z_TRACER: False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut; True if it is a TRACER target and passes TRACER redshift quality cut
+        # They apply to the Z column
+        zqual['GOOD_Z_BGS'] &= is_bgs
+        zqual['GOOD_Z_LRG'] &= is_lrg
+        zqual['GOOD_Z_ELG'] &= is_elg
+
+        # GOOD_Z_QSO: True only if it is a QSO target AND passes the QSO redshift quality cut; it only applies to the Z_QSO column
+        zqual['GOOD_Z_QSO'] &= is_qso
+        
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts as the per-target class and GOOD_SPEC requirements are added here
+
+        # Z_CONF=3: highly confident redshift; criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO) and pass the LSS redshift quality cuts
+        mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+        zqual['Z_CONF'][mask] = 3
+
+        # Z_CONF=2: placeholder
+
+        # Z_CONF=1: less confident redshift; criteria: the Z_CONF==3 criteria are not met, but GOOD_SPEC==True & ZWARN==0
+        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        zqual['Z_CONF'][mask] = 1
+
+    else:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+            zqual[col] = False
+        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        zqual['Z_CONF'][mask] = 1
+
+    zcat = hstack([zcat, zqual], join_type='exact')
+
+    # Create "best redshift" columns
+    z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
+    for col in z_cols:
+        zcat[col+'_BEST'] = zcat[col].copy()
+
+    # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs significantly from Z
+    z_diff_threshold = 0.00333
+    mask = (zcat['GOOD_Z_QSO']==True) & (np.abs(zcat['Z']-zcat['Z_QSO'])>z_diff_threshold*(1+zcat['Z_QSO']))
+    zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
+    for col in z_cols:
+        if col!='Z':
+            zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
+
+    columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
+    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
+    assert len(np.intersect1d(columns_basic, columns_imaging))==0
+
+    # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
+    if survey!='main':
+        for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
+            if col in zcat.colnames:
+                zcat.remove_column(col)
+
+    # Remove the columns that do not exist
+    columns_basic = [col for col in columns_basic if col in zcat.colnames]
+    columns_imaging = ['TARGETID', 'TILEID'] + columns_imaging
+    columns_imaging = [col for col in columns_imaging if col in zcat.colnames]  # remove columns that do not exist
+    columns_extra = ['TARGETID', 'TILEID'] + [col for col in zcat.colnames if (col not in columns_basic and col not in columns_imaging)]
+    columns_extra = [col for col in columns_extra if col in zcat.colnames]  # remove columns that do not exist
+
+    zcat_basic = zcat[columns_basic].copy()
+    zcat_imaging = zcat[columns_imaging].copy()
+    zcat_extra = zcat[columns_extra].copy()
+
     #- we're done adding columns, convert to numpy array for fitsio
     zcat = np.array(zcat)
+    zcat_basic = np.array(zcat_basic)
+    zcat_imaging = np.array(zcat_imaging)
+    zcat_extra = np.array(zcat_extra)
 
     #- Inherit header from first input, but remove keywords that don't apply
     #- across multiple files
@@ -635,8 +729,8 @@ def main(args=None):
             key, value = parse_keyval(keyval)
             header[key] = value
 
-    if args.survey is not None:
-        header['SURVEY'] = args.survey
+    if survey is not None:
+        header['SURVEY'] = survey
 
     if args.program is not None:
         header['PROGRAM'] = args.program
@@ -651,16 +745,50 @@ def main(args=None):
         units = dict()
         comments = dict()
 
-    log.info(f'Writing {args.outfile}')
-    tmpfile = get_tempfilename(args.outfile)
+    if not os.path.isdir(os.path.dirname(args.outfile)):
+        os.makedirs(os.path.dirname(args.outfile))
 
-    write_bintable(tmpfile, zcat, header=header, extname='ZCATALOG',
-                   units=units, comments=comments, clobber=True)
+    # outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', os.path.basename(args.outfile)+'.fits')
+    # if not os.path.isdir(os.path.dirname(outfile_all)):
+    #     os.makedirs(os.path.dirname(outfile_all))
+    # log.info(f'Writing {outfile_all}')
+    # tmpfile = get_tempfilename(outfile_all)
+    # write_bintable(tmpfile, zcat, header=header, extname='MERGEDZCAT',
+    #                units=units, clobber=True)
+    # write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
+    # os.rename(tmpfile, outfile_all)
+    # log.info("Successfully wrote {}".format(outfile_all))
 
-    if not args.minimal and expfm is not None:
-        write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units, comments=comments)
+    outfile_basic = args.outfile+'.fits'
+    log.info(f'Writing {outfile_basic}')
+    tmpfile = get_tempfilename(outfile_basic)
+    write_bintable(tmpfile, zcat_basic, header=header, extname='ZCATALOG',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_basic)
+    log.info("Successfully wrote {}".format(outfile_basic))
 
-    os.rename(tmpfile, args.outfile)
+    outfile_imaging = args.outfile+'-imaging.fits'
+    log.info(f'Writing {outfile_imaging}')
+    tmpfile = get_tempfilename(outfile_imaging)
+    write_bintable(tmpfile, zcat_imaging, header=header, extname='ZCATALOG_IMAGING',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_imaging)
+    log.info("Successfully wrote {}".format(outfile_imaging))
 
-    log.info("Successfully wrote {}".format(args.outfile))
+    outfile_extra = args.outfile+'-extra.fits'
+    log.info(f'Writing {outfile_extra}')
+    tmpfile = get_tempfilename(outfile_extra)
+    write_bintable(tmpfile, zcat_extra, header=header, extname='ZCATALOG_EXTRA',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_extra)
+    log.info("Successfully wrote {}".format(outfile_extra))
 
+    outfile_expfm = os.path.join(os.path.dirname(args.outfile), 'exp_fibermap', os.path.basename(args.outfile)+'-expfibermap.fits')
+    if not os.path.isdir(os.path.dirname(outfile_expfm)):
+        os.makedirs(os.path.dirname(outfile_expfm))
+    log.info(f'Writing {outfile_expfm}')
+    tmpfile = get_tempfilename(outfile_expfm)
+    write_bintable(tmpfile, expfm, header=header, extname='EXP_FIBERMAP',
+                   units=units, clobber=True)
+    os.rename(tmpfile, outfile_expfm)
+    log.info("Successfully wrote {}".format(outfile_expfm))
