@@ -12,6 +12,7 @@ import numpy as np
 from astropy.table import Table, hstack, join
 import fitsio
 
+from desispec.maskbits import fibermask
 
 def get_good_fiberstatus(cat):
     '''
@@ -24,7 +25,8 @@ def get_good_fiberstatus(cat):
         good_fiberstatus: boolean array
     '''
 
-    good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==2**3)  # allow bit 3 (restricted fiber reach)
+    # allow bit 3 (restricted fiber reach)
+    good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==fibermask.RESTRICTED)
     return good_fiberstatus
 
 

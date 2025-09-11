@@ -24,18 +24,23 @@ from numpy.lib.recfunctions import append_fields, drop_fields
 
 import fitsio
 from astropy.table import Table, hstack, vstack
+import astropy.constants
 
 from desiutil.log import get_logger, DEBUG
+from desiutil.annotate import load_csv_units
+from desiutil.names import radec_to_desiname
+import desiutil.depend
+
+from desitarget.targetmask import desi_mask
+
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
+from desispec.io.meta import get_readonly_filepath
 from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
-from desiutil.annotate import load_csv_units
-from desiutil.names import radec_to_desiname
-import desiutil.depend
 from desispec import validredshifts
 
 def load_sv1_ivar_w12(hpix, targetids):
@@ -95,10 +100,10 @@ def _wrap_read_redrock(optdict):
 
 def read_redrock(rrfile, group=None, pertile=False, counter=None):
     """
-    Read a Redrock file, combining REDSHIFTS, FIBERMAP, and TSNR2 HDUs
+    Read Redrock, emline, mgii, and qso_qn files, combining HDUs into single table
 
     Args:
-        rrfile (str): full path to redrock filename
+        rrfile (str): full path to Redrock filename; others will be derived from this
 
     Options:
         group (str): add group-specific columns for cumulative, pernight, healpix
@@ -122,21 +127,18 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
             log.warning("Skipping {} with SPGRP {} != group {}".format(
                 rrfile, hdr['SPGRP'], group))
             return None
-        try:
-            redshifts = fx['REDSHIFTS'].read()
-            zbest_file = False
-        except IOError:
-            #
-            # zbest files do not have an EXP_FIBERMAP HDU, so force a recoadd.
-            #
-            redshifts = fx['ZBEST'].read()
-            zbest_file = True
 
-        if recoadd_fibermap or zbest_file:
-            if zbest_file:
-                spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
-            else:
-                spectra_filename = checkgzip(replace_prefix(rrfile, 'redrock', 'spectra'))
+        if 'REDSHIFTS' in fx:
+            redshifts = Table(fx['REDSHIFTS'].read())
+            zbest_file = False
+        elif 'ZBEST' in fx:
+            redshifts = Table(fx['ZBEST'].read())
+            zbest_file = True
+        else:
+            raise IOError(f'Unable to find REDSHIFTS or ZBEST HDU in {rrfile}')
+
+        if zbest_file:
+            spectra_filename = checkgzip(replace_prefix(rrfile, 'zbest', 'spectra'))
             log.info('Recoadding fibermap from %s.', os.path.basename(spectra_filename))
             fibermap_orig = read_table(spectra_filename)
             fibermap, expfibermap = coadd_fibermap(fibermap_orig, onetile=pertile)
@@ -149,7 +151,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
 
         try:
-            tsnr2 = fx['TSNR2'].read()
+            tsnr2 = Table(fx['TSNR2'].read())
         except IOError:
             if zbest_file:
                 #
@@ -185,9 +187,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
                             tsnr2 = append_fields(tsnr2, colname,
                                                   np.zeros(tsnr2.shape, dtype=np.float32), dtypes=np.float32)
 
-    emline_file = rrfile.replace('/redrock-', '/emline-')
-    qso_mgii_file = rrfile.replace('/redrock-', '/qso_mgii-')
-    qso_qn_file = rrfile.replace('/redrock-', '/qso_qn-')
+    emline_file = replace_prefix(rrfile, 'redrock', 'emline')
+    qso_mgii_file = replace_prefix(rrfile, 'redrock', 'qso_mgii')
+    qso_qn_file = replace_prefix(rrfile, 'redrock', 'qso_qn')
 
     with fitsio.FITS(emline_file) as fx:
         emline = Table(fx['EMLINEFIT'].read())
@@ -431,8 +433,7 @@ def main(args=None):
         indir = os.path.join(io.specprod_root(), 'healpix')
 
         #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
-        if indir.startswith('/global/cfs/cdirs'):
-            indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
+        indir = get_readonly_filepath(indir)
 
         #- specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
         globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
@@ -445,8 +446,7 @@ def main(args=None):
         indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
         #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
-        if indir.startswith('/global/cfs/cdirs'):
-            indir = indir.replace('/global/cfs/cdirs', '/dvs_ro/cfs/cdirs')
+        indir = get_readonly_filepath(indir)
 
         if not os.path.exists(tilefile):
             log.warning(f'Tiles file {tilefile} does not exist. Trying CSV instead.')
@@ -631,10 +631,10 @@ def main(args=None):
             desi_target_col = survey.upper()+'_DESI_TARGET'
 
         # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
-        is_bgs = zcat[desi_target_col] & 2**60 > 0
-        is_lrg = zcat[desi_target_col] & 2**0 > 0
-        is_elg = zcat[desi_target_col] & 2**1 > 0
-        is_qso = zcat[desi_target_col] & 2**2 > 0
+        is_bgs = zcat[desi_target_col] & desi_mask.BGS_ANY != 0
+        is_lrg = zcat[desi_target_col] & desi_mask.LRG != 0
+        is_elg = zcat[desi_target_col] & desi_mask.ELG != 0
+        is_qso = zcat[desi_target_col] & desi_mask.QSO != 0
 
         # GOOD_Z_TRACER: False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut; True if it is a TRACER target and passes TRACER redshift quality cut
         # They apply to the Z column
@@ -653,14 +653,15 @@ def main(args=None):
 
         # Z_CONF=2: placeholder
 
-        # Z_CONF=1: less confident redshift; criteria: the Z_CONF==3 criteria are not met, but GOOD_SPEC==True & ZWARN==0
-        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        # Z_CONF=1: less confident redshift; criteria: the Z_CONF==3 or 2 criteria are not met,
+        # but GOOD_SPEC==True & ZWARN==0
+        mask = (zqual['Z_CONF']==0) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
         zqual['Z_CONF'][mask] = 1
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
             zqual[col] = False
-        mask = (zqual['Z_CONF']!=2) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+        mask = (zqual['Z_CONF']==0) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
         zqual['Z_CONF'][mask] = 1
 
     zcat = hstack([zcat, zqual], join_type='exact')
@@ -670,9 +671,10 @@ def main(args=None):
     for col in z_cols:
         zcat[col+'_BEST'] = zcat[col].copy()
 
-    # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs significantly from Z
-    z_diff_threshold = 0.00333
-    mask = (zcat['GOOD_Z_QSO']==True) & (np.abs(zcat['Z']-zcat['Z_QSO'])>z_diff_threshold*(1+zcat['Z_QSO']))
+    # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs by more than 1000 km/s from Z
+    c = astropy.constants.c.to('km/s').value
+    dv = c*(zcat['Z']-zcat['Z_QSO'])/(1+zcat['Z_QSO'])
+    mask = zcat['GOOD_Z_QSO'] & (np.abs(dv) > 1000)
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
@@ -695,15 +697,13 @@ def main(args=None):
     columns_extra = ['TARGETID', 'TILEID'] + [col for col in zcat.colnames if (col not in columns_basic and col not in columns_imaging)]
     columns_extra = [col for col in columns_extra if col in zcat.colnames]  # remove columns that do not exist
 
-    zcat_basic = zcat[columns_basic].copy()
-    zcat_imaging = zcat[columns_imaging].copy()
+    #- we're done adding columns, split and convert to numpy array for fitsio
+    zcat_basic = np.array(zcat[columns_basic])
+    zcat_imaging = np.array(zcat[columns_imaging])
     zcat_extra = zcat[columns_extra].copy()
 
-    #- we're done adding columns, convert to numpy array for fitsio
-    zcat = np.array(zcat)
-    zcat_basic = np.array(zcat_basic)
-    zcat_imaging = np.array(zcat_imaging)
-    zcat_extra = np.array(zcat_extra)
+    #- we don't need the original anymore; del to save memory
+    del zcat
 
     #- Inherit header from first input, but remove keywords that don't apply
     #- across multiple files
@@ -747,17 +747,6 @@ def main(args=None):
 
     if not os.path.isdir(os.path.dirname(args.outfile)):
         os.makedirs(os.path.dirname(args.outfile))
-
-    # outfile_all = os.path.join(os.path.dirname(args.outfile), 'merged', os.path.basename(args.outfile)+'.fits')
-    # if not os.path.isdir(os.path.dirname(outfile_all)):
-    #     os.makedirs(os.path.dirname(outfile_all))
-    # log.info(f'Writing {outfile_all}')
-    # tmpfile = get_tempfilename(outfile_all)
-    # write_bintable(tmpfile, zcat, header=header, extname='MERGEDZCAT',
-    #                units=units, clobber=True)
-    # write_bintable(tmpfile, expfm, extname='EXP_FIBERMAP', units=units)
-    # os.rename(tmpfile, outfile_all)
-    # log.info("Successfully wrote {}".format(outfile_all))
 
     outfile_basic = args.outfile+'.fits'
     log.info(f'Writing {outfile_basic}')

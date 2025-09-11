@@ -1,6 +1,9 @@
 # salloc -N 1 -C cpu -t 04:00:00 -q interactive
 
-cd /global/cfs/cdirs/desi/public/dr2/spectro/redux/loa/zcatalog/v2
+# Example commands to generate all of the zcatalog files, to be run in e.g.
+# cd /global/cfs/cdirs/desi/public/dr2/spectro/redux/loa/zcatalog/v2
+
+# requires "module load desidatamodel" first to be able to add units
 
 desi_zcatalog --survey cmx --program other --group healpix --nproc 128 -o cmx/zpix-cmx-other > logs/zpix-cmx-other.log
 desi_zcatalog --survey cmx --program other --group cumulative --nproc 128 -o cmx/ztile-cmx-other-cumulative > logs/ztile-cmx-other-cumulative.log
