@@ -169,6 +169,7 @@ class TestSpectra(unittest.TestCase):
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
         self.redshifts = Table()
+        self.redshifts.meta['EXTNAME'] = 'REDSHIFTS'
         self.redshifts["Z"] = np.random.uniform(0,5, size=self.nspec)
         self.redshifts["COEFF"] = np.random.uniform(-1,1, size=(self.nspec,10))
         self.redshifts["DELTACHI2"] = np.random.uniform(0,5000, size=self.nspec)
