@@ -21,7 +21,7 @@ class TestSky(unittest.TestCase):
     def setUp(self):
         #- Create a fake sky
         self.nspec = 20
-        self.wave = np.arange(4000, 4502)
+        self.wave = np.arange(8000, 8502)
         self.nwave = len(self.wave)
         self.flux = np.zeros(self.nwave)
         for i in range(0, self.nwave, 20):
