@@ -410,7 +410,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
         if nights is None:
             nights = np.unique(exp_summary["NIGHT"])
         for night in nights:
-            pipe_exptab_filename = findfile("exposure_table", night=int(night))
+            pipe_exptab_filename = findfile("exposure_table", night=int(night), readonly=True)
             if not os.path.isfile(pipe_exptab_filename) :
                 log.warning("cannot find prod. exposure table {}".format(pipe_exptab_filename))
                 continue
@@ -451,7 +451,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
 
                     # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
                     # as of 20210624: SURVEY present in table_exposure since 20210611 only
-                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"], readonly=True))
                     fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
                     if len(fns) > 0:
                         fiberassign_header = fits.getheader(fns[0], 0)
