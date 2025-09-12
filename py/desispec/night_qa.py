@@ -563,7 +563,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         for camera in cameras:
             myargs.append(
                 [
-                    findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=specprod_dir),
+                    findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=specprod_dir, readonly=True),
                     night,
                     prod,
                     dark_expid,
