@@ -33,7 +33,7 @@ class TestBinScripts(unittest.TestCase):
         os.chdir(cls.testdir)
         cls.nspec = 6
         cls.nwave = 2000  # Needed for QA
-        cls.wave = 4000+np.arange(cls.nwave)
+        cls.wave = 7000+np.arange(cls.nwave)
         id = uuid4().hex
         cls.calibfile = 'calib-'+id+'.fits'
         cls.framefile = 'frame-'+id+'.fits.gz'
@@ -106,7 +106,8 @@ class TestBinScripts(unittest.TestCase):
 
     def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
         """Write a fake frame"""
-        flux = np.ones((self.nspec, self.nwave))
+        ### flux = np.ones((self.nspec, self.nwave))
+        flux = np.random.normal(loc=1.0, scale=0.05, size=(self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))*100 # S/N=10
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
