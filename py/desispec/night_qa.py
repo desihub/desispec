@@ -1384,7 +1384,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     fns = []
     for tileid in tileids:
         fn = findfile('tileqapng', night=night, tile=tileid, groupname=group, 
-                      specprod_dir=prod. readonly=True)
+                      specprod_dir=prod, readonly=True)
         if os.path.isfile(fn):
             fns.append(fn)
         else:
