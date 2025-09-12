@@ -169,7 +169,7 @@ def get_dark_night_expid(night, prod):
     """
     #
     expid = None
-    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod)
+    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod, readonly=True)
     log.info("proctable_fn = {}".format(proctable_fn))
     if not os.path.isfile(proctable_fn):
         log.warning("no {} found; returning None".format(proctable_fn))
@@ -222,7 +222,7 @@ def get_morning_dark_night_expid(night, prod, exptime=1200):
     """
     #
     expid = None
-    exptable_fn = findfile('exposure_table', night=night, specprod_dir=prod)
+    exptable_fn = findfile('exposure_table', night=night, specprod_dir=prod, readonly=True)
     log.info("exptable_fn = {}".format(exptable_fn))
     if not os.path.isfile(exptable_fn):
         log.warning("no {} found; returning None".format(exptable_fn))
@@ -486,7 +486,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     tmp_outpdf = get_tempfilename(outpdf)
 
     # AR raw exposure
-    rawfn = findfile("raw", night, dark_expid)
+    rawfn = findfile("raw", night, dark_expid, readonly=True)
     if not os.path.isfile(rawfn):
         msg = "no raw image {} -> skipping".format(rawfn)
         log.error(msg)
@@ -511,7 +511,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     log.info("existing campets: {}".format(campets))
 
     # AR first check if we need to process this dark image
-    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod)
+    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod, readonly=True)
     # if set to None will judge necessity for preprocessing according to proctable
     # but allows manual override e.g. for cases where no proctable should be there
     if run_preproc is None:
@@ -541,6 +541,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         cmds = []
         temp_dir_loc = tempfile.mkdtemp()
         specprod_dir = temp_dir_loc
+        ## not readonly because we are generating the files 
         outdir = os.path.dirname(findfile("preproc", night, dark_expid,
                                           'r1', specprod_dir=specprod_dir))
         os.makedirs(outdir, exist_ok=True)
@@ -604,6 +605,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         #
         bkgsub_specprod_dir = None
         if len(bkgsub_science_campets) > 0:
+            ## not readonly because we are generating the files
             bkgsub_specprod_dir = tempfile.mkdtemp()
             outdir = os.path.dirname(findfile("preproc", night, dark_expid,
                                      'r1', specprod_dir=bkgsub_specprod_dir))
@@ -626,7 +628,8 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             for camera in bkgsub_science_cameras:
                 bkgsub_myargs.append(
                     [
-                        findfile("preproc", night, dark_expid, camera+str(petal), specprod_dir=bkgsub_specprod_dir),
+                        findfile("preproc", night, dark_expid, camera+str(petal), 
+                                 specprod_dir=bkgsub_specprod_dir, readonly=True),
                         night,
                         prod,
                         dark_expid,
@@ -849,7 +852,7 @@ def _read_ctedet_campet(night, prod, ctedet_expid, petal, camera):
     """
     #
     fn = findfile("preproc", night, ctedet_expid, camera+str(petal),
-            specprod_dir=prod)
+                  specprod_dir=prod, readonly=True)
     if os.path.isfile(fn):
         mydict = {}
         mydict["fn"] = fn
@@ -1227,7 +1230,7 @@ def _read_sframesky(night, prod, expid):
         for ic, camera in enumerate(cameras):
             for petal in petals:
                 fn, exists = findfile('sframe', night, expid, camera+str(petal),
-                        specprod_dir=prod, return_exists=True)
+                                      specprod_dir=prod, readonly=True, return_exists=True)
                 if exists:
                     with fitsio.FITS(fn) as h:
                         fibermap = h["FIBERMAP"].read()
@@ -1380,7 +1383,8 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     #
     fns = []
     for tileid in tileids:
-        fn = findfile('tileqapng', night=night, tile=tileid, groupname=group, specprod_dir=prod)
+        fn = findfile('tileqapng', night=night, tile=tileid, groupname=group, 
+                      specprod_dir=prod. readonly=True)
         if os.path.isfile(fn):
             fns.append(fn)
         else:
@@ -1455,6 +1459,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
                 groupname=group,
                 spectrograph=petal,
                 specprod_dir=prod,
+                readonly=True,
                 return_exists=True,
             )
             if exists:
@@ -1718,7 +1723,8 @@ def create_petalnz_pdf(
     sel = np.ones(len(tileids), dtype=bool)
     for i in range(len(tileids)):
         if surveys[i] == "main":
-            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group, specprod_dir=prod)
+            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group, 
+                          specprod_dir=prod, readonly=True)
             if not os.path.isfile(fn):
                 log.warning("no {} file, proceeding to next tile".format(fn))
                 continue
@@ -1739,7 +1745,7 @@ def create_petalnz_pdf(
     ntiles = {"bright" : 0, "dark" : 0}
     for tileid, survey in zip(tileids, surveys):
         # AR bright or dark?
-        fn = findfile('tileqa', night=night, tile=tileid, groupname=group, specprod_dir=prod)
+        fn = findfile('tileqa', night=night, tile=tileid, groupname=group, specprod_dir=prod, readonly=True)
         # AR if no tile-qa*fits, we skip the tileid
         if not os.path.isfile(fn):
             log.warning("no {} file, proceeding to next tile".format(fn))
@@ -1759,7 +1765,8 @@ def create_petalnz_pdf(
         istileid = False
         pix_ntilecovs = None
         for petal in petals:
-            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
+            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group, 
+                          specprod_dir=prod, readonly=True)
             if not os.path.isfile(fn):
                 log.warning("{} : no file".format(fn))
             else:
@@ -2292,7 +2299,8 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
             # AR list all science exposure files for that campet
             fns = []
             for expid in expids:
-                fn = findfile("frame", night, expid=expid, camera=camera+str(petal), specprod_dir=prod)
+                fn = findfile("frame", night, expid=expid, camera=camera+str(petal), 
+                              specprod_dir=prod, readonly=True)
                 if os.path.isfile(fn):
                     fns.append(fn)
             # AR protect against case where a campet has no processed files
@@ -2320,7 +2328,7 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
         for case in ["psfnight", "fiberflatnight", "biasnight"]:
             for camera in cameras:
                 campet = "{}{}".format(camera, petal)
-                fn = findfile(case, night, camera=campet, specprod_dir=prod)
+                fn = findfile(case, night, camera=campet, specprod_dir=prod, readonly=True)
                 fnshort, color = os.path.basename(fn).replace("-{}".format(night), ""), "red"
                 if os.path.isfile(fn):
                     if os.path.islink(fn):
