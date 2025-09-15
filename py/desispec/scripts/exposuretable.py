@@ -148,6 +148,13 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
             if rowdict is not None and type(rowdict) is not str:
                 rowdict['BADCAMWORD'] = badcamword
                 rowdict['BADAMPS'] = badamps
+                
+                ## Check that the night from the header matches that given and if not, ignore the file
+                if rowdict['NIGHT']!=night:
+                    log.info(f"\n{exp} has the wrong NIGHT keyword, setting LASTSTEP to 'ignore'.")
+                    rowdict['LASTSTEP']='ignore'
+                    rowdict['COMMENTS']=['wrong NIGHT keyword']
+
                 ## Add the dictionary of column values as a new row
                 nightly_tab.add_row(rowdict)
             if verbose:
