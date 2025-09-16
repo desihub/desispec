@@ -45,10 +45,10 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     log = get_logger()
     outfile = makepath(outfile, 'frame')
 
-    #- Ignore some known and harmless units warnings
     import warnings
-    warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
     warnings.filterwarnings('ignore', message=r".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+    warnings.filterwarnings('ignore', ".*nanomaggies.*")
+    warnings.filterwarnings('ignore', ".*nmgy.*")
 
     if header is not None:
         hdr = fitsheader(header)

@@ -470,7 +470,7 @@ def dateobs2night(dateobs):
         #- only use optional dependency dateutil if needed;
         #- it can handle some ISO8601 timezone variants that astropy can't
         from dateutil.parser import isoparser
-        mjd = Time(isoparser().isoparse(dateobs))
+        mjd = Time(isoparser().isoparse(dateobs)).mjd
 
     return mjd2night(mjd)
 

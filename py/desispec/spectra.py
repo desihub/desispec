@@ -741,7 +741,7 @@ class Spectra(object):
         Returns
         -------
         specutils.SpectrumList
-            A list with each band represented as a specutils.Spectrum1D object.
+            A list with each band represented as a specutils.Spectrum object.
 
         Raises
         ------
@@ -749,7 +749,12 @@ class Spectra(object):
             If ``specutils`` is not available in the environment.
         """
         #- only import specutils if needed for faster module import
-        from specutils import SpectrumList, Spectrum1D
+        from specutils import SpectrumList
+        try:
+            from specutils import Spectrum
+        except ImportError:
+            from specutils import Spectrum1D as Spectrum  # specutils 1.x
+
         from astropy.nddata import InverseVariance
 
         sl = SpectrumList()
@@ -779,7 +784,7 @@ class Spectra(object):
                         meta[key] = getattr(self, key).copy()
                     except AttributeError:
                         pass
-            sl.append(Spectrum1D(flux=flux, spectral_axis=spectral_axis,
+            sl.append(Spectrum(flux=flux, spectral_axis=spectral_axis,
                                  uncertainty=uncertainty, mask=mask, meta=meta))
         return sl
 
@@ -789,7 +794,7 @@ class Spectra(object):
 
         Parameters
         ----------
-        spectra : specutils.Spectrum1D or specutils.SpectrumList
+        spectra : specutils.Spectrum or specutils.SpectrumList
             A ``specutils`` object.
 
         Returns
@@ -805,7 +810,12 @@ class Spectra(object):
             If an unknown type is found in `spectra`.
         """
         #- only import specutils if needed for faster module import
-        from specutils import SpectrumList, Spectrum1D
+        from specutils import SpectrumList
+        try:
+            from specutils import Spectrum
+        except ImportError:
+            from specutils import Spectrum1D as Spectrum  # specutils 1.x
+
         from astropy.nddata import InverseVariance, StdDevUncertainty
 
         if isinstance(spectra, SpectrumList):
@@ -814,7 +824,7 @@ class Spectra(object):
                 bands = sl[0].meta['bands']
             except KeyError:
                 raise ValueError("Band details not supplied. Bands should be specified with, e.g.: spectra[0].meta['bands'] = ['b', 'r', 'z'].")
-        elif isinstance(spectra, Spectrum1D):
+        elif isinstance(spectra, Spectrum):
             sl = [spectra]
             #
             # Assume this is a coadd across cameras.

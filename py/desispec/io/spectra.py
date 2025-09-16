@@ -89,6 +89,7 @@ def write_spectra(outfile, spec, units=None):
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
         warnings.filterwarnings('ignore', '.*nanomaggies.*')
+        warnings.filterwarnings('ignore', '.*nmgy.*')
         hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
@@ -103,6 +104,7 @@ def write_spectra(outfile, spec, units=None):
         with warnings.catch_warnings():
             #- nanomaggies aren't an official IAU unit but don't complain
             warnings.filterwarnings('ignore', '.*nanomaggies.*')
+            warnings.filterwarnings('ignore', '.*nmgy.*')
             hdu = fits.convenience.table_to_hdu(expfmap)
 
         # Add comments for exp_fibermap columns.

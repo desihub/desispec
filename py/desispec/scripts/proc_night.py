@@ -414,7 +414,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     
     ## Quickly exit if we haven't processed the biasprdark job yet and we should have
     jobtypes_requested = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    job_exists = np.any(np.in1d(np.array([b'biasnight', b'biaspdark', b'linkcal']), ptable['JOBDESC'].data))
+    job_exists = np.any(np.isin(np.array([b'biasnight', b'biaspdark', b'linkcal']), ptable['JOBDESC'].data))
     # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
     # ## otherwise assume it is available
     #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
