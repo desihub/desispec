@@ -151,7 +151,7 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 
                 ## Check that the night from the header matches that given and if not, ignore the file
                 if rowdict['NIGHT']!=night:
-                    log.info(f"\n{exp} has the wrong NIGHT keyword, setting LASTSTEP to 'ignore'.")
+                    print(f"\n{exp} has the wrong NIGHT keyword, setting LASTSTEP to 'ignore'.")
                     rowdict['LASTSTEP']='ignore'
                     rowdict['COMMENTS']=['wrong NIGHT keyword']
 
