@@ -962,7 +962,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     if ccd_calibration_filename is False:
                         msg = f'SPECPROD not set and no ccd_calibration_filename provided. Cannot identify a viable dark for {expid} {camera}'
                         log.critical(msg)
-                        raise ValueError(message)
+                        raise ValueError(msg)
                     else:
                         cfinder = CalibFinder([header, primary_header],
                                 yaml_file=ccd_calibration_filename,
