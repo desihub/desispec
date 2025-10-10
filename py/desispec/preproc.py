@@ -814,7 +814,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
-    need_cfinder = (mask is True) or (dark is True) or (pixflat is True)
+    need_cfinder = (mask is True) or (pixflat is True)
 
     cfinder = None
     if ccd_calibration_filename is not False and need_cfinder:
@@ -930,8 +930,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     readnoise = np.zeros_like(image)
 
     #- Load dark
-    if cfinder and cfinder.haskey("DARK") and (dark is not False):
-
+    if dark is not False:
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
@@ -941,12 +940,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
-
         if isinstance(dark,str):
             dark_filename=dark
             if not os.path.exists(dark_filename):
                 message=f"Supplied a filename for the dark to be used for preprocessing ({dark}), but does not exist"
-                log.error(message)
+                log.critical(message)
                 raise ValueError(message)
         else:
             night = header2night(header)
@@ -954,23 +952,34 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             camera = header['CAMERA'].lower()
             found = False
             if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
-                darknight = findfile('darknight', night, expid, camera, readonly=True)
+                darknight = findfile('darknight', night=night, camera=camera, readonly=True)
                 if os.path.exists(darknight):
                     log.info(f'Using {night} nightly dark for {expid} {camera}')
                     dark_filename = darknight
                     found = True
-                else:
-                    log.warning(f'{night} nightly dark not found; using default dark for {expid} {camera}')
-            else:
-                log.warning(f'SPECPROD not set; using default dark instead of nightly dark for {expid} {camera}')
-
             if not found:
-                dark_filename = cfinder.findfile("DARK")
+                if cfinder is None:
+                    if ccd_calibration_filename is False:
+                        msg = f'SPECPROD not set and no ccd_calibration_filename provided. Cannot identify a viable dark for {expid} {camera}'
+                        log.critical(msg)
+                        raise ValueError(message)
+                    else:
+                        cfinder = CalibFinder([header, primary_header],
+                                yaml_file=ccd_calibration_filename,
+                                fallback_on_dark_not_found=fallback_on_dark_not_found)
+                if cfinder.haskey("DARK"):
+                    log.warning(f'{night} nightly dark not found; attempting to use default dark for {expid=} {camera}')
+                    dark_filename = cfinder.findfile("DARK")
+                else:
+                    msg = f'No nightly dark found for {expid=} {camera}, and no DARK entry in the ' \
+                        + f'{ccd_calibration_filename=}.  Cannot proceed.'
+                    log.critical(msg)
+                    raise ValueError(msg)
 
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
-        dark = read_dark(filename=dark_filename,exptime=exptime)
+        dark = read_dark(filename=dark_filename, exptime=exptime)
 
         if dark.shape == image.shape :
             log.info(f"Camera {camera} dark is trimmed")
@@ -992,9 +1001,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             else:
                 log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
             dark = False
-
-    else:
-        dark = False
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :

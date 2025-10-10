@@ -227,7 +227,7 @@ class CalibFinder() :
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
 
         log.debug("header['CAMERA']={}".format(header['CAMERA']))
-        camera=header["CAMERA"].strip().lower()
+        self.camera=header["CAMERA"].strip().lower()
 
         if "SPECID" in header :
             log.debug("header['SPECID']={}".format(header['SPECID']))
@@ -248,7 +248,7 @@ class CalibFinder() :
             ccdtming = None
 
         log.debug("camera=%s specid=%s detector=%s ccdcfg=%s ccdtming=%s",
-                camera, specid, detector, ccdcfg, ccdtming)
+                self.camera, specid, detector, ccdcfg, ccdtming)
 
         #if "DOSVER" in header :
         #    dosver = str(header["DOSVER"]).strip()
@@ -272,8 +272,8 @@ class CalibFinder() :
 
 
         if dateobs < 20191211 or detector == 'SIM': # old spectro identifiers
-            cameraid = camera
-            spectro=int(camera[-1])
+            cameraid = self.camera
+            spectro=int(self.camera[-1])
             if yaml_file is None :
                 if old_version :
                     yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
@@ -284,7 +284,7 @@ class CalibFinder() :
                 log.error("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
                 raise RuntimeError("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
             log.debug("Use spectrograph hardware identifier SMY")
-            cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+            cameraid    = "sm{}-{}".format(specid,self.camera[0].lower())
             if yaml_file is None :
                 yaml_file = "{}/spec/sm{}/{}.yaml".format(self.directory,specid,cameraid)
 
@@ -361,7 +361,8 @@ class CalibFinder() :
             raise KeyError("Didn't find matching calibration data in %s"%(yaml_file))
 
         self.data = matching_data
-
+        self.crash_on_dark_or_bias_request = False
+        self.dark_or_bias_not_found = False
         if "DESI_SPECTRO_DARK" in os.environ:
             self.find_darks_in_desi_spectro_dark(header)
 
@@ -381,6 +382,15 @@ class CalibFinder() :
         Returns:
             data found in yaml file
         """
+        log = get_logger()
+        if self.dark_or_bias_not_found and key in ['BIAS', 'DARK']:
+            if self.crash_on_dark_or_bias_request:
+                log.critical(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                raise IOError(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+            else:
+                #this would prevent nightwatch failures in case of not-yet-existing files
+                log.error(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
+                            "falling back to $DESI_SPECTRO_CALIB")
         val=self.data[key]
         if type(val)==list :
             if len(val)!=2 :
@@ -418,8 +428,6 @@ class CalibFinder() :
             return np.array([],dtype=int)
         return np.unique(np.hstack(fibers))
 
-
-
     def find_darks_in_desi_spectro_dark(self, header):
         """
         Function to select dark frames from $DESI_SPECTRO_DARK using the keywords found in the headers
@@ -451,8 +459,6 @@ class CalibFinder() :
             log.critical(msg)
             raise IOError(msg)
 
-        camera=header["CAMERA"].strip().lower()
-
         if "SPECID" in header :
             specid=int(header["SPECID"])
         else :
@@ -460,7 +466,7 @@ class CalibFinder() :
 
         dateobs = header2night(header)
 
-        cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+        cameraid    = "sm{}-{}".format(specid,self.camera[0].lower())
 
         dark_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv'
         bias_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'
@@ -553,22 +559,26 @@ class CalibFinder() :
                     raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file  {dark_filename} not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
+            self.dark_or_bias_not_found = True
             if not self.fallback_on_dark_not_found:
-                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
-                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+                self.crash_on_dark_or_bias_request = True
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
+                            + " This will raise an error if DARK or BIAS is requested.")
             else:
-                #this would prevent nightwatch failures in case of problems with e.g. permissions
-                log.error(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}, "
-                           "falling back to DESI_SPECTRO_CALIB")
+                #this would prevent nightwatch failures in case of not-yet-existing files
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
+                           "falling back to $DESI_SPECTRO_CALIB")
                 return
         if found:
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
+            self.dark_or_bias_not_found = True
             if not self.fallback_on_dark_not_found:
-                log.critical(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
-                raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                self.crash_on_dark_or_bias_request = True
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
+                            + " This will raise an error if DARK or BIAS is requested.")
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
-                log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, "
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
                            "falling back to $DESI_SPECTRO_CALIB")
