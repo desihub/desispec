@@ -383,8 +383,11 @@ def run(comm,cmds,cameras):
                 timestamp = time.asctime()
                 log.info(f'MPI ranks {worldrank}-{worldrank+group_size-1}'
                          f' fitting PSF for {camera} in job {job} at {timestamp}')
+                log.info('RUNNING: {}'.format(cmds[camera]))
             try:
                 main(cmdargs, comm=groupcomm)
+                if grouprank == 0:
+                    log.info('SUCCESS: {}'.format(cmds[camera]))
             except Exception as e:
                  if grouprank == 0:
                      log.error(f'FAILED: MPI ranks {worldrank}-{worldrank+group_size-1}'+
