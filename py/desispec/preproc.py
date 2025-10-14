@@ -937,7 +937,22 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.info(f"Camera {camera} Using exposure time keyword {exptime_key} for dark normalization")
         else :
             exptime_key="EXPTIME"
-        exptime =  primary_header[exptime_key]
+            if exptime_key not in primary_header and ccd_calibration_filename is not False:
+                message=f"No {exptime_key} keyword in primary header for Camera {camera} " \
+                        + "attempting to load calibfinder"
+                log.warning(message)
+                cfinder = CalibFinder([header, primary_header],
+                                       yaml_file=ccd_calibration_filename,
+                                       fallback_on_dark_not_found=fallback_on_dark_not_found)
+                if cfinder.haskey("EXPTIMEKEY"):
+                    exptime_key=cfinder.value("EXPTIMEKEY")
+                    log.info(f"Camera {camera} Using exposure time keyword {exptime_key} for dark normalization")
+
+        if exptime_key not in primary_header and exptime_key in header:
+            log.warning(f"For camera {camera}, no {exptime_key} keyword in primary header, but found in image header")
+            exptime = header[exptime_key]
+        else:
+            exptime =  primary_header[exptime_key]
         log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
         if isinstance(dark,str):
