@@ -611,13 +611,24 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
 
         if filename is None:
             if cfinder is None :
-                log.error("no calibration data was found")
+                log.critical("no calibration data was found")
                 raise ValueError("no calibration data was found")
             if cfinder.haskey(keyword) :
                 filename = cfinder.findfile(keyword)
-            else :
+            elif keyword == 'PIXFLAT':
+                ## Special case just for the pixel flat because they are hard to obtain,
+                ## we don't have them for every historic configuration, and the
+                ## flat fielding does a sufficient job of correcting without it
+                log.error("PIXFLAT not found in cfinder, but set to True in preproc; continuing without pixflat.")
                 depend.setdep(header, calkey, 'None')
-                return False # we say in the calibration data we don't need this
+                return False
+            else :
+                ## This used to return False, but if True we shouldn't set to
+                ## False just because a file is lacking an entry. Instead,
+                ## raise an informative error.
+                msg = f"Calibration data for {keyword} not found in cfinder."
+                log.critical(msg)
+                raise ValueError(msg)
 
         if filename is None :
             depend.setdep(header, calkey, 'None')
@@ -869,7 +880,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     do_cte_corr = not no_cte_corr
     if do_cte_corr:
         from desispec.correct_cte import needs_ctecorr
-        if needs_ctecorr(cfinder=cfinder):
+        if cfinder is None:
+            full_header = header.copy()
+            for key in primary_header:
+                if key not in full_header:
+                    full_header[key] = primary_header[key]
+        else:
+            full_header = None
+        if needs_ctecorr(cfinder=cfinder, header=full_header):
             log.info(f'Camera {camera} needs CTE corrections')
             if cte_params_filename is None:
                 if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):

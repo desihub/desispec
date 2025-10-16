@@ -158,7 +158,8 @@ class TestPreProc(unittest.TestCase):
             xy = parse_sec_keyword(self.header['DATASEC'+amp])
             #old_image[xy] -= np.int32(self.offset_row[amp]) -- OR_SEC now zero
         #
-        image = preproc(old_image, old_header, primary_header = self.primary_header)
+        image = preproc(old_image, old_header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
         for amp in ('A', 'B', 'C', 'D'):
@@ -170,7 +171,8 @@ class TestPreProc(unittest.TestCase):
             self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
 
     def test_preproc(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
         for amp in ('A', 'B', 'C', 'D'):
@@ -190,7 +192,8 @@ class TestPreProc(unittest.TestCase):
                     hdr[prefix+ampnum] = hdr[prefix+amp]
                     del hdr[prefix+amp]
 
-        image = preproc(self.rawimage, hdr, primary_header=self.primary_header)
+        image = preproc(self.rawimage, hdr, primary_header=self.primary_header,
+                        mask=False, dark=False, bias=False)
 
     def test_amp_ids(self):
         """Test auto-detection of amp names"""
@@ -288,40 +291,53 @@ class TestPreProc(unittest.TestCase):
 
 
     def test_bias(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=False)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         bias = np.zeros(self.rawimage.shape)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=bias)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        bias=bias, mask=False, dark=False)
         fits.writeto(self.calibfile, bias)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=self.calibfile)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        bias=self.calibfile, mask=False, dark=False)
         with self.assertRaises(ValueError):
-            image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=bias[0:10, 0:10])
+            image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                            bias=bias[0:10, 0:10], mask=False, dark=False)
 
     def test_pixflat(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=False)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         pixflat = np.ones_like(image.pix)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=pixflat)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        pixflat=pixflat, mask=False, dark=False, bias=False)
         fits.writeto(self.calibfile, pixflat)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=self.calibfile)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        pixflat=self.calibfile, mask=False, dark=False, bias=False)
         with self.assertRaises(ValueError):
-            image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=pixflat[0:10, 0:10])
+            image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+            pixflat=pixflat[0:10, 0:10], mask=False, dark=False, bias=False)
 
     def test_mask(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=False)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         mask = np.random.randint(0, 2, size=image.pix.shape)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=mask)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=mask, dark=False, bias=False)
         self.assertTrue(np.all(image.mask == mask))
         fits.writeto(self.calibfile, mask)
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=self.calibfile)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        mask=self.calibfile, dark=False, bias=False)
         self.assertTrue(np.all(image.mask == mask))
         with self.assertRaises(ValueError):
-            image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=mask[0:10, 0:10])
+            image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                            mask=mask[0:10, 0:10], dark=False, bias=False)
 
     def test_pixflat_mask(self):
         from desispec.maskbits import ccdmask
         pixflat = np.ones((2*self.ny, 2*self.nx))
         pixflat[0:10, 0:10] = 0.0
         pixflat[10:20, 10:20] = 0.05
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=pixflat)
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+                        pixflat=pixflat, mask=False, dark=False, bias=False)
         self.assertTrue(np.all(image.mask[0:10,0:10] & ccdmask.PIXFLATZERO))
         self.assertTrue(np.all(image.mask[10:20,10:20] & ccdmask.PIXFLATLOW))
 
@@ -332,7 +348,7 @@ class TestPreProc(unittest.TestCase):
         self.header['CAMERA'] = 'B3'
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
 
-        b0 = io.read_raw(self.rawfile, 'b0')
+        b0 = io.read_raw(self.rawfile, 'b0', mask=False, dark=False, bias=False)
         #b1 = io.read_raw(self.rawfile, 'b1')
         #r1 = io.read_raw(self.rawfile, 'r1')
         #z9 = io.read_raw(self.rawfile, 'Z9')
@@ -394,7 +410,6 @@ class TestPreProc(unittest.TestCase):
         self.assertEqual(fx[5].data.dtype, np.int16)
         self.assertEqual(fx[5].header['EXTNAME'], 'B4')
 
-
         # not a very useful test :
         # it is tested by the other tests
         #def test_keywords(self):
@@ -427,38 +442,44 @@ class TestPreProc(unittest.TestCase):
             parse_sec_keyword('blat')
         #- should log a warning about large readnoise
         rawimage = self.rawimage + np.random.normal(scale=2, size=self.rawimage.shape)
-        image = preproc(rawimage, self.header, primary_header = self.primary_header)
+        image = preproc(rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         #- should log an error about huge readnoise
         rawimage = self.rawimage + np.random.normal(scale=10, size=self.rawimage.shape)
-        image = preproc(rawimage, self.header, primary_header = self.primary_header)
+        image = preproc(rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         #- should log a warning about small readnoise
         rdnoise = 0.7 * np.mean(list(self.rdnoise.values()))
         rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
-        image = preproc(rawimage, self.header, primary_header = self.primary_header)
+        image = preproc(rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         #- should log a warning about tiny readnoise
         rdnoise = 0.01 * np.mean(list(self.rdnoise.values()))
         rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
-        image = preproc(rawimage, self.header, primary_header = self.primary_header)
+        image = preproc(rawimage, self.header, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         #- Missing expected RDNOISE keywords shouldn't be fatal
         hdr = self.header.copy()
         del hdr['RDNOISEA']
         del hdr['RDNOISEB']
         del hdr['RDNOISEC']
         del hdr['RDNOISED']
-        image = preproc(self.rawimage, hdr, primary_header = self.primary_header)
+        image = preproc(self.rawimage, hdr, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
         #- Missing expected GAIN keywords should log error but not crash
         hdr = self.header.copy()
         del hdr['GAINA']
         del hdr['GAINB']
         del hdr['GAINC']
         del hdr['GAIND']
-        image = preproc(self.rawimage, hdr, primary_header = self.primary_header)
+        image = preproc(self.rawimage, hdr, primary_header = self.primary_header,
+                        mask=False, dark=False, bias=False)
 
     def test_preproc_script(self):
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
-        args = ['--infile', self.rawfile, '--cameras', 'b0',
-                '--outfile', self.pixfile]
+        args = ['--infile', self.rawfile, '--cameras', 'b0', '--outfile', self.pixfile,
+                '--nobias', '--nodark', '--nomask']
         if os.path.exists(self.pixfile):
             os.remove(self.pixfile)
         desispec.scripts.preproc.main(args)
@@ -475,13 +496,16 @@ class TestPreProc(unittest.TestCase):
         biased_std = np.std(x[np.abs(x)<3])
         self.assertAlmostEqual(biased_std, _clipped_std_bias(3), places=3)
 
-    #- Not implemented yet, but flag these as expectedFailures instead of
-    #- successful tests of raising NotImplementedError
-    def test_default_bias(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=True)
+    # #- Not implemented yet, but flag these as expectedFailures instead of
+    # #- successful tests of raising NotImplementedError
+    # def test_default_bias(self):
+    #     image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+    #                     mask=False, dark=False, bias=True)
 
-    def test_default_pixflat(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, pixflat=True)
+    # def test_default_pixflat(self):
+    #     image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+    #                     mask=False, dark=False, bias=False, pixflat=True)
 
-    def test_default_mask(self):
-        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
+    # def test_default_mask(self):
+    #     image = preproc(self.rawimage, self.header, primary_header = self.primary_header,
+    #                     dark=False, bias=False, mask=True)
