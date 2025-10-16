@@ -497,24 +497,24 @@ class TestPreProc(unittest.TestCase):
         self.assertAlmostEqual(biased_std, _clipped_std_bias(3), places=3)
 
     def test_error_if_no_bias(self):
-        """Should raise error if bias=True because BIAS isn't in calibration file"""
+        '''Should raise error if bias=True because BIAS isn't in calibration file'''
         with self.assertRaises(ValueError):
             image = preproc(self.rawimage, self.header, primary_header=self.primary_header,
                             mask=False, dark=False, bias=True)
 
     def test_error_if_no_dark(self):
-        """Should raise error if dark=True because DARK isn't in calibration file"""
+        '''Should raise error if dark=True because DARK isn't in calibration file'''
         with self.assertRaises(ValueError):
             image = preproc(self.rawimage, self.header, primary_header=self.primary_header,
                             bias=False, mask=False, dark=True)
 
     def test_no_error_if_no_pixflat(self):
-        """Should NOT raise error if pixflat=True even if PIXFLAT isn't in calibration file"""
+        '''Should NOT raise error if pixflat=True even if PIXFLAT isn't in calibration file'''
         image = preproc(self.rawimage, self.header, primary_header=self.primary_header,
                         mask=False, dark=False, bias=False, pixflat=True)
 
     def test_error_if_no_mask(self):
-        """Should raise error if mask=True because MASK isn't in calibration file"""
+        '''Should raise error if mask=True because MASK isn't in calibration file'''
         with self.assertRaises(ValueError):
             image = preproc(self.rawimage, self.header, primary_header=self.primary_header,
                             dark=False, bias=False, mask=True)
