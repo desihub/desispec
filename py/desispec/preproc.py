@@ -626,7 +626,7 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
                 ## This used to return False, but if True we shouldn't set to
                 ## False just because a file is lacking an entry. Instead,
                 ## raise an informative error.
-                msg = f"Calibration data for {keyword} not found in cfinder."
+                msg = f"Calibration data for {keyword} not found in cfinder for {header['CAMERA'].lower()}."
                 log.critical(msg)
                 raise ValueError(msg)
 
