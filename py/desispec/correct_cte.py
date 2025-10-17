@@ -167,6 +167,8 @@ def needs_ctecorr(header=None, cfinder=None):
     """
     if cfinder is not None and header is not None:
         raise ValueError('provide header or cfinder but not both')
+    elif header is None and cfinder is None:
+        raise ValueError('must provide header or cfinder')
 
     if cfinder is None:
         cfinder = CalibFinder([header])

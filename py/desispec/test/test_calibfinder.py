@@ -70,9 +70,10 @@ class TestCalibFinder(unittest.TestCase):
                   "CCDCFG":"default_sta_20190717.cfg",
                   "CCDTMING":"default_sta_timing_20180905.txt"}
 
-        #- without an entry in DESI_SPECTRO_DARK, even creating the CalibFinder fails
+        #- without an entry in DESI_SPECTRO_DARK, creating the CalibFinder works but requesting dark fails
+        cfinder = CalibFinder([phdr,camhdr])
         with self.assertRaises(OSError):
-            cfinder = CalibFinder([phdr,camhdr])
+            cfinder.findfile('DARK')
 
         #- but fallback option should work
         cfinder = CalibFinder([phdr,camhdr], fallback_on_dark_not_found=True)
