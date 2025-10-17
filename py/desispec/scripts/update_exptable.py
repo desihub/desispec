@@ -171,12 +171,6 @@ def update_exposure_table(night=None, specprod=None, exp_table_pathname=None,
         elif erow['LASTSTEP'] == 'ignore':
             log.info(f"\n{exp} identified by the pipeline as something to ignore.")
 
-        ## Flag as ignore if header night and exposure table night don't match
-        if erow['NIGHT']!=night and erow['LASTSTEP']!='ignore':
-            log.info(f"\n{exp} has the wrong NIGHT keyword, setting LASTSTEP to 'ignore'.")
-            erow['LASTSTEP']='ignore'
-            erow['COMMENTS']=['wrong NIGHT keyword']
-
         log.info(f"\nFound: {erow}")
         etable.add_row(erow)
 
