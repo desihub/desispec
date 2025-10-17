@@ -217,11 +217,11 @@ def main(args=None, exptable=None):
 
     # check consistency of input options
     if args.nights is not None and args.images is not None :
-        log.error("Cannot specify both --nights and --image arguments")
+        log.critical("Cannot specify both --nights and --image arguments")
         return 1
 
     if args.nights is None and args.images is None and args.reference_night is None:
-        log.error("Need to specify input using --images, --nights, or --reference-night")
+        log.critical("Need to specify input using --images, --nights, or --reference-night")
         return 1
 
     if args.reference_night is not None and args.reference_expid is not None :
@@ -263,7 +263,7 @@ def main(args=None, exptable=None):
                 args.images.append(filename)
                 mjds.append(row["MJD-OBS"])
             else:
-                log.error(f'Skipping missing file {filename}')
+                log.critical(f'Raw data {filename} is missing. This should not happen. Exiting.')
                 return 1
         args.images = np.array(args.images)
         mjds = np.array(mjds)
@@ -275,7 +275,7 @@ def main(args=None, exptable=None):
     if args.reference_expid is not None :
         selection=np.where(exptable["EXPID"]==args.reference_expid)[0]
         if selection.size == 0 :
-            log.error(f"Reference expid {args.reference_expid} is not in the list of input darks")
+            log.critical(f"Reference expid {args.reference_expid} is not in the list of input darks")
             return 1
         reference_header_possible_filenames.append(args.images[selection[0]])
     elif args.reference_night is not None :
@@ -291,7 +291,7 @@ def main(args=None, exptable=None):
                     if args.camera in decode_camword(erow_to_goodcamword(scierow, suppress_logging=True, exclude_badamps=False)):
                         reference_header_possible_filenames.append(findfile('raw', night=args.reference_night, expid=scierow['EXPID']))
             if len(reference_header_possible_filenames) == 0:
-                log.warning(f"No dark during reference night {args.reference_night} in input list "
+                log.critical(f"No dark during reference night {args.reference_night} in input list "
                             + "AND no valid science exposures. Cannot proceed. Exiting.")
                 return 1
         else:
