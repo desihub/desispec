@@ -263,7 +263,7 @@ def main(args=None, exptable=None):
                 args.images.append(filename)
                 mjds.append(row["MJD-OBS"])
             else:
-                log.error(f'Skipping missing file {filename}')
+                log.error(f'Raw data {filename} is missing. This should not happen. Exiting.')
                 return 1
         args.images = np.array(args.images)
         mjds = np.array(mjds)
