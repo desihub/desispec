@@ -386,7 +386,7 @@ class CalibFinder() :
         if self.dark_or_bias_not_found and key in ['BIAS', 'DARK']:
             if self.crash_on_dark_or_bias_request:
                 log.critical(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
-                raise IOError(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                raise KeyError(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
                 log.error(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
