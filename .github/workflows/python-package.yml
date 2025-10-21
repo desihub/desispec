@@ -102,14 +102,15 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
+                # matches python 3.10 environment above, approximately matching NERSC
                 os: [ubuntu-latest]
-                python-version: ['3.10'] # Approximately current NERSC setup
-                astropy-version: ['<6.1']  # Approximately current NERSC setup
-                fitsio-version: ['<2']  # Approximately current NERSC setup
-                scipy-version: ['<1.9'] # Approximately current NERSC setup
-                matplotlib-version: ['<3.9'] # Approximately current NERSC setup
-                numpy-version: ['<1.23']  # to keep asscalar, used by astropy
-                numba-version: ['<0.60'] # for compatibility with old numpy
+                python-version: ['3.10']
+                numpy-version: ['<2.0']
+                scipy-version: ['<1.14']
+                astropy-version: ['<6.1']
+                matplotlib-version: ['<3.10']
+                fitsio-version: ['']
+                numba-version: ['<0.70']
 
         steps:
             - name: Install System Packages
@@ -135,7 +136,7 @@ jobs:
                 SPECTER_VERSION: 0.10.1
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
-                DESITARGET_VERSION: 3.2.0
+                DESITARGET_VERSION: main
                 REDROCK_VERSION: 0.20.4
               run: |
                 python -m pip install desiutil==${DESIUTIL_VERSION}
