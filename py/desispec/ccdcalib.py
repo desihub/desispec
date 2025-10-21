@@ -312,7 +312,9 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     for i, filename in enumerate(files_used):
         hdulist[0].header["INPUT%03d"%i]=os.path.basename(filename)
 
-    hdulist.writeto(outfile, overwrite=True)
+    tmpfile = get_tempfilename(outfile)
+    hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, outfile)
     log.info(f"Wrote {outfile}")
 
     log.info(f"done")
