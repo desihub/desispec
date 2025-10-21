@@ -72,7 +72,7 @@ class TestCalibFinder(unittest.TestCase):
 
         #- without an entry in DESI_SPECTRO_DARK, creating the CalibFinder works but requesting dark fails
         cfinder = CalibFinder([phdr,camhdr])
-        with self.assertRaises(OSError):
+        with self.assertRaises(KeyError):
             cfinder.findfile('DARK')
 
         #- but fallback option should work
