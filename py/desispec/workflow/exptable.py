@@ -653,6 +653,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         log.error(f"Input exposure id doesn't match that derived from the header! {exp}!={outdict['EXPID']}")
     if int(night) != outdict['NIGHT']:
         log.error(f"Input night doesn't match that derived from the header! {night}!={outdict['NIGHT']}")
+        log.error(f"Setting LASTSTEP for {exp} to 'ignore'.") 
+        outdict['LASTSTEP']='ignore'
+        outdict['COMMENTS']=np.append(outdict['COMMENTS'],'wrong NIGHT keyword') 
 
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity
