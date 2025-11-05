@@ -392,6 +392,9 @@ def parse(options=None):
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Set log level to DEBUG.")
 
+    parser.add_argument('--force', action='store_true',
+                        help="Rerun and overwrite even if all outputs already exist.")
+
     args = parser.parse_args(options)
 
     return args
@@ -407,8 +410,29 @@ def main(args=None):
     else:
         log=get_logger()
 
+    log.info(f'desi_zcatalog starting at {time.asctime()}')
+
     if args.outfile is None:
         args.outfile = io.findfile('zcatalog')
+
+    #- Check if this has already been done
+    #- NOTE: this repeats filepath logic in final writing
+    if not args.force:
+        done = True
+        for ext in ['.fits', '-imaging.fits', '-extra.fits']:
+            if not os.path.exists(args.outfile+ext):
+                done = False
+                break
+
+        # exp_fibermap in a separate directory
+        outdir, basename = os.path.split(args.outfile)
+        expfibermap_file = os.path.join(outdir, 'exp_fibermap', basename+'-expfibermap.fits')
+        if not os.path.exists(expfibermap_file):
+            done = False
+
+        if done:
+            log.info('All outfiles already exist; use --force to rerun if needed')
+            return
 
     #- If adding units, check dependencies before doing a lot of work
     add_units = not args.do_not_add_units
@@ -432,10 +456,10 @@ def main(args=None):
         program = args.program if args.program is not None else "*"
         indir = os.path.join(io.specprod_root(), 'healpix')
 
-        #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
         indir = get_readonly_filepath(indir)
 
-        #- specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
+        # specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
         globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
         log.info(f'Looking for healpix redrock files in {globstr}')
         redrockfiles = sorted(glob.glob(globstr))
@@ -445,7 +469,7 @@ def main(args=None):
         tilefile_format = 'fits'
         indir = os.path.join(io.specprod_root(), 'tiles', args.group)
 
-        #- special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
         indir = get_readonly_filepath(indir)
 
         if not os.path.exists(tilefile):
@@ -515,13 +539,15 @@ def main(args=None):
                               counter=(ifile+1, nfiles)))
 
     #- Read individual Redrock files
+    t0 = time.time()
     if args.nproc>1:
         from multiprocessing import Pool
         with Pool(args.nproc) as pool:
             results = pool.map(_wrap_read_redrock, read_args, chunksize=1)
     else:
         results = [_wrap_read_redrock(a) for a in read_args]
-    log.info("Successfully read {} redrock files".format(nfiles))
+    dt = time.time() - t0
+    log.info(f"Successfully read {nfiles} redrock files in {dt:.1f} sec")
 
     #- Stack catalogs
     zcatdata = list()
@@ -614,16 +640,25 @@ def main(args=None):
                     except KeyError:
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
-    # Add redshift quality flags
-    zqual = validredshifts.actually_validate(zcat)
-    good_spec = validredshifts.get_good_fiberstatus(zcat)
-    good_spec &= zcat['OBJTYPE']=='TGT'
-    zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
-    zqual['Z_CONF'] = np.uint8(0)  # Z_CONF=0: no confidence
-    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
-        zqual[col] = zqual[col] & zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
+    ######
+    # Add GOOD_Z_{BGS,LRG,ELG,QSO} redshift quality flags
+    # - passes LSS quality cuts from validredshifts.actually_validate
+    # - science target with good hardware
+    # - core DESI tracer target selection (and not e.g. secondary QSOs)
+    # - SURVEY is main/sv1/sv2/sv3 (not special)
 
-    # evaluate Z_CONF
+    # LSS cuts
+    zqual = validredshifts.actually_validate(zcat)
+
+    # GOOD_SPEC: true if it is a science spectrum with good hardware status
+    good_spec = validredshifts.get_good_fiberstatus(zcat)
+    good_spec &= zcat['OBJTYPE']=='TGT'    # not included in LSS BGS,LRG,ELG cuts
+    zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
+
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
+
+    # Require primary tracer targeting
     if survey in ['main', 'sv1', 'sv2', 'sv3']:
         if survey=='main':
             desi_target_col = 'DESI_TARGET'
@@ -631,42 +666,52 @@ def main(args=None):
             desi_target_col = survey.upper()+'_DESI_TARGET'
 
         # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
-        is_bgs = zcat[desi_target_col] & desi_mask.BGS_ANY != 0
-        is_lrg = zcat[desi_target_col] & desi_mask.LRG != 0
-        is_elg = zcat[desi_target_col] & desi_mask.ELG != 0
-        is_qso = zcat[desi_target_col] & desi_mask.QSO != 0
+        is_bgs = (zcat[desi_target_col] & desi_mask.BGS_ANY) != 0
+        is_lrg = (zcat[desi_target_col] & desi_mask.LRG) != 0
+        is_elg = (zcat[desi_target_col] & desi_mask.ELG) != 0
+        is_qso = (zcat[desi_target_col] & desi_mask.QSO) != 0
 
-        # GOOD_Z_TRACER: False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut; True if it is a TRACER target and passes TRACER redshift quality cut
+        # GOOD_Z_TRACER:
+        # True if it is a TRACER target and passes TRACER redshift quality cut
+        # False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut;
         # They apply to the Z column
         zqual['GOOD_Z_BGS'] &= is_bgs
         zqual['GOOD_Z_LRG'] &= is_lrg
         zqual['GOOD_Z_ELG'] &= is_elg
 
-        # GOOD_Z_QSO: True only if it is a QSO target AND passes the QSO redshift quality cut; it only applies to the Z_QSO column
+        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
+        # True if it is a QSO target AND passes the QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
         
-        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts as the per-target class and GOOD_SPEC requirements are added here
-
-        # Z_CONF=3: highly confident redshift; criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO) and pass the LSS redshift quality cuts
-        mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
-        zqual['Z_CONF'][mask] = 3
-
-        # Z_CONF=2: placeholder
-
-        # Z_CONF=1: less confident redshift; criteria: the Z_CONF==3 or 2 criteria are not met,
-        # but GOOD_SPEC==True & ZWARN==0
-        mask = (zqual['Z_CONF']==0) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
-        zqual['Z_CONF'][mask] = 1
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts
+        # as the per-target class and GOOD_SPEC requirements are added here
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
             zqual[col] = False
-        mask = (zqual['Z_CONF']==0) & zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
-        zqual['Z_CONF'][mask] = 1
+
+    ######
+    # evaluate Z_CONF; proceed from low-confidence to high-confidence
+
+    # default Z_CONF=0 is no confidence
+    zqual['Z_CONF'] = np.uint8(0)   # Note: unsigned int because FITS converts signed int8 to bool (!)
+
+    # Z_CONF=1: less confident redshift but maybe ok
+    # criteria: the Z_CONF==3 or 2 criteria are not met, but GOOD_SPEC==True & ZWARN==0
+    mask = zqual['GOOD_SPEC'] & (zcat['ZWARN']==0)
+    zqual['Z_CONF'][mask] = 1
+
+    # Z_CONF=2: placeholder for non-LSS WG supplied quality criteria
+
+    # Z_CONF=3: highly confident redshift
+    # criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO)
+    # and pass the LSS redshift quality cuts
+    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+    zqual['Z_CONF'][mask] = 3
 
     zcat = hstack([zcat, zqual], join_type='exact')
 
-    # Create "best redshift" columns
+    # Create "best redshift" columns, choosing between Z and Z_QSO
     z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
     for col in z_cols:
         zcat[col+'_BEST'] = zcat[col].copy()
@@ -781,3 +826,6 @@ def main(args=None):
                    units=units, clobber=True)
     os.rename(tmpfile, outfile_expfm)
     log.info("Successfully wrote {}".format(outfile_expfm))
+
+    log.info(f'desi_zcatalog all done at {time.asctime()}')
+

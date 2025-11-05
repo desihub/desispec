@@ -1,46 +1,63 @@
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive
+# NOTE: after this script was developed, we re-discovered bin/desi_zcatalog_wrapper,
+# which does the same within python, plus generates the zall files.
 
-# Example commands to generate all of the zcatalog files, to be run in e.g.
-# cd /global/cfs/cdirs/desi/public/dr2/spectro/redux/loa/zcatalog/v2
+# Example commands to generate all of the zcatalog files, e.g.
+#
+#   salloc -N 1 -C cpu -t 04:00:00 -q interactive
+#   module load desidatamodel
+#   export SPECPROD=loa
+#   cd $DESI_ROOT/spectro/redux/$SPECPROD/zcatalog/v2
+#   source $DESISPEC/etc/zcatalog_commands.sh
+
+# NOTE: desi_zcatalog will skip over any SURVEY/PROGRAM combinations already done,
+# so it is safe to re-run this script until all files are generated.
 
 # requires "module load desidatamodel" first to be able to add units
+python -c "import desidatamodel"
+if [ $? -ne 0 ]; then
+    echo 'Please run "module load desidatamodel" first'
+    return 1  # note: return not exit so that if this is sourced, it won't exit parent shell
+fi
 
-desi_zcatalog --survey cmx --program other --group healpix --nproc 128 -o cmx/zpix-cmx-other > logs/zpix-cmx-other.log
-desi_zcatalog --survey cmx --program other --group cumulative --nproc 128 -o cmx/ztile-cmx-other-cumulative > logs/ztile-cmx-other-cumulative.log
+# create output log directory
+mkdir -p logs
 
-desi_zcatalog --survey sv1 --program backup --group healpix --nproc 128 -o sv1/zpix-sv1-backup > logs/zpix-sv1-backup.log
-desi_zcatalog --survey sv1 --program bright --group healpix --nproc 128 -o sv1/zpix-sv1-bright > logs/zpix-sv1-bright.log
-desi_zcatalog --survey sv1 --program dark --group healpix --nproc 128 -o sv1/zpix-sv1-dark > logs/zpix-sv1-dark.log
-desi_zcatalog --survey sv1 --program other --group healpix --nproc 128 -o sv1/zpix-sv1-other > logs/zpix-sv1-other.log
-desi_zcatalog --survey sv1 --program backup --group cumulative --nproc 128 -o sv1/ztile-sv1-backup-cumulative > logs/ztile-sv1-backup-cumulative.log
-desi_zcatalog --survey sv1 --program bright --group cumulative --nproc 128 -o sv1/ztile-sv1-bright-cumulative > logs/ztile-sv1-bright-cumulative.log
-desi_zcatalog --survey sv1 --program dark --group cumulative --nproc 128 -o sv1/ztile-sv1-dark-cumulative > logs/ztile-sv1-dark-cumulative.log
-desi_zcatalog --survey sv1 --program other --group cumulative --nproc 128 -o sv1/ztile-sv1-other-cumulative > logs/ztile-sv1-other-cumulative.log
+# SURVEY PROGRAM combinations to process
+survey_program=(
+    "cmx other"
+    "sv1 dark"
+    "sv1 bright"
+    "sv1 backup"
+    "sv1 other"
+    "sv2 dark"
+    "sv2 bright"
+    "sv2 backup"
+    "sv3 dark"
+    "sv3 bright"
+    "sv3 backup"
+    "main dark"
+    "main bright"
+    "main backup"
+    "special dark"
+    "special bright"
+    "special backup"
+)
 
-desi_zcatalog --survey sv2 --program backup --group healpix --nproc 128 -o sv2/zpix-sv2-backup > logs/zpix-sv2-backup.log
-desi_zcatalog --survey sv2 --program bright --group healpix --nproc 128 -o sv2/zpix-sv2-bright > logs/zpix-sv2-bright.log
-desi_zcatalog --survey sv2 --program dark --group healpix --nproc 128 -o sv2/zpix-sv2-dark > logs/zpix-sv2-dark.log
-desi_zcatalog --survey sv2 --program backup --group cumulative --nproc 128 -o sv2/ztile-sv2-backup-cumulative > logs/ztile-sv2-backup-cumulative.log
-desi_zcatalog --survey sv2 --program bright --group cumulative --nproc 128 -o sv2/ztile-sv2-bright-cumulative > logs/ztile-sv2-bright-cumulative.log
-desi_zcatalog --survey sv2 --program dark --group cumulative --nproc 128 -o sv2/ztile-sv2-dark-cumulative > logs/ztile-sv2-dark-cumulative.log
+# I/O saturates so don't use all the cores for parallel reads
+NPROC=64
 
-desi_zcatalog --survey sv3 --program backup --group healpix --nproc 128 -o sv3/zpix-sv3-backup > logs/zpix-sv3-backup.log
-desi_zcatalog --survey sv3 --program bright --group healpix --nproc 128 -o sv3/zpix-sv3-bright > logs/zpix-sv3-bright.log
-desi_zcatalog --survey sv3 --program dark --group healpix --nproc 128 -o sv3/zpix-sv3-dark > logs/zpix-sv3-dark.log
-desi_zcatalog --survey sv3 --program backup --group cumulative --nproc 128 -o sv3/ztile-sv3-backup-cumulative > logs/ztile-sv3-backup-cumulative.log
-desi_zcatalog --survey sv3 --program bright --group cumulative --nproc 128 -o sv3/ztile-sv3-bright-cumulative > logs/ztile-sv3-bright-cumulative.log
-desi_zcatalog --survey sv3 --program dark --group cumulative --nproc 128 -o sv3/ztile-sv3-dark-cumulative > logs/ztile-sv3-dark-cumulative.log
+for pair in "${survey_program[@]}"; do
+    # Split the pair into separate SURVEY PROGRAM variables
+    read -r SURVEY PROGRAM <<< "$pair"
 
-desi_zcatalog --survey main --program backup --group healpix --nproc 128 -o main/zpix-main-backup > logs/zpix-main-backup.log
-desi_zcatalog --survey main --program bright --group healpix --nproc 128 -o main/zpix-main-bright > logs/zpix-main-bright.log
-desi_zcatalog --survey main --program dark --group healpix --nproc 128 -o main/zpix-main-dark > logs/zpix-main-dark.log
-desi_zcatalog --survey main --program backup --group cumulative --nproc 128 -o main/ztile-main-backup-cumulative > logs/ztile-main-backup-cumulative.log
-desi_zcatalog --survey main --program bright --group cumulative --nproc 128 -o main/ztile-main-bright-cumulative > logs/ztile-main-bright-cumulative.log
-desi_zcatalog --survey main --program dark --group cumulative --nproc 128 -o main/ztile-main-dark-cumulative > logs/ztile-main-dark-cumulative.log
+    # Generate the zpix and ztile catalogs
+    echo $(date '+%Y-%m-%d %T') "Generating zpix  for $SURVEY $PROGRAM"
+    desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
+    echo $(date '+%Y-%m-%d %T') "Generating ztile for $SURVEY $PROGRAM"
+    desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log
+done
 
-desi_zcatalog --survey special --program backup --group healpix --nproc 128 -o special/zpix-special-backup > logs/zpix-special-backup.log
-desi_zcatalog --survey special --program bright --group healpix --nproc 128 -o special/zpix-special-bright > logs/zpix-special-bright.log
-desi_zcatalog --survey special --program dark --group healpix --nproc 128 -o special/zpix-special-dark > logs/zpix-special-dark.log
-desi_zcatalog --survey special --program backup --group cumulative --nproc 128 -o special/ztile-special-backup-cumulative > logs/ztile-special-backup-cumulative.log
-desi_zcatalog --survey special --program bright --group cumulative --nproc 128 -o special/ztile-special-bright-cumulative > logs/ztile-special-bright-cumulative.log
-desi_zcatalog --survey special --program dark --group cumulative --nproc 128 -o special/ztile-special-dark-cumulative > logs/ztile-special-dark-cumulative.log
+echo $(date '+%Y-%m-%d %T') All done
+
+
+
