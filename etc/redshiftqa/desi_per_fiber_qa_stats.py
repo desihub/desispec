@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+# This is step 1 of the redshift QA generation procedure
 # Compute the per-fiber redshift success rates and save them to disk
+
 # Usage:
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i /global/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main/ -o per_fiber_qa_stats.fits
+# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
+# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o per_fiber_qa_stats.fits
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -19,150 +22,159 @@ from desitarget.targetmask import desi_mask, bgs_mask
 import argparse
 
 import time
-time_start = time.time()
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-i', '--indir', type=str, help="input directory path", required=True)
-parser.add_argument('-o', '--output', type=str, help="output file path", required=True)
-args = parser.parse_args()
+def main():
 
-indir = args.indir
-output_fn = args.output
+    time_start = time.time()
 
-ks_test = True
-pvalue_threshold = 1e-4
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--indir', type=str, help="input directory path", required=True)
+    parser.add_argument('-o', '--output', type=str, help="output file path", required=True)
+    args = parser.parse_args()
 
-for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
+    indir = args.indir
+    output_fn = args.output
 
-    print(tracer)
+    ks_test = True
+    pvalue_threshold = 1e-4
 
-    if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
-        fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
-        fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
-        cat = Table(fitsio.read(fn))
-        cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'Z_QSO', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']))
-        cat = hstack([cat, cat1], join_type='exact')
-        mask = np.where(cat['DESI_TARGET'] & desi_mask[tracer] > 0)[0]
-        cat = cat[mask]
-    else:
-        fn = os.path.join(indir, 'ztile-main-bright-cumulative.fits')
-        fn1 = os.path.join(indir, 'ztile-main-bright-cumulative-extra.fits')
-        cat = Table(fitsio.read(fn))
-        cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'GOOD_Z_BGS']))
-        cat = hstack([cat, cat1], join_type='exact')
-        mask = np.where(cat['BGS_TARGET'] & bgs_mask[tracer] > 0)[0]
-        cat = cat[mask]
+    for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
 
-    print(tracer, 'zcat', len(cat))
-    stats_zcat = Table()
-    stats_zcat['FIBER'], stats_zcat[tracer.lower()+'_zcat_n_tot'] = np.unique(cat['FIBER'], return_counts=True)
-    # fill in the missing fibers
-    tmp = Table()
-    tmp['FIBER'] = np.arange(5000)
-    stats_zcat = join(stats_zcat, tmp, keys='FIBER', join_type='outer').filled(0)
+        print(tracer)
 
-    # Remove FIBERSTATUS!=0 fibers
-    mask = cat['COADD_FIBERSTATUS']==0
-    print('FIBERSTATUS   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
-    cat = cat[mask]
+        if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
+            fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
+            fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
+            cat = Table(fitsio.read(fn))
+            cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'Z_QSO', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']))
+            cat = hstack([cat, cat1], join_type='exact')
+            mask = np.where(cat['DESI_TARGET'] & desi_mask[tracer] > 0)[0]
+            cat = cat[mask]
+        else:
+            fn = os.path.join(indir, 'ztile-main-bright-cumulative.fits')
+            fn1 = os.path.join(indir, 'ztile-main-bright-cumulative-extra.fits')
+            cat = Table(fitsio.read(fn))
+            cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'GOOD_Z_BGS']))
+            cat = hstack([cat, cat1], join_type='exact')
+            mask = np.where(cat['BGS_TARGET'] & bgs_mask[tracer] > 0)[0]
+            cat = cat[mask]
 
-    # Remove "no data" fibers
-    mask = cat['ZWARN'] & 2**9==0
-    print('No data   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
-    cat = cat[mask]
+        print(tracer, 'zcat', len(cat))
+        stats_zcat = Table()
+        stats_zcat['FIBER'], stats_zcat[tracer.lower()+'_zcat_n_tot'] = np.unique(cat['FIBER'], return_counts=True)
+        # fill in the missing fibers
+        tmp = Table()
+        tmp['FIBER'] = np.arange(5000)
+        stats_zcat = join(stats_zcat, tmp, keys='FIBER', join_type='outer').filled(0)
 
-    # Require a minimum depth
-    if tracer in ['BGS_ANY', 'BGS_BRIGHT', 'BGS_FAINT']:
-        min_depth = 160
-        mask = cat['EFFTIME_SPEC']>min_depth
-    else:
-        min_depth = 800.
-        mask = cat['EFFTIME_SPEC']>min_depth
-    print('Min depth   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
-    cat = cat[mask]
-
-    # Apply masks
-    if tracer=='LRG':
-        lrgmask = Table(fitsio.read('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_lrg_1.1.1_lrgmask_v1.1_with_targetid.fits'))
-        lrgmask = lrgmask[lrgmask['lrg_mask']==0]
-        mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
-        print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
-        cat = cat[mask]
-    elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
-        elgmask = Table(fitsio.read('/dvs_ro/cfs/cdirs/desi/users/rongpu/targets/dr9.0/1.1.1/resolve/dr9_elg_1.1.1_elgmask_v1_with_targetid.fits'))
-        elgmask = elgmask[elgmask['elg_mask']==0]
-        mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
-        print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+        # Remove FIBERSTATUS!=0 fibers
+        mask = cat['COADD_FIBERSTATUS']==0
+        print('FIBERSTATUS   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
         cat = cat[mask]
 
-    if tracer=='QSO':
-        mask = cat['PRIORITY']==3400
-        print('Remove QSO reobservations', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+        # Remove "no data" fibers
+        mask = cat['ZWARN'] & 2**9==0
+        print('No data   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
         cat = cat[mask]
-        z_col = 'Z_QSO'
-    else:
-        z_col = 'Z'
 
-    print(tracer, len(cat))
+        # Require a minimum depth
+        if tracer in ['BGS_ANY', 'BGS_BRIGHT', 'BGS_FAINT']:
+            min_depth = 160
+            mask = cat['EFFTIME_SPEC']>min_depth
+        else:
+            min_depth = 800.
+            mask = cat['EFFTIME_SPEC']>min_depth
+        print('Min depth   ', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+        cat = cat[mask]
 
-    good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
-    print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
+        # Apply masks
+        if tracer=='LRG':
+            lrgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/LRGtargetsDR9v1.1.1_lrgimask.fits')
+            lrgmask = Table(fitsio.read(lrgmask_fn))
+            lrgmask = lrgmask[lrgmask['lrg_mask']==0]
+            mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
+            print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+            cat = cat[mask]
+        elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
+            elgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/ELGtargetsDR9v1.1.1_elgimask.fits')
+            elgmask = Table(fitsio.read(elgmask_fn))
+            elgmask = elgmask[elgmask['elg_mask']==0]
+            mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
+            print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+            cat = cat[mask]
 
-    stats = Table()
-    stats['FIBER'], stats[tracer.lower()+'_n_tot'] = np.unique(cat['FIBER'], return_counts=True)
-    stats.sort(tracer.lower()+'_n_tot')
-    tt = Table()
-    tt['FIBER'], tt[tracer.lower()+'_n_fail'] = np.unique(cat['FIBER'][~cat[good_z_col]], return_counts=True)
-    stats = join(stats, tt, keys='FIBER', join_type='outer').filled(0)
-    stats[tracer.lower()+'_frac_fail'] = stats[tracer.lower()+'_n_fail']/stats[tracer.lower()+'_n_tot']
-    error_floor = True
-    n, p = stats[tracer.lower()+'_n_tot'].copy(), stats[tracer.lower()+'_frac_fail'].copy()
-    if error_floor:
-        p1 = np.maximum(p, 1/n)  # error floor
-    else:
-        p1 = p
-    stats[tracer.lower()+'_frac_fail_err'] = np.clip(np.sqrt(n * p * (1-p))/n, np.sqrt(n * p1 * (1-p1))/n, 1)
+        if tracer=='QSO':
+            mask = cat['PRIORITY']==3400
+            print('Remove QSO reobservations', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
+            cat = cat[mask]
+            z_col = 'Z_QSO'
+        else:
+            z_col = 'Z'
 
-    if ks_test:
+        print(tracer, len(cat))
 
-        for apply_good_z_cut in [True, False]:
+        good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
+        print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
 
-            outliers = []
+        stats = Table()
+        stats['FIBER'], stats[tracer.lower()+'_n_tot'] = np.unique(cat['FIBER'], return_counts=True)
+        stats.sort(tracer.lower()+'_n_tot')
+        tt = Table()
+        tt['FIBER'], tt[tracer.lower()+'_n_fail'] = np.unique(cat['FIBER'][~cat[good_z_col]], return_counts=True)
+        stats = join(stats, tt, keys='FIBER', join_type='outer').filled(0)
+        stats[tracer.lower()+'_frac_fail'] = stats[tracer.lower()+'_n_fail']/stats[tracer.lower()+'_n_tot']
+        error_floor = True
+        n, p = stats[tracer.lower()+'_n_tot'].copy(), stats[tracer.lower()+'_frac_fail'].copy()
+        if error_floor:
+            p1 = np.maximum(p, 1/n)  # error floor
+        else:
+            p1 = p
+        stats[tracer.lower()+'_frac_fail_err'] = np.clip(np.sqrt(n * p * (1-p))/n, np.sqrt(n * p1 * (1-p1))/n, 1)
 
-            for ii in range(3):  # 3 iterations
-                print('iteration', ii+1)
-                mask = ~np.in1d(cat['FIBER'], outliers)
-                if apply_good_z_cut:
-                    mask &= cat[good_z_col]
-                allz = np.sort(np.array(cat[z_col][mask]))
-                x = allz.copy()
-                y = np.linspace(0, 1, len(x))
-                cdf = interp1d(x, y, fill_value=(0, 1), bounds_error=False)
+        if ks_test:
 
-                pvalues = np.zeros(len(stats))
-                for index, fiber in enumerate(stats['FIBER']):
-                    mask = cat['FIBER']==stats['FIBER'][index]
+            for apply_good_z_cut in [True, False]:
+
+                outliers = []
+
+                for ii in range(3):  # 3 iterations
+                    print('iteration', ii+1)
+                    mask = ~np.in1d(cat['FIBER'], outliers)
                     if apply_good_z_cut:
                         mask &= cat[good_z_col]
-                        if np.sum(mask)==0:
-                            pvalues[index] = -99
-                            continue
-                    pvalues[index] = kstest(cat[z_col][mask], cdf).pvalue
+                    allz = np.sort(np.array(cat[z_col][mask]))
+                    x = allz.copy()
+                    y = np.linspace(0, 1, len(x))
+                    cdf = interp1d(x, y, fill_value=(0, 1), bounds_error=False)
 
-                mask_outlier = (pvalues<pvalue_threshold) & (pvalues!=-99)
-                outliers = np.array(np.sort(stats['FIBER'][mask_outlier]))
-                print('{} outlier fibers:'.format(len(outliers)), list(outliers))
+                    pvalues = np.zeros(len(stats))
+                    for index, fiber in enumerate(stats['FIBER']):
+                        mask = cat['FIBER']==stats['FIBER'][index]
+                        if apply_good_z_cut:
+                            mask &= cat[good_z_col]
+                            if np.sum(mask)==0:
+                                pvalues[index] = -99
+                                continue
+                        pvalues[index] = kstest(cat[z_col][mask], cdf).pvalue
 
-            if apply_good_z_cut:
-                stats[tracer.lower()+'_ks_pvalue_goodz'] = pvalues
-            else:
-                stats[tracer.lower()+'_ks_pvalue_allz'] = pvalues
+                    mask_outlier = (pvalues<pvalue_threshold) & (pvalues!=-99)
+                    outliers = np.array(np.sort(stats['FIBER'][mask_outlier]))
+                    print('{} outlier fibers:'.format(len(outliers)), list(outliers))
 
-    stats = join(stats_zcat, stats, keys='FIBER', join_type='outer').filled(-99)
-    print()
+                if apply_good_z_cut:
+                    stats[tracer.lower()+'_ks_pvalue_goodz'] = pvalues
+                else:
+                    stats[tracer.lower()+'_ks_pvalue_allz'] = pvalues
 
-stats.sort('FIBER')
-stats.write(output_fn, overwrite=False)
+        stats = join(stats_zcat, stats, keys='FIBER', join_type='outer').filled(-99)
+        print()
 
-print('Done!', time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start)))
+    stats.sort('FIBER')
+    stats.write(output_fn, overwrite=False)
+
+    print('Done!', time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start)))
+
+
+if __name__ == '__main__':
+    main()
