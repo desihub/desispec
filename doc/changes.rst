@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.69.1 (unreleased)
+0.70.0 (unreleased)
 -------------------
 
 * Add nightly dark processing (PR `#2531`_)
@@ -33,6 +33,8 @@ desispec Change Log
 * Avoid warning about unit style (PR `#2460`_).
 * Fix ``read_frame_as_spectra`` (PR `#2459`_).
 * Log error when arc/flat set are rejected due to large time difference (PR `#2457`_).
+* TODO: many other PRs...
+* New zcatalog v2 format, splitting sets of columns into separate files (PR `#2396`_).
 
 .. _`#2531`: https://github.com/desihub/desispec/pull/2531
 .. _`#2502`: https://github.com/desihub/desispec/pull/2502
@@ -62,6 +64,7 @@ desispec Change Log
 .. _`#2460`: https://github.com/desihub/desispec/pull/2460
 .. _`#2459`: https://github.com/desihub/desispec/pull/2459
 .. _`#2457`: https://github.com/desihub/desispec/pull/2457
+.. _`#2396`: https://github.com/desihub/desispec/pull/2396
 
 0.69.0 (2025-03-14)
 -------------------
