@@ -48,10 +48,12 @@ from astropy.io import fits
 from astropy.table import Table, Column, vstack, join
 
 ## DESI related functions
-from desispec.io import specprod_root
+from desispec.io import specprod_root, read_table
 from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
 import desiutil.depend
+
+import fitsio
 
 ####################################################################################################
 ####################################################################################################
@@ -269,7 +271,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
 
             ## Load the ZCATALOG table, along with the meta data
             log.info(f'Reading {filename}')
-            t = Table.read(filename, hdu = file_extension)
+            t = read_table(filename, ext=file_extension)
 
             ## Merge DEPNAMnn and DEPVERnn, then remove from header
             desiutil.depend.mergedep(t.meta, dependencies)
@@ -424,12 +426,8 @@ def update_table_columns(table, specgroup):
     sel = np.char.endswith(tab_cols, '_TARGET') & (tab_cols!='FA_TARGET')
     target_cols = list(tab_cols[sel])
 
-    for col in target_cols:
-        ## Fill the *TARGET columns that are masked with 0
-        table[col].fill_value = 0
-
     ## Table with filled values
-    table = table.filled()
+    table = table.filled(fill_value=0)
 
     # Move the target columns to the end
     reordered_cols = list(np.array(table.colnames)[~np.in1d(table.colnames, target_cols)]) + target_cols
