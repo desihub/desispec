@@ -459,7 +459,7 @@ def update_table_columns(table, specgroup='zpix', order_columns=True,
             assert col in target_cols, f"Unexpected masked column {col}"
 
     ## Table with filled values
-    tab = table.filled()
+    table = table.filled(fill_value=0)
 
     ## Selecting the required columns for the final table
     ## If all_columns is True, then rearraning the columns into a proper order
@@ -490,7 +490,7 @@ def update_table_columns(table, specgroup='zpix', order_columns=True,
             ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
             ## Last column in TSNR2_LRG in all the redshift catalogs
             ## We will add the PRIMARY columns in the end
-            colname_array = np.array(tab.colnames)
+            colname_array = np.array(table.colnames)
             colname_index = colname_array.argsort()
             assert (np.unique(colname_array) == colname_array[colname_index]).all()
 
@@ -501,7 +501,7 @@ def update_table_columns(table, specgroup='zpix', order_columns=True,
             log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
 
             ## List of all columns
-            all_cols = tab.colnames
+            all_cols = table.colnames
             log.debug(all_cols)
             log.debug(target_cols)
             log.debug(primary_cols)
@@ -536,13 +536,14 @@ def update_table_columns(table, specgroup='zpix', order_columns=True,
                 req_columns = columns_list + primary_cols
     else:
         log.debug("order_columns is False")
-        req_columns = tab.colnames
+        req_columns = table.colnames
     log.debug(req_columns)
 
-    ## Final table with the required columns
-    t_final = tab[req_columns]
+    # Move the target columns to the end
+    reordered_cols = list(np.array(table.colnames)[~np.in1d(table.colnames, target_cols)]) + target_cols
+    table = table[reordered_cols]
 
-    return t_final
+    return table
 
 ####################################################################################################
 ####################################################################################################
