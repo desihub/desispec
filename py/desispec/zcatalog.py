@@ -45,7 +45,7 @@ import numpy as np
 import os
 from glob import glob
 from astropy.io import fits
-from astropy.table import Table, Column, vstack, join
+from astropy.table import Table, Column, MaskedColumn, vstack, join
 
 ## DESI related functions
 from desispec.io import specprod_root, read_table
@@ -425,6 +425,11 @@ def update_table_columns(table, specgroup):
     ## for rearranging the columns into a proper order
     sel = np.char.endswith(tab_cols, '_TARGET') & (tab_cols!='FA_TARGET')
     target_cols = list(tab_cols[sel])
+
+    ## Confirm that the only masked values are the _TARGET columns
+    for col in table.colnames:
+        if isinstance(table[col], MaskedColumn):
+            assert col in target_cols, f"Unexpected masked column {col}"
 
     ## Table with filled values
     table = table.filled(fill_value=0)
