@@ -89,6 +89,7 @@ def write_spectra(outfile, spec, units=None):
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
         warnings.filterwarnings('ignore', '.*nanomaggies.*')
+        warnings.filterwarnings('ignore', '.*nmgy.*')
         hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
@@ -103,6 +104,7 @@ def write_spectra(outfile, spec, units=None):
         with warnings.catch_warnings():
             #- nanomaggies aren't an official IAU unit but don't complain
             warnings.filterwarnings('ignore', '.*nanomaggies.*')
+            warnings.filterwarnings('ignore', '.*nmgy.*')
             hdu = fits.convenience.table_to_hdu(expfmap)
 
         # Add comments for exp_fibermap columns.
@@ -399,7 +401,7 @@ def read_spectra(
                     ).as_array()
                 )
                 addkeys(redshifts.meta, hdus[h].read_header())
-                    
+
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -433,7 +435,7 @@ def read_spectra(
                     if model is None:
                         model = {}
                     model[band] = _read_image(hdus, h, ftype, rows=rows)
-                elif type != "MASK" and type != "RESOLUTION" and type not in skip_hdus:
+                elif type != "MASK" and type != "RESOLUTION" and type != "MODEL" and type not in skip_hdus:
                     # this must be an "extra" HDU
                     log.debug('Reading extra HDU %s', name)
                     if extra is None:
@@ -479,22 +481,19 @@ def read_spectra(
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
 
-    redrock_targetids = None # for the sanity checks between fibermap and redshift targetids
-    if return_redshifts:
+    if return_redshifts and redshifts is None:
         t0 = time.time()
-        if redshifts is None:
-            redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
-            redrock_targetids = np.asarray(redshifts["TARGETID"])# for sanity check
-            if rows is not None and len(rows)>0:
-                redrock_targetids = redrock_targetids[rows]
+        redshifts = Table.read(redrock_file, hdu="REDSHIFTS")
+        if rows is not None and len(rows)>0:
+            redshifts = redshifts[rows]
         duration = time.time() - t0
         log.info(iotime.format("read REDSHIFTS from: ", redrock_file, duration))
 
-    # sanity check between targetids in fibermap and model catalog
+    # sanity check between targetids in fibermap and model catalog/redshifts
     if fmap is not None and model_targetids is not None:
         np.testing.assert_array_equal(fmap["TARGETID"], model_targetids)
-    if fmap is not None and redrock_targetids is not None:
-        np.testing.assert_array_equal(fmap["TARGETID"], redrock_targetids)   
+    if fmap is not None and redshifts is not None:
+        np.testing.assert_array_equal(fmap["TARGETID"], redshifts["TARGETID"])
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
@@ -539,8 +538,14 @@ def read_spectra(
             log.debug("rows for subselection=%s", rows)
             spec = spec[rows]
 
-        #consistency check between targetids (perhaps this is not necessary)
-        
+        # consistency check between targetids
+        # This check is incorrect: see test_spectra.py : test_read_targetids
+        # for thorough testing of a number of different cases.
+        #   np.testing.assert_array_equal(spec.fibermap["TARGETID"], targetids)
+        if return_redshifts:
+            np.testing.assert_array_equal(spec.fibermap["TARGETID"],
+                                          spec.redshifts["TARGETID"])
+
     return spec
 
 def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):

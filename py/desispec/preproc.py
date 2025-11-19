@@ -194,13 +194,15 @@ def calc_overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def subtract_peramp_overscan(image, hdr, cfinder):
+def subtract_peramp_overscan(image, hdr, cfinder=None):
     """Subtract per-amp overscan using BIASSEC* keywords
 
     Args:
         image: 2D image array, modified in-place
         hdr: FITS header with BIASSEC[ABCD] or BIASSEC[1234] keywords
-        cfinder: CalibFinder for this image
+
+    Options:
+        cfinder: CalibFinder for this image, used for GOODBIASSEC override
 
     Note: currently used in desispec.ccdcalib.compute_bias_file to model
     bias image, but not preproc itself (which subtracts that bias, and
@@ -209,7 +211,7 @@ def subtract_peramp_overscan(image, hdr, cfinder):
     amp_ids = get_amp_ids(hdr)
     for a,amp in enumerate(amp_ids) :
         ii=parse_sec_keyword(hdr['BIASSEC'+amp])
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
             ii = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
         s0,s1=ii[0],ii[1]
         for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
@@ -609,14 +611,29 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
 
         if filename is None:
             if cfinder is None :
-                log.error("no calibration data was found")
+                log.critical("no calibration data was found")
                 raise ValueError("no calibration data was found")
             if cfinder.haskey(keyword) :
                 filename = cfinder.findfile(keyword)
-                depend.setdep(header, calkey, shorten_filename(filename))
-            else :
+            elif keyword == 'PIXFLAT':
+                ## Special case just for the pixel flat because they are hard to obtain,
+                ## we don't have them for every historic configuration, and the
+                ## flat fielding does a sufficient job of correcting without it
+                log.error("PIXFLAT not found in cfinder, but set to True in preproc; continuing without pixflat.")
                 depend.setdep(header, calkey, 'None')
-                return False # we say in the calibration data we don't need this
+                return False
+            else :
+                ## This used to return False, but if True we shouldn't set to
+                ## False just because a file is lacking an entry. Instead,
+                ## raise an informative error.
+                msg = f"Calibration data for {keyword} not found in cfinder for {header['CAMERA'].lower()}."
+                log.critical(msg)
+                raise ValueError(msg)
+
+        if filename is None :
+            depend.setdep(header, calkey, 'None')
+        else :
+            depend.setdep(header, calkey, shorten_filename(filename))
 
     elif isinstance(entry,str) :
         filename = entry
@@ -808,11 +825,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
+    need_cfinder = (mask is True) or (pixflat is True)
+
     cfinder = None
-    if ccd_calibration_filename is not False:
+    if ccd_calibration_filename is not False and need_cfinder:
         cfinder = CalibFinder([header, primary_header],
                               yaml_file=ccd_calibration_filename,
                               fallback_on_dark_not_found=fallback_on_dark_not_found)
+    else:
+        cfinder = None
 
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
@@ -859,7 +880,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     do_cte_corr = not no_cte_corr
     if do_cte_corr:
         from desispec.correct_cte import needs_ctecorr
-        if needs_ctecorr(cfinder=cfinder):
+        if cfinder is None:
+            full_header = header.copy()
+            for key in primary_header:
+                if key not in full_header:
+                    full_header[key] = primary_header[key]
+        else:
+            full_header = None
+        if needs_ctecorr(cfinder=cfinder, header=full_header):
             log.info(f'Camera {camera} needs CTE corrections')
             if cte_params_filename is None:
                 if not ('DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ):
@@ -920,31 +948,71 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     readnoise = np.zeros_like(image)
 
     #- Load dark
-    if cfinder and cfinder.haskey("DARK") and (dark is not False):
-
+    if dark is not False:
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
             log.info(f"Camera {camera} Using exposure time keyword {exptime_key} for dark normalization")
         else :
             exptime_key="EXPTIME"
-        exptime =  primary_header[exptime_key]
-        log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
+            if exptime_key not in primary_header and ccd_calibration_filename is not False:
+                message=f"No {exptime_key} keyword in primary header for Camera {camera} " \
+                        + "attempting to load calibfinder"
+                log.warning(message)
+                cfinder = CalibFinder([header, primary_header],
+                                       yaml_file=ccd_calibration_filename,
+                                       fallback_on_dark_not_found=fallback_on_dark_not_found)
+                if cfinder.haskey("EXPTIMEKEY"):
+                    exptime_key=cfinder.value("EXPTIMEKEY")
+                    log.info(f"Camera {camera} Using exposure time keyword {exptime_key} for dark normalization")
 
+        if exptime_key not in primary_header and exptime_key in header:
+            log.warning(f"For camera {camera}, no {exptime_key} keyword in primary header, but found in image header")
+            exptime = header[exptime_key]
+        else:
+            exptime =  primary_header[exptime_key]
+        log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
         if isinstance(dark,str):
             dark_filename=dark
             if not os.path.exists(dark_filename):
                 message=f"Supplied a filename for the dark to be used for preprocessing ({dark}), but does not exist"
-                log.error(message)
+                log.critical(message)
                 raise ValueError(message)
         else:
-            dark_filename = cfinder.findfile("DARK")
+            night = header2night(header)
+            expid = header['EXPID']
+            camera = header['CAMERA'].lower()
+            found = False
+            if 'DESI_SPECTRO_REDUX' in os.environ and 'SPECPROD' in os.environ:
+                darknight = findfile('darknight', night=night, camera=camera, readonly=True)
+                if os.path.exists(darknight):
+                    log.info(f'Using {night} nightly dark for {expid} {camera}')
+                    dark_filename = darknight
+                    found = True
+            if not found:
+                if cfinder is None:
+                    if ccd_calibration_filename is False:
+                        msg = f'SPECPROD not set and no ccd_calibration_filename provided. Cannot identify a viable dark for {expid} {camera}'
+                        log.critical(msg)
+                        raise ValueError(msg)
+                    else:
+                        cfinder = CalibFinder([header, primary_header],
+                                yaml_file=ccd_calibration_filename,
+                                fallback_on_dark_not_found=fallback_on_dark_not_found)
+                if cfinder.haskey("DARK"):
+                    log.warning(f'{night} nightly dark not found; attempting to use default dark for {expid=} {camera}')
+                    dark_filename = cfinder.findfile("DARK")
+                else:
+                    msg = f'No nightly dark found for {expid=} {camera}, and no DARK entry in the ' \
+                        + f'{ccd_calibration_filename=}.  Cannot proceed.'
+                    log.critical(msg)
+                    raise ValueError(msg)
 
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
-        dark = read_dark(filename=dark_filename,exptime=exptime)
+        dark = read_dark(filename=dark_filename, exptime=exptime)
 
         if dark.shape == image.shape :
             log.info(f"Camera {camera} dark is trimmed")
@@ -966,9 +1034,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             else:
                 log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
             dark = False
-
-    else:
-        dark = False
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
@@ -1018,13 +1083,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         use_overscan_row = use_overscan_row_orig
         no_overscan_per_row = no_overscan_per_row_orig
 
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):
             use_overscan_row = False
             no_overscan_per_row = True
 
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
-        if cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):  # override BIASSEC when GOODBIASSEC is present
             ov_col = parse_sec_keyword(cfinder.value(f'GOODBIASSEC{amp}'))
             log.info(f"Camera {camera} amp {amp} using GOODBIASSEC instead of BIASSEC")
         if 'ORSEC'+amp in header.keys():

@@ -107,40 +107,6 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
 
-
-    #- Check if NIGHT keyword is present and valid; fix if needed
-    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
-    try:
-        tmp = int(primary_header['NIGHT'])
-    except (KeyError, ValueError, TypeError):
-        primary_header['NIGHT'] = (header2night(primary_header), 'Observing night')
-
-    try:
-        tmp = int(header['NIGHT'])
-    except (KeyError, ValueError, TypeError):
-        try:
-            header['NIGHT'] = (header2night(header), 'Observing night')
-        except (KeyError, ValueError, TypeError):
-            #- early teststand data only have NIGHT/timestamps in primary hdr
-            header['NIGHT'] = (primary_header['NIGHT'], 'Observing night')
-
-    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
-    primary_header['NIGHT'] = (int(primary_header['NIGHT']), 'Observing night')
-    header['NIGHT'] = (int(header['NIGHT']), 'Observing night')
-
-    if primary_header['NIGHT'] != header['NIGHT']:
-        msg = 'Primary header NIGHT=%d != camera header NIGHT=%d!'
-        log.critical(msg, primary_header['NIGHT'], header['NIGHT'])
-        raise ValueError(msg % (primary_header['NIGHT'], header['NIGHT']))
-
-    #- early data have >8 char FIBERASSIGN key; rename to match current data
-    if 'FIBERASSIGN' in primary_header:
-        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in primary_header.')
-        primary_header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
-
-    if 'FIBERASSIGN' in header:
-        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in header.')
-        header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
     #
     # A lot of this inheritance stuff is moot because real data files
     # have an empty HDU 0 with no interesting headers.
@@ -176,6 +142,80 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     fx.close()
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
+
+    fx.close()
+    return process_raw(primary_header, rawimage, header, camera=camera, fibermapfile=fibermapfile, **kwargs)
+
+def process_raw(primary_header, rawimage, header, camera, fibermapfile=None, **kwargs):
+    '''Returns preprocessed raw data rawimage.
+
+    Parameters
+    ----------
+    primary_header : :class:`astropy.io.fits.Header`
+        Primary header of the raw data file.
+    rawimage : :class:`numpy.ndarray`
+        2D ndarray of raw pixel data including overscans.
+    header : :class:`astropy.io.fits.Header`
+        Header of the camera extension of the raw data file.
+    camera : :class:`str`
+        Camera name (B0, R1, ... Z9) or FITS extension name.
+    fibermapfile : :class:`str`, optional
+        Read fibermap from this file; if ``None`` create blank fibermap.
+
+    Returns
+    -------
+    :class:`desispec.image.Image`
+        Image object with member variables pix, ivar, mask, readnoise.
+
+    Raises
+    ------
+    KeyError
+        If ``EXPTIME`` is not present in any header in `header`, or if
+        both ``NIGHT`` and ``DATE-OBS`` are missing from input headers.
+    ValueError
+        If ``NIGHT`` in the primary header does not match ``NIGHT`` in the
+        camera header.
+
+    Notes
+    -----
+    Other keyword arguments are passed to :func:`desispec.preproc.preproc`,
+    *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
+    documentation for details.
+    '''
+    log = get_logger()
+    #- Check if NIGHT keyword is present and valid; fix if needed
+    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
+    try:
+        tmp = int(primary_header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        primary_header['NIGHT'] = (header2night(primary_header), 'Observing night')
+
+    try:
+        tmp = int(header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        try:
+            header['NIGHT'] = (header2night(header), 'Observing night')
+        except (KeyError, ValueError, TypeError):
+            #- early teststand data only have NIGHT/timestamps in primary hdr
+            header['NIGHT'] = (primary_header['NIGHT'], 'Observing night')
+
+    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
+    primary_header['NIGHT'] = (int(primary_header['NIGHT']), 'Observing night')
+    header['NIGHT'] = (int(header['NIGHT']), 'Observing night')
+
+    if primary_header['NIGHT'] != header['NIGHT']:
+        msg = 'Primary header NIGHT=%d != camera header NIGHT=%d!'
+        log.critical(msg, primary_header['NIGHT'], header['NIGHT'])
+        raise ValueError(msg % (primary_header['NIGHT'], header['NIGHT']))
+
+    #- early data have >8 char FIBERASSIGN key; rename to match current data
+    if 'FIBERASSIGN' in primary_header:
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in primary_header.')
+        primary_header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
+
+    if 'FIBERASSIGN' in header:
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in header.')
+        header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
     #
     # Other cleanup of headers
     #
@@ -226,7 +266,6 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
                 #- complain loudly, but don't crash and don't override
                 log.error('Inconsistent {}: raw header {} != fibermap header {}'.format(key, img.meta[key], fibermap.meta[key]))
 
-
     #- Trim to matching camera based upon PETAL_LOC, but that requires
     #- a mapping prior to 20191211
 
@@ -262,6 +301,10 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
         fibermap = fibermap[ii]
 
     cfinder = None
+    try:
+        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
+    except KeyError:
+        log.warning(f'calib config not found for {camera}; not masking fibers')
 
     camname = camera.upper()[0]
     if camname == 'B':
@@ -271,10 +314,11 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     else:
         badamp_bit = maskbits.fibermask.BADAMPZ
 
-    if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
+    # cfinder could be done when boostrapping darks for a new config
+    # early teststand data didn't have the FIBER column
+    if (cfinder is not None) and ('FIBER' in fibermap.dtype.names) :
 
         ## Mask fibers
-        cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
         fibers  = fibermap['FIBER'].data
         for k in ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"] :
             log.debug("{}={}".format(k,cfinder.badfibers([k])))
@@ -300,25 +344,25 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     if np.sum(img.mask & maskbits.ccdmask.BADREADNOISE > 0) >= img.mask.size//4 :
         log.info("Propagate ccdmask.BADREADNOISE to fibermap FIBERSTATUS")
 
-        if cfinder is None :
-            cfinder = CalibFinder([header,primary_header],fallback_on_dark_not_found=kwargs['fallback_on_dark_not_found'] if 'fallback_on_dark_not_found' in kwargs.keys() else False)
+        if cfinder is None:
+            log.warning(f'No calib config for {camera}; unable to load PSF to set FIBERSTATUS BADREADOISE')
+        else:
+            psf_filename = cfinder.findfile("PSF")
+            tset = desispec.io.read_xytraceset(psf_filename)
+            mean_wave =(tset.wavemin+tset.wavemax)/2.
+            xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
+            amp_ids = desispec.preproc.get_amp_ids(header)
 
-        psf_filename = cfinder.findfile("PSF")
-        tset = desispec.io.read_xytraceset(psf_filename)
-        mean_wave =(tset.wavemin+tset.wavemax)/2.
-        xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
-        amp_ids = desispec.preproc.get_amp_ids(header)
-
-        for amp in amp_ids :
-            kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
-            ntot = img.mask[kk].size
-            nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
-            if nbad / ntot > 0.5 :
-                # not just nbad>0 b/c/ there are always pixels with low QE
-                # that have increased readnoise after pixel flatfield
-                log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
-                badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
-                fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
+            for amp in amp_ids :
+                kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
+                ntot = img.mask[kk].size
+                nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
+                if nbad / ntot > 0.5 :
+                    # not just nbad>0 b/c/ there are always pixels with low QE
+                    # that have increased readnoise after pixel flatfield
+                    log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
+                    badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
+                    fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
 
     img.fibermap = fibermap
 

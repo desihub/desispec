@@ -279,17 +279,16 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
     log = get_logger()
     outfile = makepath(outfile)
 
-    #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
-    #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
-    #- catch it if the arrays actually are written incorrectly.
     if header is not None:
         hdr = fitsheader(header)
     else:
         hdr = fitsheader(fibermap.meta)
 
     add_dependencies(hdr)
-
-    fibermap_hdu = fits.BinTableHDU(fibermap)
+    
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', '.*nmgy.*')
+        fibermap_hdu = fits.BinTableHDU(fibermap)
     fibermap_hdu.header.extend(hdr, update=True)
     fibermap_hdu = annotate_fibermap(fibermap_hdu)
 

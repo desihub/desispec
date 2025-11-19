@@ -89,7 +89,7 @@ def get_nights(nights_arg, start_night, end_night, prod_dir):
         for n in listdir(
                 os.path.join(prod_dir, 'run', 'scripts', 'night')):
             # - nights are 20YYMMDD
-            if re.match('^20\d{6}$', n):
+            if re.match(r'^20\d{6}$', n):
                 nights.append(n)
     else:
         nights = [nigh.strip(' \t') for nigh in nights_arg.split(',')]
@@ -726,7 +726,7 @@ def _table_row(dictionary):
         elif key == 'STATUS' and elem not in ['COMPLETED', 'unprocessed', 'unrecorded'] \
               and elem not in non_final_q_states and idlabel != 'GOOD':
             row_str += _table_element_id(elem, idlabel)
-        elif re.match('^\d+\/\d+$', elem) is not None:
+        elif re.match(r'^\d+\/\d+$', elem) is not None:
             strs = str(elem).split('/')
             numerator, denom = int(strs[0]), int(strs[1])
             if numerator == 0 and denom == 0:

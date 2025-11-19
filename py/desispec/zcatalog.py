@@ -28,11 +28,14 @@ columns via the `columns_list` keyword.
 
 Usage::
 
-   create_summary_catalog(specprod, specgroup = 'zpix', all_columns = True, \
-                          columns_list = None, output_filename = './zcat-all.fits')
+   from desispec.zcatalog import create_summary_catalog
+
+   create_summary_catalog(specgroup = 'zpix', indir='/global/cfs/cdirs/desi/public/dr2/spectro/redux/loa/zcatalog/v2')
+   create_summary_catalog(specgroup = 'ztile', indir='/global/cfs/cdirs/desi/public/dr2/spectro/redux/loa/zcatalog/v2')
 
 Ragadeepika Pucha, Stephanie Juneau, and DESI data team
 Version: 2022, March 31st
+Updated: Summer 2025
 """
 
 ####################################################################################################
@@ -42,13 +45,15 @@ import numpy as np
 import os
 from glob import glob
 from astropy.io import fits
-from astropy.table import Table, Column, vstack, join
+from astropy.table import Table, Column, MaskedColumn, vstack, join
 
 ## DESI related functions
-from desispec.io import specprod_root
+from desispec.io import specprod_root, read_table
 from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
 import desiutil.depend
+
+import fitsio
 
 ####################################################################################################
 ####################################################################################################
@@ -91,7 +96,11 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     ## Main columns that are required:
     ## TARGETID, ZWARN, SORT_COLUMN that is given by the user (default=TSNR2_LRG)
 
-    tsel = table['TARGETID', 'ZWARN', sort_column]
+    if 'ZWARN' in table.colnames:
+        zwarn_col = 'ZWARN'
+    else:
+        zwarn_col = 'ZWARN_BEST'
+    tsel = table['TARGETID', zwarn_col, sort_column]
 
     ## Adding a row number column to sort the final table back to the same order as the input
     row = Column(np.arange(1, len(table)+1), name = 'ROW_NUMBER')
@@ -106,7 +115,7 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     ## Create a ZWARN_NOT_ZERO column
     ## This helps to sort in the order such that ZWARN=0 is on top.
     ## The rest are then arranged based on the 'SORT_COLUMN'
-    tsel['ZWARN_NOT_ZERO'] = (tsel['ZWARN'] != 0).astype(int)
+    tsel['ZWARN_NOT_ZERO'] = (tsel[zwarn_col] != 0).astype(int)
 
     ## Create an inverse sort_column -- this is for sorting in the decreasing order of sort_column
     ## Higher values of sort_column are considered as better
@@ -193,8 +202,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     Returns
     -------
     None
-        The function saves a FITS file at the location and file name specified by `output_filename`
-        with the summary redshift catalog in HDU1.
+        The function saves FITS files in the input directory.
     """
 
     ############################### Checking the inputs ##################################
@@ -206,6 +214,9 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         errmsg = f'{specgroup=} not recognized, should be one of {valid_specgroups}'
         log.error(errmsg)
         raise ValueError(errmsg)
+
+    if specprod is None:
+        specprod = os.environ['SPECPROD']
 
     ## set indir if needed
     if indir is None:
@@ -219,151 +230,170 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         log.error(msg)
         raise ValueError(msg)
 
-    ## Set output_filename if needed
-    if output_filename is None:
-        specprod = os.environ['SPECPROD']
-        if specgroup == 'zpix':
-            output_filename = f'zall-pix-{specprod}.fits'
-        elif specgroup == 'ztile':
-            output_filename = f'zall-tilecumulative-{specprod}.fits'
-        else:
-            # not yet used; future-proofing
-            output_filename = f'zall-{specgroup}-{specprod}.fits'
-
-        log.info(f'Will write output to {output_filename}')
+    if not os.path.isdir(f'{indir}/zall'):
+        os.makedirs(f'{indir}/zall')
 
     ######################################################################################
 
     ## Find all the filenames for a given specgroup
     if (specgroup == 'zpix'):
         ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{indir}/zpix-*.fits')
+        zcat = glob(f'{indir}/*/zpix-*.fits')
     elif (specgroup == 'ztile'):
         ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{indir}/ztile-*cumulative.fits')
+        zcat = glob(f'{indir}/*/ztile-*cumulative.fits')
+
+    # only keep the primary filenames
+    for fn in zcat.copy():
+        if ('-imaging.fits' in fn) or ('-extra.fits' in fn):
+            print(fn)
+            zcat.remove(fn)
 
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
     zcat.sort()
 
-    ## Get all the zcatalogs for a given spectral release and specgroup
-    ## Add the required columns or select a few of them
-    ## Adding all the tables into a single list
-    tables = []
-
-    ## Handle DEPNAMnn DEPVERnn keyword merging separately
-    dependencies = dict()
-
-    ## Looping through the different zcatalogs and adding the survey and program columns
-    for filename in zcat:
-        basefile = os.path.basename(filename)
-
-        ## Load the ZCATALOG table, along with the meta data
-        log.info(f'Reading {filename}')
-        t = Table.read(filename, hdu = 'ZCATALOG')
-
-        ## Merge DEPNAMnn and DEPVERnn, then remove from header
-        desiutil.depend.mergedep(t.meta, dependencies)
-        desiutil.depend.remove_dependencies(t.meta)
-
-        ## Remove other keys that we don't want to propagate
-        for key in ('CHECKSUM', 'DATASUM'):
-            if key in t.meta:
-                del t.meta[key]
-
-        ## Get SURVEY and PROGRAM from header, then remove from header
-        ## because we are stacking catalogs from multiple surveys and programs
-        if 'SURVEY' in t.meta:
-            survey = t.meta['SURVEY']
-            del t.meta['SURVEY']
+    for file_extension in ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']:
+        fn_suffix = file_extension.replace('ZCATALOG', '').replace('_', '-').lower()
+        ## Set output_filename
+        if specgroup == 'zpix':
+            output_filename = f'{indir}/zall/zall-pix-{specprod}{fn_suffix}.fits'
+        elif specgroup == 'ztile':
+            output_filename = f'{indir}/zall/zall-tilecumulative-{specprod}{fn_suffix}.fits'
         else:
-            # parse filename if needed, but complain about it
-            survey = _get_survey_program_from_filename(filename)[0]
-            log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
+            # not yet used; future-proofing
+            output_filename = f'{indir}/zall/zall-{specgroup}-{specprod}{fn_suffix}.fits'
+            log.info(f'Will write output to {output_filename}')
 
-        if 'PROGRAM' in t.meta:
-            program = t.meta['PROGRAM']
-            del t.meta['PROGRAM']
-        else:
-            program = _get_survey_program_from_filename(filename)[1]
-            log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
+        ## Get all the zcatalogs for a given spectral release and specgroup
+        ## Add the required columns or select a few of them
+        ## Adding all the tables into a single list
+        tables = []
 
-        log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
-        ## We keep the rest of the meta data
+        ## Handle DEPNAMnn DEPVERnn keyword merging separately
+        dependencies = dict()
 
-        ## Add the SURVEY and PROGRAM columns
-        ## SURVEY is added as a str7 and PROGRAM is added as str6 (to match other catalogs)
-        ## 'special' consists of seven characters and is the maximum character for a SURVEY string
-        ## 'backup' and 'bright' consists of six characters and is the maximum for a PROGRAM string
-        col1 = Column(np.array([survey]*len(t)), name = 'SURVEY', dtype = '<U7')
-        col2 = Column(np.array([program]*len(t)), name = 'PROGRAM', dtype = '<U6')
-        t.add_column(col1, 1)
-        t.add_column(col2, 2)
-        ## The SURVEY and PROGRAM columns are added as second and third columns,
-        ## immediately after TARGETID
+        if file_extension=='ZCATALOG':
+            zcat1 = zcat.copy()
+        elif file_extension=='ZCATALOG_IMAGING':
+            zcat1 = [fn.replace('.fits', '-imaging.fits') for fn in zcat]
+        elif file_extension=='ZCATALOG_EXTRA':
+            zcat1 = [fn.replace('.fits', '-extra.fits') for fn in zcat]
 
-        ## Appending the tables to the list
-        tables.append(t)
+        ## Looping through the different zcatalogs and adding the survey and program columns
+        for filename in zcat1:
+            basefile = os.path.basename(filename)
 
-    ## Stacking all the tables into a final table
-    tab = vstack(tables)
-    ## The output of this will have Masked Columns
-    ## We will fix this at the end
+            ## Load the ZCATALOG table, along with the meta data
+            log.info(f'Reading {filename}')
+            t = read_table(filename, ext=file_extension)
 
-    ## Selecting primary spectra for the whole combined ZCATALOG
-    ## For SV, it selects the best spectrum including cmx+special+sv1+sv2+sv3
-    ## For Main, it selects the best spectrum for main+special
-    nspec, specprim = find_primary_spectra(tab)
+            ## Merge DEPNAMnn and DEPVERnn, then remove from header
+            desiutil.depend.mergedep(t.meta, dependencies)
+            desiutil.depend.remove_dependencies(t.meta)
 
-    ## Replacing the existing 'ZCAT_NSPEC' and 'ZCAT_PRIMARY'
-    ## If all_columns = False, and user-list does not contain this column -
-    ## these columns will be added
-    log.debug('Updating ZCAT_PRIMARY and ZCAT_NSPEC')
-    tab['ZCAT_NSPEC'] = nspec
-    tab['ZCAT_PRIMARY'] = specprim
+            ## Remove other keys that we don't want to propagate
+            for key in ('CHECKSUM', 'DATASUM'):
+                if key in t.meta:
+                    del t.meta[key]
 
-    ############################### Adding SV/Main Primary Flags ##################################
+            if file_extension=='ZCATALOG':
 
-    survey_col = tab['SURVEY'].astype(str)
+                ## Get SURVEY and PROGRAM from header, then remove from header
+                ## because we are stacking catalogs from multiple surveys and programs
+                if 'SURVEY' in t.meta:
+                    survey = t.meta['SURVEY']
+                    del t.meta['SURVEY']
+                else:
+                    # parse filename if needed, but complain about it
+                    survey = _get_survey_program_from_filename(filename)[0]
+                    log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
 
-    ## Check if SV1|SV2|SV3 targets are available and add SV Primary Flag columns
-    if ('sv1' in survey_col)|('sv2' in survey_col)|('sv3' in survey_col):
-        log.debug('Found SV inputs; adding SV_PRIMARY and SV_NSPEC columns')
-        ## Add empty columns for SV NSPEC and PRIMARY
-        col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i2')
-        col2 = Column(np.array([0]*len(tab)), name = 'SV_PRIMARY', dtype = 'bool')
-        tab.add_columns([col1, col2])
+                if 'PROGRAM' in t.meta:
+                    program = t.meta['PROGRAM']
+                    del t.meta['PROGRAM']
+                else:
+                    program = _get_survey_program_from_filename(filename)[1]
+                    log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
 
-        ## Selecting primary spectra for targets within just SV
-        ## For SV, it selects the primary spectra out of SV1+SV2+SV3 for every individual TARGETID
-        ## Ignores cmx+special in SV
-        is_sv = np.char.startswith(survey_col.data, 'sv')
-        nspec, specprim = find_primary_spectra(tab[is_sv])
-        tab['SV_NSPEC'][is_sv] = nspec
-        tab['SV_PRIMARY'][is_sv] = specprim
+                log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
+                ## We keep the rest of the meta data
 
-    ## Check if 'main' targets are available and add Main Primary Flag Columns
-    if ('main' in survey_col):
-        log.debug('Found main survey inputs; adding MAIN_PRIMARY and MAIN_NSPEC columns')
-        ## Add empty columns for Main NSPEC and PRIMARY
-        col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i2')
-        col2 = Column(np.array([0]*len(tab)), name = 'MAIN_PRIMARY', dtype = 'bool')
-        tab.add_columns([col1, col2])
+                ## Add the SURVEY and PROGRAM columns
+                ## SURVEY is added as a str7 and PROGRAM is added as str6 (to match other catalogs)
+                ## 'special' consists of seven characters and is the maximum character for a SURVEY string
+                ## 'backup' and 'bright' consists of six characters and is the maximum for a PROGRAM string
+                col1 = Column(np.array([survey]*len(t)), name = 'SURVEY', dtype = '<U7')
+                col2 = Column(np.array([program]*len(t)), name = 'PROGRAM', dtype = '<U6')
+                t.add_column(col1, 1)
+                t.add_column(col2, 2)
+                ## The SURVEY and PROGRAM columns are added as second and third columns,
+                ## immediately after TARGETID
 
-        ## Selecting primary spectra for targets within just MAIN
-        ## It selects the primary spectra just for 'main' and ignores 'special'
-        is_main = (survey_col.data == 'main')
-        nspec, specprim = find_primary_spectra(tab[is_main])
-        tab['MAIN_NSPEC'][is_main] = nspec
-        tab['MAIN_PRIMARY'][is_main] = specprim
+            ## Appending the tables to the list
+            tables.append(t)
 
-    ###############################################################################################
+        ## Stacking all the tables into a final table
+        tab = vstack(tables)
+        ## The output of this will have Masked Columns
+        ## We will fix this at the end
 
-    ## For convenience, sort by SURVEY, PROGRAM, and (HEALPIX or TILEID)
-    if (specgroup == 'zpix'):
-        tab.sort(['SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])
-    elif (specgroup == 'ztile'):
-        tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER'])
+        if file_extension=='ZCATALOG':
+
+            ## Selecting primary spectra for the whole combined ZCATALOG
+            ## For SV, it selects the best spectrum including cmx+special+sv1+sv2+sv3
+            ## For Main, it selects the best spectrum for main+special
+            nspec, specprim = find_primary_spectra(tab, sort_column='EFFTIME_SPEC')
+
+            ## Replacing the existing 'ZCAT_NSPEC' and 'ZCAT_PRIMARY'
+            ## If all_columns = False, and user-list does not contain this column -
+            ## these columns will be added
+            log.debug('Updating ZCAT_PRIMARY and ZCAT_NSPEC')
+            tab['ZCAT_NSPEC'] = nspec
+            tab['ZCAT_PRIMARY'] = specprim
+
+            ############################### Adding SV/Main Primary Flags ##################################
+
+            survey_col = tab['SURVEY'].astype(str)
+
+            ## Check if SV1|SV2|SV3 targets are available and add SV Primary Flag columns
+            if ('sv1' in survey_col)|('sv2' in survey_col)|('sv3' in survey_col):
+                log.debug('Found SV inputs; adding SV_PRIMARY and SV_NSPEC columns')
+                ## Add empty columns for SV NSPEC and PRIMARY
+                col1 = Column(np.array([0]*len(tab)), name = 'SV_NSPEC', dtype = '>i2')
+                col2 = Column(np.array([0]*len(tab)), name = 'SV_PRIMARY', dtype = 'bool')
+                tab.add_columns([col1, col2])
+
+                ## Selecting primary spectra for targets within just SV
+                ## For SV, it selects the primary spectra out of SV1+SV2+SV3 for every individual TARGETID
+                ## Ignores cmx+special in SV
+                is_sv = np.char.startswith(survey_col.data, 'sv')
+                nspec, specprim = find_primary_spectra(tab[is_sv], sort_column='EFFTIME_SPEC')
+                tab['SV_NSPEC'][is_sv] = nspec
+                tab['SV_PRIMARY'][is_sv] = specprim
+
+            ## Check if 'main' targets are available and add Main Primary Flag Columns
+            if ('main' in survey_col):
+                log.debug('Found main survey inputs; adding MAIN_PRIMARY and MAIN_NSPEC columns')
+                ## Add empty columns for Main NSPEC and PRIMARY
+                col1 = Column(np.array([0]*len(tab)), name = 'MAIN_NSPEC', dtype = '>i2')
+                col2 = Column(np.array([0]*len(tab)), name = 'MAIN_PRIMARY', dtype = 'bool')
+                tab.add_columns([col1, col2])
+
+                ## Selecting primary spectra for targets within just MAIN
+                ## It selects the primary spectra just for 'main' and ignores 'special'
+                is_main = (survey_col.data == 'main')
+                nspec, specprim = find_primary_spectra(tab[is_main], sort_column='EFFTIME_SPEC')
+                tab['MAIN_NSPEC'][is_main] = nspec
+                tab['MAIN_PRIMARY'][is_main] = specprim
+
+            ###############################################################################################
+
+            # Sanity check that the TARGETIDs match in the row-matched catalogs
+            if file_extension=='ZCATALOG':
+                targetid_arr = np.array(tab['TARGETID']).copy()
+            else:
+                assert np.all(tab['TARGETID']==targetid_arr)
 
     ## Convert the masked column table to normal astropy table and select required columns
     final_table = update_table_columns(tab, specgroup=specgroup, order_columns=order_columns,
@@ -416,19 +446,16 @@ def update_table_columns(table, specgroup = 'zpix', order_columns = True, all_co
     ## Array of all columns:
     tab_cols = np.array(table.colnames)
 
-    ## Pick out columns ending with '_TARGET'
-    sel = np.char.endswith(tab_cols, '_TARGET')
-
-    ## This include FA_TARGET -- which needs to be removed
-    ## Make a list of all the '*_TARGET' columns, which contain DESI targetting information
+    ## Make a list of all the targeting bit columns, which contain DESI targetting information
     ## This is both for correcting the masked columns, as well as
     ## for rearranging the columns into a proper order
+    sel = np.char.endswith(tab_cols, '_TARGET') & (tab_cols!='FA_TARGET')
     target_cols = list(tab_cols[sel])
-    target_cols.remove('FA_TARGET')
 
-    for col in target_cols:
-        ## Fill the *TARGET columns that are masked with 0
-        table[col].fill_value = 0
+    ## Confirm that the only masked values are the _TARGET columns
+    for col in table.colnames:
+        if isinstance(table[col], MaskedColumn):
+            assert col in target_cols, f"Unexpected masked column {col}"
 
     ## Table with filled values
     tab = table.filled()

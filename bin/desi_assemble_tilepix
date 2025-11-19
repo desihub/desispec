@@ -146,7 +146,7 @@ for survey, program in list(np.unique(exp['SURVEY', 'PROGRAM'])):
     ii = (exp['SURVEY'] == survey) & (exp['PROGRAM'] == program)
     tileids = np.unique(exp['TILEID'][ii])
     healpix = getpix(tilepix, tileids)
-    log.info(f'{survey} {program} {len(healpix)} healpix')
+    log.info(f'Checking {survey} {program} with {len(healpix)} healpixels')
     for pix in healpix:
         fn = desispec.io.findfile('redrock', groupname=pix,
                 survey=survey, faprogram=program)

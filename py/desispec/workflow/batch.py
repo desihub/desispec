@@ -47,6 +47,7 @@ def get_config(name):
 
     return config[name]
 
+
 def default_system(jobdesc=None, no_gpu=False):
     """
     Guess default system to use based on environment
@@ -61,12 +62,10 @@ def default_system(jobdesc=None, no_gpu=False):
     log = get_logger()
     name = None
     if 'NERSC_HOST' in os.environ:
-        if os.environ['NERSC_HOST'] == 'cori':
-            name = 'cori-haswell'
-        elif os.environ['NERSC_HOST'] == 'perlmutter':
+        if os.environ['NERSC_HOST'] == 'perlmutter':
             ## HARDCODED: for now arcs and biases can't use gpu's, so use cpu's
-            if jobdesc in ['linkcal', 'arc', 'nightlybias', 'ccdcalib',
-                           'badcol', 'psfnight']:
+            if jobdesc in ['linkcal', 'arc', 'biasnight', 'biaspdark',
+                           'ccdcalib', 'badcol', 'psfnight', 'pdark' ]:
                 name = 'perlmutter-cpu'
             elif no_gpu:
                 name = 'perlmutter-cpu'
@@ -83,6 +82,7 @@ def default_system(jobdesc=None, no_gpu=False):
         log.info(f'Guessing default batch system {name}')
 
     return name
+
 
 def parse_reservation(reservation, jobdesc):
     """
@@ -122,6 +122,157 @@ def parse_reservation(reservation, jobdesc):
         return reservation_cpu
     else:
         return reservation_gpu
+
+
+def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=None, system_name=None):
+    """
+    Determine the resources that should be assigned to the batch script given what
+    desi_proc needs for the given input information.
+
+    Args:
+        ncameras (int): number of cameras to be processed
+        jobdesc (str): type of data being processed
+        nexps (int, optional): the number of exposures processed in this step
+        queue (str, optional): the Slurm queue to be submitted to. Currently not used.
+        system_name (str, optional): batch compute system, e.g. cori-haswell or perlmutter-gpu
+
+    Returns:
+        tuple: A tuple containing:
+
+        * ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
+        * nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // cores_per_node + 1
+        * runtime: int, the max time requested for the script in minutes for the processing.
+    """
+    if system_name is None:
+        system_name = default_system(jobdesc=jobdesc)
+
+    config = get_config(system_name)
+    log = get_logger()
+    jobdesc = jobdesc.upper()
+
+    nspectro = (ncameras - 1) // 3 + 1
+    nodes = None
+    if jobdesc in ('ARC', 'TESTARC'):
+        ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
+        ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
+    elif jobdesc in ('FLAT', 'TESTFLAT'):
+        runtime = 40
+        if system_name.startswith('perlmutter'):
+            ncores = config['cores_per_node']
+        else:
+            ncores = 20 * nspectro
+    elif jobdesc == 'TILENIGHT':
+        runtime  = int(60. / 140. * ncameras * nexps) # 140 frames per node hour
+        runtime += 40                                 # overhead
+        ncores = config['cores_per_node']
+        if not system_name.startswith('perlmutter'):
+            msg = 'tilenight cannot run on system_name={}'.format(system_name)
+            log.critical(msg)
+            raise ValueError(msg)
+    elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR'):
+        runtime = 30
+        if system_name.startswith('perlmutter'):
+            ncores = config['cores_per_node']
+        else:
+            ncores = 20 * nspectro
+    elif jobdesc in ('DARK', 'BADCOL'):
+        ncores, runtime = ncameras, 5
+    elif jobdesc in ('BIASNIGHT', 'BIASPDARK'):
+        ## Jobs are memory limited, so use 15 cores per node
+        ## and split work of 30 cameras across 2 nodes
+        nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
+        ncores = 15
+        ## 8 minutes base plus 4 mins per loop over dark exposures
+        pdarkcores = min([ncameras*nexps, nodes*config['cores_per_node']])
+        runtime = 8 + 4.*(float(nodes*config['cores_per_node'])/float(pdarkcores))
+    elif jobdesc in ('PDARK'):
+        nodes = 1 
+        # can do 1 core per camera per exp, but limit to cores available
+        ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
+        ## 4 minutes base plus 4 mins per loop over dark exposures    
+        runtime = 4 + 4.*(float(nodes*config['cores_per_node'])/float(ncores))
+    elif jobdesc == 'CCDCALIB':
+        nodes = 1
+        ncores, runtime = ncameras, 7 # 5 mins after perlmutter system scaling factor
+    elif jobdesc == 'ZERO':
+        ncores, runtime = 2, 5
+    elif jobdesc == 'PSFNIGHT':
+        ncores, runtime = ncameras, 5
+    elif jobdesc == 'NIGHTLYFLAT':
+        ncores, runtime = ncameras, 5
+    elif jobdesc == 'STDSTARFIT':
+        #- Special case hardcode: stdstar parallelism maxes out at ~30 cores
+        #- and on KNL, it OOMs above that anyway.
+        #- This might be more related to using a max of 30 standards, not that
+        #- there are 30 cameras (coincidence).
+        #- Use 32 as power of 2 for core packing
+        ncores = 32
+        runtime = 8+2*nexps
+    elif jobdesc == 'POSTSTDSTAR':
+        runtime = 10
+        ncores = ncameras
+    elif jobdesc == 'NIGHTLYBIAS':
+        ncores, runtime = 15, 5
+        nodes = 2
+    elif jobdesc in ['PEREXP', 'PERNIGHT', 'CUMULATIVE', 'CUSTOMZTILE']:
+        if system_name.startswith('perlmutter'):
+            nodes, runtime = 1, 50  #- timefactor will bring time back down
+        else:
+            nodes, runtime = 2, 30
+        ncores = nodes * config['cores_per_node']
+    elif jobdesc == 'HEALPIX':
+        nodes = 1
+        runtime = 100
+        ncores = nodes * config['cores_per_node']
+    elif jobdesc == 'LINKCAL':
+        nodes, ncores = 1, 1
+        runtime = 5.
+    else:
+        msg = 'unknown jobdesc={}'.format(jobdesc)
+        log.critical(msg)
+        raise ValueError(msg)
+
+    if forced_runtime is not None:
+        runtime = forced_runtime
+
+    if nodes is None:
+        nodes = (ncores - 1) // config['cores_per_node'] + 1
+
+    # - Arcs and flats make good use of full nodes, but throttle science
+    # - exposures to 5 nodes to enable two to run together in the 10-node
+    # - realtime queue, since their wallclock is dominated by less
+    # - efficient sky and fluxcalib steps
+    if jobdesc in ('ARC', 'TESTARC'):#, 'FLAT', 'TESTFLAT'):
+        max_realtime_nodes = 10
+    else:
+        max_realtime_nodes = 5
+
+    #- Pending further optimizations, use same number of nodes in all queues
+    ### if (queue == 'realtime') and (nodes > max_realtime_nodes):
+    if (nodes > max_realtime_nodes):
+        nodes = max_realtime_nodes
+        ncores = config['cores_per_node'] * nodes
+        if jobdesc in ('ARC', 'TESTARC'):
+            # adjust for workflow.schedule scheduler proc
+            ncores = ((ncores - 1) // 20) * 20 + 1
+
+    #- Allow KNL jobs to be slower than Haswell,
+    #- except for ARC so that we don't have ridiculously long times
+    #- (Normal arc is still ~15 minutes, albeit with a tail)
+    if jobdesc not in ['ARC', 'TESTARC']:
+        runtime *= config['timefactor']
+
+    #- Do not allow runtime to be less than 5 min
+    if runtime < 5:
+        runtime = 5
+
+    #- Add additional overhead factor if needed
+    if 'NERSC_RUNTIME_OVERHEAD' in os.environ:
+        t = os.environ['NERSC_RUNTIME_OVERHEAD']
+        log.info(f'Adding $NERSC_RUNTIME_OVERHEAD={t} minutes to batch runtime request')
+        runtime += float(runtime)
+
+    return ncores, nodes, runtime
 
 
 

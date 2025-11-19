@@ -2,10 +2,69 @@
 desispec Change Log
 ===================
 
-0.69.1 (unreleased)
+0.70.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Add nightly dark processing (PR `#2531`_)
+* Improve NumPy 2 support (PR `#2502`_).
+* Allow 1200s dark for bad col selection (PR `#2499`_).
+* Improve calibration uncertainty (PR `#2496`_).
+* Can coadd spectra with no resolution data (PR `#2492`_).
+* Nightqa: handle bright1b/dark1b (PR `#2490`_).
+* ``desi_tile_vi``: enable main/dark1b tiles (PR `#2487`_).
+* Tile qa plot: update reference ``n(z)`` to handle ``DARK1B`` (PR `#2485`_).
+* Add PSF correction to ``RCALIBFRAC`` (PR `#2484`_).
+* Use custom fiber cross talk correction (PR `#2482`_).
+* Update ``nightly_bias.py`` to use 50 zeros by default (again) (PR `#2478`_).
+* Revert PR `#2475`_ (PR `#2477`_).
+* Update ``nightly_bias.py`` to use 50 zeros by default (PR `#2476`_).
+* Nightqa v29 (PR `#2475`_).
+* :func:`scipy.linalg.eigh` deprecated ``turbo`` option (PR `#2474`_).
+* NumPy 2 support, first pass (PR `#2471`_).
+* :func:`sys.exit` in script for ``nightly_bias`` not function (PR `#2470`_).
+* Changes to ``desi_compute_pixmask`` (PR `#2469`_).
+* Have ``desi_compute_nightly_bias`` gracefully exit if default bias is missing (PR `#2468`_).
+* Check whether the CCD is read to the left or to the right (PR `#2467`_).
+* Added support to return redrock models in ``read_spectra`` (PR `#2466`_).
+* New DESI calibration configuration editor (PR `#2465`_).
+* Copy purged redux files to attic (PR `#2464`_).
+* ``DESI_COMPRESSION`` (PR `#2462`_).
+* ``IN_COADD_B/R/Z`` cols and new FA keywords when stacking spectra (PR `#2461`_).
+* Avoid warning about unit style (PR `#2460`_).
+* Fix ``read_frame_as_spectra`` (PR `#2459`_).
+* Log error when arc/flat set are rejected due to large time difference (PR `#2457`_).
+* TODO: many other PRs...
+* New zcatalog v2 format, splitting sets of columns into separate files (PR `#2396`_).
+
+.. _`#2531`: https://github.com/desihub/desispec/pull/2531
+.. _`#2502`: https://github.com/desihub/desispec/pull/2502
+.. _`#2499`: https://github.com/desihub/desispec/pull/2499
+.. _`#2496`: https://github.com/desihub/desispec/pull/2496
+.. _`#2492`: https://github.com/desihub/desispec/pull/2492
+.. _`#2490`: https://github.com/desihub/desispec/pull/2490
+.. _`#2487`: https://github.com/desihub/desispec/pull/2487
+.. _`#2485`: https://github.com/desihub/desispec/pull/2485
+.. _`#2484`: https://github.com/desihub/desispec/pull/2484
+.. _`#2482`: https://github.com/desihub/desispec/pull/2482
+.. _`#2478`: https://github.com/desihub/desispec/pull/2478
+.. _`#2477`: https://github.com/desihub/desispec/pull/2477
+.. _`#2476`: https://github.com/desihub/desispec/pull/2476
+.. _`#2475`: https://github.com/desihub/desispec/pull/2475
+.. _`#2474`: https://github.com/desihub/desispec/pull/2474
+.. _`#2471`: https://github.com/desihub/desispec/pull/2471
+.. _`#2470`: https://github.com/desihub/desispec/pull/2470
+.. _`#2469`: https://github.com/desihub/desispec/pull/2469
+.. _`#2468`: https://github.com/desihub/desispec/pull/2468
+.. _`#2467`: https://github.com/desihub/desispec/pull/2467
+.. _`#2466`: https://github.com/desihub/desispec/pull/2466
+.. _`#2465`: https://github.com/desihub/desispec/pull/2465
+.. _`#2464`: https://github.com/desihub/desispec/pull/2464
+.. _`#2462`: https://github.com/desihub/desispec/pull/2462
+.. _`#2461`: https://github.com/desihub/desispec/pull/2461
+.. _`#2460`: https://github.com/desihub/desispec/pull/2460
+.. _`#2459`: https://github.com/desihub/desispec/pull/2459
+.. _`#2457`: https://github.com/desihub/desispec/pull/2457
+.. _`#2396`: https://github.com/desihub/desispec/pull/2396
 
 0.69.0 (2025-03-14)
 -------------------

@@ -58,7 +58,7 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         nights = list()
         for n in listpath(os.getenv('DESI_SPECTRO_DATA')):
             #- nights are 20YYMMDD
-            if re.match('^20\d{6}$', n):
+            if re.match(r'^20\d{6}$', n):
                 nights.append(n)
     else:
         nights = [ int(val.strip()) for val in nights.split(",") ]
@@ -148,6 +148,7 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
             if rowdict is not None and type(rowdict) is not str:
                 rowdict['BADCAMWORD'] = badcamword
                 rowdict['BADAMPS'] = badamps
+
                 ## Add the dictionary of column values as a new row
                 nightly_tab.add_row(rowdict)
             if verbose:

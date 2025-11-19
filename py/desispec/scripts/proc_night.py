@@ -18,9 +18,8 @@ import re
 from socket import gethostname
 from astropy.table import Table, vstack
 
-## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.scripts.update_exptable import update_exposure_table
-from desispec.workflow.tableio import load_tables, write_table
+from desispec.workflow.tableio import load_table, load_tables, write_table
 from desispec.workflow.utils import sleep_and_report, \
     verify_variable_with_environment, load_override_file
 from desispec.workflow.timing import what_night_is_it, during_operating_hours
@@ -28,6 +27,8 @@ from desispec.workflow.exptable import get_last_step_options, \
     read_minimal_science_exptab_cols
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
     erow_to_prow, default_prow, read_minimal_tilenight_proctab_cols
+from desispec.workflow.submission import submit_linkcal_jobs, \
+    submit_necessary_biasnights_and_preproc_darks
 from desispec.workflow.processing import define_and_assign_dependency, \
     create_and_submit, \
     submit_tilenight_and_redshifts, \
@@ -36,7 +37,7 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     set_calibrator_flag, make_exposure_prow, \
     all_calibs_submitted, \
     update_and_recursively_submit, update_accounted_for_with_linking, \
-    submit_redshifts
+    submit_redshifts, check_darknight_deps_and_update_prow
 from desispec.workflow.queue import update_from_queue, any_jobs_need_resubmission, \
     get_resubmission_states
 from desispec.io.util import decode_camword, difference_camwords, \
@@ -47,8 +48,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                queue=None, reservation=None, system_name=None,
                exp_table_pathname=None, proc_table_pathname=None,
                override_pathname=None, update_exptable=False,
-               dry_run_level=0, dry_run=False, no_redshifts=False,
-               ignore_proc_table_failures = False,
+               dry_run_level=0, n_nights_darks=None, dry_run=False, no_redshifts=False,
+               ignore_proc_table_failures = False, 
                dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                tiles=None, surveys=None, science_laststeps=None,
                all_tiles=False, specstatus_path=None, use_specter=False,
@@ -93,6 +94,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             3 Doesn't write or submit anything but queries Slurm normally for job status.
             4 Doesn't write, submit jobs, or query Slurm.
             5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+        n_nights_darks (int, optional): Number of nights of darks to process into a darknight.
+            Default is None, which uses the function's default.
         dry_run (bool, optional): When to run without submitting scripts or
             not. If dry_run_level is defined, then it over-rides this flag.
             dry_run_level not set and dry_run=True, dry_run_level is set to 3
@@ -101,7 +104,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             If True, redshifts are not submitted.
         ignore_proc_table_failures (bool, optional): True if you want to submit
             other jobs even the loaded processing table has incomplete jobs in
-            it. Use with caution. Default is False.
+            it. Use with caution. Default is False. 
         dont_check_job_outputs (bool, optional): Default is False. If False,
             the code checks for the existence of the expected final data
             products for the script being submitted. If all files exist and
@@ -219,7 +222,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ## or not. This is used in daily mode when processing and exiting mid-night.
         ## override still_acquiring==False if daily mode during observing hours
         if during_operating_hours(dry_run=dry_run) and (true_night == night):
-            if still_acquiring is False:
+            if not still_acquiring:
                 log.info(f'Daily mode during observing hours on current night, so assuming that more data might arrive and setting still_acquiring=True')
             still_acquiring = True
 
@@ -286,7 +289,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
     ## Require cal_override to exist if explcitly specified
     if override_pathname is None:
-        override_pathname = findfile('override', night=night)
+        override_pathname = findfile('override', night=night, readonly=True)
     elif not os.path.exists(override_pathname):
         raise IOError(f"Specified override file: "
                       f"{override_pathname} not found. Exiting this night.")
@@ -337,13 +340,102 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                               exps_to_ignore=exps_to_ignore,
                               dry_run_level=dry_run_level, verbose=verbose)
         log.info("Done with update_exposure_table.\n\n")
+
     ## Combine the table names and types for easier passing to io functions
     table_pathnames = [exp_table_pathname, proc_table_pathname]
     table_types = ['exptable', 'proctable']
 
     ## Load in the files defined above
-    etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
+    etable, init_ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
     full_etable = etable.copy()
+
+    ## Set default camword for linkcal and biaspdark jobs that don't rely on specific exposures
+    if camword is None:
+        if len(etable) > 0:
+            camword = camword_union(etable['CAMWORD'])
+        else:
+            camword = 'a0123456789'
+            
+    ## Now that the exposure table is updated, check if we need to run biases and/or preproc darks
+    if n_nights_darks is None:
+        n_nights_after_darks = None
+        n_nights_before_darks = None
+    else:
+        n_nights_after_darks = int((n_nights_darks-1) // 2)
+        n_nights_before_darks = n_nights_darks - 1 - n_nights_after_darks
+    proc_biasdark_obstypes = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
+    no_bias_job = (len(init_ptable) == 0
+               or ('biasnight' not in init_ptable['JOBDESC'] and 'biaspdark' not in init_ptable['JOBDESC']) )
+    should_submit = ((not still_acquiring)
+                     or (len(etable) > 2 and np.sum(etable['OBSTYPE']=='dark') > 0
+                         and np.sum(etable['OBSTYPE']=='arc') > 0 and np.sum(etable['OBSTYPE']=='zero') > 9)
+                    )
+    returned_ptable = None
+    if proc_biasdark_obstypes and no_bias_job and should_submit:
+        ## This will populate the processing table with the biases and preproc dark job if 
+        ## it needed to submit them. It will do it for future and past nights relevant for 
+        ## the current night's dark nights.
+        log.info("Running submit_necessary_biasnights_and_preproc_darks")
+        if n_nights_before_darks is None:
+            kwargs = {}
+        else:
+            kwargs = {'n_nights_before': n_nights_before_darks, 'n_nights_after': n_nights_after_darks}
+        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes, 
+                                                                        camword=camword, badcamword=badcamword, badamps=badamps,
+                                                                        exp_table_pathname=exp_table_pathname,
+                                                                        proc_table_pathname=proc_table_pathname,
+                                                                        specprod=specprod, path_to_data=path_to_data,
+                                                                        sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
+                                                                        queue=queue, system_name=system_name,
+                                                                        psf_linking_without_fflat=psf_linking_without_fflat,
+                                                                        **kwargs)
+        log.info("Done with submit_necessary_biasnights_and_preproc_darks.\n\n")
+    elif proc_biasdark_obstypes and (not still_acquiring) and (not no_bias_job):
+        log.info("Running submit_necessary_biasnights_and_preproc_darks to process any additional darks")
+        kwargs = {'n_nights_before': 0,  'n_nights_after': 0}
+        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes,
+                                                                        camword=camword, badcamword=badcamword, badamps=badamps,
+                                                                        exp_table_pathname=exp_table_pathname,
+                                                                        proc_table_pathname=proc_table_pathname,
+                                                                        specprod=specprod, path_to_data=path_to_data,
+                                                                        sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
+                                                                        queue=queue, system_name=system_name,
+                                                                        psf_linking_without_fflat=psf_linking_without_fflat,
+                                                                        **kwargs)
+
+    ## Load in the updated processing table if saved to disk, otherwise use what is in memory
+    if dry_run_level > 2:
+        if returned_ptable is None:
+            ptable = init_ptable
+        else:
+            ptable = returned_ptable
+    else:
+        ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
+    
+    ## Quickly exit if we haven't processed the biasprdark job yet and we should have
+    jobtypes_requested = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
+    job_exists = np.any(np.isin(np.array([b'biasnight', b'biaspdark', b'linkcal']), ptable['JOBDESC'].data))
+    # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
+    # ## otherwise assume it is available
+    #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
+    if require_cals and jobtypes_requested and not job_exists:
+        log.critical("Bias and preproc dark job not found in processing table. "
+                    + "We will need to wait for darks to be processed. "
+                    + f"Exiting {night=}.")
+        ## If still acquiring new data in daily mode, don't exit with error code
+        ## But do exit
+        log.info(f'Stopping at {time.asctime()}\n')
+        if still_acquiring:
+            if len(ptable) > 0:
+                processed = np.isin(full_etable['EXPID'],
+                                    np.unique(np.concatenate(ptable['EXPID'])))
+                unproc_table = full_etable[~processed]
+            else:
+                unproc_table = full_etable
+
+            return ptable, unproc_table
+        else:
+            sys.exit(1)
 
     ## For I/O efficiency, pre-populate exposure table and processing table caches
     ## of all nights if doing cross-night redshifts so that future per-night "reads"
@@ -434,23 +526,18 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         cal_override = overrides['calibration']
 
     ## Determine calibrations that will be linked
-    if 'linkcal' in cal_override:
-        files_to_link, files_not_linked = None, None
-        if 'include' in cal_override['linkcal']:
-            files_to_link = cal_override['linkcal']['include']
-        if 'exclude' in cal_override['linkcal']:
-            files_not_linked = cal_override['linkcal']['exclude']
-        files_to_link, files_not_linked = derive_include_exclude(files_to_link,
-                                                                 files_not_linked)
-        ## Fiberflatnights need to be generated with psfs from same time, so
-        ## can't link psfs without also linking fiberflatnight
-        if 'psfnight' in files_to_link and not 'fiberflatnight' in files_to_link \
-                and not psf_linking_without_fflat:
-            err = "Must link fiberflatnight if linking psfnight"
-            log.error(err)
-            raise ValueError(err)
-    else:
-        files_to_link = set()
+    files_to_link = None
+    if 'linkcal' in cal_override and (len(ptable) == 0 or 'linkcal' not in ptable['JOBDESC']):
+        proccamword = difference_camwords(camword, badcamword)
+        ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
+                        psf_linking_without_fflat=psf_linking_without_fflat, proccamword=proccamword,
+                        dry_run_level=dry_run_level, queue=queue, reservation=reservation,
+                        check_outputs=check_for_outputs, system_name=system_name)
+        if len(ptable) > 0 and dry_run_level < 3:
+            write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
+            sleep_and_report(sub_wait_time,
+                             message_suffix=f"to slow down the queue submission rate",
+                             dry_run=dry_run, logfunc=log.info)
 
     ## Identify what calibrations have been done
     calibjobs = generate_calibration_dict(ptable, files_to_link)
@@ -471,15 +558,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                         ignore_last_tile=still_acquiring,
                                         complete_tiles_thrunight=complete_tiles_thrunight,
                                         specstatus_path=specstatus_path)
-
-    ## if camword isn't defined in the file, derive the cameras needed
-    ## to process the current night's etable
-    if 'linkcal' in cal_override and 'camword' not in cal_override['linkcal']:
-        log.info(f"Linkcal in override file doesn't define camword. Setting "
-                 + f"as the union of goodcamwords for all good exposures.")
-        goodcamwords = [erow_to_goodcamword(erow, suppress_logging=True)
-                           for erow in vstack([cal_etable, sci_etable])]
-        cal_override['linkcal']['camword'] = camword_union(goodcamwords)
 
     ## For cumulative redshifts, identify tiles for which this is the last
     ## night that they were observed
@@ -516,8 +594,11 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ptable, calibjobs, int_id = submit_calibrations(cal_etable, ptable,
                                                 cal_override, calibjobs,
                                                 int_id, night, files_to_link,
-                                                create_submit_add_and_save)
-
+                                                create_submit_add_and_save,
+                                                n_nights_before_darks=n_nights_before_darks,
+                                                n_nights_after_darks=n_nights_after_darks,
+                                                proc_table_path=os.path.dirname(proc_table_pathname))
+    
     ## Require some minimal level of calibrations to process science exposures
     if require_cals and not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats):
         err = (f"Exiting because not all calibration files accounted for "
@@ -687,8 +768,14 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
 
 
 def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
-                        curnight, files_to_link, create_submit_add_and_save):
+                        curnight, files_to_link, create_submit_add_and_save,
+                        n_nights_before_darks=None, n_nights_after_darks=None,
+                        proc_table_path=None):
     log = get_logger()
+
+    if len(cal_etable) == 0:
+        return ptable, calibjobs, int_id
+    
     if len(ptable) > 0:
         ## we use this to check for individual jobs rather than combination
         ## jobs, so only check for scalar jobs where JOBDESC == OBSTYPE
@@ -703,37 +790,6 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     else:
         processed_cal_expids = np.array([]).astype(int)
 
-    ######## Submit caliblink if requested ########
-
-    if 'linkcal' in cal_override and calibjobs['linkcal'] is None:
-        log.info("Linking calibration files listed in override files: "
-                 + f"{files_to_link}")
-        prow = default_prow()
-        prow['INTID'] = int_id
-        int_id += 1
-        prow['JOBDESC'] = 'linkcal'
-        prow['OBSTYPE'] = 'link'
-        prow['CALIBRATOR'] = 1
-        prow['NIGHT'] = curnight
-        if 'refnight' in cal_override['linkcal']:
-            refnight = int(cal_override['linkcal']['refnight'])
-            prow = define_and_assign_dependency(prow, calibjobs, refnight=refnight)
-        if 'camword' in cal_override['linkcal']:
-            prow['PROCCAMWORD'] = cal_override['linkcal']['camword']
-
-        ## create dictionary to carry linking information
-        linkcalargs = cal_override['linkcal']
-        prow, ptable = create_submit_add_and_save(prow, ptable,
-                                                  check_outputs=False,
-                                                  extra_job_args=linkcalargs)
-        calibjobs[prow['JOBDESC']] = prow.copy()
-        calibjobs['accounted_for'] = \
-            update_accounted_for_with_linking(calibjobs['accounted_for'],
-                                              files_to_link)
-
-    if len(cal_etable) == 0:
-        return ptable, calibjobs, int_id
-
     ## Otherwise proceed with submitting the calibrations
     ## Define objects to process
     darks, flats, ctes, cte1s = list(), list(), list(), list()
@@ -747,26 +803,27 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         flats = allflats[~is_cte]
         ctes = allflats[is_cte]
 
-    have_flats_for_cte = len(ctes) > 0 and len(flats) > 0
-    do_bias = len(zeros) > 0 and not calibjobs['accounted_for']['biasnight']
+    do_darknight = not calibjobs['accounted_for']['darknight']
     do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
+    have_flats_for_cte = len(ctes) > 0 and len(flats) > 0
     do_cte = have_flats_for_cte and not calibjobs['accounted_for']['ctecorrnight']
 
     ## if do badcol or cte, then submit a ccdcalib job, otherwise submit a
     ## nightlybias job
-    if do_badcol or do_cte:
+    if do_darknight or do_badcol or do_cte:
         ######## Submit ccdcalib ########
         ## process dark for bad columns even if we don't have zeros for nightlybias
-        ## ccdcalib = nightlybias(zeros) + badcol(dark) + cte correction
+        ## ccdcalib = darknight(darks) + badcol(dark) + cte correction
         jobdesc = 'ccdcalib'
 
         if calibjobs[jobdesc] is None:
             ## Define which erow to use to create the processing table row
             all_expids = []
-            if do_badcol:
-                ## first exposure is a 300s dark
+            if do_badcol or not do_cte:
+                ## use first exposure if do_badcol or if (do_darknight and not do_cte)
                 job_erow = darks[0]
-                all_expids.append(job_erow['EXPID'])
+                dark_expid = job_erow['EXPID']
+                all_expids.append(dark_expid)
             else:
                 job_erow = ctes[-1]
             ## if doing cte correction, create expid list of last 120s flat
@@ -779,42 +836,41 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
             prow, int_id = make_exposure_prow(job_erow, int_id,
                                               calibjobs, jobdesc=jobdesc)
+
             if len(all_expids) > 1:
                 prow['EXPID'] = np.array(all_expids)
 
             prow['CALIBRATOR'] = 1
 
-            extra_job_args = {'nightlybias': do_bias,
-                              'nightlycte': do_cte,
-                              'cte_expids': cte_expids}
+            if do_darknight:
+                prow = check_darknight_deps_and_update_prow(prow, n_nights_before=n_nights_before_darks, 
+                                                                          n_nights_after=n_nights_after_darks, 
+                                                                          proc_table_path=proc_table_path)
+                #if not enough_darks:
+                #    log.critical("Not enough darks for every camera. Stopping submission of calibrations "
+                #                 + "until this criteria is met.")
+                #    return ptable, calibjobs, int_id
+                
+                
+            extra_job_args = {'steps': []}
+            if do_darknight:
+                extra_job_args['steps'].append('darknight')
+                extra_job_args['n_nights_before'] = n_nights_before_darks
+                extra_job_args['n_nights_after'] = n_nights_after_darks
+            if do_badcol:
+                extra_job_args['steps'].append('badcolumn')
+                extra_job_args['dark_expid'] = dark_expid
+            if do_cte:
+                extra_job_args['steps'].append('ctecorr')
+                extra_job_args['cte_expids'] = cte_expids
             prow, ptable = create_submit_add_and_save(prow, ptable,
                                                       extra_job_args=extra_job_args)
             calibjobs[prow['JOBDESC']] = prow.copy()
-            log.info(f"Submitted ccdcalib job with {do_bias=}, "
+            log.info(f"Submitted ccdcalib job with {do_darknight=}, "
                      + f"{do_badcol=}, {do_cte=}")
-    elif do_bias:
-        log.info("\nNo dark or cte found. Submitting nightlybias before "
-                 "processing exposures.\n")
-        prow = erow_to_prow(zeros[0])
-        prow['EXPID'] = np.array([])
-        prow['INTID'] = int_id
-        int_id += 1
-        prow['JOBDESC'] = 'nightlybias'
-        prow['CALIBRATOR'] = 1
-        cams = set(decode_camword('a0123456789'))
-        for zero in zeros:
-            if 'calib' in zero['PROGRAM']:
-                proccamword = difference_camwords(zero['CAMWORD'],
-                                                  zero['BADCAMWORD'])
-                cams = cams.intersection(set(decode_camword(proccamword)))
-        prow['PROCCAMWORD'] = create_camword(list(cams))
-        prow = define_and_assign_dependency(prow, calibjobs)
-        prow, ptable = create_submit_add_and_save(prow, ptable)
-        calibjobs[prow['JOBDESC']] = prow.copy()
-        log.info("Performed nightly bias as no dark or cte passed cuts.")
 
-    if do_bias:
-        calibjobs['accounted_for']['biasnight'] = True
+    if do_darknight:
+        calibjobs['accounted_for']['darknight'] = True
     if do_badcol:
         calibjobs['accounted_for']['badcolumns'] = True
     if do_cte:
@@ -843,7 +899,6 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
         calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
         calibjobs['accounted_for']['psfnight'] = True
-
 
     ######## Submit flats and nightlyflat ########
     ## If nightlyflat defined we don't need to process more normal flats
@@ -886,5 +941,5 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         prow, int_id = make_exposure_prow(cte_erow, int_id, calibjobs,
                                       jobdesc=jobdesc)
         prow, ptable = create_submit_add_and_save(prow, ptable)
-            
+
     return ptable, calibjobs, int_id

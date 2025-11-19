@@ -382,15 +382,18 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.5,niter=6,dilate
         # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-b2-20190308.fit
         psf_gradients=np.array([0.758221,0.771945,0.570183,0.592199])
     elif band == 'r':
-        # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-r2-20190308.fits
-        psf_gradients=np.array([0.819245,0.847529,0.617514,0.656629])
+        if ('CCDTYPE' in img.meta) and ('ITL' in img.meta['CCDTYPE']):
+            log.info('This red dectector has an ITL chip, using a different PSF gradient')
+            psf_gradients=np.array([0.62,0.64,0.44,0.46])
+        else:
+            # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-r2-20190308.fits
+            psf_gradients=np.array([0.819245,0.847529,0.617514,0.656629])
     elif band == 'z':
         # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-z2-20190308.fits
         psf_gradients=np.array([0.829552,0.862828,0.633424,0.664144])
     else :
         log.error("do not have psf info for band='%s'"%band)
         raise KeyError("do not have psf info for band='%s'"%band)
-
     selection = ((img.pix*np.sqrt(tivar))>nsig)
 
     use_numba = True

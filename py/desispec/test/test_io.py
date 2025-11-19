@@ -1196,7 +1196,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
     def test_sv1_faflavor2program(self):
-        """Test desispec.io.meta.sv1_faflavor2program
+        """Test desispec.io.meta.faflavor2program
         """
         from ..io.meta import faflavor2program
         flavor = [
@@ -1204,12 +1204,14 @@ class TestIO(unittest.TestCase):
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
             'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
             'sv2dark', 'sv3bright', 'mainbackup',
-            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint',
+            'dark', 'dark1b', 'bright', 'bright1b']
         program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
             'bright', 'backup', 'other', 'other',
             'dark', 'bright', 'backup',
-            'other', 'other', 'other'])
+            'other', 'other', 'other',
+            'dark', 'dark1b', 'bright', 'bright1b'])
 
         #- list input
         p = faflavor2program(flavor)

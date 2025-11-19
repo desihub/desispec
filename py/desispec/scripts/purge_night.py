@@ -84,9 +84,10 @@ def purge_night(night, dry_run=True, no_attic=False):
     #- Night and tile directories
     nightdirs = [
                     f'calibnight/{night}',
+                    f'dark_preproc/{night}',
+                    f'preproc/{night}',
                     f'exposures/{night}',
                     f'nightqa/{night}',
-                    f'preproc/{night}',
                     f'run/scripts/night/{night}',
                 ]
     nightdirs += sorted(glob.glob(f'tiles/cumulative/*/{night}'))
