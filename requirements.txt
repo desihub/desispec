@@ -2,7 +2,7 @@ scipy
 pytz
 requests
 astropy
-numba<0.60
+numba
 healpy
 speclite
 sqlalchemy
