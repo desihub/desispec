@@ -540,7 +540,7 @@ def update_table_columns(table, specgroup='zpix', order_columns=True,
     log.debug(req_columns)
 
     # Move the target columns to the end
-    reordered_cols = list(np.array(table.colnames)[~np.in1d(table.colnames, target_cols)]) + target_cols
+    reordered_cols = list(np.array(table.colnames)[~np.isin(table.colnames, target_cols)]) + target_cols
     table = table[reordered_cols]
 
     return table
