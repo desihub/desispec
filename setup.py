@@ -1,45 +1,92 @@
 #!/usr/bin/env python
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-from __future__ import absolute_import, division, print_function
-#
-# Standard imports
-#
-import glob
+
+# NOTE: The configuration for the package, including the name, version, and
+# other information are set in the setup.cfg file.
+
 import os
+import glob
 import sys
-#
-# setuptools' sdist command ignores MANIFEST.in
-#
-from distutils.command.sdist import sdist as DistutilsSdist
-from setuptools import setup, find_packages
-#
-# DESI support code.
-#
-from desiutil.setup import DesiVersion, get_version
+from setuptools import setup
+
+# First provide helpful messages if contributors try and run legacy commands
+# for tests or docs.
+
+API_HELP = """
+Note: Generating api.rst files is no longer done using 'python setup.py api'. Instead
+you will need to run:
+
+    desi_api_file
+
+which is part of the desiutil package. If you don't already have desiutil installed, you can install it with:
+
+    pip install desiutil
+"""
+
+MODULE_HELP = """
+Note: Generating Module files is no longer done using 'python setup.py api'. Instead
+you will need to run:
+
+    desiInstall
+
+or
+
+    desi_module_file
+
+depending on your exact situation.  desiInstall is preferred.  Both commands are
+part of the desiutil package. If you don't already have desiutil installed, you can install it with:
+
+    pip install desiutil
+"""
+
+VERSION_HELP = """
+Note: Generating version strings is no longer done using 'python setup.py version'. Instead
+you will need to run:
+
+    desi_update_version [-t TAG] desiutil
+
+which is part of the desiutil package. If you don't already have desiutil installed, you can install it with:
+
+    pip install desiutil
+"""
+
+TEST_HELP = """
+Note: running tests is no longer done using 'python setup.py test'. Instead
+you will need to run:
+
+    pytest
+
+If you don't already have pytest installed, you can install it with:
+
+    pip install pytest
+"""
+
+DOCS_HELP = """
+Note: building the documentation is no longer done using
+'python setup.py {0}'. Instead you will need to run:
+
+    sphinx-build -W --keep-going -b html doc doc/_build/html
+
+If you don't already have Sphinx installed, you can install it with:
+
+    pip install Sphinx
+"""
+
+message = {'api': API_HELP,
+           'module_file': MODULE_HELP,
+           'test': TEST_HELP,
+           'version': VERSION_HELP,
+           'build_docs': DOCS_HELP.format('build_docs'),
+           'build_sphinx': DOCS_HELP.format('build_sphinx'), }
+
+for m in message:
+    if m in sys.argv:
+        print(message[m])
+        sys.exit(1)
 #
 # Begin setup
 #
 setup_keywords = dict()
-#
-# THESE SETTINGS NEED TO BE CHANGED FOR EVERY PRODUCT.
-#
-setup_keywords['name'] = 'desispec'
-setup_keywords['description'] = 'DESI Spectroscopic Tools'
-setup_keywords['author'] = 'DESI Collaboration'
-setup_keywords['author_email'] = 'desi-data@desi.lbl.gov'
-setup_keywords['license'] = 'BSD'
-setup_keywords['url'] = 'https://github.com/desihub/desispec'
-#
-# END OF SETTINGS THAT NEED TO BE CHANGED.
-#
-setup_keywords['version'] = get_version(setup_keywords['name'])
-#
-# Use README.rst as long_description.
-#
-setup_keywords['long_description'] = ''
-if os.path.exists('README.rst'):
-    with open('README.rst') as readme:
-        setup_keywords['long_description'] = readme.read()
 #
 # Set other keywords for the setup function.  These are automated, & should
 # be left alone unless you are an expert.
@@ -48,42 +95,8 @@ if os.path.exists('README.rst'):
 #
 if os.path.isdir('bin'):
     setup_keywords['scripts'] = [fname for fname in glob.glob(os.path.join('bin', '*'))
-        if not os.path.basename(fname).endswith('.rst')]
-setup_keywords['provides'] = [setup_keywords['name']]
-setup_keywords['requires'] = ['Python (>2.7.0)']
-# setup_keywords['install_requires'] = ['Python (>2.7.0)']
-setup_keywords['zip_safe'] = False
-# setup_keywords['use_2to3'] = False
-setup_keywords['packages'] = find_packages('py')
-setup_keywords['package_dir'] = {'':'py'}
-setup_keywords['cmdclass'] = {'version': DesiVersion, 'sdist': DistutilsSdist}
-setup_keywords['test_suite']='{name}.test.{name}_test_suite.{name}_test_suite'.format(**setup_keywords)
-#
-# Autogenerate command-line scripts.
-#
-# setup_keywords['entry_points'] = {'console_scripts':['desiInstall = desiutil.install.main:main']}
-#
-# Add internal data directories.
-#
-setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
-                                               'data/db/*',
-                                               'data/params/*',
-                                               'data/quicklook/*',
-                                               'data/tsnr/*',
-                                               'data/qa/*.*',
-                                               'data/*.yaml',
-                                               'data/*.dat',],
-                                  'desispec.test': ['data/ql/*',]}
-
-#
-# Print informative message if user tried "python setup.py test"
-#
-if "test" in sys.argv:
-    print("Please run pytest instead")
-    sys.exit(1)
-
+                                 if os.access(fname, os.X_OK)]
 #
 # Run setup command.
 #
-if __name__ == '__main__':
-    setup(**setup_keywords)
+setup(**setup_keywords)
