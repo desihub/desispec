@@ -282,27 +282,27 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 if key in t.meta:
                     del t.meta[key]
 
+            ## Get SURVEY and PROGRAM from header, then remove from header
+            ## because we are stacking catalogs from multiple surveys and programs
+            if 'SURVEY' in t.meta:
+                survey = t.meta['SURVEY']
+                del t.meta['SURVEY']
+            else:
+                # parse filename if needed, but complain about it
+                survey = _get_survey_program_from_filename(filename)[0]
+                log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
+
+            if 'PROGRAM' in t.meta:
+                program = t.meta['PROGRAM']
+                del t.meta['PROGRAM']
+            else:
+                program = _get_survey_program_from_filename(filename)[1]
+                log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
+
+            log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
+            ## We keep the rest of the meta data
+
             if file_extension=='ZCATALOG':
-
-                ## Get SURVEY and PROGRAM from header, then remove from header
-                ## because we are stacking catalogs from multiple surveys and programs
-                if 'SURVEY' in t.meta:
-                    survey = t.meta['SURVEY']
-                    del t.meta['SURVEY']
-                else:
-                    # parse filename if needed, but complain about it
-                    survey = _get_survey_program_from_filename(filename)[0]
-                    log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
-
-                if 'PROGRAM' in t.meta:
-                    program = t.meta['PROGRAM']
-                    del t.meta['PROGRAM']
-                else:
-                    program = _get_survey_program_from_filename(filename)[1]
-                    log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
-
-                log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
-                ## We keep the rest of the meta data
 
                 ## Add the SURVEY and PROGRAM columns
                 ## SURVEY is added as a str7 and PROGRAM is added as str6 (to match other catalogs)
