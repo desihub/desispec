@@ -74,7 +74,8 @@ Algorithms:
 * Fix bug in fiber aperature correction impacting ivar [PR `#2452`_]
 * Fix fiber aperture correction: normalization and sky fibers [PR `#2454`_]
 * Add option to select good overscan region in preproc [PR `#2438`_]
-* Trace shifts accomodate large offsets [PRs `#2440`_. `#2444`_]
+* Trace shifts accomodate large offsets [PRs `#2440`_. `#2444`_, `#2386`_]
+* Fluxcalib variance fix (PR `#2422`_).
 
 Pipeline:
 
@@ -83,6 +84,15 @@ Pipeline:
 * Resolve unknown statuses in the dashboard [PR `#2442`_]
 * Fix tsnr afterburner bug causing crash on nights with no good data [PR `#2447`_]
 * Allow user to specify exposures or tiles to resubmit [PR `#2450`_]
+* better error message when updating $DESI_SPECTRO_DARK (PR `#2404`_).
+* allow fallback to darks/biases in DESI_SPECTRO_CALIB if running ccdcalib (PR `#2405`_).
+* Add a new wrapper to create all of the zcatalogs with a single command (PR `#2410`_).
+* Resubmit all jobs in daily twice before giving up in desi_proc_night (PR `#2416`_).
+* Add desi_find_file (PR `#2417`_).
+* Update nightqa multiprocessing and add new options for skipping some steps (PR `#2418`_).
+* Updated wrap_rrdesi to fix multiple use cases. (PR `#2429`_).
+* Remove future night redshifts when running purge night (PR `#2430`_).
+* Add option to not resub failed exposures in proc_night (PR `#2435`_).
 
 Cleanup:
 
@@ -92,6 +102,13 @@ Cleanup:
 * Update readthedocs configuration [PR `#2446`_]
 * ``$DESI_SPECTRO_REDUX`` default to ``$DESI_ROOT/spectro/redux`` for
   ``desispec.io.findfile`` [PR `#2448`_]
+* improve top-level import speed with deferred imports (PR `#2394`_).
+* save the trace shift offsets in the psf file (PR `#2411`_).
+* Fix zcatalog columns when reading from many epochs of redshift catalog types (PR `#2415`_).
+* Improve desi_purge_tilenight removal of ancillary information (PR `#2424`_).
+* Remove unused code and expand unit tests (PR `#2425`_).
+* Update to new output from fit_trace_shifts. (PR `#2426`_).
+* Fix the traceshift undefined variable bug (PR `#2428`_).
 
 .. _`#2437`: https://github.com/desihub/desispec/pull/2437
 .. _`#2438`: https://github.com/desihub/desispec/pull/2438
@@ -106,6 +123,25 @@ Cleanup:
 .. _`#2450`: https://github.com/desihub/desispec/pull/2450
 .. _`#2452`: https://github.com/desihub/desispec/pull/2452
 .. _`#2454`: https://github.com/desihub/desispec/pull/2454
+.. _`#2386`: https://github.com/desihub/desispec/pull/2386
+.. _`#2394`: https://github.com/desihub/desispec/pull/2394
+.. _`#2404`: https://github.com/desihub/desispec/pull/2404
+.. _`#2405`: https://github.com/desihub/desispec/pull/2405
+.. _`#2410`: https://github.com/desihub/desispec/pull/2410
+.. _`#2411`: https://github.com/desihub/desispec/pull/2411
+.. _`#2415`: https://github.com/desihub/desispec/pull/2415
+.. _`#2416`: https://github.com/desihub/desispec/pull/2416
+.. _`#2417`: https://github.com/desihub/desispec/pull/2417
+.. _`#2418`: https://github.com/desihub/desispec/pull/2418
+.. _`#2422`: https://github.com/desihub/desispec/pull/2422
+.. _`#2424`: https://github.com/desihub/desispec/pull/2424
+.. _`#2425`: https://github.com/desihub/desispec/pull/2425
+.. _`#2426`: https://github.com/desihub/desispec/pull/2426
+.. _`#2428`: https://github.com/desihub/desispec/pull/2428
+.. _`#2429`: https://github.com/desihub/desispec/pull/2429
+.. _`#2430`: https://github.com/desihub/desispec/pull/2430
+.. _`#2435`: https://github.com/desihub/desispec/pull/2435
+
 
 0.68.1 (2024-11-08)
 -------------------
