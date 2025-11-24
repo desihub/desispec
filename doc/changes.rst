@@ -131,7 +131,9 @@ Used for rerunning the QuasarNet afterburner on Loa.
 * Use slurm job status to color and inform processing dashboards (PR `#2403`_).
 * Update QuasarNet afterburner outputs - add columns, don't run SKY fibers
   (PR `#2407`_).
+* No E(B-V) for effective exposure times of backup program (PR `#2370`_).
 
+.. _`#2370`: https://github.com/desihub/desispec/pull/2370
 .. _`#2392`: https://github.com/desihub/desispec/pull/2392
 .. _`#2395`: https://github.com/desihub/desispec/pull/2395
 .. _`#2400`: https://github.com/desihub/desispec/pull/2400
@@ -163,6 +165,7 @@ Other
 * Add desi_update_proctable_status script and standardize dry-run levels
   (PR `#2385`_).
 * Enable zproc.main to be called from other scripts (PR `#2391`_).
+* Improvements to Workflow Queue Tools (PR `#2351`_).
 
 .. _`#2365`: https://github.com/desihub/desispec/pull/2365
 .. _`#2373`: https://github.com/desihub/desispec/pull/2373
@@ -173,6 +176,7 @@ Other
 .. _`#2384`: https://github.com/desihub/desispec/pull/2384
 .. _`#2385`: https://github.com/desihub/desispec/pull/2385
 .. _`#2391`: https://github.com/desihub/desispec/pull/2391
+.. _`#2351`: https://github.com/desihub/desispec/pull/2351
 
 0.66.3 (2024-09-13)
 -------------------
@@ -254,6 +258,8 @@ First tag used for Kibo/Y3 run.
 * Modernize submit_prod (PR `#2322`_).
 * FIBERSTATUS VARIABLETHRU bad for sky and stdstars (PR `#2323`_).
 * faflavor2program for special tiles: fix other to bright or dark (PR `#2325`_).
+* cleanup redirected stdout crash before re-redirecting (PR `#2311`_).
+* Night_qa: introduce new ctedet row-by-row diagnosis plot (PR `#2312`_).
 
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
@@ -271,6 +277,9 @@ First tag used for Kibo/Y3 run.
 .. _`#2322`: https://github.com/desihub/desispec/pull/2322
 .. _`#2323`: https://github.com/desihub/desispec/pull/2323
 .. _`#2325`: https://github.com/desihub/desispec/pull/2325
+.. _`#2311`: https://github.com/desihub/desispec/pull/2311
+.. _`#2312`: https://github.com/desihub/desispec/pull/2312
+
 
 0.64.0 (2024-07-01)
 -------------------
