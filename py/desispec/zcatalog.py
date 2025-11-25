@@ -529,7 +529,7 @@ def update_table_columns(table, specgroup='zpix', columns_list=None):
     # detailed ordering work above.
     # reordered_cols = list(np.array(table.colnames)[~np.isin(table.colnames, target_cols)]) + target_cols
     # table = table[reordered_cols]
-    table = table[req_columns]
+    # table = table[req_columns]
 
     return table
 
