@@ -193,7 +193,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         If all_columns is ``False``, list of columns to include in the final table.
         If None, a list of pre-decided summary columns will be used. Default is ``None``.
         The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
-        catalog witll be included.
+        catalog will be included.
     output_filename : str, optional
         Path+Filename for the output summary redshift catalog.
         The output FITS file will be saved at this path.
@@ -404,7 +404,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         log.debug("Completed call to mergedep().")
         ## Write final output via a temporary filename
         tmpfile = get_tempfilename(output_filename)
-        write_bintable(tmpfile, final_table, extname='ZCATALOG', clobber=True)
+        write_bintable(tmpfile, final_table, extname=file_extension, clobber=True)
         os.rename(tmpfile, output_filename)
         log.info(f'Wrote {output_filename}')
 

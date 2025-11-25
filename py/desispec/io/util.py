@@ -218,13 +218,13 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
         outdata = data
     elif isinstance(data, (np.recarray, np.ndarray)):
         log.debug("data is numpy array.")
-        outdata = Table(data)
+        outdata = Table(data, copy=False)
     elif isinstance(data, astropy.io.fits.BinTableHDU):
         log.debug("data is astropy.io.fits.BinTableHDU.")
         hdu = data
     else:
         log.debug("data is something else. Trying to convert.")
-        outdata = Table(_dict2ndarray(data))
+        outdata = Table(_dict2ndarray(data), copy=False)
 
     if hdu is None:
         hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
@@ -598,7 +598,7 @@ def difference_camwords(fullcamword,badcamword,suppress_logging=False):
         badcamword = ''
         if not suppress_logging:
             log.info("No badcamword given, proceeding without badcamword removal")
-            
+
     full_cameras = decode_camword(fullcamword)
     bad_cameras = decode_camword(badcamword)
     for cam in bad_cameras:
@@ -645,7 +645,7 @@ def camword_union(camwords, full_spectros_only=False):
         if len(camwords) > 1:
             for camword in camwords[1:]:
                 cams |= set(decode_camword(camword))
-                
+
         camword = create_camword(sorted(list(cams)))
 
     if full_spectros_only:
@@ -734,10 +734,10 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
                            input camera information.
     """
     log = get_logger()
-    
+
     if badamps is None:
         badamps = ''
-            
+
     if exclude_badamps and not suppress_logging:
         if badamps == '':
             log.info("No badamps given, proceeding without badamp removal")
