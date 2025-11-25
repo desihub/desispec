@@ -21,8 +21,13 @@ import desispec.scripts
 import desispec.scripts.sky
 import desispec.scripts.fiberflat
 import desispec.scripts.stdstars
-import desispec.scripts.fluxcalibration
 from desispec.test.util import get_frame_data, get_models
+
+try:
+    import desimodel
+    _desimodel_installed = True
+except ImportError:
+    _desimodel_installed = False
 
 class TestBinScripts(unittest.TestCase):
 
@@ -102,6 +107,9 @@ class TestBinScripts(unittest.TestCase):
         os.chdir(cls.origdir)
 
     def setUp(self):
+        if not _desimodel_installed:
+            self.skipTest("binscript tests require desimodel")
+
         os.chdir(self.testdir)
 
     def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
@@ -305,11 +313,11 @@ for legacy standards
             self.assertTrue(success)
             self.assertEqual(result, 0)
 
-        
     def test_compute_fluxcalib(self):
         """
         Tests desi_compute_fluxcalibration
         """
+        import desispec.scripts.fluxcalibration
 
         if 'DESI_SPECTRO_CALIB' not in os.environ :
             print("do not test desi_compute_fluxcalib without DESI_SPECTRO_CALIB set")

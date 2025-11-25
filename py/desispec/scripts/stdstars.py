@@ -16,7 +16,6 @@ from astropy import units
 from astropy.table import Table
 import astropy.coordinates as acoo
 
-import desispec.fluxcalibration
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates,isStdStar
 from desispec.interpolation import resample_flux
