@@ -20,7 +20,9 @@ from importlib import resources
 
 import desispec.image
 import desispec.io
-import desispec.scripts.extract
+
+if not nospecter:
+    import desispec.scripts.extract
 
 from astropy.io import fits
 import numpy as np
@@ -29,6 +31,9 @@ class TestExtract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if nospecter:
+            return  # don't bother; can't extraction tests without specter
+
         cls.origdir = os.getcwd()
         cls.testdir = tempfile.mkdtemp()
         os.chdir(cls.testdir)
@@ -54,6 +59,9 @@ class TestExtract(unittest.TestCase):
         cls.img = img
 
     def setUp(self):
+        if nospecter:
+            self.skipTest('Extraction tests require specter and/or gpu_specter')
+
         os.chdir(self.testdir)
         for filename in (self.outfile, self.outmodel):
             if os.path.exists(filename):
@@ -62,12 +70,12 @@ class TestExtract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         #- Remove testdir only if it was created by tempfile.mkdtemp
-        if cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
+        if hasattr(cls, 'testdir') and cls.testdir.startswith(tempfile.gettempdir()) and os.path.exists(cls.testdir):
             shutil.rmtree(cls.testdir)
 
-        os.chdir(cls.origdir)
+        if hasattr(cls, 'origdir'):
+            os.chdir(cls.origdir)
 
-    @unittest.skipIf(nospecter, 'specter not installed; skipping extraction test')
     def test_extract(self):
         template = "desi_extract_spectra -i {} -p {} -w 7500,7600,0.75 -f {} -s 0 -n 5 --bundlesize 5 -o {} -m {}"
 
