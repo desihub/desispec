@@ -13,12 +13,7 @@ import desispec.scripts.preproc
 from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
 from desispec.preproc import get_amp_ids, get_readout_mode
 from desispec import io
-
-try:
-    import specter
-    _specter_installed = True
-except ImportError:
-    _specter_installed = False
+from desispec.test.util import installed
 
 def xy2hdr(xyslice):
     '''
@@ -37,7 +32,7 @@ class TestPreProc(unittest.TestCase):
             shutil.rmtree(self.calibdir)
 
     def setUp(self):
-        if not _specter_installed:
+        if not installed('specter'):
             self.skipTest('preproc tests require specter')
 
         #- Create temporary calib directory

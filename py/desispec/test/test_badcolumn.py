@@ -11,6 +11,8 @@ from astropy.table import Table
 from desispec.frame import Frame
 from desispec.io import read_xytraceset
 
+from desispec.test.util import installed
+
 class TestBadColumn(unittest.TestCase):
 
     def test_flux_bias_function(self):
@@ -31,7 +33,7 @@ class TestBadColumn(unittest.TestCase):
         self.assertEqual(bias[1], bias1)
         self.assertEqual(bias[2], bias10)
 
-
+    @unittest.skipIf(not installed('specter'), "badcolumn mask requires specter for read_xytraceset")
     def test_compute_badcolumn_mask(self):
         from desispec.badcolumn import (
                 compute_badcolumn_specmask, compute_badcolumn_fibermask, add_badcolumn_mask)

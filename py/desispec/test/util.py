@@ -3,6 +3,7 @@ Utility functions for desispec.tests
 """
 from glob import glob
 import os.path
+import importlib.util
 
 import numpy as np
 
@@ -12,6 +13,21 @@ from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 
 from desitarget.targetmask import desi_mask
+
+def installed(*modules):
+    """
+    Return True/False if all elements in modules list are installed
+
+    Intended to be used with @unittest.skipIf(not installed(mod1, mod2), ...)
+    """
+    for module in modules:
+        try:
+            importlib.import_module(module)
+        except ModuleNotFoundError:
+            return False
+
+    # if we got this far, everything is installed
+    return True
 
 def get_calib_from_frame(frame):
     """ Generate a FluxCalib object given an input Frame
