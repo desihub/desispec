@@ -14,6 +14,12 @@ from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
 from desispec.preproc import get_amp_ids, get_readout_mode
 from desispec import io
 
+try:
+    import specter
+    _specter_installed = True
+except ImportError:
+    _specter_installed = False
+
 def xy2hdr(xyslice):
     '''
     convert 2D slice into IRAF style [a:b,c:d] header value
@@ -27,13 +33,12 @@ def xy2hdr(xyslice):
 class TestPreProc(unittest.TestCase):
 
     def tearDown(self):
-        pass
-        if os.path.isdir(self.calibdir) :
+        if hasattr(self, 'calibdir') and os.path.isdir(self.calibdir) :
             shutil.rmtree(self.calibdir)
 
     def setUp(self):
-        #- catch specific warnings so that we can find and fix
-        # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
+        if not _specter_installed:
+            self.skipTest('preproc tests require specter')
 
         #- Create temporary calib directory
         self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')

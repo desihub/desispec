@@ -15,7 +15,6 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 
 from desispec.io.meta import get_desi_root_readonly, get_readonly_filepath, findfile
-from desitarget.io import desitarget_resolve_dec
 from desitarget import geomask
 
 from desiutil.log import get_logger, DEBUG
@@ -960,6 +959,9 @@ def tractorphot_datamodel(from_file=False, datarelease='dr9'):
 def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racolumn, deccolumn,
                                  datamodel, restrict_region):
     """Support routine for gather_tractorphot."""
+
+    # delayed import to avoid optional dependency on desimodel used by desitarget.io
+    from desitarget.io import desitarget_resolve_dec
 
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
     brick = input_cat['BRICKNAME'][0]

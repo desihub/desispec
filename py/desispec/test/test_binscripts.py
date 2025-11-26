@@ -23,12 +23,6 @@ import desispec.scripts.fiberflat
 import desispec.scripts.stdstars
 from desispec.test.util import get_frame_data, get_models
 
-try:
-    import desimodel
-    _desimodel_installed = True
-except ImportError:
-    _desimodel_installed = False
-
 class TestBinScripts(unittest.TestCase):
 
     @classmethod
@@ -107,9 +101,6 @@ class TestBinScripts(unittest.TestCase):
         os.chdir(cls.origdir)
 
     def setUp(self):
-        if not _desimodel_installed:
-            self.skipTest("binscript tests require desimodel")
-
         os.chdir(self.testdir)
 
     def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
