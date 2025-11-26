@@ -59,6 +59,11 @@ def read_thumbnail(night, expid, camera, fiber, wavelength, size=51):
     Returns: (thumbnail_image, thumbnail_mask)
     """
     psffile = findfile('psf', night, expid, camera, readonly=True)
+
+    # fall back to psfnight if per-exposure psf isn't available
+    if not os.path.exists(psffile):
+        psffile = findfile('psfnight', night=night, camera=camera, readonly=True)
+
     xy = read_xytraceset(psffile)
 
     x = int(xy.x_vs_wave(fiber%500, wavelength))
@@ -101,7 +106,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('-f', '--fiber', type=int, required=True, help="fiber number")
     p.add_argument('-w', '--wavelength', type=float, required=True, help="wavelength in Angstrom")
-    p.add_argument('-t', '--tileid', type=int, help="Tile ID")
+
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument('-t', '--tileid', type=int, help="Tile ID")
+    group.add_argument('-e', '--expid', type=int, help="Exposure ID")
+
+    p.add_argument('-n', '--night', type=int, help="YEARMMDD night; only required with --expid for non-science exposures")
     p.add_argument('--size', type=int, default=51, help="Size of thumbnail to plot")
     p.add_argument('-s', '--specprod', help="Override $SPECPROD")
     p.add_argument('-o', '--outfile', help="Save figure to OUTFILE")
@@ -115,14 +125,29 @@ def main():
         os.environ['SPECPROD'] = args.specprod
     
     #- find which exposures observed this tile
-    expfile = findfile('exposures')
+    expfile = findfile('exposures', readonly=True)
     exps = Table.read(expfile)
-    keep = (exps['TILEID'] == args.tileid)
+    if args.tileid is not None:
+        keep = (exps['TILEID'] == args.tileid)
+    else:
+        keep = (exps['EXPID'] == args.expid)
+
     exps = exps[keep]
 
     if len(exps) == 0:
-        log.critical(f'no exposures found for tile {args.tileid}')
-        return 1
+        if args.tileid is not None:
+            log.critical(f'no exposures found for tile {args.tileid}')
+            return 1
+        elif args.night is not None:
+            exps = Table(dict(TILEID=[-99,], NIGHT=[args.night,], EXPID=[args.expid,]))
+        else:
+            log.critical(f'expid {args.expid} not found')
+            return 1
+
+    if args.tileid is not None:
+        tileid = args.tileid
+    else:
+        tileid = exps['TILEID'][0]  # found via --expid instead of --tileid
 
     #- Read the individual thumbnails for each NIGHT,EXPID,CAMERA
     results = list()
@@ -150,9 +175,9 @@ def main():
 
     #- Longer super-title if room to fit
     if n>1:
-        plt.suptitle(f'Tile {args.tileid} Fiber {args.fiber} @ {args.wavelength:.1f}A')
+        plt.suptitle(f'Tile {tileid} Fiber {args.fiber} @ {args.wavelength:.1f}A')
     else:
-        plt.suptitle(f'{args.tileid}/{args.fiber} @ {args.wavelength:.1f}A')
+        plt.suptitle(f'{tileid}/{args.fiber} @ {args.wavelength:.1f}A')
 
     plt.tight_layout()
     if args.outfile:
