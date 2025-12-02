@@ -40,6 +40,7 @@ Pipeline:
 * Fix readonly write when no sky fibers (PR `#2523`_).
 * Purge dark_preproc in desi_purge_night (PR `#2553`_).
 * Make compute_dark crashes more explicit (PR `#2554`_).
+* Require minimum 6 darks instead of 4 for nightly dark (PR `#2575`_).
 
 Cleanup:
 
@@ -128,6 +129,7 @@ Cleanup:
 .. _`#2566`: https://github.com/desihub/desispec/pull/2566
 .. _`#2569`: https://github.com/desihub/desispec/pull/2569
 .. _`#2572`: https://github.com/desihub/desispec/pull/2572
+.. _`#2575`: https://github.com/desihub/desispec/pull/2575
 
 
 0.69.0 (2025-03-14)
