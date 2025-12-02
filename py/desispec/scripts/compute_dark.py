@@ -60,8 +60,8 @@ def compute_dark_baseparser():
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod directory where preprocessed dark frame images are saved. Default is same input specprod')
     parser.add_argument('--dry-run', action='store_true', help="If dry_run, print which images would be used, but don't compute dark.")
-    parser.add_argument('--min-dark-exposures', type=int, default=4, required=False,
-                        help='Minimum number of dark exposures to use. Default is 4. If less than this number of exposures are valid, ' \
+    parser.add_argument('--min-dark-exposures', type=int, default=6, required=False,
+                        help='Minimum number of dark exposures to use. Default is 6. If less than this number of exposures are valid, ' \
                         'the script will raise an error and exit.')
     parser.add_argument('--max-dark-exposures', type=int, default=50, required=False,
                         help='Maximum number of dark exposures to use. Default is 50. If more than this number of exposures are found, ' \
