@@ -52,6 +52,8 @@ def parse(options=None):
                         help="disable merging fiber bundles")
     parser.add_argument("--dont-merge-with-input", action = 'store_true',
                         help="dont use the input PSF as default when merging bundles")
+    parser.add_argument("--mpi", action = 'store_true',
+                        help="Parallelize with MPI, must be launched with srun prefix")
 
 
     args = parser.parse_args(options)
@@ -63,6 +65,10 @@ def main(args=None, comm=None):
 
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
+
+    if comm is None and args.mpi:
+        from mpi4py import  MPI
+        comm = MPI.COMM_WORLD
 
     log = get_logger()
 
