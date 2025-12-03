@@ -17,6 +17,10 @@ Algorithms / core features:
 * Fix ``read_spectra`` indexing error (PR `#2508`_).
 * Magnitude calculation by photons not flux (PR `#2515`_).
 * Adjust cosmics parameters for red ITL CCDs (PR `#2557`_).
+* New ``plot_preproc`` script to plot specific tile/fiber/wavelength
+  thumbnails (PR `#2570`_).
+* Add ``desi_compute_psf --mpi`` option for MPI parallelism from the
+  command line (PR `#2576`_).
 
 Pipeline:
 
@@ -70,6 +74,7 @@ Cleanup:
 * Fix zall blank string bug (PR `#2566`_).
 * Add pyproject.toml and update top-level files (PR `#2569`_).
 * Fix bug in zall zcatlog PROGRAM and SURVEY header keywords (PR `#2572`_).
+* Installation and testing updates in prep for PyPI upload (PR `#2573`_).
 
 .. _`#2531`: https://github.com/desihub/desispec/pull/2531
 .. _`#2502`: https://github.com/desihub/desispec/pull/2502
@@ -128,8 +133,11 @@ Cleanup:
 .. _`#2562`: https://github.com/desihub/desispec/pull/2562
 .. _`#2566`: https://github.com/desihub/desispec/pull/2566
 .. _`#2569`: https://github.com/desihub/desispec/pull/2569
+.. _`#2570`: https://github.com/desihub/desispec/pull/2570
 .. _`#2572`: https://github.com/desihub/desispec/pull/2572
+.. _`#2573`: https://github.com/desihub/desispec/pull/2573
 .. _`#2575`: https://github.com/desihub/desispec/pull/2575
+.. _`#2576`: https://github.com/desihub/desispec/pull/2576
 
 
 0.69.0 (2025-03-14)
