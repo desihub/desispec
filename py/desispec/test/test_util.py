@@ -566,4 +566,17 @@ class TestUtil(unittest.TestCase):
         self.assertTrue(np.all(a['x'][ii] == b['x']))
         self.assertTrue(np.all(a['y'][ii] == b['y']))
 
+    def test_test_util_installed(self):
+        """Test desispec.test.util.installed"""
+        from ..test.util import installed
+        self.assertTrue(installed('os'))
+        self.assertTrue(installed('os', 'sys'))
+        self.assertTrue(installed('numpy'))
+        self.assertFalse(installed('not_a_package'))
+        self.assertFalse(installed('os', 'not_a_package'))
+        self.assertFalse(installed('not_a_package', 'os'))
+        self.assertTrue(installed('os.path'))
+        self.assertFalse(installed('os.blat'))
+
+
 

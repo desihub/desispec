@@ -16,7 +16,6 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
-from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 from desispec.gpu import is_gpu_available, NoGPU
 from desispec.maskbits import fibermask
 import scipy, scipy.sparse, scipy.ndimage
@@ -907,6 +906,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         which is very close to C_fiber = R_fiber*C (but not exactly).
 
     """
+    # import only if needed to minimize required dependencies
+    from desispec.fiberfluxcorr import flat_to_psf_flux_correction, psf_to_fiber_flux_correction
 
     log=get_logger()
 

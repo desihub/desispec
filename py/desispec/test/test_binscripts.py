@@ -21,7 +21,6 @@ import desispec.scripts
 import desispec.scripts.sky
 import desispec.scripts.fiberflat
 import desispec.scripts.stdstars
-import desispec.scripts.fluxcalibration
 from desispec.test.util import get_frame_data, get_models
 
 class TestBinScripts(unittest.TestCase):
@@ -305,11 +304,11 @@ for legacy standards
             self.assertTrue(success)
             self.assertEqual(result, 0)
 
-        
     def test_compute_fluxcalib(self):
         """
         Tests desi_compute_fluxcalibration
         """
+        import desispec.scripts.fluxcalibration
 
         if 'DESI_SPECTRO_CALIB' not in os.environ :
             print("do not test desi_compute_fluxcalib without DESI_SPECTRO_CALIB set")
