@@ -11,12 +11,15 @@ from desispec.image_model import compute_image_model
 from desispec.io import read_xytraceset
 from desispec.image import Image
 from desispec.fiberflat import FiberFlat
+from desispec.test.util import installed
 
 class TestImageModel(unittest.TestCase):
 
     # setUpClass runs once at the start before any tests
     @classmethod
     def setUpClass(cls):
+        if not installed('specter'):
+            return
 
         #- Read PSF and trim to just one bundle
         cls.camera = camera = 'r0'
@@ -49,6 +52,7 @@ class TestImageModel(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @unittest.skipIf(not installed('specter'), 'image model tests require specter')
     def test_image_model(self):
         pix = np.random.normal(size=(self.ny, self.nx))
         ivar = np.ones((self.ny, self.nx))

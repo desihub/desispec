@@ -18,6 +18,7 @@ from desiutil import funcfits as dufits
 
 from desispec.scripts import bootcalib as bootscript
 
+from .util import installed
 
 class TestBoot(unittest.TestCase):
 
@@ -183,6 +184,7 @@ class TestBoot(unittest.TestCase):
         flatimage = Image(flat, np.ones_like(flat), camera='b0')
         results = bootcalib(3, flatimage, arcimage)
 
+    @unittest.skipIf(not installed('specter'), 'test_main requires specter for read_xytraceset')
     def test_main(self):
         if self.data_unavailable:
             self.skipTest("Failed to download test data.")

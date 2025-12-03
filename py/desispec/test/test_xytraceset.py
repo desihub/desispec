@@ -10,10 +10,14 @@ from numpy.polynomial.legendre import legval
 
 from desispec.xytraceset import XYTraceSet, get_badamp_fibers
 from desispec.io import read_xytraceset
+from desispec.test.util import installed
 
-class TestSky(unittest.TestCase):
+class TestXYTraceSet(unittest.TestCase):
 
     def setUp(self):
+        if not installed('specter'):
+            self.skipTest('XYTraceSet tests require specter')
+
         self.nspec = 10
         self.ncoef = 5
         self.wavemin = 5000
