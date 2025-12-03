@@ -3,7 +3,7 @@ Utility functions for desispec.tests
 """
 from glob import glob
 import os.path
-import importlib.util
+import importlib
 
 import numpy as np
 
