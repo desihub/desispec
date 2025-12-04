@@ -28,7 +28,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_fiberflat, shorten_filename, findfile
 from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
-from desispec.util import header2night
+from desispec.util import header2night, is_robust_mode
 
 def get_amp_ids(header):
     '''
@@ -1006,13 +1006,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 else:
                     msg = f'No nightly dark found for {expid=} {camera}, and no DARK entry in the ' \
                         + f'{ccd_calibration_filename=}.'
-                    is_robust_to_missing_calibration = ("DESI_SPECTRO_ROBUST" in os.environ and os.environ["DESI_SPECTRO_ROBUST"].upper() in ["YES","TRUE","1"])
+                    is_robust_to_missing_calibration = is_robust_mode()
                     if is_robust_to_missing_calibration :
                         log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
                         log.error(msg)
                         dark_filename = None
                     else :
-                        msg += '  Cannot proceed.'
+                        msg += '  Cannot proceed. Set $DESI_SPECTRO_ROBUST=TRUE to override.'
                         log.critical(msg)
                         raise ValueError(msg)
 

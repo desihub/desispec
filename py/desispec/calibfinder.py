@@ -13,7 +13,7 @@ import numpy as np
 import yaml
 from astropy.table import Table
 
-from desispec.util import parse_int_args, header2night
+from desispec.util import parse_int_args, header2night, is_robust_mode
 from desiutil.log import get_logger
 
 def parse_date_obs(value):
@@ -385,12 +385,14 @@ class CalibFinder() :
         log = get_logger()
         if self.dark_or_bias_not_found and key in ['BIAS', 'DARK']:
 
-            is_robust_to_missing_calibration = ("DESI_SPECTRO_ROBUST" in os.environ and os.environ["DESI_SPECTRO_ROBUST"].upper() == "TRUE")
+            is_robust_to_missing_calibration = is_robust_mode()
             if is_robust_to_missing_calibration :
                 log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
             if self.crash_on_dark_or_bias_request and not is_robust_to_missing_calibration :
-                log.critical(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
-                raise KeyError(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                msg = f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting. " \
+                       "Set $DESI_SPECTRO_ROBUST=TRUE to proceed anyway."
+                log.critical(msg)
+                raise KeyError(msg)
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
                 log.error(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
@@ -580,8 +582,9 @@ class CalibFinder() :
             self.dark_or_bias_not_found = True
             if not self.fallback_on_dark_not_found:
                 self.crash_on_dark_or_bias_request = True
-                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
-                            + " This will raise an error if DARK or BIAS is requested.")
+                if not is_robust_mode():
+                    log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
+                                + " This will raise an error if DARK or BIAS is requested.")
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
                 log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
