@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.70.0 (unreleased)
+0.70.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.70.0 (2025-12-04)
 -------------------
 
 Algorithms / core features:
