@@ -1005,34 +1005,44 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     dark_filename = cfinder.findfile("DARK")
                 else:
                     msg = f'No nightly dark found for {expid=} {camera}, and no DARK entry in the ' \
-                        + f'{ccd_calibration_filename=}.  Cannot proceed.'
-                    log.critical(msg)
-                    raise ValueError(msg)
+                        + f'{ccd_calibration_filename=}.'
+                    is_robust_to_missing_calibration = ("DESI_SPECTRO_ROBUST" in os.environ and os.environ["DESI_SPECTRO_ROBUST"].upper() in ["YES","TRUE","1"])
+                    if is_robust_to_missing_calibration :
+                        log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
+                        log.error(msg)
+                        dark_filename = None
+                    else :
+                        msg += '  Cannot proceed.'
+                        log.critical(msg)
+                        raise ValueError(msg)
 
-        depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
-        log.info(f'Camera {camera} using DARK model from {dark_filename}')
-        # dark is multipled by exptime, or we use the non-linear dark model in the routine
-        dark = read_dark(filename=dark_filename, exptime=exptime)
+        if dark_filename is not None :
+            depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
+            log.info(f'Camera {camera} using DARK model from {dark_filename}')
+            # dark is multipled by exptime, or we use the non-linear dark model in the routine
+            dark = read_dark(filename=dark_filename, exptime=exptime)
 
-        if dark.shape == image.shape :
-            log.info(f"Camera {camera} dark is trimmed")
-            trimmed_dark_in_electrons = dark
-            dark_is_trimmed   = True
-        elif dark.shape == rawimage.shape :
-            log.info(f"Camera {camera} dark is not trimmed")
-            trimmed_dark_in_electrons = np.zeros_like(image)
-            dark_is_trimmed = False
+            if dark.shape == image.shape :
+                log.info(f"Camera {camera} dark is trimmed")
+                trimmed_dark_in_electrons = dark
+                dark_is_trimmed   = True
+            elif dark.shape == rawimage.shape :
+                log.info(f"Camera {camera} dark is not trimmed")
+                trimmed_dark_in_electrons = np.zeros_like(image)
+                dark_is_trimmed = False
+            else :
+                message="Camera {} incompatible dark shape={} when raw shape={} and preproc shape={}".format(
+                        camera, dark.shape, rawimage.shape, image.shape)
+                log.error(message)
+                raise ValueError(message)
+
+            if np.all(dark==0.0):
+                if exptime == 0.0:
+                    log.info(f'Camera {camera} dark model for exptime=0 is all zeros; not applying')
+                else:
+                    log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
+                dark = False
         else :
-            message="Camera {} incompatible dark shape={} when raw shape={} and preproc shape={}".format(
-                    camera, dark.shape, rawimage.shape, image.shape)
-            log.error(message)
-            raise ValueError(message)
-
-        if np.all(dark==0.0):
-            if exptime == 0.0:
-                log.info(f'Camera {camera} dark model for exptime=0 is all zeros; not applying')
-            else:
-                log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
             dark = False
 
     if bias is not False : #- it's an array

@@ -384,7 +384,11 @@ class CalibFinder() :
         """
         log = get_logger()
         if self.dark_or_bias_not_found and key in ['BIAS', 'DARK']:
-            if self.crash_on_dark_or_bias_request:
+
+            is_robust_to_missing_calibration = ("DESI_SPECTRO_ROBUST" in os.environ and os.environ["DESI_SPECTRO_ROBUST"].upper() == "TRUE")
+            if is_robust_to_missing_calibration :
+                log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
+            if self.crash_on_dark_or_bias_request and not is_robust_to_missing_calibration :
                 log.critical(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
                 raise KeyError(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
             else:
