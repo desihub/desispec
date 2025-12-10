@@ -269,7 +269,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         else:
             # not yet used; future-proofing
             output_filename = f'{indir}/zall/zall-{specgroup}-{specprod}{fn_suffix}.fits'
-            log.info(f'Will write output to {output_filename}')
+        log.info(f'Will write output to {output_filename}')
 
         ## Get all the zcatalogs for a given spectral release and specgroup
         ## Add the required columns or select a few of them
@@ -304,23 +304,21 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                     del t.meta[key]
 
             if file_extension=='ZCATALOG':
-
                 ## Get SURVEY and PROGRAM from header, then remove from header
                 ## because we are stacking catalogs from multiple surveys and programs
-                if 'SURVEY' in t.meta:
-                    survey = t.meta['SURVEY']
-                    del t.meta['SURVEY']
+                # survey, program = None, None
+                sp_headers = {'SURVEY': None, 'PROGRAM': None}
+                for header in sp_headers:
+                    if header in t.meta:
+                        sp_headers[header] = t.meta[header]
+                        del t.meta[header]
+                # parse filename if needed, but complain about it
+                if any([sp_headers[k] is None for k in sp_headers]):
+                    log.warning(f'{filename} header missing {header}; parsing filename!')
+                    survey, program = _get_survey_program_from_filename(filename)
                 else:
-                    # parse filename if needed, but complain about it
-                    survey = _get_survey_program_from_filename(filename)[0]
-                    log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
-
-                if 'PROGRAM' in t.meta:
-                    program = t.meta['PROGRAM']
-                    del t.meta['PROGRAM']
-                else:
-                    program = _get_survey_program_from_filename(filename)[1]
-                    log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
+                    survey = sp_headers['SURVEY']
+                    program = sp_headers['PROGRAM']
 
                 log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
                 ## We keep the rest of the meta data
@@ -335,16 +333,16 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                 t.add_column(col2, 2)
                 ## The SURVEY and PROGRAM columns are added as second and third columns,
                 ## immediately after TARGETID
-
+            log.debug(t.colnames)
             ## Appending the tables to the list
             tables.append(t)
 
-        # log.debug(tables)
-        log.debug(tables[0].colnames)
         ## Stacking all the tables into a final table
         tab = vstack(tables)
         ## The output of this will have Masked Columns
         ## We will fix this at the end
+        # Try to recover some memory.
+        del tables
 
         if primary and file_extension=='ZCATALOG':
 
