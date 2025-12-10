@@ -236,13 +236,18 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 
     ######################################################################################
 
-    ## Find all the filenames for a given specgroup
-    if (specgroup == 'zpix'):
-        ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{indir}/zpix-*.fits')
-    elif (specgroup == 'ztile'):
-        ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{indir}/ztile-*cumulative.fits')
+    # Detect whether we are working with "v2" or "v1" -style catalogs.
+    if os.path.isdir(os.path.join(indir, 'main')):
+        file_extensions = ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']
+        search_glob = os.path.join(indir, '*', f'{specgroup}-*.fits')
+    else:
+        file_extensions = ['ZCATALOG']
+        search_glob = os.path.join(indir, f'{specgroup}-*.fits')
+    # Find all the filenames for a given specgroup
+    if specgroup == 'ztile':
+        search_glob = search_glob.replace('.fits', 'cumulative.fits')
+    log.debug("zcat = glob('%s')", search_glob)
+    zcat = glob(search_glob)
 
     # only keep the primary filenames
     for fn in zcat.copy():
@@ -254,7 +259,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## This is to keep it neat, clean, and in order
     zcat.sort()
 
-    for file_extension in ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']:
+    for file_extension in file_extensions:
         fn_suffix = file_extension.replace('ZCATALOG', '').replace('_', '-').lower()
         ## Set output_filename
         if specgroup == 'zpix':
