@@ -167,7 +167,8 @@ def _get_survey_program_from_filename(filename):
     return survey, program
 
 def create_summary_catalog(specgroup, indir=None, specprod=None,
-                           columns_list=None, output_filename=None):
+                           columns_list=None, output_filename=None,
+                           primary=True):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -194,6 +195,9 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         Path+Filename for the output summary redshift catalog.
         The output FITS file will be saved at this path.
         If not specified, the output filename will be derived from specgroup and $SPECPROD
+    primary : bool, optional
+        If ``False`` write out the combined catalog *before* computing the global
+        primary and nspec columns. This is only for debugging purposes.
 
     Returns
     -------
@@ -330,13 +334,14 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             ## Appending the tables to the list
             tables.append(t)
 
-        log.debug(tables)
+        # log.debug(tables)
+        log.debug(tables[0].colnames)
         ## Stacking all the tables into a final table
         tab = vstack(tables)
         ## The output of this will have Masked Columns
         ## We will fix this at the end
 
-        if file_extension=='ZCATALOG':
+        if primary and file_extension=='ZCATALOG':
 
             ## Selecting primary spectra for the whole combined ZCATALOG
             ## For SV, it selects the best spectrum including cmx+special+sv1+sv2+sv3
