@@ -166,7 +166,9 @@ def _get_survey_program_from_filename(filename):
     program = arr[2]
     return survey, program
 
-def create_summary_catalog(specgroup, indir=None, specprod=None):
+def create_summary_catalog(specgroup, indir=None, specprod=None,
+                           columns_list=None, output_filename=None,
+                           primary=True):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -178,11 +180,24 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'
-    indir : str
+    indir : str, optional
         Input directory to look for zpix/ztile files.
-    specprod : str
+    specprod : str, optional
         Internal Release Name for the DESI Spectral Release.
         Used to derive input directory if indir is not provided.
+    columns_list : str or list, optional
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used.
+        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used.
+        If `columns_list` is a user-supplied list, the columns in the list will be included.
+        The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
+        catalog will be included.
+    output_filename : str, optional
+        Path+Filename for the output summary redshift catalog.
+        The output FITS file will be saved at this path.
+        If not specified, the output filename will be derived from specgroup and $SPECPROD
+    primary : bool, optional
+        If ``False`` write out the combined catalog *before* computing the global
+        primary and nspec columns. This is only for debugging purposes.
 
     Returns
     -------
@@ -206,7 +221,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
     ## set indir if needed
     if indir is None:
         indir = specprod_root(specprod) + '/zcatalog'
-        log.info(f'Using input directory {indir}')
+    log.info(f'Using input directory {indir}')
 
     ## Initial check 2
     ## Test whether the input directory exists
@@ -216,29 +231,35 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         raise ValueError(msg)
 
     if not os.path.isdir(f'{indir}/zall'):
+        log.debug("os.makedirs('%s/zall')", indir)
         os.makedirs(f'{indir}/zall')
 
     ######################################################################################
 
-    ## Find all the filenames for a given specgroup
-    if (specgroup == 'zpix'):
-        ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{indir}/*/zpix-*.fits')
-    elif (specgroup == 'ztile'):
-        ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{indir}/*/ztile-*cumulative.fits')
+    # Detect whether we are working with "v2" or "v1" -style catalogs.
+    if os.path.isdir(os.path.join(indir, 'main')):
+        file_extensions = ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']
+        search_glob = os.path.join(indir, '*', f'{specgroup}-*.fits')
+    else:
+        file_extensions = ['ZCATALOG']
+        search_glob = os.path.join(indir, f'{specgroup}-*.fits')
+    # Find all the filenames for a given specgroup
+    if specgroup == 'ztile':
+        search_glob = search_glob.replace('.fits', 'cumulative.fits')
+    log.debug("zcat = glob('%s')", search_glob)
+    zcat = glob(search_glob)
 
     # only keep the primary filenames
     for fn in zcat.copy():
         if ('-imaging.fits' in fn) or ('-extra.fits' in fn):
-            print(fn)
+            log.debug("zcat.remove('%s')", fn)
             zcat.remove(fn)
 
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
     zcat.sort()
 
-    for file_extension in ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']:
+    for file_extension in file_extensions:
         fn_suffix = file_extension.replace('ZCATALOG', '').replace('_', '-').lower()
         ## Set output_filename
         if specgroup == 'zpix':
@@ -248,7 +269,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         else:
             # not yet used; future-proofing
             output_filename = f'{indir}/zall/zall-{specgroup}-{specprod}{fn_suffix}.fits'
-            log.info(f'Will write output to {output_filename}')
+        log.info(f'Will write output to {output_filename}')
 
         ## Get all the zcatalogs for a given spectral release and specgroup
         ## Add the required columns or select a few of them
@@ -282,27 +303,25 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 if key in t.meta:
                     del t.meta[key]
 
-            ## Get SURVEY and PROGRAM from header, then remove from header
-            ## because we are stacking catalogs from multiple surveys and programs
-            if 'SURVEY' in t.meta:
-                survey = t.meta['SURVEY']
-                del t.meta['SURVEY']
-            else:
-                # parse filename if needed, but complain about it
-                survey = _get_survey_program_from_filename(filename)[0]
-                log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
-
-            if 'PROGRAM' in t.meta:
-                program = t.meta['PROGRAM']
-                del t.meta['PROGRAM']
-            else:
-                program = _get_survey_program_from_filename(filename)[1]
-                log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
-
-            log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
-            ## We keep the rest of the meta data
-
             if file_extension=='ZCATALOG':
+                ## Get SURVEY and PROGRAM from header, then remove from header
+                ## because we are stacking catalogs from multiple surveys and programs
+                # survey, program = None, None
+                sp_headers = {'SURVEY': None, 'PROGRAM': None}
+                for header in sp_headers:
+                    if header in t.meta:
+                        sp_headers[header] = t.meta[header]
+                        del t.meta[header]
+                # parse filename if needed, but complain about it
+                if any([sp_headers[k] is None for k in sp_headers]):
+                    log.warning(f'{filename} header missing {header}; parsing filename!')
+                    survey, program = _get_survey_program_from_filename(filename)
+                else:
+                    survey = sp_headers['SURVEY']
+                    program = sp_headers['PROGRAM']
+
+                log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
+                ## We keep the rest of the meta data
 
                 ## Add the SURVEY and PROGRAM columns
                 ## SURVEY is added as a str7 and PROGRAM is added as str6 (to match other catalogs)
@@ -314,7 +333,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 t.add_column(col2, 2)
                 ## The SURVEY and PROGRAM columns are added as second and third columns,
                 ## immediately after TARGETID
-
+            log.debug(t.colnames)
             ## Appending the tables to the list
             tables.append(t)
 
@@ -322,8 +341,10 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         tab = vstack(tables)
         ## The output of this will have Masked Columns
         ## We will fix this at the end
+        # Try to recover some memory.
+        del tables
 
-        if file_extension=='ZCATALOG':
+        if primary and file_extension=='ZCATALOG':
 
             ## Selecting primary spectra for the whole combined ZCATALOG
             ## For SV, it selects the best spectrum including cmx+special+sv1+sv2+sv3
@@ -331,7 +352,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
             nspec, specprim = find_primary_spectra(tab, sort_column='EFFTIME_SPEC')
 
             ## Replacing the existing 'ZCAT_NSPEC' and 'ZCAT_PRIMARY'
-            ## If all_columns = False, and user-list does not contain this column -
+            ## If columns_list is user-supplied and does not contain this column -
             ## these columns will be added
             log.debug('Updating ZCAT_PRIMARY and ZCAT_NSPEC')
             tab['ZCAT_NSPEC'] = nspec
@@ -381,11 +402,11 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 assert np.all(tab['TARGETID']==targetid_arr)
 
         ## Convert the masked column table to normal astropy table and select required columns
-        final_table = update_table_columns(tab, specgroup)
-
+        final_table = update_table_columns(tab, specgroup=specgroup, columns_list=columns_list)
+        log.debug("Completed call to update_table_columns().")
         ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
         desiutil.depend.mergedep(dependencies, final_table.meta)
-
+        log.debug("Completed call to mergedep().")
         ## Write final output via a temporary filename
         tmpfile = get_tempfilename(output_filename)
         write_bintable(tmpfile, final_table, extname=file_extension, clobber=True)
@@ -395,7 +416,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
 ####################################################################################################
 ####################################################################################################
 
-def update_table_columns(table, specgroup):
+def update_table_columns(table, specgroup='zpix', columns_list=None):
     """
     This function fills the ``*TARGET`` masked columns and returns the final table
     with the required columns.
@@ -404,9 +425,16 @@ def update_table_columns(table, specgroup):
     ----------
     table : Astropy Table
         A table.
-    specgroup : str
+    specgroup : str, optional
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
+    columns_list : str or list, optional
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used.
+        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used.
+        If `columns_list` is a user-supplied list, the columns in the list will be included.
+        The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
+        catalog will be included.
+
     Returns
     -------
     t_final : Astropy Table
@@ -434,9 +462,84 @@ def update_table_columns(table, specgroup):
     ## Table with filled values
     table = table.filled(fill_value=0)
 
+    ## Selecting the required columns for the final table
+    ## If columns_list is None, then just use the input columns.
+    ## If columns_list is 'minimal' a pre-defined list of columns is used.
+    ## If columns_list is a list, then the user-supplied list is used
+    ## to create a summary redshift catalog.
+
+    ## Find all the existing NSPEC and PRIMARY flag columns and order them
+    nspec_cols = list(tab_cols[np.char.endswith(tab_cols, '_NSPEC')])
+    prim_cols = list(tab_cols[np.char.endswith(tab_cols, '_PRIMARY')])
+    nspec_cols.sort()
+    prim_cols.sort()
+
+    ## Ordering the primary columns
+    ## If SV/MAIN flag columns also exist, the order is -
+    ## MAIN_NSPEC, MAIN_PRIMARY, SV_NSPEC, SV_PRIMARY, ZCAT_NSPEC, ZCAT_PRIMARY
+    ## This is to add these columns separately in the end
+    primary_cols = []
+    for xx in range(len(nspec_cols)):
+        primary_cols.append(nspec_cols[xx])
+        primary_cols.append(prim_cols[xx])
+
+    if columns_list is None:
+        log.debug("columns_list is None")
+        ## Rearranging the columns to order all the *TARGET columns together
+        ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
+        ## Last column in TSNR2_LRG in all the redshift catalogs
+        ## We will add the PRIMARY columns in the end
+        colname_array = np.array(table.colnames)
+        colname_index = colname_array.argsort()
+        assert (np.unique(colname_array) == colname_array[colname_index]).all()
+
+        ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
+        nobs = np.where(colname_array == 'NUMOBS_INIT')[0][0]
+        pra = np.where(colname_array == 'PLATE_RA')[0][0]
+        tsnr = np.where(np.char.startswith(colname_array, 'TSNR2_'))[0][-1]
+        log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
+
+        ## List of all columns
+        all_cols = table.colnames
+        log.debug(all_cols)
+        log.debug(target_cols)
+        log.debug(primary_cols)
+        ## Reorder the columns
+        ## This reorder is important for stacking the different redshift catalogs
+        ## Also to keep it neat and clean
+        req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1] + primary_cols
+    elif columns_list == 'minimal':
+        log.debug("columns_list is 'minimal'")
+        ## These are the pre-defined columns:
+        pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM',
+                             'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',
+                             'COADD_FIBERSTATUS',  'CHI2', 'DELTACHI2',
+                             'MASKBITS', 'SPECTYPE', 'FLUX_G', 'FLUX_R',
+                             'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G',
+                             'FLUX_IVAR_R', 'FLUX_IVAR_Z','FLUX_IVAR_W1',
+                             'FLUX_IVAR_W2', 'TSNR2_LRG', 'TSNR2_BGS', 'TSNR2_ELG',
+                             'TSNR2_QSO', 'TSNR2_LYA'] + target_cols + primary_cols
+
+        ## Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
+        if (specgroup == 'zpix'):
+            req_columns = pre_selected_cols[0:3]+['HEALPIX']+pre_selected_cols[3:]
+        else:
+            req_columns = pre_selected_cols[0:3]+['TILEID', 'LASTNIGHT']+pre_selected_cols[3:]
+
+    else:
+        log.debug("columns_list is user-supplied")
+        ## Adding the primary flag columns to the user-requested list
+        for p in primary_cols:
+            if p not in columns_list:
+                req_columns += [p]
+    log.debug(req_columns)
+
     # Move the target columns to the end
-    reordered_cols = list(np.array(table.colnames)[~np.in1d(table.colnames, target_cols)]) + target_cols
-    table = table[reordered_cols]
+    # BAW: I'm not sure how important this is since we've done all the more
+    # detailed ordering work above.
+    # reordered_cols = list(np.array(table.colnames)[~np.isin(table.colnames, target_cols)]) + target_cols
+    # table = table[reordered_cols]
+    # table = table[req_columns]
 
     return table
 
