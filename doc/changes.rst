@@ -6,7 +6,7 @@ desispec Change Log
 -------------------
 
 * Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed even without dark
-  or bias models (PR `2577`_).
+  or bias models (PR `#2577`_).
 
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 
