@@ -217,7 +217,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## set indir if needed
     if indir is None:
         indir = specprod_root(specprod) + '/zcatalog'
-        log.info(f'Using input directory {indir}')
+    log.info(f'Using input directory {indir}')
 
     ## Initial check 2
     ## Test whether the input directory exists
@@ -227,6 +227,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         raise ValueError(msg)
 
     if not os.path.isdir(f'{indir}/zall'):
+        log.debug("os.makedirs('%s/zall')", indir)
         os.makedirs(f'{indir}/zall')
 
     ######################################################################################
@@ -234,15 +235,15 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## Find all the filenames for a given specgroup
     if (specgroup == 'zpix'):
         ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{indir}/*/zpix-*.fits')
+        zcat = glob(f'{indir}/zpix-*.fits')
     elif (specgroup == 'ztile'):
         ## List of all ztile* catalogs, considering only cumulative catalogs
-        zcat = glob(f'{indir}/*/ztile-*cumulative.fits')
+        zcat = glob(f'{indir}/ztile-*cumulative.fits')
 
     # only keep the primary filenames
     for fn in zcat.copy():
         if ('-imaging.fits' in fn) or ('-extra.fits' in fn):
-            print(fn)
+            log.debug("zcat.remove('%s')", fn)
             zcat.remove(fn)
 
     ## Sorting the list of zcatalogs by name
@@ -329,6 +330,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             ## Appending the tables to the list
             tables.append(t)
 
+        log.debug(tables)
         ## Stacking all the tables into a final table
         tab = vstack(tables)
         ## The output of this will have Masked Columns
