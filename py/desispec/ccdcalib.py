@@ -501,6 +501,10 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     if isinstance(cameras, str):
         cameras = decode_camword(parse_cameras(cameras))
 
+    ## Laod exposure table
+    expfile = get_exposure_table_pathname(night)
+    exptable = load_table(expfile, tabletype='exptable')
+
     #- Find all ZERO exposures on this night
     nightdir = io.rawdata_root() + f'/{night}'
     requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
@@ -511,13 +515,31 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
         #- CALIB ZEROs or non-calib ZEROs for dark sequence
         #- while being robust to missing OBSTYPE or PROGRAM
-        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r):
-            if r['PROGRAM'].startswith('CALIB ZEROs'):
-                calib_expids.append(int(os.path.basename(os.path.dirname(filename))))
-            elif r['PROGRAM'].startswith('ZEROs for dark sequence'):
-                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
-            elif r['PROGRAM'].startswith('ZEROs for morning darks'):
-                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO'):
+            fname_derived_expid = int(os.path.basename(os.path.dirname(filename)))
+            ## Update to include zeros in exposure table that are
+            ## relabeled as Calibration Zeros
+            in_etable = (fname_derived_expid in exptable['EXPID'])
+            if in_etable:
+                etable_program = str(exptable['PROGRAM'][exptable['EXPID']==fname_derived_expid][0]).lower()
+            else:
+                etable_program = None
+
+            if 'PROGRAM' in r:
+                program = r['PROGRAM'].lower()
+            elif in_etable:
+                program = etable_program
+            else:
+                continue
+
+            if program.startswith('calib zeros'):
+                calib_expids.append(fname_derived_expid)
+            elif program.startswith('zeros for dark sequence'):
+                noncalib_expids.append(fname_derived_expid)
+            elif program.startswith('zeros for morning darks'):
+                noncalib_expids.append(fname_derived_expid)
+            elif in_etable and etable_program.startswith('calib zeros'):
+                calib_expids.append(fname_derived_expid)
             else:
                 continue
         else:
@@ -526,8 +548,6 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     #- Remove ZEROs that are flagged as bad, but allow for the possibility
     #- of ZEROs that aren't in the exposure table for whatever reason
     log.debug('Checking for pre-identified bad ZEROs')
-    expfile = get_exposure_table_pathname(night)
-    exptable = load_table(expfile, tabletype='exptable')
     select_zeros=exptable['OBSTYPE']=='zero'
     bad = select_zeros & (exptable['LASTSTEP']!='all')
     badcam = select_zeros & (exptable['BADCAMWORD']!='')
