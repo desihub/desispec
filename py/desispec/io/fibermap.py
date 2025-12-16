@@ -940,6 +940,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         #- SKY assignments on stuck positioners will get special treatment
         stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
 
+        #- fiber not on SKY or TGT
+        badobj = fibermap['OBJTYPE'] == 'BAD'
+
         #- Set fiber status bits
         missing = np.isin(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
@@ -947,6 +950,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
         fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
         fibermap['FIBERSTATUS'][badpos & ~stucksky] |= fibermask.BADPOSITION
+        fibermap['FIBERSTATUS'][badobj] |= fibermask.UNASSIGNED
 
         #- for SKY on stuck positioners, recheck if they are on a blank sky
         #- (e.g. they might be "off" target but still ok for sky)
