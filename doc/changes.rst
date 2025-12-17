@@ -5,10 +5,13 @@ desispec Change Log
 0.70.1 (unreleased)
 -------------------
 
-* Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed even without dark
-  or bias models (PR `#2577`_).
+* Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed anyway
+  even without dark or bias models (PR `#2577`_).
+* Set FIBERSTATUS=UNASSIGNED for targets with OBJTYPE != TGT or SKY
+  (PR `#2579`_).
 
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
+.. _`#2579`: https://github.com/desihub/desispec/pull/2579
 
 0.70.0 (2025-12-04)
 -------------------
