@@ -44,16 +44,13 @@ Updated: Summer 2025
 import numpy as np
 import os
 from glob import glob
-from astropy.io import fits
-from astropy.table import Table, Column, MaskedColumn, vstack, join
+from astropy.table import Table, Column, MaskedColumn, vstack
 
 ## DESI related functions
 from desispec.io import specprod_root, read_table
 from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
 import desiutil.depend
-
-import fitsio
 
 ####################################################################################################
 ####################################################################################################
@@ -167,8 +164,7 @@ def _get_survey_program_from_filename(filename):
     return survey, program
 
 def create_summary_catalog(specgroup, indir=None, specprod=None,
-                           columns_list=None, output_filename=None,
-                           primary=True):
+                           columns_list=None):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -191,13 +187,6 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         If `columns_list` is a user-supplied list, the columns in the list will be included.
         The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
         catalog will be included.
-    output_filename : str, optional
-        Path+Filename for the output summary redshift catalog.
-        The output FITS file will be saved at this path.
-        If not specified, the output filename will be derived from specgroup and $SPECPROD
-    primary : bool, optional
-        If ``False`` write out the combined catalog *before* computing the global
-        primary and nspec columns. This is only for debugging purposes.
 
     Returns
     -------
@@ -236,18 +225,13 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 
     ######################################################################################
 
-    # Detect whether we are working with "v2" or "v1" -style catalogs.
-    if os.path.isdir(os.path.join(indir, 'main')):
-        file_extensions = ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']
-        search_glob = os.path.join(indir, '*', f'{specgroup}-*.fits')
-    else:
-        file_extensions = ['ZCATALOG']
-        search_glob = os.path.join(indir, f'{specgroup}-*.fits')
-    # Find all the filenames for a given specgroup
-    if specgroup == 'ztile':
-        search_glob = search_glob.replace('.fits', 'cumulative.fits')
-    log.debug("zcat = glob('%s')", search_glob)
-    zcat = glob(search_glob)
+    ## Find all the filenames for a given specgroup
+    if (specgroup == 'zpix'):
+        ## List of all zpix* catalogs: zpix-survey-program.fits
+        zcat = glob(f'{indir}/*/zpix-*.fits')
+    elif (specgroup == 'ztile'):
+        ## List of all ztile* catalogs, considering only cumulative catalogs
+        zcat = glob(f'{indir}/*/ztile-*cumulative.fits')
 
     # only keep the primary filenames
     for fn in zcat.copy():
@@ -259,7 +243,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## This is to keep it neat, clean, and in order
     zcat.sort()
 
-    for file_extension in file_extensions:
+    for file_extension in ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']:
         fn_suffix = file_extension.replace('ZCATALOG', '').replace('_', '-').lower()
         ## Set output_filename
         if specgroup == 'zpix':
@@ -303,25 +287,27 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                 if key in t.meta:
                     del t.meta[key]
 
-            if file_extension=='ZCATALOG':
-                ## Get SURVEY and PROGRAM from header, then remove from header
-                ## because we are stacking catalogs from multiple surveys and programs
-                # survey, program = None, None
-                sp_headers = {'SURVEY': None, 'PROGRAM': None}
-                for header in sp_headers:
-                    if header in t.meta:
-                        sp_headers[header] = t.meta[header]
-                        del t.meta[header]
+            ## Get SURVEY and PROGRAM from header, then remove from header
+            ## because we are stacking catalogs from multiple surveys and programs
+            if 'SURVEY' in t.meta:
+                survey = t.meta['SURVEY']
+                del t.meta['SURVEY']
+            else:
                 # parse filename if needed, but complain about it
-                if any([sp_headers[k] is None for k in sp_headers]):
-                    log.warning(f'{filename} header missing {header}; parsing filename!')
-                    survey, program = _get_survey_program_from_filename(filename)
-                else:
-                    survey = sp_headers['SURVEY']
-                    program = sp_headers['PROGRAM']
+                survey = _get_survey_program_from_filename(filename)[0]
+                log.warning(f'{filename} header missing SURVEY; guessing {survey} from filename')
 
-                log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
-                ## We keep the rest of the meta data
+            if 'PROGRAM' in t.meta:
+                program = t.meta['PROGRAM']
+                del t.meta['PROGRAM']
+            else:
+                program = _get_survey_program_from_filename(filename)[1]
+                log.warning(f'{filename} header missing PROGRAM; guessing {program} from filename')
+
+            log.debug(f'{basefile} SURVEY={survey} PROGRAM={program}')
+            ## We keep the rest of the meta data
+
+            if file_extension=='ZCATALOG':
 
                 ## Add the SURVEY and PROGRAM columns
                 ## SURVEY is added as a str7 and PROGRAM is added as str6 (to match other catalogs)
@@ -341,10 +327,11 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         tab = vstack(tables)
         ## The output of this will have Masked Columns
         ## We will fix this at the end
+
         # Try to recover some memory.
         del tables
 
-        if primary and file_extension=='ZCATALOG':
+        if file_extension=='ZCATALOG':
 
             ## Selecting primary spectra for the whole combined ZCATALOG
             ## For SV, it selects the best spectrum including cmx+special+sv1+sv2+sv3
