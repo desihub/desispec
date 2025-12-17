@@ -941,7 +941,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
 
         #- fiber not on SKY or TGT
-        badobj = fibermap['OBJTYPE'] == 'BAD'
+        badobj = (fibermap['OBJTYPE'] != 'TGT') & (fibermap['OBJTYPE'] != 'SKY')
 
         #- Set fiber status bits
         missing = np.isin(fibermap['LOCATION'], pm['LOCATION'], invert=True)
