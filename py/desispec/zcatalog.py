@@ -370,11 +370,12 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         Internal Release Name for the DESI Spectral Release.
         Used to derive input directory if indir is not provided.
     columns_list : str or list, optional
-        If `columns_list` is ``None`` (the default), all columns from the inputs will be used.
-        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used.
-        If `columns_list` is a user-supplied list, the columns in the list will be included.
-        The 'SV/MAIN' primary flag columns as well as the primary flag columns for the entire
-        catalog will be included.
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
+        although they may be reordered.
+        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used,
+        which will depend on `specgroup` and `extension`.
+        If `columns_list` is a user-supplied list, the columns in the list will be included,
+        unconditionally.
 
     Returns
     -------
