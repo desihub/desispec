@@ -57,6 +57,7 @@ import desiutil.depend
 
 log = get_logger()
 
+# Currently this list of columns is based on the v2.1 test run from November 2025.
 _raw_columns = {'ZCATALOG':['TARGETID',
                             'SURVEY',
                             'PROGRAM',
@@ -608,10 +609,14 @@ def columns_by_extension(specgroup, extension):
     """
     extension_columns = _raw_columns[extension]
     # Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
-    if specgroup == 'zpix':
-        columns = extension_columns[0:3] + ['HEALPIX'] + extension_columns[3:]
-    else:
-        columns = extension_columns[0:3] + ['TILEID', 'LASTNIGHT'] + extension_columns[3:]
+    extra_columns = {'zpix': {'ZCATALOG': ['HEALPIX']},
+                     'ztile':{'ZCATALOG': ['TILEID', 'LASTNIGHT'],
+                              'ZCATALOG_IMAGING': ['TILEID'],
+                              'ZCATALOG_EXTRA': ['TILEID']}}
+    try:
+        columns = extension_columns[0:3] + extra_columns[specgroup][extension] + extension_columns[3:]
+    except KeyError:
+        columns = extension_columns
     return columns
 
 
@@ -630,10 +635,12 @@ def update_table_columns(table, specgroup, extension, columns_list=None):
     extension : str
         The "v2"-style grouping, *e.g.* ``ZCATALOG_EXTRA``.
     columns_list : str or list, optional
-        If `columns_list` is ``None`` (the default), all columns from the inputs will be used.
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
+        although they may be reordered.
         If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used,
         which will depend on `specgroup` and `extension`.
-        If `columns_list` is a user-supplied list, the columns in the list will be included.
+        If `columns_list` is a user-supplied list, the columns in the list will be included,
+        unconditionally.
 
     Returns
     -------
@@ -662,69 +669,23 @@ def update_table_columns(table, specgroup, extension, columns_list=None):
     ## Table with filled values
     table = table.filled(fill_value=0)
 
-    ## Selecting the required columns for the final table
-    ## If columns_list is None, then just use the input columns.
-    ## If columns_list is 'minimal' a pre-defined list of columns is used.
-    ## If columns_list is a list, then the user-supplied list is used
-    ## to create a summary redshift catalog.
-
-    ## Find all the existing NSPEC and PRIMARY flag columns and order them
-    nspec_cols = list(tab_cols[np.char.endswith(tab_cols, '_NSPEC')])
-    prim_cols = list(tab_cols[np.char.endswith(tab_cols, '_PRIMARY')])
-    nspec_cols.sort()
-    prim_cols.sort()
-
-    ## Ordering the primary columns
-    ## If SV/MAIN flag columns also exist, the order is -
-    ## MAIN_NSPEC, MAIN_PRIMARY, SV_NSPEC, SV_PRIMARY, ZCAT_NSPEC, ZCAT_PRIMARY
-    ## This is to add these columns separately in the end
-    primary_cols = []
-    for xx in range(len(nspec_cols)):
-        primary_cols.append(nspec_cols[xx])
-        primary_cols.append(prim_cols[xx])
-
     if columns_list is None:
         log.debug("columns_list is None")
-        ## Rearranging the columns to order all the *TARGET columns together
-        ## TARGET columns sit between NUMOBS_INIT and PLATE_RA columns
-        ## Last column in TSNR2_LRG in all the redshift catalogs
-        ## We will add the PRIMARY columns in the end
-        colname_array = np.array(table.colnames)
-        colname_index = colname_array.argsort()
-        assert (np.unique(colname_array) == colname_array[colname_index]).all()
-
-        ## The indices of NUMOBS_INIT, PLATE_RA, and last TSNR2_* columns
-        nobs = np.where(colname_array == 'NUMOBS_INIT')[0][0]
-        pra = np.where(colname_array == 'PLATE_RA')[0][0]
-        tsnr = np.where(np.char.startswith(colname_array, 'TSNR2_'))[0][-1]
-        log.debug("nobs = %d; pra = %d; tsnr = %d", nobs, pra, tsnr)
-
-        ## List of all columns
-        all_cols = table.colnames
-        log.debug(all_cols)
-        log.debug(target_cols)
-        log.debug(primary_cols)
-        ## Reorder the columns
-        ## This reorder is important for stacking the different redshift catalogs
-        ## Also to keep it neat and clean
-        req_columns = all_cols[0:nobs+1] + target_cols + all_cols[pra:tsnr+1] + primary_cols
+        # Move the target columns to the end.
+        reordered_columns = list(tab_cols[~np.isin(tab_cols, target_cols)]) + target_cols
     elif columns_list == 'minimal':
         log.debug("columns_list is 'minimal'")
-        log.debug("req_columns = columns_by_extension('%s', '%s')", specgroup, extension)
+        log.debug("reordered_columns = columns_by_extension('%s', '%s')", specgroup, extension)
         # These columns are obtained from the "zcat/v2.1" tests based on loa.
-        req_columns = columns_by_extension(specgroup, extension)
+        reordered_columns = columns_by_extension(specgroup, extension)
     else:
         log.debug("columns_list is user-supplied")
-        req_columns = columns_list
+        reordered_columns = columns_list
 
-    log.debug(req_columns)
+    log.debug(reordered_columns)
 
-    # Move the target columns to the end
-    # BAW: I'm not sure how important this is since we've done all the more
-    # detailed ordering work above.
-    # reordered_cols = list(np.array(table.colnames)[~np.isin(table.colnames, target_cols)]) + target_cols
-    # table = table[reordered_cols]
-    table = table[req_columns]
+    table = table[reordered_columns]
+
     return table
 
 ####################################################################################################

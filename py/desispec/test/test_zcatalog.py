@@ -4,7 +4,7 @@ Test desispec.zcatalog
 
 import os
 import unittest
-from unittest.mock import patch, call
+from unittest.mock import patch, call, MagicMock
 
 import numpy as np
 from astropy.table import Table, Column
@@ -12,6 +12,7 @@ from astropy.table import Table, Column
 from desispec.zcatalog import (find_primary_spectra, _get_survey_program_from_filename,
                                create_summary_catalog, columns_by_extension,
                                update_table_columns)
+
 
 class TestZCatalog(unittest.TestCase):
 
@@ -63,57 +64,58 @@ class TestZCatalog(unittest.TestCase):
 
     def test_columns_by_extension(self):
         columns = columns_by_extension('zpix', 'ZCATALOG')
-        self.assertEqual(columns[4], 'HEALPIX')
-        # columns = columns_by_extension('ztile', 'ZCATALOG_EXTRA')
-        # self.assertEqual(columns[4], 'FOOBAR')
+        self.assertEqual(columns[3], 'HEALPIX')
+        columns = columns_by_extension('zpix', 'ZCATALOG_IMAGING')
+        self.assertEqual(columns[1], 'PMRA')
+        columns = columns_by_extension('ztile', 'ZCATALOG')
+        self.assertEqual(columns[4], 'LASTNIGHT')
+        columns = columns_by_extension('ztile', 'ZCATALOG_EXTRA')
+        self.assertEqual(columns[3], 'TILEID')
 
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_default(self, mock_log):
         """Test update_table_columns with columns_list = None.
         """
-        pass
-    #     rows = 5
-    #     targetid = Column(np.arange(rows, dtype=np.int64), name='TARGETID')
-    #     survey = Column(np.array(['main']*rows), name='SURVEY')
-    #     program = Column(np.array(['dark']*rows), name='PROGRAM')
-    #     desi_target = Column(np.array([0]*rows), name='DESI_TARGET')
-    #     bgs_target = Column(np.array([0]*rows), name='BGS_TARGET')
-    #     numobs_init = Column(np.array([0]*rows), name='NUMOBS_INIT')
-    #     plate_ra = Column(np.array([0]*rows), name='PLATE_RA')
-    #     plate_dec = Column(np.array([0]*rows), name='PLATE_DEC')
-    #     tsnr2_lrg = Column(np.array([0]*rows), name='TSNR2_LRG')
-    #     zcat_nspec = Column(np.array([0]*rows), name='ZCAT_NSPEC')
-    #     zcat_primary = Column(np.array([0]*rows), name='ZCAT_PRIMARY')
-    #     t = Table([targetid, survey, program,
-    #                numobs_init, plate_ra, plate_dec, desi_target, bgs_target,
-    #                tsnr2_lrg, zcat_nspec, zcat_primary])
-    #     self.assertListEqual(t.colnames,
-    #                          ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
-    #                           'PLATE_RA', 'PLATE_DEC', 'DESI_TARGET', 'BGS_TARGET',
-    #                           'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])
-    #     t2 = update_table_columns(t, 'ztile', 'ZCATALOG')
-    #     self.assertListEqual(t2.colnames,
-    #                          ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
-    #                           'DESI_TARGET', 'BGS_TARGET', 'PLATE_RA', 'PLATE_DEC',
-    #                           'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])
-    #     mock_log.debug.assert_has_calls([call("columns_list is None"),
-    #                                      call('nobs = %d; pra = %d; tsnr = %d', 5, 6, 8),
-    #                                      call(['TARGETID', 'SURVEY', 'PROGRAM',
-    #                                            'NUMOBS_INIT', 'PLATE_RA', 'PLATE_DEC',
-    #                                            'DESI_TARGET', 'BGS_TARGET',
-    #                                            'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']),
-    #                                      call(['DESI_TARGET', 'BGS_TARGET']),
-    #                                      call(['ZCAT_NSPEC', 'ZCAT_PRIMARY']),
-    #                                      call(['TARGETID', 'SURVEY', 'PROGRAM',
-    #                                            'NUMOBS_INIT', 'DESI_TARGET', 'BGS_TARGET',
-    #                                            'PLATE_RA', 'PLATE_DEC',
-    #                                            'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])])
+        rows = 5
+        targetid = Column(np.arange(rows, dtype=np.int64), name='TARGETID')
+        survey = Column(np.array(['main']*rows), name='SURVEY')
+        program = Column(np.array(['dark']*rows), name='PROGRAM')
+        desi_target = Column(np.array([0]*rows), name='DESI_TARGET')
+        bgs_target = Column(np.array([0]*rows), name='BGS_TARGET')
+        numobs_init = Column(np.array([0]*rows), name='NUMOBS_INIT')
+        plate_ra = Column(np.array([0]*rows), name='PLATE_RA')
+        plate_dec = Column(np.array([0]*rows), name='PLATE_DEC')
+        tsnr2_lrg = Column(np.array([0]*rows), name='TSNR2_LRG')
+        zcat_nspec = Column(np.array([0]*rows), name='ZCAT_NSPEC')
+        zcat_primary = Column(np.array([0]*rows), name='ZCAT_PRIMARY')
+        t = Table([targetid, survey, program,
+                   numobs_init, plate_ra, plate_dec, desi_target, bgs_target,
+                   tsnr2_lrg, zcat_nspec, zcat_primary])
+        self.assertListEqual(t.colnames,
+                             ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
+                              'PLATE_RA', 'PLATE_DEC', 'DESI_TARGET', 'BGS_TARGET',
+                              'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])
+        t2 = update_table_columns(t, 'ztile', 'ZCATALOG')
+        self.assertListEqual(t2.colnames,
+                             ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
+                              'PLATE_RA', 'PLATE_DEC', 'TSNR2_LRG', 'ZCAT_NSPEC',
+                              'ZCAT_PRIMARY', 'DESI_TARGET', 'BGS_TARGET'])
+        mock_log.debug.assert_has_calls([call("columns_list is None"),])
 
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_minimal(self, mock_log):
         """Test update_table_columns with columns_list = 'minimal'.
         """
-        pass
+        t = MagicMock()
+        t.colnames = columns_by_extension('ztile', 'ZCATALOG')
+        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list='minimal')
+        mock_log.debug.assert_has_calls([call("columns_list is 'minimal'"),
+                                         call("reordered_columns = columns_by_extension('%s', '%s')", 'ztile', 'ZCATALOG'),
+                                         call(t.colnames)])
+        self.assertListEqual(t.mock_calls,
+                             [call.__getitem__(c) for c in t.colnames] +
+                             [call.filled(fill_value=0),
+                              call.filled().__getitem__(t.colnames)])
 
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_user(self, mock_log):
@@ -145,3 +147,4 @@ class TestZCatalog(unittest.TestCase):
         with self.assertRaises(KeyError):
             t2 = update_table_columns(t, 'ztile', 'ZCATALOG',
                                     columns_list=['TARGETID', 'SURVEY', 'PROGRAM', 'FOOBAR'])
+        mock_log.debug.assert_has_calls([call("columns_list is user-supplied"),])
