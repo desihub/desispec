@@ -66,6 +66,18 @@ def _create_summary_catalog_wrapper(kwargs):
     return create_summary_catalog(**kwargs)
 
 def main(args=None):
+    """Entry-point for command-line scripts.
+
+    Parameters
+    ----------
+    args : :class:`list`, optional
+        A list of arguments to be parsed.
+
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
+    """
     if not isinstance(args, argparse.Namespace):
         args = parse(options=args)
 
@@ -219,9 +231,10 @@ def main(args=None):
             log.warning(f"Failed to produce output: {outfile}, see {outlog}")
         else:
             log.info(f"Success for job producing output: {outfile}")
-            
+
     if error_count == 0:
         log.info(f"SUCCESS: All done at {time.asctime()}")
     else:
         log.info(f"{error_count} FAILURES: All done at {time.asctime()}")
 
+    return error_count
