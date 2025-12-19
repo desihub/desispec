@@ -285,7 +285,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
         hdr = fitsheader(fibermap.meta)
 
     add_dependencies(hdr)
-    
+
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', '.*nmgy.*')
         fibermap_hdu = fits.BinTableHDU(fibermap)
@@ -951,6 +951,11 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
         fibermap['FIBERSTATUS'][badpos & ~stucksky] |= fibermask.BADPOSITION
         fibermap['FIBERSTATUS'][badobj] |= fibermask.UNASSIGNED
+
+        # Intercept things that should have been set to BAD in fiberassign
+        # but weren't, i.e. empty strings and N/A, and set them to BAD
+        fibermap['OBJTYPE'][badobj] = 'BAD'
+
 
         #- for SKY on stuck positioners, recheck if they are on a blank sky
         #- (e.g. they might be "off" target but still ok for sky)
