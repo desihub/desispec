@@ -574,7 +574,7 @@ def mean_psf(inputs, output):
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
     log.debug("bundle_rchi2= {}".format(str(bundle_rchi2)))
-    median_bundle_rchi2 = np.median(bundle_rchi2)
+    median_bundle_rchi2 = np.median(bundle_rchi2[bundle_rchi2>0])
     rchi2_threshold=median_bundle_rchi2+1.
     log.debug("median chi2={} threshold={}".format(median_bundle_rchi2,
         rchi2_threshold))
@@ -626,8 +626,7 @@ def mean_psf(inputs, output):
 
         for bundle in fibers_in_bundle.keys() :
 
-            ok=np.where(bundle_rchi2[:,bundle]<rchi2_threshold)[0]
-            #ok=np.array([0,1]) # debug
+            ok=np.where((bundle_rchi2[:,bundle]>0)&(bundle_rchi2[:,bundle]<rchi2_threshold))[0]
 
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
