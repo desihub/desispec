@@ -147,6 +147,7 @@ def main(args=None, comm=None):
             (mynbundle * (rank - leftover))
 
     bundles_to_merge = []
+    failed_bundles   = []
 
     if rank == 0:
         # Print parameters
@@ -209,9 +210,8 @@ def main(args=None, comm=None):
 
         if skip_this_bundle :
             log.info("rank #{}, do not fit bundle {} {}".format(rank,cam,b))
-            retval = 0
+            retval = 12
         else :
-            bundles_to_merge.append(b)
             com = ['desi_psf_fit']
             com.extend(['-a', imgfile])
             com.extend(['--in-psf', inpsffile])
@@ -237,13 +237,16 @@ def main(args=None, comm=None):
 
             retval = run_specex(com)
 
-        if retval != 0:
-            comstr = " ".join(com)
-            log.error("desi_psf_fit on process {} failed with return "
-                "value {} running {}".format(rank, retval, comstr))
-            failcount += 1
+        if retval != 0  :
+            if not skip_this_bundle :
+                comstr = " ".join(com)
+                log.error("desi_psf_fit on process {} failed with return "
+                          "value {} running {}".format(rank, retval, comstr))
+                failcount += 1
+                failed_bundles.append(b)
         else:
             log.info(f"proc {rank} succeeded generating {outbundlefits}")
+            bundles_to_merge.append(b)
 
     if args.disable_merge:
         return failcount
@@ -251,27 +254,28 @@ def main(args=None, comm=None):
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
         bundles_to_merge = comm.gather(bundles_to_merge, root=0)
-        if rank == 0 : # it's a list of lists only for rank 0, so we flatten it only for this rank
-            if len(bundles_to_merge)>0 :
-                bundles_to_merge = np.hstack(bundles_to_merge).astype(int)
-            log.info("will merge the following {} bundles {}".format(cam, bundles_to_merge))
-            sys.stdout.flush()
-
-    if failcount > 0:
-        # all processes throw
-        raise RuntimeError(f"some {cam} bundles failed desi_psf_fit")
+        failed_bundles = comm.gather(failed_bundles, root=0)
 
     if rank == 0:
+        # it's a list of lists only for rank 0, so we flatten it only for this rank
+        if len(bundles_to_merge)>0 :
+            bundles_to_merge = np.hstack(bundles_to_merge).astype(int)
+        if len(failed_bundles)>0 :
+            failed_bundles = np.hstack(failed_bundles).astype(int)
+
+        log.info("will merge the following {} bundles {}".format(cam, bundles_to_merge))
+        sys.stdout.flush()
+
         outfits = "{}.fits".format(outroot)
 
         bundlefiles = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles_to_merge ]
 
-        log.info("will merge the following {} bundle files {}".format(cam, bundlefiles))
-
-
         if args.disable_merge :
             log.info("don't merge")
         else :
+
+            log.info("will merge the following {} bundle files {}".format(cam, bundlefiles))
+
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
@@ -292,18 +296,17 @@ def main(args=None, comm=None):
 
             log.info('done merging')
 
-            if failcount == 0:
-                # only remove the per-bundle files if the merge was good
-                for f in bundlefiles :
-                    if os.path.isfile(f):
-                        os.remove(f)
+            for f in bundlefiles :
+                if os.path.isfile(f):
+                    os.remove(f)
 
-    if comm is not None:
-        failcount = comm.bcast(failcount, root=0)
-
-    if failcount > 0:
-        # all processes throw
-        raise RuntimeError("merging of per-bundle files failed")
+        if len(failed_bundles) > 0 :
+            failed_bundles = np.hstack(failed_bundles).astype(int)
+            log.warning(f"The fit of the following bundles failed: {failed_bundles}")
+            for x in failed_bundles :
+                f =  "{}_{:02d}.fits".format(outroot, x)
+                if  os.path.isfile(f):
+                    os.remove(f)
 
     return
 
@@ -442,6 +445,16 @@ def merge_psf(inpsffile, inputs, output):
     # we will add/change data to the first PSF but write it to a different file
     psf_hdulist=fits.open(inpsffile, mode='readonly')
 
+    # reset PSF chi2 (in case there are bundles that were not fit)
+    for b in range(20) :
+        for key in [ "B{:02d}RCHI2".format(b), "B{:02d}NDATA".format(b),
+                     "B{:02d}NPAR".format(b) ]:
+            if key in psf_hdulist["PSF"].header :
+                psf_hdulist["PSF"].header[key] = 0
+    # also reset the PSF STATUS
+    index = np.where(psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
+    psf_hdulist["PSF"].data["COEFF"][index][:,0]=-1
+
     for input_filename in inputs :
         log.info("merging {} into {}".format(input_filename, inpsffile))
         other_psf_hdulist=fits.open(input_filename)
@@ -564,7 +577,7 @@ def mean_psf(inputs, output):
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
     log.debug("bundle_rchi2= {}".format(str(bundle_rchi2)))
-    median_bundle_rchi2 = np.median(bundle_rchi2)
+    median_bundle_rchi2 = np.median(bundle_rchi2[bundle_rchi2>0])
     rchi2_threshold=median_bundle_rchi2+1.
     log.debug("median chi2={} threshold={}".format(median_bundle_rchi2,
         rchi2_threshold))
@@ -616,12 +629,18 @@ def mean_psf(inputs, output):
 
         for bundle in fibers_in_bundle.keys() :
 
-            ok=np.where(bundle_rchi2[:,bundle]<rchi2_threshold)[0]
-            #ok=np.array([0,1]) # debug
+            ok=np.where((bundle_rchi2[:,bundle]>0)&(bundle_rchi2[:,bundle]<rchi2_threshold))[0]
 
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
+
+
+            nfailed = np.sum(bundle_rchi2[:,bundle]==0)
+            if nfailed > 1 :
+                message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
+                log.critical(message)
+                raise RuntimeError(message)
 
             # We finally resorted to use a mean instead of a median here for two reasons.
             # First, there is already a vetting of PSF bundles with good chi2 above
