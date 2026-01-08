@@ -11,10 +11,13 @@ desispec Change Log
   (PR `#2579`_).
 * ``assemble_fibermap`` set OBJTYPE=BAD for non-SKY non-TGT targets
   (PR `#2580`_).
+* Improve robustness of ``desi_compute_psf`` and ``desi_average_psf`` when
+  individual bundles fail (PR `#2584`_).
 
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 .. _`#2579`: https://github.com/desihub/desispec/pull/2579
 .. _`#2580`: https://github.com/desihub/desispec/pull/2580
+.. _`#2584`: https://github.com/desihub/desispec/pull/2584
 
 0.70.0 (2025-12-04)
 -------------------
