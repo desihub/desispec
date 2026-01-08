@@ -632,6 +632,13 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
 
+
+            nfailed = np.sum(bundle_rchi2[:,bundle]==0)
+            if nfailed > 1 :
+                message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
+                log.critical(message)
+                raise RuntimeError(message)
+
             # We finally resorted to use a mean instead of a median here for two reasons.
             # First, there is already a vetting of PSF bundles with good chi2 above
             # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
