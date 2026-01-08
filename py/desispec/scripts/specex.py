@@ -451,6 +451,9 @@ def merge_psf(inpsffile, inputs, output):
                      "B{:02d}NPAR".format(b) ]:
             if key in psf_hdulist["PSF"].header :
                 psf_hdulist["PSF"].header[key] = 0
+    # also reset the PSF STATUS
+    index = np.where(psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
+    psf_hdulist["PSF"].data["COEFF"][index][:,0]=-1
 
     for input_filename in inputs :
         log.info("merging {} into {}".format(input_filename, inpsffile))
