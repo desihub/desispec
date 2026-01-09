@@ -13,8 +13,10 @@ import numpy as np
 import yaml
 from astropy.table import Table
 
-from desispec.util import parse_int_args, header2night, is_robust_mode
+from desispec.util import parse_int_args, header2night, is_robust_mode, parse_int_args
+from desispec.io.meta import findfile
 from desiutil.log import get_logger
+from desispec.maskbits import fibermask
 
 def parse_date_obs(value):
     '''
@@ -149,6 +151,57 @@ def ccdregionmask(headers) :
     return masks
 
 badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
+
+
+def get_flagged_fibers(expid, filename=None):
+    """
+    Read flagged fibers from an ECSV file for a specific exposure ID.
+
+    Parameters
+    ----------
+    expid : int
+        The exposure ID to select from the file.
+    filename : str, optional
+        Path to the ECSV file. If None, it will look under $DESI_SPECTRO_CALIB/ccd/flagged_fibers.ecsv.
+
+    Returns
+    -------
+    fibers : list of int
+        List of fiber numbers parsed from the FIBERS column.
+    masks : list of int
+        List of fiberstatus mask values, one per fiber.
+    """
+    from astropy.table import Table
+    from desispec.util import parse_int_args
+
+    if filename is None:
+        filename = findfile('flagged_fibers')
+
+    table = Table.read(filename, format='ascii.ecsv')
+
+    selection = table[table['EXPID'] == expid]
+
+    if len(selection) == 0:
+        return [], []
+
+    fibers = []
+    masks = []
+    for row in selection:
+        fiber_string = row['FIBERS']
+        parsed_fibers = parse_int_args(fiber_string)
+
+        try:
+            mask = fibermask.mask(row['FIBERSTATUS_BITNAME'])
+        except KeyError:
+            log = get_logger()
+            log.error(f"Unknown FIBERSTATUS_BITNAME '{row['FIBERSTATUS_BITNAME']}' in {filename}")
+            raise
+
+        fibers.extend(parsed_fibers)
+        masks.extend([mask] * len(parsed_fibers))
+
+    return fibers, masks
+
 
 def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     """
