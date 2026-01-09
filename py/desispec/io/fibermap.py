@@ -1250,6 +1250,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     if col.startswith('FIBER') or col.startswith('DELTA'):
         fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
 
+    #
+    # Set any fiberstatus flags defined in the flagged_fibers.ecsv file
+    #
+    fibers, masks = get_flagged_fibers(expid)
+    for fiber, mask in zip(fibers, masks):
+        loc = np.where(fibermap['FIBER'] == fiber)[0]
+        if len(loc) == 1:
+            fibermap['FIBERSTATUS'][loc[0]] |= mask
+            log.info(f"Setting FIBERSTATUS flag {mask:#x} for fiber {fiber} from flagged_fibers file.")
+        else:
+            log.warning(f"Fiber {fiber} from flagged_fibers file not found in fibermap!")
+
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
     fibermap.sort('FIBER')
