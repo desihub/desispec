@@ -153,6 +153,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         healpix=None, nside=64, band=None, spectrograph=None,
         survey=None, faprogram=None, version=None,
         rawdata_dir=None, specprod_dir=None, specprod=None,
+        spectrocalib_dir=None,
         tiles_dir=None, outdir=None,
         download=False, return_exists=False,
         readonly=False, logfile=False):
@@ -180,6 +181,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir : overrides $DESI_SPECTRO_DATA
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         specprod : production name, or full path to production
+        spectrocalib_dir : overrides $DESI_SPECTRO_CALIB
         tiles_dir : defaults to $FIBER_ASSIGN_DIR if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
@@ -329,6 +331,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         expinfo = '{specprod_dir}/run/dashboard/expjsons/expinfo_{specprod}_{night}.json',
         zinfo = '{specprod_dir}/run/dashboard/zjsons/zinfo_{specprod}_{night}.json',
+        #
+        # Calibration files
+        #
+        ccd_region_mask = '{spectrocalib_dir}/ccd/ccd-region-mask.csv',
+        flagged_fibers = '{spectrocalib_dir}/ccd/flagged_fibers.ecsv',
+
     )
     ## aliases
     location['desi'] = location['raw']
@@ -438,6 +446,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
         rawdata_dir = rawdata_root()
         log.debug("rawdata_dir = '%s'", rawdata_dir)
 
+    if spectrocalib_dir is None and 'spectrocalib_dir' in required_inputs:
+        spectrocalib_dir = spectrocalib_root()
+        log.debug("spectrocalib_dir = '%s'", spectrocalib_dir)
+
     if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
         specprod_dir = specprod_root(specprod)
         log.debug("specprod_dir = '%s', specprod = '%s'", specprod_dir, specprod)
@@ -480,6 +492,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     if 'rawdata_dir' in required_inputs:
         actual_inputs['rawdata_dir'] = rawdata_dir
+
+    if 'spectrocalib_dir' in required_inputs:
+        actual_inputs['spectrocalib_dir'] = spectrocalib_dir
 
     #- If any inputs missing, print all missing inputs, then raise single ValueError
     missing_inputs = False
@@ -819,6 +834,16 @@ def rawdata_root():
     else:
         return os.path.join(os.environ['DESI_ROOT'], 'spectro', 'data')
 
+def spectrocalib_root():
+    """Returns directory root for calibration data, i.e. ``$DESI_SPECTRO_CALIB``
+
+    Raises:
+        KeyError: if these environment variables aren't set.
+    """
+    if 'DESI_SPECTRO_DATA' in os.environ:
+        return os.environ['DESI_SPECTRO_CALIB']
+    else:
+        return os.path.join(os.environ['DESI_ROOT'], 'spectro', 'desi_spectro_calib', 'trunk')
 
 def specprod_root(specprod=None, readonly=False):
     """Return directory root for spectro production, i.e.

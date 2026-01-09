@@ -124,7 +124,7 @@ def ccdregionmask(headers) :
     """
     log = get_logger()
 
-    ccd_region_mask_filename = os.path.join(os.getenv('DESI_SPECTRO_CALIB'),"ccd/ccd-region-mask.csv")
+    ccd_region_mask_filename = findfile('ccd_region_mask')
     if not os.path.isfile(ccd_region_mask_filename) :
         log.warning(f"No file {ccd_region_mask_filename}")
         return list() # empty list

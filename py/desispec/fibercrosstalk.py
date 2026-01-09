@@ -16,6 +16,7 @@ from desiutil.log import get_logger
 
 from desispec.io import read_xytraceset
 from desispec.calibfinder import CalibFinder
+from desispec.specscore import append_frame_scores
 from desispec.maskbits import specmask,fibermask
 
 def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,asymptotic_power_law_index = 2.5):
@@ -262,3 +263,100 @@ def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None,parameter_filename=N
     frame.flux -= contamination
     frame_var  = 1./(frame.ivar + (frame.ivar==0))
     frame.ivar = (frame.ivar>0)/( frame_var + contamination_var )
+
+    ## document the contamination in the frame's scores table
+    ## create ivar
+    ivar = np.zeros(frame.flux.shape)
+
+    ## null out masked values and zero variances
+    valid_entries = (frame.mask==0)&(contamination_var>0.)
+    ## bool arrays unravel 2d into 1d, so we need to get the indices
+    valid_entries_inds = np.where(valid_entries)
+    not_valid_entries_inds = np.where(~valid_entries)
+    ## calc ivar for all valid entries and set rest to small value to avoid div by 0
+    ivar[valid_entries_inds] = 1./contamination_var[valid_entries_inds]
+    ivar[not_valid_entries_inds] = 1.0e-63 # to avoid division by zero later
+    ## set contamination to zero for invalid entries
+    contamination[not_valid_entries_inds] = 0.
+
+    ## Compute the weighted mean and median
+    band = frame.meta['CAMERA'][0].upper()
+
+    ## Add them to the frame's scores table
+    entries = {
+        f'MEAN_FIB_XTALK_{band}': (np.sum(contamination*ivar, axis=1)/np.sum(ivar, axis=1)).astype(np.float32),
+        f'MEDIAN_FIB_XTALK_{band}':  np.median(contamination, axis=1).astype(np.float32),
+    }
+    comments = {
+        f'MEAN_FIB_XTALK_{band}': 'Inverse variance weighted mean fiber crosstalk contamination (in flux units)',
+        f'MEDIAN_FIB_XTALK_{band}': 'Median fiber crosstalk contamination (in flux units)',
+    }
+    append_frame_scores(frame,entries,comments,overwrite=True)
+
+    #################### TODO Hacks that should be removed later ##########################
+    # from astropy.io import fits
+    # from astropy.table import Table
+    # import os
+    # # Create the primary HDU
+    # header = fits.Header()
+    # for key in frame.meta.keys():
+    #     header[key] = frame.meta[key]
+    # primary_hdu = fits.PrimaryHDU(data=None, header=header)
+
+    # # Create additional HDUs from the ndarrays
+    # hdu1 = fits.ImageHDU(data=frame.flux.data, name='CONTAM_SUBD_FLUX')
+    # hdu2 = fits.ImageHDU(data=frame.ivar.data, name='IVAR')
+    # hdu3 = fits.ImageHDU(data=contamination, name='CONTAMINATION')
+    # hdu4 = fits.ImageHDU(data=frame.mask.data, name='MASK')
+    # hdu5 = fits.ImageHDU(data=frame.wave.data, name='WAVELENGTH')
+    # scores_table = Table()
+    # for key in frame.scores.keys():
+    #     scores_table[key] = frame.scores[key]
+    # hdu6 = fits.BinTableHDU(data=scores_table, name='SCORES')
+
+    # # Create a FITS file, add the HDUs, and save it
+    # specprod = os.environ.get('SPECPROD','unknownspecprod')
+    # night = frame.meta.get('NIGHT','unknownnight')
+    # tileid = frame.meta.get('TILEID','unknowntileid')
+    # expid = frame.meta.get('EXPID','unknownexpid')
+    # camera = frame.meta.get('CAMERA','unknowncamera')
+    # with fits.HDUList([primary_hdu, hdu1, hdu2, hdu3, hdu4, hdu5, hdu6]) as hdul:
+    #     hdul.writeto(os.path.join('/global/cfs/projectdirs/desi/users/kremin/workspace/contaminated_fibers/modified_cframes', f"mod_cframe_{specprod}_{camera}_{night}_{tileid}_{expid}.fits"), overwrite=True)
+    #################### /end Hacks that should be removed later ##########################
+
+    ## if the 70th percentile of the absolute percent contamination is greater than 0.5, flag it
+    contam_frac = np.abs(contamination/frame.flux)
+    contaminated_fibers = np.quantile(contam_frac, 0.7, axis=1) > 0.5
+    frame.fibermap['FIBERSTATUS'][contaminated_fibers] |= fibermask.MANYREJECTED  # set MANYREJECTED flag
+
+    ## Flag spectral bins that are highly contaminated by fiber crosstalk
+    frame.mask[contam_frac > 0.5] |= specmask.CONTAMINATED  # set CONTAMINATED flag
+
+    # #################### TODO Hacks that should be removed later ##########################
+    # quants, cuts, ncontam, fibs = [], [], [], []
+    # for quant in np.arange(0.1,1.,0.1):
+    #     for cut in np.arange(0.1,1.1,0.1):
+    #         contam_mask = np.quantile(contam_frac, quant, axis=1) > cut
+    #         quants.append(quant)
+    #         cuts.append(cut)
+    #         ncontam.append(np.sum(contam_mask))
+    #         fibs.append(';'.join(frame.fibermap['FIBER'][contam_mask].data.astype(str)))
+    #         print(f"{quant=:0.1f}, {cut=:0.1f}, ncontaminated={np.sum(contam_mask)}, fibers={frame.fibermap['FIBER'][contam_mask].data}")
+    # from astropy.table import Table
+    # import os
+    # specprod = os.environ.get('SPECPROD','unknownspecprod')
+    # night = frame.meta.get('NIGHT','unknownnight')
+    # tileid = frame.meta.get('TILEID','unknowntileid')
+    # expid = frame.meta.get('EXPID','unknownexpid')
+    # camera = frame.meta.get('CAMERA','unknowncamera')
+    # t = Table()
+    # t['QUANTILE'] = np.array(quants).astype(np.float16)
+    # t['CUT'] = np.array(cuts).astype(np.float16)
+    # t['NCONTAMINATED'] = np.array(ncontam).astype(np.int16)
+    # t['FIBERS'] = fibs
+    # t['NIGHT'] = np.int32(night) if str(night).isdigit() else -1
+    # t['TILEID'] = np.int32(tileid) if str(tileid).isdigit() else -1
+    # t['EXPID'] = np.int32(expid) if str(expid).isdigit() else -1
+    # t['CAMERA'] = camera
+    # t.write(os.path.join(os.environ['SCRATCH'], 'contaminated_fiber_tables', f"contaminated_fibers_table_{specprod}_{camera}_{night}_{tileid}_{expid}.fits"), overwrite=True)
+    # #################### /end Hacks that should be removed later ##########################
