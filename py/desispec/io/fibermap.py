@@ -26,7 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
-from desispec.calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder, get_flagged_fibers
 
 from . import iotime
 from .table import read_table
