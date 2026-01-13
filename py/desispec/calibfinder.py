@@ -13,8 +13,7 @@ import numpy as np
 import yaml
 from astropy.table import Table
 
-from desispec.util import parse_int_args, header2night, is_robust_mode, parse_int_args
-from desispec.io.meta import findfile
+from desispec.util import parse_int_args, header2night, is_robust_mode
 from desiutil.log import get_logger
 from desispec.maskbits import fibermask
 
@@ -124,6 +123,7 @@ def ccdregionmask(headers) :
 
     Returns list of dictionnaries with keys XMIN, XMAX, YMIN,YMAX
     """
+    from desispec.io.meta import findfile
     log = get_logger()
 
     ccd_region_mask_filename = findfile('ccd_region_mask')
@@ -150,8 +150,6 @@ def ccdregionmask(headers) :
         masks.append(mask)
     return masks
 
-badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
-
 
 def get_flagged_fibers(expid, filename=None):
     """
@@ -171,13 +169,11 @@ def get_flagged_fibers(expid, filename=None):
     masks : list of int
         List of fiberstatus mask values, one per fiber.
     """
-    from astropy.table import Table
-    from desispec.util import parse_int_args
-
+    from desispec.io.meta import findfile
     if filename is None:
         filename = findfile('flagged_fibers')
 
-    table = Table.read(filename, format='ascii.ecsv')
+    table = Table.read(filename)
 
     selection = table[table['EXPID'] == expid]
 
@@ -203,6 +199,7 @@ def get_flagged_fibers(expid, filename=None):
     return fibers, masks
 
 
+badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     """
     find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
@@ -221,8 +218,8 @@ def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     cfinder = CalibFinder(headers,yaml_file)
     return cfinder.badfibers(keys)
 
-class CalibFinder() :
 
+class CalibFinder() :
 
     def __init__(self,headers,yaml_file=None, fallback_on_dark_not_found=False) :
         """
