@@ -42,7 +42,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desispec import validredshifts
-from desispec.tsnr import tsnr2_to_efftime
+from desispec.tsnr import tsnr2_to_efftime, program_to_tsnr2_colname
 
 def load_sv1_ivar_w12(hpix, targetids):
     """
@@ -123,6 +123,10 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
     with fitsio.FITS(rrfile) as fx:
         hdr = fx[0].read_header()
+
+        # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
+        program = hdr['PROGRAM']
+
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
             log.warning("Skipping {} with SPGRP {} != group {}".format(
@@ -355,8 +359,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
             index=icol, name='SPGRPVAL')
 
     # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-    header = fitsio.read_header(rrfile, ext=0)
-    data['PROGRAM'] = header['PROGRAM']
+    data['PROGRAM'] = program
 
     return data, expfibermap
 
@@ -601,13 +604,12 @@ def main(args=None):
             badtiles = np.unique(zcat['TILEID'][bad])
             raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
 
-    # Add EFFTIME_SPEC; see https://github.com/desihub/desispec/issues/2560
-    tsnr2_to_efftime_dict = {'backup': 'GPBBACKUP', 'bright': 'BGS', 'dark': 'LRG', 'other': 'LRG'}
+    # Add EFFTIME_SPEC
     zcat['EFFTIME_SPEC'] = np.full(len(zcat), -999., dtype=np.float32)
-    for program in tsnr2_to_efftime_dict.keys():
+    for program in np.unique(zcat['PROGRAM']):
         mask = zcat['PROGRAM']==program
-        tsnr2_col = tsnr2_to_efftime_dict[program]
-        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat['TSNR2_'+tsnr2_col][mask], tsnr2_col)
+        tsnr2_col = program_to_tsnr2_colname(program)
+        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat[tsnr2_col][mask], tsnr2_col[6:])
     assert np.all(zcat['EFFTIME_SPEC']!=-999.)  # check that all objects are assigned a EFFTIME_SPEC value
     zcat.remove_column('PROGRAM')
 
