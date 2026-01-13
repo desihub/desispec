@@ -1258,7 +1258,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         loc = np.where(fibermap['FIBER'] == fiber)[0]
         if len(loc) == 1:
             fibermap['FIBERSTATUS'][loc[0]] |= mask
-            log.info(f"Setting FIBERSTATUS flag {mask:#x} for fiber {fiber} from flagged_fibers file.")
+            log.info(f"Setting FIBERSTATUS flag {mask} for fiber {fiber} from flagged_fibers file.")
         else:
             log.warning(f"Fiber {fiber} from flagged_fibers file not found in fibermap!")
 
