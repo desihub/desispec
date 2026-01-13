@@ -172,6 +172,10 @@ def get_flagged_fibers(expid, filename=None):
     from desispec.io.meta import findfile
     if filename is None:
         filename = findfile('flagged_fibers')
+    if not os.path.exists(filename):
+        log = get_logger()
+        log.warning(f"Per exposure bad fiber file not found in DESI_SPECTRO_CALIB: {filename}. Proceeding without it.")
+        return [], []
 
     table = Table.read(filename)
 

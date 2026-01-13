@@ -151,10 +151,11 @@ class TestCalibFinder(unittest.TestCase):
                 self.assertLessEqual(fiber, 4999)
 
     def test_flaggedfiber_filename_none_raises(self):
-        """Test that None filename raises ValueError."""
+        """Test that None filename returns empty lists."""
         from ..calibfinder import get_flagged_fibers
-        with self.assertRaises(KeyError):
-            get_flagged_fibers(12345, filename=None)
+        fibers, masks = get_flagged_fibers(12345, filename=None)
+        self.assertEqual(len(fibers), 0)
+        self.assertEqual(len(masks), 0)
 
     def test_flaggedfiber_highest_bit_mask(self):
         """Test handling of highest bit in 32-bit mask (bit 31)."""
