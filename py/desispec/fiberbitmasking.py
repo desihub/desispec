@@ -183,7 +183,7 @@ def get_all_nonamp_fiberbitmask_val():
         they are ok for some types of processing but not others.
     """
     return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
-            fmsk.BADPOSITION | \
+            fmsk.BADPOSITION | fmsk.BRIGHTNEIGHBOR  | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
