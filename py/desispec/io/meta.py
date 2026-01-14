@@ -840,7 +840,7 @@ def spectrocalib_root():
     Raises:
         KeyError: if these environment variables aren't set.
     """
-    if 'DESI_SPECTRO_DATA' in os.environ:
+    if 'DESI_SPECTRO_CALIB' in os.environ:
         return os.environ['DESI_SPECTRO_CALIB']
     else:
         return os.path.join(os.environ['DESI_ROOT'], 'spectro', 'desi_spectro_calib', 'trunk')
