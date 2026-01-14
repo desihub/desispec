@@ -138,7 +138,7 @@ class TestCalibFinder(unittest.TestCase):
         fibers, masks = get_flagged_fibers(12345, filename=self.test_flaggedfile)
 
         for mask in masks:
-            self.assertTrue(mask > 0)
+            self.assertGreater(mask, 0)
             self.assertEqual(mask & (mask - 1), 0, f"Mask {mask} has more than one bit set")
 
     def test_flaggedfiber_fibers_in_valid_range(self):
