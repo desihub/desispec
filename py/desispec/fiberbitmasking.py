@@ -154,7 +154,7 @@ def get_flat_fiberbitmask_val(band):
     Return mask of bad FIBERSTATUS bits for fiberflats
     i.e. fibers with these bits set have a bad fiberflat and cannot be used
     """
-    return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
+    return (fmsk.BROKENFIBER | fmsk.BRIGHTNEIGHBOR | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
 def get_fluxcalib_fiberbitmask_val(band):
