@@ -140,6 +140,17 @@ class TestZCatalog(unittest.TestCase):
                              ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
                               'PLATE_RA', 'PLATE_DEC', 'DESI_TARGET', 'BGS_TARGET',
                               'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])
+
+        # subset but in standard order
+        columns = ['TARGETID', 'SURVEY', 'PROGRAM', 'ZCAT_PRIMARY']
+        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list=columns)
+        self.assertListEqual(t2.colnames, columns)
+
+        # non-standard order
+        columns = ['DESI_TARGET', 'TARGETID', 'PLATE_DEC', 'PLATE_RA']
+        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list=columns)
+        self.assertListEqual(t2.colnames, columns)
+
         t2 = update_table_columns(t, 'ztile', 'ZCATALOG',
                                   columns_list=['TARGETID', 'SURVEY', 'PROGRAM', 'ZCAT_PRIMARY'])
         self.assertListEqual(t2.colnames,
