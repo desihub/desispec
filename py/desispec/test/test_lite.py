@@ -47,6 +47,7 @@ class TestLite(unittest.TestCase):
         fibermap['TILEID'] = 1000 * np.ones(nspec, dtype='i4')
         fibermap['FIBERSTATUS'] = np.zeros(nspec, dtype='i4')
         fibermap['DESI_TARGET'] = np.arange(nspec, dtype='i8')
+        fibermap['OBJTYPE'] = 'TGT'
 
         cls.spectra = Spectra(bands=bands, wave=wave, flux=flux, ivar=ivar,
                               resolution_data=rdat, fibermap=fibermap)
