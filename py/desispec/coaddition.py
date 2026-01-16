@@ -700,6 +700,28 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     else:
         log.info(f'Not performing cosmics sigma clipping ({cosmics_nsig=})')
 
+    # per exposure coadd for determining the normalization term for all bands
+    spectra_coadd = coadd_cameras(spectra)
+    N_exps = np.unique(spectra.fibermap['EXPID']).size
+
+    # compute normalization terms per exposure
+    norm = np.ones(shape=(ntarget, N_exps))
+    for i,tgt in enumerate(targets):
+
+        idx = np.where(spectra_coadd.fibermap['TARGETID'] == tgt)[0]
+        if np.all(spectra_coadd.fibermap['OBJTYPE'][idx] == 'TGT'):
+            try:
+                exp_avg = np.average(spectra_coadd.flux['brz'][idx], weights=spectra_coadd.ivar['brz'][idx]*(spectra_coadd.mask['brz'][idx]==0), axis=1)
+                all_avg = np.average(spectra_coadd.flux['brz'][idx], weights=spectra_coadd.ivar['brz'][idx]*(spectra_coadd.mask['brz'][idx]==0))
+                norm[i] = (all_avg/exp_avg)
+                
+            except ZeroDivisionError:
+                # do not apply normalization term
+                continue
+        else: 
+            # do not apply normalization term
+            continue
+
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
 
@@ -738,11 +760,14 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             if len(jj) == 0:
                 continue
 
+            # reshape normalization term
+            norm_term = norm[i].reshape(N_exps,1)[good_fiberstatus[(spectra.fibermap["TARGETID"] == tid)]]
+
             # here we keep original variance array that will not be modified
             # and ivarjj_masked which will be modified by
             # cosmic rays check and mask>0 check
-            ivarjj_orig = spectra.ivar[b][jj].copy()
-            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0)
+            ivarjj_orig = spectra.ivar[b][jj].copy() * norm_term**-2
+            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0) * norm_term**-2
 
             if cosmics_nsig is not None and cosmics_nsig > 0:
                 cosmic_mask = _mask_cosmics(spectra.wave[b],
@@ -753,6 +778,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
                                             camera=b)
                 ivarjj_masked[cosmic_mask] = 0
                 # We might think to log some info about cosmic mask
+                
             # inverse variance weights
             weights = ivarjj_masked * 1
             tivar[i] = np.sum(ivarjj_masked, axis=0)
@@ -762,10 +788,10 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             # we still use the variances ignoring masking
 
             tivar[i][bad] = np.sum(weights[:, bad], axis=0)
-            # we now recalculate the tivar, because we just replaced updated the weigths
+            # we now recalculate the tivar, because we just replaced updated the weights
             weights = weights / (tivar[i] + (tivar[i] == 0))
-            tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
-
+            tflux[i] = np.sum(weights * spectra.flux[b][jj] * norm_term, axis=0)
+            
             if spectra.resolution_data is not None :
                 trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
                                                     weights)[0]
