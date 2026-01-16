@@ -702,26 +702,25 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
 
     # per exposure coadd for determining the normalization term for all bands
     spectra_coadd = coadd_cameras(spectra)
-    N_exps = np.unique(spectra.fibermap['EXPID']).size
-    bands = spectra_coadd.bands
+    band = spectra_coadd.bands[0]
 
     # compute normalization terms per exposure
-    norm = np.ones(shape=(ntarget, N_exps))
+    norm = []
     for i,tgt in enumerate(targets):
 
         idx = np.where(spectra_coadd.fibermap['TARGETID'] == tgt)[0]
         if np.all(spectra_coadd.fibermap['OBJTYPE'][idx] == 'TGT'):
             try:
-                exp_avg = np.average(spectra_coadd.flux[bands[0]][idx], weights=spectra_coadd.ivar[bands[0]][idx]*(spectra_coadd.mask[bands[0]][idx]==0), axis=1)
-                all_avg = np.average(spectra_coadd.flux[bands[0]][idx], weights=spectra_coadd.ivar[bands[0]][idx]*(spectra_coadd.mask[bands[0]][idx]==0))
-                norm[i] = (all_avg/exp_avg)
+                exp_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(spectra_coadd.mask[band][idx]==0), axis=1)
+                all_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(spectra_coadd.mask[band][idx]==0))
+                norm.append(all_avg/exp_avg)
                 
             except ZeroDivisionError:
                 # do not apply normalization term
-                continue
+                norm.append(np.ones(idx.size))
         else: 
             # do not apply normalization term
-            continue
+            norm.append(np.ones(idx.size))
 
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
@@ -762,7 +761,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
                 continue
 
             # reshape normalization term
-            norm_term = norm[i].reshape(N_exps,1)[good_fiberstatus[(spectra.fibermap["TARGETID"] == tid)]]
+            norm_term = norm[i][good_fiberstatus[(spectra.fibermap["TARGETID"] == tid)]].reshape(jj.size,1)
 
             # here we keep original variance array that will not be modified
             # and ivarjj_masked which will be modified by
