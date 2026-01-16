@@ -825,7 +825,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
-    need_cfinder = (mask is True) or (pixflat is True)
+    need_cfinder = (mask is True) or (pixflat is True) or (bias is True)
 
     cfinder = None
     if ccd_calibration_filename is not False and need_cfinder:
