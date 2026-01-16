@@ -42,6 +42,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desispec import validredshifts
+from desispec.tsnr import tsnr2_to_efftime, program_to_tsnr2_colname
 
 def load_sv1_ivar_w12(hpix, targetids):
     """
@@ -122,6 +123,10 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
     with fitsio.FITS(rrfile) as fx:
         hdr = fx[0].read_header()
+
+        # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
+        program = hdr['PROGRAM']
+
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
             log.warning("Skipping {} with SPGRP {} != group {}".format(
@@ -352,6 +357,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
             raise NotImplementedError(f'No method to reconstruct SPGRPVAL!')
     data.add_column(np.full(nrows, val, dtype=dtype),
             index=icol, name='SPGRPVAL')
+
+    # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
+    data['PROGRAM'] = program
 
     return data, expfibermap
 
@@ -596,16 +604,19 @@ def main(args=None):
             badtiles = np.unique(zcat['TILEID'][bad])
             raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
 
-    #- if TARGETIDs appear more than once, which one is best within this catalog?
-    if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
-        # Add EFFTIME_SPEC; definition from Equation 22 of Guy et al. 2023 (arxiv:2209.14482)
-        zcat['EFFTIME_SPEC'] = 12.15 * zcat['TSNR2_LRG']
-        log.info('Finding best spectrum for each target')
-        nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
-        zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
-        zcat['ZCAT_PRIMARY'] = primary
-    else:
-        log.info('Missing TSNR2_LRG or ZWARN; not adding EFFTIME_SPEC, ZCAT_PRIMARY/_NSPEC')
+    # Add EFFTIME_SPEC
+    zcat['EFFTIME_SPEC'] = np.full(len(zcat), -999., dtype=np.float32)
+    for program in np.unique(zcat['PROGRAM']):
+        mask = zcat['PROGRAM']==program
+        tsnr2_col = program_to_tsnr2_colname(program)
+        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat[tsnr2_col][mask], tsnr2_col[6:])
+    assert np.all(zcat['EFFTIME_SPEC']!=-999.)  # check that all objects are assigned a EFFTIME_SPEC value
+    zcat.remove_column('PROGRAM')
+
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
 
     #- Used for fuji, should not be needed for later prods
     if args.patch_missing_ivar_w12:
