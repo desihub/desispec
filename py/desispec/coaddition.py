@@ -703,6 +703,11 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     # per exposure coadd for determining the normalization term for all bands
     spectra_coadd = coadd_cameras(spectra)
     band = spectra_coadd.bands[0]
+    if spectra_coadd.mask is not None:
+        coadd_mask = spectra_coadd.mask[band]
+    else:
+        # create a zero mask to use 
+        coadd_mask = np.zeros(spectra_coadd.flux[band].shape, dtype=int)
 
     # compute normalization terms per exposure
     norm = []
@@ -711,8 +716,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
         idx = np.where(spectra_coadd.fibermap['TARGETID'] == tgt)[0]
         if np.all(spectra_coadd.fibermap['OBJTYPE'][idx] == 'TGT'):
             try:
-                exp_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(spectra_coadd.mask[band][idx]==0), axis=1)
-                all_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(spectra_coadd.mask[band][idx]==0))
+                exp_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(coadd_mask[idx]==0), axis=1)
+                all_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(coadd_mask[idx]==0))
                 norm.append(all_avg/exp_avg)
                 
             except ZeroDivisionError:
