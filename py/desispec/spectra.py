@@ -76,7 +76,7 @@ class Spectra(object):
     extra_catalog : numpy or astropy Table, optional
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
-    copy_inputs : bool
+    copy : bool
         Whether or not to copy the input arrays when creating
         the Spectra object. If False, only prevents copying
         when the input dtype does not match the value of `single`,
@@ -91,7 +91,7 @@ class Spectra(object):
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None, model=None,
             single=False, scores=None, redshifts=None, scores_comments=None,
-            extra_catalog=None, copy_inputs=True):
+            extra_catalog=None, copy=True):
 
         self._bands = bands
         self._single = single
@@ -214,20 +214,20 @@ class Spectra(object):
 
         for b in self._bands:
             self.wave[b] = np.copy(wave[b]) # Probably "fine" to always copy just the wavelength grid.
-            self.flux[b] = flux[b].astype(self._ftype, copy=copy_inputs)
-            self.ivar[b] = ivar[b].astype(self._ftype, copy=copy_inputs)
+            self.flux[b] = flux[b].astype(self._ftype, copy=copy)
+            self.ivar[b] = ivar[b].astype(self._ftype, copy=copy)
             if model is not None:
-                self.model[b] = model[b].astype(np.float32, copy=copy_inputs)
+                self.model[b] = model[b].astype(np.float32, copy=copy)
             if mask is not None:
                 self.mask[b] = mask[b]
             if resolution_data is not None:
-                self.resolution_data[b] = resolution_data[b].astype(self._ftype, copy=copy_inputs)
+                self.resolution_data[b] = resolution_data[b].astype(self._ftype, copy=copy)
                 self.R[b] = np.array( [ Resolution(r) for r in resolution_data[b] ] )
             if extra is not None:
                 if extra[b] is not None:
                     self.extra[b] = {}
                     for ex in extra[b].items():
-                        self.extra[b][ex[0]] = ex[1].astype(self._ftype, copy=copy_inputs)
+                        self.extra[b][ex[0]] = ex[1].astype(self._ftype, copy=copy)
 
     @property
     def bands(self):

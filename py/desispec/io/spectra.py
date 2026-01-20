@@ -515,7 +515,7 @@ def read_spectra(
         single=single,
         scores=scores,
         redshifts=redshifts,
-        copy_inputs=False
+        copy=False
     )
 
     # if needed, sort spectra to match order of targetids, which could be
