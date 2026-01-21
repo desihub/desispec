@@ -1034,6 +1034,12 @@ def coadd_cameras(spectra):
     #- will make a copy of the input tables/arrays while also handling the case
     #- where they might be None without crashing on None.copy().
 
+    # extras does not have a clear definition for being coadded across cameras
+    # drop with warning
+    if spectra.extra is not None:
+        log.warning("extras dictionary cannot be coadded across cameras, ignoring")
+        spectra.extra = None
+
     res = Spectra(
         bands= [wavebands],
         wave=wave_combined,
