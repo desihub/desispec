@@ -700,32 +700,64 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     else:
         log.info(f'Not performing cosmics sigma clipping ({cosmics_nsig=})')
 
-    # per exposure coadd for determining the normalization term for all bands
-    spectra_coadd = coadd_cameras(spectra)
-    band = spectra_coadd.bands[0]
-    if spectra_coadd.mask is not None:
-        coadd_mask = spectra_coadd.mask[band]
-    else:
-        # create a zero mask to use 
-        coadd_mask = np.zeros(spectra_coadd.flux[band].shape, dtype=int)
-
     # compute normalization terms per exposure
     norm = []
     for i,tgt in enumerate(targets):
 
-        idx = np.where(spectra_coadd.fibermap['TARGETID'] == tgt)[0]
-        if np.all(spectra_coadd.fibermap['OBJTYPE'][idx] == 'TGT'):
-            try:
-                exp_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(coadd_mask[idx]==0), axis=1)
-                all_avg = np.average(spectra_coadd.flux[band][idx], weights=spectra_coadd.ivar[band][idx]*(coadd_mask[idx]==0))
-                norm.append(all_avg/exp_avg)
+        idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
+        if np.all(spectra.fibermap['OBJTYPE'][idx] == 'TGT'):
+
+            try: 
+                # check which cameras are in ALL exposures
+                useable_bands = []
+                for b in spectra.bands:
+                    if spectra.mask is not None:
+                        spectra_mask = spectra.mask[b][idx]
+                    else:
+                        # create a zero mask to use
+                        spectra_mask = np.zeros(spectra.flux[b][idx].shape, dtype=int)
+                    nwave = spectra.wave[b].size
+                    num_masked_pixels = np.sum((spectra_mask != 0)&(spectra.ivar[b][idx] == 0), 1)
+                    if np.all(num_masked_pixels < (nwave/2.)):
+                        # >50% of the band has unmasked data in all exposures
+                        useable_bands.append(b)
+    
+                if len(useable_bands) == 0:
+                    log.warning(f'spectra for targetid {tgt} could not be normalized to mean before coaddition')
+                    norm.append(np.ones(idx.size))
+                    continue
+    
+                # exposure error-weighted average flux
+                exp_avg = np.zeros(idx.size)
+                exp_weight_tot = np.zeros(idx.size) 
+                # error-weighted average flux of (crudely) coadded exposures
+                all_avg = 0
+                all_weight_tot = 0 
+                for b in useable_bands:
+                    if spectra.mask is not None:
+                        spectra_mask = spectra.mask[b][idx]  
+                    else:
+                        # create a zero mask to use
+                        spectra_mask = np.zeros(spectra.flux[b][idx].shape, dtype=int)
+                    exp_avg += np.sum(spectra.flux[b][idx]*spectra.ivar[b][idx]*(spectra_mask == 0), axis=1)
+                    exp_weight_tot += np.sum(spectra.ivar[b][idx]*(spectra_mask == 0), axis=1) 
+                    all_avg += np.sum(spectra.flux[b][idx]*spectra.ivar[b][idx]*(spectra_mask == 0), axis=0).sum()
+                    all_weight_tot += np.sum(spectra.ivar[b][idx]*(spectra_mask == 0), axis=0).sum() 
                 
+                # error-weighted average flux over useable bands per each expoosure
+                exp_avg /= exp_weight_tot
+                all_avg /= all_weight_tot
+    
+                norm.append(all_avg/exp_avg)
+
             except ZeroDivisionError:
                 # do not apply normalization term
                 norm.append(np.ones(idx.size))
+
         else: 
-            # do not apply normalization term
-            norm.append(np.ones(idx.size))
+            # do not apply normalization term, non-target type
+           norm.append(np.ones(idx.size))
+            
 
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
@@ -1033,12 +1065,6 @@ def coadd_cameras(spectra):
     #- Syntax note: "spectra.blat.copy() if spectra.blat is not None else None"
     #- will make a copy of the input tables/arrays while also handling the case
     #- where they might be None without crashing on None.copy().
-
-    # extras does not have a clear definition for being coadded across cameras
-    # drop with warning
-    if spectra.extra is not None:
-        log.warning("extras dictionary cannot be coadded across cameras, ignoring")
-        spectra.extra = None
 
     res = Spectra(
         bands= [wavebands],
