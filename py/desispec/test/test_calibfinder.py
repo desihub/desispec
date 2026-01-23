@@ -33,6 +33,7 @@ class TestCalibFinder(unittest.TestCase):
         for c in "brz" :
             shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir,f"{c}0.yaml"))
 
+        ## not the standard location, so that we test providing it with explicit filename
         cls.test_flaggedfile = os.path.join(cls.calibdir, 'test_flagged_fibers.ecsv')
 
         table = Table()
@@ -200,7 +201,6 @@ class TestCalibFinder(unittest.TestCase):
 
         self.assertEqual(masks[0], 2147483648)
         self.assertEqual(masks[0], 1 << 31)
-        self._remove_env_calibdir(reset_calib_env)
 
         max_32bit = 2**32 - 1
         for mask in masks:
