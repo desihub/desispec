@@ -1506,6 +1506,9 @@ def apply_flux_calibration(frame, fluxcalib):
         if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
             frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
+        if "FLAT_TO_PSF_FLUX" in fluxcalib.fibercorr.dtype.names :
+            log.info("add a column FLAT_TO_PSF_FLUX to fibermap")
+            frame.fibermap["FLAT_TO_PSF_FLUX"]=fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"]
 
 
 def ZP_from_calib(exptime, wave, calib):
