@@ -13,10 +13,12 @@ desispec Change Log
   (PR `#2580`_).
 * Improve robustness of ``desi_compute_psf`` and ``desi_average_psf`` when
   individual bundles fail (PR `#2584`_).
-* For zcatalogs, make EFFTIME_SPEC program-dependent to match tile usage
+* For zcatalogs, make ``EFFTIME_SPEC`` program-dependent to match tile usage
     (PR `#2583`_).
 * Add ``copy`` argument to Spectra object (PR `#2590`_).
+* Apply gains to preprocessed darks (PR `#2591`_).
 * Add ``FLAT_TO_PSF_FLUX`` to fibermap (PR `#2597`_).
+* Make ``FLAT_TO_PSF_FLUX`` and ``PSF_TO_FIBER_SPECFLUX`` float32 (PR `#2598`_).
 
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 .. _`#2579`: https://github.com/desihub/desispec/pull/2579
@@ -24,7 +26,9 @@ desispec Change Log
 .. _`#2583`: https://github.com/desihub/desispec/pull/2583
 .. _`#2584`: https://github.com/desihub/desispec/pull/2584
 .. _`#2590`: https://github.com/desihub/desispec/pull/2590
+.. _`#2591`: https://github.com/desihub/desispec/pull/2591
 .. _`#2597`: https://github.com/desihub/desispec/pull/2597
+.. _`#2598`: https://github.com/desihub/desispec/pull/2598
 
 0.70.0 (2025-12-04)
 -------------------
