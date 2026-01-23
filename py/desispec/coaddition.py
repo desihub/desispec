@@ -753,9 +753,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
                 continue
 
             a = np.median(crude_coadd)/exp_med
-            # rescale coefficients
-            a /= np.mean(a)
-
             norm.append(a)
 
         else: 
