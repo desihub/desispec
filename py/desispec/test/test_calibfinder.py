@@ -36,11 +36,13 @@ class TestCalibFinder(unittest.TestCase):
         cls.test_flaggedfile = os.path.join(cls.calibdir, 'test_flagged_fibers.ecsv')
 
         table = Table()
-        table['EXPID'] = [12345, 12345, 67890, 99999]
-        table['FIBERS'] = ['0:5', '100,101,102', '4995:5000', '2500']
-        table['FIBERSTATUS_BITNAME'] = ['BRIGHTNEIGHBOR', 'BADFIBER', 'RESERVED31', 'BADTRACE']
-        #                 maskval      [ 2048,             65536,      2147483648,   131072   ]
-        #                 bitnum       [ 11,               16,         31,           17       ]
+        table['EXPID'] = [12345, 12345, 67890, 99999, 4680]
+        table['FIBERS'] = ['0:5', '100,101,102', '4995:5000', '2500', '100-104']
+        table['FIBERSTATUS_BITNAME'] = ['BRIGHTNEIGHBOR', 'BADFIBER', 'RESERVED31', 'BADTRACE', 'BRIGHTNEIGHBOR|BADFIBER']
+        #                 maskval      [ 2048,             65536,      2147483648,   131072,    2048+65536   ]
+        #                 bitnum       [ 11,               16,         31,           17,        11;16       ]
+        table['COMMENTS'] = ['Test multiple rows same EXPID', 'Test multiple rows same EXPID',
+                             'High Mask Bit', 'Test single fiber', 'Test multiple bits']
 
         table.write(cls.test_flaggedfile, format='ascii.ecsv', overwrite=True)
 
@@ -92,9 +94,28 @@ class TestCalibFinder(unittest.TestCase):
         darkfile = cfinder.findfile('DARK')
         self.assertTrue(darkfile is not None)
 
+    def _set_env_calibdir(self):
+        """Set $DESI_SPECTRO_CALIB to the test calibdir
+        """
+        reset_calib_env = False
+        if os.getenv('DESI_SPECTRO_CALIB', None) is None:
+            os.environ['DESI_SPECTRO_CALIB'] = self.calibdir
+            reset_calib_env = True
+        return reset_calib_env
+
+    def _remove_env_calibdir(self, reset_calib_env):
+        """Set $DESI_SPECTRO_CALIB to the test calibdir
+
+        Args:
+            reset_calib_env (bool): if True, remove the env var to reset to original state
+        """
+        if reset_calib_env:
+            del os.environ['DESI_SPECTRO_CALIB']
+
     def test_flaggedfiber_single_row_range(self):
         """Test parsing a fiber range from a single matching row."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(67890, filename=self.test_flaggedfile)
 
         expected_fibers = [4995, 4996, 4997, 4998, 4999]
@@ -103,10 +124,13 @@ class TestCalibFinder(unittest.TestCase):
         self.assertEqual(fibers, expected_fibers)
         self.assertEqual(masks, expected_masks)
         self.assertEqual(len(fibers), len(masks))
+        self._remove_env_calibdir(reset_calib_env)
+
 
     def test_flaggedfiber_multiple_rows_same_expid(self):
         """Test combining fibers from multiple rows with the same EXPID."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(12345, filename=self.test_flaggedfile)
 
         expected_fibers = [0, 1, 2, 3, 4, 100, 101, 102]
@@ -115,57 +139,81 @@ class TestCalibFinder(unittest.TestCase):
         self.assertEqual(fibers, expected_fibers)
         self.assertEqual(masks, expected_masks)
         self.assertEqual(len(fibers), len(masks))
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_single_fiber(self):
         """Test parsing a single fiber number."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(99999, filename=self.test_flaggedfile)
 
         self.assertEqual(fibers, [2500])
         self.assertEqual(masks, [131072])
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_nonexistent_expid(self):
         """Test that nonexistent EXPID returns empty lists."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(11111, filename=self.test_flaggedfile)
 
         self.assertEqual(fibers, [])
         self.assertEqual(masks, [])
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_mask_is_single_bit(self):
         """Test that each mask value has only a single bit set."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(12345, filename=self.test_flaggedfile)
 
         for mask in masks:
             self.assertGreater(mask, 0)
             self.assertEqual(mask & (mask - 1), 0, f"Mask {mask} has more than one bit set")
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_fibers_in_valid_range(self):
         """Test that all fiber numbers are in valid range 0-4999."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         for expid in [12345, 67890, 99999]:
             fibers, masks = get_flagged_fibers(expid, filename=self.test_flaggedfile)
             for fiber in fibers:
                 self.assertGreaterEqual(fiber, 0)
                 self.assertLessEqual(fiber, 4999)
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_filename_none_raises(self):
         """Test that None filename returns empty lists."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(12345, filename=None)
         self.assertEqual(len(fibers), 0)
         self.assertEqual(len(masks), 0)
+        self._remove_env_calibdir(reset_calib_env)
 
     def test_flaggedfiber_highest_bit_mask(self):
         """Test handling of highest bit in 32-bit mask (bit 31)."""
         from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(67890, filename=self.test_flaggedfile)
 
         self.assertEqual(masks[0], 2147483648)
         self.assertEqual(masks[0], 1 << 31)
+        self._remove_env_calibdir(reset_calib_env)
 
         max_32bit = 2**32 - 1
         for mask in masks:
             self.assertLessEqual(mask, max_32bit)
             self.assertGreaterEqual(mask, 0)
+        self._remove_env_calibdir(reset_calib_env)
+
+    def test_flaggedfiber_multiplebits(self):
+        """Test handling of multiple bits in a single table row."""
+        from ..calibfinder import get_flagged_fibers
+        reset_calib_env = self._set_env_calibdir()
+        fibers, masks = get_flagged_fibers(4680, filename=self.test_flaggedfile)
+        self.assertEqual(len(masks), 4)
+        for mask in masks:
+            self.assertEqual(mask, 2048+65536)
+        self._remove_env_calibdir(reset_calib_env)
