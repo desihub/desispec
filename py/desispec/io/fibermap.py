@@ -26,7 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
-from desispec.calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder, get_flagged_fibers
 
 from . import iotime
 from .table import read_table
@@ -1250,6 +1250,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- if position was unknown, set FIBERSTATUS as BADPOSITION
     if col.startswith('FIBER') or col.startswith('DELTA'):
         fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
+
+    #
+    # Set any fiberstatus flags defined in the flagged_fibers.ecsv file
+    #
+    fibers, masks = get_flagged_fibers(expid)
+    for fiber, mask in zip(fibers, masks):
+        loc = np.where(fibermap['FIBER'] == fiber)[0]
+        if len(loc) == 1:
+            fibermap['FIBERSTATUS'][loc[0]] |= mask
+            log.info(f"Setting FIBERSTATUS flag {mask} for fiber {fiber} from flagged_fibers file.")
+        else:
+            log.warning(f"Fiber {fiber} from flagged_fibers file not found in fibermap!")
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table

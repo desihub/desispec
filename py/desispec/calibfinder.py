@@ -15,6 +15,7 @@ from astropy.table import Table
 
 from desispec.util import parse_int_args, header2night, is_robust_mode
 from desiutil.log import get_logger
+from desispec.maskbits import fibermask
 
 def parse_date_obs(value):
     '''
@@ -122,9 +123,10 @@ def ccdregionmask(headers) :
 
     Returns list of dictionnaries with keys XMIN, XMAX, YMIN,YMAX
     """
+    from desispec.io.meta import findfile
     log = get_logger()
 
-    ccd_region_mask_filename = os.path.join(os.getenv('DESI_SPECTRO_CALIB'),"ccd/ccd-region-mask.csv")
+    ccd_region_mask_filename = findfile('ccd_region_mask')
     if not os.path.isfile(ccd_region_mask_filename) :
         log.warning(f"No file {ccd_region_mask_filename}")
         return list() # empty list
@@ -148,8 +150,60 @@ def ccdregionmask(headers) :
         masks.append(mask)
     return masks
 
-badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 
+def get_flagged_fibers(expid, filename=None):
+    """
+    Read flagged fibers from an ECSV file for a specific exposure ID.
+
+    Parameters
+    ----------
+    expid : int
+        The exposure ID to select from the file.
+    filename : str, optional
+        Path to the ECSV file. If None, it will look under $DESI_SPECTRO_CALIB/ccd/flagged_fibers.ecsv.
+
+    Returns
+    -------
+    fibers : list of int
+        List of fiber numbers parsed from the FIBERS column.
+    masks : list of int
+        List of fiberstatus mask values, one per fiber.
+    """
+    from desispec.io.meta import findfile
+    if filename is None:
+        filename = findfile('flagged_fibers')
+    if not os.path.exists(filename):
+        log = get_logger()
+        log.warning(f"Per exposure bad fiber file not found in DESI_SPECTRO_CALIB: {filename}. Proceeding without it.")
+        return [], []
+
+    table = Table.read(filename)
+
+    selection = table[table['EXPID'] == expid]
+
+    if len(selection) == 0:
+        return [], []
+
+    fibers = []
+    masks = []
+    for row in selection:
+        fiber_string = row['FIBERS']
+        parsed_fibers = parse_int_args(fiber_string)
+
+        try:
+            mask = fibermask.mask(row['FIBERSTATUS_BITNAME'])
+        except KeyError:
+            log = get_logger()
+            log.error(f"Unknown FIBERSTATUS_BITNAME '{row['FIBERSTATUS_BITNAME']}' in {filename}")
+            raise
+
+        fibers.extend(parsed_fibers)
+        masks.extend([mask] * len(parsed_fibers))
+
+    return fibers, masks
+
+
+badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     """
     find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
@@ -168,8 +222,8 @@ def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     cfinder = CalibFinder(headers,yaml_file)
     return cfinder.badfibers(keys)
 
-class CalibFinder() :
 
+class CalibFinder() :
 
     def __init__(self,headers,yaml_file=None, fallback_on_dark_not_found=False) :
         """
