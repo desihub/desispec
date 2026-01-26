@@ -1760,12 +1760,18 @@ def make_tile_qa_plot(
     else:
         nightprefix = "per"
 
+    tile_info = ""
+    if "tile_info" in config['tile_qa_plot'].keys():
+        for tileid_min, tileid_max, tile_inf_str in config['tile_qa_plot']['tile_info']:
+            if (hdr["TILEID"]>=tileid_min) and (hdr["TILEID"]<=tileid_max):
+                tile_info = tile_inf_str
+
     for txt in [
         [f"TILEID-{nightprefix}NIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
         ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
-        ["", ""],
+        ["Tile info", tile_info],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(exps["EFFTIME_SPEC"].sum(), hdr["GOALTIME"], exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"])],
         ["qa_efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
@@ -1777,6 +1783,8 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
+        if txt[0]=="Tile info" and tile_info=="":
+            txt = ["", ""]
         if (
             (txt[0] == "efftime / goaltime") &
             (exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"] < hdr["MINTFRAC"])
