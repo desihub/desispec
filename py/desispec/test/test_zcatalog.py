@@ -10,7 +10,6 @@ import numpy as np
 from astropy.table import Table, Column
 
 from desispec.zcatalog import (find_primary_spectra, _get_survey_program_from_filename,
-                               create_summary_catalog, columns_by_extension,
                                update_table_columns)
 
 
@@ -62,16 +61,6 @@ class TestZCatalog(unittest.TestCase):
         self.assertEqual(survey, 'sv3')
         self.assertEqual(program, 'bright')
 
-    def test_columns_by_extension(self):
-        columns = columns_by_extension('zpix', 'ZCATALOG')
-        self.assertEqual(columns[3], 'HEALPIX')
-        columns = columns_by_extension('zpix', 'ZCATALOG_IMAGING')
-        self.assertEqual(columns[1], 'PMRA')
-        columns = columns_by_extension('ztile', 'ZCATALOG')
-        self.assertEqual(columns[4], 'LASTNIGHT')
-        columns = columns_by_extension('ztile', 'ZCATALOG_EXTRA')
-        self.assertEqual(columns[3], 'TILEID')
-
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_default(self, mock_log):
         """Test update_table_columns with columns_list = None.
@@ -101,21 +90,6 @@ class TestZCatalog(unittest.TestCase):
                               'PLATE_RA', 'PLATE_DEC', 'TSNR2_LRG', 'ZCAT_NSPEC',
                               'ZCAT_PRIMARY', 'DESI_TARGET', 'BGS_TARGET'])
         mock_log.debug.assert_has_calls([call("columns_list is None"),])
-
-    # @patch('desispec.zcatalog.log')
-    # def test_update_table_columns_minimal(self, mock_log):
-    #     """Test update_table_columns with columns_list = 'minimal'.
-    #     """
-    #     t = MagicMock()
-    #     t.colnames = columns_by_extension('ztile', 'ZCATALOG')
-    #     t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list='minimal')
-    #     mock_log.debug.assert_has_calls([call("columns_list is 'minimal'"),
-    #                                      call("reordered_columns = columns_by_extension('%s', '%s')", 'ztile', 'ZCATALOG'),
-    #                                      call(t.colnames)])
-    #     self.assertListEqual(t.mock_calls,
-    #                          [call.__getitem__(c) for c in t.colnames] +
-    #                          [call.filled(fill_value=0),
-    #                           call.filled().__getitem__(t.colnames)])
 
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_user(self, mock_log):
