@@ -1780,23 +1780,25 @@ def make_tile_qa_plot(
 
     # Get tile info based on pass number
     if os.getenv("DESI_SURVEYOPS") is None:
-        log.warning("DESI_SURVEYOPS variable not defined")
-        tile_info = "N/A"  # N/A if something is amiss
-    elif 'tile_info' not in config['tile_qa_plot'].keys():
-        log.warning("tile_info not found in qa-params.yaml")
-        tile_info = "N/A"  # N/A if something is amiss
+        log.warning("DESI_SURVEYOPS variable undefined")
+        tile_info = "DESI_SURVEYOPS variable undefined; check wiki guidance"
     else:
         tiles_path = os.path.join(os.getenv("DESI_SURVEYOPS"), 'ops/tiles-main.ecsv')
-        tiles = Table.read(tiles_path)
-        if hdr['TILEID'] not in tiles['TILEID']:
-            tile_info = "N/A"
+        if not os.path.isfile(tiles_path):
+            log.warning("tiles-main.ecsv not found")
+            tile_info = "tiles-main.ecsv not found; check wiki guidance"
         else:
-            index = np.where(tiles['TILEID']==hdr['TILEID'])[0][0]
-            tile_info_key = hdr["FAPRGRM"].lower() + '_pass_' + str(tiles['PASS'][index])
-            if tile_info_key in config['tile_qa_plot']['tile_info'].keys():
-                tile_info = config['tile_qa_plot']['tile_info'][tile_info_key]
+            tiles = Table.read(tiles_path)
+            if hdr['TILEID'] not in tiles['TILEID']:
+                log.warning("Tile {} not found in tiles-main.ecsv".format(hdr['TILEID']))
+                tile_info = "Unknown tile; check wiki guidance"
             else:
-                tile_info = ""  # blank if tile_info is not defined for this program/pass
+                index = np.where(tiles['TILEID']==hdr['TILEID'])[0][0]
+                tile_info_key = hdr["FAPRGRM"].lower() + '_pass_' + str(tiles['PASS'][index])
+                if tile_info_key in config['tile_qa_plot']['tile_info'].keys():
+                    tile_info = config['tile_qa_plot']['tile_info'][tile_info_key]
+                else:
+                    tile_info = ""
 
     for txt in [
         [f"TILEID-{nightprefix}NIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
@@ -1815,6 +1817,8 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
+        if txt[0]=="Tile info":
+            fontweight = 'bold'
         if txt[0]=="Tile info" and tile_info=="":
             txt = ["", ""]
         if (
