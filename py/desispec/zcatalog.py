@@ -57,192 +57,6 @@ import desiutil.depend
 
 log = get_logger()
 
-# Currently this list of columns is based on the v2.1 test run from November 2025.
-_raw_columns = {'ZCATALOG':['TARGETID',
-                            'SURVEY',
-                            'PROGRAM',
-                            'Z_BEST',
-                            'Z_CONF',
-                            'ZERR_BEST',
-                            'ZWARN_BEST',
-                            'SPECTYPE_BEST',
-                            'SUBTYPE_BEST',
-                            'CHI2_BEST',
-                            'DELTACHI2_BEST',
-                            'PETAL_LOC',
-                            'FIBER',
-                            'COADD_FIBERSTATUS',
-                            'TARGET_RA',
-                            'TARGET_DEC',
-                            'DESINAME',
-                            'OBJTYPE',
-                            'FIBERASSIGN_X',
-                            'FIBERASSIGN_Y',
-                            'PRIORITY',
-                            'COADD_NUMEXP',
-                            'COADD_EXPTIME',
-                            'COADD_NUMNIGHT',
-                            'COADD_NUMTILE',
-                            'MIN_MJD',
-                            'MAX_MJD',
-                            'MEAN_MJD',
-                            'GOOD_SPEC',
-                            'EFFTIME_SPEC',
-                            'ZCAT_NSPEC',
-                            'ZCAT_PRIMARY',
-                            'SV_NSPEC',
-                            'SV_PRIMARY',
-                            'MAIN_NSPEC',
-                            'MAIN_PRIMARY',
-                            'CMX_TARGET',
-                            'DESI_TARGET',
-                            'BGS_TARGET',
-                            'MWS_TARGET',
-                            'SCND_TARGET',
-                            'SV1_DESI_TARGET',
-                            'SV1_BGS_TARGET',
-                            'SV1_MWS_TARGET',
-                            'SV1_SCND_TARGET',
-                            'SV2_DESI_TARGET',
-                            'SV2_BGS_TARGET',
-                            'SV2_MWS_TARGET',
-                            'SV2_SCND_TARGET',
-                            'SV3_DESI_TARGET',
-                            'SV3_BGS_TARGET',
-                            'SV3_MWS_TARGET',
-                            'SV3_SCND_TARGET'],
-        'ZCATALOG_IMAGING':['TARGETID',
-                            'PMRA',
-                            'PMDEC',
-                            'REF_EPOCH',
-                            'RELEASE',
-                            'BRICKNAME',
-                            'BRICKID',
-                            'BRICK_OBJID',
-                            'MORPHTYPE',
-                            'EBV',
-                            'FLUX_G',
-                            'FLUX_R',
-                            'FLUX_Z',
-                            'FLUX_W1',
-                            'FLUX_W2',
-                            'FLUX_IVAR_G',
-                            'FLUX_IVAR_R',
-                            'FLUX_IVAR_Z',
-                            'FLUX_IVAR_W1',
-                            'FLUX_IVAR_W2',
-                            'FIBERFLUX_G',
-                            'FIBERFLUX_R',
-                            'FIBERFLUX_Z',
-                            'FIBERTOTFLUX_G',
-                            'FIBERTOTFLUX_R',
-                            'FIBERTOTFLUX_Z',
-                            'MASKBITS',
-                            'SERSIC',
-                            'SHAPE_R',
-                            'SHAPE_E1',
-                            'SHAPE_E2',
-                            'REF_ID',
-                            'REF_CAT',
-                            'GAIA_PHOT_G_MEAN_MAG',
-                            'GAIA_PHOT_BP_MEAN_MA',
-                            'GAIA_PHOT_RP_MEAN_MA',
-                            'PARALLAX',
-                            'PHOTSYS'],
-        'ZCATALOG_EXTRA':  ['TARGETID',
-                            'FIRSTNIGHT',
-                            'SPGRPVAL',
-                            'Z',
-                            'ZERR',
-                            'ZWARN',
-                            'CHI2',
-                            'COEFF',
-                            'FITMETHOD',
-                            'NPIXELS',
-                            'SPECTYPE',
-                            'SUBTYPE',
-                            'NCOEFF',
-                            'DELTACHI2',
-                            'DEVICE_LOC',
-                            'LOCATION',
-                            'LAMBDA_REF',
-                            'FA_TARGET',
-                            'FA_TYPE',
-                            'SUBPRIORITY',
-                            'OBSCONDITIONS',
-                            'PRIORITY_INIT',
-                            'NUMOBS_INIT',
-                            'PLATE_RA',
-                            'PLATE_DEC',
-                            'MEAN_DELTA_X',
-                            'RMS_DELTA_X',
-                            'MEAN_DELTA_Y',
-                            'RMS_DELTA_Y',
-                            'MEAN_PSF_TO_FIBER_SP',
-                            'MEAN_FIBER_X',
-                            'MEAN_FIBER_Y',
-                            'MEAN_FIBER_RA',
-                            'STD_FIBER_RA',
-                            'MEAN_FIBER_DEC',
-                            'STD_FIBER_DEC',
-                            'TSNR2_BGS_B',
-                            'TSNR2_ELG_B',
-                            'TSNR2_GPBBACKUP_B',
-                            'TSNR2_GPBBRIGHT_B',
-                            'TSNR2_GPBDARK_B',
-                            'TSNR2_LRG_B',
-                            'TSNR2_LYA_B',
-                            'TSNR2_QSO_B',
-                            'TSNR2_BGS_R',
-                            'TSNR2_ELG_R',
-                            'TSNR2_GPBBACKUP_R',
-                            'TSNR2_GPBBRIGHT_R',
-                            'TSNR2_GPBDARK_R',
-                            'TSNR2_LRG_R',
-                            'TSNR2_LYA_R',
-                            'TSNR2_QSO_R',
-                            'TSNR2_BGS_Z',
-                            'TSNR2_ELG_Z',
-                            'TSNR2_GPBBACKUP_Z',
-                            'TSNR2_GPBBRIGHT_Z',
-                            'TSNR2_GPBDARK_Z',
-                            'TSNR2_LRG_Z',
-                            'TSNR2_LYA_Z',
-                            'TSNR2_QSO_Z',
-                            'TSNR2_BGS',
-                            'TSNR2_ELG',
-                            'TSNR2_GPBBACKUP',
-                            'TSNR2_GPBBRIGHT',
-                            'TSNR2_GPBDARK',
-                            'TSNR2_LRG',
-                            'TSNR2_LYA',
-                            'TSNR2_QSO',
-                            'OII_FLUX',
-                            'OII_FLUX_IVAR',
-                            'IS_QSO_MGII',
-                            'IS_QSO_QN_NEW_RR',
-                            'C_LYA',
-                            'C_CIV',
-                            'C_CIII',
-                            'C_MgII',
-                            'C_Hbeta',
-                            'C_Halpha',
-                            'Z_NEW',
-                            'ZERR_NEW',
-                            'ZWARN_NEW',
-                            'SPECTYPE_NEW',
-                            'SUBTYPE_NEW',
-                            'CHI2_NEW',
-                            'DELTACHI2_NEW',
-                            'COEFF_NEW',
-                            'GOOD_Z_BGS',
-                            'GOOD_Z_LRG',
-                            'GOOD_Z_ELG',
-                            'GOOD_Z_QSO',
-                            'Z_QSO',
-                            'ZERR_QSO',
-                            'COEFF_BEST']}
-
 
 def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     """
@@ -369,11 +183,9 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     specprod : str, optional
         Internal Release Name for the DESI Spectral Release.
         Used to derive input directory if indir is not provided.
-    columns_list : str or list, optional
+    columns_list : list, optional
         If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
         although they may be reordered.
-        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used,
-        which will depend on `specgroup` and `extension`.
         If `columns_list` is a user-supplied list, the columns in the list will be included,
         unconditionally.
 
@@ -578,7 +390,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                 assert np.all(tab['TARGETID']==targetid_arr)
 
         ## Convert the masked column table to normal astropy table and select required columns
-        final_table = update_table_columns(tab, specgroup, file_extension, columns_list=columns_list)
+        final_table = update_table_columns(tab, columns_list=columns_list)
         log.debug("Completed call to update_table_columns().")
         ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
         desiutil.depend.mergedep(dependencies, final_table.meta)
@@ -592,36 +404,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 ####################################################################################################
 ####################################################################################################
 
-def columns_by_extension(specgroup, extension):
-    """Return a list of column names that depend on `specgroup` and `extension`
 
-    Parameters
-    ----------
-    specgroup : str
-        The option to run the code on ztile* files or zpix* files.
-        It can either be 'zpix' or 'ztile'. Default is 'zpix'
-    extension : str
-        The "v2"-style grouping, *e.g.* ``ZCATALOG_EXTRA``.
-
-    Returns
-    -------
-    list
-        A list of column names.
-    """
-    extension_columns = _raw_columns[extension]
-    # Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
-    extra_columns = {'zpix': {'ZCATALOG': ['HEALPIX']},
-                     'ztile':{'ZCATALOG': ['TILEID', 'LASTNIGHT'],
-                              'ZCATALOG_IMAGING': ['TILEID'],
-                              'ZCATALOG_EXTRA': ['TILEID']}}
-    try:
-        columns = extension_columns[0:3] + extra_columns[specgroup][extension] + extension_columns[3:]
-    except KeyError:
-        columns = extension_columns
-    return columns
-
-
-def update_table_columns(table, specgroup, extension, columns_list=None):
+def update_table_columns(table, columns_list=None):
     """
     This function fills the ``*TARGET`` masked columns and returns the final table
     with the required columns.
@@ -630,16 +414,9 @@ def update_table_columns(table, specgroup, extension, columns_list=None):
     ----------
     table : Astropy Table
         A table.
-    specgroup : str
-        The option to run the code on ztile* files or zpix* files.
-        It can either be 'zpix' or 'ztile'.
-    extension : str
-        The "v2"-style grouping, *e.g.* ``ZCATALOG_EXTRA``.
-    columns_list : str or list, optional
+    columns_list : list, optional
         If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
         although they may be reordered.
-        If `columns_list` is ``'minimal'`` a  pre-defined list of summary columns will be used,
-        which will depend on `specgroup` and `extension`.
         If `columns_list` is a user-supplied list, the columns in the list will be included,
         unconditionally.
 
@@ -674,11 +451,6 @@ def update_table_columns(table, specgroup, extension, columns_list=None):
         log.debug("columns_list is None")
         # Move the target columns to the end.
         reordered_columns = list(tab_cols[~np.isin(tab_cols, target_cols)]) + target_cols
-    elif columns_list == 'minimal':
-        log.debug("columns_list is 'minimal'")
-        log.debug("reordered_columns = columns_by_extension('%s', '%s')", specgroup, extension)
-        # These columns are obtained from the "zcat/v2.1" tests based on loa.
-        reordered_columns = columns_by_extension(specgroup, extension)
     else:
         log.debug("columns_list is user-supplied")
         reordered_columns = columns_list

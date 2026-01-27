@@ -102,20 +102,20 @@ class TestZCatalog(unittest.TestCase):
                               'ZCAT_PRIMARY', 'DESI_TARGET', 'BGS_TARGET'])
         mock_log.debug.assert_has_calls([call("columns_list is None"),])
 
-    @patch('desispec.zcatalog.log')
-    def test_update_table_columns_minimal(self, mock_log):
-        """Test update_table_columns with columns_list = 'minimal'.
-        """
-        t = MagicMock()
-        t.colnames = columns_by_extension('ztile', 'ZCATALOG')
-        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list='minimal')
-        mock_log.debug.assert_has_calls([call("columns_list is 'minimal'"),
-                                         call("reordered_columns = columns_by_extension('%s', '%s')", 'ztile', 'ZCATALOG'),
-                                         call(t.colnames)])
-        self.assertListEqual(t.mock_calls,
-                             [call.__getitem__(c) for c in t.colnames] +
-                             [call.filled(fill_value=0),
-                              call.filled().__getitem__(t.colnames)])
+    # @patch('desispec.zcatalog.log')
+    # def test_update_table_columns_minimal(self, mock_log):
+    #     """Test update_table_columns with columns_list = 'minimal'.
+    #     """
+    #     t = MagicMock()
+    #     t.colnames = columns_by_extension('ztile', 'ZCATALOG')
+    #     t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list='minimal')
+    #     mock_log.debug.assert_has_calls([call("columns_list is 'minimal'"),
+    #                                      call("reordered_columns = columns_by_extension('%s', '%s')", 'ztile', 'ZCATALOG'),
+    #                                      call(t.colnames)])
+    #     self.assertListEqual(t.mock_calls,
+    #                          [call.__getitem__(c) for c in t.colnames] +
+    #                          [call.filled(fill_value=0),
+    #                           call.filled().__getitem__(t.colnames)])
 
     @patch('desispec.zcatalog.log')
     def test_update_table_columns_user(self, mock_log):
