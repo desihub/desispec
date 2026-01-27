@@ -114,10 +114,7 @@ tile_qa_plot:
  vccdsec_min : 72000
 
  # tile information
- # [tileid_min, tileid_max, tile_info_str]
  tile_info: 
-  - [120000, 121342, 'MW streams and dwarf galaxies']
-  # - [121343, 122906, 'BGS/MWS layer']
-  - [122907, 123221, 'M31']
-  - [123222, 123284, 'C-19 MW stream']
-  - [123285, 123287, 'MW streams and dwarf galaxies']
+  bright1b_pass_5: 'regular BRIGHT1B tile'
+  bright1b_pass_7: 'streams/dwarfs program'
+  bright1b_pass_8: 'M31 program'
