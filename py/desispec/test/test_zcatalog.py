@@ -84,7 +84,7 @@ class TestZCatalog(unittest.TestCase):
                              ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
                               'PLATE_RA', 'PLATE_DEC', 'DESI_TARGET', 'BGS_TARGET',
                               'TSNR2_LRG', 'ZCAT_NSPEC', 'ZCAT_PRIMARY'])
-        t2 = update_table_columns(t, 'ztile', 'ZCATALOG')
+        t2 = update_table_columns(t)
         self.assertListEqual(t2.colnames,
                              ['TARGETID', 'SURVEY', 'PROGRAM', 'NUMOBS_INIT',
                               'PLATE_RA', 'PLATE_DEC', 'TSNR2_LRG', 'ZCAT_NSPEC',
@@ -117,19 +117,19 @@ class TestZCatalog(unittest.TestCase):
 
         # subset but in standard order
         columns = ['TARGETID', 'SURVEY', 'PROGRAM', 'ZCAT_PRIMARY']
-        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list=columns)
+        t2 = update_table_columns(t, columns_list=columns)
         self.assertListEqual(t2.colnames, columns)
 
         # non-standard order
         columns = ['DESI_TARGET', 'TARGETID', 'PLATE_DEC', 'PLATE_RA']
-        t2 = update_table_columns(t, 'ztile', 'ZCATALOG', columns_list=columns)
+        t2 = update_table_columns(t, columns_list=columns)
         self.assertListEqual(t2.colnames, columns)
 
-        t2 = update_table_columns(t, 'ztile', 'ZCATALOG',
-                                  columns_list=['TARGETID', 'SURVEY', 'PROGRAM', 'ZCAT_PRIMARY'])
+        t2 = update_table_columns(t, columns_list=['TARGETID', 'SURVEY',
+                                                   'PROGRAM', 'ZCAT_PRIMARY'])
         self.assertListEqual(t2.colnames,
                              ['TARGETID', 'SURVEY', 'PROGRAM', 'ZCAT_PRIMARY'])
         with self.assertRaises(KeyError):
-            t2 = update_table_columns(t, 'ztile', 'ZCATALOG',
-                                    columns_list=['TARGETID', 'SURVEY', 'PROGRAM', 'FOOBAR'])
+            t2 = update_table_columns(t, columns_list=['TARGETID', 'SURVEY',
+                                                       'PROGRAM', 'FOOBAR'])
         mock_log.debug.assert_has_calls([call("columns_list is user-supplied"),])
