@@ -376,7 +376,7 @@ def parse(options=None):
     parser.add_argument("--minimal", action='store_true',
             help="only include minimal output columns")
     parser.add_argument("-t", "--tiles", type=str,
-            help="ascii file with tileids to include (one per line)")
+            help="FITS or CSV file with TILEIDs to include")
 
     parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
