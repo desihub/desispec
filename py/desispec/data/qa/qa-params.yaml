@@ -112,3 +112,9 @@ tile_qa_plot:
 
  # vccdsec
  vccdsec_min : 72000
+
+ # tile information
+ tile_info: 
+  bright1b_pass_5: 'regular BRIGHT1B tile'
+  bright1b_pass_7: 'streams/dwarfs program'
+  bright1b_pass_8: 'M31 program'
