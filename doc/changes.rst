@@ -19,7 +19,9 @@ desispec Change Log
 * Apply gains to preprocessed darks (PR `#2591`_).
 * Add ``FLAT_TO_PSF_FLUX`` to fibermap (PR `#2597`_).
 * Make ``FLAT_TO_PSF_FLUX`` and ``PSF_TO_FIBER_SPECFLUX`` float32 (PR `#2598`_).
+* Add detailed control over ordering in zall files (PR `#2568`_).
 
+.. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 .. _`#2579`: https://github.com/desihub/desispec/pull/2579
 .. _`#2580`: https://github.com/desihub/desispec/pull/2580
