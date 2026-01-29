@@ -553,6 +553,10 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     badcam = select_zeros & (exptable['BADCAMWORD']!='')
     notallcams = select_zeros & (exptable['CAMWORD']!='a0123456789')
 
+    #Only use ZEROs that are in the exposure table
+    calib_expids = [expid for expid in calib_expids if expid in exptable['EXPID'][select_zeros]]
+    noncalib_expids = [expid for expid in noncalib_expids if expid in exptable['EXPID'][select_zeros]]
+
     expdicts = dict()
     for expids, zerotype in zip([calib_expids, noncalib_expids],
                                 ['calib', 'noncalib']):
