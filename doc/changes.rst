@@ -7,6 +7,7 @@ desispec Change Log
 
 * Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed anyway
   even without dark or bias models (PR `#2577`_).
+* Update _find_zeros to also use exptable PROGRAM (PR `#2578`_).
 * Set FIBERSTATUS=UNASSIGNED for targets with OBJTYPE != TGT or SKY
   (PR `#2579`_).
 * ``assemble_fibermap`` set OBJTYPE=BAD for non-SKY non-TGT targets
@@ -15,22 +16,29 @@ desispec Change Log
   individual bundles fail (PR `#2584`_).
 * For zcatalogs, make ``EFFTIME_SPEC`` program-dependent to match tile usage
     (PR `#2583`_).
+* Add ``flagged_fibers.ecsv`` to flag fibers for specific exposures
+  (PR `#2588`_).
 * Add ``copy`` argument to Spectra object (PR `#2590`_).
 * Apply gains to preprocessed darks (PR `#2591`_).
 * Add ``FLAT_TO_PSF_FLUX`` to fibermap (PR `#2597`_).
 * Make ``FLAT_TO_PSF_FLUX`` and ``PSF_TO_FIBER_SPECFLUX`` float32 (PR `#2598`_).
 * Add detailed control over ordering in zall files (PR `#2568`_).
+* Add tile info in tile QA (PR `#2600`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
+.. _`#2578`: https://github.com/desihub/desispec/pull/2578
 .. _`#2579`: https://github.com/desihub/desispec/pull/2579
 .. _`#2580`: https://github.com/desihub/desispec/pull/2580
 .. _`#2583`: https://github.com/desihub/desispec/pull/2583
 .. _`#2584`: https://github.com/desihub/desispec/pull/2584
+.. _`#2588`: https://github.com/desihub/desispec/pull/2588
 .. _`#2590`: https://github.com/desihub/desispec/pull/2590
 .. _`#2591`: https://github.com/desihub/desispec/pull/2591
 .. _`#2597`: https://github.com/desihub/desispec/pull/2597
 .. _`#2598`: https://github.com/desihub/desispec/pull/2598
+.. _`#2600`: https://github.com/desihub/desispec/pull/2600
+
 
 0.70.0 (2025-12-04)
 -------------------
