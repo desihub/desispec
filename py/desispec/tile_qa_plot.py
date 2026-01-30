@@ -22,7 +22,7 @@ from desispec.tsnr import tsnr2_to_efftime
 from desimodel.focalplane.geometry import get_tile_radius_deg
 from desiutil.log import get_logger
 from desiutil.dust import ebv as dust_ebv
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, join
 from astropy.io import fits
 from astropy import units
 from astropy.coordinates import SkyCoord
@@ -1363,8 +1363,8 @@ def make_tile_qa_plot(
             log.warning("no {} keyword in header".format(key))
 
     # AR start plotting
-    fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2)
+    fig = plt.figure(figsize=(22, 15))
+    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2, width_ratios=[1.0, 1.3, 1.0, 1.0])
 
     # AR exposures from that TILEID
     exps = get_expids_efftimes(tileqafits, prod)
@@ -1381,26 +1381,44 @@ def make_tile_qa_plot(
         exps["VCCDSEC"][i] = vccdsec
         exps["VCCDSEC_PBCAMPETS"][i] = pb_campets
         exps["VCCDSEC_MIN"][i] = np.min([vccdsec[campet] for campet in vccdsec])
-    xs = (-0.25, 0.03, 0.33, 0.57, 0.90)
+
+    # Add EXPTIME and AIRMASS to exps
+    exposures_path = glob(os.path.join(prod, "exposures-*.csv"))
+    if len(exposures_path)!=0:
+        exposures_path = exposures_path[0]
+        exposures = Table.read(exposures_path)
+        exps = join(exps, exposures[['EXPID', 'EXPTIME', 'AIRMASS']], join_type='left', keys='EXPID')
+        exps.sort('EXPID')
+        exps = exps.filled(-99)
+    else:
+        log.warning("exposures file not found")
+        exps['EXPTIME'] = -99
+        exps['AIRMASS'] = -99
+
+    xs = (-0.192, 0.028, 0.231, 0.528, 0.712, 0.905)
     y, dy = 0.95, -0.10
     fs = 10
     ax = plt.subplot(gs[0, 1])
     ax.axis("off")
-    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME", "VCCDSEC"]
+    txts = ["EXPID", "NIGHT", "EFFTIME\n(QA_EFFTIME)", "EXPTIME", "VCCDSEC", "AIRMASS"]
     for x, txt in zip(xs, txts):
-        ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+        if txt=="EFFTIME\n(QA_EFFTIME)":
+            ax.text(x, y+dy/2, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+        else:
+            ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
     y += 2 * dy
     for i in range(len(exps)):
         txts = [
             "{:08d}".format(exps["EXPID"][i]),
             "{}".format(exps["NIGHT"][i]),
-            "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
-            "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
+            "{:.0f}s ({:.0f}s)".format(exps["EFFTIME_SPEC"][i], exps["QA_EFFTIME_SPEC"][i]),
+            "{:.0f}s".format(exps["EXPTIME"][i]),
             "{:.1f}hr".format(exps["VCCDSEC_MIN"][i] / 3600),
+            "{:.2f}".format(exps["AIRMASS"][i]),
         ]
         for x, txt in zip(xs, txts):
             fontweight, col = "normal", "k"
-            if txt == txts[-1]:
+            if txt == 'VCCDSEC':
                 if len(exps["VCCDSEC_PBCAMPETS"][i]) > 0:
                     fontweight, col = "bold", "r"
             ax.text(x, y, txt, fontsize=fs, fontweight=fontweight, color=col, transform=ax.transAxes)
@@ -1760,12 +1778,34 @@ def make_tile_qa_plot(
     else:
         nightprefix = "per"
 
+    # Get tile info based on pass number
+    if os.getenv("DESI_SURVEYOPS") is None:
+        log.warning("DESI_SURVEYOPS variable undefined")
+        tile_info = "DESI_SURVEYOPS variable undefined; check wiki guidance"
+    else:
+        tiles_path = os.path.join(os.getenv("DESI_SURVEYOPS"), 'ops/tiles-main.ecsv')
+        if not os.path.isfile(tiles_path):
+            log.warning("tiles-main.ecsv not found")
+            tile_info = "tiles-main.ecsv not found; check wiki guidance"
+        else:
+            tiles = Table.read(tiles_path)
+            if hdr['TILEID'] not in tiles['TILEID']:
+                log.warning("Tile {} not found in tiles-main.ecsv".format(hdr['TILEID']))
+                tile_info = "Unknown tile; check wiki guidance"
+            else:
+                index = np.where(tiles['TILEID']==hdr['TILEID'])[0][0]
+                tile_info_key = hdr["FAPRGRM"].lower() + '_pass_' + str(tiles['PASS'][index])
+                if tile_info_key in config['tile_qa_plot']['tile_info'].keys():
+                    tile_info = config['tile_qa_plot']['tile_info'][tile_info_key]
+                else:
+                    tile_info = ""
+
     for txt in [
         [f"TILEID-{nightprefix}NIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
         ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
-        ["", ""],
+        ["Tile info", tile_info],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(exps["EFFTIME_SPEC"].sum(), hdr["GOALTIME"], exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"])],
         ["qa_efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
@@ -1777,6 +1817,10 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
+        if txt[0]=="Tile info":
+            fontweight = 'bold'
+        if txt[0]=="Tile info" and tile_info=="":
+            txt = ["", ""]
         if (
             (txt[0] == "efftime / goaltime") &
             (exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"] < hdr["MINTFRAC"])
