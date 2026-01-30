@@ -1383,15 +1383,22 @@ def make_tile_qa_plot(
         exps["VCCDSEC_MIN"][i] = np.min([vccdsec[campet] for campet in vccdsec])
 
     # Add EXPTIME and AIRMASS to exps
-    exposures_path = glob(os.path.join(prod, "exposures-*.csv"))
-    if len(exposures_path)!=0:
-        exposures_path = exposures_path[0]
-        exposures = Table.read(exposures_path)
-        exps = join(exps, exposures[['EXPID', 'EXPTIME', 'AIRMASS']], join_type='left', keys='EXPID')
+    exposures = Table()
+    for night in np.unique(exps['NIGHT']):
+        exposures_path = os.path.join(prod, "exposure_tables/{}/exposure_table_{}.csv".format(str(night)[:6], night))
+        if os.path.isfile(exposures_path):
+            tmp = Table.read(exposures_path)[['EXPID', 'EXPTIME', 'AIRMASS']]
+            try:
+                exposures = vstack([exposures, tmp])
+            except:
+                log.warning("format mismatch in exposure_table")
+        else:
+            log.warning("exposures table not found: "+exposures_path)
+    if len(exposures)>0:
+        exps = join(exps, exposures, join_type='left', keys='EXPID')
         exps.sort('EXPID')
         exps = exps.filled(-99)
     else:
-        log.warning("exposures file not found")
         exps['EXPTIME'] = -99
         exps['AIRMASS'] = -99
 
