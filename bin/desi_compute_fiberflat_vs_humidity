@@ -242,7 +242,7 @@ def main():
                 continue
 
             log.info("nights in bins = {}".format(list(nights_in_bins[bin_index])))
-            selection = np.in1d(humidity_table["NIGHT"],nights_in_bins[bin_index])
+            selection = np.isin(humidity_table["NIGHT"],nights_in_bins[bin_index])
             if np.sum(selection)==0 :
                 log.warning("bin={} nflats={} (skip)".format(bin_index,np.sum(selection)))
                 continue

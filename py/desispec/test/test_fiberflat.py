@@ -13,12 +13,14 @@ from uuid import uuid1
 
 import numpy as np
 import scipy.sparse
+from astropy.table import Table
 
 from desispec.maskbits import specmask
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat, apply_fiberflat
+from desispec.fiberflat import average_fiberflat, autocalib_fiberflat, gradient_correction
 from desiutil.log import get_logger
 from desispec.io import write_frame
 import desispec.io as io
@@ -43,7 +45,6 @@ def _get_data():
 
     return wave, flux, ivar, mask
 
-
 class TestFiberFlat(unittest.TestCase):
 
     @classmethod
@@ -58,6 +59,7 @@ class TestFiberFlat(unittest.TestCase):
         self.testfibermap = 'test_fibermap_{}.fits'.format(id)
         self.testframe = 'test_frame_{}.fits'.format(id)
         self.testflat = 'test_fiberflat_{}.fits'.format(id)
+        self.random = np.random.RandomState(42)
 
     def tearDown(self):
         os.chdir(self.testdir)
@@ -75,6 +77,7 @@ class TestFiberFlat(unittest.TestCase):
             shutil.rmtree(cls.testdir)
 
         os.chdir(cls.origdir)
+
 
 
     def test_interface(self):
@@ -236,35 +239,44 @@ class TestFiberFlat(unittest.TestCase):
         diff = (ff.fiberflat[4]*1.2 - ff.fiberflat[mid])
         self.assertLess(np.max(np.abs(diff)), accuracy)
 
+        #- Add outliers and ensure that it doesn't significantly change
+        frame.flux[0][0] = 1000
+        frame.flux[1][10] = 2000
+        frame.flux[2][20] = 3000
+        ff2 = compute_fiberflat(frame,accuracy=accuracy)
+        self.assertTrue(np.allclose(ff.fiberflat, ff2.fiberflat))
+
+
     def test_apply_fiberflat(self):
         '''test apply_fiberflat interface and changes to flux and mask'''
         wave = np.arange(5000, 5050)
         nwave = len(wave)
         nspec = 3
-        flux = np.random.uniform(size=(nspec, nwave))
+        flux = self.random.uniform(size=(nspec, nwave))
         ivar = np.ones_like(flux)
         frame = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
+        frame.meta['HELIOCOR'] = 1.0  #- breaks test due to interpolation over bad ff
 
         fiberflat = np.ones_like(flux)
         ffivar = 2*np.ones_like(flux)
-        ffmask = np.zeros_like(flux)
+        ffmask = np.zeros_like(flux, dtype=np.uint32)
         fiberflat[0] *= 0.8
         fiberflat[1] *= 1.2
         fiberflat[2, 0:10] = 0  #- bad fiberflat
         ffivar[2, 10:20] = 0    #- bad fiberflat
         ffmask[2, 20:30] = 1    #- bad fiberflat
 
-        ff = FiberFlat(wave, fiberflat, ffivar)
+        ff = FiberFlat(wave, fiberflat, ffivar, mask=ffmask)
 
+        self.assertTrue(np.all(ff.fiberflat == fiberflat))
+        self.assertTrue(np.all(ff.ivar == ffivar))
+        self.assertTrue(np.all(ff.mask == ffmask))
+
+        #- Test applying fiberflat
         origframe = copy.deepcopy(frame)
         apply_fiberflat(frame, ff)
 
-        #- was fiberflat applied?
-        self.assertTrue(np.all(frame.flux[0] == origframe.flux[0]/0.8))
-        self.assertTrue(np.all(frame.flux[1] == origframe.flux[1]/1.2))
-        self.assertTrue(np.all(frame.flux[2] == origframe.flux[2]))
-
-        #- did mask get set?
+        #- did mask get set for bad fiberflat?
         ii = (ff.fiberflat == 0)
         self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
         ii = (ff.ivar == 0)
@@ -272,28 +284,35 @@ class TestFiberFlat(unittest.TestCase):
         ii = (ff.mask != 0)
         self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
 
+        #- was fiberflat applied for non-masked pixels?
+        ok = (frame.mask & specmask.BADFIBERFLAT) == 0
+        self.assertTrue(np.all(frame.flux[0][ok[0]] == origframe.flux[0][ok[0]]/0.8))
+        self.assertTrue(np.all(frame.flux[1][ok[1]] == origframe.flux[1][ok[1]]/1.2))
+        self.assertTrue(np.all(frame.flux[2][ok[2]] == origframe.flux[2][ok[2]]))
+
         #- Should fail if frame and ff don't have a common wavelength grid
         frame.wave = frame.wave + 0.1
         with self.assertRaises(ValueError):
             apply_fiberflat(frame, ff)
+
 
     def test_apply_fiberflat_ivar(self):
         '''test error propagation in apply_fiberflat'''
         wave = np.arange(5000, 5010)
         nwave = len(wave)
         nspec = 3
-        flux = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
+        flux = self.random.uniform(0.9, 1.0, size=(nspec, nwave))
         ivar = np.ones_like(flux)
         origframe = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
 
         fiberflat = np.ones_like(flux)
-        ffmask = np.zeros_like(flux)
+        ffmask = np.zeros_like(flux, dtype=np.uint32)
         fiberflat[0] *= 0.5
         fiberflat[1] *= 1.5
 
         #- ff with essentially no error
         ffivar = 1e20 * np.ones_like(flux)
-        ff = FiberFlat(wave, fiberflat, ffivar)
+        ff = FiberFlat(wave, fiberflat, ffivar, mask=ffmask)
         frame = copy.deepcopy(origframe)
         apply_fiberflat(frame, ff)
         self.assertTrue(np.allclose(frame.ivar, fiberflat**2))
@@ -369,14 +388,29 @@ class TestFiberFlat(unittest.TestCase):
 class TestFiberFlatObject(unittest.TestCase):
 
     def setUp(self):
+        self.random = np.random.RandomState(42)
         self.nspec = 5
         self.nwave = 10
         self.wave = np.arange(self.nwave)
-        self.fiberflat = np.random.uniform(size=(self.nspec, self.nwave))
+        self.fiberflat = self.random.uniform(size=(self.nspec, self.nwave))
         self.ivar = np.ones(self.fiberflat.shape)
         self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
-        self.meanspec = np.random.uniform(size=self.nwave)
-        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec)
+        self.meanspec = self.random.uniform(size=self.nwave)
+        self.header = dict(blat=1, foo=2)
+        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec, header=self.header)
+
+    def _get_fibermap(self, petal, nspec):
+        """Return a basic fibermap for the requested `petal` with `nspec` rows"""
+        fibermap = Table()
+        fibermap['FIBER'] = petal*500 + np.arange(nspec)
+        alpha = 2*np.pi/10  # angle of one petal in radians
+        theta = self.random.uniform(petal*alpha, (petal+1)*alpha, size=nspec)
+        r = self.random.uniform(0,400, size=nspec)
+        fibermap['FIBERASSIGN_X'] = r*np.cos(theta)
+        fibermap['FIBERASSIGN_Y'] = r*np.sin(theta)
+        fibermap['FIBERSTATUS'] = 0
+
+        return fibermap
 
     def test_init(self):
         for key in ('wave', 'fiberflat', 'ivar', 'mask', 'meanspec'):
@@ -420,3 +454,63 @@ class TestFiberFlatObject(unittest.TestCase):
         x = self.ff[1:2]
         x = self.ff[[1,2,3]]
         x = self.ff[self.ff.fibers<3]
+
+    def test_average_fiberflat(self):
+        ff = average_fiberflat([self.ff, self.ff])
+        self.assertTrue(np.allclose(ff.fiberflat, self.ff.fiberflat))
+        self.assertTrue(np.allclose(ff.ivar, self.ff.ivar*2))
+
+        ff = average_fiberflat([self.ff, self.ff, self.ff, self.ff])
+        self.assertTrue(np.allclose(ff.fiberflat, self.ff.fiberflat))
+        self.assertTrue(np.allclose(ff.ivar, self.ff.ivar*4*2/np.pi))  # 2/pi due to median vs. mean penalty
+
+        #- boundary cases of 1 or 0 inputs
+        ff = average_fiberflat([self.ff,])
+        self.assertIs(ff, self.ff)
+
+        with self.assertRaises(ValueError):
+            ff = average_fiberflat([])
+
+    def test_autocalib_fiberflat(self):
+        fiberflats = list()
+        expid = 1000
+        for petal in range(10):
+            fibermap = self._get_fibermap(petal, self.nspec)
+            for i in range(3):
+                ff = copy.deepcopy(self.ff)
+                ff.header['EXPID'] = expid
+                expid += 1
+                ff.header['CAMERA'] = f'r{petal}'
+                ff.fibermap = fibermap
+                fiberflats.append(ff)
+
+        ff = autocalib_fiberflat(fiberflats)
+
+    def test_gradient_correction(self):
+        ref_fiberflats = dict()
+        tilted_fiberflats = dict()
+        for petal in range(10):
+            fibermap = self._get_fibermap(petal, self.nspec)
+            camera = f'r{petal}'
+
+            ff = copy.deepcopy(self.ff)
+            ff.fiberflat[:,:] = 1.0
+            ff.header['CAMERA'] = f'r{petal}'
+            ff.fibermap = fibermap
+            ref_fiberflats[camera] = ff
+
+            ff = copy.deepcopy(self.ff)
+            ff.fiberflat[:,:] = 1.0
+            ff.header['CAMERA'] = f'r{petal}'
+            ff.fibermap = fibermap
+            #- add +/- 5% tilt edge-to-edge
+            tilt = 1 + 0.05*fibermap['FIBERASSIGN_X']/400
+            for i in range(ff.fiberflat.shape[0]):
+                ff.fiberflat[i] *= tilt[i]
+
+            tilted_fiberflats[camera] = ff
+
+        final_fiberflats = gradient_correction(tilted_fiberflats, ref_fiberflats)
+
+        for cam in final_fiberflats:
+            self.assertTrue(np.allclose(final_fiberflats[cam].fiberflat, ref_fiberflats[cam].fiberflat))

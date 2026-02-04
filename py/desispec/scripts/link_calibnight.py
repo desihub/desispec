@@ -7,7 +7,7 @@ from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.io.util import parse_cameras, decode_camword, relsymlink
 
-calibnight_prefixes = ('badcolumns','biasnight','fiberflatnight','psfnight','ctecorrnight')
+calibnight_prefixes = ('biasnight', 'badcolumns', 'ctecorrnight', 'psfnight', 'fiberflatnight')
 _prefixstr = ','.join(calibnight_prefixes)
 
 def derive_include_exclude(input_include, input_exclude):

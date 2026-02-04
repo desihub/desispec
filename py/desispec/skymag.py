@@ -83,7 +83,7 @@ def compute_skymag(night, expid, specprod_dir=None):
         ok  = True
         for camera in ["b","r","z"] :
             camspec="{}{}".format(camera,spec)
-            filename = findfile("sky",night=night,expid=expid,camera=camspec,specprod_dir=specprod_dir)
+            filename = findfile("sky",night=night,expid=expid,camera=camspec,specprod_dir=specprod_dir, readonly=True)
             if not os.path.isfile(filename) :
                 log.warning("skipping {}-{:08d}-{} : missing {}".format(night,expid,spec,filename))
                 ok = False

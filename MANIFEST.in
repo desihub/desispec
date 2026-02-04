@@ -1,12 +1,2 @@
-include LICENSE.rst
-include README.rst
-include requirements.txt
-
-graft bin
-graft doc
-graft etc
-
-prune build
-prune dist
-prune htmlcov
-prune doc/_build
+prune .github
+global-exclude .gitignore .readthedocs.yml

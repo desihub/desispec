@@ -7,6 +7,7 @@ import sys, os, glob
 import json
 from astropy.io import fits
 from astropy.table import Table, join
+from desispec.workflow.batch_writer import create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime
@@ -21,11 +22,7 @@ from desispec.workflow.redshifts import get_ztile_script_pathname, \
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
-from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, \
-                                              create_desi_proc_batch_script, \
-                                              get_desi_proc_batch_file_path, \
-                                              get_desi_proc_tilenight_batch_file_pathname, \
-                                              create_desi_proc_tilenight_batch_script
+from desispec.workflow.batch_writer import get_desi_proc_batch_file_path
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
@@ -47,7 +44,6 @@ from astropy.table import Table, vstack
 
 
 def determine_science_to_proc(etable, tiles, surveys, laststeps,
-                              processed_tiles=None,
                               all_tiles=True,
                               ignore_last_tile=False,
                               complete_tiles_thrunight=None,
@@ -63,8 +59,6 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
             surveys (lowercase)
         laststeps (array-like, optional): Only submit jobs for exposures with
             LASTSTEP in these science_laststeps (lowercase)
-        processed_tiles (array-like, optional): TILEIDs that have already
-            been processed
         all_tiles (bool, optional): Default is True. Set to NOT restrict to
             completed tiles as defined by the table pointed to by specstatus_path.
         ignore_last_tile (bool): Default is False. Whether to ignore the last
@@ -88,10 +82,6 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
     full_etable = etable.copy()
     sci_etable = etable[etable['OBSTYPE'] == 'science']
 
-    ## Cut on exposure time
-    if len(sci_etable) > 0:
-        sci_etable = sci_etable[sci_etable['EXPTIME'] >= 60]
-
     ## Remove any exposure related to the last tile when in daily mode
     ## and during the nightly processing
     if ignore_last_tile and len(sci_etable) > 0:
@@ -106,11 +96,6 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
     if len(sci_etable) > 0:
         good_exps = np.isin(np.array(sci_etable['LASTSTEP']).astype(str), laststeps)
         sci_etable = sci_etable[good_exps]
-
-    ## Identify tiles that have already been processed and remove them
-    if len(sci_etable) > 0:
-        keep = np.bitwise_not(np.isin(sci_etable['TILEID'], processed_tiles))
-        sci_etable = sci_etable[keep]
 
     ## filter by TILEID if requested
     if tiles is not None and len(sci_etable) > 0:

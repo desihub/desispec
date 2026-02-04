@@ -70,11 +70,16 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     #  fiber flat correction is larger
     #  have to divide by isotropic_platescale^2
     ok = (fiber_frac>0.01)
+    skyfibers = fibermap["OBJTYPE"]=="SKY"
+    ok &= (~skyfibers)  # also exclude sky fibers from the point_source_correction calculation
     point_source_correction = np.zeros(x_mm.shape)
     point_source_correction[ok] = 1./fiber_frac[ok]/isotropic_platescale[ok]**2
 
-    # normalize to one because this is a relative correction here
-    point_source_correction[ok] /= np.mean(point_source_correction[ok])
+    # normalize to one because this is a relative correction here; use median to be robust against outliers
+    point_source_correction[ok] /= np.median(point_source_correction[ok])
+
+    # set the correction factor to 1 for sky fibers; other low-fiber_frac fibers have value 0.
+    point_source_correction[skyfibers] = 1.
 
     return point_source_correction
 

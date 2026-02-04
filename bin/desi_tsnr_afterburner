@@ -170,6 +170,9 @@ def update_targ_info(entry, targ_in):
     if entry['GOALTYPE'] in ('unknown', 'other'):
         entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
+    if entry['GOALTYPE'] in ['dark1b', 'bright1b']:
+        entry['GOALTYPE'] = entry['GOALTYPE'].replace('1b', '')
+
     return entry
 
 
@@ -259,7 +262,7 @@ def update_table(table1,table2,keys) :
             v1=[i+j for i,j in zip(v1,table1[k].astype(str))]
             v2=[i+j for i,j in zip(v2,table2[k].astype(str))]
 
-    replace = np.in1d(v1,v2)
+    replace = np.isin(v1,v2)
     keep = ~replace
 
     log.info("keep {} entries, replace {}, add {}".format(np.sum(keep),np.sum(replace),len(table2)-np.sum(replace)))
@@ -407,48 +410,48 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
         if nights is None:
             nights = np.unique(exp_summary["NIGHT"])
         for night in nights:
-            prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
-            if not os.path.isfile(prod_table_filename) :
-                log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
+            pipe_exptab_filename = findfile("exposure_table", night=int(night), readonly=True)
+            if not os.path.isfile(pipe_exptab_filename) :
+                log.warning("cannot find prod. exposure table {}".format(pipe_exptab_filename))
                 continue
-            prod_table = load_table(tablename=prod_table_filename, tabletype="exptable", suppress_logging=True)
-            missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
+            pipe_exptab = load_table(tablename=pipe_exptab_filename, tabletype="exptable", suppress_logging=True)
+            missing = (~(np.isin(pipe_exptab["EXPID"],exp_summary["EXPID"])))&(pipe_exptab["TILEID"]>0)
             nmissing=np.sum(missing)
             if nmissing>0:
                 for i in np.where(missing)[0] :
                     #- If the exposure was supposed to be processed but is unexpectedly
                     #- missing from prod, log error but don't add it to table because
                     #- we are in an ambiguous/error state of processing
-                    if prod_table["LASTSTEP"][i] == 'all':
-                        tileid = prod_table['TILEID'][i]
-                        expid = prod_table['EXPID'][i]
+                    if pipe_exptab["LASTSTEP"][i] == 'all':
+                        tileid = pipe_exptab['TILEID'][i]
+                        expid = pipe_exptab['EXPID'][i]
                         log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
                         continue
 
                     entry={}
-                    entry["EXPID"]=prod_table["EXPID"][i]
+                    entry["EXPID"]=pipe_exptab["EXPID"][i]
                     entry["NIGHT"]=night
-                    entry["TILEID"]=prod_table["TILEID"][i]
-                    entry["MJD"] = prod_table["MJD-OBS"][i]
+                    entry["TILEID"]=pipe_exptab["TILEID"][i]
+                    entry["MJD"] = pipe_exptab["MJD-OBS"][i]
                     entry["AIRMASS"]=0.
                     entry["EBV"]=0.
                     # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
-                    if "EBVFAC" in prod_table.dtype.names:
-                        entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
-                    entry["EXPTIME"]=prod_table["EXPTIME"][i]
+                    if "EBVFAC" in pipe_exptab.dtype.names:
+                        entry["EBV"] = 2.5 * np.log10(pipe_exptab["EBVFAC"][i]) / 2.165
+                    entry["EXPTIME"]=pipe_exptab["EXPTIME"][i]
                     entry['SEEING_ETC']=0.
                     entry["EFFTIME_ETC"] = 0.
-                    if "EFFTIME_ETC" in prod_table.dtype.names:
-                        entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
+                    if "EFFTIME_ETC" in pipe_exptab.dtype.names:
+                        entry["EFFTIME_ETC"] = pipe_exptab["EFFTIME_ETC"][i]
 
                     # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
-                    targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
+                    targ_dict = {key : pipe_exptab[key][i] for key in pipe_exptab.dtype.names}
                     entry = update_targ_info(entry, targ_dict)
                     entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
                     # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
                     # as of 20210624: SURVEY present in table_exposure since 20210611 only
-                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"], readonly=True))
                     fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
                     if len(fns) > 0:
                         fiberassign_header = fits.getheader(fns[0], 0)
@@ -478,7 +481,7 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
                     exp_summary.add_row(vals)
 
                     # same for other table
-                    for cam in decode_camword(difference_camwords(prod_table['CAMWORD'][i],prod_table["BADCAMWORD"][i])):
+                    for cam in decode_camword(difference_camwords(pipe_exptab['CAMWORD'][i],pipe_exptab["BADCAMWORD"][i])):
                         entry["CAMERA"]=cam
                         vals=[]
                         for j,k in enumerate(cam_summary.dtype.names) :
@@ -567,8 +570,8 @@ def compute_summary_tables(summary_rows, preexisting_tsnr2_expid_table,
               'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
               'EFFTIME_BACKUP_GFA']
 
-    if not np.all(np.in1d(exp_summary.dtype.names, neworder)):
-        missing = ~np.in1d(exp_summary.dtype.names, neworder)
+    if not np.all(np.isin(exp_summary.dtype.names, neworder)):
+        missing = ~np.isin(exp_summary.dtype.names, neworder)
         msg = "Missing keys, '{}' in new order list!".format(np.array(exp_summary.dtype.names)[missing])
         log.critical(msg)
         log.critical("new order list:",sorted(neworder))
@@ -1138,9 +1141,13 @@ def main():
                             if entry is not None :
                                 skymag_rows.append(entry)
 
-            colnames = list(skymag_rows[0].keys())
-            skymags_table = Table(rows=skymag_rows, names=colnames)
-            add_skymags_columns(tsnr2_expid_table,skymags_table)
+            if len(skymag_rows) > 0:
+                log.info("Adding computed sky magnitudes to table.")
+                colnames = list(skymag_rows[0].keys())
+                skymags_table = Table(rows=skymag_rows, names=colnames)
+                add_skymags_columns(tsnr2_expid_table,skymags_table)
+            else:
+                log.warning("No sky magnitudes to append to table.")
 
         gfa_table = None
         gfa_nights = list()
@@ -1257,16 +1264,16 @@ def main():
                 #
                 if args.expids is not None:
                     expids = parse_int_args(args.expids)
-                    selection &= np.in1d(exposure_table["EXPID"], expids)
+                    selection &= np.isin(exposure_table["EXPID"], expids)
                 if args.nights is not None:
                     nights = parse_int_args(args.nights)
-                    selection &= np.in1d(exposure_table["NIGHT"], nights)
+                    selection &= np.isin(exposure_table["NIGHT"], nights)
                 if len(gfa_nights) > 0:
-                    selection &= np.in1d(exposure_table["NIGHT"], gfa_nights)
+                    selection &= np.isin(exposure_table["NIGHT"], gfa_nights)
                 # consider only the tiles observed in this selection of exposures
                 tiles=np.unique(exposure_table["TILEID"][selection])
                 # keep all exposures of those tiles
-                selection = np.in1d(exposure_table["TILEID"],tiles)
+                selection = np.isin(exposure_table["TILEID"],tiles)
 
             new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
             if os.path.isfile(args.tile_completeness) :

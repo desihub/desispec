@@ -78,25 +78,29 @@ tile_qa_plot:
  tracers :
 
   BGS_BRIGHT :
-   program : BRIGHT
+   program : "BRIGHT,BRIGHT1B"
    zmin : 0.05
    zmax : 0.40
   BGS_FAINT :
-   program : BRIGHT
+   program : "BRIGHT,BRIGHT1B"
    zmin : 0.05
    zmax : 0.40
   LRG :
-   program : DARK
+   program : "DARK,DARK1B"
    zmin : 0.40
    zmax : 1.00
   ELG_LOP :
-   program : DARK
+   program : "DARK,DARK1B"
    zmin : 0.60
    zmax : 1.60
   QSO :
-   program : DARK
+   program : "DARK,DARK1B"
    zmin : 0.9
    zmax : 2.1
+  LGE :
+   program : "DARK1B"
+   zmin : 0.40
+   zmax : 1.00
 
  # {BRZ}THRUFRAC
  thrufrac_min : 0.8
@@ -108,3 +112,9 @@ tile_qa_plot:
 
  # vccdsec
  vccdsec_min : 72000
+
+ # tile information
+ tile_info: 
+  bright1b_pass_5: 'regular BRIGHT1B tile'
+  bright1b_pass_7: 'streams/dwarfs program'
+  bright1b_pass_8: 'M31 program'

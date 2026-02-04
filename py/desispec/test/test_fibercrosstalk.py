@@ -11,11 +11,15 @@ from desispec.fibercrosstalk import correct_fiber_crosstalk
 from desispec.frame import Frame
 from desispec.io import empty_fibermap,read_xytraceset
 from desispec.resolution import Resolution
+from desispec.test.util import installed
 
 class TestSky(unittest.TestCase):
 
     #- Create unique test filename in a subdirectory
     def setUp(self):
+        if not installed('specter'):
+            self.skipTest('crosstalk tests require specter')
+
         #- Create a fake sky
         self.nspec = 20
         self.wave = np.arange(4000, 4502)
@@ -73,4 +77,8 @@ class TestSky(unittest.TestCase):
         spectra = self._get_spectra()
 
         xyset = read_xytraceset(self.psffile)
-        correct_fiber_crosstalk(spectra,xyset=xyset)
+
+        from importlib import resources
+        parameter_filename = resources.files('desispec').joinpath("data/fiber-crosstalk.yaml")
+
+        correct_fiber_crosstalk(spectra,xyset=xyset,parameter_filename=parameter_filename)

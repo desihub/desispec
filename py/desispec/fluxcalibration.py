@@ -16,7 +16,6 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
-from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 from desispec.gpu import is_gpu_available, NoGPU
 from desispec.maskbits import fibermask
 import scipy, scipy.sparse, scipy.ndimage
@@ -907,6 +906,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         which is very close to C_fiber = R_fiber*C (but not exactly).
 
     """
+    # import only if needed to minimize required dependencies
+    from desispec.fiberfluxcorr import flat_to_psf_flux_correction, psf_to_fiber_flux_correction
 
     log=get_logger()
 
@@ -980,7 +981,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         stdfibers = np.where(isStdStar(tframe.fibermap))[0]
         assert len(stdfibers) > 0
 
-        if not np.all(np.in1d(stdfibers, input_model_fibers)):
+        if not np.all(np.isin(stdfibers, input_model_fibers)):
             bad = set(input_model_fibers) - set(stdfibers)
             if len(bad) > 0:
                 log.error('Discarding {} input_model_fibers that are not standards: {}'.format(camera, bad))
@@ -1116,7 +1117,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     scale /= mscale
     median_calib *= mscale
 
-
+    # Iteratively fit and reject outliers
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
 
@@ -1127,10 +1128,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-
     nout_tot=0
 
     for iteration in range(20) :
+
+        # NOTE: this fitting code is replicated later with a final fit with updated errors
 
         # fit mean calibration
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
@@ -1170,7 +1172,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         calibration = B*0
         try:
             calibration[w]=cholesky_solve(A_pos_def, B[w])
-        except np.linalg.linalg.LinAlgError :
+        except np.linalg.LinAlgError :
             log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
@@ -1295,7 +1297,25 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     log.info("{} n flux values excluded = {}".format(camera, nout_tot))
 
     # solve once again to get deconvolved variance
-    #calibration,calibcovar=cholesky_solve_and_invert(A.todense(),B)
+    # but we now want to remove the large error floor that was set
+    # at the begining to remove outliers
+    # so we restart from the original ivar, but keep the information about the masked pixels
+    # NOTE: this copies the fitting code above in the iteration fit+clip loop
+    current_ivar=stdstars.ivar*(current_ivar>0)
+    sqrtw=np.sqrt(current_ivar)
+    for star in range(nstds) :
+        if badfiber[star] : continue
+        R = stdstars.R[star]
+        # diagonal sparse matrix with content = sqrt(ivar)*flat
+        D1.setdiag(sqrtw[star]*scale[star])
+        D2.setdiag(model_flux[star])
+        sqrtwmodelR = D1.dot(R.dot(D2)) # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*scale*R*diag(model_flux)*calib )
+        A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
+    #- Add a weak prior that calibration = median_calib
+    #- to keep A well conditioned
+    minivar = np.min(current_ivar[current_ivar>0])
+    epsilon = minivar/10000
+    A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
     calibcovar=np.linalg.inv(A)
     calibvar=np.diagonal(calibcovar)
     log.info("{} mean(var)={:f}".format(camera, np.mean(calibvar)))
@@ -1349,6 +1369,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     #- Apply point source flux correction
     ccalibration /= point_source_correction[:,None]
+    ccalibivar *= (point_source_correction[:,None])**2
 
     log.info(f"{camera} interpolate calibration over Ca and Na ISM lines")
     # do this after convolution with resolution
@@ -1484,11 +1505,14 @@ def apply_flux_calibration(frame, fluxcalib):
     # It is important we update flux *after*
     # updating variance
     frame.flux = frame.flux * (C > 0) / (C + (C == 0))
-        
+
     if fluxcalib.fibercorr is not None and frame.fibermap is not None:
         if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names:
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
-            frame.fibermap["PSF_TO_FIBER_SPECFLUX"] = fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
+            frame.fibermap["PSF_TO_FIBER_SPECFLUX"] = np.array(fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"], dtype='float32')
+        if "FLAT_TO_PSF_FLUX" in fluxcalib.fibercorr.dtype.names :
+            log.info("add a column FLAT_TO_PSF_FLUX to fibermap")
+            frame.fibermap["FLAT_TO_PSF_FLUX"] = np.array(fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"], dtype='float32')
 
 
 def _calibrate_resolution_matrix(res_mat, calib, good_calib):

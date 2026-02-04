@@ -76,19 +76,20 @@ def compute_efftime(table,
         1.0 + sky_rdn / sky_nom + fflux_backup / sky_nom
     )
     # AR effective exposure time
-    efftime_dark = (
+    # SB cast astropy Column to numpy array
+    efftime_dark = np.asarray(
         exptime
         * (fiberfac_elg / airfac) ** 2
         * (sky_nom / effsky_dark)
         / ebvfac ** 2
     )
-    efftime_bright = (
+    efftime_bright = np.asarray(
         exptime
         * (fiberfac_bgs / airfac) ** 2
         * (sky_nom / effsky_bright)
         / ebvfac ** 2
     )
-    efftime_backup = (
+    efftime_backup = np.asarray(
         exptime
         * (fiberfac_psf / airfac) ** 2
         * (sky_nom / effsky_backup)

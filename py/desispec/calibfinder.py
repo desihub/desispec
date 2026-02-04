@@ -13,8 +13,9 @@ import numpy as np
 import yaml
 from astropy.table import Table
 
-from desispec.util import parse_int_args, header2night
+from desispec.util import parse_int_args, header2night, is_robust_mode
 from desiutil.log import get_logger
+from desispec.maskbits import fibermask
 
 def parse_date_obs(value):
     '''
@@ -122,9 +123,10 @@ def ccdregionmask(headers) :
 
     Returns list of dictionnaries with keys XMIN, XMAX, YMIN,YMAX
     """
+    from desispec.io.meta import findfile
     log = get_logger()
 
-    ccd_region_mask_filename = os.path.join(os.getenv('DESI_SPECTRO_CALIB'),"ccd/ccd-region-mask.csv")
+    ccd_region_mask_filename = findfile('ccd_region_mask')
     if not os.path.isfile(ccd_region_mask_filename) :
         log.warning(f"No file {ccd_region_mask_filename}")
         return list() # empty list
@@ -148,8 +150,60 @@ def ccdregionmask(headers) :
         masks.append(mask)
     return masks
 
-badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 
+def get_flagged_fibers(expid, filename=None):
+    """
+    Read flagged fibers from an ECSV file for a specific exposure ID.
+
+    Parameters
+    ----------
+    expid : int
+        The exposure ID to select from the file.
+    filename : str, optional
+        Path to the ECSV file. If None, it will look under $DESI_SPECTRO_CALIB/ccd/flagged_fibers.ecsv.
+
+    Returns
+    -------
+    fibers : list of int
+        List of fiber numbers parsed from the FIBERS column.
+    masks : list of int
+        List of fiberstatus mask values, one per fiber.
+    """
+    from desispec.io.meta import findfile
+    if filename is None:
+        filename = findfile('flagged_fibers')
+    if not os.path.exists(filename):
+        log = get_logger()
+        log.warning(f"Per exposure bad fiber file not found in DESI_SPECTRO_CALIB: {filename}. Proceeding without it.")
+        return [], []
+
+    table = Table.read(filename)
+
+    selection = table[table['EXPID'] == expid]
+
+    if len(selection) == 0:
+        return [], []
+
+    fibers = []
+    masks = []
+    for row in selection:
+        fiber_string = row['FIBERS']
+        parsed_fibers = parse_int_args(fiber_string)
+
+        try:
+            mask = fibermask.mask(row['FIBERSTATUS_BITNAME'])
+        except KeyError:
+            log = get_logger()
+            log.error(f"Unknown FIBERSTATUS_BITNAME '{row['FIBERSTATUS_BITNAME']}' in {filename}")
+            raise
+
+        fibers.extend(parsed_fibers)
+        masks.extend([mask] * len(parsed_fibers))
+
+    return fibers, masks
+
+
+badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS","NEARCHARGETRAPFIBERS", "VARIABLETHRUFIBERS"]
 def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     """
     find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
@@ -168,8 +222,8 @@ def badfibers(headers,keys=badfiber_keywords,yaml_file=None) :
     cfinder = CalibFinder(headers,yaml_file)
     return cfinder.badfibers(keys)
 
-class CalibFinder() :
 
+class CalibFinder() :
 
     def __init__(self,headers,yaml_file=None, fallback_on_dark_not_found=False) :
         """
@@ -227,7 +281,7 @@ class CalibFinder() :
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
 
         log.debug("header['CAMERA']={}".format(header['CAMERA']))
-        camera=header["CAMERA"].strip().lower()
+        self.camera=header["CAMERA"].strip().lower()
 
         if "SPECID" in header :
             log.debug("header['SPECID']={}".format(header['SPECID']))
@@ -248,7 +302,7 @@ class CalibFinder() :
             ccdtming = None
 
         log.debug("camera=%s specid=%s detector=%s ccdcfg=%s ccdtming=%s",
-                camera, specid, detector, ccdcfg, ccdtming)
+                self.camera, specid, detector, ccdcfg, ccdtming)
 
         #if "DOSVER" in header :
         #    dosver = str(header["DOSVER"]).strip()
@@ -272,8 +326,8 @@ class CalibFinder() :
 
 
         if dateobs < 20191211 or detector == 'SIM': # old spectro identifiers
-            cameraid = camera
-            spectro=int(camera[-1])
+            cameraid = self.camera
+            spectro=int(self.camera[-1])
             if yaml_file is None :
                 if old_version :
                     yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
@@ -284,7 +338,7 @@ class CalibFinder() :
                 log.error("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
                 raise RuntimeError("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
             log.debug("Use spectrograph hardware identifier SMY")
-            cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+            cameraid    = "sm{}-{}".format(specid,self.camera[0].lower())
             if yaml_file is None :
                 yaml_file = "{}/spec/sm{}/{}.yaml".format(self.directory,specid,cameraid)
 
@@ -316,11 +370,15 @@ class CalibFinder() :
             if dateobs < datebegin :
                 log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
-            if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
-                dateend=int(data[version]["DATE-OBS-END"])
-                if dateobs > dateend :
-                    log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
-                    continue
+            if "DATE-OBS-END" in data[version] :
+                try:
+                    dateend=int(data[version]["DATE-OBS-END"])
+                    if dateobs > dateend :
+                        log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,dateend,dateobs))
+                        continue
+                except ValueError as e :
+                    if not data[version]["DATE-OBS-END"].lower() == "none" :
+                        raise(e)
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
                 continue
@@ -346,8 +404,9 @@ class CalibFinder() :
 
             log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
-                log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
-                raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
+                message="Duplicate possible calibration data. Please fix this ambiguity. Maybe set DATE-OBS-END in previous config?"
+                log.error(message)
+                raise KeyError(message)
             found=True
             matching_data=data[version]
 
@@ -356,7 +415,8 @@ class CalibFinder() :
             raise KeyError("Didn't find matching calibration data in %s"%(yaml_file))
 
         self.data = matching_data
-
+        self.crash_on_dark_or_bias_request = False
+        self.dark_or_bias_not_found = False
         if "DESI_SPECTRO_DARK" in os.environ:
             self.find_darks_in_desi_spectro_dark(header)
 
@@ -376,7 +436,27 @@ class CalibFinder() :
         Returns:
             data found in yaml file
         """
-        return self.data[key]
+        log = get_logger()
+        if self.dark_or_bias_not_found and key in ['BIAS', 'DARK']:
+
+            is_robust_to_missing_calibration = is_robust_mode()
+            if is_robust_to_missing_calibration :
+                log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
+            if self.crash_on_dark_or_bias_request and not is_robust_to_missing_calibration :
+                msg = f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, quitting. " \
+                       "Set $DESI_SPECTRO_ROBUST=TRUE to proceed anyway."
+                log.critical(msg)
+                raise KeyError(msg)
+            else:
+                #this would prevent nightwatch failures in case of not-yet-existing files
+                log.error(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
+                            "falling back to $DESI_SPECTRO_CALIB")
+        val=self.data[key]
+        if type(val)==list :
+            if len(val)!=2 :
+                raise ValueError(f"Error reading {val}: list should have length=2 [value,comment]")
+            val=val[0]
+        return val
 
     def findfile(self,key) :
         """
@@ -385,7 +465,7 @@ class CalibFinder() :
         Returns:
             path to calibration file
         """
-        return os.path.join(self.directory,self.data[key])
+        return os.path.join(self.directory,self.value(key))
 
     def badfibers(self,keys=badfiber_keywords) :
         """
@@ -407,8 +487,6 @@ class CalibFinder() :
         if len(fibers)==0 :
             return np.array([],dtype=int)
         return np.unique(np.hstack(fibers))
-
-
 
     def find_darks_in_desi_spectro_dark(self, header):
         """
@@ -441,8 +519,6 @@ class CalibFinder() :
             log.critical(msg)
             raise IOError(msg)
 
-        camera=header["CAMERA"].strip().lower()
-
         if "SPECID" in header :
             specid=int(header["SPECID"])
         else :
@@ -450,7 +526,7 @@ class CalibFinder() :
 
         dateobs = header2night(header)
 
-        cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+        cameraid    = "sm{}-{}".format(specid,self.camera[0].lower())
 
         dark_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/dark_table.csv'
         bias_table_file = f'{os.getenv("DESI_SPECTRO_DARK")}/bias_table.csv'
@@ -539,26 +615,31 @@ class CalibFinder() :
                 dark_filename=f"{self.dark_directory}{dark_entry['FILENAME']}"
                 bias_filename=f"{self.dark_directory}{bias_entry['FILENAME']}"
                 if not os.path.exists(dark_filename) or not os.path.exists(bias_filename):
-                    log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
-                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file not found in {self.dark_directory}")
+                    log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file {dark_filename} not found in {self.dark_directory}")
+                    raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file  {dark_filename} not found in {self.dark_directory}")
 
         else:   #this will only be done as long as files do not yet exist
+            self.dark_or_bias_not_found = True
             if not self.fallback_on_dark_not_found:
-                log.critical(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
-                raise IOError(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}")
+                self.crash_on_dark_or_bias_request = True
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
+                            + " This will raise an error if DARK or BIAS is requested.")
             else:
-                #this would prevent nightwatch failures in case of problems with e.g. permissions
-                log.error(f"DESI_SPECTRO_DARK has been set, but dark/bias file tables not found in {self.dark_directory}, "
-                           "falling back to DESI_SPECTRO_CALIB")
+                #this would prevent nightwatch failures in case of not-yet-existing files
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
+                           "falling back to $DESI_SPECTRO_CALIB")
                 return
         if found:
             self.data.update({"DARK": dark_filename,
                               "BIAS": bias_filename})
         else:
+            self.dark_or_bias_not_found = True
             if not self.fallback_on_dark_not_found:
-                log.critical(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
-                raise IOError(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, quitting")
+                self.crash_on_dark_or_bias_request = True
+                if not is_robust_mode():
+                    log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK."
+                                + " This will raise an error if DARK or BIAS is requested.")
             else:
                 #this would prevent nightwatch failures in case of not-yet-existing files
-                log.error(f"Didn't find matching {camera} calibration darks in $DESI_SPECTRO_DARK, "
+                log.warning(f"Didn't find matching {self.camera} calibration darks in $DESI_SPECTRO_DARK, "
                            "falling back to $DESI_SPECTRO_CALIB")

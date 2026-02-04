@@ -18,12 +18,15 @@ from desiutil.log import get_logger
 
 from desispec.util import parse_int_args
 
-def checkgzip(filename):
+def checkgzip(filename, readonly=True):
     """
     Check for existence of filename, with or without .gz extension
 
     Args:
         filename (str): filename to check for
+
+   Options:
+        readonly: If False, raises IOError if alternative file exists (.gz or not), default is True
 
     Returns path of existing file without or without .gz,
     or raises FileNotFoundError if neither exists
@@ -37,6 +40,8 @@ def checkgzip(filename):
         altfilename = filename + '.gz'
 
     if os.path.exists(altfilename):
+        if not readonly :
+            raise IOError(f'Requested {filename} but {altfilename} exists. Either change code to set argument readonly=True in call to checkgzip (possibly via call to findfile), or remove {altfilename}, or change request, or check env. variable DESI_COMPRESSION')
         return altfilename
     else:
         raise FileNotFoundError(f'Neither {filename} nor {altfilename}')
@@ -118,7 +123,8 @@ def native_endian(data):
     if data.dtype.isnative:
         return data
     else:
-        return data.byteswap().newbyteorder()
+        # return data.byteswap().newbyteorder()   # numpy<2
+        return data.byteswap().view(data.dtype.newbyteorder('native'))  # works with numpy 2
 
 def add_columns(data, colnames, colvals):
     '''
@@ -207,16 +213,23 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     hdu = None
     #- Convert data as needed
-    if isinstance(data, (np.recarray, np.ndarray, Table)):
-        outdata = Table(data)
+    if isinstance(data, Table):
+        log.debug("data is astropy.table.Table.")
+        outdata = data
+    elif isinstance(data, (np.recarray, np.ndarray)):
+        log.debug("data is numpy array.")
+        outdata = Table(data, copy=False)
     elif isinstance(data, astropy.io.fits.BinTableHDU):
+        log.debug("data is astropy.io.fits.BinTableHDU.")
         hdu = data
     else:
-        outdata = Table(_dict2ndarray(data))
+        log.debug("data is something else. Trying to convert.")
+        outdata = Table(_dict2ndarray(data), copy=False)
 
     if hdu is None:
         hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
 
+    log.debug("Conversion to astropy.io.fits.BinTableHDU is complete.")
     if extname is not None:
         hdu.header['EXTNAME'] = extname
     elif 'EXTNAME' not in hdu.header:
@@ -254,11 +267,12 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 # Add TUNITnn key after TFORMnn key (which is right after TTYPEnn)
                 tform_key = 'TFORM'+str(i)
                 hdu.header.insert(tform_key, (tunit_key, units[colname], colname+' units'), after=True)
+    log.debug("hdu units and comments processed.")
     #
     # Add checksum cards.
     #
     hdu.add_checksum()
-
+    log.debug("hdu checksum complete.")
     #- Write the data and header
 
     if os.path.isfile(filename):
@@ -448,7 +462,11 @@ def decode_camword(camword):
                                 cameras, e.g. 'b0','r1',...
     """
     log = get_logger()
-    searchstr = camword
+    if camword is None:
+        log.error(f"Received camword=None to decode. Return empty list.")
+        searchstr = ''
+    else:
+        searchstr = camword
     camlist = []
     while len(searchstr) > 1:
         key = searchstr[0]
@@ -462,7 +480,7 @@ def decode_camword(camword):
             elif key in ['b','r','z']:
                 camlist.append(key+searchstr[0])
             else:
-                log.error(f"Couldn't understand key={key} in camword={camword}.")
+                log.critical(f"Couldn't understand key={key} in camword={camword}.")
                 raise ValueError(f"Couldn't understand key={key} in camword={camword}.")
             searchstr = searchstr[1:]
     return sorted(camlist)
@@ -575,6 +593,12 @@ def difference_camwords(fullcamword,badcamword,suppress_logging=False):
         str. A camword of cameras in fullcamword that are not in badcamword.
     """
     log = get_logger()
+
+    if badcamword is None:
+        badcamword = ''
+        if not suppress_logging:
+            log.info("No badcamword given, proceeding without badcamword removal")
+
     full_cameras = decode_camword(fullcamword)
     bad_cameras = decode_camword(badcamword)
     for cam in bad_cameras:
@@ -618,9 +642,11 @@ def camword_union(camwords, full_spectros_only=False):
                     + f"{camwords=}, {type(camwords)=}, {len(camwords)=}")
     else:
         cams = set(decode_camword(camwords[0]))
-        for camword in camwords[1:]:
-            cams = cams.union(set(decode_camword(camword)))
-        camword = create_camword(list(cams))
+        if len(camwords) > 1:
+            for camword in camwords[1:]:
+                cams |= set(decode_camword(camword))
+
+        camword = create_camword(sorted(list(cams)))
 
     if full_spectros_only:
         full_sps = np.sort(camword_to_spectros(camword,
@@ -652,7 +678,7 @@ def camword_intersection(camwords, full_spectros_only=False):
         for cw in camwords[1:]:
             cameras &= set(decode_camword(cw))
 
-    camword = parse_cameras(sorted(cameras))
+    camword = create_camword(sorted(list(cameras)))
 
     if full_spectros_only:
         spectros = camword_to_spectros(camword, full_spectros_only)
@@ -708,8 +734,12 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
                            input camera information.
     """
     log = get_logger()
+
+    if badamps is None:
+        badamps = ''
+
     if exclude_badamps and not suppress_logging:
-        if badamps is None:
+        if badamps == '':
             log.info("No badamps given, proceeding without badamp removal")
         elif obstype is None:
             log.info("No obstype given, will remove badamps.")
@@ -731,21 +761,21 @@ def columns_to_goodcamword(camword, badcamword, badamps=None, obstype=None,
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
-    Takes a camword as input and returns any spectrograph represented 
+    Takes a camword as input and returns any spectrograph represented
     within that camword in a sorted list. By default this includes partial
-    spectrographs (with one or two cameras represented). But if 
-    full_spectros_only is set to True, only spectrographs with all 
+    spectrographs (with one or two cameras represented). But if
+    full_spectros_only is set to True, only spectrographs with all
     cameras represented are given.
 
     Args:
         camword, str. The camword of all cameras.
-        full_spectros_only, bool. Default is False. Flag to specify if you 
-                                  want all spectrographs with any cameras 
-                                  existing in the camword (the default) or 
+        full_spectros_only, bool. Default is False. Flag to specify if you
+                                  want all spectrographs with any cameras
+                                  existing in the camword (the default) or
                                   if you only want fully populated spectrographs.
 
     Returns:
-        spectros, list. A sorted list of integer spectrograph numbers 
+        spectros, list. A sorted list of integer spectrograph numbers
                         represented in the camword input.
     """
     ## Normalize the camword
@@ -957,13 +987,34 @@ def get_speclog(nights, rawdir=None):
     for night in nights:
         for filename in sorted(glob.glob(f'{rawdir}/{night}/*/desi-*.fits.fz')):
             hdr = fitsio.read_header(filename, 1)
+            speckeyword = 'CCDSPECS' if 'CCDSPECS' in hdr else 'SPCGRPHS'
+            specs = []
+            for sp in hdr[speckeyword].split(','):
+                spnum = sp.strip().lstrip('SP')
+                if spnum.isnumeric():
+                    specs.append(spnum)
+            if len(specs) > 0:
+                camword = 'a' + ''.join(sorted(specs))
+                badcamword = ''
+                badamps = ''
+            else:
+                continue
             rows.append([night, hdr['EXPID'], hdr['MJD-OBS'],
-                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME']])
+                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME'], camword, badcamword, badamps])
 
-    speclog = Table(
-        names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
-        rows = rows,
-    )
+    if len(rows) > 0:
+        speclog = Table(
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
+            rows = rows,
+            )
+    else:
+        speclog = Table(
+            names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME',
+                     'CAMWORD', 'BADCAMWORD', 'BADAMPS'],
+            dtype = [ int,     int,     float, str,      str,      float,
+                     'S30',     'S30',        'S30' ],
+            )
 
     return speclog
 
@@ -1151,4 +1202,3 @@ def backup_filename(filename):
     os.rename(filename, altfile)
 
     return altfile
-

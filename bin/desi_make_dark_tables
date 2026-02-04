@@ -6,13 +6,14 @@ import numpy as np
 import astropy.table as t
 from astropy.io import fits
 import argparse
+from desiutil.log import get_logger
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="Generate tables of DARK and BIAS frames in DESI_SPECTRO_DARK",
     epilog='''
     Scans all dark and bias frames currently in the DESI_SPECTRO_DARK directories
-    and puts information relevant for choosing the right file into a table to 
+    and puts information relevant for choosing the right file into a table to
     avoid opening all files for each calibfinder call
     currently uses DETECTOR, CCDTMING, CCDCFG and CCDTEMP for doing the decision,
     date and spectrograph are encoded in the filenames
@@ -32,6 +33,7 @@ parser.add_argument('--suffix', type=str, default="",required=False,
                     help="suffix to add to output filenames")
 args = parser.parse_args()
 
+log = get_logger()
 
 dark_files=glob.glob(f'{args.indir}/{args.dark_dir}/dark*.fits.gz')
 bias_files=glob.glob(f'{args.indir}/{args.bias_dir}/bias*.fits.gz')
@@ -48,7 +50,8 @@ for files,outfile in zip([dark_files,bias_files],
     else:
         files_new = files
     if len(files_new)==0:
-        raise ValueError(f"No new files found in {args.indir} to add to {outfile}")
+        log.warning(f"No new files found in {args.indir} to add to {outfile}")
+        continue
     for fi in files_new:
         with fits.open(fi, "readonly") as f:
             det = f[0].header["DETECTOR"]
@@ -59,6 +62,7 @@ for files,outfile in zip([dark_files,bias_files],
             else:
               temp = np.nan
         outlist.append([fi.replace(f"{args.indir}/",""), det, cfg, tming, temp])
+        log.info(f"added {fi}")
     outarr=np.array(outlist)
     newtab=t.Table(
         outarr[:,:-1], names=["FILENAME", "DETECTOR", "CCDCFG", "CCDTMING"],

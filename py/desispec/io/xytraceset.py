@@ -81,10 +81,6 @@ def read_xytraceset(filename) :
          XYTraceSet object
 
     """
-    #- specter import isolated within function so specter only loaded if
-    #- really needed
-    from specter.util.traceset import TraceSet,fit_traces
-
     log=get_logger()
 
     xcoef=None
@@ -159,6 +155,9 @@ def read_xytraceset(filename) :
 
     if wsigmacoef is not None :
         log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
+        #- import specter only when really needed
+        from specter.util.traceset import TraceSet,fit_traces
+
         nfiber    = wsigmacoef.shape[0]
         ncoef     = wsigmacoef.shape[1]
         nw = 100 # to get accurate dydw

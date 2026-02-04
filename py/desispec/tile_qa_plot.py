@@ -22,7 +22,7 @@ from desispec.tsnr import tsnr2_to_efftime
 from desimodel.focalplane.geometry import get_tile_radius_deg
 from desiutil.log import get_logger
 from desiutil.dust import ebv as dust_ebv
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, join
 from astropy.io import fits
 from astropy import units
 from astropy.coordinates import SkyCoord
@@ -96,6 +96,25 @@ def assert_tracer(tracer):
         )
 
 
+# AR pick the first listed program
+def get_tracer_nz_program(tracer):
+    """
+    Returns the PROGRAM used to store the tracer reference n(z).
+
+    Args:
+        tracer: BGS_BRIGHT, BGS_FAINT, LRG, LGE, ELG_LOP, QSO (str)
+
+    Returns:
+        program (str)
+
+    Note:
+        Pick the first listed in the qa config file.
+    """
+
+    config = get_qa_config()
+    return config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")[0]
+
+
 def get_tracer_zminmax(tracer):
     """
     Returns some fiducial redshift range per tracer to compute basic stats.
@@ -133,7 +152,7 @@ def get_zbins():
     return np.arange(zmin, zmax, dz).round(2)
 
 
-def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
+def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS", nolya=False):
     """
     For a given tracer, returns the selection used for the tile QA n(z):
         - (fstatus_key & bad_qafstatus_mask) == 0
@@ -144,6 +163,8 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
         tracer: "BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG_LOP", or "QSO" (string)
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         sel: selected tracer sample (boolean array)
@@ -158,6 +179,9 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
     # AR ELG_LOP : excluding ELG_LOP x QSO
     if tracer == "ELG_LOP":
         sel &= (d["DESI_TARGET"] & desi_mask["QSO"]) == 0
+    # AR QSO : excluding Lya if asked
+    if (tracer == "QSO") & (nolya):
+        sel &= d["PRIORITY"] == desi_mask["QSO"].priorities["UNOBS"]
     return sel
 
 
@@ -187,7 +211,7 @@ def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
 
 
 def get_zhists(
-    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None
+    tileids, tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS", tileid_key=None, nolya=False
 ):
     """
     Returns the fractional, per tileid, n(z) for a given tracer.
@@ -199,6 +223,8 @@ def get_zhists(
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET, DELTACHI2, SPECTYPE, Z
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
         tileid_key (optional, defaults to None): column name for TILEID (string)
+        nolya (optional, defaults to False): if True, and if tracer=="QSO", then only keep
+            first-time observed QSOs
 
     Returns:
         tuple: A tuple containing:
@@ -219,7 +245,7 @@ def get_zhists(
     nbin = len(bins) - 1
 
     # AR restricting to valid fibers + selecting tracer
-    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key)
+    istracer = get_tracer(tracer, d, fstatus_key=fstatus_key, nolya=nolya)
 
     # AR making hist for each TILEID
     if tileid_key is None:
@@ -1105,7 +1131,7 @@ def get_tilecov(
         lastnight = int(datetime.now().strftime("%Y%m%d"))
     # AR files
     allowed_surveys = ["sv1", "sv2", "sv3", "main", "catchall"]
-    sel = ~np.in1d(surveys.split(","), allowed_surveys)
+    sel = ~np.isin(surveys.split(","), allowed_surveys)
     if sel.sum() > 0:
         msg = "surveys={} not in allowed_surveys={}".format(
             ",".join([survey for survey in np.array(surveys.split(","))[sel]]),
@@ -1169,14 +1195,14 @@ def get_tilecov(
     if verbose:
         log.info("starting from {} tiles".format(len(tiles)))
     if programs is not None:
-        sel = np.in1d(tiles["PROGRAM"], programs.split(","))
+        sel = np.isin(tiles["PROGRAM"], programs.split(","))
         if verbose:
             log.info("considering {} tiles after cutting on PROGRAM={}".format(sel.sum(), programs))
     if indesi:
         sel &= tiles["IN_DESI"]
         if verbose:
             log.info("considering {} tiles after cutting on IN_DESI".format(sel.sum()))
-    sel &= np.in1d(tiles["TILEID"], exps["TILEID"])
+    sel &= np.isin(tiles["TILEID"], exps["TILEID"])
     if verbose:
         log.info("considering {} tiles after cutting on NIGHT <= {}".format(sel.sum(), lastnight))
     tiles = tiles[sel]
@@ -1198,7 +1224,7 @@ def get_tilecov(
     for i in range(len(tiles)):
         i_radecrad = [tiles["RA"][i], tiles["DEC"][i], tile_radius_deg]
         i_pixs = hp_in_cap(nside, i_radecrad, inclusive=True, fact=4)
-        sel = np.in1d(pixs, i_pixs)
+        sel = np.isin(pixs, i_pixs)
         if verbose:
             log.info("fraction of TILEID={} covered by TILEID={}: {:.2f}".format(tileid, tiles[i]["TILEID"], sel.mean()))
         pix_ntiles[sel] += 1
@@ -1307,6 +1333,12 @@ def make_tile_qa_plot(
     if tsnr2_key is None:
         tsnr2_key = config["tile_qa_plot"]["tsnr2_key"]
 
+    # AR all programs that can be used for the n(z)
+    all_nz_programs = []
+    for tracer in config["tile_qa_plot"]["tracers"]:
+        all_nz_programs += config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
+    all_nz_programs = np.unique(all_nz_programs)
+
     # SB derive output file name, handling case if ".fits" appears in path
     if pngoutfile is None:
         base = os.path.splitext(os.path.basename(tileqafits))[0]
@@ -1331,8 +1363,8 @@ def make_tile_qa_plot(
             log.warning("no {} keyword in header".format(key))
 
     # AR start plotting
-    fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2)
+    fig = plt.figure(figsize=(22, 15))
+    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2, width_ratios=[1.0, 1.3, 1.0, 1.0])
 
     # AR exposures from that TILEID
     exps = get_expids_efftimes(tileqafits, prod)
@@ -1349,26 +1381,51 @@ def make_tile_qa_plot(
         exps["VCCDSEC"][i] = vccdsec
         exps["VCCDSEC_PBCAMPETS"][i] = pb_campets
         exps["VCCDSEC_MIN"][i] = np.min([vccdsec[campet] for campet in vccdsec])
-    xs = (-0.25, 0.03, 0.33, 0.57, 0.90)
+
+    # Add EXPTIME and AIRMASS to exps
+    exposures = Table()
+    for night in np.unique(exps['NIGHT']):
+        exposures_path = os.path.join(prod, "exposure_tables/{}/exposure_table_{}.csv".format(str(night)[:6], night))
+        if os.path.isfile(exposures_path):
+            tmp = Table.read(exposures_path)[['EXPID', 'EXPTIME', 'AIRMASS']]
+            try:
+                exposures = vstack([exposures, tmp])
+            except:
+                log.warning("format mismatch in exposure_table")
+        else:
+            log.warning("exposures table not found: "+exposures_path)
+    if len(exposures)>0:
+        exps = join(exps, exposures, join_type='left', keys='EXPID')
+        exps.sort('EXPID')
+        exps = exps.filled(-99)
+    else:
+        exps['EXPTIME'] = -99
+        exps['AIRMASS'] = -99
+
+    xs = (-0.192, 0.028, 0.231, 0.528, 0.712, 0.905)
     y, dy = 0.95, -0.10
     fs = 10
     ax = plt.subplot(gs[0, 1])
     ax.axis("off")
-    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME", "VCCDSEC"]
+    txts = ["EXPID", "NIGHT", "EFFTIME\n(QA_EFFTIME)", "EXPTIME", "VCCDSEC", "AIRMASS"]
     for x, txt in zip(xs, txts):
-        ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+        if txt=="EFFTIME\n(QA_EFFTIME)":
+            ax.text(x, y+dy/2, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+        else:
+            ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
     y += 2 * dy
     for i in range(len(exps)):
         txts = [
             "{:08d}".format(exps["EXPID"][i]),
             "{}".format(exps["NIGHT"][i]),
-            "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
-            "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
+            "{:.0f}s ({:.0f}s)".format(exps["EFFTIME_SPEC"][i], exps["QA_EFFTIME_SPEC"][i]),
+            "{:.0f}s".format(exps["EXPTIME"][i]),
             "{:.1f}hr".format(exps["VCCDSEC_MIN"][i] / 3600),
+            "{:.2f}".format(exps["AIRMASS"][i]),
         ]
         for x, txt in zip(xs, txts):
             fontweight, col = "normal", "k"
-            if txt == txts[-1]:
+            if txt == 'VCCDSEC':
                 if len(exps["VCCDSEC_PBCAMPETS"][i]) > 0:
                     fontweight, col = "bold", "r"
             ax.text(x, y, txt, fontsize=fs, fontweight=fontweight, color=col, transform=ax.transAxes)
@@ -1387,7 +1444,7 @@ def make_tile_qa_plot(
 
     # AR n(z)
     # AR n(z): plotting only if main survey
-    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].lower() != "backup" :
+    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].upper() in all_nz_programs:
 
         # AR n(z): reference
         ref = Table.read(os.path.join(refdir, "qa-reference-nz.ecsv"))
@@ -1395,9 +1452,8 @@ def make_tile_qa_plot(
         # AR n(z), for the tracers for that program
         tracers = [
             tracer
-            for tracer in list(config["tile_qa_plot"]["tracers"].keys())
-            if config["tile_qa_plot"]["tracers"][tracer]["program"]
-            == hdr["FAPRGRM"].upper()
+            for tracer in config["tile_qa_plot"]["tracers"]
+            if hdr["FAPRGRM"].upper() in config["tile_qa_plot"]["tracers"][tracer]["program"].split(",")
         ]
         cols = plt.rcParams["axes.prop_cycle"].by_key()["color"][: len(tracers)]
 
@@ -1446,7 +1502,7 @@ def make_tile_qa_plot(
         ax.legend(loc=1, ncol=1)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
-        if hdr["FAPRGRM"].lower() == "bright":
+        if hdr["FAPRGRM"].lower() in ["bright", "bright1b"]:
             ax.set_xlim(-0.1, 1.5)
             ax.set_ylim(0, 0.4)
         else:
@@ -1464,7 +1520,7 @@ def make_tile_qa_plot(
     # AR Z vs. FIBER plot
     ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (-1.1, 1.1)
-    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7])
     # AR identifying non-assigned/sky/broken fibers
     # AR    (equivalent of OBJTYPE!="TGT" in fiberassign-TILEID.fits.gz)
     # AR    undirect way, as not all columns are here...
@@ -1729,12 +1785,34 @@ def make_tile_qa_plot(
     else:
         nightprefix = "per"
 
+    # Get tile info based on pass number
+    if os.getenv("DESI_SURVEYOPS") is None:
+        log.warning("DESI_SURVEYOPS variable undefined")
+        tile_info = "DESI_SURVEYOPS variable undefined; check wiki guidance"
+    else:
+        tiles_path = os.path.join(os.getenv("DESI_SURVEYOPS"), 'ops/tiles-main.ecsv')
+        if not os.path.isfile(tiles_path):
+            log.warning("tiles-main.ecsv not found")
+            tile_info = "tiles-main.ecsv not found; check wiki guidance"
+        else:
+            tiles = Table.read(tiles_path)
+            if hdr['TILEID'] not in tiles['TILEID']:
+                log.warning("Tile {} not found in tiles-main.ecsv".format(hdr['TILEID']))
+                tile_info = "Unknown tile; check wiki guidance"
+            else:
+                index = np.where(tiles['TILEID']==hdr['TILEID'])[0][0]
+                tile_info_key = hdr["FAPRGRM"].lower() + '_pass_' + str(tiles['PASS'][index])
+                if tile_info_key in config['tile_qa_plot']['tile_info'].keys():
+                    tile_info = config['tile_qa_plot']['tile_info'][tile_info_key]
+                else:
+                    tile_info = ""
+
     for txt in [
         [f"TILEID-{nightprefix}NIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
         ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
-        ["", ""],
+        ["Tile info", tile_info],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(exps["EFFTIME_SPEC"].sum(), hdr["GOALTIME"], exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"])],
         ["qa_efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
@@ -1746,6 +1824,10 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
+        if txt[0]=="Tile info":
+            fontweight = 'bold'
+        if txt[0]=="Tile info" and tile_info=="":
+            txt = ["", ""]
         if (
             (txt[0] == "efftime / goaltime") &
             (exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"] < hdr["MINTFRAC"])

@@ -17,6 +17,32 @@ from desispec import util
 import desispec.parallel as dpl
 
 class TestNight(unittest.TestCase):
+
+    def test_robust_mode(self):
+        # Cache original value so that we can restore it at end; will be None if not set
+        orig = os.getenv('DESI_SPECTRO_ROBUST', None)
+
+        # Not robust mode if $DESI_SPECTRO_ROBUST isn't set
+        if 'DESI_SPECTRO_ROBUST' in os.environ:
+            del os.environ['DESI_SPECTRO_ROBUST']
+
+        self.assertFalse(util.is_robust_mode())
+
+        # Various values of robust mode
+        for value in ('True', 'TRUE', 'true', 'Yes', 'YES', 'yes', '1'):
+            os.environ['DESI_SPECTRO_ROBUST'] = value
+            self.assertTrue(util.is_robust_mode(), f'Should be robust mode if $DESI_SPECTRO_ROBUST={value}')
+
+        # Various values of not robust mode
+        for value in ('False', 'FALSE', 'false', 'No', 'NO', 'no', '0', 'nope', 'octopus'):
+            os.environ['DESI_SPECTRO_ROBUST'] = value
+            self.assertFalse(util.is_robust_mode(), f'Should NOT be robust mode if $DESI_SPECTRO_ROBUST={value}')
+
+        # Reset state of $DESI_SPECTRO_ROBUST
+        if orig is not None:
+            os.environ['DESI_SPECTRO_ROBUST'] = orig
+        else:
+            del os.environ['DESI_SPECTRO_ROBUST']
     
     def test_ymd2night(self):
         """
@@ -438,6 +464,38 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(type(value), bool)
         self.assertEqual(value, False)
 
+    def test_parse_int_args(self):
+        self.assertEqual(list(util.parse_int_args('1:3')), [1,2])
+        self.assertEqual(list(util.parse_int_args('1:3,0,8,5,10-12')), [1,2,0,8,5,10,11])
+        self.assertEqual(list(util.parse_int_args('5:8', include_end=True)), [5,6,7,8])
+        self.assertEqual(list(util.parse_int_args('5-8', include_end=True)), [5,6,7,8])
+        self.assertEqual(list(util.parse_int_args('5..8', include_end=True)), [5,6,7,8])
+
+    def test_parse_nights(self):
+        #- spans month boundary, no leap year
+        self.assertEqual(list(util.parse_nights('20250227:20250303')),
+                         [20250227, 20250228, 20250301, 20250302])
+        #- spans month boundary on a leap year
+        self.assertEqual(list(util.parse_nights('20240227:20240303')),
+                         [20240227, 20240228, 20240229, 20240301, 20240302])
+        #- spans year boundary
+        self.assertEqual(list(util.parse_nights('20241231:20250102')),
+                         [20241231,20250101])
+        #- include_end
+        self.assertEqual(list(util.parse_nights('20240227:20240303', include_end=True)),
+                         [20240227, 20240228, 20240229, 20240301, 20240302, 20240303])
+        #- must be a date
+        self.assertEqual(list(util.parse_nights('1:5')), [])
+        #- other forms
+        self.assertEqual(list(util.parse_nights('20240227:20240302,20250101')),
+                         [20240227, 20240228, 20240229, 20240301, 20250101])
+
+    def test_get_night_range(self):
+        self.assertEqual(list(util.get_night_range(20240228, before=2, after=3)),
+                         [20240226,20240227,20240228,20240229,20240301,20240302])
+        self.assertEqual(list(util.get_night_range(20251231, before=1, after=1)),
+                         [20251230,20251231,20260101])
+
     def test_argmatch(self):
         #- basic argmatch
         a = np.array([1,3,2,4])
@@ -533,5 +591,18 @@ class TestUtil(unittest.TestCase):
         #- compare columns, since comparing tables will say False due to dtype mismatch
         self.assertTrue(np.all(a['x'][ii] == b['x']))
         self.assertTrue(np.all(a['y'][ii] == b['y']))
+
+    def test_test_util_installed(self):
+        """Test desispec.test.util.installed"""
+        from ..test.util import installed
+        self.assertTrue(installed('os'))
+        self.assertTrue(installed('os', 'sys'))
+        self.assertTrue(installed('numpy'))
+        self.assertFalse(installed('not_a_package'))
+        self.assertFalse(installed('os', 'not_a_package'))
+        self.assertFalse(installed('not_a_package', 'os'))
+        self.assertTrue(installed('os.path'))
+        self.assertFalse(installed('os.blat'))
+
 
 

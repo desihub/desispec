@@ -52,7 +52,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
                             + ['calib long arcs cd+xe'] * narcsperset
 
         obs = ['arc'] * ntotalarcs
-        arcset['OBSTYPE'] = obs
+        arcset['OBSTYPE'] = np.array(obs, dtype='<U7')  # len('science') == 7
         perexp_mjd_offsets = np.cumsum(arcset['EXPTIME']+60.0) / (24*3600)
         arcset['MJD-OBS'] = mjd + mjd_offset + perexp_mjd_offsets
 
@@ -88,7 +88,7 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         flatset['BADCAMWORD'][:] = ''
         flatset['BADAMPS'] = ['b0123456789r0123456789'] * nexps
         flatset['BADAMPS'][:] = ''
-        flatset['OBSTYPE'] = ['flat'] * nexps
+        flatset['OBSTYPE'] = np.array(['flat'] * nexps, dtype='<U7')  # len('science']) == 7
         perexp_mjd_offsets = np.cumsum(flatset['EXPTIME']+60.0) / (24*3600)
         flatset['MJD-OBS'] = mjd + mjd_offset + perexp_mjd_offsets
 

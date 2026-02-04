@@ -69,6 +69,7 @@ def write_image(outfile, image, meta=None):
             with warnings.catch_warnings():
                 #- nanomaggies aren't an official IAU unit but don't complain
                 warnings.filterwarnings('ignore', ".*nanomaggies.*")
+                warnings.filterwarnings('ignore', ".*nmgy.*")
                 fmhdu = fits.convenience.table_to_hdu(image.fibermap)
             fmhdu.name = 'FIBERMAP'
         else:

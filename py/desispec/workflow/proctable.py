@@ -406,6 +406,43 @@ def table_row_to_dict(table_row):
         log.error(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
         raise TypeError(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
 
+def get_pdarks_from_ptable(ptable):
+    """
+    Extracts all dark exposures that have been pre-processed from a processing table.
+
+    Args:
+        ptable, Table. A processing table with the columns defined in get_processing_table_column_defs().
+
+    Returns:
+        processed_dark_expid, np.array. An array of the dark exposures that have been pre-processed.
+    """
+    log = get_logger()
+    if ptable is None:
+        log.error("Processing table is None, can't extract dark exposures. Exiting.")
+        return np.array([])
+    
+    if len(ptable) == 0:
+        log.info("Processing table is empty, can't extract dark exposures. Exiting.")
+        return np.array([])
+    
+    for col in ['EXPID', 'OBSTYPE', 'JOBDESC']:
+        if col not in ptable.colnames:
+            log.error(f"Processing table does not have {col} column, can't extract dark exposures. Exiting.")
+            return np.array([])
+    
+    ## Select the two JOBDESC's that are relevant for dark preprocessing
+    darks = ptable[np.isin(ptable['JOBDESC'].data, [b'pdark', b'biaspdark'])]
+    ## Remove bias-only biapdark jobs by requiring OBSTYPE to be dark
+    if len(darks) > 0:
+        darks = darks[darks['OBSTYPE'] == 'dark']
+
+    if len(darks) == 0:
+        log.info("No dark exposures. Exiting.")
+        return np.array([])
+    
+    processed_dark_expid = np.concatenate(darks['EXPID'])
+    return processed_dark_expid
+
 
 ## This cache is used in initial processing when we need to identify tilenights
 ## to use
@@ -608,7 +645,7 @@ def read_minimal_full_proctab_cols(nights=None, tileids=None,
 
     ## If the cache exists, use it speed up the search over tiles and nights
     if nights is not None and np.all(
-            np.in1d(nights, list(_full_ptab_cache.keys()))):
+            np.isin(nights, list(_full_ptab_cache.keys()))):
         log.info(f'Using cached processing table rows')
         tablist = []
         for night in nights:

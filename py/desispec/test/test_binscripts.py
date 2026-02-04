@@ -21,7 +21,6 @@ import desispec.scripts
 import desispec.scripts.sky
 import desispec.scripts.fiberflat
 import desispec.scripts.stdstars
-import desispec.scripts.fluxcalibration
 from desispec.test.util import get_frame_data, get_models
 
 class TestBinScripts(unittest.TestCase):
@@ -33,7 +32,7 @@ class TestBinScripts(unittest.TestCase):
         os.chdir(cls.testdir)
         cls.nspec = 6
         cls.nwave = 2000  # Needed for QA
-        cls.wave = 4000+np.arange(cls.nwave)
+        cls.wave = 7000+np.arange(cls.nwave)
         id = uuid4().hex
         cls.calibfile = 'calib-'+id+'.fits'
         cls.framefile = 'frame-'+id+'.fits.gz'
@@ -42,9 +41,6 @@ class TestBinScripts(unittest.TestCase):
         cls.modelfile ='stdstar_templates-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits.gz'
         cls.stdfile = 'std-'+id+'.fits.gz'
-        cls.qa_calib_file = 'qa-calib-'+id+'.yaml'
-        cls.qa_data_file = 'qa-data-'+id+'.yaml'
-        cls.qafig = 'qa-'+id+'.pdf'
 
         #- when running "python setup.py test", this file is run from different
         #- locations for python 2.7 vs. 3.5
@@ -109,7 +105,8 @@ class TestBinScripts(unittest.TestCase):
 
     def _write_frame(self, flavor='none', camera='b3', expid=1, night='20160607',gaia_only=False):
         """Write a fake frame"""
-        flux = np.ones((self.nspec, self.nwave))
+        ### flux = np.ones((self.nspec, self.nwave))
+        flux = np.random.normal(loc=1.0, scale=0.05, size=(self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))*100 # S/N=10
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
@@ -227,11 +224,9 @@ class TestBinScripts(unittest.TestCase):
         self._write_frame(flavor='flat')
         self._write_fibermap()
 
-        # QA fig requires fibermapfile
-        cmd = '{} {}/desi_compute_fiberflat --infile {} --outfile {} --qafile {} --qafig {}'.format(
-                sys.executable, self.binDir, self.framefile,
-                self.fiberflatfile, self.qa_calib_file, self.qafig)
-        outputs = [self.fiberflatfile,self.qa_calib_file,self.qafig]
+        cmd = '{} {}/desi_compute_fiberflat --infile {} --outfile {}'.format(
+                sys.executable, self.binDir, self.framefile, self.fiberflatfile)
+        outputs = [self.fiberflatfile,]
         inputs = [self.framefile,]
         result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
         self.assertTrue(success, 'FAILED: {}'.format(cmd))
@@ -309,11 +304,11 @@ for legacy standards
             self.assertTrue(success)
             self.assertEqual(result, 0)
 
-        
     def test_compute_fluxcalib(self):
         """
         Tests desi_compute_fluxcalibration
         """
+        import desispec.scripts.fluxcalibration
 
         if 'DESI_SPECTRO_CALIB' not in os.environ :
             print("do not test desi_compute_fluxcalib without DESI_SPECTRO_CALIB set")
@@ -325,11 +320,11 @@ for legacy standards
         self._write_skymodel()
         self._write_stdstars()
 
-        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {} --min-color 0.".format(
+        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fiberflat {} --sky {} --models {} --outfile {} --min-color 0.".format(
             sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.skyfile, self.stdfile,
-                self.calibfile, self.qa_data_file, self.qafig)
+                self.calibfile)
         inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.stdfile]
-        outputs = [self.calibfile,self.qa_data_file,self.qafig,]
+        outputs = [self.calibfile,]
         result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
         self.assertTrue(success, 'FAILED: {}'.format(cmd))
@@ -349,10 +344,10 @@ for legacy standards
         self._write_fiberflat()
         self._write_fibermap()
 
-        cmd = "{} {}/desi_compute_sky --infile {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
-            sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.skyfile, self.qa_data_file, self.qafig)
+        cmd = "{} {}/desi_compute_sky --infile {} --fiberflat {} --outfile {}".format(
+            sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.skyfile)
         inputs  = [self.framefile, self.fiberflatfile]
-        outputs = [self.skyfile,self.qa_data_file,self.qafig,]
+        outputs = [self.skyfile,]
         result, success = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
         self.assertEqual(result, 0, 'FAILED: {}'.format(cmd))
         self.assertTrue(success, 'FAILED: {}'.format(cmd))

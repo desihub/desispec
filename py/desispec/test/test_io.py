@@ -41,6 +41,7 @@ class TestIO(unittest.TestCase):
                        "DESI_SPECTRO_DATA": None,
                        "DESI_SPECTRO_REDUX": None,
                        "DESI_SPECTRO_CALIB": None,
+                       "DESI_COMPRESSION": None,
                        }
         cls.testEnv = {'SPECPROD': cls.specprod,
                        "DESI_ROOT": cls.testDir,
@@ -48,6 +49,7 @@ class TestIO(unittest.TestCase):
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
                        "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
                        "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       "DESI_COMPRESSION": None,
                        }
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
@@ -55,7 +57,12 @@ class TestIO(unittest.TestCase):
         for e in cls.origEnv:
             if e in os.environ:
                 cls.origEnv[e] = os.environ[e]
-            os.environ[e] = cls.testEnv[e]
+
+            #- Set test environment, handling cases like $DESI_COMPRESSION that should not be set
+            if cls.testEnv[e] is not None:
+                os.environ[e] = cls.testEnv[e]
+            elif e in os.environ:
+                del os.environ[e]
 
     def setUp(self):
         #- clear DESI_ROOT_READONLY cache leftover from other tests
@@ -74,7 +81,10 @@ class TestIO(unittest.TestCase):
 
         # restore environment variables if test changed them
         for key, value in self.testEnv.items():
-            os.environ[key] = value
+            if value is not None:
+                os.environ[key] = value
+            elif key in os.environ:
+                del os.environ[key]
 
     @classmethod
     def tearDownClass(cls):
@@ -84,10 +94,10 @@ class TestIO(unittest.TestCase):
             if os.path.exists(testfile):
                 os.remove(testfile)
         for e in cls.origEnv:
-            if cls.origEnv[e] is None:
-                del os.environ[e]
-            else:
+            if cls.origEnv[e] is not None:
                 os.environ[e] = cls.origEnv[e]
+            elif e in os.environ:
+                del os.environ[e]
 
         if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
@@ -246,7 +256,7 @@ class TestIO(unittest.TestCase):
 
         t = Table()
         t['a'] = ['a', 'b', '']
-        t['x'] = [1.0, 2.0, np.NaN]
+        t['x'] = [1.0, 2.0, np.nan]
         t['blat'] = [10, 20, 30]
         t['rows'] = np.arange(len(t), dtype=np.int16)
         t.meta['EXTNAME'] = 'TABLE'
@@ -514,6 +524,32 @@ class TestIO(unittest.TestCase):
                 match = np.all(fibermap[name] == frame.fibermap[name])
                 self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
+    def test_read_frame_as_spectra(self):
+        """Test desispec.io.read_frame_as_spectra
+        """
+        from ..io import read_frame_as_spectra, write_frame
+        from .util import get_frame_data
+        frame = get_frame_data()
+        frame.meta['CAMERA'] = 'r0'
+        frame.meta['NIGHT'] = 20201212
+        frame.meta['EXPID'] = 1234
+        frame.meta['TILEID'] = 4444
+        frame.meta['FLAVOR'] = 'science'
+
+        frame.mask[0,0] = 10
+
+        write_frame(self.testfile, frame)
+        sp = read_frame_as_spectra(self.testfile)
+
+        for key, value in frame.meta.items():
+            self.assertEqual(sp.meta[key], value)
+
+        #- Values agree after float64 -> float32 -> float64 conversion
+        self.assertTrue(np.all(sp.flux['r'] == frame.flux.astype('f4').astype('f8')))
+        self.assertTrue(np.all(sp.ivar['r'] == frame.ivar.astype('f4').astype('f8')))
+        self.assertTrue(np.all(sp.mask['r'] == frame.mask))
+
+
     def test_sky_rw(self):
         """Test reading and writing sky files.
         """
@@ -731,29 +767,6 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
-    def test_io_qa_frame(self):
-        """Test reading and writing QA_Frame.
-        """
-        from ..qa import QA_Frame
-        from ..io.qa import read_qa_frame, write_qa_frame
-        nspec = 3
-        nwave = 10
-        wave = np.arange(nwave)
-        flux = np.random.uniform(size=(nspec, nwave))
-        ivar = np.ones(flux.shape)
-        frame = Frame(wave, flux, ivar, spectrograph=0)
-        frame.meta = dict(CAMERA='b0', FLAVOR='science', NIGHT='20160607', EXPID=1)
-        #- Init
-        qaframe = QA_Frame(frame)
-        qaframe.init_skysub()
-        # Write
-        write_qa_frame(self.testyfile, qaframe)
-        # Read
-        xqaframe = read_qa_frame(self.testyfile)
-        # Check
-        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'])
-        self.assertTrue(qaframe.flavor == xqaframe.flavor)
-
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """
@@ -811,6 +824,8 @@ class TestIO(unittest.TestCase):
 
         # canonical case is gzipped, but if non-gzipped version exists
         # return that instead
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3, readonly=True)
+        file1 = findfile('sky', **kwargs)
         assert file1.endswith('.gz')
         os.makedirs(os.path.dirname(file1), exist_ok=True)
         file1nogzip = file1[:-3]
@@ -821,17 +836,17 @@ class TestIO(unittest.TestCase):
 
         # and also the reverse: canonical non-gzip will return gzip if
         # for whatever reason that exists
-        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        file4 = findfile('redrock', tile=1234, spectrograph=2, night=20201010, readonly=True)
         self.assertFalse(file4.endswith('.gz'))
         file5 = file4 + '.gz'
         os.makedirs(os.path.dirname(file5), exist_ok=True)
         fx = open(file5, 'w')
         fx.close()
-        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010)
+        file6 = findfile('redrock', tile=1234, spectrograph=2, night=20201010, readonly=True)
         self.assertEqual(file6, file5)  #- not file4
 
         # url1 = filepath2url(file1)
-        url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+        url1 = file1.replace(os.environ['DESI_ROOT_READONLY'], 'https://data.desi.lbl.gov/desi')
         url2 = os.path.join('https://data.desi.lbl.gov/desi',
                             'spectro', 'redux', os.environ['SPECPROD'], 'exposures',
                             str(kwargs['night']),'{expid:08d}'.format(**kwargs),
@@ -851,20 +866,24 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertTrue(str(the_exception), "Missing inputs for")
 
-        #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
+        #- $DESI_SPECTRO_DATA is used if set, but defaults to $DESI_ROOT/spectro/data
+        path1 = findfile('raw', night=20201020, expid=123)
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
-        self.assertTrue(x is not None)
-        with self.assertRaises(KeyError):
-            x = findfile('raw', night='20150101', expid=123)
+        path2 = findfile('raw', night=20201020, expid=123)
+        self.assertEqual(path1, path2)
+        os.environ['DESI_SPECTRO_DATA'] = '/blat/foo'
+        path3 = findfile('raw', night=20201020, expid=123)
+        self.assertEqual(path3, path1.replace(os.path.expandvars('$DESI_ROOT/spectro/data'), '/blat/foo'))
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
-        #- Some require $DESI_SPECTRO_REDUX; others to not
+        #- $DESI_SPECTRO_REDUX is used if set, but defaults to $DESI_ROOT/spectro/redux
+        path1 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         del os.environ['DESI_SPECTRO_REDUX']
-        x = findfile('raw', night='20150101', expid=123)
-        self.assertTrue(x is not None)
-        with self.assertRaises(KeyError):
-            x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        path2 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        self.assertEqual(path1, path2)
+        os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
+        path3 = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
+        self.assertEqual(path3, path1.replace(os.path.expandvars('$DESI_ROOT/spectro/redux'), '/blat/foo'))
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
         #- Camera is case insensitive
@@ -1028,6 +1047,64 @@ class TestIO(unittest.TestCase):
         filename = findfile('tiles', specprod='blat')
         self.assertEqual(filename, os.environ['DESI_SPECTRO_REDUX']+f'/blat/tiles-blat.fits')
 
+    def test_findfile_with_compression(self):
+        """Test desispec.io.meta.findfile with or without compression.
+        """
+        from ..io.meta import findfile
+        # from ..io.download import filepath2url
+
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
+        if "DESI_COMPRESSION" in os.environ :
+            os.environ.pop("DESI_COMPRESSION")
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file2_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="GZIP"
+        file3_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="gzip"
+        file4_should_be_gzip = findfile('sky', **kwargs)
+        os.environ["DESI_COMPRESSION"]="NONE"
+        file5_should_not_be_gzip = findfile('sky', **kwargs)
+
+        # testing if $DESI_COMPRESSION is not set, default is .gz
+        assert(file1_should_be_gzip.find(".gz")>=0)
+        # testing $DESI_COMPRESSION= 'gz', 'none', 'GZ', 'NONE', and 'None' all work as expected
+        assert(file1_should_be_gzip==file2_should_be_gzip)
+        assert(file1_should_be_gzip==file3_should_be_gzip)
+        assert(file1_should_be_gzip==file4_should_be_gzip)
+        assert(file5_should_not_be_gzip.find(".gz")<0)
+        # testing the pre-existence of an alternate file has expected behavior
+        # if readonly=True, alternate file is returned
+        # if readonly=False, raises error
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3, readonly=True)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        dirname1=os.path.dirname(file1_should_be_gzip)
+        if not os.path.isdir(dirname1) :
+            os.makedirs(dirname1)
+        with open(file1_should_be_gzip, "w"): pass # equivalent of touch
+        os.environ["DESI_COMPRESSION"]="NONE"
+        # it should be the gzip version because this file already exists
+        # despite the value of the environment variable
+        file2_should_be_gzip = findfile('sky', **kwargs)
+        assert(file1_should_be_gzip==file2_should_be_gzip)
+        # same test without readonly mode should raise an error that we are going to catch
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
+        os.environ["DESI_COMPRESSION"]="GZ"
+        file1_should_be_gzip = findfile('sky', **kwargs)
+        dirname1=os.path.dirname(file1_should_be_gzip)
+        if not os.path.isdir(dirname1) :
+            os.makedirs(dirname1)
+        with open(file1_should_be_gzip, "w"): pass # equivalent of touch
+        os.environ["DESI_COMPRESSION"]="NONE"
+        # it should raise an error because the gzip version already exists and
+        # we don't want two different versions of the same file
+        hasfailed=False
+        try :
+            file2_should_fail = findfile('sky', **kwargs)
+        except IOError as e :
+            hasfailed=True
+        assert(hasfailed)
 
     def test_desi_root_readonly(self):
         """test $DESI_ROOT_READONLY + findfile"""
@@ -1119,7 +1196,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
     def test_sv1_faflavor2program(self):
-        """Test desispec.io.meta.sv1_faflavor2program
+        """Test desispec.io.meta.faflavor2program
         """
         from ..io.meta import faflavor2program
         flavor = [
@@ -1127,12 +1204,14 @@ class TestIO(unittest.TestCase):
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
             'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
             'sv2dark', 'sv3bright', 'mainbackup',
-            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint',
+            'dark', 'dark1b', 'bright', 'bright1b']
         program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
             'bright', 'backup', 'other', 'other',
             'dark', 'bright', 'backup',
-            'other', 'other', 'other'])
+            'other', 'other', 'other',
+            'dark', 'dark1b', 'bright', 'bright1b'])
 
         #- list input
         p = faflavor2program(flavor)
@@ -1388,7 +1467,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'a01234567b89r89'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -1396,7 +1475,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'a01235679b8r48z4'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 5, 6, 7, 9]
@@ -1406,7 +1485,7 @@ class TestIO(unittest.TestCase):
                          completespectros)
 
         # the following three arent officially
-        # supported but should pass this function 
+        # supported but should pass this function
         camword = 'a01234567b89r89z89'
         allspectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         completespectros = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -1414,7 +1493,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'b0a12'
         allspectros = [0, 1, 2]
         completespectros = [1, 2]
@@ -1422,7 +1501,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
         camword = 'z9a543b1r2'
         allspectros = [1, 2, 3, 4, 5, 9]
         completespectros = [3, 4, 5]
@@ -1430,7 +1509,7 @@ class TestIO(unittest.TestCase):
                          allspectros)
         self.assertEqual(camword_to_spectros(camword, full_spectros_only=True),
                          completespectros)
-        
+
     def test_all_impacted_cameras(self):
         """Test desispec.io.util.all_impacted_cameras
         """
@@ -1770,3 +1849,10 @@ class TestIO(unittest.TestCase):
         self.assertEqual(specprod_root('blat/foo'), 'blat/foo')
         self.assertEqual(specprod_root('/blat/foo'), '/blat/foo')
 
+        #- $DESI_SPECTRO_REDUX overrides $DESI_ROOT/spectro/redux, but isn't required
+        del os.environ['DESI_SPECTRO_REDUX']
+        self.assertEqual(specprod_root(),
+                         os.path.expandvars('$DESI_ROOT/spectro/redux/$SPECPROD'))
+        os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
+        self.assertEqual(specprod_root(),
+                         os.path.expandvars('/blat/foo/$SPECPROD'))

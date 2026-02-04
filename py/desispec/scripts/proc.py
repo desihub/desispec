@@ -23,6 +23,9 @@ Examples at NERSC::
 """
 
 import time, datetime
+
+from desispec.workflow.batch_writer import create_desi_proc_batch_script
+from desispec.workflow.timing import log_timer
 start_imports = time.time()
 
 #- enforce a batch-friendly matplotlib backend
@@ -76,8 +79,8 @@ from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, \
-    update_args_with_headers, find_most_recent, log_timer
-from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
+    update_args_with_headers, find_most_recent
+from desispec.workflow.batch import determine_resources
 
 stop_imports = time.time()
 
@@ -265,7 +268,7 @@ def main(args=None, comm=None):
         #- are determined to be worse than the default, so check existence
         #- of output files separately.
         result, success = runcmd(desispec.scripts.nightly_bias.main,
-                args=cmd.split()[1:], inputs=[], outputs=[], comm=comm)
+                args=cmd.split()[1:], inputs=[], outputs=[], check_return=True, comm=comm)
 
         #- check for biasnight or biasnighttest output files
         missing_biasnight = 0
@@ -317,7 +320,10 @@ def main(args=None, comm=None):
     if args.expid is None:
         if comm is not None:
             all_error_counts = comm.gather(error_count, root=0)
-            error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+            if rank == 0:
+                error_count = int(np.sum(all_error_counts))  # all_error_counts is None on other ranks
+
+            error_count = comm.bcast(error_count, root=0)
 
         if rank == 0:
             log.info('No expid given so stopping now')
@@ -500,10 +506,14 @@ def main(args=None, comm=None):
             rawfilename=findfile('raw', args.night, args.expid, readonly=True)
             head=fitsio.read_header(rawfilename,1)
             exptime=head["EXPTIME"]
+            #ics_program=head["PROGRAM"]
         if comm is not None :
             exptime = comm.bcast(exptime, root=0)
+            #ics_program = comm.bcast(ics_program, root=0)
 
-        if exptime > 270 and exptime < 330 :
+        ## TODO: make this a desi_proc flag rather than selecting on exptime or program
+        #if 'calib dark' in ics_program.lower():
+        if np.abs(exptime - 300) < 2.0 or np.abs(exptime - 1200) < 2.0:
             timer.start('inspect_dark')
             if rank == 0 :
                 log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
@@ -530,7 +540,7 @@ def main(args=None, comm=None):
 
             timer.stop('inspect_dark')
         elif rank == 0:
-            log.warning(f'Not running desi_inspect_dark for DARK with exptime={exptime:.1f}')
+            log.warning(f'Not running desi_inspect_dark for DARK with EXPTIME={exptime:.1f}')
 
     #-------------------------------------------------------------------------
     #- Traceshift
@@ -558,7 +568,7 @@ def main(args=None, comm=None):
                     cmd += " --psf {}".format(inpsf)
                     cmd += " --degxx 2 --degxy 0"
                     if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT'] :
-                        cmd += " --continuum"
+                        cmd += " --continuum --no-large-shift-scan"
                     else :
                         cmd += " --degyx 2 --degyy 0"
                     if args.obstype in ['SCIENCE', 'SKY']:
@@ -1127,15 +1137,15 @@ def main(args=None, comm=None):
 
         for i in range(rank, len(args.cameras), size):
             camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera, readonly=True)
-            orig_frame = desispec.io.read_frame(framefile)
+            roframefile = findfile('frame', args.night, args.expid, camera, readonly=True)
+            orig_frame = desispec.io.read_frame(roframefile)
 
             #- Make a copy so that we can apply fiberflat
             fr = deepcopy(orig_frame)
 
             if np.any(fr.fibermap['OBJTYPE'] == 'SKY'):
                 log.info('{} sky fibers already set; skipping'.format(
-                    os.path.basename(framefile)))
+                    os.path.basename(roframefile)))
                 continue
 
             #- Apply fiberflat then select random fibers below a flux cut
@@ -1151,6 +1161,8 @@ def main(args=None, comm=None):
             orig_frame.fibermap['OBJTYPE'][iisky] = 'SKY'
             orig_frame.fibermap['DESI_TARGET'][iisky] |= desi_mask.SKY
 
+            #- Get the writable path to frame file and write it out
+            framefile = findfile('frame', args.night, args.expid, camera)
             desispec.io.write_frame(framefile, orig_frame)
 
         timer.stop('picksky')

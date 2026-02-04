@@ -6,6 +6,9 @@ One stop shopping for redshifting  DESI spectra
 """
 
 import time
+
+from desispec.workflow.batch_writer import create_desi_proc_batch_script
+from desispec.workflow.timing import log_timer
 start_imports = time.time()
 
 #- python imports
@@ -23,7 +26,6 @@ from astropy.io import fits
 from astropy.table import Table,vstack
 
 #- external desi imports
-from redrock.external import desi
 import desiutil.timer
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
@@ -43,8 +45,8 @@ from desispec.parallel import stdouterr_redirected
 from desispec.workflow import batch
 from desispec.workflow.exptable import get_exposure_table_pathname, \
     read_minimal_science_exptab_cols
-from desispec.workflow.desi_proc_funcs import assign_mpi, update_args_with_headers, log_timer
-from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import assign_mpi, update_args_with_headers
+from desispec.workflow.batch import determine_resources
 
 stop_imports = time.time()
 
@@ -144,6 +146,7 @@ def main(args=None, comm=None):
 
     Returns: integer error code (0=good)
     """
+    from redrock.external.desi import rrdesi
     #- save original command line before parsing it
     #- in case we need it for creating a batch script
     if args is None or isinstance(args, argparse.Namespace):
@@ -622,7 +625,7 @@ def main(args=None, comm=None):
                 log.info(f"dryrun: Would have run {cmd}")
         else:
             with stdouterr_redirected(rrlog, comm=comm):
-                result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
+                result, success = runcmd(rrdesi, comm=comm, args=cmdargs,
                                          inputs=[coaddfile], outputs=[rrfile, rdfile, rmfile])
 
         ## Since all ranks running redrock, only count failure/success once

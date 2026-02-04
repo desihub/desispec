@@ -9,6 +9,7 @@ import numpy as np
 import numba
 from scipy import special, linalg
 from specter.util import custom_hermitenorm, custom_erf
+from desispec.qproc.qframe import QFrame
 from desispec import qproc, io
 from desiutil.log import log
 
@@ -369,13 +370,13 @@ def extract(image, psf, blocksize=25, fibermap=None, nspec=500,
         log.warning("setting up a fibermap to save the FIBER identifiers")
         fibermap = io.fibermap.empty_fibermap(nspec)  # 2% of time
         fibermap["FIBER"] = np.arange(nspec)
-        if (image.meta is not None) and ('CAMERA' in image.meta):
+        if (image.meta is not None) and ('CAMERA' in image.meta) and (image.meta['CAMERA'] != 'unknown'):
             petal = int(image.meta['CAMERA'][1])
             fibermap["FIBER"] += petal*500
     else:
         fibermap = fibermap[:nspec]
 
-    out = qproc.qframe.QFrame(wave, outspec, 1/outvar, mask=None,
+    out = QFrame(wave, outspec, 1/outvar, mask=None,
                               fibers=fibermap['FIBER'],
                               meta=image.meta, fibermap=fibermap)
     if return_model:

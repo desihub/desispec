@@ -11,7 +11,9 @@ srun -n 8 -c 8 desi_compute_nightly_bias --mpi -n 20211020
 #- Cori KNL, ~13.5 minutes:
 srun -n 8 -c 32 desi_compute_nightly_bias --mpi -n 20211020
 """
-
+import sys
 from desispec.scripts.nightly_bias import main
-main()
+
+if __name__ == '__main__':
+    sys.exit(main())
 

@@ -45,10 +45,10 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     log = get_logger()
     outfile = makepath(outfile, 'frame')
 
-    #- Ignore some known and harmless units warnings
     import warnings
-    warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
     warnings.filterwarnings('ignore', message=r".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+    warnings.filterwarnings('ignore', ".*nanomaggies.*")
+    warnings.filterwarnings('ignore', ".*nmgy.*")
 
     if header is not None:
         hdr = fitsheader(header)
@@ -140,7 +140,7 @@ def read_meta_frame(filename, extname=0):
         meta: dict or astropy.fits.header
 
     """
-    filename = checkgzip(filename)
+    filename = checkgzip(filename,readonly=True)
     with fits.open(filename, uint=True, memmap=False) as fx:
         hdr = fx[extname].header
     return hdr
@@ -165,10 +165,10 @@ def read_frame(filename, nspec=None, skip_resolution=False):
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
-        filename = findfile('frame', night, expid, camera)
+        filename = findfile('frame', night, expid, camera,readonly=True)
 
     #- check for gzip, raise FileNotFoundError if neither exists
-    filename = checkgzip(filename)
+    filename = checkgzip(filename,readonly=True)
 
     t0 = time.time()
     fx = fitsio.FITS(filename)

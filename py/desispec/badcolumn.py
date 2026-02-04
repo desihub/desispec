@@ -28,7 +28,8 @@ def flux_bias_function(delta_x) :
     nonnull  = (np.abs(delta_x)<4.5)
     val[nonnull] = 1.1/(1+np.abs(delta_x[nonnull]/2.)**5)
     if scalar :
-        return float(val)
+        # Fix "Conversion of an array with ndim > 0 to a scalar is deprecated"
+        return val[0]
     else :
         return val
 

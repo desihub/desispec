@@ -1,14 +1,22 @@
 """Some simple unit tests of qproc/rowbyrowextract.py"""
-
-from pkg_resources import resource_filename
+from importlib.resources import files
 import numpy as np
-from specter.psf import load_psf
 from desispec import io
-from desispec.qproc import rowbyrowextract
-
+from desispec.test.util import installed
 
 def test_rowbyrowextract():
-    psf = load_psf(resource_filename("specter.test", "t/psf-gausshermite2.fits"))
+    if not installed('specter.psf'):
+        from desiutil.log import get_logger
+        log = get_logger()
+        log.warning('specter not installed; skipping rowbyrow extraction tests')
+        return
+
+    # if specter is installed, this import should succeed
+    from specter.psf import load_psf
+    from desispec.qproc import rowbyrowextract
+
+    # psf = load_psf(resource_filename("specter.test", "t/psf-gausshermite2.fits"))
+    psf = load_psf(str(files('specter.test') / 't' / 'psf-gausshermite2.fits'))
     shape = (psf.npix_y, psf.npix_x)
     pix = np.zeros(shape, dtype='f4')
     ivar = np.ones(shape, dtype='f4')
