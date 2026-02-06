@@ -676,7 +676,7 @@ def coadd_spectra(spectra, cosmics_nsig=None, onetile=False):
        spectra: desispec.spectra.Spectra object
 
     Options:
-       cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
+       cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
 
     Returns:
@@ -706,7 +706,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
        spectra: desispec.spectra.Spectra object
 
     Options:
-       cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
+       cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
 
     Notes: if `onetile` is True, additional tile-specific columns
