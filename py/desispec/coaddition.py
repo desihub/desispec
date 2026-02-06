@@ -677,11 +677,13 @@ def coadd_spectra(spectra, cosmics_nsig=None, onetile=False):
 
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
-
        onetile: bool, if True, inputs are from a single tile
 
     Returns:
        coadded_spectra: desispec.spectra.Spectra object
+
+    See ``coadd`` for a version of this function that does an in-place coaddition,
+    modifying its inputs instead of returning a new object.
     """
     log = get_logger()
     log.debug("coadding spectra to new Spectra object")
@@ -711,6 +713,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
        like LOCATION and FIBER are included the FIBERMAP; otherwise
        these are only in the EXP_FIBERMAP since for the same target they could
        be different on different tiles.
+
+    See ``coadd_spectra`` for a version of this function that returns a new object
+    without modifying the input, instead of doing an in-place coaddition,
     """
     log = get_logger()
     targets = ordered_unique(spectra.fibermap["TARGETID"])
