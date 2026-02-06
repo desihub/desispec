@@ -668,6 +668,33 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
+def coadd_spectra(spectra, cosmics_nsig=None, onetile=False):
+    """
+    Coadd spectra, returning new Spectra object without changing original.
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
+
+       onetile: bool, if True, inputs are from a single tile
+
+    Returns:
+       coadded_spectra: desispec.spectra.Spectra object
+    """
+    log = get_logger()
+    log.debug("coadding spectra to new Spectra object")
+
+    #- Make a deep copy of input spectra to become the coadded output
+    coadded_spectra = spectra.copy()
+
+    #- Perform coaddition in place on the copy
+    coadd(coadded_spectra,
+          cosmics_nsig=cosmics_nsig,
+          onetile=onetile)
+
+    return coadded_spectra
 
 def coadd(spectra, cosmics_nsig=None, onetile=False):
     """

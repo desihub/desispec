@@ -298,6 +298,11 @@ class Spectra(object):
         else:
             return 0
 
+    def copy(self):
+        """
+        Return deep copy of self
+        """
+        return self[:]
 
     def _get_slice(self, index, bands=None):
         """Slice spectra by index.
