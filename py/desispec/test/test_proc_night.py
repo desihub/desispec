@@ -103,7 +103,7 @@ class TestProcNight(unittest.TestCase):
     def test_proc_night(self):
         proctable, unproctable = proc_night(self.night, z_submit_types=['cumulative',],
                                             dry_run_level=1, sub_wait_time=0.0)
-        
+
         # processing table file created
         self.assertTrue(os.path.isfile(findfile('processing_table', self.night)))
 
@@ -523,7 +523,7 @@ class TestProcNight(unittest.TestCase):
                                            and np.sum(etable['OBSTYPE']=='dark') > 0
                                            and np.sum(etable['OBSTYPE']=='arc') > 0
                                            and np.sum(etable['OBSTYPE']=='zero') > 9)
-                    
+
                 if has_1secflat:
                     ## if 1sec flat has arrived, cals should be submitted.
                     ## Note: this could be different if we switch to testing a daily night with
@@ -561,4 +561,3 @@ class TestProcNight(unittest.TestCase):
         proctiles = set(proctable['TILEID'][ proctable['OBSTYPE'] == 'science' ])
         exptiles = set(etable['TILEID'][ etable['OBSTYPE'] == 'science' ])
         self.assertEqual(len(proctiles), len(exptiles))
-
