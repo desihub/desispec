@@ -258,9 +258,8 @@ class TestCoadd(unittest.TestCase):
         #- Verify result has coadded shape
         self.assertEqual(result.flux['b'].shape[0], 1)
         
-        #- Create another copy for in-place coadd comparison
-        s2 = self._random_spectra(nspec, nwave)
-        s2.fibermap['TARGETID'] = 10
+        #- Create a deep copy of s1 for in-place coadd comparison
+        s2 = s1.copy()
         coadd(s2)
         
         #- Verify coadd_spectra result matches in-place coadd
