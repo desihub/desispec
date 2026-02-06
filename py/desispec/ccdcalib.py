@@ -85,7 +85,16 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                     reference_header = header
 
     log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
-
+    log.info('Checking for DARK_RESET')
+    reference_calib=CalibFinder([reference_header])
+    # Check for dark_reset
+    dark_reset_begin=0
+    dark_reset_end=1e10
+    if reference_calib.haskey('DARK_RESET'):
+        dark_reset=True
+        dark_reset_begin=reference_calib.data['DATE-OBS-BEGIN']
+    else:
+        dark_reset=False
     log.info(f"reading images for {camera} ...")
     shape=None
     images=[]
@@ -97,7 +106,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     files_used = []
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
-
+        
        # collect exposure times
         primary_header = read_raw_primary_header(filename)
         try:
@@ -105,7 +114,28 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         except OSError:
             log.warning(f'No camera {camera} in {filename}')
             continue
-            
+        
+        # Instantiate CalibFinder
+        calib=CalibFinder([header,primary_header])
+        if calib.data==reference_calib.data:
+            pass
+        elif dark_reset and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
+            continue
+        elif calib.haskey('DARK_RESET') and dark_reset:
+            continue
+        elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
+            if dark_reset_begin>calib.data['DATE-OBS-BEGIN']:
+                dark_reset_begin=calib.data['DATE-OBS-BEGIN']
+            continue
+        elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']>reference_calib.data['DATE-OBS-BEGIN']:
+            if calib.data['DATE-OBS-BEGIN']<dark_reset_end:
+                dark_reset_end=calib.data['DATE-OBS-BEGIN']
+            continue
+        elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
+            continue
+        elif calib.data['DATE_OBS-BEGIN']<dark_reset_begin:
+            continue
+
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -243,6 +273,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.critical(msg)
         raise RuntimeError(msg)
     
+    # log.info('I')
+
     images=np.array(images)
     exptimes=np.array(exptimes)
     assert(images.shape[0] == exptimes.size)
