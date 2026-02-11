@@ -1167,7 +1167,6 @@ def coadd_cameras(spectra):
     # drop with warning
     if spectra.extra is not None:
         log.warning("extras dictionary cannot be coadded across cameras, ignoring")
-        spectra.extra = None
 
     res = Spectra(
         bands= [wavebands],
@@ -1180,7 +1179,7 @@ def coadd_cameras(spectra):
         fibermap=spectra.fibermap.copy() if spectra.fibermap is not None else None,
         exp_fibermap=spectra.exp_fibermap.copy() if spectra.exp_fibermap is not None else None,
         meta=spectra.meta.copy() if spectra.meta is not None else None,
-        extra=spectra.extra.copy() if spectra.extra is not None else None,
+        extra=None,
         scores=spectra.scores.copy() if spectra.scores is not None else None,
         redshifts=spectra.redshifts.copy() if spectra.redshifts is not None else None,
     )
