@@ -2,7 +2,7 @@
 desispec.workflow.submision
 ===========================
 
-Utilities for working submitting jobs to slurm 
+Utilities for working submitting jobs to slurm
 """
 
 import os
@@ -31,8 +31,8 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
                         check_outputs=True, system_name=None):
     """
     Submit linkcal jobs for the current night. This function will read the override file,
-    determine what calibrations have been done, and submit jobs to link the calibrations 
-    that are specified in the override file. It will also update the processing table 
+    determine what calibrations have been done, and submit jobs to link the calibrations
+    that are specified in the override file. It will also update the processing table
     with the new jobs.
 
     Args:
@@ -83,7 +83,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
             files_to_link = cal_override['linkcal']['include']
         if 'exclude' in cal_override['linkcal']:
             files_not_linked = cal_override['linkcal']['exclude']
-        files_to_link, files_not_linked = derive_include_exclude(files_to_link,                             
+        files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
         ## Fiberflatnights need to be generated with psfs from same time, so
         ## can't link psfs without also linking fiberflatnight
@@ -131,7 +131,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
     return ptable, files_to_link
 
 
-def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes, 
+def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                            camword, badcamword, badamps=None,
                            exp_table_path=None,
                            proc_table_path=None,
@@ -145,7 +145,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     Submit a biasnight and/or preproc_darks jobs for the given night.
     This function will read the override file, determine what calibrations
     have been done, and submit jobs to process the bias and dark frames.
-    
+
     Args:
         night (int): The night to process, in YYYYMMDD format.
         dark_expids (list): List of exposure IDs for the dark frames to process.
@@ -155,7 +155,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         badamps (list, optional): List of bad amps to exclude. Default is None.
         exp_table_path (str, optional): Path to the exposure table files.
                                             If None, will search for it.
-        proc_table_path (str, optional): Path to the processing table files. 
+        proc_table_path (str, optional): Path to the processing table files.
                                             If None, will search for it.
         override_path (str, optional): Path to the override file.
                                             If None, will search for it.
@@ -170,13 +170,13 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             without fiberflatnight calibrations.
         sub_wait_time (float, optional): Time to wait between submissions. Default is 0.1 seconds.
         dry_run_level (int, optional): Level of dry run to perform. Default is 0.
- 
+
     Returns:
         ptable (Table): Updated processing table with new jobs.
 
     """
     log = get_logger()
-   
+
     ## Determine where the processing table will be written
     proc_table_pathname = findfile('processing_table', night=night, readonly=True)
     if proc_table_path is None:
@@ -209,7 +209,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         exp_table_pathname = os.path.join(exp_table_path, exp_month_dir, exp_table_name)
     if not os.path.exists(exp_table_pathname):
         raise IOError(f"Exposure table: {exp_table_pathname} not found. Exiting this night.")
-    
+
     ## Load in the files defined above
     etable = load_table(tablename=exp_table_pathname, tabletype='exptable')
 
@@ -220,7 +220,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         baddarks = badetable[np.isin(badetable['EXPID'].data, dark_expid_to_process)]
         log.critical(f"Asked to process exposure that has LASTSTEP=ignore: {baddarks}")
         raise ValueError(f"Asked to process exposure that has LASTSTEP=ignore: {baddarks}")
-    
+
     etable = etable[~bad]
 
     ## Require cal_override to exist if explcitly specified
@@ -232,7 +232,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         if not os.path.exists(override_pathname):
             raise IOError(f"Specified override file: "
                         f"{override_pathname} not found. Exiting this night.")
-        
+
     ## Load calibration_override_file
     overrides = load_override_file(filepathname=override_pathname)
     cal_override = {}
@@ -254,14 +254,17 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                              dry_run=dry_run_level>0, logfunc=log.info)
     else:
         files_to_link = set()
-        
+
     zeros = etable[etable['OBSTYPE'] == 'zero']
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
     linked_bias = 'biasnight' in files_to_link
     dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
-    dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 # 'darknight' not in files_to_link and
+
+    # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
+    dark_date=night>20240408
+    dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 and dark_date
 
     ## Next derive the full badcamword from that supplied plus the erows for the exposure type
     if dobias:
@@ -299,9 +302,9 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         prow['INTID'] = int_id
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = night
-        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps, 
+        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
                                                      suppress_logging=True, exclude_badamps=True)
-        
+
     ## If submit bias and darks, submit joint job, otherwise submit one or the other
     if dobias and dodarks:
         log.info(f"Submitting biaspdark for night {night}.")
@@ -333,7 +336,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
         sleep_and_report(sub_wait_time,
                             message_suffix=f"to slow down the queue submission rate",
-                            dry_run=(dry_run_level>0), logfunc=log.info)        
+                            dry_run=(dry_run_level>0), logfunc=log.info)
         log.info(f"Successfully submitted {prow['JOBDESC']} job submitted for night {night}.")
     else:
         log.info(f"No biasnight or preproc_darks jobs submitted for night {night}.")
@@ -341,20 +344,20 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     return ptable
 
 
-def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes, 
+def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes,
                                                   camword, badcamword, badamps=None,
                                                   exp_table_pathname=None,
                                                   proc_table_pathname=None,
                                                   specprod=None, path_to_data=None,
                                                   sub_wait_time=0.1, dry_run_level=0,
-                                                  psf_linking_without_fflat=None,
+                                                  psf_linking_without_fflat=False,
                                                   n_nights_before=None, n_nights_after=None,
                                                   queue=None, system_name=None):
     """
     Submit biasnight and preproc_darks jobs for the given reference night.
     This function will read the override file, determine what calibrations
     have been done, and submit jobs to process the bias and dark frames.
-    
+
     Args:
         reference_night (int): The reference night to process, in YYYYMMDD format.
         proc_obstypes (list): List of obstypes to process.
@@ -413,5 +416,5 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
             queue=queue, system_name=system_name)
         if night == reference_night:
             refnight_ptable = ptable
-    
+
     return refnight_ptable
