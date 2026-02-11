@@ -523,7 +523,10 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
             if in_etable:
                 etable_program = str(exptable['PROGRAM'][exptable['EXPID']==fname_derived_expid][0]).lower()
             else:
-                etable_program = None
+                ## Only include ZEROs that are in the exposure table
+                ## Change to below if you want to include all ZEROs on disk
+                ## etable_program=None
+                continue
 
             if 'PROGRAM' in r:
                 program = r['PROGRAM'].lower()
