@@ -273,8 +273,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         log.critical(msg)
         raise RuntimeError(msg)
     
-    # log.info('I')
-
     images=np.array(images)
     exptimes=np.array(exptimes)
     assert(images.shape[0] == exptimes.size)

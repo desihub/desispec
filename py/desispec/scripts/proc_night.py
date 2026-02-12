@@ -802,7 +802,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
         flats = allflats[~is_cte]
         ctes = allflats[is_cte]
-        
+    
     do_darknight = not calibjobs['accounted_for']['darknight']
     do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
     have_flats_for_cte = len(ctes) > 0 and len(flats) > 0
