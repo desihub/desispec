@@ -340,7 +340,7 @@ class TestSpectra(unittest.TestCase):
         # make sure coadded spectra with FIBERMAP vs. EXP_FIBERMAP works
         tid = 555666
         spec.fibermap['TARGETID'][0:2] = tid
-        desispec.coaddition.coadd(spec)  #- in place-coadd
+        desispec.coaddition.coadd(spec, normalize=True)  #- in place-coadd
         write_spectra(self.fileio, spec)
 
         comp_subset = read_spectra(self.fileio, targetids=[tid,])
