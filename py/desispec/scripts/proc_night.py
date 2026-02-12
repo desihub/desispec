@@ -802,9 +802,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
         is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
         flats = allflats[~is_cte]
         ctes = allflats[is_cte]
-    # Only do darknight if date is past 20240509 (see desispec issue #2571)
-    dark_date = np.median(cal_etable['NIGHT']) > 20240509
-    do_darknight = not calibjobs['accounted_for']['darknight'] and dark_date
+    do_darknight = not calibjobs['accounted_for']['darknight']
     do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
     have_flats_for_cte = len(ctes) > 0 and len(flats) > 0
     do_cte = have_flats_for_cte and not calibjobs['accounted_for']['ctecorrnight']
