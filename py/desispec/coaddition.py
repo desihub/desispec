@@ -760,7 +760,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     coadd_wave = wave_b
                 else:
                     # allow overlap tolerance 1e-4
-                    coadd_wave = np.append(coadd_wave, wave_b[wave_b > coadd_wave[-1] + 1e-4])
+                    coadd_wave = np.append(coadd_wave, wave_b)
     
             f_i = np.zeros((idx.size, coadd_wave.size)) # exposure flux
             w_i = np.zeros((idx.size, coadd_wave.size)) # exposure weights
