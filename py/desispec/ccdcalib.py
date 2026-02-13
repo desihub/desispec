@@ -133,7 +133,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             continue
         elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
             continue
-        elif calib.data['DATE_OBS-BEGIN']<dark_reset_begin:
+        elif calib.data['DATE-OBS-BEGIN']<dark_reset_begin:
             continue
 
         if "EXPREQ" in primary_header :
