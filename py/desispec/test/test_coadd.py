@@ -247,7 +247,7 @@ class TestCoadd(unittest.TestCase):
         s1.fibermap['TARGETID'][5:] = 11
         s1.fibermap['TARGETID'][-1] = 12
         s1.fibermap['OBJTYPE'] = 'TGT'
-        coadd(s1, onetile=True, normalize=True)
+        coadd(s1, onetile=True, no_normalize=False)
         self.assertEqual(s1.flux['b'].shape[0], 3)
         self.assertEqual(s1.exp_fibermap['COADD_NORM'][-1], 1)
         self.assertIsInstance(s1.scores, Table)

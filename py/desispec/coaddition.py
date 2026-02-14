@@ -831,7 +831,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
     return norm
 
 
-def coadd(spectra, cosmics_nsig=None, onetile=False, normalize=False):
+def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -841,7 +841,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, normalize=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       normalize: bool, if True, individual exposures are rescaled prior to coaddition
+       no_normalize: bool, if True, individual exposures are not rescaled prior to coaddition
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -864,6 +864,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, normalize=False):
     else:
         log.info(f'Not performing cosmics sigma clipping ({cosmics_nsig=})')
 
+    normalize = not(no_normalize)
     if normalize:
         # compute normalization constants for handling flux calibration offset
         norm = _per_exposure_normalization(spectra, targets)    
