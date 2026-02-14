@@ -14,6 +14,7 @@ import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
 import scipy.stats
+from scipy.ndimage import median_filter
 
 from astropy.table import Table, Column
 
@@ -131,7 +132,7 @@ fibermap_perexp_cols = \
     fibermap_exp_cols + \
     fibermap_fiberassign_cols + \
     fibermap_coords_cols + fibermap_cframe_cols + \
-    ('IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z')
+    ('IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z', 'COADD_NORM')
 
 def calc_mean_std_ra_dec(ras, decs):
     """
@@ -188,7 +189,7 @@ def use_for_coadd(fiberstatus, band):
     return good_fiberstatus
 
 
-def coadd_fibermap(fibermap, onetile=False):
+def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
     """
     Coadds fibermap
 
@@ -197,6 +198,9 @@ def coadd_fibermap(fibermap, onetile=False):
 
     Options:
         onetile (bool): this is a coadd of a single tile, not across tiles
+        coadd_norm (list of np.ndarray): each element contains a 1D array
+        of length n_exposures with each element corresponding to the normalization 
+        scalar for the ith exposure
 
     Returns: (coadded_fibermap, exp_fibermap) Tables
 
@@ -240,6 +244,10 @@ def coadd_fibermap(fibermap, onetile=False):
     exp_fibermap['IN_COADD_B'] = np.zeros(len(exp_fibermap), dtype=bool)
     exp_fibermap['IN_COADD_R'] = np.zeros(len(exp_fibermap), dtype=bool)
     exp_fibermap['IN_COADD_Z'] = np.zeros(len(exp_fibermap), dtype=bool)
+    
+    #- column to store per exposure normalization scalar, if applied
+    if coadd_norm is not None:
+        exp_fibermap['COADD_NORM'] = np.ones(len(exp_fibermap), dtype=np.float32)
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
@@ -327,6 +335,10 @@ def coadd_fibermap(fibermap, onetile=False):
         exp_fibermap['IN_COADD_B'][jj] = in_coadd_b
         exp_fibermap['IN_COADD_R'][jj] = in_coadd_r
         exp_fibermap['IN_COADD_Z'][jj] = in_coadd_z
+
+        # add per exposure scalar, if applicable
+        if coadd_norm is not None:
+            exp_fibermap['COADD_NORM'][jj] = coadd_norm[i]
 
         # Check if there are some good coadds to compute aggregate quantities;
         # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
@@ -669,7 +681,158 @@ def _resolution_coadd(resolution, pix_weights):
     return res, res_norm
 
 
-def coadd(spectra, cosmics_nsig=None, onetile=False):
+def _per_exposure_normalization(spectra, targets, filter_width=51):
+    """
+    Compute multiplicative normalization factors for each exposure of each
+    target in the set of spectra prior to coaddition across exposures.
+
+    Args:
+        spectra: desispec.spectra.Spectra object
+        targets (numpy.ndarray): 1d array of sorted, unique targetids
+        filter_width (int): optional, width of the median filter (in pixels)
+        for estimating broad-band flux level of each spectrum; default is 51 pixels
+
+    Returns:
+        norm (list of np.ndarray): Each element corresponds to the TARGETID
+        in the targets argument at the same index. Each element is a 1‑D 
+        array of length n_exposures containing the normalization scalar factor
+        for each exposure.  If a target does not meet the criteria
+        (e.g. sky spectra, single exposure, or excessive masking), the function 
+        returns an array of ones for that target.
+    """
+
+    log = get_logger()
+
+    bands = spectra.bands
+    mwave = [np.mean(spectra.wave[b]) for b in bands]
+    sbands = np.array(bands)[np.argsort(mwave)] #wavelength-sorted bands
+    
+    # compute normalization terms per exposure
+    norm = []
+    for i,tgt in enumerate(targets):
+
+        idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
+        # do not apply to sky spectra or single exposures 
+        if np.all(spectra.fibermap['OBJTYPE'][idx] == 'TGT') & (idx.size > 1):
+
+            # check which cameras are in ALL exposures
+            usable_bands = []
+            for j, b in enumerate(bands):
+                
+                if spectra.mask is not None:
+                    spectra_mask = spectra.mask[b][idx]
+                else:
+                    # create a zero mask to use
+                    spectra_mask = np.zeros_like(spectra.flux[b][idx])
+
+                wave_b = spectra.wave[b]
+                nwave = wave_b.size
+                num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx] == 0), 1)
+                
+                if np.all(num_masked_pixels < (nwave/2.)):
+                    # >50% of the band has unmasked data in all exposures
+                    usable_bands.append(b)
+
+            if len(usable_bands) == 0:
+                log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, no usable bands')
+                norm.append(np.ones(idx.size))
+                continue
+
+            # check for overlap between usable bands, 
+            # exclude these regions to avoid coadding cameras
+            overlap = {}
+            for j,b in enumerate(usable_bands):
+                
+                wave_b = spectra.wave[b]
+                nwave = wave_b.size
+                overlap_flag = np.zeros(nwave, dtype=int)
+
+                # determine overlap with previous band
+                if j > 0:
+                    wave_prev = spectra.wave[usable_bands[j - 1]]
+                    # Mark overlapping pixels in current band
+                    for k, w in enumerate(wave_b):
+                        if np.any(np.abs(w - wave_prev) <= 1e-4):
+                            overlap_flag[k] = 1
+        
+                # Check overlap with next band
+                if j < len(usable_bands) - 1:
+                    wave_next = spectra.wave[usable_bands[j + 1]]
+                    for k, w in enumerate(wave_b):
+                        if np.any(np.abs(w - wave_next) <= 1e-4):
+                            overlap_flag[k] = 1
+
+                overlap[b] = overlap_flag
+
+            # construct coadd wave grid, skipping overlap regions
+            coadd_wave = None
+            for b in sbands[np.isin(sbands, usable_bands)]:
+                wave_b = spectra.wave[b][overlap[b]==0]
+                if coadd_wave is None:
+                    coadd_wave = wave_b
+                else:
+                    coadd_wave = np.append(coadd_wave, wave_b)
+    
+            f_i = np.zeros((idx.size, coadd_wave.size)) # exposure flux
+            w_i = np.zeros((idx.size, coadd_wave.size)) # exposure weights
+
+            # we will want to ignore edge pixels where the median filter is unreliable
+            edge_buffer = int(filter_width/2.) + 1
+            not_edges = np.ones_like(coadd_wave, dtype=bool)
+            
+            for b in usable_bands:
+
+                pix_mask = (overlap[b] == 0)                
+                if spectra.mask is not None:
+                    spectra_mask = spectra.mask[b][idx][:,pix_mask]
+                else:
+                    # create a zero mask to use
+                    spectra_mask = np.zeros_like(spectra.flux[b][idx][:,pix_mask])
+
+                # where to insert 
+                wband = spectra.wave[b][pix_mask]
+                start = np.searchsorted(coadd_wave, wband[0])
+                end = start + len(wband)
+                iband = slice(start, end)
+
+                # update edge mask
+                not_edges[start:(start+edge_buffer)] = False
+                not_edges[(end-edge_buffer):end] = False
+
+                # Non-overlapping: directly copy
+                f_i[:, iband] = spectra.flux[b][idx][:,pix_mask]
+                w_i[:, iband] = (spectra.ivar[b][idx][:,pix_mask]*(spectra_mask == 0))
+
+            w_tot = np.sum(w_i, axis=0)
+            # compute a rough coadd for normalization
+            # exclude pixels masked in all exposures with (w_tot != 0)
+            crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
+
+            if np.any(np.sum(w_i[:,not_edges] != 0, axis=1) < filter_width): 
+                # the previous check of usable bands should have already caught these instances, 
+                # but checking again now that edges & overlap are excluded
+                log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, too much of an exposure is masked')
+                norm.append(np.ones(idx.size))
+                continue
+
+            # median smooth coadds and individual spectra to capture broad band offsets
+            filtered_coadd = median_filter(crude_coadd, size=filter_width, mode='reflect')[not_edges]
+            filtered_exp = np.zeros_like(f_i[:,not_edges])
+            for j in range(idx.size):
+                filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
+            
+            # compute normalization constant
+            a = np.sum(filtered_coadd**2)/np.sum(filtered_coadd*filtered_exp, axis=1)
+            norm.append(a)
+
+        else: 
+            # do not apply normalization term, non-target type or single exposures
+            norm.append(np.ones(idx.size))
+
+    return norm
+
+
+def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -679,6 +842,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
        onetile: bool, if True, inputs are from a single tile
+       no_normalize: bool, if True, individual exposures are not rescaled prior to coaddition
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -700,6 +864,11 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
         log.info(f'Clipping cosmics with {cosmics_nsig=}')
     else:
         log.info(f'Not performing cosmics sigma clipping ({cosmics_nsig=})')
+
+    normalize = not(no_normalize)
+    if normalize:
+        # compute normalization constants for handling flux calibration offset
+        norm = _per_exposure_normalization(spectra, targets)    
 
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
@@ -738,12 +907,19 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             # to next target, leaving tflux and tivar=0 for this target
             if len(jj) == 0:
                 continue
+            
+            if normalize:
+                # reshape normalization term
+                norm_term = norm[i][good_fiberstatus[(spectra.fibermap["TARGETID"] == tid)]].reshape(jj.size,1)
+            else:
+                # set normalization coefficient array to ones
+                norm_term = np.ones((jj.size,1), dtype=np.float32)
 
             # here we keep original variance array that will not be modified
             # and ivarjj_masked which will be modified by
             # cosmic rays check and mask>0 check
-            ivarjj_orig = spectra.ivar[b][jj].copy()
-            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0)
+            ivarjj_orig = spectra.ivar[b][jj].copy() * norm_term**-2
+            ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0) * norm_term**-2
 
             if cosmics_nsig is not None and cosmics_nsig > 0:
                 cosmic_mask = _mask_cosmics(spectra.wave[b],
@@ -754,6 +930,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
                                             camera=b)
                 ivarjj_masked[cosmic_mask] = 0
                 # We might think to log some info about cosmic mask
+                
             # inverse variance weights
             weights = ivarjj_masked * 1
             tivar[i] = np.sum(ivarjj_masked, axis=0)
@@ -763,10 +940,10 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             # we still use the variances ignoring masking
 
             tivar[i][bad] = np.sum(weights[:, bad], axis=0)
-            # we now recalculate the tivar, because we just replaced updated the weigths
+            # we now recalculate the tivar, because we just replaced updated the weights
             weights = weights / (tivar[i] + (tivar[i] == 0))
-            tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
-
+            tflux[i] = np.sum(weights * spectra.flux[b][jj] * norm_term, axis=0)
+            
             if spectra.resolution_data is not None :
                 trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
                                                     weights)[0]
@@ -792,8 +969,12 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     else:
         orig_scores = None
 
+    # if normalization is set to False, pass none
+    if not(normalize):
+        norm=None
     spectra.fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap,
-                                                    onetile=onetile)
+                                                    onetile=onetile,
+                                                    coadd_norm=norm) 
     spectra.exp_fibermap = exp_fibermap
     spectra.scores = None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
@@ -1004,6 +1185,11 @@ def coadd_cameras(spectra):
     #- will make a copy of the input tables/arrays while also handling the case
     #- where they might be None without crashing on None.copy().
 
+    # extras does not have a clear definition for being coadded across cameras
+    # drop with warning
+    if spectra.extra is not None:
+        log.warning("extras dictionary cannot be coadded across cameras, ignoring")
+
     res = Spectra(
         bands= [wavebands],
         wave=wave_combined,
@@ -1015,7 +1201,7 @@ def coadd_cameras(spectra):
         fibermap=spectra.fibermap.copy() if spectra.fibermap is not None else None,
         exp_fibermap=spectra.exp_fibermap.copy() if spectra.exp_fibermap is not None else None,
         meta=spectra.meta.copy() if spectra.meta is not None else None,
-        extra=spectra.extra.copy() if spectra.extra is not None else None,
+        extra=None,
         scores=spectra.scores.copy() if spectra.scores is not None else None,
         redshifts=spectra.redshifts.copy() if spectra.redshifts is not None else None,
     )
