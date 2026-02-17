@@ -728,8 +728,8 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 nwave = wave_b.size
                 num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx] == 0), 1)
                 
-                if np.all(num_masked_pixels < (nwave/2.)):
-                    # >50% of the band has unmasked data in all exposures
+                if np.all(num_masked_pixels < int(0.4*nwave)):
+                    # >40% of the band has unmasked data in all exposures
                     usable_bands.append(b)
 
             if len(usable_bands) == 0:
