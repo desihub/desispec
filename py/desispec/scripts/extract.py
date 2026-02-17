@@ -179,6 +179,13 @@ def gpu_specter_check_input_options(args):
 
     return True, 'OK'
 
+def get_chi2pix_mask(chi2pix):
+    median_chi2pix_wavelength = np.median(chi2pix, axis=0)
+    median_chi2pix_fibers = np.median(chi2pix, axis=1)
+    bad2d = (chi2pix > 5*median_chi2pix_wavelength)
+    bad2d &= (chi2pix > 5*median_chi2pix_fibers[:,None])
+    mask[bad2d] |= specmask.BAD2DFIT
+
 def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
     from desispec.gpu import is_gpu_available
 
