@@ -179,12 +179,48 @@ def gpu_specter_check_input_options(args):
 
     return True, 'OK'
 
-def get_chi2pix_mask(chi2pix):
+def get_chi2pix_mask(chi2pix, scale=5.0):
+    """
+    Returns 2D boolean array of chi2pix values indicating a bad extraction fit
+
+    Args:
+        chi2pix: 2D[nfibers, nwave] array of chi2pix values
+
+    Returns:
+        bad2d: 2D boolean array of same shape as chi2pix, True where chi2pix is > scale*median in both wavelength and fiber directions
+
+    The median in both fiber and wavelength directions adapts to expected
+    worse fits on high S/N bright sky lines (median over fibers per wavelength)
+    and bright stars (median over wavelengths per fiber).
+    """
+
     median_chi2pix_wavelength = np.median(chi2pix, axis=0)
     median_chi2pix_fibers = np.median(chi2pix, axis=1)
-    bad2d = (chi2pix > 5*median_chi2pix_wavelength)
-    bad2d &= (chi2pix > 5*median_chi2pix_fibers[:,None])
-    mask[bad2d] |= specmask.BAD2DFIT
+    bad2d = (chi2pix > scale*median_chi2pix_wavelength)
+    bad2d &= (chi2pix > scale*median_chi2pix_fibers[:,None])
+    return bad2d
+
+
+def get_spectrum_mask(chi2pix, pixmask_fraction):
+    """
+    Returns 2D mask[nfiber,nwave] of specmask bits; non-0 is bad
+
+    Args:
+        chi2pix: 2D[nfiber, nwave] array of chi2pix values
+        pixmask_fraction: 2D[nfiber, nwave] array of fraction of input CCD pixels masked
+
+    Returns:
+        mask[nfiber,neave] of specmask values; non-0 is bad
+    """
+    assert chi2pix.shape == pixmask_fraction.shape, f"{chi2pix.shape=} does not match {pixmask_fraction.shape=}"
+
+    mask = np.zeros(pixmask_fraction.shape, dtype=np.uint32)
+    mask[pixmask_fraction > 0.5] |= specmask.SOMEBADPIX
+    mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
+    mask[get_chi2pix_mask(chi2pix)] |= specmask.BAD2DFIT
+
+    return mask
+
 
 def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
     from desispec.gpu import is_gpu_available
@@ -388,19 +424,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         wave = result['wave']
 
         #- Compute the output mask
-        mask = np.zeros(flux.shape, dtype=np.uint32)
-        mask[pixmask_fraction > 0.5] |= specmask.SOMEBADPIX
-        mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
-
-        #- Mask pixels with bad 2D fit, based upon chi2pix being >5*median
-        #- in both the wavelength and fiber direction.  This adapts to expected
-        #- worse fits on high S/N bright sky lines (median over fibers per wavelength)
-        #- and bright stars (median over wavelengths per fiber).
-        median_chi2pix_wavelength = np.median(chi2pix, axis=0)
-        median_chi2pix_fibers = np.median(chi2pix, axis=1)
-        bad2d = (chi2pix > 5*median_chi2pix_wavelength)
-        bad2d &= chi2pix > 5*median_chi2pix_fibers[:, None]
-        mask[bad2d] |= specmask.BAD2DFIT
+        mask = get_spectrum_mask(chi2pix, pixmask_fraction)
 
         #- TODO: compare with cpu-specter
         if fibermap is not None:
@@ -757,11 +781,9 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     ivar = results['ivar']
     Rdata = results['resolution_data']
     chi2pix = results['chi2pix']
+    pixmask_fraction = results['pixmask_fraction']
 
-    mask = np.zeros(flux.shape, dtype=np.uint32)
-    mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
-    mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
-    mask[chi2pix>100.0] |= specmask.BAD2DFIT
+    mask = get_spectrum_mask(chi2pix, pixmask_fraction)
 
     if fibermap is not None:
         bfibermap = fibermap[bspecmin-specmin:bspecmin+bnspec-specmin]
