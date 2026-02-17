@@ -210,7 +210,7 @@ def get_spectrum_mask(chi2pix, pixmask_fraction):
         pixmask_fraction: 2D[nfiber, nwave] array of fraction of input CCD pixels masked
 
     Returns:
-        mask[nfiber,neave] of specmask values; non-0 is bad
+        mask[nfiber,nwave] of specmask values; non-0 is bad
     """
     assert chi2pix.shape == pixmask_fraction.shape, f"{chi2pix.shape=} does not match {pixmask_fraction.shape=}"
 
