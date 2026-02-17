@@ -399,7 +399,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         median_chi2pix_wavelength = np.median(chi2pix, axis=0)
         median_chi2pix_fibers = np.median(chi2pix, axis=1)
         bad2d = (chi2pix > 5*median_chi2pix_wavelength)
-        bad2d &= (chi2pix.T > 5*median_chi2pix_fibers).T
+        bad2d &= chi2pix > 5*median_chi2pix_fibers[:, None]
         mask[bad2d] |= specmask.BAD2DFIT
 
         #- TODO: compare with cpu-specter
