@@ -384,7 +384,16 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         mask = np.zeros(flux.shape, dtype=np.uint32)
         mask[pixmask_fraction > 0.5] |= specmask.SOMEBADPIX
         mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
-        mask[chi2pix > 100.0] |= specmask.BAD2DFIT
+
+        #- Mask pixels with bad 2D fit, based upon chi2pix being >5*median
+        #- in both the wavelength and fiber direction.  This adapts to expected
+        #- worse fits on high S/N bright sky lines (wavelength median)
+        #- and bright stars (fiber median).
+        median_chi2pix_wavelength = np.median(chi2pix, axis=0)
+        median_chi2pix_fibers = np.median(chi2pix, axis=1)
+        bad2d = (chi2pix > 5*median_chi2pix_wavelength)
+        bad2d &= (chi2pix.T > 5*median_chi2pix_fibers).T
+        mask[bad2d] |= specmask.BAD2DFIT
 
         #- TODO: compare with cpu-specter
         if fibermap is not None:
