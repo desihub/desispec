@@ -668,9 +668,9 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
-def coadd_spectra(spectra, cosmics_nsig=None, onetile=False):
+def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     """
-    Coadd spectra, returning new Spectra object without changing original.
+    Coadd spectra across exposures, returning new Spectra object without changing original.
 
     Args:
        spectra: desispec.spectra.Spectra object
@@ -684,6 +684,9 @@ def coadd_spectra(spectra, cosmics_nsig=None, onetile=False):
 
     See ``coadd`` for a version of this function that does an in-place coaddition,
     modifying its inputs instead of returning a new object.
+    This function coadds across exposures but not across cameras; see ``coadd_cameras``
+    for coadding across cameras but not across exposures. Combine the two to get a
+    coadd across both.
     """
     log = get_logger()
     log.debug("coadding spectra to new Spectra object")
@@ -714,7 +717,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
        these are only in the EXP_FIBERMAP since for the same target they could
        be different on different tiles.
 
-    See ``coadd_spectra`` for a version of this function that returns a new object
+    See ``coadd_exposures`` for a version of this function that returns a new object
     without modifying the input, instead of doing an in-place coaddition,
     """
     log = get_logger()
@@ -843,8 +846,12 @@ def coadd_cameras(spectra):
         desispec.spectra.Spectra
         Coadded Spectra object (new object).
 
-    Note: unlike `coadd`, this does not modify the input spectra object, rather write a new Spectrum object.
-    This is coadding across cameras, NOT exposures.
+    Note: unlike ``coadd``, this does not modify the input spectra object, rather
+    it returns a new Spectra object like ``coadd_exposures``.
+
+    This function coadds across cameras but not across exposures; see ``coadd_exposures``
+    for coadding across exposures but not across cameras. Combine the two to get a
+    coadd across both.
     """
 
     log = get_logger()

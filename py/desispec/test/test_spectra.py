@@ -760,7 +760,7 @@ class TestSpectra(unittest.TestCase):
         #- extend with extra exposures of the first two targets
         spectra = stack([spectra, spectra[0:nspec2]])
 
-        #- coadd_spectra is in-place update, so generate another copy
+        #- coadd is in-place update, so generate another copy
         coadd = spectra[:]
         desispec.coaddition.coadd(coadd, onetile=True)
 

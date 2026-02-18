@@ -9,7 +9,7 @@ from astropy.units import Unit
 
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
-from desispec.coaddition import (coadd, coadd_spectra, fast_resample_spectra,
+from desispec.coaddition import (coadd, coadd_exposures, fast_resample_spectra,
                                  spectroperf_resample_spectra,
                                  coadd_fibermap, coadd_cameras,
                                  _mask_cosmics)
@@ -230,8 +230,8 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.flux['b'].shape[0], 1)
         self.assertIsInstance(s1.scores, Table)
 
-    def test_coadd_spectra(self):
-        """Test coadd_spectra doesn't mutate input and matches in-place coadd"""
+    def test_coadd_exposures(self):
+        """Test coadd_exposures doesn't mutate input and matches in-place coadd"""
         nspec, nwave = 3, 10
         s1 = self._random_spectra(nspec, nwave)
 
@@ -243,8 +243,8 @@ class TestCoadd(unittest.TestCase):
         original_ivar = {band: s1.ivar[band].copy() for band in s1.bands}
         original_fibermap = s1.fibermap.copy()
 
-        #- Call coadd_spectra (non-mutating)
-        result = coadd_spectra(s1)
+        #- Call coadd_exposures (non-mutating)
+        result = coadd_exposures(s1)
 
         #- Verify input is unchanged
         for band in s1.bands:
@@ -262,12 +262,12 @@ class TestCoadd(unittest.TestCase):
         s2 = s1.copy()
         coadd(s2)
 
-        #- Verify coadd_spectra result matches in-place coadd
+        #- Verify coadd_exposures result matches in-place coadd
         for band in result.bands:
             self.assertTrue(np.allclose(result.flux[band], s2.flux[band]),
-                          f"coadd_spectra flux[{band}] doesn't match in-place coadd")
+                          f"coadd_exposures flux[{band}] doesn't match in-place coadd")
             self.assertTrue(np.allclose(result.ivar[band], s2.ivar[band]),
-                          f"coadd_spectra ivar[{band}] doesn't match in-place coadd")
+                          f"coadd_exposures ivar[{band}] doesn't match in-place coadd")
 
     def test_coadd_masked(self):
         """Test coaddition when all spectra have certain wavelength range masked
