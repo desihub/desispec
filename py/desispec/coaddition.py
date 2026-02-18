@@ -705,28 +705,40 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
     bands = spectra.bands
     mwave = [np.mean(spectra.wave[b]) for b in bands]
     sbands = np.array(bands)[np.argsort(mwave)] #wavelength-sorted bands
+
+    fiberstatus = spectra.fibermap['FIBERSTATUS']
+    # fatally bad FIBERSTATUS bits, can fully ignore these exposures
+    fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
+    good_fiberstatus = ( (fiberstatus & fatal_fiberstatus_bits) == 0 )
     
     # compute normalization terms per exposure
     norm = []
     for i,tgt in enumerate(targets):
 
         idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
+        idx_good = np.where((spectra.fibermap['TARGETID'] == tgt) & good_fiberstatus)[0]
+        
         # do not apply to sky spectra or single exposures 
-        if np.all(spectra.fibermap['OBJTYPE'][idx] == 'TGT') & (idx.size > 1):
+        if np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') & (idx_good.size > 1):
 
             # check which cameras are in ALL exposures
             usable_bands = []
             for j, b in enumerate(bands):
+
+                # check for fatal camera fiberstatus is good for all exposures
+                cam_fiberstatus = use_for_coadd(fiberstatus[idx_good], b)
+                if np.sum(cam_fiberstatus) != idx_good.size:
+                    continue
                 
                 if spectra.mask is not None:
-                    spectra_mask = spectra.mask[b][idx]
+                    spectra_mask = spectra.mask[b][idx_good]
                 else:
                     # create a zero mask to use
-                    spectra_mask = np.zeros_like(spectra.flux[b][idx])
+                    spectra_mask = np.zeros_like(spectra.flux[b][idx_good])
 
                 wave_b = spectra.wave[b]
                 nwave = wave_b.size
-                num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx] == 0), 1)
+                num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx_good] == 0), 1)
                 
                 if np.all(num_masked_pixels < int(0.4*nwave)):
                     # >40% of the band has unmasked data in all exposures
@@ -734,7 +746,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
 
             if len(usable_bands) == 0:
                 log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, no usable bands')
-                norm.append(np.ones(idx.size))
+                norm.append(np.ones(idx.size)) # set coadd_norm to 1 even for bad fiberstatus
                 continue
 
             # check for overlap between usable bands, 
@@ -772,8 +784,8 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 else:
                     coadd_wave = np.append(coadd_wave, wave_b)
     
-            f_i = np.zeros((idx.size, coadd_wave.size)) # exposure flux
-            w_i = np.zeros((idx.size, coadd_wave.size)) # exposure weights
+            f_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure flux
+            w_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure weights
 
             # we will want to ignore edge pixels where the median filter is unreliable
             edge_buffer = int(filter_width/2.) + 1
@@ -783,10 +795,10 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
 
                 pix_mask = (overlap[b] == 0)                
                 if spectra.mask is not None:
-                    spectra_mask = spectra.mask[b][idx][:,pix_mask]
+                    spectra_mask = spectra.mask[b][idx_good][:,pix_mask]
                 else:
                     # create a zero mask to use
-                    spectra_mask = np.zeros_like(spectra.flux[b][idx][:,pix_mask])
+                    spectra_mask = np.zeros_like(spectra.flux[b][idx_good][:,pix_mask])
 
                 # where to insert 
                 wband = spectra.wave[b][pix_mask]
@@ -799,8 +811,8 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 not_edges[(end-edge_buffer):end] = False
 
                 # Non-overlapping: directly copy
-                f_i[:, iband] = spectra.flux[b][idx][:,pix_mask]
-                w_i[:, iband] = (spectra.ivar[b][idx][:,pix_mask]*(spectra_mask == 0))
+                f_i[:, iband] = spectra.flux[b][idx_good][:,pix_mask]
+                w_i[:, iband] = (spectra.ivar[b][idx_good][:,pix_mask]*(spectra_mask == 0))
 
             w_tot = np.sum(w_i, axis=0)
             # compute a rough coadd for normalization
@@ -817,15 +829,18 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
             # median smooth coadds and individual spectra to capture broad band offsets
             filtered_coadd = median_filter(crude_coadd, size=filter_width, mode='reflect')[not_edges]
             filtered_exp = np.zeros_like(f_i[:,not_edges])
-            for j in range(idx.size):
+            for j in range(idx_good.size):
                 filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
             
             # compute normalization constant
-            a = np.sum(filtered_coadd**2)/np.sum(filtered_coadd*filtered_exp, axis=1)
+            # default = 1 for fatal fiberstatus
+            a = np.ones(idx.size)
+            a[np.isin(idx,idx_good)] = np.sum(filtered_coadd**2)/np.sum(filtered_coadd*filtered_exp, axis=1)
             norm.append(a)
 
         else: 
-            # do not apply normalization term, non-target type or single exposures
+            # do not apply normalization term: 
+            # non-target type, single exposures, or no good exposures
             norm.append(np.ones(idx.size))
 
     return norm
