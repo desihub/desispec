@@ -1497,18 +1497,94 @@ def apply_flux_calibration(frame, fluxcalib):
                                  (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
+            if frame.resolution_data is not None:
+                frame.resolution_data[i] = _calibrate_resolution_matrix(
+                    frame.resolution_data[i], C[i], (C[i] > 0)
+                    & (fluxcalib.ivar[i] > 0))
         frame.ivar[i, ~ok] = 0
     # It is important we update flux *after*
     # updating variance
     frame.flux = frame.flux * (C > 0) / (C + (C == 0))
 
-    if fluxcalib.fibercorr is not None and frame.fibermap is not None :
-        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
+    if fluxcalib.fibercorr is not None and frame.fibermap is not None:
+        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names:
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
             frame.fibermap["PSF_TO_FIBER_SPECFLUX"] = np.array(fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"], dtype='float32')
         if "FLAT_TO_PSF_FLUX" in fluxcalib.fibercorr.dtype.names :
             log.info("add a column FLAT_TO_PSF_FLUX to fibermap")
             frame.fibermap["FLAT_TO_PSF_FLUX"] = np.array(fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"], dtype='float32')
+
+
+def _calibrate_resolution_matrix(res_mat, calib, good_calib):
+    """
+    Apply corrections to the resolution matrix given the flux calibration
+    Arguments:
+        res_mat: (ndarray) banded storage of the resolution matrix
+        calib: (ndarray) calibration vector
+        good_calib: (ndarray) array of booleans for good pixels
+    Returns:
+        res_mat_fc: corrected resolution matrix
+    """
+    # We use calculation from #2419
+    # the calculation is C^{-1} R C
+    # the only complication if C has zeros.
+    # Then for the left we take the pseudo inverse
+    # and for the right we interpolate over bad regions
+    icalib = np.zeros(len(calib))
+    icalib[good_calib ] = 1./calib[good_calib]
+    if not good_calib.any():
+        rcalib = np.ones(len(calib))
+    else:
+        # we need to fill holes
+        rcalib = _interpolate_bad_regions(calib, ~good_calib)
+    # now we align the diagonals to the banded storage
+    # of the resolution matrix
+    width = res_mat.shape[0]
+    M1 = [np.roll(icalib, _) for _ in np.arange(-(width//2),(width//2)+1)[::-1]]
+    M2 = [rcalib for _ in np.arange(width)]
+    res_mat_out = res_mat * M1 * M2
+    # This has been tested with X0 and X1 being indentical in this calculation
+    # M1 = [np.roll(D1, _) for _ in np.arange(-5, 6)[::-1]]
+    # M2 = [D2 for _ in np.arange(-5, 6)]
+    # X1 = (desispec.resolution.Resolution(res[0] * M1 * M2).todense())
+    # X0 = (np.diag(D1) @ r.todense() @ np.diag(D2))
+    return res_mat_out
+
+
+def _interpolate_bad_regions(spec,badmask):
+    """
+    Interpolate bad regions
+    Arguments:
+        spec: ndarray with data
+        mask: bad mask that needs to be interpolated over
+
+    Returns:
+        ret Interpolated ndarray
+    """
+    xind = np.nonzero(badmask)[0]
+    if len(xind) == 0:
+        return spec
+    elif len(xind) == len(spec):
+        return spec
+    edges = np.nonzero(np.diff(xind, prepend=-10) > 1)[0]
+    n_edges = len(edges)
+    spec1 = spec * 1
+    for i in range(n_edges):
+        if i == n_edges - 1:
+            rh = xind[-1]
+        else:
+            rh = xind[edges[i + 1] - 1]
+        lh = xind[edges[i]]
+        # lh rh inclusive
+        if lh == 0:
+            spec1[:rh + 1] = spec[rh + 1]
+        elif rh == len(spec) - 1:
+            spec1[lh:] = spec[lh - 1]
+        else:
+            spec1[lh:rh + 1] = np.interp(np.arange(lh,
+                                                   rh + 1), [lh - 1, rh + 1],
+                                         [spec[lh - 1], spec[rh + 1]])
+    return spec1
 
 
 def ZP_from_calib(exptime, wave, calib):
