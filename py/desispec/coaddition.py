@@ -717,11 +717,11 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
 
         idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
 
-	# physicality requirement of scaling terms > 0
-	is_converged = False
-	iter = 0 # avoiding infinite loop
-	while not(is_converged) & (iter < 5):
-            iter += 1
+        # physicality requirement of scaling terms > 0
+        is_converged = False
+        iteration = 0 # avoiding infinite loop
+        while not(is_converged) & (iteration < 5):
+            iteration += 1
             idx_good = np.where((spectra.fibermap['TARGETID'] == tgt) & good_fiberstatus)[0]
         
             # do not apply to sky spectra or single exposures or all bad exposures 
@@ -732,7 +732,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 for j, b in enumerate(bands):
 
                     # check for fatal camera fiberstatus is good for all exposures
-                    cam_fiberstatus = use_for_coadd(fiberstatus[idx_good], b)
+                    cam_fiberstatus = use_for_coadd(spectra.fibermap['FIBERSTATUS'][idx_good], b)
                     if np.sum(cam_fiberstatus) != idx_good.size:
                         continue
                 
@@ -755,6 +755,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     is_converged = True
                     # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
                     spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
+                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
                     norm.append(np.ones(idx.size)) # set coadd_norm to 1 even for bad fiberstatus
                     continue
  
@@ -833,6 +834,9 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     # but checking again now that edges & overlap are excluded
                     log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, too much of an exposure is masked')
                     is_converged = True
+                    # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
+                    spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
+                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
                     norm.append(np.ones(idx.size))
                     continue
 
@@ -850,14 +854,14 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 # physicality check
                 is_converged = np.all(a>0) 
                 if is_converged:
-		    norm.append(a)
-	        else:
-	            negative_indices = idx[np.where(a<0)[0]]
-		    # set badfiber fiberstatus for these exposures
-		    spectra.fibermap['FIBERSTATUS'][negative_indices] |= fmsk.BADFIBER
-		    # update fiberstatus
-		    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-		
+                    norm.append(a)
+                else:
+                    negative_indices = idx[np.where(a<0)[0]]
+                    # set badfiber fiberstatus for these exposures
+                    spectra.fibermap['FIBERSTATUS'][negative_indices] |= fmsk.BADFIBER
+                    # update fiberstatus
+                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+
             else: 
                 # do not apply normalization term: 
                 # non-target type, single exposures, or no good exposures
@@ -869,6 +873,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
             log.error(f"normalization for targetid {tid} could not converge!")
             # update fiberstatus
             spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
+            good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
             norm.append(np.ones(idx.size))     
 
     return norm
