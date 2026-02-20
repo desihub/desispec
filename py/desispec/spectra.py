@@ -298,6 +298,11 @@ class Spectra(object):
         else:
             return 0
 
+    def copy(self):
+        """
+        Return deep copy of self
+        """
+        return self[:]
 
     def _get_slice(self, index, bands=None):
         """Slice spectra by index.
@@ -358,6 +363,11 @@ class Spectra(object):
         else:
             scores = None
 
+        if hasattr(self, 'scores_comments'):
+            scores_comments = copy.deepcopy(self.scores_comments)
+        else:
+            scores_comments = None
+
         if self.redshifts is not None:
             redshifts = self.redshifts[index].copy()
         else:
@@ -367,7 +377,8 @@ class Spectra(object):
             mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
             meta=self.meta, extra=extra, model=model, single=self._single,
-            scores=scores, redshifts=redshifts, extra_catalog=extra_catalog,
+            scores=scores, scores_comments=scores_comments,
+            redshifts=redshifts, extra_catalog=extra_catalog,
         )
         return sp
 
