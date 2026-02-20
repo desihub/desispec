@@ -123,9 +123,11 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             pass
         # If the reference calib has a dark reset and the date of the new dark is before the date of the reference dark, skip it
         elif dark_reset and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
+            log.info(f"skip {filename} because it is before the dark reset at {reference_calib.data['DATE-OBS-BEGIN']}")
             continue
         # Quick and easy check that if both reference and new calib have dark reset, then skip it
         elif calib.haskey('DARK_RESET') and dark_reset:
+            log.info(f"skip {filename} because it has a dark reset and the reference calib also has a dark reset")
             continue
         # If the new calib has a dark reset and its date is before the reference calib, set dark_reset_begin and pass it
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
@@ -136,12 +138,15 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']>reference_calib.data['DATE-OBS-BEGIN']:
             if dark_reset_end==0 or calib.data['DATE-OBS-BEGIN']<dark_reset_end:
                 dark_reset_end = calib.data['DATE-OBS-BEGIN']
+            log.info(f"skip {filename} because it has a dark reset and is later than the reference calib")
             continue
         # If the new calib is after dark_reset_end, skip it
         elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
+            log.info(f"skip {filename} because it is after a dark reset at {dark_reset_end}")
             continue
         # If the new calib is before dark_reset_begin, skip it
         elif calib.data['DATE-OBS-BEGIN']<dark_reset_begin:
+            log.info(f"skip {filename} because it is before a dark reset at {dark_reset_begin}")
             continue
         # If the new calib is between dark_reset_begin and dark_reset_end, pass it
         else:
