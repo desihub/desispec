@@ -88,13 +88,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info('Checking for DARK_RESET')
     reference_calib=CalibFinder([reference_header])
     # Check for dark_reset
-    dark_reset_begin=0
-    dark_reset_end=1e10
+    dark_reset_begin = 0
+    dark_reset_end = 0
     if reference_calib.haskey('DARK_RESET'):
-        dark_reset=True
-        dark_reset_begin=reference_calib.data['DATE-OBS-BEGIN']
+        dark_reset = True
+        dark_reset_begin = reference_calib.data['DATE-OBS-BEGIN']
     else:
-        dark_reset=False
+        dark_reset = False
     log.info(f"reading images for {camera} ...")
     shape=None
     images=[]
@@ -107,7 +107,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
         
-       # collect exposure times
+        # collect exposure times
         primary_header = read_raw_primary_header(filename)
         try:
             header = fitsio.read_header(filename, ext=camera)
@@ -116,25 +116,36 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             continue
         
         # Instantiate CalibFinder
+        # The images should be sorted as those closest in MJD so I should be able to step out
         calib=CalibFinder([header,primary_header])
-        if calib.data==reference_calib.data:
+        # If the new dark has the same calib as the reference dark, pass it
+        if calib.data['DATE-OBS-BEGIN']==reference_calib.data['DATE-OBS-BEGIN']:
             pass
+        # If the reference calib has a dark reset and the date of the new dark is before the date of the reference dark, skip it
         elif dark_reset and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
             continue
+        # Quick and easy check that if both reference and new calib have dark reset, then skip it
         elif calib.haskey('DARK_RESET') and dark_reset:
             continue
+        # If the new calib has a dark reset and its date is before the reference calib, set dark_reset_begin and pass it
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
-            if dark_reset_begin>calib.data['DATE-OBS-BEGIN']:
-                dark_reset_begin=calib.data['DATE-OBS-BEGIN']
-            continue
+            if dark_reset_begin==0 or dark_reset_begin>calib.data['DATE-OBS-BEGIN']:
+                dark_reset_begin = calib.data['DATE-OBS-BEGIN']
+            pass
+        # If the new calib has a dark reset and is later than the reference calib, set dark_reset_end and skip it
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']>reference_calib.data['DATE-OBS-BEGIN']:
-            if calib.data['DATE-OBS-BEGIN']<dark_reset_end:
-                dark_reset_end=calib.data['DATE-OBS-BEGIN']
+            if dark_reset_end==0 or calib.data['DATE-OBS-BEGIN']<dark_reset_end:
+                dark_reset_end = calib.data['DATE-OBS-BEGIN']
             continue
+        # If the new calib is after dark_reset_end, skip it
         elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
             continue
+        # If the new calib is before dark_reset_begin, skip it
         elif calib.data['DATE-OBS-BEGIN']<dark_reset_begin:
             continue
+        # If the new calib is between dark_reset_begin and dark_reset_end, pass it
+        else:
+            pass
 
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
