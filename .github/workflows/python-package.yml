@@ -77,7 +77,7 @@ jobs:
             - name: Install DESI dependencies
               env:
                 DESIUTIL_VERSION: 3.5.1
-                SPECTER_VERSION: 0.10.1
+                SPECTER_VERSION: 0.11.0
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
                 DESITARGET_VERSION: main
@@ -134,7 +134,7 @@ jobs:
             - name: Install DESI dependencies
               env:
                 DESIUTIL_VERSION: 3.5.1
-                SPECTER_VERSION: 0.10.1
+                SPECTER_VERSION: 0.11.0
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
                 DESITARGET_VERSION: main
