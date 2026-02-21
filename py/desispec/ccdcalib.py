@@ -105,7 +105,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         except OSError:
             log.warning(f'No camera {camera} in {filename}')
             continue
-            
+
         if "EXPREQ" in primary_header :
             thisexptime = primary_header["EXPREQ"]
             log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
@@ -164,7 +164,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 raise RuntimeError(message)
         else:
             thisbias = True
-        
+
         night=header2night(primary_header)
         expid=primary_header["EXPID"]
 
@@ -196,7 +196,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             preproc_filename = user_preproc_filename
         else:
             preproc_filename = default_preproc_filename
-            
+
         if user_exists or default_exists:
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
@@ -229,7 +229,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
         files_used.append(file_used)
-        
+
         if len(images) >= max_dark_exposures:
             log.warning(f"Using only the first {max_dark_exposures} valid darks provided for {camera}.")
             break
@@ -242,7 +242,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
               + f"{min_dark_exposures=}. Exiting without producing file."
         log.critical(msg)
         raise RuntimeError(msg)
-    
+
     images=np.array(images)
     exptimes=np.array(exptimes)
     assert(images.shape[0] == exptimes.size)
@@ -1370,7 +1370,7 @@ cp {biasfile}  bias_frames/{biasfile}
 """)
 #TODO: the copying needs to be done in a cleaner way, maybe as part of the desi_compute_dark_nonlinear? or just writing to the corresponding output dir directly
         if not nosubmit:
-            err = subprocess.call(['sbatch', batchfile])
+            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', batchfile])
             if err == 0:
                 log.info(f'Submitted {batchfile}')
             else:

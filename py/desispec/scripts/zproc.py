@@ -340,7 +340,7 @@ def main(args=None, comm=None):
             log.info("Generating batch script and exiting.")
 
             if not args.nosubmit and not args.dryrun:
-                err = subprocess.call(['sbatch', scriptfile])
+                err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
 
         ## All ranks need to exit if submitted batch
         if comm is not None:
