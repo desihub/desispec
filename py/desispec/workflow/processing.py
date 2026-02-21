@@ -726,7 +726,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         script_pathname = batch_script_pathname(prow)
         jobname = os.path.basename(script_pathname)
 
-    batch_params = ['sbatch', '--parsable']
+    batch_params = ['sbatch', '--parsable', '--kill-on-invalid-dep=yes']
     if dep_str != '':
         batch_params.append(f'{dep_str}')
 

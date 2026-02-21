@@ -234,7 +234,7 @@ def main(args=None, comm=None):
                                                    cte_expids=args.cte_expids)
         err = 0
         if not args.nosubmit:
-            err = subprocess.call(['sbatch', scriptfile])
+            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
         sys.exit(err)
 
     #-------------------------------------------------------------------------
