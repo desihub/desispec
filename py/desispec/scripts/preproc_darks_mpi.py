@@ -33,6 +33,8 @@ def preproc_darks_parser():
                         help = 'exposures to process, can be a comma separated list of expids or a single expid')
     parser.add_argument('-n', '--nights', type=str, default = None, required=False,
                         help='Comma separated list of YEARMMDD nights where we find the darks to run through preproc')
+    parser.add_argument('--reference-night', type=int, default = None, required=False,
+                        help='YEARMMDD reference night defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-expid)')
     parser.add_argument('-c','--camword', type=str, required = True,
                         help = 'cameras to process, e.g. a0123456789')
     parser.add_argument('--bias', type = str, default = None, required=False,
@@ -66,18 +68,27 @@ def main(args=None):
 
     log  = get_logger()
 
+    ## Need to know where to look for the exposures
+    if args.nights is None and args.reference_night is None:
+        if rank == 0:
+            log.error("At least one of --nights or --reference-night must be provided to identify the exposures to process.")
+        return 1
+    elif args.nights is not None and args.reference_night is not None:
+        if rank == 0:
+            log.warning("Both --nights and --reference-night set, this will IGNORE --reference-night.")
+
     comm, rank, size = assign_mpi(args.mpi, do_batch=False, log=log)
 
     if args.specprod is not None :
         os.environ["SPECPROD"] = args.specprod
 
     # check consistency of input options
-    if args.nights is not None and args.expids is not None and rank == 0:
+    if args.expids is not None and rank == 0:
         log.info(f"Assuming all exposures in {args.expids} can be found in nights={args.nights}.")
 
+    ## Make sure the expids and nights are lists of integers
     args.expids = np.array(args.expids.split(',')).astype(int)
-    if args.nights is not None:
-        args.nights = np.array(args.nights.split(',')).astype(int)
+    args.nights = np.array(args.nights.split(',')).astype(int)
 
     ## get the requested cameras from the camword
     requested_cameras = set(decode_camword(args.camword))
@@ -93,7 +104,7 @@ def main(args=None):
         ## for number of nights nbefore and after the reference night
         if args.nights is None:
             ## camera and outfile are required, so give dummy values for those
-            opts = ['--expids', ' '.join(args.expids.astype(str)), '-o', 'temp', '-c', 'b1',
+            opts = ['--reference-night', args.reference_night, '-o', 'temp', '-c', 'b1',
                     '--skip-camera-check', '--dont-search-filesystem']
             compdark_parser = compute_dark_parser()
             compdark_args = compdark_parser.parse_args(opts)
@@ -106,11 +117,10 @@ def main(args=None):
             exptable = vstack(exptables)
             if not np.all(np.isin(args.expids, exptable['EXPID'].data)):
                 log.error(f"Not all expids in {args.expids} found on nights {args.nights}")
-            exptable = exptable[np.isin(exptable['EXPID'].data, args.expids)]
+        exptable = exptable[np.isin(exptable["EXPID"].data, args.expids)]
+
         # assemble corresponding images
         expids, camlists, files, nights = [], [], [], []
-        if args.expids is not None:
-            exptable = exptable[np.isin(exptable["EXPID"], args.expids)]
         for row in exptable:
             filename = findfile("raw",night=row["NIGHT"],expid=row["EXPID"], readonly=True)
             if os.path.exists(filename):
@@ -129,7 +139,7 @@ def main(args=None):
     else:
         data = None
 
-    # Broadcast data to all ranks
+    # Broadcast data to all ranks if we're in MPI mode
     if comm is not None:
         data = comm.bcast(data, root=0)
 
@@ -184,7 +194,7 @@ def main(args=None):
                 primary_header = None
 
             with fits.open(filename, memmap=False) as fx:
-                hducams = [str(hdu.name).lower().strip() for hdu in fx]
+                # hdu_cameras = [hdu.name.lower() for hdu in fx if hdu.name.lower() != 'primary']
                 final_camlist = sorted(list(requested_cameras.intersection(set(camlist))))
                 ncam = len(final_camlist)
 
@@ -216,7 +226,8 @@ def main(args=None):
             continue
 
         ## scatter the work to the ranks
-        if block_comm is not None:
+        ## if there is a communicator and more than one rank per block
+        if block_comm is not None and block_size > 1:
             data_header_cams = block_comm.scatter(broadcast_bundle, root=0)
         else:
             data_header_cams = all_data_header_cams
