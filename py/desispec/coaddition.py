@@ -829,7 +829,7 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 # exclude pixels masked in all exposures with (w_tot != 0)
                 crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
 
-                if np.any(np.sum(w_i[:,not_edges] != 0, axis=1) < filter_width): 
+                if np.any(np.sum(w_i[:,not_edges] != 0, axis=1) < 2*filter_width): 
                     # the previous check of usable bands should have already caught these instances, 
                     # but checking again now that edges & overlap are excluded
                     log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, too much of an exposure is masked')
@@ -840,16 +840,18 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     norm.append(np.ones(idx.size))
                     continue
 
-                # median smooth coadds and individual spectra to capture broad band offsets
-                filtered_coadd = median_filter(crude_coadd, size=filter_width, mode='reflect')[not_edges]
-                filtered_exp = np.zeros_like(f_i[:,not_edges])
-                for j in range(idx_good.size):
-                    filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
-            
                 # compute normalization constant
                 # default = 1 for fatal fiberstatus
                 a = np.ones(idx.size)
-                a[np.isin(idx,idx_good)] = np.sum(filtered_coadd**2)/np.sum(filtered_coadd*filtered_exp, axis=1)
+                
+                # median smooth coadds and individual spectra to capture broad band offsets
+                filtered_coadd = median_filter(crude_coadd, size=filter_width, mode='reflect')[not_edges]
+                filtered_exp = np.zeros_like(f_i[:,not_edges])
+                for j,k in enumerate(idx_good):
+                    filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
+                    # ignore ivar = 0 pixels
+                    mask = (w_tot[not_edges] != 0) & (w_i[j][not_edges] != 0)
+                    a[np.isin(idx,k)] = np.sum(filtered_coadd[mask]**2)/np.sum(filtered_coadd[mask]*filtered_exp[j][mask])
 
                 # physicality check
                 is_converged = np.all(a>0) 
