@@ -34,7 +34,7 @@ def preproc_darks_parser():
     parser.add_argument('-n', '--nights', type=str, default = None, required=False,
                         help='Comma separated list of YEARMMDD nights where we find the darks to run through preproc')
     parser.add_argument('--reference-night', type=int, default = None, required=False,
-                        help='YEARMMDD reference night defining the hardware state for this dark frame (default is most recent, option cannot be set at the same time as reference-expid)')
+                        help='YEARMMDD reference night defining the hardware state for this dark frame (default is most recent)')
     parser.add_argument('-c','--camword', type=str, required = True,
                         help = 'cameras to process, e.g. a0123456789')
     parser.add_argument('--bias', type = str, default = None, required=False,
