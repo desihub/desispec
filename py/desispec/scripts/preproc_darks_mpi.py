@@ -68,6 +68,9 @@ def main(args=None):
 
     log  = get_logger()
 
+    ## setup MPI if requested
+    comm, rank, size = assign_mpi(args.mpi, do_batch=False, log=log)
+
     ## Need to know where to look for the exposures
     if args.nights is None and args.reference_night is None:
         if rank == 0:
@@ -76,8 +79,6 @@ def main(args=None):
     elif args.nights is not None and args.reference_night is not None:
         if rank == 0:
             log.warning("Both --nights and --reference-night set, this will IGNORE --reference-night.")
-
-    comm, rank, size = assign_mpi(args.mpi, do_batch=False, log=log)
 
     if args.specprod is not None :
         os.environ["SPECPROD"] = args.specprod
