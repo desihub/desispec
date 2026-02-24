@@ -1496,6 +1496,7 @@ def apply_flux_calibration(frame, fluxcalib):
     """
 
     C = fluxcalib.calib
+    C_deconvolved = fluxcalib.deconvolved_calib
     good = (fluxcalib.ivar > 0) & (C > 0) & (frame.ivar > 0)
     for i in range(nfibers) :
         ok = good[i]
@@ -1505,7 +1506,23 @@ def apply_flux_calibration(frame, fluxcalib):
                                  (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
+
+        if (frame.resolution_data is not None) and (C_deconvolved is not None):
+            # convert R to  C_i^-1 * R * C using the calibration vectors
+            icalib = np.zeros_like(C[i])
+            icalib[ok] = 1 / C[i, ok]
+
+            # Aligning the diagonals with the banded storage. This
+            # code originally by Sergey,and confirmed
+            # bit wise equivalent but much faster to C_i^-1 * R * C
+            width = frame.resolution_data[i].shape[0]
+            M1 = [np.roll(icalib, _) for _ in np.arange(-(width//2),(width//2)+1)[::-1]]
+            M2 = [C_deconvolved for _ in np.arange(width)]
+            res_out = frame.resolution_data[i] * M1 * M2
+            frame.resolution_data[i] = res_out
+
         frame.ivar[i, ~ok] = 0
+
     # It is important we update flux *after*
     # updating variance
     frame.flux = frame.flux * (C > 0) / (C + (C == 0))
