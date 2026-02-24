@@ -1407,7 +1407,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration,
                      fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap,
-                     deconvolved_calib=calibration)
+                     deconvolved_calib=calibration[margin:-margin])
 
 
 class FluxCalib(object):
