@@ -166,7 +166,6 @@ def main(args=None):
     ## task for each expid to handle the I/O of the files
     lens = [len(cams)+1 for cams in camlists]
     maxlens = np.max(lens)
-    ntasks = np.sum(lens)
     # Files are only ~0.25Gb each, so shouldn't need to limit blocks.
     optimal_nblocks = int(np.ceil(size / maxlens)) #min(int(np.ceil(size / maxlens)), 200) # 50Gb limit
 
