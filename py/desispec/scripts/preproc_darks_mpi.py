@@ -88,7 +88,8 @@ def main(args=None):
 
     ## Make sure the expids and nights are lists of integers
     args.expids = np.array(args.expids.split(',')).astype(int)
-    args.nights = np.array(args.nights.split(',')).astype(int)
+    if args.nights is not None:
+        args.nights = np.array(args.nights.split(',')).astype(int)
 
     ## get the requested cameras from the camword
     requested_cameras = set(decode_camword(args.camword))
@@ -104,7 +105,7 @@ def main(args=None):
         ## for number of nights nbefore and after the reference night
         if args.nights is None:
             ## camera and outfile are required, so give dummy values for those
-            opts = ['--reference-night', args.reference_night, '-o', 'temp', '-c', 'b1',
+            opts = ['--reference-night', str(args.reference_night), '-o', 'temp', '-c', 'b1',
                     '--skip-camera-check', '--dont-search-filesystem']
             compdark_parser = compute_dark_parser()
             compdark_args = compdark_parser.parse_args(opts)
