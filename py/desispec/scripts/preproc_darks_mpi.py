@@ -84,7 +84,7 @@ def main(args=None):
         os.environ["SPECPROD"] = args.specprod
 
     # check consistency of input options
-    if args.expids is not None and rank == 0:
+    if args.nights is not None and args.expids is not None and rank == 0:
         log.info(f"Assuming all exposures in {args.expids} can be found in nights={args.nights}.")
 
     ## Make sure the expids and nights are lists of integers
