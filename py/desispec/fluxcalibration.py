@@ -1405,13 +1405,15 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     #log.info("number of stars used in fit = {}".format(len(stdstar_fibermap)))
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap)
-
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration,
+                     fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap,
+                     deconvolved_calib=calibration)
 
 
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask, meancalib=None,
-                 fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None):
+                 fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None,
+                 deconvolved_calib=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1423,6 +1425,7 @@ class FluxCalib(object):
             fibercorr : dictionary of 1D arrays of size nspec (optional)
             fibercorr_comments : dictionnary of string (explaining the fibercorr)
             stdstar_fibermap : table with the fibermap of the std stars actually used
+            deconvolved_calib : 1D[nwave] estimated deconvolved calibration vector C (optional)
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1435,6 +1438,9 @@ class FluxCalib(object):
         assert calib.shape == mask.shape
         assert np.all(ivar >= 0)
 
+        if deconvolved_calib is not None:
+            assert deconvolved_calib.ndim == 1
+
         self.nspec, self.nwave = calib.shape
         self.wave = wave
         self.calib = calib
@@ -1445,6 +1451,8 @@ class FluxCalib(object):
         self.fibercorr_comments= fibercorr_comments
         self.stdstar_fibermap = stdstar_fibermap
         self.meta = dict(units='photons/(erg/s/cm^2)')
+
+        self.deconvolved_calib = deconvolved_calib
 
     def __repr__(self):
         txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(

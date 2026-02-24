@@ -127,7 +127,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
-    hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
+    hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f8'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     # hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
     hx.append( fits.ImageHDU(fluxcalib.mask, name='MASK') )
@@ -151,6 +151,10 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
         fibermap = encode_table(fluxcalib.stdstar_fibermap)  #- unicode -> bytes
         fibermap.meta['EXTNAME'] = 'STDSTAR_FIBERMAP'
         hx.append( fits.convenience.table_to_hdu(fibermap) )
+
+    if fluxcalib.deconvolved_calib is not None:
+        hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib.astype('f8'), name='DECONVOLVED_CALIB') )
+        hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
 
     t0 = time.time()
     tmpfile = get_tempfilename(outfile)
@@ -194,12 +198,18 @@ def read_flux_calibration(filename):
         else :
             stdstar_fibermap = None
 
+        if 'DECONVOLVED_CALIB' in fx:
+            deconvolved_calib = fx['DECONVOLVED_CALIB'].data.astype('f8')
+        else :
+            deconvolved_calib = None
+
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask,
                           fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
-                          stdstar_fibermap = stdstar_fibermap)
+                          stdstar_fibermap = stdstar_fibermap,
+                          deconvolved_calib=deconvolved_calib)
     fluxcalib.header = header
 
     return fluxcalib
