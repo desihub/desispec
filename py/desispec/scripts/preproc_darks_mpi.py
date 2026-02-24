@@ -10,12 +10,11 @@ from desispec.workflow.desi_proc_funcs import assign_mpi
 import numpy as np
 from astropy.io import fits
 
-import astropy.io.fits as pyfits
-from astropy.table import Table,vstack
+from astropy.table import vstack
 
 from desiutil.log import get_logger
 
-from desispec.io.util import checkgzip, decode_camword, difference_camwords
+from desispec.io.util import decode_camword, difference_camwords
 from desispec.io import findfile
 from desispec.workflow.tableio import load_table
 from desispec.scripts.compute_dark import get_stacked_dark_exposure_table
@@ -25,7 +24,7 @@ def preproc_darks_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="Computes preprocs for dark exposures used for dark creation",
                                      epilog='''
-                                     Input is a list of dark expids. The raw images are preprocessed 
+                                     Input is a list of dark expids. The raw images are preprocessed
                                      without dark,mask correction. However gains are applied so the output is in electrons/sec.
                                      --expids and --camword are required, --nights are optional but improve I/O efficiency.
                                      ''')
@@ -35,11 +34,11 @@ def preproc_darks_parser():
     parser.add_argument('-n', '--nights', type=str, default = None, required=False,
                         help='Comma separated list of YEARMMDD nights where we find the darks to run through preproc')
     parser.add_argument('-c','--camword', type=str, required = True,
-                        help = 'header HDU (int or string)')
+                        help = 'cameras to process, e.g. a0123456789')
     parser.add_argument('--bias', type = str, default = None, required=False,
                          help = 'specify a bias image calibration file (standard preprocessing calibration is turned off)')
     parser.add_argument('--nocosmic', action = 'store_true',
-                        help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
+                        help = 'do not perform cosmic ray subtraction (much slower, but more accurate because median can leave traces)')
     parser.add_argument('--specprod', type=str, default=None, required=False,
                         help='Specify specprod containing the nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB and identify exposures from DESI_SPECTRO_DATA.')
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
@@ -53,7 +52,7 @@ def preproc_darks_parser():
 def parse(options=None):
     # parse the command line arguments
     parser = preproc_darks_parser()
-    
+
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
 
@@ -79,7 +78,7 @@ def main(args=None):
     args.expids = np.array(args.expids.split(',')).astype(int)
     if args.nights is not None:
         args.nights = np.array(args.nights.split(',')).astype(int)
-        
+
     ## get the requested cameras from the camword
     requested_cameras = set(decode_camword(args.camword))
     if len(requested_cameras) == 0:
@@ -98,7 +97,7 @@ def main(args=None):
                     '--skip-camera-check', '--dont-search-filesystem']
             compdark_parser = compute_dark_parser()
             compdark_args = compdark_parser.parse_args(opts)
-            exptable = get_stacked_dark_exposure_table(args)
+            exptable = get_stacked_dark_exposure_table(compdark_args)
         else:
             exptables = []
             for night in np.unique(args.nights):
@@ -131,7 +130,9 @@ def main(args=None):
         data = None
 
     # Broadcast data to all ranks
-    data = comm.bcast(data, root=0)
+    if comm is not None:
+        data = comm.bcast(data, root=0)
+
     expids, nights, camlists, files = data
 
     if len(expids) == 0:
@@ -151,18 +152,21 @@ def main(args=None):
     else:
         thisbias = args.bias
 
-    ## Number of task is the total number of cameras to run preproc on plus one additional 
+    ## Number of task is the total number of cameras to run preproc on plus one additional
     ## task for each expid to handle the I/O of the files
     lens = [len(cams)+1 for cams in camlists]
     maxlens = np.max(lens)
     ntasks = np.sum(lens)
-    # Files are only ~0.25Gb each, so shouldn't need to limit blocks. 
-    optimal_nblocks = int(np.ceil(size / maxlens)) #min(int(np.ceil(size / maxlens)), 200) # 50Gb limit  
+    # Files are only ~0.25Gb each, so shouldn't need to limit blocks.
+    optimal_nblocks = int(np.ceil(size / maxlens)) #min(int(np.ceil(size / maxlens)), 200) # 50Gb limit
 
     ## Split into subcommunicators if we have enough ranks and enough work to do
-    nblocks, block_size, block_rank, block_num, block_comm = \
-        distribute_ranks_to_blocks(nblocks=optimal_nblocks, rank=rank, size=size, comm=comm,
-                            log=log, split_comm=True)
+    if comm is not None:
+        nblocks, block_size, block_rank, block_num, block_comm = \
+            distribute_ranks_to_blocks(nblocks=optimal_nblocks, rank=rank, size=size, comm=comm,
+                                log=log, split_comm=True)
+    else:
+        nblocks, block_size, block_rank, block_num, block_comm = 1, 1, 0, 0, None
 
     ## looping over all the exposures, each communicator gets a subset
     for expid, night, camlist, filename in zip(expids[block_num::nblocks], nights[block_num::nblocks],
@@ -170,46 +174,53 @@ def main(args=None):
         ## Each subcommunicator has enough ranks for the largest camera list
         ## give each rank a camera, skipping rank 0 which will handle the I/O and MPI
         ## and pad the remaining ranks with None so that scatter works
-        ncam = len(camlist)
         if block_rank == 0:
             try:
                 primary_header = read_raw_primary_header(filename)
-                # Convert to a plain Header since CompImageHeader can't be pickled 
+                # Convert to a plain Header since CompImageHeader can't be pickled
                 primary_header = fits.Header(primary_header)
-            except:
+            except Exception as e:
+                log.error(f'Failed to read primary header from {filename}: {e}')
                 primary_header = None
-            fx = fits.open(filename, memmap=False)
-            hducams = [str(hdu.name).lower().strip() for hdu in fx]
-            final_camlist = sorted(list(requested_cameras.intersection(set(camlist))))
 
-            indices = [ list(range(i, ncam, block_size-1)) for i in range(block_size-1) ]
-            all_data_header_cams = []
-            for camera in final_camlist:
-                rawimage = fx[camera.upper()].data
-                # Convert to a plain Header since CompImageHeader can't be pickled 
-                header = fits.Header(fx[camera.upper()].header)
-                all_data_header_cams.append((rawimage, header, camera))
+            with fits.open(filename, memmap=False) as fx:
+                hducams = [str(hdu.name).lower().strip() for hdu in fx]
+                final_camlist = sorted(list(requested_cameras.intersection(set(camlist))))
+                ncam = len(final_camlist)
 
-            all_data_header_cams = np.array(all_data_header_cams)
+                indices = [ list(range(i, ncam, block_size-1)) for i in range(block_size-1) ]
+                all_data_header_cams = []
+                for camera in final_camlist:
+                    rawimage = fx[camera.upper()].data
+                    # Convert to a plain Header since CompImageHeader can't be pickled
+                    header = fits.Header(fx[camera.upper()].header)
+                    all_data_header_cams.append((rawimage, header, camera))
+
             broadcast_bundle = [None]
             for inds in indices:
-                broadcast_bundle.append(all_data_header_cams[inds])
+                broadcast_bundle.append([all_data_header_cams[i] for i in inds])
             if len(broadcast_bundle) < block_size:
                 broadcast_bundle += [None] * (block_size - len(broadcast_bundle))
             assert len(broadcast_bundle) == block_size, f"broadcast_bundle length {len(broadcast_bundle)} does not match block_size {block_size}"
         else:
             data_header_cams = None
             primary_header = None
-            broadcast_bundle = [None]
+            ## For non-root this isn't needed but we need to have the same variable defined for the mpi scatter
+            broadcast_bundle = None
 
-        ## broadcast the primary header 
-        primary_header = block_comm.bcast(primary_header, root=0)
+        ## broadcast the primary header
+        if block_comm is not None:
+            primary_header = block_comm.bcast(primary_header, root=0)
         if primary_header is None:
             log.error(f'No primary header in {filename} for expid {expid} for rank {rank} block_rank {block_rank} block_num {block_num}')
             continue
 
         ## scatter the work to the ranks
-        data_header_cams = block_comm.scatter(broadcast_bundle, root=0)
+        if block_comm is not None:
+            data_header_cams = block_comm.scatter(broadcast_bundle, root=0)
+        else:
+            data_header_cams = all_data_header_cams
+
         if data_header_cams is None:
             log.info(f'No data_header_cams for rank {rank} block_rank {block_rank} block_num {block_num}')
             continue
@@ -220,19 +231,19 @@ def main(args=None):
                 rawimage, header, camera = data_header_cam
             else:
                 continue
-                
+
             if args.preproc_dark_dir is not None:
                 preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera,specprod_dir=args.preproc_dark_dir)
             else:
                 preproc_filename = findfile("preproc_for_dark",night=night,expid=expid,camera=camera)
-            
+
             if os.path.exists(preproc_filename):
                 log.info(f"Rank {rank} block_rank {block_rank} block_num {block_num}: "
                          + f"Preprocessed dark file {preproc_filename} already exists, skipping.")
                 continue
             else:
                 log.info(f'Rank {rank} block_rank {block_rank} block_num {block_num}: '
-                         + f'Processing {filename} for camera {camera} (expid={expid})')   
+                         + f'Processing {filename} for camera {camera} (expid={expid})')
                 img = process_raw(primary_header, rawimage, header, camera=camera, bias=thisbias, nocosmic=args.nocosmic,
                         mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
@@ -240,10 +251,11 @@ def main(args=None):
             write_image(preproc_filename,img)
             log.info(f"Wrote {preproc_filename}")
 
-    comm.barrier()
+    if comm is not None:
+        comm.barrier()
     if rank == 0:
         log.info("All ranks have completed preproc_darks_mpi.")
-        
+
     return 0
 
 
