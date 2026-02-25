@@ -61,7 +61,8 @@ fibermask:
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
-    - [LOWTRANSMISSION, 12, "Low fiber transmission. Cannot use for sky."]
+    - [BRIGHTNEIGHBOR, 11, "Fiber has a bright neighbor affecting its flux"]
+    - [LOWTRANSMISSION,12, "Low fiber transmission. Cannot use for sky."]
     - [NEARCHARGETRAP, 13, "Fiber trace near charge trap in one of the CCDs"]
     - [VARIABLETHRU,   14, "Fiber has throughput variations we cannot model well"]
     - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
@@ -69,8 +70,8 @@ fibermask:
     - [BADTRACE,       17, "Bad trace solution"]
     - [BADFLAT,        18, "Bad fiber flat"]
     - [BADARC,         19, "Bad arc solution"]
-    - [MANYBADCOL,     20, ">10% of pixels are bad columns"]
-    - [MANYREJECTED,   21, ">10% of pixels rejected in extraction"]
+    - [MANYBADCOL,     20, ">10% of spectral bins are bad columns"]
+    - [MANYREJECTED,   21, ">10% of spectral bins rejected in extraction"]
     - [BADAMPB,        22, "Issues in the amplifier readouts of camera B make this unusable"]
     - [BADAMPR,        23, "Issues in the amplifier readouts of camera R make this unusable"]
     - [BADAMPZ,        24, "Issues in the amplifier readouts of camera Z make this unusable"]
@@ -96,6 +97,8 @@ specmask:
     - [NODATA,       8, "No data exists"]
     - [BADFIBER,     9, "fibermask has a non-zero bit"]
     - [BADCOLUMN,    10, "Bad CCD column biases the flux"]
+    - [SATURATED,    11, "More than half of input pixels were saturated"]
+    - [CONTAMINATED, 12, "Fiber cross talk correction greater than 50 percent of flux"]
 
 #- zmask: reasons why redshift fitting failed
 """)

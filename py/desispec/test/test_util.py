@@ -17,6 +17,32 @@ from desispec import util
 import desispec.parallel as dpl
 
 class TestNight(unittest.TestCase):
+
+    def test_robust_mode(self):
+        # Cache original value so that we can restore it at end; will be None if not set
+        orig = os.getenv('DESI_SPECTRO_ROBUST', None)
+
+        # Not robust mode if $DESI_SPECTRO_ROBUST isn't set
+        if 'DESI_SPECTRO_ROBUST' in os.environ:
+            del os.environ['DESI_SPECTRO_ROBUST']
+
+        self.assertFalse(util.is_robust_mode())
+
+        # Various values of robust mode
+        for value in ('True', 'TRUE', 'true', 'Yes', 'YES', 'yes', '1'):
+            os.environ['DESI_SPECTRO_ROBUST'] = value
+            self.assertTrue(util.is_robust_mode(), f'Should be robust mode if $DESI_SPECTRO_ROBUST={value}')
+
+        # Various values of not robust mode
+        for value in ('False', 'FALSE', 'false', 'No', 'NO', 'no', '0', 'nope', 'octopus'):
+            os.environ['DESI_SPECTRO_ROBUST'] = value
+            self.assertFalse(util.is_robust_mode(), f'Should NOT be robust mode if $DESI_SPECTRO_ROBUST={value}')
+
+        # Reset state of $DESI_SPECTRO_ROBUST
+        if orig is not None:
+            os.environ['DESI_SPECTRO_ROBUST'] = orig
+        else:
+            del os.environ['DESI_SPECTRO_ROBUST']
     
     def test_ymd2night(self):
         """
@@ -565,5 +591,18 @@ class TestUtil(unittest.TestCase):
         #- compare columns, since comparing tables will say False due to dtype mismatch
         self.assertTrue(np.all(a['x'][ii] == b['x']))
         self.assertTrue(np.all(a['y'][ii] == b['y']))
+
+    def test_test_util_installed(self):
+        """Test desispec.test.util.installed"""
+        from ..test.util import installed
+        self.assertTrue(installed('os'))
+        self.assertTrue(installed('os', 'sys'))
+        self.assertTrue(installed('numpy'))
+        self.assertFalse(installed('not_a_package'))
+        self.assertFalse(installed('os', 'not_a_package'))
+        self.assertFalse(installed('not_a_package', 'os'))
+        self.assertTrue(installed('os.path'))
+        self.assertFalse(installed('os.blat'))
+
 
 

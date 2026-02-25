@@ -1179,3 +1179,25 @@ def tsnr2_to_efftime(tsnr2,target_type) :
     log.debug("for tracer %s SNR2TIME=%.2f", tracer, slope)
 
     return slope*tsnr2
+
+
+def program_to_tsnr2_colname(program):
+    """
+    Provide the appropriate TSNR2 column name for a given program
+    See https://github.com/desihub/desispec/issues/2560
+
+    Args:
+      program: PROGRAM name
+
+    Returns:
+      The appropriate TSNR2 column name for that program
+    """
+    program_to_tsnr2_colname_dict = {'backup': 'TSNR2_GPBBACKUP', 'bright': 'TSNR2_BGS', 'dark': 'TSNR2_LRG', 'other': 'TSNR2_LRG'}
+    if not program.lower() in program_to_tsnr2_colname_dict.keys():
+        msg = '\"{}\" is not a valid program'.format(program.lower())
+        log = get_logger()
+        log.error(msg)
+        raise ValueError(msg)
+    return program_to_tsnr2_colname_dict[program.lower()]
+
+

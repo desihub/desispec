@@ -26,7 +26,6 @@ from astropy.io import fits
 from astropy.table import Table,vstack
 
 #- external desi imports
-from redrock.external import desi
 import desiutil.timer
 from desiutil.log import get_logger, DEBUG, INFO
 import desiutil.iers
@@ -147,6 +146,7 @@ def main(args=None, comm=None):
 
     Returns: integer error code (0=good)
     """
+    from redrock.external.desi import rrdesi
     #- save original command line before parsing it
     #- in case we need it for creating a batch script
     if args is None or isinstance(args, argparse.Namespace):
@@ -340,7 +340,7 @@ def main(args=None, comm=None):
             log.info("Generating batch script and exiting.")
 
             if not args.nosubmit and not args.dryrun:
-                err = subprocess.call(['sbatch', scriptfile])
+                err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
 
         ## All ranks need to exit if submitted batch
         if comm is not None:
@@ -625,7 +625,7 @@ def main(args=None, comm=None):
                 log.info(f"dryrun: Would have run {cmd}")
         else:
             with stdouterr_redirected(rrlog, comm=comm):
-                result, success = runcmd(desi.rrdesi, comm=comm, args=cmdargs,
+                result, success = runcmd(rrdesi, comm=comm, args=cmdargs,
                                          inputs=[coaddfile], outputs=[rrfile, rdfile, rmfile])
 
         ## Since all ranks running redrock, only count failure/success once

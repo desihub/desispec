@@ -32,7 +32,8 @@ parser.add_argument('--other-psf', type= str, default = None, required = False,
                     help = 'other psf to compare with')
 parser.add_argument('--wavelength', type= float, default = None, required = False,
                     help = 'compare traces for this wavelength (default is central wavelength), used only along with --other-psf option')
-
+parser.add_argument('--amps', action = 'store_true',
+                    help = 'show amplifier boundaries')
 args = parser.parse_args()
 
 
@@ -94,6 +95,11 @@ if args.image is not None :
 
     plt.imshow(img,origin="lower",vmin=vmin,vmax=vmax,aspect="auto")
 
+    if args.amps :
+        plt.axvline(img.shape[1]//2,linestyle="--",color="red")
+        plt.axhline(img.shape[0]//2,linestyle="--",color="red")
+
+
 for i,fiber in enumerate(fibers) :
     x = tset.x_vs_wave(fiber,wave)
     y = tset.y_vs_wave(fiber,wave)
@@ -126,7 +132,7 @@ if args.other_psf is not None :
     else :
         wave_to_compare = np.mean(wave)
 
-    
+
     otset = read_xytraceset(args.other_psf)
     xx=np.zeros(len(fibers))
     yy=np.zeros(len(fibers))

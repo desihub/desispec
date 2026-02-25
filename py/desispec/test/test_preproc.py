@@ -13,6 +13,7 @@ import desispec.scripts.preproc
 from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
 from desispec.preproc import get_amp_ids, get_readout_mode
 from desispec import io
+from desispec.test.util import installed
 
 def xy2hdr(xyslice):
     '''
@@ -27,13 +28,12 @@ def xy2hdr(xyslice):
 class TestPreProc(unittest.TestCase):
 
     def tearDown(self):
-        pass
-        if os.path.isdir(self.calibdir) :
+        if hasattr(self, 'calibdir') and os.path.isdir(self.calibdir) :
             shutil.rmtree(self.calibdir)
 
     def setUp(self):
-        #- catch specific warnings so that we can find and fix
-        # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
+        if not installed('specter'):
+            self.skipTest('preproc tests require specter')
 
         #- Create temporary calib directory
         self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')

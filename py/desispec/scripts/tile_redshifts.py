@@ -357,7 +357,7 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
 
     err = 0
     if submit:
-        cmd = ['sbatch' ,]
+        cmd = ['sbatch', '--kill-on-invalid-dep=yes']
         if reservation:
             cmd.extend(['--reservation', reservation])
         if dependency:

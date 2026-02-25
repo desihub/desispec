@@ -213,7 +213,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 raise RuntimeError(message)
         else:
             thisbias = True
-        
+
         night=header2night(primary_header)
         expid=primary_header["EXPID"]
 
@@ -245,7 +245,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             preproc_filename = user_preproc_filename
         else:
             preproc_filename = default_preproc_filename
-            
+
         if user_exists or default_exists:
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename)
@@ -278,7 +278,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             masks.append(img.mask.ravel())
         exptimes.append(thisexptime)
         files_used.append(file_used)
-        
+
         if len(images) >= max_dark_exposures:
             log.warning(f"Using only the first {max_dark_exposures} valid darks provided for {camera}.")
             break
@@ -291,7 +291,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
               + f"{min_dark_exposures=}. Exiting without producing file."
         log.critical(msg)
         raise RuntimeError(msg)
-    
+
     images=np.array(images)
     exptimes=np.array(exptimes)
     assert(images.shape[0] == exptimes.size)
@@ -550,6 +550,10 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     if isinstance(cameras, str):
         cameras = decode_camword(parse_cameras(cameras))
 
+    ## Laod exposure table
+    expfile = get_exposure_table_pathname(night)
+    exptable = load_table(expfile, tabletype='exptable')
+
     #- Find all ZERO exposures on this night
     nightdir = io.rawdata_root() + f'/{night}'
     requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
@@ -560,13 +564,34 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
 
         #- CALIB ZEROs or non-calib ZEROs for dark sequence
         #- while being robust to missing OBSTYPE or PROGRAM
-        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and ('PROGRAM' in r):
-            if r['PROGRAM'].startswith('CALIB ZEROs'):
-                calib_expids.append(int(os.path.basename(os.path.dirname(filename))))
-            elif r['PROGRAM'].startswith('ZEROs for dark sequence'):
-                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
-            elif r['PROGRAM'].startswith('ZEROs for morning darks'):
-                noncalib_expids.append(int(os.path.basename(os.path.dirname(filename))))
+        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO'):
+            fname_derived_expid = int(os.path.basename(os.path.dirname(filename)))
+            ## Update to include zeros in exposure table that are
+            ## relabeled as Calibration Zeros
+            in_etable = (fname_derived_expid in exptable['EXPID'])
+            if in_etable:
+                etable_program = str(exptable['PROGRAM'][exptable['EXPID']==fname_derived_expid][0]).lower()
+            else:
+                ## Only include ZEROs that are in the exposure table
+                ## Change to below if you want to include all ZEROs on disk
+                ## etable_program=None
+                continue
+
+            if 'PROGRAM' in r:
+                program = r['PROGRAM'].lower()
+            elif in_etable:
+                program = etable_program
+            else:
+                continue
+
+            if program.startswith('calib zeros'):
+                calib_expids.append(fname_derived_expid)
+            elif program.startswith('zeros for dark sequence'):
+                noncalib_expids.append(fname_derived_expid)
+            elif program.startswith('zeros for morning darks'):
+                noncalib_expids.append(fname_derived_expid)
+            elif in_etable and etable_program.startswith('calib zeros'):
+                calib_expids.append(fname_derived_expid)
             else:
                 continue
         else:
@@ -575,8 +600,6 @@ def _find_zeros(night, cameras, nzeros=25, nskip=2):
     #- Remove ZEROs that are flagged as bad, but allow for the possibility
     #- of ZEROs that aren't in the exposure table for whatever reason
     log.debug('Checking for pre-identified bad ZEROs')
-    expfile = get_exposure_table_pathname(night)
-    exptable = load_table(expfile, tabletype='exptable')
     select_zeros=exptable['OBSTYPE']=='zero'
     bad = select_zeros & (exptable['LASTSTEP']!='all')
     badcam = select_zeros & (exptable['BADCAMWORD']!='')
@@ -1396,7 +1419,7 @@ cp {biasfile}  bias_frames/{biasfile}
 """)
 #TODO: the copying needs to be done in a cleaner way, maybe as part of the desi_compute_dark_nonlinear? or just writing to the corresponding output dir directly
         if not nosubmit:
-            err = subprocess.call(['sbatch', batchfile])
+            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', batchfile])
             if err == 0:
                 log.info(f'Submitted {batchfile}')
             else:

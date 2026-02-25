@@ -42,6 +42,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.util import parse_keyval
 from desispec import validredshifts
+from desispec.tsnr import tsnr2_to_efftime, program_to_tsnr2_colname
 
 def load_sv1_ivar_w12(hpix, targetids):
     """
@@ -122,6 +123,10 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
     with fitsio.FITS(rrfile) as fx:
         hdr = fx[0].read_header()
+
+        # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
+        program = hdr['PROGRAM']
+
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
             log.warning("Skipping {} with SPGRP {} != group {}".format(
@@ -353,6 +358,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     data.add_column(np.full(nrows, val, dtype=dtype),
             index=icol, name='SPGRPVAL')
 
+    # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
+    data['PROGRAM'] = program
+
     return data, expfibermap
 
 
@@ -368,7 +376,7 @@ def parse(options=None):
     parser.add_argument("--minimal", action='store_true',
             help="only include minimal output columns")
     parser.add_argument("-t", "--tiles", type=str,
-            help="ascii file with tileids to include (one per line)")
+            help="FITS or CSV file with TILEIDs to include")
 
     parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
@@ -596,16 +604,19 @@ def main(args=None):
             badtiles = np.unique(zcat['TILEID'][bad])
             raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
 
-    #- if TARGETIDs appear more than once, which one is best within this catalog?
-    if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
-        # Add EFFTIME_SPEC; definition from Equation 22 of Guy et al. 2023 (arxiv:2209.14482)
-        zcat['EFFTIME_SPEC'] = 12.15 * zcat['TSNR2_LRG']
-        log.info('Finding best spectrum for each target')
-        nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
-        zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
-        zcat['ZCAT_PRIMARY'] = primary
-    else:
-        log.info('Missing TSNR2_LRG or ZWARN; not adding EFFTIME_SPEC, ZCAT_PRIMARY/_NSPEC')
+    # Add EFFTIME_SPEC
+    zcat['EFFTIME_SPEC'] = np.full(len(zcat), -999., dtype=np.float32)
+    for program in np.unique(zcat['PROGRAM']):
+        mask = zcat['PROGRAM']==program
+        tsnr2_col = program_to_tsnr2_colname(program)
+        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat[tsnr2_col][mask], tsnr2_col[6:])
+    assert np.all(zcat['EFFTIME_SPEC']!=-999.)  # check that all objects are assigned a EFFTIME_SPEC value
+    zcat.remove_column('PROGRAM')
+
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
 
     #- Used for fuji, should not be needed for later prods
     if args.patch_missing_ivar_w12:
@@ -724,6 +735,15 @@ def main(args=None):
     for col in z_cols:
         if col!='Z':
             zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
+
+    # Downgrade some of the columns to lower precision
+    if 'LOCATION' in zcat.colnames:
+        zcat['LOCATION'] = zcat['LOCATION'].astype('int16')
+    if 'DEVICE_LOC' in zcat.colnames:
+        zcat['DEVICE_LOC'] = zcat['DEVICE_LOC'].astype('int16')
+    if 'OBSCONDITIONS' in zcat.colnames:
+        if np.max(zcat['OBSCONDITIONS']) <= 32767 and np.min(zcat['OBSCONDITIONS']) >= -32768:
+            zcat['OBSCONDITIONS'] = zcat['OBSCONDITIONS'].astype('int16')
 
     columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']

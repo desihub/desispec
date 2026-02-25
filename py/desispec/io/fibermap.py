@@ -26,7 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
-from desispec.calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder, get_flagged_fibers
 
 from . import iotime
 from .table import read_table
@@ -138,7 +138,8 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('FIBER_RA',                   'f8',          'deg', 'RA of actual fiber position',                  'empty'),
                     ('FIBER_DEC',                  'f8',          'deg', 'DEC of actual fiber position',                 'empty'),
                     ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
-                    ('PSF_TO_FIBER_SPECFLUX',      'f8',             '', 'Fraction of light captured by a fiber',        'cframe'),
+                    ('PSF_TO_FIBER_SPECFLUX',      'f4',             '', 'Fraction of light captured by a fiber',        'cframe'),
+                    ('FLAT_TO_PSF_FLUX',           'f4',             '', 'Fiber aperture correction factor',             'cframe'),
                     ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
                     ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
                     ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),
@@ -285,7 +286,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
         hdr = fitsheader(fibermap.meta)
 
     add_dependencies(hdr)
-    
+
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', '.*nmgy.*')
         fibermap_hdu = fits.BinTableHDU(fibermap)
@@ -940,6 +941,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         #- SKY assignments on stuck positioners will get special treatment
         stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
 
+        #- fiber not on SKY or TGT
+        badobj = (fibermap['OBJTYPE'] != 'TGT') & (fibermap['OBJTYPE'] != 'SKY')
+
         #- Set fiber status bits
         missing = np.isin(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
@@ -947,6 +951,12 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
         fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
         fibermap['FIBERSTATUS'][badpos & ~stucksky] |= fibermask.BADPOSITION
+        fibermap['FIBERSTATUS'][badobj] |= fibermask.UNASSIGNED
+
+        # Intercept things that should have been set to BAD in fiberassign
+        # but weren't, i.e. empty strings and N/A, and set them to BAD
+        fibermap['OBJTYPE'][badobj] = 'BAD'
+
 
         #- for SKY on stuck positioners, recheck if they are on a blank sky
         #- (e.g. they might be "off" target but still ok for sky)
@@ -1240,6 +1250,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- if position was unknown, set FIBERSTATUS as BADPOSITION
     if col.startswith('FIBER') or col.startswith('DELTA'):
         fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
+
+    #
+    # Set any fiberstatus flags defined in the flagged_fibers.ecsv file
+    #
+    fibers, masks = get_flagged_fibers(expid)
+    for fiber, mask in zip(fibers, masks):
+        loc = np.where(fibermap['FIBER'] == fiber)[0]
+        if len(loc) == 1:
+            fibermap['FIBERSTATUS'][loc[0]] |= mask
+            log.info(f"Setting FIBERSTATUS flag {mask} for fiber {fiber} from flagged_fibers file.")
+        else:
+            log.warning(f"Fiber {fiber} from flagged_fibers file not found in fibermap!")
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table

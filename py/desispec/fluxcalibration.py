@@ -16,7 +16,6 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
-from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 from desispec.gpu import is_gpu_available, NoGPU
 from desispec.maskbits import fibermask
 import scipy, scipy.sparse, scipy.ndimage
@@ -907,6 +906,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         which is very close to C_fiber = R_fiber*C (but not exactly).
 
     """
+    # import only if needed to minimize required dependencies
+    from desispec.fiberfluxcorr import flat_to_psf_flux_correction, psf_to_fiber_flux_correction
 
     log=get_logger()
 
@@ -1504,7 +1505,10 @@ def apply_flux_calibration(frame, fluxcalib):
     if fluxcalib.fibercorr is not None and frame.fibermap is not None :
         if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
-            frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
+            frame.fibermap["PSF_TO_FIBER_SPECFLUX"] = np.array(fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"], dtype='float32')
+        if "FLAT_TO_PSF_FLUX" in fluxcalib.fibercorr.dtype.names :
+            log.info("add a column FLAT_TO_PSF_FLUX to fibermap")
+            frame.fibermap["FLAT_TO_PSF_FLUX"] = np.array(fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"], dtype='float32')
 
 
 def ZP_from_calib(exptime, wave, calib):

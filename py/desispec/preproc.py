@@ -28,7 +28,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_fiberflat, shorten_filename, findfile
 from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
-from desispec.util import header2night
+from desispec.util import header2night, is_robust_mode
 
 def get_amp_ids(header):
     '''
@@ -825,7 +825,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if key in os.environ:
             depend.setdep(header, key, os.environ[key])
 
-    need_cfinder = (mask is True) or (pixflat is True)
+    need_cfinder = (mask is True) or (pixflat is True) or (bias is True)
 
     cfinder = None
     if ccd_calibration_filename is not False and need_cfinder:
@@ -1005,34 +1005,44 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     dark_filename = cfinder.findfile("DARK")
                 else:
                     msg = f'No nightly dark found for {expid=} {camera}, and no DARK entry in the ' \
-                        + f'{ccd_calibration_filename=}.  Cannot proceed.'
-                    log.critical(msg)
-                    raise ValueError(msg)
+                        + f'{ccd_calibration_filename=}.'
+                    is_robust_to_missing_calibration = is_robust_mode()
+                    if is_robust_to_missing_calibration :
+                        log.info(f"DESI_SPECTRO_ROBUST={os.environ['DESI_SPECTRO_ROBUST']}")
+                        log.error(msg)
+                        dark_filename = None
+                    else :
+                        msg += '  Cannot proceed. Set $DESI_SPECTRO_ROBUST=TRUE to override.'
+                        log.critical(msg)
+                        raise ValueError(msg)
 
-        depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
-        log.info(f'Camera {camera} using DARK model from {dark_filename}')
-        # dark is multipled by exptime, or we use the non-linear dark model in the routine
-        dark = read_dark(filename=dark_filename, exptime=exptime)
+        if dark_filename is not None :
+            depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
+            log.info(f'Camera {camera} using DARK model from {dark_filename}')
+            # dark is multipled by exptime, or we use the non-linear dark model in the routine
+            dark = read_dark(filename=dark_filename, exptime=exptime)
 
-        if dark.shape == image.shape :
-            log.info(f"Camera {camera} dark is trimmed")
-            trimmed_dark_in_electrons = dark
-            dark_is_trimmed   = True
-        elif dark.shape == rawimage.shape :
-            log.info(f"Camera {camera} dark is not trimmed")
-            trimmed_dark_in_electrons = np.zeros_like(image)
-            dark_is_trimmed = False
+            if dark.shape == image.shape :
+                log.info(f"Camera {camera} dark is trimmed")
+                trimmed_dark_in_electrons = dark
+                dark_is_trimmed   = True
+            elif dark.shape == rawimage.shape :
+                log.info(f"Camera {camera} dark is not trimmed")
+                trimmed_dark_in_electrons = np.zeros_like(image)
+                dark_is_trimmed = False
+            else :
+                message="Camera {} incompatible dark shape={} when raw shape={} and preproc shape={}".format(
+                        camera, dark.shape, rawimage.shape, image.shape)
+                log.error(message)
+                raise ValueError(message)
+
+            if np.all(dark==0.0):
+                if exptime == 0.0:
+                    log.info(f'Camera {camera} dark model for exptime=0 is all zeros; not applying')
+                else:
+                    log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
+                dark = False
         else :
-            message="Camera {} incompatible dark shape={} when raw shape={} and preproc shape={}".format(
-                    camera, dark.shape, rawimage.shape, image.shape)
-            log.error(message)
-            raise ValueError(message)
-
-        if np.all(dark==0.0):
-            if exptime == 0.0:
-                log.info(f'Camera {camera} dark model for exptime=0 is all zeros; not applying')
-            else:
-                log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
             dark = False
 
     if bias is not False : #- it's an array

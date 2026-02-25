@@ -491,11 +491,12 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='badcolumn')
 
     if do_ctecorr:
-        if cte_expids is None and (do_darknight or do_badcolumn):
-            cte_expids = expids[1:]
-        else:
-            cte_expids = expids
-        cte_expstr = ','.join(np.array(expids).astype(str))
+        if cte_expids is None:
+            if do_darknight or do_badcolumn:
+                cte_expids = expids[1:]
+            else:
+                cte_expids = expids
+        cte_expstr = ','.join(np.array(cte_expids).astype(str))
         cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expstr}"
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='ctecorr')
 

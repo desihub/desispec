@@ -22,6 +22,18 @@ import subprocess as sp
 
 from desiutil.log import get_logger, INFO
 
+def is_robust_mode():
+    """
+    Return True/False for whether we should run in robust mode
+    based upon $DESI_SPECTRO_ROBUST (True/Yes/1)
+
+    This is intended to be used e.g. to decide to preproc anyway
+    even if a dark model can't be found.
+    """
+    if 'DESI_SPECTRO_ROBUST' in os.environ and os.environ['DESI_SPECTRO_ROBUST'].upper() in ('YES', 'TRUE', '1'):
+        return True
+    else:
+        return False
 
 def runcmd(cmd, args=None, expandargs=False, inputs=[], outputs=[], comm=None, clobber=False, check_return=False):
     """
