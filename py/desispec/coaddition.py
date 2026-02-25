@@ -189,7 +189,7 @@ def use_for_coadd(fiberstatus, band):
     return good_fiberstatus
 
 
-def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
+def coadd_fibermap(fibermap, onetile=False):
     """
     Coadds fibermap
 
@@ -198,10 +198,7 @@ def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
 
     Options:
         onetile (bool): this is a coadd of a single tile, not across tiles
-        coadd_norm (list of np.ndarray): each element contains a 1D array
-        of length n_exposures with each element corresponding to the normalization 
-        scalar for the ith exposure
-
+        
     Returns: (coadded_fibermap, exp_fibermap) Tables
 
 
@@ -245,10 +242,6 @@ def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
     exp_fibermap['IN_COADD_R'] = np.zeros(len(exp_fibermap), dtype=bool)
     exp_fibermap['IN_COADD_Z'] = np.zeros(len(exp_fibermap), dtype=bool)
     
-    #- column to store per exposure normalization scalar, if applied
-    if coadd_norm is not None:
-        exp_fibermap['COADD_NORM'] = np.ones(len(exp_fibermap), dtype=np.float32)
-
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
     tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
@@ -335,10 +328,6 @@ def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
         exp_fibermap['IN_COADD_B'][jj] = in_coadd_b
         exp_fibermap['IN_COADD_R'][jj] = in_coadd_r
         exp_fibermap['IN_COADD_Z'][jj] = in_coadd_z
-
-        # add per exposure scalar, if applicable
-        if coadd_norm is not None:
-            exp_fibermap['COADD_NORM'][jj] = coadd_norm[i]
 
         # Check if there are some good coadds to compute aggregate quantities;
         # Otherwise just use all the (bad) exposures; will still count NUM on good_coadds
@@ -439,7 +428,7 @@ def coadd_fibermap(fibermap, onetile=False, coadd_norm=None):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX']:
+            'PSF_TO_FIBER_SPECFLUX', 'COADD_NORM']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
@@ -681,24 +670,25 @@ def _resolution_coadd(resolution, pix_weights):
     return res, res_norm
 
 
-def _per_exposure_normalization(spectra, targets, filter_width=51):
+def per_exposure_normalization(spectra, filter_width=51):
     """
-    Compute multiplicative normalization factors for each exposure of each
-    target in the set of spectra prior to coaddition across exposures.
+    Compute per‑exposure multiplicative normalization factors for each
+    target in a desispec.spectra.Spectra object and store them in the
+    COADD_NORM column of the fibermap. Objects for which a normalization
+    term cannot be computed have a default COADD_NORM value of 1.0, e.g.,
+    sky spectra, single exposures, etc. If any exposure yields a negative 
+    normalization factor, the exposure is flagged with the BADFIBER bit 
+    in FIBERSTATUS, and COADD_NORM retains the default value.
 
     Args:
-        spectra: desispec.spectra.Spectra object
-        targets (numpy.ndarray): 1d array of sorted, unique targetids
+        spectra: desispec.spectra.Spectra object; It must provide flux,
+        ivar, optional mask, wave dictionaries, and a fibermap 
+        table that contains at least the columns TARGETID, FIBERSTATUS
+        and OBJTYPE.
         filter_width (int): optional, width of the median filter (in pixels)
-        for estimating broad-band flux level of each spectrum; default is 51 pixels
+        for estimating the broad-band flux level of each spectrum; the 
+        default is 51 pixels
 
-    Returns:
-        norm (list of np.ndarray): Each element corresponds to the TARGETID
-        in the targets argument at the same index. Each element is a 1‑D 
-        array of length n_exposures containing the normalization scalar factor
-        for each exposure.  If a target does not meet the criteria
-        (e.g. sky spectra, single exposure, or excessive masking), the function 
-        returns an array of ones for that target.
     """
 
     log = get_logger()
@@ -706,13 +696,17 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
     bands = spectra.bands
     mwave = [np.mean(spectra.wave[b]) for b in bands]
     sbands = np.array(bands)[np.argsort(mwave)] #wavelength-sorted bands
+    
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
 
     # fatally bad FIBERSTATUS bits, can fully ignore these exposures
     fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+
+    # default COADD_NORM = 1.
+    spectra.fibermap['COADD_NORM'] = 1.
     
     # compute normalization terms per exposure
-    norm = []
     for i,tgt in enumerate(targets):
 
         idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
@@ -756,7 +750,6 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
                     spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
                     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-                    norm.append(np.ones(idx.size)) # set coadd_norm to 1 even for bad fiberstatus
                     continue
  
                 # check for overlap between usable bands, 
@@ -837,11 +830,9 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
                     spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
                     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-                    norm.append(np.ones(idx.size))
                     continue
 
                 # compute normalization constant
-                # default = 1 for fatal fiberstatus
                 a = np.ones(idx.size)
                 
                 # median smooth coadds and individual spectra to capture broad band offsets
@@ -852,11 +843,11 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                     # ignore ivar = 0 pixels
                     mask = (w_tot[not_edges] != 0) & (w_i[j][not_edges] != 0)
                     a[np.isin(idx,k)] = np.sum(filtered_coadd[mask]**2)/np.sum(filtered_coadd[mask]*filtered_exp[j][mask])
-
+                    
                 # physicality check
                 is_converged = np.all(a>0) 
                 if is_converged:
-                    norm.append(a)
+                    spectra.fibermap['COADD_NORM'][idx] = a
                 else:
                     negative_indices = idx[np.where(a<0)[0]]
                     # set badfiber fiberstatus for these exposures
@@ -868,7 +859,6 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
                 # do not apply normalization term: 
                 # non-target type, single exposures, or no good exposures
                 is_converged = True
-                norm.append(np.ones(idx.size))
 
         if not(is_converged):
             # this should never occur and something is very wrong
@@ -876,9 +866,9 @@ def _per_exposure_normalization(spectra, targets, filter_width=51):
             # update fiberstatus
             spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
             good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-            norm.append(np.ones(idx.size))     
 
-    return norm
+    # downgrade to float 32
+    spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
 
 
 def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
@@ -917,7 +907,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     normalize = not(no_normalize)
     if normalize:
         # compute normalization constants for handling flux calibration offset
-        norm = _per_exposure_normalization(spectra, targets)    
+        per_exposure_normalization(spectra)    
 
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
@@ -959,7 +949,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
             
             if normalize:
                 # reshape normalization term
-                norm_term = norm[i][good_fiberstatus[(spectra.fibermap["TARGETID"] == tid)]].reshape(jj.size,1)
+                norm_term = spectra.fibermap['COADD_NORM'][jj].reshape(jj.size,1)
             else:
                 # set normalization coefficient array to ones
                 norm_term = np.ones((jj.size,1), dtype=np.float32)
@@ -1018,12 +1008,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     else:
         orig_scores = None
 
-    # if normalization is set to False, pass none
-    if not(normalize):
-        norm=None
     spectra.fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap,
-                                                    onetile=onetile,
-                                                    coadd_norm=norm) 
+                                                    onetile=onetile) 
     spectra.exp_fibermap = exp_fibermap
     spectra.scores = None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
