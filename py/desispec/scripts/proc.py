@@ -325,6 +325,9 @@ def main(args=None, comm=None):
 
             error_count = comm.bcast(error_count, root=0)
 
+        #- save / print timing information before exiting
+        log_timer(timer, args.timingfile, comm=comm)
+
         if rank == 0:
             log.info('No expid given so stopping now')
             if error_count > 0:

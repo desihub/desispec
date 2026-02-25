@@ -224,7 +224,6 @@ def create_desi_zproc_batch_script(group,
 
     if timingfile is None:
         timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
-        timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
@@ -350,6 +349,7 @@ def create_desi_zproc_batch_script(group,
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         ## Don't currently need for 1 node jobs
         # mps_wrapper=''
@@ -359,7 +359,7 @@ def create_desi_zproc_batch_script(group,
 
         srun = f"srun -N {nodes} -n {ncores} -c {threads_per_core}" \
                + f"{srun_rr_gpu_opts} --cpu-bind=cores {cmd}"
-        fx.write(f"echo RUNNING {srun}\n")
+        fx.write(f"\necho RUNNING {srun}\n")
         fx.write(f'{srun}\n')
 
         fx.write('\nif [ $? -eq 0 ]; then\n')
