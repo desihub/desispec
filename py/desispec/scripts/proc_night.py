@@ -229,7 +229,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             still_acquiring = True
 
         update_exptable = True
-        append_to_proc_table = True
         all_cumulatives = True
         all_tiles = True
         complete_tiles_thrunight = None
@@ -273,7 +272,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                     + "some cameras weren't linear in their darks. "
                     + "Code will NOT create a darknight.")
         do_darknight = False
-        n_nights_before_darks = 1
+        n_nights_darks = 1
 
     ###################
     ## Set filenames ##
@@ -425,12 +424,16 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
 
     ## Quickly exit if we haven't processed the biasprdark job yet and we should have
-    jobtypes_requested = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
-    job_exists = np.any(np.isin(np.array([b'biasnight', b'biaspdark', b'linkcal']), ptable['JOBDESC'].data))
+    bias_requested = 'zero' in biaspdark_proc_obstypes
+    pdark_requested = 'dark' in biaspdark_proc_obstypes
+    linkexists = 'linkcal' in ptable['JOBDESC']
+    biaspdark_exists = 'biaspdark' in ptable['JOBDESC']
+    bias_exists = ('biasnight' in ptable['JOBDESC'] or biaspdark_exists or linkexists)
+    pdark_exists = ('pdark' in ptable['JOBDESC'] or biaspdark_exists or linkexists)
     # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
     # ## otherwise assume it is available
     #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
-    if require_cals and jobtypes_requested and not job_exists:
+    if require_cals and ((bias_requested and not bias_exists) or (pdark_requested and not pdark_exists)):
         log.critical("Bias and preproc dark job not found in processing table. "
                     + "We will need to wait for darks to be processed. "
                     + f"Exiting {night=}.")
@@ -805,7 +808,7 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
 
     ## Otherwise proceed with submitting the calibrations
     ## Define objects to process
-    darks, flats, ctes, cte1s = list(), list(), list(), list()
+    darks, flats, ctes = list(), list(), list()
     zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
     arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'dark' in cal_etable['OBSTYPE']:

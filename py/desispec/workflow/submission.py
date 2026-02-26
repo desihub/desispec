@@ -199,7 +199,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         if 'biaspdark' in ptable['JOBDESC'] or 'biasnight' in ptable['JOBDESC']:
             log.info(f"Bias and all preproc darks are already accounted for on {night=}.")
             return ptable
-    
+
     ## Determine where the exposure table will be written
     exp_table_pathname = findfile('exposure_table', night=night, readonly=True)
     if exp_table_path is None:
@@ -260,8 +260,8 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    linked_bias = 'biasnight' in files_to_link
-    dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
+    bias_accounted_for = ('biasnight' in files_to_link) or  ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
 
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
     ## Technically this is no longer needed, but left for belt and suspenders
