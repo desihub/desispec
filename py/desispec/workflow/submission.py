@@ -261,8 +261,8 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
 
     linked_bias = 'biasnight' in files_to_link
     dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
-
-    # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
+    
+   # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
     dark_date=night>20240408
     dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 and dark_date
 
