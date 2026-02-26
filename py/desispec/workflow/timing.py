@@ -249,13 +249,14 @@ def log_timer(timer, timingfile=None, comm=None):
                 #- augment previous_stats with new entries, but don't overwrite old
                 for name in stats:
                     newname = name
-                    for i in range(1,100):
-                        newname = f'{name}.{i}'
-                        if newname not in previous_stats:
-                            break
-                    else:
-                        log.warning(f'Already have 100 entries for {name} in {timingfile}; skipping new entry')
-                        continue
+                    if newname in previous_stats:
+                        for i in range(1,100):
+                            newname = f'{name}.{i}'
+                            if newname not in previous_stats:
+                                break
+                        else:  # for loop ended without finding available new name
+                            log.warning(f'Already have 100 entries for {name} in {timingfile}; skipping new entry')
+                            continue
 
                     previous_stats[newname] = stats[name]
 
