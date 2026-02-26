@@ -219,6 +219,8 @@ def log_timer(timer, timingfile=None, comm=None):
 
     Args:
         timer: desiutil.timer.Timer object
+
+    Options:
         timingfile (str): write json output to this file
         comm: MPI communicator
 
@@ -240,13 +242,22 @@ def log_timer(timer, timingfile=None, comm=None):
         stats = compute_stats(timers)
         if timingfile:
             if os.path.exists(timingfile):
+                log.info(f'Updating timing stats in {timingfile}')
                 with open(timingfile) as fx:
                     previous_stats = json.load(fx)
 
                 #- augment previous_stats with new entries, but don't overwrite old
                 for name in stats:
-                    if name not in previous_stats:
-                        previous_stats[name] = stats[name]
+                    newname = name
+                    for i in range(1,100):
+                        newname = f'{name}.{i}'
+                        if newname not in previous_stats:
+                            break
+                    else:
+                        log.warning(f'Already have 100 entries for {name} in {timingfile}; skipping new entry')
+                        continue
+
+                    previous_stats[newname] = stats[name]
 
                 stats = previous_stats
 
