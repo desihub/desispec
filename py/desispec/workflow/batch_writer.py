@@ -831,7 +831,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
                 fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
-                srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                srun = (f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
                     +mps_wrapper+f' {cmd}')
                 if jobdesc.lower() in ['science', 'prestdstar']:
                     srun += ' --nofluxcalib'
