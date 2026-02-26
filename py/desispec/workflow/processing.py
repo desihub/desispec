@@ -843,6 +843,8 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['ccdcalib']
         elif calibjobs['biaspdark'] is not None:
             dependency = calibjobs['biaspdark']
+        elif calibjobs['biasnight'] is not None:
+            dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
         if not use_tilenight:
@@ -854,6 +856,8 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['ccdcalib']
         elif calibjobs['biaspdark'] is not None:
             dependency = calibjobs['biaspdark']
+        elif calibjobs['biasnight'] is not None:
+            dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
     elif prow['OBSTYPE'] == 'arc':
@@ -861,11 +865,15 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['ccdcalib']
         elif calibjobs['biaspdark'] is not None:
             dependency = calibjobs['biaspdark']
+        elif calibjobs['biasnight'] is not None:
+            dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] in ['badcol', 'nightlybias', 'ccdcalib', 'pdark']:
+    elif prow['JOBDESC'] in ['badcol', 'ccdcalib', 'pdark']:
         if calibjobs['biaspdark'] is not None:
             dependency = calibjobs['biaspdark']
+        elif calibjobs['biasnight'] is not None:
+            dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
     elif prow['JOBDESC'] == 'biaspdark':
