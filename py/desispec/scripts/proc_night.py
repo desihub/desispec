@@ -273,6 +273,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                     + "some cameras weren't linear in their darks. "
                     + "Code will NOT create a darknight.")
         do_darknight = False
+        n_nights_before_darks = 1
 
     ###################
     ## Set filenames ##
@@ -374,24 +375,36 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     else:
         n_nights_after_darks = int((n_nights_darks-1) // 2)
         n_nights_before_darks = n_nights_darks - 1 - n_nights_after_darks
-    proc_biasdark_obstypes = ('zero' in proc_obstypes or 'dark' in proc_obstypes)
+
+    if do_darknight:
+        biaspdark_proc_obstypes = proc_obstypes
+    else:
+        biaspdark_proc_obstypes = np.array([obstype for obstype in proc_obstypes if obstype != 'dark'])
+
     no_bias_job = (len(init_ptable) == 0
-               or ('biasnight' not in init_ptable['JOBDESC'] and 'biaspdark' not in init_ptable['JOBDESC']) )
-    should_submit = ((not still_acquiring)
-                     or (len(etable) > 2 and np.sum(etable['OBSTYPE']=='dark') > 0
-                         and np.sum(etable['OBSTYPE']=='arc') > 0 and np.sum(etable['OBSTYPE']=='zero') > 9)
-                    )
+                   or ('biasnight' not in init_ptable['JOBDESC'] and 'biaspdark' not in init_ptable['JOBDESC']) )
+    exposures_available = ((not still_acquiring)
+                           or (len(etable) > 2 and np.sum(etable['OBSTYPE']=='dark') > 0
+                               and np.sum(etable['OBSTYPE']=='arc') > 0 and np.sum(etable['OBSTYPE']=='zero') > 9) )
+    submit_biasnightorbiaspdark = ('zero' in biaspdark_proc_obstypes) and no_bias_job and exposures_available
+    submit_pdark = ('dark' in biaspdark_proc_obstypes) and (not still_acquiring) and (not no_bias_job)
+
     returned_ptable = None
-    if proc_biasdark_obstypes and no_bias_job and should_submit:
-        ## This will populate the processing table with the biases and preproc dark job if
-        ## it needed to submit them. It will do it for future and past nights relevant for
-        ## the current night's dark nights.
-        log.info("Running submit_necessary_biasnights_and_preproc_darks")
-        if n_nights_before_darks is None:
-            kwargs = {}
-        else:
-            kwargs = {'n_nights_before': n_nights_before_darks, 'n_nights_after': n_nights_after_darks}
-        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes,
+    if submit_biasnightorbiaspdark or submit_pdark:
+        if submit_biasnightorbiaspdark:
+            ## This will populate the processing table with the biases and preproc dark job if
+            ## it needed to submit them. It will do it for future and past nights relevant for
+            ## the current night's dark nights.
+            log.info("Running submit_necessary_biasnights_and_preproc_darks")
+            if n_nights_before_darks is None:
+                kwargs = {}
+            else:
+                kwargs = {'n_nights_before': n_nights_before_darks, 'n_nights_after': n_nights_after_darks}
+        elif submit_pdark:
+            log.info("Running submit_necessary_biasnights_and_preproc_darks to process any additional darks")
+            kwargs = {'n_nights_before': 0,  'n_nights_after': 0}
+
+        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=biaspdark_proc_obstypes,
                                                                         camword=camword, badcamword=badcamword, badamps=badamps,
                                                                         exp_table_pathname=exp_table_pathname,
                                                                         proc_table_pathname=proc_table_pathname,
@@ -401,18 +414,6 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                                                         psf_linking_without_fflat=psf_linking_without_fflat,
                                                                         **kwargs)
         log.info("Done with submit_necessary_biasnights_and_preproc_darks.\n\n")
-    elif proc_biasdark_obstypes and (not still_acquiring) and (not no_bias_job):
-        log.info("Running submit_necessary_biasnights_and_preproc_darks to process any additional darks")
-        kwargs = {'n_nights_before': 0,  'n_nights_after': 0}
-        returned_ptable = submit_necessary_biasnights_and_preproc_darks(reference_night=night, proc_obstypes=proc_obstypes,
-                                                                        camword=camword, badcamword=badcamword, badamps=badamps,
-                                                                        exp_table_pathname=exp_table_pathname,
-                                                                        proc_table_pathname=proc_table_pathname,
-                                                                        specprod=specprod, path_to_data=path_to_data,
-                                                                        sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
-                                                                        queue=queue, system_name=system_name,
-                                                                        psf_linking_without_fflat=psf_linking_without_fflat,
-                                                                        **kwargs)
 
     ## Load in the updated processing table if saved to disk, otherwise use what is in memory
     if dry_run_level > 2:
