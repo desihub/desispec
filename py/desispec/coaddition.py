@@ -895,7 +895,7 @@ def per_exposure_normalization(spectra, filter_width=51):
 
         if not(is_converged):
             # this should never occur and something is very wrong
-            log.error(f"normalization for targetid {tid} could not converge!")
+            log.error(f"normalization for targetid {tgt} could not converge!")
             # update fiberstatus
             spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
             good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
