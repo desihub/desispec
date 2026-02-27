@@ -20,7 +20,8 @@ class ImageLite:
 class TestTraceShift(unittest.TestCase):
     def test_detect_spots_in_image(self):
         # Create a dummy image with some bright spots
-        pix = np.random.normal(size=(100, 100))
+        rnd = np.random.RandomState(0)
+        pix = rnd.normal(size=(100, 100))
         pix[20:25, 30:35] = 100
         pix[50:55, 50:55] = 150
         pix[80:85, 70:75] = 200
