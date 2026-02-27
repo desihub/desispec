@@ -123,6 +123,7 @@ fibermap_exp_cols = (
 #- Fibermap columns added by flux calibration
 fibermap_cframe_cols = (
     'PSF_TO_FIBER_SPECFLUX',
+    'FLAT_TO_PSF_FLUX',
     )
 
 #- Columns to include in the per-exposure EXP_FIBERMAP
@@ -428,7 +429,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX', 'COADD_NORM']:
+            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'COADD_NORM']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
@@ -669,6 +670,38 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
+def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
+    """
+    Coadd spectra across exposures, returning new Spectra object without changing original.
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
+       onetile: bool, if True, inputs are from a single tile
+
+    Returns:
+       coadded_spectra: desispec.spectra.Spectra object
+
+    See ``coadd`` for a version of this function that does an in-place coaddition,
+    modifying its inputs instead of returning a new object.
+    This function coadds across exposures but not across cameras; see ``coadd_cameras``
+    for coadding across cameras but not across exposures. Combine the two to get a
+    coadd across both.
+    """
+    log = get_logger()
+    log.debug("coadding spectra to new Spectra object")
+
+    #- Make a deep copy of input spectra to become the coadded output
+    coadded_spectra = spectra.copy()
+
+    #- Perform coaddition in place on the copy
+    coadd(coadded_spectra,
+          cosmics_nsig=cosmics_nsig,
+          onetile=onetile)
+
+    return coadded_spectra
 
 def per_exposure_normalization(spectra, filter_width=51):
     """
@@ -879,7 +912,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
        spectra: desispec.spectra.Spectra object
 
     Options:
-       cosmics_nsig: float, nsigma clipping threshold for cosmics rays (default 4)
+       cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
        no_normalize: bool, if True, individual exposures are not rescaled prior to coaddition
 
@@ -887,6 +920,9 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
        like LOCATION and FIBER are included the FIBERMAP; otherwise
        these are only in the EXP_FIBERMAP since for the same target they could
        be different on different tiles.
+
+    See ``coadd_exposures`` for a version of this function that returns a new object
+    without modifying the input, instead of doing an in-place coaddition,
     """
     log = get_logger()
     targets = ordered_unique(spectra.fibermap["TARGETID"])
@@ -1027,8 +1063,12 @@ def coadd_cameras(spectra):
         desispec.spectra.Spectra
         Coadded Spectra object (new object).
 
-    Note: unlike `coadd`, this does not modify the input spectra object, rather write a new Spectrum object.
-    This is coadding across cameras, NOT exposures.
+    Note: unlike ``coadd``, this does not modify the input spectra object, rather
+    it returns a new Spectra object like ``coadd_exposures``.
+
+    This function coadds across cameras but not across exposures; see ``coadd_exposures``
+    for coadding across exposures but not across cameras. Combine the two to get a
+    coadd across both.
     """
 
     log = get_logger()

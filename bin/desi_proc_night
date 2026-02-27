@@ -74,7 +74,7 @@ def parse_args():
                         + "3 Doesn't write or submit anything but queries Slurm normally for job status. "
                         + "4 Doesn't write, submit jobs, or query Slurm."
                         + "5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.")
-    
+
     parser.add_argument("--no-redshifts", action="store_true",
                         help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--ignore-proc-table-failures", action="store_true",
@@ -101,6 +101,9 @@ def parse_args():
     parser.add_argument("--no-cte-flats", action="store_true",
                         help="If flag set then cte flat exposures are "
                         + "not processed for cte identification.")
+    parser.add_argument("--no-darknight", action="store_true",
+                        help="If flag set then darks are "
+                        + "not used to produce a dark night.")
     parser.add_argument("--dont-require-cals", action="store_true",
                         help="If set then the code requires either a valid set "
                         + "of calibrations or a valid override file to link"
@@ -118,10 +121,10 @@ def parse_args():
     parser.add_argument("--still-acquiring", action='store_true',
                         help="for testing --daily mode, assume more data is still coming even if "
                         + "outside of normal observing hours.")
-    
-    
+
+
     args = parser.parse_args()
-    
+
     # convert str lists to actual lists
     if args.proc_obstypes is not None:
          args.proc_obstypes = [pobstype.strip().lower() for pobstype in

@@ -44,8 +44,7 @@ Updated: Summer 2025
 import numpy as np
 import os
 from glob import glob
-from astropy.io import fits
-from astropy.table import Table, Column, MaskedColumn, vstack, join
+from astropy.table import Table, Column, MaskedColumn, vstack
 
 ## DESI related functions
 from desispec.io import specprod_root, read_table
@@ -53,12 +52,11 @@ from desispec.io.util import get_tempfilename, write_bintable
 from desiutil.log import get_logger
 import desiutil.depend
 
-import fitsio
-
 ####################################################################################################
 ####################################################################################################
 
 log = get_logger()
+
 
 def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     """
@@ -166,7 +164,9 @@ def _get_survey_program_from_filename(filename):
     program = arr[2]
     return survey, program
 
-def create_summary_catalog(specgroup, indir=None, specprod=None):
+
+def create_summary_catalog(specgroup, indir=None, specprod=None,
+                           columns_list=None):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile'
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
@@ -178,11 +178,16 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
     specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'
-    indir : str
+    indir : str, optional
         Input directory to look for zpix/ztile files.
-    specprod : str
+    specprod : str, optional
         Internal Release Name for the DESI Spectral Release.
         Used to derive input directory if indir is not provided.
+    columns_list : list, optional
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
+        although they may be reordered.
+        If `columns_list` is a user-supplied list, the columns in the list will be included,
+        unconditionally.
 
     Returns
     -------
@@ -206,7 +211,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
     ## set indir if needed
     if indir is None:
         indir = specprod_root(specprod) + '/zcatalog'
-        log.info(f'Using input directory {indir}')
+    log.info(f'Using input directory {indir}')
 
     ## Initial check 2
     ## Test whether the input directory exists
@@ -216,6 +221,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         raise ValueError(msg)
 
     if not os.path.isdir(f'{indir}/zall'):
+        log.debug("os.makedirs('%s/zall')", indir)
         os.makedirs(f'{indir}/zall')
 
     ######################################################################################
@@ -231,7 +237,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
     # only keep the primary filenames
     for fn in zcat.copy():
         if ('-imaging.fits' in fn) or ('-extra.fits' in fn):
-            print(fn)
+            log.debug("zcat.remove('%s')", fn)
             zcat.remove(fn)
 
     ## Sorting the list of zcatalogs by name
@@ -248,7 +254,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         else:
             # not yet used; future-proofing
             output_filename = f'{indir}/zall/zall-{specgroup}-{specprod}{fn_suffix}.fits'
-            log.info(f'Will write output to {output_filename}')
+        log.info(f'Will write output to {output_filename}')
 
         ## Get all the zcatalogs for a given spectral release and specgroup
         ## Add the required columns or select a few of them
@@ -314,7 +320,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 t.add_column(col2, 2)
                 ## The SURVEY and PROGRAM columns are added as second and third columns,
                 ## immediately after TARGETID
-
+            log.debug(t.colnames)
             ## Appending the tables to the list
             tables.append(t)
 
@@ -322,6 +328,9 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
         tab = vstack(tables)
         ## The output of this will have Masked Columns
         ## We will fix this at the end
+
+        # Try to recover some memory.
+        del tables
 
         if file_extension=='ZCATALOG':
 
@@ -331,7 +340,7 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
             nspec, specprim = find_primary_spectra(tab, sort_column='EFFTIME_SPEC')
 
             ## Replacing the existing 'ZCAT_NSPEC' and 'ZCAT_PRIMARY'
-            ## If all_columns = False, and user-list does not contain this column -
+            ## If columns_list is user-supplied and does not contain this column -
             ## these columns will be added
             log.debug('Updating ZCAT_PRIMARY and ZCAT_NSPEC')
             tab['ZCAT_NSPEC'] = nspec
@@ -381,11 +390,11 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
                 assert np.all(tab['TARGETID']==targetid_arr)
 
         ## Convert the masked column table to normal astropy table and select required columns
-        final_table = update_table_columns(tab, specgroup)
-
+        final_table = update_table_columns(tab, columns_list=columns_list)
+        log.debug("Completed call to update_table_columns().")
         ## Add merged DEPNAMnn / DEPVERnn dependencies back into final table
         desiutil.depend.mergedep(dependencies, final_table.meta)
-
+        log.debug("Completed call to mergedep().")
         ## Write final output via a temporary filename
         tmpfile = get_tempfilename(output_filename)
         write_bintable(tmpfile, final_table, extname=file_extension, clobber=True)
@@ -395,7 +404,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None):
 ####################################################################################################
 ####################################################################################################
 
-def update_table_columns(table, specgroup):
+
+def update_table_columns(table, columns_list=None):
     """
     This function fills the ``*TARGET`` masked columns and returns the final table
     with the required columns.
@@ -404,9 +414,12 @@ def update_table_columns(table, specgroup):
     ----------
     table : Astropy Table
         A table.
-    specgroup : str
-        The option to run the code on ztile* files or zpix* files.
-        It can either be 'zpix' or 'ztile'. Default is 'zpix'
+    columns_list : list, optional
+        If `columns_list` is ``None`` (the default), all columns from the inputs will be used,
+        although they may be reordered.
+        If `columns_list` is a user-supplied list, the columns in the list will be included,
+        unconditionally.
+
     Returns
     -------
     t_final : Astropy Table
@@ -434,9 +447,17 @@ def update_table_columns(table, specgroup):
     ## Table with filled values
     table = table.filled(fill_value=0)
 
-    # Move the target columns to the end
-    reordered_cols = list(np.array(table.colnames)[~np.in1d(table.colnames, target_cols)]) + target_cols
-    table = table[reordered_cols]
+    if columns_list is None:
+        log.debug("columns_list is None")
+        # Move the target columns to the end.
+        reordered_columns = list(tab_cols[~np.isin(tab_cols, target_cols)]) + target_cols
+    else:
+        log.debug("columns_list is user-supplied")
+        reordered_columns = columns_list
+
+    log.debug(reordered_columns)
+
+    table = table[reordered_columns]
 
     return table
 

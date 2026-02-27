@@ -76,6 +76,13 @@ class Spectra(object):
     extra_catalog : numpy or astropy Table, optional
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
+    copy : bool
+        Whether or not to copy the input arrays when creating
+        the Spectra object. If False, only prevents copying
+        when the input dtype does not match the value of `single`,
+        in which case casting must incur a copy regardless of the
+        value of `copy_inputs`.
+        Defaults to True.
     """
     wavelength_unit = Unit('Angstrom')
     flux_density_unit = Unit('10-17 erg cm-2 s-1 AA-1')
@@ -84,7 +91,7 @@ class Spectra(object):
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None, model=None,
             single=False, scores=None, redshifts=None, scores_comments=None,
-            extra_catalog=None):
+            extra_catalog=None, copy=True):
 
         self._bands = bands
         self._single = single
@@ -182,7 +189,7 @@ class Spectra(object):
         self.wave = {}
         self.flux = {}
         self.ivar = {}
-        
+
         if model is None:
             self.model = None
         else:
@@ -206,21 +213,21 @@ class Spectra(object):
             self.extra = {}
 
         for b in self._bands:
-            self.wave[b] = np.copy(wave[b])
-            self.flux[b] = np.copy(flux[b].astype(self._ftype))
-            self.ivar[b] = np.copy(ivar[b].astype(self._ftype))
+            self.wave[b] = np.copy(wave[b]) # Probably "fine" to always copy just the wavelength grid.
+            self.flux[b] = flux[b].astype(self._ftype, copy=copy)
+            self.ivar[b] = ivar[b].astype(self._ftype, copy=copy)
             if model is not None:
-                self.model[b] = np.copy(model[b].astype(np.float32))
+                self.model[b] = model[b].astype(np.float32, copy=copy)
             if mask is not None:
-                self.mask[b] = np.copy(mask[b])
+                self.mask[b] = mask[b]
             if resolution_data is not None:
-                self.resolution_data[b] = resolution_data[b].astype(self._ftype)
+                self.resolution_data[b] = resolution_data[b].astype(self._ftype, copy=copy)
                 self.R[b] = np.array( [ Resolution(r) for r in resolution_data[b] ] )
             if extra is not None:
                 if extra[b] is not None:
                     self.extra[b] = {}
                     for ex in extra[b].items():
-                        self.extra[b][ex[0]] = np.copy(ex[1].astype(self._ftype))
+                        self.extra[b][ex[0]] = ex[1].astype(self._ftype, copy=copy)
 
     @property
     def bands(self):
@@ -291,6 +298,11 @@ class Spectra(object):
         else:
             return 0
 
+    def copy(self):
+        """
+        Return deep copy of self
+        """
+        return self[:]
 
     def _get_slice(self, index, bands=None):
         """Slice spectra by index.
@@ -351,6 +363,11 @@ class Spectra(object):
         else:
             scores = None
 
+        if hasattr(self, 'scores_comments'):
+            scores_comments = copy.deepcopy(self.scores_comments)
+        else:
+            scores_comments = None
+
         if self.redshifts is not None:
             redshifts = self.redshifts[index].copy()
         else:
@@ -360,7 +377,8 @@ class Spectra(object):
             mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
             meta=self.meta, extra=extra, model=model, single=self._single,
-            scores=scores, redshifts=redshifts, extra_catalog=extra_catalog,
+            scores=scores, scores_comments=scores_comments,
+            redshifts=redshifts, extra_catalog=extra_catalog,
         )
         return sp
 
@@ -581,7 +599,7 @@ class Spectra(object):
                                    dtype=self.redshifts.dtype))
             if hasattr(self.redshifts, 'meta'):
                 newscores.meta.update(self.redshifts.meta)
-                
+
         newextra_catalog = None
         if self.extra_catalog is not None:
             newextra_catalog = encode_table(np.zeros( (nold + nnew, ),
@@ -1004,7 +1022,7 @@ def stack(speclist):
         flux[band] = np.vstack([sp.flux[band] for sp in speclist])
         ivar[band] = np.vstack([sp.ivar[band] for sp in speclist])
         wave[band] = speclist[0].wave[band].copy()
-    
+
     if speclist[0].model is not None:
         model = dict()
         for band in bands:

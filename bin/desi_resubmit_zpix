@@ -138,7 +138,7 @@ def main():
     for i, filename in enumerate(slurm_scripts):
         if len(missing_healpix[i]) > 0:
             num_resubmit += 1
-            cmd = f'sbatch {filename}'
+            cmd = f'sbatch --kill-on-invalid-dep=yes {filename}'
             if args.dry_run:
                 print(f"TODO: {cmd}")
             else:

@@ -42,6 +42,7 @@ class TestProcNight(unittest.TestCase):
         cls.repeat_tiles = [7567, 23826]
         cls.dailynight = _dailynight
         cls.basicnight = 20211129  #- early data without 1s CTE flat or end-of-night zeros/darks
+        cls.laternight = 20250318 #- later night with both CTE and darknight
 
         cls.reduxdir = tempfile.mkdtemp()
         cls.test_rawdir = tempfile.mkdtemp()
@@ -103,7 +104,7 @@ class TestProcNight(unittest.TestCase):
     def test_proc_night(self):
         proctable, unproctable = proc_night(self.night, z_submit_types=['cumulative',],
                                             dry_run_level=1, sub_wait_time=0.0)
-        
+
         # processing table file created
         self.assertTrue(os.path.isfile(findfile('processing_table', self.night)))
 
@@ -112,7 +113,7 @@ class TestProcNight(unittest.TestCase):
 
         # every step is represented
         for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat', 'tilenight', 'cumulative'):
-            self.assertIn(jobdesc, proctable['JOBDESC'])
+            self.assertIn(jobdesc, set(proctable['JOBDESC']))
 
         # tilenight jobs created
         for tileid in np.unique(proctable['TILEID']):
@@ -268,7 +269,7 @@ class TestProcNight(unittest.TestCase):
         os.remove(override_file)
         return proctable, unproctable
 
-    def test_proc_night_linking_and_ccdcalib(self):
+    def test_proc_night_linking_and_ccdcalib_earlynight(self):
         """Test if override file linking is working"""
         ## Setup the basic dictionary for the override file
         base_override_dict = {'calibration':
@@ -276,158 +277,376 @@ class TestProcNight(unittest.TestCase):
                                     {'refnight': self.night-1}}}
 
         ## Test basic case where we link everything
-        testdict = base_override_dict.copy()
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=0):
+            testdict = base_override_dict.copy()
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'psfnight', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test no psfnight but still fiberflatnight -- should raise error
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'psfnight'
-        with open(self.override_file, 'w') as fil:
-            yaml.safe_dump(testdict, fil)
-        with self.assertRaises(ValueError):
-            proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
-                                                dry_run_level=3)
-        os.remove(self.override_file)
+        with self.subTest(i=1):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight'
+            with open(self.override_file, 'w') as fil:
+                yaml.safe_dump(testdict, fil)
+            with self.assertRaises(ValueError):
+                proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                    dry_run_level=3)
+            os.remove(self.override_file)
 
         ## Test no psfnight but still fiberflatnight and flag set to allow
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'psfnight'
-        proctable, unproctable = self._override_write_run_delete(testdict,
-                                                                 dry_run_level=3,
-                                                                 psf_linking_without_fflat=True)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark', 'psfnight']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=2):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight'
+            proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                    dry_run_level=3,
+                                                                    psf_linking_without_fflat=True)
+            for job in ['linkcal', 'biasnight', 'ccdcalib', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark', 'psfnight']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link fiberflatnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'fiberflatnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark', 'nightlyflat']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=3):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'fiberflatnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biasnight', 'ccdcalib', 'psfnight']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link biasnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'biasnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=4):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link badcolumns
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'badcolumns'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=5):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'badcolumns'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biasnight', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link ctecorrnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'ctecorrnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=6):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biasnight', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link ctecorrnight and biasnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'ctecorrnight,biasnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=7):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight,biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link badcolumns and biasnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'badcolumns,biasnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=8):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'badcolumns,biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link cte and badcol
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'ctecorrnight,badcolumns'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=9):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight,badcolumns'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biasnight', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark', 'ccdcalib']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link ccdcalib
-        calib_files = 'biasnight,badcolumns,ctecorrnight'
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = calib_files
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=10):
+            calib_files = 'biasnight,badcolumns,ctecorrnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark', 'biaspdark', 'ccdcalib']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link psfnight and fiberflatnight
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = 'psfnight,fiberflatnight'
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'biaspdark', 'ccdcalib']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'pdark', 'psfnight', 'nightlyflat']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=11):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight,fiberflatnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biasnight', 'ccdcalib']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biaspdark', 'pdark', 'psfnight', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link everything except fiberflatnight -- should raise error
-        calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = calib_files
-        with open(self.override_file, 'w') as fil:
-            yaml.safe_dump(testdict, fil)
-        with self.assertRaises(ValueError):
-            proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
-                                                dry_run_level=3)
-        os.remove(self.override_file)
+        with self.subTest(i=12):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            with open(self.override_file, 'w') as fil:
+                yaml.safe_dump(testdict, fil)
+            with self.assertRaises(ValueError):
+                proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                    dry_run_level=3)
+            os.remove(self.override_file)
 
         ## Test link everything except fiberflatnight with flag set to allow
-        calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = calib_files
-        proctable, unproctable = self._override_write_run_delete(testdict,
-                                                                 dry_run_level=3,
-                                                                 psf_linking_without_fflat=True)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'nightlyflat']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark', 'psfnight']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=13):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                    dry_run_level=3,
+                                                                    psf_linking_without_fflat=True)
+            for job in ['linkcal', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'pdark', 'ccdcalib', 'psfnight']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test link everything except psfnight
-        calib_files = 'biasnight,badcolumns,ctecorrnight,fiberflatnight'
-        testdict = base_override_dict.copy()
-        testdict['calibration']['linkcal']['include'] = calib_files
-        proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight']:
-            self.assertTrue(job in proctable['JOBDESC'])
-        for job in ['biasnight', 'biaspdark', 'nightlyflat']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+        with self.subTest(i=14):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,fiberflatnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'psfnight']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'pdark', 'ccdcalib', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
 
         ## Test linking an earlier night without 1s CTE flat
-        testdict = base_override_dict.copy()
-        testnight = self.basicnight
-        testdict['calibration']['linkcal']['refnight'] = testnight-1
-        testdict['calibration']['linkcal']['include'] = 'biasnight,badcolumns'
-        proctable, unproctable = self._override_write_run_delete(testdict, night=testnight, dry_run_level=3)
-        for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
-            self.assertIn(job, set(proctable['JOBDESC']))
-        for job in ['nightlybias', 'biaspdark']:
+        ## linking biasnight,badcolumns so ccdcalib should not be linked
+        with self.subTest(i=15):
+            testdict = base_override_dict.copy()
+            testnight = self.basicnight
+            testdict['calibration']['linkcal']['refnight'] = testnight-1
+            testdict['calibration']['linkcal']['include'] = 'biasnight,badcolumns'
+            proctable, unproctable = self._override_write_run_delete(testdict, night=testnight, dry_run_level=3)
+            for job in ['linkcal', 'psfnight', 'nightlyflat', 'tilenight']:
+                self.assertIn(job, set(set(proctable['JOBDESC'])))
+            for job in ['biasnight', 'biaspdark', 'pdark', 'ccdcalib']:
+                self.assertNotIn(job, set(set(proctable['JOBDESC'])))
+
+
+    def test_proc_night_linking_and_ccdcalib_latenight(self):
+        """Test if override file linking is working"""
+        ## Setup the basic dictionary for the override file
+        orig_night = self.night
+        orig_override_file = self.override_file
+        self.night = self.laternight
+        self.override_file = findfile('override', night=self.laternight)
+
+        base_override_dict = {'calibration':
+                                {'linkcal':
+                                    {'refnight': self.night-1}}}
+
+        ## Test basic case where we link everything
+        with self.subTest(i=0):
+            testdict = base_override_dict.copy()
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'psfnight', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test no psfnight but still fiberflatnight -- should raise error
+        with self.subTest(i=1):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight'
+            with open(self.override_file, 'w') as fil:
+                yaml.safe_dump(testdict, fil)
+            with self.assertRaises(ValueError):
+                proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                    dry_run_level=3)
+            os.remove(self.override_file)
+
+        ## Test no psfnight but still fiberflatnight and flag set to allow
+        with self.subTest(i=2):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight'
+            proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                    dry_run_level=3,
+                                                                    psf_linking_without_fflat=True)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark', 'psfnight']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link fiberflatnight
+        with self.subTest(i=3):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'fiberflatnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link biasnight
+        with self.subTest(i=4):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link badcolumns
+        with self.subTest(i=5):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'badcolumns'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link ctecorrnight
+        with self.subTest(i=6):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link ctecorrnight and biasnight
+        with self.subTest(i=7):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight,biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link badcolumns and biasnight
+        with self.subTest(i=8):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'badcolumns,biasnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link cte and badcol
+        with self.subTest(i=9):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'ctecorrnight,badcolumns'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link ccdcalib
+        with self.subTest(i=10):
+            calib_files = 'biasnight,badcolumns,ctecorrnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link psfnight and fiberflatnight
+        with self.subTest(i=11):
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = 'psfnight,fiberflatnight'
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'biaspdark', 'ccdcalib']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'pdark', 'psfnight', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link everything except fiberflatnight -- should raise error
+        with self.subTest(i=12):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            with open(self.override_file, 'w') as fil:
+                yaml.safe_dump(testdict, fil)
+            with self.assertRaises(ValueError):
+                proctable, unproctable = proc_night(self.night, sub_wait_time=0.0,
+                                                    dry_run_level=3)
+            os.remove(self.override_file)
+
+        ## Test link everything except fiberflatnight with flag set to allow
+        with self.subTest(i=13):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,psfnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict,
+                                                                    dry_run_level=3,
+                                                                    psf_linking_without_fflat=True)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'nightlyflat']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'psfnight']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Test link everything except psfnight
+        with self.subTest(i=14):
+            calib_files = 'biasnight,badcolumns,ctecorrnight,fiberflatnight'
+            testdict = base_override_dict.copy()
+            testdict['calibration']['linkcal']['include'] = calib_files
+            proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=3)
+            for job in ['linkcal', 'pdark', 'ccdcalib', 'psfnight']:
+                self.assertIn(job, set(proctable['JOBDESC']))
+            for job in ['biasnight', 'biaspdark', 'nightlyflat']:
+                self.assertNotIn(job, set(proctable['JOBDESC']))
+
+        ## Clean up by resetting override file and night to original values
+        self.night = orig_night
+        self.override_file = orig_override_file
+
+    def test_proc_night_no_darknight(self):
+        """Regression test for issue #2623: no_darknight=True must not trigger
+        surrounding-night biasnight submissions.
+
+        When no_darknight=True, the obstypes used for submitting surrounding-
+        night dark-related jobs must exclude 'dark' so that
+        get_stacked_dark_exposure_table is never called and only the reference
+        night receives a biasnight job (no pdark or biaspdark).
+        """
+        from unittest.mock import patch
+
+        with patch('desispec.workflow.submission.get_stacked_dark_exposure_table') as mock_get_stacked:
+            proctable, unproctable = proc_night(self.laternight,
+                                                no_darknight=True,
+                                                dry_run_level=3,
+                                                sub_wait_time=0.0)
+            ## get_stacked_dark_exposure_table must NOT be called when do_darknight=False
+            mock_get_stacked.assert_not_called()
+
+        ## biasnight should be submitted for the reference night
+        self.assertIn('biasnight', set(proctable['JOBDESC']))
+        ## pdark and biaspdark must NOT be submitted when no_darknight=True
+        for job in ['pdark', 'biaspdark']:
             self.assertNotIn(job, set(proctable['JOBDESC']))
 
     def test_proc_night_camword_linking(self):
@@ -461,9 +680,9 @@ class TestProcNight(unittest.TestCase):
         testdict['calibration']['nightlyflat'] = {'extra_cmd_args': [flag]}
         proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=1)
         for job in ['ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
-            self.assertTrue(job in proctable['JOBDESC'])
+            self.assertIn(job, set(proctable['JOBDESC']))
         for job in ['linkcal', 'nightlybias']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+            self.assertNotIn(job, set(proctable['JOBDESC']))
         scriptdir = get_desi_proc_batch_file_path(self.night, reduxdir=self.proddir)
         script = glob.glob(os.path.join(scriptdir, 'nightlyflat*.slurm'))[0]
         with open(script, 'r') as fil:
@@ -482,9 +701,9 @@ class TestProcNight(unittest.TestCase):
         testdict['calibration'] = {}
         proctable, unproctable = self._override_write_run_delete(testdict, dry_run_level=1)
         for job in ['ccdcalib', 'psfnight', 'nightlyflat', 'tilenight']:
-            self.assertTrue(job in proctable['JOBDESC'])
+            self.assertIn(job, set(proctable['JOBDESC']))
         for job in ['linkcal', 'nightlybias']:
-            self.assertTrue(job not in proctable['JOBDESC'])
+            self.assertNotIn(job, set(proctable['JOBDESC']))
         script = glob.glob(os.path.join(scriptdir, 'nightlyflat*.slurm'))[0]
         with open(script, 'r') as fil:
             for line in fil.readlines():
@@ -523,20 +742,20 @@ class TestProcNight(unittest.TestCase):
                                            and np.sum(etable['OBSTYPE']=='dark') > 0
                                            and np.sum(etable['OBSTYPE']=='arc') > 0
                                            and np.sum(etable['OBSTYPE']=='zero') > 9)
-                    
+
                 if has_1secflat:
                     ## if 1sec flat has arrived, cals should be submitted.
                     ## Note: this could be different if we switch to testing a daily night with
                     ## and override file, in which case e.g. it could have linkcal instead of nightlyflat
                     for jobdesc in ('biasnight', 'ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
-                        self.assertIn(jobdesc, proctable['JOBDESC'])
+                        self.assertIn(jobdesc, set(proctable['JOBDESC']))
                 elif should_submit_biaspdark:
                     ## arc have started coming in and there are biases and darks, so we expect
                     ## the biasnight or biaspdark job to be submitted
                     ## since this is a 2023 night, the afternoon 300s dark isn't used for darks,
                     ## so there are no darks to process and we expect a biasnight
                     self.assertEqual(len(proctable), 1)
-                    self.assertIn('biasnight', proctable['JOBDESC'])
+                    self.assertIn('biasnight', set(proctable['JOBDESC']))
                 else:
                     self.assertEqual(len(proctable), 0)
 
@@ -561,4 +780,3 @@ class TestProcNight(unittest.TestCase):
         proctiles = set(proctable['TILEID'][ proctable['OBSTYPE'] == 'science' ])
         exptiles = set(etable['TILEID'][ etable['OBSTYPE'] == 'science' ])
         self.assertEqual(len(proctiles), len(exptiles))
-

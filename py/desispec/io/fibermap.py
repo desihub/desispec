@@ -26,7 +26,7 @@ from desiutil.names import radec_to_desiname
 from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
-from desispec.calibfinder import CalibFinder
+from desispec.calibfinder import CalibFinder, get_flagged_fibers
 
 from . import iotime
 from .table import read_table
@@ -138,7 +138,8 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('FIBER_RA',                   'f8',          'deg', 'RA of actual fiber position',                  'empty'),
                     ('FIBER_DEC',                  'f8',          'deg', 'DEC of actual fiber position',                 'empty'),
                     ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
-                    ('PSF_TO_FIBER_SPECFLUX',      'f8',             '', 'Fraction of light captured by a fiber',        'cframe'),
+                    ('PSF_TO_FIBER_SPECFLUX',      'f4',             '', 'Fraction of light captured by a fiber',        'cframe'),
+                    ('FLAT_TO_PSF_FLUX',           'f4',             '', 'Fiber aperture correction factor',             'cframe'),
                     ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
                     ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
                     ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),
@@ -701,6 +702,20 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                         log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
                         badcol.remove(col)
 
+        # We patched some fiberassign columns to remove nans in
+        # https://github.com/desihub/fiberassign/pull/497
+        # (see also https://github.com/desihub/desispec/issues/2359)
+        # Consider it ok if the "bad columns" are bad because they are NOT nan in the
+        # fiberassign file, but ARE nan in the other file.
+        # Only check the known four columns that have been patched, though
+        cols_to_check = [c for c in ["FIBERASSIGN_X", "FIBERASSIGN_Y", "TARGET_RA", "TARGET_DEC"] if c in badcol]
+        for col in cols_to_check:
+            ii = rawfa[col] != fa[col]
+            if np.all(np.isnan(rawfa[col][ii]) & ~np.isnan(fa[col][ii])):
+                log.warning(f'Ignoring {col} mismatch NaN (raw) vs not NaN (fa) on tile {tileid} night {night}')
+                badcol.remove(col)
+
+
         if len(badcol)>0:
             msg = f'incompatible raw/svn fiberassign files for columns {badcol}'
             log.critical(msg)
@@ -1250,6 +1265,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- if position was unknown, set FIBERSTATUS as BADPOSITION
     if col.startswith('FIBER') or col.startswith('DELTA'):
         fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
+
+    #
+    # Set any fiberstatus flags defined in the flagged_fibers.ecsv file
+    #
+    fibers, masks = get_flagged_fibers(expid)
+    for fiber, mask in zip(fibers, masks):
+        loc = np.where(fibermap['FIBER'] == fiber)[0]
+        if len(loc) == 1:
+            fibermap['FIBERSTATUS'][loc[0]] |= mask
+            log.info(f"Setting FIBERSTATUS flag {mask} for fiber {fiber} from flagged_fibers file.")
+        else:
+            log.warning(f"Fiber {fiber} from flagged_fibers file not found in fibermap!")
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table

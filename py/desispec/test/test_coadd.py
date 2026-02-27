@@ -9,7 +9,7 @@ from astropy.units import Unit
 
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
-from desispec.coaddition import (coadd, fast_resample_spectra,
+from desispec.coaddition import (coadd, coadd_exposures, fast_resample_spectra,
                                  spectroperf_resample_spectra,
                                  coadd_fibermap, coadd_cameras,
                                  _mask_cosmics)
@@ -251,6 +251,45 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.flux['b'].shape[0], 3)
         self.assertEqual(s1.exp_fibermap['COADD_NORM'][-1], 1)
         self.assertIsInstance(s1.scores, Table)
+
+    def test_coadd_exposures(self):
+        """Test coadd_exposures doesn't mutate input and matches in-place coadd"""
+        nspec, nwave = 3, 10
+        s1 = self._random_spectra(nspec, nwave)
+
+        #- All the same targets
+        s1.fibermap['TARGETID'] = 10
+
+        #- Save copies of original input data to verify no mutation
+        original_flux = {band: s1.flux[band].copy() for band in s1.bands}
+        original_ivar = {band: s1.ivar[band].copy() for band in s1.bands}
+        original_fibermap = s1.fibermap.copy()
+
+        #- Call coadd_exposures (non-mutating)
+        result = coadd_exposures(s1)
+
+        #- Verify input is unchanged
+        for band in s1.bands:
+            self.assertTrue(np.array_equal(s1.flux[band], original_flux[band]),
+                          f"Input flux[{band}] was modified")
+            self.assertTrue(np.array_equal(s1.ivar[band], original_ivar[band]),
+                          f"Input ivar[{band}] was modified")
+        self.assertTrue(np.array_equal(s1.fibermap, original_fibermap),
+                       "Input fibermap was modified")
+
+        #- Verify result has coadded shape
+        self.assertEqual(result.flux['b'].shape[0], 1)
+
+        #- Create a deep copy of s1 for in-place coadd comparison
+        s2 = s1.copy()
+        coadd(s2)
+
+        #- Verify coadd_exposures result matches in-place coadd
+        for band in result.bands:
+            self.assertTrue(np.allclose(result.flux[band], s2.flux[band]),
+                          f"coadd_exposures flux[{band}] doesn't match in-place coadd")
+            self.assertTrue(np.allclose(result.ivar[band], s2.ivar[band]),
+                          f"coadd_exposures ivar[{band}] doesn't match in-place coadd")
 
     def test_coadd_masked(self):
         """Test coaddition when all spectra have certain wavelength range masked
