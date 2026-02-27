@@ -520,7 +520,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     if run_preproc is None:
         campets_to_preproc = []
         for campet in campets:
-            if not os.path.isfile(findfile("preproc", night=night, expid=dark_expid, camera=campet)):
+            if not os.path.isfile(findfile("preproc", night=night, expid=dark_expid,
+                                           camera=campet, readonly=True,
+                                           specprod_dir=prod)):
                 campets_to_preproc.append(campet)
     elif run_preproc is True:
         campets_to_preproc = campets
