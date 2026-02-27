@@ -315,7 +315,7 @@ def create_biaspdark_batch_script(night, expids,
     batchdir = os.path.dirname(scriptpathname)
     os.makedirs(batchdir, exist_ok=True)
     jobname = os.path.basename(scriptpathname).removesuffix('.slurm')
-    
+    runtime=0
     if do_pdark and expids is None:
         log.error('Must provide exposure ids if requesting pdark')
         raise ValueError('Must provide exposure ids if requesting pdark')
@@ -325,10 +325,6 @@ def create_biaspdark_batch_script(night, expids,
         system_name = batch.default_system(jobdesc=jobdesc)
 
     batch_config = batch.get_config(system_name)
-
-    dark_ntasks, nodes, runtime = determine_resources(ncameras, jobdesc='pdark', 
-                                                        queue=queue, nexps=nexps, 
-                                                        system_name=system_name)
     threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
     script_body = ""
     # Run nightlybias first  
@@ -352,6 +348,10 @@ def create_biaspdark_batch_script(night, expids,
 
     # Then pdarks  
     if do_pdark: 
+
+        dark_ntasks, nodes, dark_runtime = determine_resources(ncameras, jobdesc='pdark', 
+                                                        queue=queue, nexps=nexps, 
+                                                        system_name=system_name)
         ## if do_biasnight is True, then we need to run pdark with the same number of nodes
         if do_biasnight:
             ## select up to one exp-cam pair per core
@@ -370,7 +370,7 @@ def create_biaspdark_batch_script(night, expids,
             
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
-
+        runtime+=dark_runtime
     script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
