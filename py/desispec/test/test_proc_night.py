@@ -628,8 +628,8 @@ class TestProcNight(unittest.TestCase):
         """Regression test for issue #2623: no_darknight=True must not trigger
         surrounding-night biasnight submissions.
 
-        When no_darknight=True, 'dark' should be stripped from proc_obstypes
-        before calling submit_necessary_biasnights_and_preproc_darks so that
+        When no_darknight=True, the obstypes used for submitting surrounding-
+        night dark-related jobs must exclude 'dark' so that
         get_stacked_dark_exposure_table is never called and only the reference
         night receives a biasnight job (no pdark or biaspdark).
         """
