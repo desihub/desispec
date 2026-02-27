@@ -737,7 +737,7 @@ def per_exposure_normalization(spectra, filter_width=51):
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
     # default COADD_NORM = 1.
-    spectra.fibermap['COADD_NORM'] = 1.
+    spectra.fibermap['COADD_NORM'] = np.ones(len(spectra.fibermap), dtype=np.float32)
     
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
@@ -899,9 +899,6 @@ def per_exposure_normalization(spectra, filter_width=51):
             # update fiberstatus
             spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
             good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-
-    # downgrade to float 32
-    spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
 
 
 def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
