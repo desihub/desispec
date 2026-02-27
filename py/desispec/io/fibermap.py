@@ -701,8 +701,10 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                         log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
                         badcol.remove(col)
 
-        # We patched some fiberassing columns to remove nans. Consider it ok
-        # if the "bad columns" are bad because they are NOT nan in the
+        # We patched some fiberassign columns to remove nans in
+        # https://github.com/desihub/fiberassign/pull/497
+        # (see also https://github.com/desihub/desispec/issues/2359)
+        # Consider it ok if the "bad columns" are bad because they are NOT nan in the
         # fiberassign file, but ARE nan in the other file.
         # Only check the known four columns that have been patched, though
         cols_to_check = [c for c in ["FIBERASSIGN_X", "FIBERASSIGN_Y", "TARGET_RA", "TARGET_DEC"] if c in badcol]
