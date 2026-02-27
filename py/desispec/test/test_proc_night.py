@@ -214,7 +214,7 @@ class TestProcNight(unittest.TestCase):
         desispec.workflow.proctable.reset_tilenight_ptab_cache()
 
         ## test that the code runs
-        updatedtable2, nsubmits = update_and_recursively_submit(proctable2, submits=0, dry_run_level=4)
+        updatedtable2, nsubmits, nbad = update_and_recursively_submit(proctable2, submits=0, dry_run_level=4)
         self.assertFalse(np.any(np.isin(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
                         msg='No TIMEOUTs in nominal resubmission')
 
@@ -223,7 +223,7 @@ class TestProcNight(unittest.TestCase):
             tilematches2 = proctable2[proctable2['TILEID'] == tileid]
             cumulative2 = tilematches2[tilematches2['JOBDESC'] == 'cumulative'][0]
             proctable2['STATUS'][proctable2['INTID']==cumulative2['INTID']] = 'TIMEOUT'
-        updatedtable2, nsubmits = update_and_recursively_submit(proctable2,
+        updatedtable2, nsubmits, nbad = update_and_recursively_submit(proctable2,
                                                                 submits=0,
                                                                 dry_run_level=4)
         self.assertFalse(np.any(np.isin(updatedtable2['STATUS'], [b'DEP_NOT_SUBD', b'TIMEOUT'])),
@@ -246,7 +246,7 @@ class TestProcNight(unittest.TestCase):
         desispec.workflow.proctable.reset_full_ptab_cache()
 
         ## Run resubmission code
-        updatedtable2, nsubmits = update_and_recursively_submit(proctable2,
+        updatedtable2, nsubmits, nbad = update_and_recursively_submit(proctable2,
                                                                 submits=0,
                                                                 dry_run_level=4)
         self.assertTrue(np.sum(updatedtable2['STATUS'] == 'DEP_NOT_SUBD')==2,
