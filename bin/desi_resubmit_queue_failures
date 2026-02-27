@@ -99,7 +99,7 @@ if __name__ == '__main__':
     ## Load in the files defined above
     ptable = load_table(tablename=ptable_pathname, tabletype='proctable')
     log.info(f"Identified ptable with {len(ptable)} entries.")
-    ptable, nsubmits = update_and_recursively_submit(ptable, submits=0,
+    ptable, nsubmits, nbad = update_and_recursively_submit(ptable, submits=0,
                                                      resubmission_states=args.resub_states,
                                                      no_resub_failed=args.no_resub_failed,
                                                      ptab_name=ptable_pathname,
@@ -109,6 +109,14 @@ if __name__ == '__main__':
 
     if args.dry_run_level < 3:
         write_table(ptable, tablename=ptable_pathname)
+        log.info(f'Updated {ptable_pathname}')
 
-    log.info("Completed all necessary queue resubmissions from processing "
-             + f"table: {ptable_pathname}")
+    if nbad>0:
+        log.error(f'Resubmitted {nsubmits} jobs but failed to submit {nbad} jobs for {args.night}.')
+        sys.exit(1)
+    elif nsubmits == 0:
+        log.info(f"No jobs needed to be resubmitted for {args.night}.")
+        sys.exit(0)
+    else:
+        log.info(f"Completed all {nsubmits} necessary queue resubmissions for {args.night}.")
+        sys.exit(0)
