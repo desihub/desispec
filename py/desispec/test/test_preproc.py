@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import unittest
 import os
 import os.path
+import tempfile
 import warnings
 from astropy.io import fits
 import numpy as np
@@ -36,8 +37,7 @@ class TestPreProc(unittest.TestCase):
             self.skipTest('preproc tests require specter')
 
         #- Create temporary calib directory
-        self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')
-        if not os.path.exists(self.calibdir): os.makedirs(self.calibdir)
+        self.calibdir = tempfile.mkdtemp()
         #- Copy test calibration-data.yaml file
         specdir=os.path.join(self.calibdir,"spec/sp0")
         if not os.path.isdir(specdir) :
