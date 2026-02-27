@@ -154,7 +154,7 @@ jobs:
             - name: Run the test
               run: pytest --cov
 
-# 2026-02-27 : Coverall is having a major outage; skip the coverage upload
+# 2026-02-27 : Coveralls is having a major outage; skip the coverage upload
 ###            - name: Coveralls
 ###              env:
 ###                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
