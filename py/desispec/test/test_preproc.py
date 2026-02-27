@@ -31,6 +31,11 @@ class TestPreProc(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'calibdir') and os.path.isdir(self.calibdir) :
             shutil.rmtree(self.calibdir)
+        if hasattr(self, '_orig_calib_env'):
+            if self._orig_calib_env is None:
+                os.environ.pop('DESI_SPECTRO_CALIB', None)
+            else:
+                os.environ['DESI_SPECTRO_CALIB'] = self._orig_calib_env
 
     def setUp(self):
         if not installed('specter'):
@@ -44,7 +49,8 @@ class TestPreProc(unittest.TestCase):
             os.makedirs(specdir)
         for c in "brz" :
             shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir, f"{c}0.yaml"))
-        #- Set calibration environment variable
+        #- Set calibration environment variable, saving original value for tearDown
+        self._orig_calib_env = os.environ.get('DESI_SPECTRO_CALIB')
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
 
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')
