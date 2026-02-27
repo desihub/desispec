@@ -195,9 +195,10 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         processed_dark_expids = get_pdarks_from_ptable(ptable)
         dark_expid_to_process = np.setdiff1d(dark_expid_to_process, processed_dark_expids)
 
-    if len(ptable) > 0 and 'biaspdark' in ptable['JOBDESC'] and len(dark_expid_to_process) == 0:
-        log.info(f"Bias and all preproc darks are already accounted for on {night=}.")
-        return ptable
+    if len(ptable) > 0 and len(dark_expid_to_process) == 0:
+        if 'biaspdark' in ptable['JOBDESC'] or 'biasnight' in ptable['JOBDESC']:
+            log.info(f"Bias and all preproc darks are already accounted for on {night=}.")
+            return ptable
 
     ## Determine where the exposure table will be written
     exp_table_pathname = findfile('exposure_table', night=night, readonly=True)
@@ -259,10 +260,11 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    linked_bias = 'biasnight' in files_to_link
-    dobias = (not linked_bias) and ('biaspdark' not in ptable['JOBDESC']) and 'zero' in proc_obstypes and len(zero_expids) > 0
+    bias_accounted_for = ('biasnight' in files_to_link) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
 
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
+    ## Technically this is no longer needed, but left for belt and suspenders
     dark_date=night>20240408
     dodarks = 'dark' in proc_obstypes and len(dark_expid_to_process) > 0 and dark_date
 
@@ -385,20 +387,27 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
 
     """
     log = get_logger()
-    compdarkparser = compute_dark_parser()
-    options = ['--reference-night', str(reference_night), '-o', 'dummy', '-c', 'b1',
-               '--skip-camera-check', '--dont-search-filesystem']
-    if n_nights_before is not None:
-        options.extend(['--before', str(n_nights_before)])
-    if n_nights_after is not None:
-        options.extend(['--after', str(n_nights_after)])
-    compdarkargs = compdarkparser.parse_args(options)
 
-    exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+    if 'dark' in proc_obstypes:
+        compdarkparser = compute_dark_parser()
+        options = ['--reference-night', str(reference_night), '-o', 'dummy', '-c', 'b1',
+                   '--skip-camera-check', '--dont-search-filesystem']
+        if n_nights_before is not None:
+            options.extend(['--before', str(n_nights_before)])
+        if n_nights_after is not None:
+            options.extend(['--after', str(n_nights_after)])
+        compdarkargs = compdarkparser.parse_args(options)
 
-    ## We might not have darks on the reference night, but we still want to process
-    ## the biasnight's
-    nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [reference_night]))
+        exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+
+        ## We might not have darks on the reference night, but we still want to process
+        ## the biasnight's
+        nights = np.unique(np.append(exptab_for_dark_night['NIGHT'].data, [reference_night]))
+    else:
+        log.info(f"{proc_obstypes=}, so not submitting darks for preprocessing."
+                 + " Only submitting biasnight for the reference night if requested.")
+        exptab_for_dark_night = Table(names=['NIGHT', 'EXPID'])
+        nights = [reference_night]
 
     ## Loop over nights and submit biasnight or biaspdark jobs
     refnight_ptable = None
