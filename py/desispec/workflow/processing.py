@@ -1293,7 +1293,6 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
           been updated for those jobs that needed to be resubmitted.
         * submits: int, number of submissions made to the queue. This is incremented from the input submits, so it is
           the number of submissions made from this function call plus the input submits value.
-          the number of submissions made from this function call plus the input submits value.
         * nbad: int, number of jobs not submitted due to dependency issues
 
     Note:
