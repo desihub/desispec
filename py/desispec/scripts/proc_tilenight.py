@@ -180,6 +180,8 @@ def main(args=None, comm=None):
         prestdstar_args += f' --nostdstarfit --nofluxcalib --expid {expid} --cameras {prestd_camwords[expid]}'
         if len(badamps[expid]) > 0:
             prestdstar_args += f' --badamps {badamps[expid]}'
+        if args.timingfile is not None:
+            prestdstar_args += f' --timingfile {args.timingfile}'
         if rank==0:
             log.info(f'running desi_proc {prestdstar_args}')
         prestdstar_args_parsed = proc.parse(prestdstar_args.split())
@@ -216,6 +218,8 @@ def main(args=None, comm=None):
         #- run joint stdstar fit using all exp for this tile night
         stdstar_args  = common_args + mpi_args
         stdstar_args += f' --obstype science --expids {",".join(map(str, stdstar_expids))} --cameras {joint_camwords}'
+        if args.timingfile is not None:
+            stdstar_args += f' --timingfile {args.timingfile}'
         if rank==0:
             log.info(f'running desi_proc_joint_fit {stdstar_args}')
         stdstar_args_parsed = proc_joint_fit.parse(stdstar_args.split())
@@ -253,6 +257,8 @@ def main(args=None, comm=None):
             poststdstar_args += f' --nostdstarfit --noprestdstarfit --expid {expid} --cameras {poststd_camwords[expid]}'
             if len(badamps[expid]) > 0:
                 poststdstar_args += f' --badamps {badamps[expid]}'
+            if args.timingfile is not None:
+                poststdstar_args += f' --timingfile {args.timingfile}'
             if rank==0:
                 log.info(f'running desi_proc {poststdstar_args}')
             poststdstar_args_parsed = proc.parse(poststdstar_args.split())

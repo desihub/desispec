@@ -34,6 +34,8 @@ import desispec.scripts.stdstars
 import desispec.scripts.average_fiberflat
 import desispec.scripts.autocalib_fiberflat
 
+from desispec.workflow.timing import log_timer
+
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
@@ -174,6 +176,10 @@ def main(args=None, comm=None):
         log.info('Cameras {}'.format(args.cameras))
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
+
+    # - Convert timingfile to absolute path in case some later step does an os.chdir
+    if args.timingfile is not None:
+        args.timingfile = os.path.abspath(args.timingfile)
 
     # - sync ranks before proceeding
     if comm is not None:
@@ -624,40 +630,7 @@ def main(args=None, comm=None):
     # -------------------------------------------------------------------------
     # - Wrap up
 
-    # if rank == 0:
-    #     report = timer.report()
-    #     log.info('Rank 0 timing report:\n' + report)
-
-    if comm is not None:
-        timers = comm.gather(timer, root=0)
-    else:
-        timers = [timer,]
-
-    if rank == 0:
-        stats = desiutil.timer.compute_stats(timers)
-        log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
-
-        if args.timingfile:
-            if os.path.exists(args.timingfile):
-                with open(args.timingfile) as fx:
-                    previous_stats = json.load(fx)
-
-                #- augment previous_stats with new entries, but don't overwrite old
-                for name in stats:
-                    if name not in previous_stats:
-                        previous_stats[name] = stats[name]
-
-                stats = previous_stats
-
-            tmpfile = get_tempfilename(args.timingfile)
-            with open(tmpfile, 'w') as fx:
-                json.dump(stats, fx, indent=2)
-            os.rename(tmpfile, args.timingfile)
-
-        log.info('Timing max duration per step [seconds]:')
-        for stepname, steptiming in stats.items():
-            tmax = steptiming['duration.max']
-            log.info(f'  {stepname:16s} {tmax:.2f}')
+    log_timer(timer, args.timingfile, comm=comm)
 
     if rank == 0:
         log.info('All done at {}'.format(time.asctime()))
