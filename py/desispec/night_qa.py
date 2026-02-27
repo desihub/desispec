@@ -513,12 +513,18 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     # We will determine if we need to preproc and campets in this image by searching
     # for the preproc for all expected cameras. If *all* of them are there
     # then campets_to_preproc will be empty, so unless we forced run_preproc
-    # from the start run_preproc should be false.
-    campets_to_preproc = []
-    for campet in campets:
-        if not os.path.isfile(findfile("preproc", night=night, expid=dark_expid, camera=campet)):
-            campets_to_preproc.append(campet)
-    run_preproc = run_preproc or (len(campets_to_preproc) > 1)
+    # from the start, then campets_to_preproc will be empty and nothing will
+    # be preprocced. If run_preproc is True, which forces a re-preproc,
+    # we preproc everyhing.
+    if run_preproc is None:
+        campets_to_preproc = []
+        for campet in campets:
+            if not os.path.isfile(findfile("preproc", night=night, expid=dark_expid, camera=campet)):
+                campets_to_preproc.append(campet)
+    elif run_preproc is True:
+        campets_to_preproc = campets
+
+    run_preproc = ((run_preproc is not None) and run_preproc) or (len(campets_to_preproc) > 1)
 
     temp_dir_loc = None
     if run_preproc:
