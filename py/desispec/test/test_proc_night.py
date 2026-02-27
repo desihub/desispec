@@ -624,6 +624,30 @@ class TestProcNight(unittest.TestCase):
         self.night = orig_night
         self.override_file = orig_override_file
 
+    def test_proc_night_no_darknight(self):
+        """Regression test for issue #2623: no_darknight=True must not trigger
+        surrounding-night biasnight submissions.
+
+        When no_darknight=True, the obstypes used for submitting surrounding-
+        night dark-related jobs must exclude 'dark' so that
+        get_stacked_dark_exposure_table is never called and only the reference
+        night receives a biasnight job (no pdark or biaspdark).
+        """
+        from unittest.mock import patch
+
+        with patch('desispec.workflow.submission.get_stacked_dark_exposure_table') as mock_get_stacked:
+            proctable, unproctable = proc_night(self.laternight,
+                                                no_darknight=True,
+                                                dry_run_level=3,
+                                                sub_wait_time=0.0)
+            ## get_stacked_dark_exposure_table must NOT be called when do_darknight=False
+            mock_get_stacked.assert_not_called()
+
+        ## biasnight should be submitted for the reference night
+        self.assertIn('biasnight', set(proctable['JOBDESC']))
+        ## pdark and biaspdark must NOT be submitted when no_darknight=True
+        for job in ['pdark', 'biaspdark']:
+            self.assertNotIn(job, set(proctable['JOBDESC']))
 
     def test_proc_night_camword_linking(self):
         """Test if setting camword in override file linking is working"""
