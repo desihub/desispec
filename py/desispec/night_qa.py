@@ -510,42 +510,26 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
                 campets.append(campet)
     log.info("existing campets: {}".format(campets))
 
-    # AR first check if we need to process this dark image
-    proctable_fn = findfile('processing_table', night=night, specprod_dir=prod, readonly=True)
-    # if set to None will judge necessity for preprocessing according to proctable
-    # but allows manual override e.g. for cases where no proctable should be there
-    if run_preproc is None:
-        if not os.path.isfile(proctable_fn):
-            run_preproc = True
-        else:
-            d = Table.read(proctable_fn)
-            sel = d["OBSTYPE"] == "dark"
-            d = d[sel]
-            ## for ccdcalib jobs, the EXPID can sometimes be a list of
-            ## [DARK, FLAT, FLAT], so split and take just the first for the dark
-            proc_expids = list()
-            for expstr in d["EXPID"]:
-                if '|' in expstr:
-                    expid = int(expstr.split('|')[0])
-                else:
-                    expid = int(expstr)
-                proc_expids.append(expid)
-            if dark_expid not in proc_expids:
-                run_preproc = True
-            else:
-                run_preproc = False
-        # AR run preproc?
+    # We will determine if we need to preproc and campets in this image by searching
+    # for the preproc for all expected cameras. If *all* of them are there
+    # then campets_to_preproc will be empty, so unless we forced run_preproc
+    # from the start run_preproc should be false.
+    campets_to_preproc = []
+    for campet in campets:
+        if not os.path.isfile(findfile("preproc", night=night, expid=dark_expid, camera=campet)):
+            campets_to_preproc.append(campet)
+    run_preproc = run_preproc or (len(campets_to_preproc) > 1)
 
     temp_dir_loc = None
     if run_preproc:
         cmds = []
         temp_dir_loc = tempfile.mkdtemp()
         specprod_dir = temp_dir_loc
-        ## not readonly because we are generating the files 
+        ## not readonly because we are generating the files
         outdir = os.path.dirname(findfile("preproc", night, dark_expid,
                                           'r1', specprod_dir=specprod_dir))
         os.makedirs(outdir, exist_ok=True)
-        for campet in campets:
+        for campet in campets_to_preproc:
             cmd = "desi_preproc -n {} -e {} --outdir {} --ncpu 1 --cameras {}".format(
                 night, dark_expid, outdir, campet,
             )
@@ -581,7 +565,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     if temp_dir_loc is not None and os.path.exists(temp_dir_loc):
             shutil.rmtree(temp_dir_loc)
             log.info(f"Removed temporary directory and its contents: {temp_dir_loc}")
-            
+
     # AR campets to be additionally processed with --bkgsub-for-science
     # AR besides, check the very unlikely case where a camera is missing
     # AR    for all petals
@@ -628,7 +612,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
             for camera in bkgsub_science_cameras:
                 bkgsub_myargs.append(
                     [
-                        findfile("preproc", night, dark_expid, camera+str(petal), 
+                        findfile("preproc", night, dark_expid, camera+str(petal),
                                  specprod_dir=bkgsub_specprod_dir, readonly=True),
                         night,
                         prod,
@@ -646,7 +630,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         if bkgsub_specprod_dir is not None and os.path.exists(bkgsub_specprod_dir):
             shutil.rmtree(bkgsub_specprod_dir)
             log.info(f"Removed temporary directory and its contents: {bkgsub_specprod_dir}")
-    
+
     # AR plotting
     # AR remarks:
     # AR - the (x,y) conversions for the side panels
@@ -1383,7 +1367,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     #
     fns = []
     for tileid in tileids:
-        fn = findfile('tileqapng', night=night, tile=tileid, groupname=group, 
+        fn = findfile('tileqapng', night=night, tile=tileid, groupname=group,
                       specprod_dir=prod, readonly=True)
         if os.path.isfile(fn):
             fns.append(fn)
@@ -1723,7 +1707,7 @@ def create_petalnz_pdf(
     sel = np.ones(len(tileids), dtype=bool)
     for i in range(len(tileids)):
         if surveys[i] == "main":
-            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group, 
+            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group,
                           specprod_dir=prod, readonly=True)
             if not os.path.isfile(fn):
                 log.warning("no {} file, proceeding to next tile".format(fn))
@@ -1765,7 +1749,7 @@ def create_petalnz_pdf(
         istileid = False
         pix_ntilecovs = None
         for petal in petals:
-            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group, 
+            fn = findfile('redrock', night=night, tile=tileid, spectrograph=petal, groupname=group,
                           specprod_dir=prod, readonly=True)
             if not os.path.isfile(fn):
                 log.warning("{} : no file".format(fn))
@@ -2299,7 +2283,7 @@ def write_nightqa_html(outfns, night, prod, css, expids, tileids, surveys):
             # AR list all science exposure files for that campet
             fns = []
             for expid in expids:
-                fn = findfile("frame", night, expid=expid, camera=camera+str(petal), 
+                fn = findfile("frame", night, expid=expid, camera=camera+str(petal),
                               specprod_dir=prod, readonly=True)
                 if os.path.isfile(fn):
                     fns.append(fn)
