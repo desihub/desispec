@@ -701,6 +701,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                         log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
                         badcol.remove(col)
 
+        # We patched some fiberassing columns to remove nans. Consider it ok
+        # if the "bad columns" are bad because they are NOT nan in the
+        # fiberassign file, but ARE nan in the other file.
+        # Only check the known four columns that have been patched, though
+        cols_to_check = [c for c in ["FIBERASSIGN_X", "FIBERASSIGN_Y", "TARGET_RA", "TARGET_DEC"] if c in badcol]
+        for col in cols_to_check:
+            ii = rawfa[col] != fa[col]
+            if np.all(np.isnan(rawfa[col][ii]) & ~np.isnan(fa[col][ii])):
+                log.warning(f'Ignoring {col} mismatch NaN (raw) vs not NaN (fa) on tile {tileid} night {night}')
+                badcol.remove(col)
+
+
         if len(badcol)>0:
             msg = f'incompatible raw/svn fiberassign files for columns {badcol}'
             log.critical(msg)
