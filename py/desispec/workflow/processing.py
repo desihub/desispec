@@ -663,7 +663,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    if len(dep_qids)>0 and dep_qids.dtype.kind != 'i':
+    if len(dep_qids) > 0 and dep_qids.dtype.kind != 'i':
         err = f"Expected prow['LATEST_DEP_QID'] to be an array of integers, but got {dep_qids} with dtype {dep_qids.dtype}"
         log.error(err)
         raise ValueError(err)
