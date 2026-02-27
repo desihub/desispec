@@ -1351,7 +1351,7 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
 
     # Check if any jobs not resubmitted due to dependency issues
     nbad = np.sum(proc_table['STATUS']=='DEP_NOT_SUBD')
-    if nbad>0:
+    if nbad > 0:
         log.error(f'{nbad} jobs not re-submitted due to dependency issues; see logs above.')
 
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
