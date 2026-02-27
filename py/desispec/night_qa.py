@@ -474,8 +474,9 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
         bkgsub_science_cameras_str (optional, defaults to None): comma-separated list of the
             cameras to be additionally processed with the --bkgsub-for-science argument
             (e.g. "b") (string)
-        run_preproc (optional, defaults to None): if None, autoderive if preproc should be run, otherwise
-            override if it should be run or not (None or bool)
+        run_preproc (optional, defaults to None): if None, autoderive if preproc should be run. If
+            True, run preproc for all necessary cameras, if False don't run preproc at all.
+            Defaults to None.
 
     Note:
         If the identified dark image is not processed and if the raw data is there,
