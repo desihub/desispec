@@ -1411,14 +1411,15 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
 
+    all_valid_states = list(resubmission_states.copy())
+    good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
+    all_valid_states.extend(good_states)
+    othernight_idep_row_lookup = {}
+    ok_different_night_ideps = list()
     if ideps is None or len(ideps)==0:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
+        ideps = []
     else:
-        all_valid_states = list(resubmission_states.copy())
-        good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
-        all_valid_states.extend(good_states)
-        othernight_idep_row_lookup = {}
-        ok_different_night_ideps = list()
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
                 # check if dependency YYMMDDnnn is from a different night
