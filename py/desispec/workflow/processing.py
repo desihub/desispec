@@ -663,7 +663,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    if len(dep_qids)>0 and dep_qids.dtype.kind != 'i':
+    if len(dep_qids) > 0 and dep_qids.dtype.kind != 'i':
         err = f"Expected prow['LATEST_DEP_QID'] to be an array of integers, but got {dep_qids} with dtype {dep_qids.dtype}"
         log.error(err)
         raise ValueError(err)
@@ -1351,7 +1351,7 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
 
     # Check if any jobs not resubmitted due to dependency issues
     nbad = np.sum(proc_table['STATUS']=='DEP_NOT_SUBD')
-    if nbad>0:
+    if nbad > 0:
         log.error(f'{nbad} jobs not re-submitted due to dependency issues; see logs above.')
 
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
