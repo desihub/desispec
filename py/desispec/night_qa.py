@@ -527,6 +527,10 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, nproc, binning=4, bkgsub_sc
     elif run_preproc is True:
         campets_to_preproc = campets
 
+    # Check to see if we need to preproc all campets, to ensure we don't end
+    # up in a case where we preproc only some of them, but then don't load
+    # the rest because the newly-preproc'd ones go into a temp directory
+    # but the originals do not.
     run_preproc = ((run_preproc is not None) and run_preproc) or (len(campets_to_preproc) == len(campets))
 
     temp_dir_loc = None
