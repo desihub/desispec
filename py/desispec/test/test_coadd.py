@@ -230,6 +230,28 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.flux['b'].shape[0], 1)
         self.assertIsInstance(s1.scores, Table)
 
+    def test_coadd_normalization(self):
+        """Test coaddition"""
+        nspec, nwave = 10, 300
+        bands = ('b','z')
+        s1 = self._random_spectra( ns=nspec, nw=nwave, bands=bands)
+        self.assertEqual(s1.flux['b'].shape[0], nspec)
+        self.assertIsInstance(s1.scores, Table)
+
+        #- three different targets, one with only one exposure
+        s1.fibermap['TARGETID'][:5] = 10
+        for b in bands:
+            # offset first spectrum
+            s1.flux[b][0] +=5
+            s1.ivar[b][0] /=3
+        s1.fibermap['TARGETID'][5:] = 11
+        s1.fibermap['TARGETID'][-1] = 12
+        s1.fibermap['OBJTYPE'] = 'TGT'
+        coadd(s1, onetile=True, no_normalize=False)
+        self.assertEqual(s1.flux['b'].shape[0], 3)
+        self.assertEqual(s1.exp_fibermap['COADD_NORM'][-1], 1)
+        self.assertIsInstance(s1.scores, Table)
+
     def test_coadd_exposures(self):
         """Test coadd_exposures doesn't mutate input and matches in-place coadd"""
         nspec, nwave = 3, 10
