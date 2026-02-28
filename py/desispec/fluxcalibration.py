@@ -1507,10 +1507,10 @@ def apply_flux_calibration(frame, fluxcalib):
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
 
-        if (frame.resolution_data is not None) and (C_deconvolved is not None):
+        if (frame.resolution_data is not None) and (C_deconvolved is not None) and (fluxcalib.fibercorr is not None):
             # convert R to  C_i^-1 * R * C using the calibration vectors
             icalib = np.zeros_like(C[i])
-            icalib[ok] = 1 / C[i, ok]
+            icalib[ok] = 1 / (C[i, ok] * fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"][i])
 
             # Aligning the diagonals with the banded storage. This
             # code originally by Sergey,and confirmed
