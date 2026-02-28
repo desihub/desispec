@@ -153,11 +153,13 @@ jobs:
               run: install_desimodel_data --desimodel-version ${DESIMODEL_DATA}
             - name: Run the test
               run: pytest --cov
-            - name: Coveralls
-              env:
-                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: coveralls
+
+# 2026-02-27 : Coveralls is having a major outage; skip the coverage upload
+###            - name: Coveralls
+###              env:
+###                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+###                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+###              run: coveralls
 
     desilite:
         name: Test minimal env

@@ -663,6 +663,11 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
+    if len(dep_qids) > 0 and dep_qids.dtype.kind != 'i':
+        err = f"Expected prow['LATEST_DEP_QID'] to be an array of integers, but got {dep_qids} with dtype {dep_qids.dtype}"
+        log.error(err)
+        raise ValueError(err)
+
     ## With desi_proc_night we now either resubmit failed jobs or exit, so this
     ## should no longer be necessary in the normal workflow.
     # workaround for sbatch --dependency bug not tracking jobs correctly
@@ -701,20 +706,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 
         dep_str = f'--dependency={depcond}:'
 
-        if np.isscalar(dep_qids):
-            dep_list = str(dep_qids).strip(' \t')
-            if dep_list == '':
-                dep_str = ''
-            else:
-                dep_str += dep_list
+        # Add dependencies, but ignore qid=1 and 0 as fake dependency placeholders
+        use_dep_qids = [str(q) for q in dep_qids if q not in [0, 1]]
+        if len(use_dep_qids) > 0:
+            dep_str += ':'.join(use_dep_qids)
         else:
-            if len(dep_qids)>1:
-                dep_list = ':'.join(np.array(dep_qids).astype(str))
-                dep_str += dep_list
-            elif len(dep_qids) == 1 and dep_qids[0] not in [None, 0]:
-                dep_str += str(dep_qids[0])
-            else:
-                dep_str = ''
+            dep_str = ''
 
     # script = f'{jobname}.slurm'
     # script_pathname = pathjoin(batchdir, script)
@@ -1302,8 +1299,9 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
 
         * proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
           been updated for those jobs that needed to be resubmitted.
-        * submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
+        * submits: int, number of submissions made to the queue. This is incremented from the input submits, so it is
           the number of submissions made from this function call plus the input submits value.
+        * nbad: int, number of jobs not submitted due to dependency issues
 
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
@@ -1358,9 +1356,14 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
                                                           reservation=reservation,
                                                           dry_run_level=dry_run_level)
 
+    # Check if any jobs not resubmitted due to dependency issues
+    nbad = np.sum(proc_table['STATUS']=='DEP_NOT_SUBD')
+    if nbad > 0:
+        log.error(f'{nbad} jobs not re-submitted due to dependency issues; see logs above.')
+
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
 
-    return proc_table, submits
+    return proc_table, submits, nbad
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs=100, ptab_name=None,
                             resubmission_states=None, reservation=None, dry_run_level=0):
@@ -1414,15 +1417,19 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
+
+    all_valid_states = list(resubmission_states.copy())
+    good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
+    all_valid_states.extend(good_states)
+    othernight_idep_row_lookup = {}
+    ok_different_night_ideps = list()
     if ideps is None or len(ideps)==0:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
+        ideps = []
     else:
-        all_valid_states = list(resubmission_states.copy())
-        good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
-        all_valid_states.extend(good_states)
-        othernight_idep_row_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
+                # check if dependency YYMMDDnnn is from a different night
                 if idep // 1000 != row['INTID'] // 1000:
                     log.debug("Internal ID: %d not in id_to_row_map. "
                              + "This is expected since it is from another day. ", idep)
@@ -1450,6 +1457,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         ## in the next stage
                         othernight_idep_row_lookup[idep] = entry
                         update_full_ptab_cache(reftab)
+                        ok_different_night_ideps.append(idep)
                 else:
                     msg = f"Internal ID: {idep} not in id_to_row_map. " \
                          + f"Since the dependency is from the same night" \
@@ -1495,9 +1503,35 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
                         + " This is expected if the ideps were status=COMPLETED")
 
-    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
-                                           strictly_successful=True, dry_run=dry_run_level)
-    submits += 1
+    # Having re-submitted dependencies, double check that they are ok before submitting this job
+    ok = True
+    for idep in ideps:
+        if idep in id_to_row_map:
+            depstate = proc_table['STATUS'][id_to_row_map[idep]]
+            if depstate in good_states:
+                log.debug("Dependency %d is in a good state %s", idep, depstate)
+                continue
+            else:
+                log.error(f"Dependency {idep} is still in bad state {depstate}; not submitting {row['INTID']}")
+                proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                ok = False
+        elif idep in ok_different_night_ideps:
+            log.debug("Dependency %d is from a different night but verified as ok", idep)
+            continue
+        else:
+            # this should never happen, but catch this just in case
+            log.error(f"Unexpected! Dependency {idep} not in current night and not in good list from other nights;" +
+                      f" not submitting {row['INTID']}")
+            proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+            ok = False
+
+    if ok:
+        proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
+                                               strictly_successful=True, dry_run=dry_run_level)
+        submits += 1
+    else:
+        log.error(f"Not submitting {row['INTID']} since dependencies aren't in good states.")
+        proc_table['STATUS'][rown] = "DEP_NOT_SUBD"  # just in case
 
     if dry_run_level < 3:
         if ptab_name is None:

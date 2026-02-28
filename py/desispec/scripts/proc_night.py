@@ -482,7 +482,7 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
             log.info("Job failures were detected. Resubmitting those jobs "
                      + "before continuing with new submissions.")
 
-            ptable, nsubmits = update_and_recursively_submit(ptable,
+            ptable, nsubmits, nbad = update_and_recursively_submit(ptable,
                                                              no_resub_failed=no_resub_failed,
                                                              max_resubs=2,
                                                              ptab_name=proc_table_pathname,
