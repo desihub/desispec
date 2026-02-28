@@ -875,10 +875,17 @@ def per_exposure_normalization(spectra, filter_width=51):
                     filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
                     # ignore ivar = 0 pixels
                     mask = (w_tot[not_edges] != 0) & (w_i[j][not_edges] != 0)
-                    a[np.isin(idx,k)] = np.sum(filtered_coadd[mask]**2)/np.sum(filtered_coadd[mask]*filtered_exp[j][mask])
-                    
+                    if np.isfinite(np.sum(filtered_coadd[mask]*filtered_exp[j][mask])):
+                        a[np.isin(idx,k)] = np.sum(filtered_coadd[mask]**2)/np.sum(filtered_coadd[mask]*filtered_exp[j][mask])
+                    else:
+                        log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
+                        spectra.fibermap['FIBERSTATUS'][k] |= fmsk.BADFIBER
+                        good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+                        # need to retry without this exposure
+                        continue
+
                 # physicality check
-                is_converged = np.all(a>0) 
+                is_converged = np.all( (a>0.1) & (a<10.) ) 
                 if is_converged:
                     spectra.fibermap['COADD_NORM'][idx] = a
                 else:
@@ -993,12 +1000,13 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
             # here we keep original variance array that will not be modified
             # and ivarjj_masked which will be modified by
             # cosmic rays check and mask>0 check
-            ivarjj_orig = spectra.ivar[b][jj].copy() * norm_term**-2
+            ivarjj_orig = spectra.ivar[b][jj] * norm_term**-2
             ivarjj_masked = spectra.ivar[b][jj] * (spectra_mask[jj] == 0) * norm_term**-2
+            flux_scaled =  spectra.flux[b][jj] * norm_term
 
             if cosmics_nsig is not None and cosmics_nsig > 0:
                 cosmic_mask = _mask_cosmics(spectra.wave[b],
-                                            spectra.flux[b][jj],
+                                            flux_scaled,
                                             ivarjj_masked,
                                             cosmics_nsig=cosmics_nsig,
                                             tid=tid,
@@ -1017,7 +1025,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
             tivar[i][bad] = np.sum(weights[:, bad], axis=0)
             # we now recalculate the tivar, because we just replaced updated the weights
             weights = weights / (tivar[i] + (tivar[i] == 0))
-            tflux[i] = np.sum(weights * spectra.flux[b][jj] * norm_term, axis=0)
+            tflux[i] = np.sum(weights * flux_scaled, axis=0)
             
             if spectra.resolution_data is not None :
                 trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],

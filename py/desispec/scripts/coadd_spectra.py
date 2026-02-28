@@ -45,7 +45,7 @@ def parse(options=None):
     parser.add_argument("--onetile", action="store_true",
             help="input spectra are from a single tile")
     parser.add_argument("--no-normalize", action="store_true",
-            help="multiplicative normalization factors are computed for each target exposure prior to coaddition")
+            help="multiplicative normalization factors are not computed for each target exposure prior to coaddition")
 
 
     if options is None:
