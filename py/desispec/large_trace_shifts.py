@@ -69,9 +69,9 @@ def detect_spots_in_image(image) :
     xc=np.zeros(nspots)
     yc=np.zeros(nspots)
     for p in range(nspots) :
-        b0=yp[p]-3
+        b0=max(yp[p]-3, 0)
         e0=yp[p]+4
-        b1=xp[p]-3
+        b1=max(xp[p]-3, 0)
         e1=xp[p]+4
         spix=np.sum(image.pix[b0:e0,b1:e1])
         xc[p]=np.sum(image.pix[b0:e0,b1:e1]*x[b0:e0,b1:e1])/spix
