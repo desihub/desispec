@@ -327,19 +327,19 @@ def create_biaspdark_batch_script(night, expids,
 
     batch_config = batch.get_config(system_name)
 
-    dark_ntasks, nodes, runtime = determine_resources(ncameras, jobdesc='pdark', 
-                                                        queue=queue, nexps=nexps, 
-                                                        system_name=system_name)
+    runtime=0
+    nodes=0
     threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
     script_body = ""
     # Run nightlybias first  
     if do_biasnight: 
-        bias_ntasks, nodes, bias_runtime = determine_resources(ncameras, jobdesc='biasnight', 
+        bias_ntasks, bias_nodes, bias_runtime = determine_resources(ncameras, jobdesc='biasnight', 
                                                                     queue=queue, nexps=1, 
                                                                     system_name=system_name)
         ## srun won't split a task across nodes, so for tasks that aren't evenly split
         ## across nodes, make sure largest task count with number of threads
         ## will still fit in a single node
+        nodes=bias_nodes
         if nodes > 1 and bias_ntasks % nodes != 0:
             largest_ntasks_on_node = np.ceil(float(bias_ntasks)/float(nodes))
             bias_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
@@ -355,6 +355,11 @@ def create_biaspdark_batch_script(night, expids,
 
     # Then pdarks  
     if do_pdark: 
+        dark_ntasks, dark_nodes, dark_runtime = determine_resources(ncameras, jobdesc='pdark', 
+                                                        queue=queue, nexps=nexps, 
+                                                        system_name=system_name)
+        if dark_nodes>nodes:
+            nodes=dark_nodes
         ## if do_biasnight is True, then we need to run pdark with the same number of nodes
         if do_biasnight:
             ## select up to one exp-cam pair per core
@@ -373,6 +378,7 @@ def create_biaspdark_batch_script(night, expids,
             
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
+        runtime+=dark_runtime
 
     script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
