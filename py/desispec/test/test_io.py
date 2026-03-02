@@ -714,7 +714,7 @@ class TestIO(unittest.TestCase):
         write_flux_calibration(self.testfile, fc)
         fx = read_flux_calibration(self.testfile)
         self.assertTrue(np.all(fx.wave  == fc.wave.astype('f4').astype('f8')))
-        self.assertTrue(np.all(fx.calib == fc.calib.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.calib == fc.calib.astype('f8')))
         self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
 
