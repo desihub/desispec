@@ -511,7 +511,8 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         cte_expstr = ','.join(np.array(cte_expids).astype(str))
         cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expstr}"
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='ctecorr')
-
+    if nodes==0:
+        log.critical('No nodes allocated for job, exiting without writing script')
     script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
