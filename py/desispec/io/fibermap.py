@@ -701,6 +701,20 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                         log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
                         badcol.remove(col)
 
+        # We patched some fiberassign columns to remove nans in
+        # https://github.com/desihub/fiberassign/pull/497
+        # (see also https://github.com/desihub/desispec/issues/2359)
+        # Consider it ok if the "bad columns" are bad because they are NOT nan in the
+        # fiberassign file, but ARE nan in the other file.
+        # Only check the known four columns that have been patched, though
+        cols_to_check = [c for c in ["FIBERASSIGN_X", "FIBERASSIGN_Y", "TARGET_RA", "TARGET_DEC"] if c in badcol]
+        for col in cols_to_check:
+            ii = rawfa[col] != fa[col]
+            if np.all(np.isnan(rawfa[col][ii]) & ~np.isnan(fa[col][ii])):
+                log.warning(f'Ignoring {col} mismatch NaN (raw) vs not NaN (fa) on tile {tileid} night {night}')
+                badcol.remove(col)
+
+
         if len(badcol)>0:
             msg = f'incompatible raw/svn fiberassign files for columns {badcol}'
             log.critical(msg)
@@ -1324,7 +1338,7 @@ def annotate_fibermap(fibermap):
         try:
             row = fibermap_columns[column_names.index(col)]
         except ValueError:
-            log.error("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
+            log.warning("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
             continue
         coltype = fh[tform]
         try:
@@ -1336,16 +1350,16 @@ def annotate_fibermap(fibermap):
                 log.debug("Expected data type, %s, for column %s found.",
                           row[1], col)
             else:
-                log.error("Unexpected data type, %s != %s, for column %s!",
+                log.warning("Unexpected data type, %s != %s, for column %s!",
                           tforms[coltype], row[1], col)
         elif coltype.endswith('A'):
             if int(coltype.replace('A', '')) == row[1][1]:
                 log.debug("Expected string length, %d, for column %s found.", row[1][1], col)
             else:
-                log.error("Unexpected string length, %d != %d, for column %s found.",
+                log.warning("Unexpected string length, %d != %d, for column %s found.",
                           int(coltype.replace('A', '')), row[1][1], col)
         else:
-            log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
+            log.warning('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
                       coltype, col)
         if row[2]:
             if colunit:

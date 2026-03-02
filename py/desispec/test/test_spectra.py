@@ -671,6 +671,11 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))
             self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
 
+        #- slicing copies scores_comments
+        sp1.scores_comments = self.scores_comments
+        sp2 = sp1[1:self.nspec]
+        self.assertDictEqual(sp2.scores_comments, self.scores_comments)
+
         #- slicing also works when various optional elements are None
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
         sp2 = sp1[1:self.nspec]
@@ -755,7 +760,7 @@ class TestSpectra(unittest.TestCase):
         #- extend with extra exposures of the first two targets
         spectra = stack([spectra, spectra[0:nspec2]])
 
-        #- coadd_spectra is in-place update, so generate another copy
+        #- coadd is in-place update, so generate another copy
         coadd = spectra[:]
         desispec.coaddition.coadd(coadd, onetile=True)
 

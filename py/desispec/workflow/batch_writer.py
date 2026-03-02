@@ -210,7 +210,6 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
 
     if timingfile is None:
         timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
-        timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
@@ -255,6 +254,7 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
 
         fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
         # fx.write("export OMP_NUM_THREADS=1\n")
+        fx.write(f'cd {batchdir}\n')
 
         fx.write(f'\n# Link refnight to new night\n')
         fx.write(wrap_command_for_script(cmd, nodes, ntasks=ncores, threads_per_task=threads_per_core))
@@ -315,6 +315,7 @@ def create_biaspdark_batch_script(night, expids,
     batchdir = os.path.dirname(scriptpathname)
     os.makedirs(batchdir, exist_ok=True)
     jobname = os.path.basename(scriptpathname).removesuffix('.slurm')
+    timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
     
     if do_pdark and expids is None:
         log.error('Must provide exposure ids if requesting pdark')
@@ -348,6 +349,8 @@ def create_biaspdark_batch_script(night, expids,
 
         runtime += bias_runtime
         cmd = f'desi_proc --cameras {camword} -n {night} --nightlybias --mpi'
+        cmd += f' --starttime $(date +%s) --timingfile {timingfile}'
+
         script_body += wrap_command_for_script(cmd, nodes, ntasks=bias_ntasks, threads_per_task=bias_threads_per_task, stepname='biasnight')
 
     # Then pdarks  
@@ -396,6 +399,7 @@ def create_biaspdark_batch_script(night, expids,
         fx.write(f'# using {nodes*batch_config["cores_per_node"]} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         fx.write(script_body)
 
@@ -450,6 +454,7 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
     batchdir = os.path.dirname(scriptpathname)
     os.makedirs(batchdir, exist_ok=True)
     jobname = os.path.basename(scriptpathname).removesuffix('.slurm')
+    timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
 
     ## If system name isn't specified, guess it
     if system_name is None:
@@ -488,14 +493,16 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         if dark_expid is None:
             dark_expid = expids[0]
         cmd = f'desi_proc -n {night} --cameras {camword} -e {dark_expid} --mpi'
+        cmd += f' --starttime $(date +%s) --timingfile {timingfile}'
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='badcolumn')
 
     if do_ctecorr:
-        if cte_expids is None and (do_darknight or do_badcolumn):
-            cte_expids = expids[1:]
-        else:
-            cte_expids = expids
-        cte_expstr = ','.join(np.array(expids).astype(str))
+        if cte_expids is None:
+            if do_darknight or do_badcolumn:
+                cte_expids = expids[1:]
+            else:
+                cte_expids = expids
+        cte_expstr = ','.join(np.array(cte_expids).astype(str))
         cmd = f"desi_fit_cte_night -n {night} -c {camword} -e {cte_expstr}"
         script_body += wrap_command_for_script(cmd, nodes, ntasks=ntasks, threads_per_task=threads_per_task, stepname='ctecorr')
 
@@ -524,6 +531,7 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         fx.write(f'# using {nodes*batch_config["cores_per_node"]} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         fx.write(script_body)
 
@@ -588,7 +596,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
 
     if timingfile is None:
         timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
-        timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
@@ -744,6 +751,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         mps_wrapper=''
         if jobdesc.lower() == 'arc':
@@ -823,7 +831,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
         else:
             if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
                 fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
-                srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
+                srun = (f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
                     +mps_wrapper+f' {cmd}')
                 if jobdesc.lower() in ['science', 'prestdstar']:
                     srun += ' --nofluxcalib'
@@ -899,7 +907,6 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
     jobname = get_desi_proc_tilenight_batch_file_name(night, tileid)
 
     timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
-    timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
@@ -979,13 +986,13 @@ def create_desi_proc_tilenight_batch_script(night, exp, tileid, ncameras, queue,
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         mps_wrapper=''
         if system_name == 'perlmutter-gpu':
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
             mps_wrapper='desi_mps_wrapper'
 
-        fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
         srun = (f' srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores '
                 +mps_wrapper+f' {cmd}')
         fx.write('echo Running {}\n'.format(srun))

@@ -234,7 +234,7 @@ def main(args=None, comm=None):
                                                    cte_expids=args.cte_expids)
         err = 0
         if not args.nosubmit:
-            err = subprocess.call(['sbatch', scriptfile])
+            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
         sys.exit(err)
 
     #-------------------------------------------------------------------------
@@ -249,6 +249,10 @@ def main(args=None, comm=None):
         log.info('Cameras {}'.format(args.cameras))
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
+
+    #- Convert timingfile to absolute path in case some later step does an os.chdir
+    if args.timingfile is not None:
+        args.timingfile = os.path.abspath(args.timingfile)
 
     #-------------------------------------------------------------------------
     #- Create nightly bias from N>>1 ZEROs, but only for B-cameras
@@ -324,6 +328,9 @@ def main(args=None, comm=None):
                 error_count = int(np.sum(all_error_counts))  # all_error_counts is None on other ranks
 
             error_count = comm.bcast(error_count, root=0)
+
+        #- save / print timing information before exiting
+        log_timer(timer, args.timingfile, comm=comm)
 
         if rank == 0:
             log.info('No expid given so stopping now')
