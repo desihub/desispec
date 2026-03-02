@@ -885,13 +885,15 @@ def per_exposure_normalization(spectra, filter_width=51):
                         continue
 
                 # physicality check
+                # coefficients should not be negative. Also restricting range to OM about 1
                 is_converged = np.all( (a>0.1) & (a<10.) ) 
                 if is_converged:
                     spectra.fibermap['COADD_NORM'][idx] = a
                 else:
-                    negative_indices = idx[np.where(a<0)[0]]
+                    bad_a = np.where((a<0.1) | (a>10.))[0]
+                    bad_indices = idx[bad_a]
                     # set badfiber fiberstatus for these exposures
-                    spectra.fibermap['FIBERSTATUS'][negative_indices] |= fmsk.BADFIBER
+                    spectra.fibermap['FIBERSTATUS'][bad_indices] |= fmsk.BADFIBER
                     # update fiberstatus
                     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
