@@ -8,6 +8,7 @@ Utilities for working with slurm batch queues.
 import os
 from importlib import resources
 import yaml
+import numpy as np
 
 from desiutil.log import get_logger
 
@@ -178,19 +179,17 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     elif jobdesc in ('DARK', 'BADCOL'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('BIASNIGHT', 'BIASPDARK'):
-        ## Jobs are memory limited, so use 15 cores per node
-        ## and split work of 30 cameras across 2 nodes
+        ## Jobs are memory limited, so use 15 cores max per node
+        ## 8 minutes to run biases plus startup plus overhead
         nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
-        ncores = 15
-        ## 8 minutes base plus 4 mins per loop over dark exposures
-        pdarkcores = min([ncameras*nexps, nodes*config['cores_per_node']])
-        runtime = 8 + 4.*(float(nodes*config['cores_per_node'])/float(pdarkcores))
+        ncores = ncameras # redefined for biaspdark below
+        runtime = 8.
     elif jobdesc in ('PDARK'):
-        nodes = 1 
-        # can do 1 core per camera per exp, but limit to cores available
-        ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
-        ## 4 minutes base plus 4 mins per loop over dark exposures    
-        runtime = 4 + 4.*(float(nodes*config['cores_per_node'])/float(ncores))
+        ## only one node since not memory or compute intensive
+        ## ncores and runtime are defined below the if-elif-else statement,
+        ## but we need to define nodes here for the scaling
+        nodes = 1
+        runtime, ncores = 0., 1. # both redefined later on
     elif jobdesc == 'CCDCALIB':
         nodes = 1
         ncores, runtime = ncameras, 7 # 5 mins after perlmutter system scaling factor
@@ -211,9 +210,6 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     elif jobdesc == 'POSTSTDSTAR':
         runtime = 10
         ncores = ncameras
-    elif jobdesc == 'NIGHTLYBIAS':
-        ncores, runtime = 15, 5
-        nodes = 2
     elif jobdesc in ['PEREXP', 'PERNIGHT', 'CUMULATIVE', 'CUSTOMZTILE']:
         if system_name.startswith('perlmutter'):
             nodes, runtime = 1, 50  #- timefactor will bring time back down
@@ -231,6 +227,18 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         msg = 'unknown jobdesc={}'.format(jobdesc)
         log.critical(msg)
         raise ValueError(msg)
+
+    ## Above we didn't assign any runtime or n_cores for PDARK jobs.
+    ## We can only run so many cam-exp pairs in parallel, so there is a
+    ## linear scaling of runtime with the number of loops we have to wait for,
+    ## which is ncameras*nexps/cores_available.
+    if jobdesc.endswith('PDARK'):
+        ## base startup time and contingency
+        runtime += 4.
+        ## now scale with the number of loops through ncameras*nexps tasks
+        ## can do 1 core per camera per exp, but limit to cores available
+        ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
+        runtime += 4.*np.ceil(float(ncameras*nexps)/float(nodes*config['cores_per_node']))
 
     if forced_runtime is not None:
         runtime = forced_runtime
@@ -273,6 +281,3 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         runtime += float(runtime)
 
     return ncores, nodes, runtime
-
-
-
