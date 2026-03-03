@@ -349,7 +349,7 @@ def create_biaspdark_batch_script(night, expids,
             bias_threads_per_rank = int(np.floor(tot_threads // bias_nranks))
 
         if bias_nranks * bias_threads_per_rank > nodes * threads_on_node:
-            assertstring = f"Requested {bias_nranks} ranks with {bias_threads_per_rank} threads per rank on
+            assertstring = f"Requested {bias_nranks} ranks with {bias_threads_per_rank} threads per rank on"
                            + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
             log.critical(assertstring)
             raise AssertionError(assertstring)
@@ -374,7 +374,7 @@ def create_biaspdark_batch_script(night, expids,
             dark_threads_per_rank = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // nranks))
 
         if nranks * dark_threads_per_rank > nodes * threads_on_node:
-            assertstring = f"Requested {nranks} ranks with {dark_threads_per_rank} threads per rank on
+            assertstring = f"Requested {nranks} ranks with {dark_threads_per_rank} threads per rank on"
                            + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
             log.critical(assertstring)
             raise AssertionError(assertstring)
