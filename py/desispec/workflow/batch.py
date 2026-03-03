@@ -178,7 +178,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
             ncores = 20 * nspectro
     elif jobdesc in ('DARK', 'BADCOL'):
         ncores, runtime = ncameras, 5
-    elif jobdesc in ('BIASNIGHT', 'BIASPDARK'):
+    elif jobdesc in ('BIASNIGHT', 'BIASPDARK', 'NIGHTLYBIAS'):
         ## Jobs are memory limited, so use 15 cores max per node
         ## 8 minutes to run biases plus startup plus overhead
         nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
@@ -189,7 +189,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         ## ncores and runtime are defined below the if-elif-else statement,
         ## but we need to define nodes here for the scaling
         nodes = 1
-        runtime, ncores = 0., 1. # both redefined later on
+        runtime, ncores = 0., 1 # both redefined later on
     elif jobdesc == 'CCDCALIB':
         nodes = 1
         ncores, runtime = ncameras, 7 # 5 mins after perlmutter system scaling factor

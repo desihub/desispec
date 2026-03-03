@@ -327,7 +327,8 @@ def create_biaspdark_batch_script(night, expids,
 
     batch_config = batch.get_config(system_name)
 
-    ntasks, nodes, runtime = determine_resources(ncameras, jobdesc=jobdesc,
+    ## Get number of mpi workers
+    nranks, nodes, runtime = determine_resources(ncameras, jobdesc=jobdesc,
                                                  queue=queue, nexps=nexps,
                                                  system_name=system_name)
 
@@ -335,42 +336,51 @@ def create_biaspdark_batch_script(night, expids,
     script_body = ""
     # Run nightlybias first
     if do_biasnight:
-        ## One task for each camera
-        bias_ntasks = ncameras
-        ## srun won't split a task across nodes, so for tasks that aren't evenly split
-        ## across nodes, make sure largest task count with number of threads
+        ## One ranks for each camera
+        bias_nranks = ncameras
+        ## srun won't split a ranks across nodes, so for ranks that aren't evenly split
+        ## across nodes, make sure largest rank count with number of threads
         ## will still fit in a single node
-        if nodes > 1 and bias_ntasks % nodes != 0:
-            largest_ntasks_on_node = np.ceil(float(bias_ntasks)/float(nodes))
-            bias_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
+        if nodes > 1 and bias_nranks % nodes != 0:
+            largest_nranks_on_node = np.ceil(float(bias_nranks)/float(nodes))
+            bias_threads_per_rank = int(np.floor(threads_on_node / largest_nranks_on_node))
         else:
             tot_threads = nodes * threads_on_node
-            bias_threads_per_task = int(np.floor(tot_threads // bias_ntasks))
+            bias_threads_per_rank = int(np.floor(tot_threads // bias_nranks))
+
+        if bias_nranks * bias_threads_per_rank > nodes * threads_on_node:
+            assertstring = f"Requested {bias_nranks} ranks with {bias_threads_per_rank} threads per rank on
+                           + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
+            log.critical(assertstring)
+            raise AssertionError(assertstring)
 
         cmd = f'desi_proc --cameras {camword} -n {night} --nightlybias --mpi'
         cmd += f' --starttime $(date +%s) --timingfile {timingfile}'
 
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=bias_ntasks, threads_per_task=bias_threads_per_task, stepname='biasnight')
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=bias_nranks, threads_per_task=bias_threads_per_rank, stepname='biasnight')
 
     # Then pdarks
     if do_pdark:
-        ## this should be equivalent to the number of tasks returned by determine_resources() for pdark,
-        ## but let's recalculate just in case
-        dark_ntasks = min([ncameras*nexps, nodes*batch_config['cores_per_node']])
-        ## if fewer than one-to-one assign more than one core to each task (min of batch_config['threads_per_core']
+        ## if fewer than one-to-one assign more than one core to each rank (min of batch_config['threads_per_core']
         ## since we don't use threads)
-        ## srun won't split a task across nodes, so for tasks that aren't evenly split
-        ## across nodes, make sure largest task count with number of threads
+        ## srun won't split a rank across nodes, so for ranks that aren't evenly split
+        ## across nodes, make sure largest rank count with number of threads
         ## will still fit in a single node
-        if nodes > 1 and dark_ntasks % nodes != 0:
-            largest_ntasks_on_node = np.ceil(float(dark_ntasks)/float(nodes))
-            dark_threads_per_task = int(np.floor(threads_on_node / largest_ntasks_on_node))
+        if nodes > 1 and nranks % nodes != 0:
+            largest_nranks_on_node = np.ceil(float(nranks)/float(nodes))
+            dark_threads_per_rank = int(np.floor(threads_on_node / largest_nranks_on_node))
         else:
             tot_threads = nodes * threads_on_node
-            dark_threads_per_task = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // dark_ntasks))
+            dark_threads_per_rank = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // nranks))
+
+        if nranks * dark_threads_per_rank > nodes * threads_on_node:
+            assertstring = f"Requested {nranks} ranks with {dark_threads_per_rank} threads per rank on
+                           + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
+            log.critical(assertstring)
+            raise AssertionError(assertstring)
 
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_ntasks, threads_per_task=dark_threads_per_task, stepname='pdark')
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_nranks, threads_per_task=dark_threads_per_rank, stepname='pdark')
 
     script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
