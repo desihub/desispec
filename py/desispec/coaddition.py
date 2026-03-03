@@ -872,7 +872,7 @@ def per_exposure_normalization(spectra, filter_width=51):
                 filtered_coadd = median_filter(crude_coadd, size=filter_width, mode='reflect')[not_edges]
                 filtered_exp = np.zeros_like(f_i[:,not_edges])
                 for j,k in enumerate(idx_good):
-                    filtered_exp[j] = median_filter(f_i[j]*(w_i[j] != 0), size=filter_width, mode='reflect')[not_edges]
+                    filtered_exp[j] = median_filter(f_i[j], size=filter_width, mode='reflect')[not_edges]
                     # ignore ivar = 0 pixels
                     mask = (w_tot[not_edges] != 0) & (w_i[j][not_edges] != 0)
                     if np.isfinite(np.sum(filtered_coadd[mask]*filtered_exp[j][mask])):
