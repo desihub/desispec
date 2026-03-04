@@ -336,7 +336,7 @@ def create_biaspdark_batch_script(night, expids,
     script_body = ""
     # Run nightlybias first
     if do_biasnight:
-        ## One ranks for each camera
+        ## One rank for each camera
         bias_nranks = ncameras
         ## srun won't split a ranks across nodes, so for ranks that aren't evenly split
         ## across nodes, make sure largest rank count with number of threads
@@ -349,7 +349,7 @@ def create_biaspdark_batch_script(night, expids,
             bias_threads_per_rank = int(np.floor(tot_threads // bias_nranks))
 
         if bias_nranks * bias_threads_per_rank > nodes * threads_on_node:
-            assertstring = f"Requested {bias_nranks} ranks with {bias_threads_per_rank} threads per rank on" \
+            assertstring = f"Requested {bias_nranks} ranks with {bias_threads_per_rank} threads per rank on " \
                            + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
             log.critical(assertstring)
             raise AssertionError(assertstring)
@@ -374,13 +374,13 @@ def create_biaspdark_batch_script(night, expids,
             dark_threads_per_rank = int(np.floor(nodes*batch_config['cores_per_node']*batch_config['threads_per_core'] // nranks))
 
         if nranks * dark_threads_per_rank > nodes * threads_on_node:
-            assertstring = f"Requested {nranks} ranks with {dark_threads_per_rank} threads per rank on" \
+            assertstring = f"Requested {nranks} ranks with {dark_threads_per_rank} threads per rank on " \
                            + f"{nodes} nodes with {threads_on_node} threads per node exceeds available threads ({nodes*threads_on_node})"
             log.critical(assertstring)
             raise AssertionError(assertstring)
 
         cmd = f'desi_preproc_darks -n {night} --expids={",".join(expids.astype(str))} --camword={camword} --mpi'
-        script_body += wrap_command_for_script(cmd, nodes, ntasks=dark_nranks, threads_per_task=dark_threads_per_rank, stepname='pdark')
+        script_body += wrap_command_for_script(cmd, nodes, ntasks=nranks, threads_per_task=dark_threads_per_rank, stepname='pdark')
 
     script_body += wrapup_for_script()
     runtime_hh = int(runtime // 60)
