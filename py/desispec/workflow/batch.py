@@ -183,7 +183,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
         ## 8 minutes to run biases plus startup plus overhead
         nodes = (ncameras // 16) + 1 # 2 nodes unless ncameras <= 15
         ncores = ncameras # redefined for biaspdark below
-        runtime = 8.
+        runtime = 12. #~8 minutes after perlmutter system scaling factor
     elif jobdesc in ('PDARK'):
         ## only one node since not memory or compute intensive
         ## ncores and runtime are defined below the if-elif-else statement,
@@ -234,7 +234,7 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     ## which is ncameras*nexps/cores_available.
     if jobdesc.endswith('PDARK'):
         ## base startup time and contingency
-        runtime += 4.
+        runtime += 6.
         ## now scale with the number of loops through ncameras*nexps tasks
         ## can do 1 core per camera per exp, but limit to cores available
         ncores = min([ncameras*nexps, nodes*config['cores_per_node']])
@@ -270,9 +270,11 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     if jobdesc not in ['ARC', 'TESTARC']:
         runtime *= config['timefactor']
 
-    #- Do not allow runtime to be less than 5 min
-    if runtime < 5:
-        runtime = 5
+    #- Do not allow runtime to be less than 8 min except for LINKCAL
+    if runtime < 8. and jobdesc not in ('LINKCAL'):
+        runtime = 8.
+    elif runtime < 5.:
+        runtime = 5.
 
     #- Add additional overhead factor if needed
     if 'NERSC_RUNTIME_OVERHEAD' in os.environ:
