@@ -276,7 +276,8 @@ def create_biaspdark_batch_script(night, expids,
 
     Args:
         night (str or int): The night in which the biaspdark script will be run.
-        expids (list of int or np.array): The exposure id(s) for the data.
+        expids (list of int or np.array): The exposure id(s) for the data. These are the
+            dark expids if pdark or biaspdark is being run. Otherwise it is a zero expid.
         jobdesc (str, optional): Description of the job to be performed. If None, will
             default to 'biaspdark' or 'pdark' depending on do_biasnight and do_pdark.
         camword (str): Camword of cameras to include in the processing.
