@@ -1348,11 +1348,13 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
                                                           reservation=reservation,
                                                           dry_run_level=dry_run_level)
 
-    # Check if any jobs not resubmitted due to dependency issues
+    ## Check if any jobs not resubmitted due to dependency issues
     nbad = np.sum(proc_table['STATUS']=='DEP_NOT_SUBD')
     if nbad > 0:
         log.error(f'{nbad} jobs not re-submitted due to dependency issues; see logs above.')
 
+    ## Reset DEP_NOT_SUBD back to whatever the actual queue state is,
+    ## plus catch up on the state of other jobs that may have run in the meantime
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
 
     return proc_table, submits, nbad
@@ -1399,7 +1401,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
     log = get_logger()
     row = proc_table[rown]
     log.info(f"Identified row {row['INTID']} as needing resubmission.")
-    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}")
+    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}, " +
+             f"Dependencies={row['INT_DEP_IDS']}")
     if len(proc_table['ALL_QIDS'][rown]) > max_resubs:
         log.warning(f"Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, "
                     + f"Jobdesc={row['JOBDESC']} has already been submitted "
@@ -1456,6 +1459,11 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                          + f" and we can't find it, this is a fatal error."
                     log.critical(msg)
                     raise ValueError(msg)
+            elif proc_table['STATUS'][id_to_row_map[idep]] == 'DEP_NOT_SUBD':
+                log.error(f"Already tried and failed to submit dependency {idep};" +
+                          f" not submitting {row['INTID']}.")
+                proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                return proc_table, submits
             elif proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
                 log.error(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
@@ -1474,6 +1482,15 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                                                                   id_to_row_map,
                                                                   reservation=reservation,
                                                                   dry_run_level=dry_run_level)
+
+                ## Check if dependency was successfully submitted
+                if proc_table['STATUS'][id_to_row_map[idep]] not in good_states:
+                    dep_state = proc_table['STATUS'][id_to_row_map[idep]]
+                    log.error(f"After attempting resubmission, dependency {idep} in state {dep_state}," +
+                              f" so not submitting {row['INTID']}.")
+                    proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                    return proc_table, submits
+
                 ## Now that we've resubmitted the dependency if necessary,
                 ## add the most recent QID to the list assuming it isn't COMPLETED
                 if still_a_dependency(proc_table[id_to_row_map[idep]]):
@@ -1495,35 +1512,11 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
                         + " This is expected if the ideps were status=COMPLETED")
 
-    # Having re-submitted dependencies, double check that they are ok before submitting this job
-    ok = True
-    for idep in ideps:
-        if idep in id_to_row_map:
-            depstate = proc_table['STATUS'][id_to_row_map[idep]]
-            if depstate in good_states:
-                log.debug("Dependency %d is in a good state %s", idep, depstate)
-                continue
-            else:
-                log.error(f"Dependency {idep} is still in bad state {depstate}; not submitting {row['INTID']}")
-                proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
-                ok = False
-        elif idep in ok_different_night_ideps:
-            log.debug("Dependency %d is from a different night but verified as ok", idep)
-            continue
-        else:
-            # this should never happen, but catch this just in case
-            log.error(f"Unexpected! Dependency {idep} not in current night and not in good list from other nights;" +
-                      f" not submitting {row['INTID']}")
-            proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
-            ok = False
 
-    if ok:
-        proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
-                                               strictly_successful=True, dry_run=dry_run_level)
-        submits += 1
-    else:
-        log.error(f"Not submitting {row['INTID']} since dependencies aren't in good states.")
-        proc_table['STATUS'][rown] = "DEP_NOT_SUBD"  # just in case
+    ## If we got this far, dependencies should be ok and we can resubmit this job
+    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
+                                           strictly_successful=True, dry_run=dry_run_level)
+    submits += 1
 
     if dry_run_level < 3:
         if ptab_name is None:
