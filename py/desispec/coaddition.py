@@ -859,7 +859,10 @@ def per_exposure_normalization(spectra, filter_width=51):
                     spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
                     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
                     continue
-                    
+                
+                #snr_exp = np.sum(f_i*np.sqrt(w_i), axis=1)/np.sum(w_i!=0, axis=1)
+                #snr_exp = snr_exp.reshape(snr_exp.size, 1)
+
                 # median smooth individual spectra to capture broad band and reduce noise
                 filtered_exp = np.zeros_like(f_i[:,not_edges])
                 for j,k in enumerate(idx_good):
@@ -867,8 +870,9 @@ def per_exposure_normalization(spectra, filter_width=51):
             
                 w_tot = np.sum(w_i, axis=0)[not_edges]
                 # coadd of smoothed spectra
-                #smooth_coadd = np.sum(filtered_exp*w_i[:,not_edges], axis=0) / (w_tot + (w_tot == 0))
-                smooth_coadd = np.mean(filtered_exp, axis=0)
+                #smooth_coadd = np.sum(snr_exp*filtered_exp, axis=0) / np.sum(snr_exp)
+                smooth_coadd = np.sum(filtered_exp*w_i[:,not_edges], axis=0) / (w_tot + (w_tot == 0))
+                #smooth_coadd = np.mean(filtered_exp, axis=0)
 
                 # compute normalization constant
                 a = np.ones(idx.size)
