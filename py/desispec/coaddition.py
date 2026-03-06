@@ -817,7 +817,13 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
                     dwave[0] = waves[1] - waves[0]
                     dwave[-1] = waves[-1] - waves[-2]
                     for idx, j in enumerate(jj):
-                        mjd = spectra.fibermap["MJD"][j] if "MJD" in spectra.fibermap.colnames else spectra.fibermap.get("MJD-OBS", [0])[j]
+                        if "MJD" in spectra.fibermap.colnames:
+                            mjd = spectra.fibermap["MJD"][j]
+                        elif "MJD-OBS" in spectra.fibermap.colnames:
+                            mjd = spectra.fibermap["MJD-OBS"][j]
+                        else:
+                            mjd = 0.0
+                        
                         if not np.isnan(spectra.fibermap["TARGET_RA"][j]) and not np.isnan(spectra.fibermap["TARGET_DEC"][j]) and mjd > 0:
                             v_fiber = barycentric_velocity_corr_kms(
                                 spectra.fibermap["TARGET_RA"][j],
@@ -862,6 +868,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
                                                     onetile=onetile)
     spectra.exp_fibermap = exp_fibermap
     spectra.scores = None
+    spectra.heliocor = None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 

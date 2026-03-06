@@ -50,6 +50,8 @@ def parse(options=None):
             help="output coadded spectra filename")
     parser.add_argument("--onetile", action="store_true",
             help="input spectra are from a single tile")
+    parser.add_argument("--shift-resolution", action="store_true",
+            help="apply barycentric shift offsets to resolution matrix before coadding")
     parser.add_argument("--mpi", action="store_true",
             help="use MPI for parallelism")
 
@@ -242,7 +244,7 @@ def main(args=None, comm=None):
         if args.coaddfile is not None:
             log.info('Coadding spectra')
             #- in-place coadd updates spectra object
-            coadd(spectra, onetile=args.onetile)
+            coadd(spectra, onetile=args.onetile, shift_resolution=args.shift_resolution)
             log.info('Writing {}'.format(args.coaddfile))
             io.write_spectra(args.coaddfile, spectra)
 
