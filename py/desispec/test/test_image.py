@@ -74,14 +74,28 @@ class TestImage(unittest.TestCase):
         self.assertEqual(img2.meta['NAXIS1'], nx)
         self.assertEqual(img2.meta['NAXIS2'], ny)
         
-        #- also works for non-None mask and meta=None
-        img1 = Image(self.pix, self.ivar, mask=(self.ivar==0))
+        #- also works for mask!=None, readnoise[2D]!=None, and meta=None
+        img1 = Image(self.pix, self.ivar, mask=(self.ivar==0), readnoise=np.ones_like(self.pix))
         nx, ny = 2, 3
         img2 = img1[0:ny, 0:nx]
         self.assertEqual(img2.pix.shape[0], ny)
         self.assertEqual(img2.pix.shape[1], nx)
         self.assertTrue(img2.pix.shape == img2.ivar.shape)
         self.assertTrue(img2.pix.shape == img2.mask.shape)
+        self.assertTrue(img2.pix.shape == img2.readnoise.shape)
+
+        #- also works with missing mask, ivar, readnoise
+        img1 = Image(self.pix)
+        self.assertTrue(img1.ivar is None)
+        self.assertTrue(img1.mask is None)
+        self.assertEqual(img1.readnoise, 0.0)
+        nx, ny = 2, 3
+        img2 = img1[0:ny, 0:nx]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertTrue(img2.ivar is None)
+        self.assertTrue(img2.mask is None)
+        self.assertEqual(img2.readnoise, 0.0)
 
         #- Slice and dice multiple ways, getting meta NAXIS1/NAXIS2 correct
         img1 = Image(self.pix, self.ivar, meta=meta)

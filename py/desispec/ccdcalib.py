@@ -18,7 +18,7 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 from desispec import io
-from desispec.preproc import masked_median
+from desispec.maskedmedian import masked_median
 # from desispec.preproc import parse_sec_keyword, calc_overscan
 from desispec.preproc import parse_sec_keyword, get_amp_ids, get_readout_mode
 from desispec.preproc import subtract_peramp_overscan
@@ -248,7 +248,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
         if user_exists or default_exists:
             log.info(f"Reading existing {preproc_filename}")
-            img = io.read_image(preproc_filename)
+            img = io.read_image(preproc_filename, skip=('readnoise', 'ivar'))
             file_used = preproc_filename
         else :
             log.warning(f"Missing {preproc_filename}, generating now.")
@@ -263,6 +263,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 file_used = preproc_filename
             else:
                 file_used = filename
+
+            # drop readoise and ivar to save memory
+            img.readnoise = None
+            img.ivar = None
 
         # propagate gains to reference_header
         for a in get_amp_ids(img.meta) :
@@ -302,7 +306,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     else :
         smask=np.zeros(images[0].shape)
 
-    log.info(f"compute median image for {camera}...")
+    log.info(f"compute median image for {camera} from {len(images)} input images...")
     medimage=masked_median(images,masks)
 
     if True :

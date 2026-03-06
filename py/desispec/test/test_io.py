@@ -752,6 +752,12 @@ class TestIO(unittest.TestCase):
         self.assertEqual(img1.camera, img2.camera)
         self.assertEqual(img2.mask.dtype, np.uint32)
 
+        #- Check skipping HDUs
+        img3 = read_image(self.testfile, skip=('ivar', 'MASK', 'ReadNoise'))
+        self.assertTrue(img3.ivar is None)
+        self.assertTrue(img3.mask is None)
+        self.assertTrue(img3.readnoise is None)
+
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)
         img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0', meta=meta)
