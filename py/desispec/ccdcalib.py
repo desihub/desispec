@@ -264,7 +264,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             else:
                 file_used = filename
 
-            # drop readoise and ivar to save memory
+            # drop readnoise and ivar to save memory
             img.readnoise = None
             img.ivar = None
 
