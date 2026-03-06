@@ -3,7 +3,7 @@
 These instructions are for GitHub Copilot, Claude Code, and similar coding assistants.
 
 ## Project Overview
-desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) data processing. It handles spectral data extraction, calibration, and slurm batch job workflow.
+desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) data processing. It handles spectral data extraction, calibration, and Slurm batch job workflow.
 
 ## Code Style & Standards
 
