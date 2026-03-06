@@ -128,7 +128,7 @@ class TestCoadd(unittest.TestCase):
             spectra.resolution_data[b][0, ndiag//2, :] = 1.0
             
         # Add heliocor and set RA/DEC/MJD to something that gives a non-zero shift
-        spectra.heliocor = np.array([1.0001]) # field velocity = ~30 km/s
+        spectra.heliocor = np.array([1+20/3e5]) # field velocity = ~20 km/s
         spectra.fibermap['TARGET_RA'][:] = 0.0
         spectra.fibermap['TARGET_DEC'][:] = 0.0
         spectra.fibermap['MJD'] = 58800.0 # From heliocentric.py tests, gives ~19 km/s
