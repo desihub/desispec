@@ -11,7 +11,7 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 - Follow PEP 8 guidelines
 - Use 4-space indentation
 - Do not include type hints
-- Only use ASCII characters in code, comments, and docstrings; do not use Unicode symbols, emojis, or non-latin letters
+- Only use ASCII characters in code, comments, and docstrings; do not use Unicode symbols, emojis, or non-Latin letters
 - Keep lines under 120 characters when possible
 - Prefer functions that return values rather than modifying arguments in place
 - Classes may be used for data structures, but avoid complex class hierarchies and classes that manage state or contain algorithmic logic
