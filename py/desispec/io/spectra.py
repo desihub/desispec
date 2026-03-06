@@ -82,6 +82,8 @@ def write_spectra(outfile, spec, units=None):
 
     # Next is the fibermap
     fmap = encode_table(spec.fibermap.copy())
+    if getattr(spec, 'heliocor', None) is not None:
+        fmap['HELIOCOR'] = spec.heliocor
     fmap.meta['EXTNAME'] = 'FIBERMAP'
     fmap.meta['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(fmap.meta)
@@ -499,6 +501,11 @@ def read_spectra(
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
 
+    heliocor = None
+    if fmap is not None and 'HELIOCOR' in fmap.colnames:
+        heliocor = fmap['HELIOCOR'].copy()
+        fmap.remove_column('HELIOCOR')
+
     spec = Spectra(
         bands,
         wave,
@@ -515,6 +522,7 @@ def read_spectra(
         single=single,
         scores=scores,
         redshifts=redshifts,
+        heliocor=heliocor,
         copy=False
     )
 

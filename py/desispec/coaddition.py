@@ -23,6 +23,8 @@ from desiutil.log import get_logger
 
 from desispec.interpolation import resample_flux
 from desispec.spectra import Spectra
+from desispec.resolution import resolution_mat_torows, resolution_mat_tocolumns, shift_resolution_matrix_by_pixel
+from desispec.heliocentric import barycentric_velocity_corr_kms
 from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.specscore import compute_coadd_scores
@@ -668,7 +670,7 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
-def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
+def coadd_exposures(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
     """
     Coadd spectra across exposures, returning new Spectra object without changing original.
 
@@ -678,6 +680,7 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
+       shift_resolution: bool, if True, apply barycentric shift to resolution matrix before coadding
 
     Returns:
        coadded_spectra: desispec.spectra.Spectra object
@@ -697,11 +700,12 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     #- Perform coaddition in place on the copy
     coadd(coadded_spectra,
           cosmics_nsig=cosmics_nsig,
-          onetile=onetile)
+          onetile=onetile,
+          shift_resolution=shift_resolution)
 
     return coadded_spectra
 
-def coadd(spectra, cosmics_nsig=None, onetile=False):
+def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -711,6 +715,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
+       shift_resolution: bool, if True, apply barycentric shift to resolution matrix before coadding
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -803,8 +808,34 @@ def coadd(spectra, cosmics_nsig=None, onetile=False):
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
             if spectra.resolution_data is not None :
-                trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
-                                                    weights)[0]
+                if shift_resolution and getattr(spectra, 'heliocor', None) is not None:
+                    c_kms = 299792.458
+                    shifted_res_data = np.zeros_like(spectra.resolution_data[b][jj])
+                    waves = spectra.wave[b]
+                    dwave = np.zeros_like(waves)
+                    dwave[1:-1] = (waves[2:] - waves[:-2]) / 2.
+                    dwave[0] = waves[1] - waves[0]
+                    dwave[-1] = waves[-1] - waves[-2]
+                    for idx, j in enumerate(jj):
+                        mjd = spectra.fibermap["MJD"][j] if "MJD" in spectra.fibermap.colnames else spectra.fibermap.get("MJD-OBS", [0])[j]
+                        if not np.isnan(spectra.fibermap["TARGET_RA"][j]) and not np.isnan(spectra.fibermap["TARGET_DEC"][j]) and mjd > 0:
+                            v_fiber = barycentric_velocity_corr_kms(
+                                spectra.fibermap["TARGET_RA"][j],
+                                spectra.fibermap["TARGET_DEC"][j],
+                                mjd
+                            )
+                            v_field = (spectra.heliocor[j] - 1.0) * c_kms
+                            vshift = v_fiber - v_field
+                            deltas = (vshift / c_kms) * (waves / dwave)
+                            kernels = resolution_mat_torows(spectra.resolution_data[b][j])
+                            shifted_kernels = shift_resolution_matrix_by_pixel(kernels, deltas)
+                            shifted_res_data[idx] = resolution_mat_tocolumns(shifted_kernels)
+                        else:
+                            shifted_res_data[idx] = spectra.resolution_data[b][j]
+                    trdata[i, :, :] = _resolution_coadd(shifted_res_data, weights)[0]
+                else:
+                    trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
+                                                        weights)[0]
             # note we ignore the resolution matrix norm (sum of weights)
             # because weights already were normalized
 

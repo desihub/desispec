@@ -252,7 +252,7 @@ class SpectraLite(object):
     Lightweight spectra I/O object for regrouping
     '''
     def __init__(self, bands, wave, flux, ivar, mask, resolution_data,
-            fibermap, exp_fibermap=None, scores=None, model=None, redshifts=None):
+            fibermap, exp_fibermap=None, scores=None, model=None, redshifts=None, heliocor=None):
         '''
         Create a SpectraLite object
 
@@ -270,9 +270,11 @@ class SpectraLite(object):
             scores: scores table, applies to all bands
             model: 2D[nspec, nwave] spectral models
             redshifts: table of best-fit redshifts
+            heliocor: 1D array of heliocor per spectrum
         '''
 
         self.bands = bands[:]
+        self.heliocor = heliocor
 
         #- All inputs should have the same bands
         _bands = set(bands)
@@ -690,7 +692,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
 
     #- Setup data structures to fill
     wave, flux, ivar, mask = dict(), dict(), dict(), dict()
-    resolution_data, scores, fmaps = dict(), dict(), dict()
+    resolution_data, scores, fmaps, heliocor_data = dict(), dict(), dict(), dict()
 
     #- Get the bands that exist in the input data
     #- identify all of the exposures for each band
@@ -706,6 +708,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             mask[band] = list()
             resolution_data[band] = list()
             scores[band] = list()
+            heliocor_data[band] = list()
             wave[band] = frame.wave
         if (cam[1],night,expid) not in fmaps.keys():
             fmaps[(cam[1],night,expid)] = dict()
@@ -737,6 +740,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             ivar[band].append(bandframe.ivar[ii])
             mask[band].append(bandframe.mask[ii])
             resolution_data[band].append(bandframe.resolution_data[ii])
+            heliocor_data[band].append(np.full(np.sum(ii), bandframe.meta.get('HELIOCOR', 1.0)))
 
             fmaps[(spec,night,expid)][band] = bandframe.fibermap[ii]
 
@@ -748,6 +752,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
         ivar[band] = np.vstack(ivar[band])
         mask[band] = np.vstack(mask[band])
         resolution_data[band] = np.vstack(resolution_data[band])
+        heliocor_data[band] = np.hstack(heliocor_data[band])
 
         if len(scores[band]) > 0:
             scores[band] = np.hstack(scores[band])
@@ -855,7 +860,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             fibermap[col][ii] = 0.0
 
     return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
-            fibermap, scores=scores)
+            fibermap, scores=scores, heliocor=heliocor_data[bands[0]])
 
 def update_frame_cache(frames, framekeys, specprod_dir=None):
     '''

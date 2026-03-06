@@ -113,6 +113,37 @@ class TestCoadd(unittest.TestCase):
                 scores=scores,
                 )
 
+    def test_shift_resolution(self):
+        """Test the resolution matrix shift functionality through coadd()"""
+        from desispec.coaddition import coadd
+        
+        # Setup a simple spectra object with heliocor
+        spectra = self.spectra.copy()
+        nwave = len(spectra.wave['b'])
+        ndiag = 11
+        
+        # Create a mock resolution matrix (delta function in the middle)
+        for b in spectra.bands:
+            spectra.resolution_data[b] = np.zeros((1, ndiag, len(spectra.wave[b])))
+            spectra.resolution_data[b][0, ndiag//2, :] = 1.0
+            
+        # Add heliocor and set RA/DEC/MJD to something that gives a non-zero shift
+        spectra.heliocor = np.array([1.0001]) # field velocity = ~30 km/s
+        spectra.fibermap['TARGET_RA'][:] = 0.0
+        spectra.fibermap['TARGET_DEC'][:] = 0.0
+        spectra.fibermap['MJD'] = 58800.0 # From heliocentric.py tests, gives ~19 km/s
+        
+        # Coadd with shift_resolution=True
+        coadded = spectra.copy()
+        coadd(coadded, shift_resolution=True)
+        
+        # Verify the resolution matrix was shifted
+        # The central pixel should no longer be exactly 1.0 (it should be less due to shift spreading)
+        for b in spectra.bands:
+            self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2, :] < 1.0))
+            self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2 - 1, :] > 0.0))
+            self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2 + 1, :] > 0.0))
+
     def test_cosmic_masking_blank(self):
         """
         Ensure the masking works fine even if we have a few
