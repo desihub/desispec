@@ -11,7 +11,7 @@ from desispec import util
 from desiutil.log import get_logger
 
 class Image(object):
-    def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
+    def __init__(self, pix, ivar=None, mask=None, readnoise=0.0, camera='unknown',
         meta=None):
         """
         Create Image object
@@ -29,19 +29,23 @@ class Image(object):
         log = get_logger()
         if pix.ndim != 2:
             raise ValueError('pix must be 2D, not {}D'.format(pix.ndim))
-        if pix.shape != ivar.shape:
+        if (ivar is not None) and (pix.shape != ivar.shape):
             raise ValueError('pix.shape{} != ivar.shape{}'.format(pix.shape, ivar.shape))
         if (mask is not None) and (pix.shape != mask.shape):
             raise ValueError('pix.shape{} != mask.shape{}'.format(pix.shape, mask.shape))
+        if (readnoise is not None) and not np.isscalar(readnoise) and (pix.shape != readnoise.shape):
+            raise ValueError('pix.shape{} != readnoise.shape{}'.format(pix.shape, readnoise.shape))
 
         self.pix = pix
         self.ivar = ivar
         self.meta = meta
         if mask is not None:
             self.mask = util.mask32(mask)
-        else:
-            self.mask = np.zeros(self.ivar.shape, dtype=np.uint32)
+        elif self.ivar is not None:
+            self.mask = np.zeros(self.pix.shape, dtype=np.uint32)
             self.mask[self.ivar == 0] |= ccdmask.BAD
+        else:
+            self.mask = None
 
         #- Optional parameters
         self.readnoise = readnoise
@@ -75,11 +79,13 @@ class Image(object):
             raise ValueError('Invalid slice for Image objects')
 
         pix = self.pix[xyslice]
-        ivar = self.ivar[xyslice]
-        mask = self.mask[xyslice]
+        ivar = self.ivar[xyslice] if self.ivar is not None else None
+        mask = self.mask[xyslice] if self.mask is not None else None
         meta = copy.copy(self.meta)
 
-        if np.isscalar(self.readnoise):
+        if self.readnoise is None:
+            readnoise = None
+        elif np.isscalar(self.readnoise):
             readnoise = self.readnoise
         else:
             readnoise = self.readnoise[xyslice]

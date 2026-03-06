@@ -86,24 +86,33 @@ def write_image(outfile, image, meta=None):
 
     return outfile
 
-def read_image(filename):
+def read_image(filename, skip=None):
     """
     Returns desispec.image.Image object from input file
+
+    Options:
+        skip: iterable of case-insensitive HDU names to skip, e.g. ('ivar', 'mask', 'readnoise')
+
+    Returns: desispec.image.Image object
     """
     log = get_logger()
     filename = checkgzip(filename)
+    skip = [s.upper() for s in skip] if skip is not None else []
     t0 = time.time()
     with fits.open(filename, uint=True, memmap=False) as fx:
         image = native_endian(fx['IMAGE'].data).astype(np.float64)
-        ivar = native_endian(fx['IVAR'].data).astype(np.float64)
-        mask = native_endian(fx['MASK'].data).astype(np.uint16)
+        ivar = native_endian(fx['IVAR'].data).astype(np.float64) if 'IVAR' not in skip else None
+        mask = native_endian(fx['MASK'].data).astype(np.uint16) if 'MASK' not in skip else None
         camera = fx['IMAGE'].header['CAMERA'].lower()
         meta = fx['IMAGE'].header
 
-        if 'READNOISE' in fx:
-            readnoise = native_endian(fx['READNOISE'].data).astype(np.float64)
+        if 'READNOISE' in skip:
+            readnoise = None
         else:
-            readnoise = fx['IMAGE'].header['RDNOISE']
+            if 'READNOISE' in fx:
+                readnoise = native_endian(fx['READNOISE'].data).astype(np.float64)
+            else:
+                readnoise = fx['IMAGE'].header['RDNOISE']
 
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
