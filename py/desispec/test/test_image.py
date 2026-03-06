@@ -97,6 +97,17 @@ class TestImage(unittest.TestCase):
         self.assertTrue(img2.mask is None)
         self.assertEqual(img2.readnoise, 0.0)
 
+        #- explicitly test slicing when readnoise is None
+        img1 = Image(self.pix, readnoise=None)
+        self.assertTrue(img1.ivar is None)
+        self.assertTrue(img1.mask is None)
+        self.assertTrue(img1.readnoise is None)
+        img2 = img1[0:ny, 0:nx]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertTrue(img2.ivar is None)
+        self.assertTrue(img2.mask is None)
+        self.assertTrue(img2.readnoise is None)
         #- Slice and dice multiple ways, getting meta NAXIS1/NAXIS2 correct
         img1 = Image(self.pix, self.ivar, meta=meta)
         img2 = img1[0:ny]
