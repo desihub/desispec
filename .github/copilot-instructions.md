@@ -11,7 +11,7 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 - Follow PEP 8 guidelines
 - Use 4-space indentation
 - Do not include type hints
-- Do not use unicode
+- Only use ASCII characters in code, comments, and docstrings; do not use unicode symbols, emojis, or non-latin letters
 - Keep lines under 120 characters when possible
 - Prefer functions that return values rather than modifying arguments in place
 - Classes may be used for data structures, but avoid complex class hierarchies and classes that manage state or contain algorithmic logic
@@ -25,11 +25,21 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 
 ## Key Guidelines
 
-### When Writing Code
+### When Writing New Code
 - **Imports**: Keep imports organized - standard library first, then third-party, then local imports
 - **Error Handling**: Use appropriate exceptions and provide meaningful error messages
 - **Logging**: Use the desiutil.log module for debug/info messages rather than print statements
 - **Testing**: Include unit tests for new functions in the appropriate test directory
+
+### Policy When Modifying Existing Code
+- Check existing code patterns before suggesting alternatives
+- Make ONLY the changes explicitly requested
+- Update related documentation when making changes
+- Do NOT refactor, improve, or fix unrelated code without asking
+- Do NOT reorder pre-existing imports, dictionaries, or other elements unless asked
+- If you see something that should be changed, ASK first
+- Do NOT break backwards compatibility without explicit instructions to do so
+- Do NOT add new 3rd party dependencies without explicit instructions to do so
 
 ### Project Structure
 - `/py/` - Main Python package code
@@ -56,12 +66,3 @@ desispec supports installation with `pip install .`, and also supports direct us
 - Test locally before committing
 - Keep commits focused on single logical changes
 
-## Code modification policy
-- Check existing code patterns before suggesting alternatives
-- Make ONLY the changes explicitly requested
-- Update related documentation when making changes
-- Do NOT refactor, improve, or fix unrelated code without asking
-- Do NOT reorder imports, dictionaries, or other elements unless asked
-- If you see something that should be changed, ASK first
-- Do NOT break backwards compatibility without explicit instructions to do so
-- Do NOT add new 3rd party dependencies without explicit instructions to do so
