@@ -85,7 +85,7 @@ class Image(object):
 
         if self.readnoise is None:
             readnoise = None
-        if np.isscalar(self.readnoise):
+        elif np.isscalar(self.readnoise):
             readnoise = self.readnoise
         else:
             readnoise = self.readnoise[xyslice]
