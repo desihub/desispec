@@ -43,7 +43,7 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 
 ### Project Structure
 - `/py/` - Main Python package code
-- `/py/desispec/tests/` - Unit tests
+- `/py/desispec/test/` - Unit tests
 - `/bin/` - Command line scripts
 - `/doc/` - Documentation
 - `/etc/` - Specialized files; ignore these
@@ -58,7 +58,7 @@ desispec supports installation with `pip install .`, and also supports direct us
 
 ## Testing & Development
 - Use pytest for unit tests
-- Place tests in `/py/desispec/tests/` with naming pattern `test_*.py`
+- Place tests in `/py/desispec/test/` with naming pattern `test_*.py`
 
 ## Git Conventions
 - Use clear, descriptive commit messages
