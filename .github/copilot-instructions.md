@@ -17,10 +17,11 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 - Classes may be used for data structures, but avoid complex class hierarchies and classes that manage state or contain algorithmic logic
 - Prioritize clarity over cleverness; write code that is easy to read and understand by non-expert collaborators
 - Support Python 3.10 and newer
+- Existing code doen't strictly follow these guidelines, so when modifying existing code, follow the existing style and patterns unless explicitly asked to change them
 
 ### Documentation
 - Provide clear docstrings with brief descriptions, input parameters, and return values
-- Use NumPy or Google style for docstrings
+- Use Google style docstrings; numpy style docstrings are also ok if existing file uses them
 - Add comments for complex logic and non-obvious implementations
 
 ## Key Guidelines
@@ -57,8 +58,9 @@ desispec supports installation with `pip install .`, and also supports direct us
 - `desispec.spectra` - Spectral data structures and manipulation
 
 ## Testing & Development
-- Use pytest for unit tests
+- Use `unittest.TestCase` for unit tests
 - Place tests in `/py/desispec/test/` with naming pattern `test_*.py`
+- Tests will be run with `pytest`
 
 ## Git Conventions
 - Use clear, descriptive commit messages
