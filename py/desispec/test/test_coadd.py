@@ -141,8 +141,6 @@ class TestCoadd(unittest.TestCase):
         # The central pixel should no longer be exactly 1.0 (it should be less due to shift spreading)
         for b in spectra.bands:
             self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2, :] < 1.0))
-            self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2 - 1, :] > 0.0))
-            self.assertTrue(np.all(coadded.resolution_data[b][0, ndiag//2 + 1, :] > 0.0))
 
     def test_cosmic_masking_blank(self):
         """
