@@ -16,7 +16,7 @@ desispec is a Python package for Dark Energy Spectroscopic Instrument (DESI) dat
 - Prefer functions that return values rather than modifying arguments in place
 - Classes may be used for data structures, but avoid complex class hierarchies and classes that manage state or contain algorithmic logic
 - Prioritize clarity over cleverness; write code that is easy to read and understand by non-expert collaborators
-- Support Python 3.12 and newer
+- Support Python 3.10 and newer
 
 ### Documentation
 - Provide clear docstrings with brief descriptions, input parameters, and return values
