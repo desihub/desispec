@@ -113,12 +113,7 @@ class Spectra(object):
             self.meta = {}
         else:
             self.meta = meta.copy()
-            
-        if heliocor is not None:
-            self.heliocor = np.array(heliocor)
-        else:
-            self.heliocor = None
-
+        
         nspec = 0
 
         # check consistency of input dimensions
@@ -190,7 +185,11 @@ class Spectra(object):
             self.redshifts = redshifts.copy()
         else:
             self.redshifts = None
-
+        if heliocor is not None:
+            self.heliocor = heliocor.copy()
+        else:
+            self.heliocor = None
+        
         self.wave = {}
         self.flux = {}
         self.ivar = {}

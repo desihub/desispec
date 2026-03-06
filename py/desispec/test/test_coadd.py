@@ -150,7 +150,7 @@ class TestCoadd(unittest.TestCase):
         # testing that zero shift does nothing 
         # Add heliocor and set RA/DEC/MJD to something that gives a non-zero shift
         mjd = 58800
-        spectra.heliocor = barycentric_velocity_corr_kms(0, 0, mjd)
+        spectra.heliocor = np.array([barycentric_velocity_corr_kms(0, 0, mjd)])
         spectra.fibermap['TARGET_RA'][:] = 0.0
         spectra.fibermap['TARGET_DEC'][:] = 0.0
         spectra.fibermap['MJD'] = mjd # From heliocentric.py tests, gives ~19 km/s
