@@ -570,10 +570,10 @@ def _initialize_page(color_profile, titlefill='Processing'):
     /* #c tr:nth-child(even){background-color: #f2f2f2;} */
     #c tr:hover {background-color: #ddd;}
     #c th {padding-top: 12px;  padding-bottom: 12px;  text-align: left;  background-color: #34495e;  color: white;}
-    .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 18px;width: 100%;border: none;text-align: left;outline: none;font-size: 25px;}
-    .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
+    .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 8px;width: 100%;border: none;text-align: left;outline: none;font-size: 18px;}
+    .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 8px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 18px;}
     .active, .collapsible:hover { background-color: #ccc;}
-    .content {padding: 0 18px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
+    .content {padding: 0 12px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
@@ -618,7 +618,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
           background-position: 10px 10px;
           background-repeat: no-repeat;
           width: 10%;
-          font-size: 16px;
+          font-size: 14px;
           padding: 12px 20px 12px 40px;
           border: 1px solid #ddd;
           margin-bottom: 12px;
@@ -628,7 +628,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
           background-position: 10px 10px;
           background-repeat: no-repeat;
           width: 10%;
-          font-size: 16px;
+          font-size: 14px;
           padding: 12px 20px 12px 40px;
           border: 1px solid #ddd;
           margin-bottom: 12px;
