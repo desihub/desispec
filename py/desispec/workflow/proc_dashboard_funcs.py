@@ -573,7 +573,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
     .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 8px;width: 100%;border: none;text-align: left;outline: none;font-size: 18px;}
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 8px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 18px;}
     .active, .collapsible:hover { background-color: #ccc;}
-    .content {padding: 0 12px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
+    .content {padding: 0 12px;display: table;overflow: hidden;background-color: #f1f1f1;max-height:0px;}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
