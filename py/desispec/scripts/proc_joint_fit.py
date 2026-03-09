@@ -161,7 +161,8 @@ def main(args=None, comm=None):
                                                 system_name=args.system_name)
         err = 0
         if not args.nosubmit:
-            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
+            ### err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', scriptfile])
+            err = subprocess.call(['sbatch', scriptfile])
         sys.exit(err)
 
     # -------------------------------------------------------------------------

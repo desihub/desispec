@@ -1423,7 +1423,8 @@ cp {biasfile}  bias_frames/{biasfile}
 """)
 #TODO: the copying needs to be done in a cleaner way, maybe as part of the desi_compute_dark_nonlinear? or just writing to the corresponding output dir directly
         if not nosubmit:
-            err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', batchfile])
+            ### err = subprocess.call(['sbatch', '--kill-on-invalid-dep=yes', batchfile])
+            err = subprocess.call(['sbatch', batchfile])
             if err == 0:
                 log.info(f'Submitted {batchfile}')
             else:

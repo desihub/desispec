@@ -139,7 +139,8 @@ def main(args):
             log.info(f"Dry run so not creating the batch script: {batchscript}"
                      + f"\tfor {healpixels=}, {args.survey=}, {args.program=}")
 
-        cmd = ['sbatch' , '--kill-on-invalid-dep=yes']
+        ### cmd = ['sbatch', '--kill-on-invalid-dep=yes']
+        cmd = ['sbatch', ]
         if args.batch_reservation:
             cmd.extend(['--reservation', args.batch_reservation])
         if args.batch_dependency:
