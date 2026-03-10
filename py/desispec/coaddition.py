@@ -680,7 +680,7 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False, shift_resolution=
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       shift_resolution: bool, if True, apply barycentric shift to resolution matrix before coadding
+       shift_resolution: bool, if True, apply barycentric shift correction to resolution matrix before coadding
 
     Returns:
        coadded_spectra: desispec.spectra.Spectra object
@@ -715,7 +715,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       shift_resolution: bool, if True, apply barycentric shift to resolution matrix before coadding
+       shift_resolution: bool, if True, apply barycentric shift correction to resolution matrix before coadding
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -832,7 +832,10 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
                             )
                             v_field = (spectra.heliocor[j] - 1.0) * c_kms
                             vshift = v_fiber - v_field
-                            deltas = (vshift / c_kms) * (waves / dwave)
+                            # this is the velocity correction that needs to be added to the object
+                            # velocity that means that the resolution matrix shift needs to be of
+                            # opposite sign
+                            deltas = (-1 * vshift / c_kms) * (waves / dwave)
                             kernels = resolution_mat_torows(spectra.resolution_data[b][j])
                             shifted_kernels = shift_resolution_matrix_by_pixel(kernels, deltas)
                             shifted_res_data[idx] = resolution_mat_tocolumns(shifted_kernels)
