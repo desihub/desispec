@@ -130,7 +130,7 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave):
     nspec, ndiag, nwave = resolution_data.shape
     shifted_res_data = np.zeros_like(resolution_data)
 
-    c_kms = 299792.458
+    c_kms = astropy.constants.c.to(u.km/u.s).value
 
     dwave = np.zeros_like(wave)
     dwave[1:-1] = (wave[2:] - wave[:-2]) / 2.
