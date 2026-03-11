@@ -421,7 +421,7 @@ class CalibFinder() :
             self.find_darks_in_desi_spectro_dark(header)
         # Make sure that the dates are ints
         self.data['DATE-OBS-BEGIN']=int(self.data['DATE-OBS-BEGIN'])
-        if self.data.haskey('DATE-OBS-END'):
+        if 'DATE-OBS-END' in self.data:
             if self.data['DATE-OBS-END'].lower()=='none':
                 self.data['DATE-OBS-END']=99999999
             else:

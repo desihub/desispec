@@ -86,9 +86,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
     log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
     log.info('Checking for DARK_RESET')
-    # Load the header and set the DATE-OBS-BEGIN to int for comparisons
+    # Load the calib from the header
     reference_calib=CalibFinder([reference_header])
-    # reference_calib.data['DATE-OBS-BEGIN']=int(reference_calib.data['DATE-OBS-BEGIN'])
     # Check for dark_reset
     dark_reset_begin = 0
     dark_reset_end = 0
@@ -120,8 +119,6 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         # Instantiate CalibFinder
         # The images should be sorted as those closest in MJD so I should be able to step out
         calib=CalibFinder([header,primary_header])
-        # Set the DATE-OBS-BEGIN to int for comparisons
-        # calib.data['DATE-OBS-BEGIN']=int(calib.data['DATE-OBS-BEGIN'])
         # If the new dark has the same calib as the reference dark, pass it
         if calib.data['DATE-OBS-BEGIN']==reference_calib.data['DATE-OBS-BEGIN']:
             pass
