@@ -116,7 +116,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, inter
                                          ('WAVE','f4'),
                                          ('DWAVE','f4'),
                                          ('DWAVE_ERR','f4')]))
-        psf_fits.append(pyfits.BinTableHDU(data, name='INTOFF'))
+        psf_fits['INTOFF'] = pyfits.BinTableHDU(data, name='INTOFF')
+        # this will overwrite previously existing extensions with same name
     if external_offset_info is not None:
         data = {}
         dwave,dwave_err,wave=[external_offset_info[_] for _ in ['dwave','dwave_err','wave']]
@@ -125,7 +126,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, inter
                                          ('WAVE','f4'),
                                          ('DWAVE','f4'),
                                          ('DWAVE_ERR','f4')]))
-        psf_fits.append( pyfits.BinTableHDU(data, name='EXTOFF'))
+        psf_fits['EXTOFF'] = pyfits.BinTableHDU(data, name='EXTOFF')
+        # this will overwrite previously existing extensions with same name
 
     tmpfile = get_tempfilename(output_psf_filename)
     psf_fits.writeto(tmpfile, overwrite=True)
