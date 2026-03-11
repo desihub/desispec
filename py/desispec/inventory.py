@@ -10,6 +10,8 @@ import numpy as np
 import h5py
 from astropy.table import Table, Column, vstack
 
+from desispec.io.meta import faflavor2program
+
 def _inventory_tiledir(tiledir):
     """
     Generate tiles, healpix, and radec Tables for data in tiledir
@@ -17,11 +19,7 @@ def _inventory_tiledir(tiledir):
     Args:
         tiledir (str): path to a directory of tile redshifts
 
-    Returns tuple (tiles, healpix, radec) where
-
-      - tiles: Table(TARGETID, TILEID, LASTNIGHT, FIBER)
-      - healpix: Table(TARGETID, SURVEY, PROGRAM, HEALPIX)
-      - radec: Table(TARGETID, TARGET_RA, TARGET_DEC, HEALPIX)
+    Returns Table with columns TARGETID, SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC
     """
     from desimodel.footprint import radec2pix
     import fitsio
@@ -30,32 +28,25 @@ def _inventory_tiledir(tiledir):
     print(f'Loading {tiledir}')
     lastnight = int(os.path.basename(tiledir))
     coaddfiles = sorted(glob.glob(f'{tiledir}/coadd*.fits*'))
-    columns = ('TARGETID', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
 
-    tiles = list()
-    healpix = list()
-    radec = list()
+    tables = list()
+    fmcols = ('TARGETID', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
     for filename in coaddfiles:
-        fibermap, header = fitsio.read(filename, 'FIBERMAP', header=True)
-        fibermap = Table(fibermap)
-        fibermap['HEALPIX'] = radec2pix(nside=64, ra=fibermap['TARGET_RA'], dec=fibermap['TARGET_DEC'])
+        with fitsio.FITS(filename) as fx:
+            fibermap = fx['FIBERMAP'].read(columns=fmcols)
+            header = fx['FIBERMAP'].read_header()
+            hdr0 = fx[0].read_header()
 
-        tiles.append(fibermap['TARGETID', 'FIBER'])
-        healpix.append(fibermap['TARGETID', 'HEALPIX'])
-        radec.append(fibermap['TARGETID', 'TARGET_RA', 'TARGET_DEC', 'HEALPIX'])
+        tables.append(Table(fibermap))
 
     #- Stack first, then add columns that are the same for every row
-    tiles = vstack(tiles)
-    tiles['TILEID'] = header['TILEID']
-    tiles['LASTNIGHT'] = lastnight
+    tiletable = vstack(tables)
+    tiletable['TILEID'] = header['TILEID']
+    tiletable['SURVEY'] = header['SURVEY']
+    tiletable['PROGRAM'] = faflavor2program(header['FAFLAVOR'])
+    tiletable['LASTNIGHT'] = hdr0['NIGHT']   # in HDU 0 instead of FIBERMAP HDU
 
-    healpix = vstack(healpix)
-    healpix['SURVEY'] = header['SURVEY'].lower()
-    healpix['PROGRAM'] = header['PROGRAM'].lower()
-
-    radec = vstack(radec)
-
-    return tiles, healpix, radec
+    return tiletable
 
 def _get_unique_indices(arr):
     """
@@ -84,12 +75,12 @@ def _get_unique_indices(arr):
 
     return indices_dict
 
-def create_inventory_zcat(zcatfile, outfile, ngroups=1000):
+def create_inventory_zcat(zcat, outfile, ngroups=1000):
     """
     Create an inventory file given a zall-tilecumulative redshift catalog file
 
     Args:
-        zcatfile (str): path to zall-tilecumulative*.fits file
+        zcat (str|Table): path to zall-tilecumulative*.fits file or Table read from that file
         outfile (str): output inventory hdf5 filepath
 
     Options:
@@ -99,9 +90,14 @@ def create_inventory_zcat(zcatfile, outfile, ngroups=1000):
     import fitsio
 
     #- Read the zcatalog file with all columns that we need
-    print(f'Reading {zcatfile}')
-    columns = ('TARGETID', 'SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
-    zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
+    if isinstance(zcat, str):
+        print(f'Reading {zcat}')
+        columns = ('TARGETID', 'SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
+        zcat = Table(fitsio.read(zcat, 'ZCATALOG', columns=columns))
+    elif isinstance(zcat, Table):
+        pass  # ok, zcat is already a Table
+    else:
+        raise ValueError(f'zcat should be a filepath or Table, not {type(zcat)}')
 
     print('Calculating healpix')
     zcat['HEALPIX'] = radec2pix(nside=64, ra=zcat['TARGET_RA'], dec=zcat['TARGET_DEC'])
@@ -199,57 +195,12 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
     if ntiles is not None:
         tiledirs = tiledirs[0:ntiles]
 
-    tiles = list()
-    healpix = list()
-    radec = list()
-
     print(f'Loading {len(tiledirs)} tiles')
     with multiprocessing.Pool(nproc) as pool:
         results = pool.map(_inventory_tiledir, tiledirs)
     
-    for tiletable, hpixtable, radectable in results:
-        tiles.append(tiletable)
-        healpix.append(hpixtable)
-        radec.append(radectable)
-
-    tiles = vstack(tiles)
-    healpix = vstack(healpix)
-    radec = vstack(radec)
-
-    #- convert unicode strings to bytes for hdf5
-    healpix['SURVEY'] = healpix['SURVEY'].astype(bytes)
-    healpix['PROGRAM'] = healpix['PROGRAM'].astype(bytes)
-
-    tmpfile = outfile+'.tmp'
-    with h5py.File(tmpfile, 'w') as hx:
-        hx.attrs['ngroups'] = ngroups
-       
-        group = 'targetid_tiles'
-        print(f'Writing {group}')
-        hx.create_group(group)
-        subgroups = tiles['TARGETID'] % ngroups
-        indices_dict = _get_unique_indices(subgroups)
-        for subgroup, ii in indices_dict.items():
-            hx[f'{group}/{subgroup}'] = tiles['TARGETID', 'TILEID', 'LASTNIGHT', 'FIBER'][ii]
-
-        group = 'targetid_healpix'
-        print(f'Writing {group}')
-        hx.create_group(group)
-        subgroups = healpix['TARGETID'] % ngroups
-        indices_dict = _get_unique_indices(subgroups)
-        for subgroup, ii in indices_dict.items():
-            hx[f'{group}/{subgroup}'] = healpix['TARGETID', 'SURVEY', 'PROGRAM', 'HEALPIX'][ii]
-
-        group = 'healpix_targetid_radec'
-        print(f'Writing {group}')
-        hx.create_group(group)
-        subgroup_indices = _get_unique_indices(radec['HEALPIX'])
-        for subgroup, ii in subgroup_indices.items():
-            hx[f'{group}/{subgroup}'] = radec['TARGETID', 'TARGET_RA', 'TARGET_DEC'][ii]
-
-    os.rename(tmpfile, outfile)
-    print(f'Wrote {outfile}')
-
+    zcat = vstack(results)
+    create_inventory_zcat(zcat, outfile, ngroups=ngroups)
 
 def update_inventory(filename, specprod=None):
     raise NotImplementedError
