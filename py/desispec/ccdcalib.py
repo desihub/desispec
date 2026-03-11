@@ -86,13 +86,14 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
 
     log.info(f"Use for hardware state reference EXPID={reference_header['EXPID']} NIGHT={reference_header['NIGHT']} CAMERA={reference_header['CAMERA']} DETECTOR={reference_header['DETECTOR']}")
     log.info('Checking for DARK_RESET')
+    # Load the calib from the header
     reference_calib=CalibFinder([reference_header])
     # Check for dark_reset
     dark_reset_begin = 0
     dark_reset_end = 0
     if reference_calib.haskey('DARK_RESET'):
         dark_reset = True
-        dark_reset_begin = reference_calib.data['DATE-OBS-BEGIN']
+        dark_reset_begin = int(reference_calib.data['DATE-OBS-BEGIN'])
     else:
         dark_reset = False
     log.info(f"reading images for {camera} ...")
