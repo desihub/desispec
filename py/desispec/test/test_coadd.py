@@ -131,7 +131,7 @@ class TestCoadd(unittest.TestCase):
         # testing that shift does somethign
         
         # Add heliocor and set RA/DEC/MJD to something that gives a non-zero shift
-        spectra.heliocor = np.array([1+20/3e5]) # field velocity = ~20 km/s
+        spectra.fibermap['HELIOCOR'] = np.array([1+20/3e5], dtype='f4') # field velocity = ~20 km/s
         spectra.fibermap['TARGET_RA'][:] = 0.0
         spectra.fibermap['TARGET_DEC'][:] = 0.0
         spectra.fibermap['MJD'] = 58800.0 # From heliocentric.py tests, gives ~19 km/s
@@ -150,7 +150,7 @@ class TestCoadd(unittest.TestCase):
         # testing that zero shift does nothing 
         # Add heliocor and set RA/DEC/MJD to something that gives a non-zero shift
         mjd = 58800
-        spectra.heliocor = np.array([barycentric_velocity_multiplicative_corr(0, 0, mjd)])
+        spectra.fibermap['HELIOCOR'] = np.array([barycentric_velocity_multiplicative_corr(0, 0, mjd)], dtype='f4')
         spectra.fibermap['TARGET_RA'][:] = 0.0
         spectra.fibermap['TARGET_DEC'][:] = 0.0
         spectra.fibermap['MJD'] = mjd # From heliocentric.py tests, gives ~19 km/s
@@ -165,6 +165,14 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(coadded.resolution_data[b][0, ndiag//2, :], 1.0))
             self.assertTrue(np.allclose(coadded.resolution_data[b][0, :ndiag//2, :], 0.0))
             self.assertTrue(np.allclose(coadded.resolution_data[b][0, ndiag//2+1:, :], 0.0))
+
+        # Verify fibermap contains HELIOCOR is gone from primary fmap
+        self.assertNotIn('HELIOCOR', coadded.fibermap.colnames)
+        
+        # Verify exp_fibermap contains HELIOCOR
+        self.assertIn('HELIOCOR', coadded.exp_fibermap.colnames)
+        self.assertAlmostEqual(coadded.exp_fibermap['HELIOCOR'][0], spectra.fibermap['HELIOCOR'][0], places=6)
+
 
     def test_cosmic_masking_blank(self):
         """

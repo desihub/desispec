@@ -91,7 +91,7 @@ class Spectra(object):
             resolution_data=None, fibermap=None, exp_fibermap=None,
             meta=None, extra=None, model=None,
             single=False, scores=None, redshifts=None, scores_comments=None,
-            extra_catalog=None, heliocor=None, copy=True):
+            extra_catalog=None, copy=True):
 
         self._bands = bands
         self._single = single
@@ -185,10 +185,6 @@ class Spectra(object):
             self.redshifts = redshifts.copy()
         else:
             self.redshifts = None
-        if heliocor is not None:
-            self.heliocor = heliocor.copy()
-        else:
-            self.heliocor = None
         
         self.wave = {}
         self.flux = {}
@@ -377,18 +373,12 @@ class Spectra(object):
         else:
             redshifts = None
             
-        if getattr(self, 'heliocor', None) is not None:
-            heliocor = self.heliocor[index].copy()
-        else:
-            heliocor = None
-
         sp = Spectra(bands, wave, flux, ivar,
             mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
             meta=self.meta, extra=extra, model=model, single=self._single,
             scores=scores, scores_comments=scores_comments,
             redshifts=redshifts, extra_catalog=extra_catalog,
-            heliocor=heliocor,
         )
         return sp
 
@@ -617,10 +607,6 @@ class Spectra(object):
             if hasattr(self.extra_catalog, 'meta'):
                 newextra_catalog.meta.update(self.extra_catalog.meta)
 
-        newheliocor = None
-        if getattr(self, 'heliocor', None) is not None or getattr(other, 'heliocor', None) is not None:
-            newheliocor = np.ones(nold + nnew, dtype=np.float64)
-
         newwave = {}
         newflux = {}
         newivar = {}
@@ -672,9 +658,6 @@ class Spectra(object):
                 if original_table is not None:
                     newtable[:nold] = original_table
 
-            if newheliocor is not None and getattr(self, 'heliocor', None) is not None:
-                newheliocor[:nold] = self.heliocor
-
             for b in self.bands:
                 newflux[b][:nold,:] = self.flux[b]
                 newivar[b][:nold,:] = self.ivar[b]
@@ -696,8 +679,6 @@ class Spectra(object):
 
         for i, s in enumerate(indx_exists):
             row = indx_original[i]
-            if newheliocor is not None and getattr(other, 'heliocor', None) is not None:
-                newheliocor[row] = other.heliocor[s]
             for b in other.bands:
                 newflux[b][row,:] = other.flux[b][s,:].astype(self._ftype)
                 newivar[b][row,:] = other.ivar[b][s,:].astype(self._ftype)
@@ -729,9 +710,6 @@ class Spectra(object):
                     # (possibly with numpy automatic casting)
                         for k in set(newtable.keys()).intersection(set(othertable.keys())):
                             newtable[k][nold:] = othertable[k][indx_new]
-
-            if newheliocor is not None and getattr(other, 'heliocor', None) is not None:
-                newheliocor[nold:] = other.heliocor[indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
@@ -772,7 +750,6 @@ class Spectra(object):
         self.scores = newscores
         self.redshifts = newredshifts
         self.extra_catalog = newextra_catalog
-        self.heliocor = newheliocor
 
         return
 

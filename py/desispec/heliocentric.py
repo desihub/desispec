@@ -113,6 +113,71 @@ def barycentric_velocity_multiplicative_corr(ra, dec, mjd) :
 
     return 1.+barycentric_velocity_corr_kms(ra, dec, mjd)/astropy.constants.c.to(u.km/u.s).value
 
+def heliocentric_shift_res_data(fibermap, resolution_data, wave):
+    """
+    Shift resolution matrix data based on heliocentric correction mismatch.
+
+    Args:
+        fibermap: Table-like object with columns TARGET_RA, TARGET_DEC, HELIOCOR, and (MJD or MJD-OBS)
+        resolution_data: (nspec, ndiag, nwave) array of resolution matrices
+        wave: (nwave,) array of wavelengths
+
+    Returns:
+        shifted_res_data: (nspec, ndiag, nwave) array of shifted resolution matrices
+    """
+    from .resolution import resolution_mat_torows, resolution_mat_tocolumns, shift_resolution_matrix_by_pixel
+
+    nspec, ndiag, nwave = resolution_data.shape
+    shifted_res_data = np.zeros_like(resolution_data)
+
+    c_kms = 299792.458
+
+    dwave = np.zeros_like(wave)
+    dwave[1:-1] = (wave[2:] - wave[:-2]) / 2.
+    dwave[0] = wave[1] - wave[0]
+    dwave[-1] = wave[-1] - wave[-2]
+
+    mjd_col = None
+    if "MJD" in fibermap.colnames:
+        mjd_col = "MJD"
+    elif "MJD-OBS" in fibermap.colnames:
+        mjd_col = "MJD-OBS"
+
+    if mjd_col is None or 'HELIOCOR' not in fibermap.colnames:
+        return resolution_data.copy()
+
+    for j in range(nspec):
+        mjd = fibermap[mjd_col][j]
+
+        if (not np.isnan(fibermap["TARGET_RA"][j]) and
+            not np.isnan(fibermap["TARGET_DEC"][j])):
+
+            v_fiber = barycentric_velocity_corr_kms(
+                fibermap["TARGET_RA"][j],
+                fibermap["TARGET_DEC"][j],
+                mjd
+            )
+            v_field = (fibermap['HELIOCOR'][j] - 1.0) * c_kms
+            vshift = v_fiber - v_field
+
+            # only apply if vshift is significant (more than 10 m/s)
+            if np.abs(vshift) < 0.01:
+                shifted_res_data[j] = resolution_data[j]
+                continue
+
+            # this is the velocity correction that needs to be added to the object
+            # velocity that means that the resolution matrix shift needs to be of
+            # opposite sign
+            deltas = (-1 * vshift / c_kms) * (wave / dwave)
+
+            kernels = resolution_mat_torows(resolution_data[j])
+            shifted_kernels = shift_resolution_matrix_by_pixel(kernels, deltas)
+            shifted_res_data[j] = resolution_mat_tocolumns(shifted_kernels)
+        else:
+            shifted_res_data[j] = resolution_data[j]
+
+    return shifted_res_data
+
 
 def main() :
     """Entry-point for command-line scripts.

@@ -124,6 +124,7 @@ fibermap_exp_cols = (
 fibermap_cframe_cols = (
     'PSF_TO_FIBER_SPECFLUX',
     'FLAT_TO_PSF_FLUX',
+    'HELIOCOR',
     )
 
 #- Columns to include in the per-exposure EXP_FIBERMAP
@@ -429,7 +430,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX']:
+            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'HELIOCOR']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
@@ -808,39 +809,11 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
             if spectra.resolution_data is not None :
-                if shift_resolution and getattr(spectra, 'heliocor', None) is not None:
-                    c_kms = 299792.458
-                    shifted_res_data = np.zeros_like(spectra.resolution_data[b][jj])
-                    waves = spectra.wave[b]
-                    dwave = np.zeros_like(waves)
-                    dwave[1:-1] = (waves[2:] - waves[:-2]) / 2.
-                    dwave[0] = waves[1] - waves[0]
-                    dwave[-1] = waves[-1] - waves[-2]
-                    for idx, j in enumerate(jj):
-                        if "MJD" in spectra.fibermap.colnames:
-                            mjd = spectra.fibermap["MJD"][j]
-                        elif "MJD-OBS" in spectra.fibermap.colnames:
-                            mjd = spectra.fibermap["MJD-OBS"][j]
-                        else:
-                            mjd = 0.0
-                        
-                        if not np.isnan(spectra.fibermap["TARGET_RA"][j]) and not np.isnan(spectra.fibermap["TARGET_DEC"][j]) and mjd > 0:
-                            v_fiber = barycentric_velocity_corr_kms(
-                                spectra.fibermap["TARGET_RA"][j],
-                                spectra.fibermap["TARGET_DEC"][j],
-                                mjd
-                            )
-                            v_field = (spectra.heliocor[j] - 1.0) * c_kms
-                            vshift = v_fiber - v_field
-                            # this is the velocity correction that needs to be added to the object
-                            # velocity that means that the resolution matrix shift needs to be of
-                            # opposite sign
-                            deltas = (-1 * vshift / c_kms) * (waves / dwave)
-                            kernels = resolution_mat_torows(spectra.resolution_data[b][j])
-                            shifted_kernels = shift_resolution_matrix_by_pixel(kernels, deltas)
-                            shifted_res_data[idx] = resolution_mat_tocolumns(shifted_kernels)
-                        else:
-                            shifted_res_data[idx] = spectra.resolution_data[b][j]
+                if shift_resolution and 'HELIOCOR' in spectra.fibermap.colnames:
+                    from desispec.heliocentric import heliocentric_shift_res_data
+                    shifted_res_data = heliocentric_shift_res_data(spectra.fibermap[jj],
+                                                                    spectra.resolution_data[b][jj],
+                                                                    spectra.wave[b])
                     trdata[i, :, :] = _resolution_coadd(shifted_res_data, weights)[0]
                 else:
                     trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
@@ -871,7 +844,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
                                                     onetile=onetile)
     spectra.exp_fibermap = exp_fibermap
     spectra.scores = None
-    spectra.heliocor = None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 
