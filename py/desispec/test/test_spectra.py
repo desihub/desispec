@@ -17,7 +17,7 @@ from astropy.table import Table, vstack
 
 _specutils_imported = True
 try:
-    from specutils import SpectrumList, Spectrum1D
+    from specutils import SpectrumList
     # from astropy.units import Unit
     # from astropy.nddata import InverseVariance, StdDevUncertainty
 except ImportError:
@@ -725,7 +725,7 @@ class TestSpectra(unittest.TestCase):
 
     @unittest.skipUnless(_specutils_imported, "Unable to import specutils.")
     def test_from_specutils_coadd(self):
-        """Test conversion from a Spectrum1D object representing a coadd across cameras.
+        """Test conversion from a Spectrum object representing a coadd across cameras.
         """
         sp0 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res,
