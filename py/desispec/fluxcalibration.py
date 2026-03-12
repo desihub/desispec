@@ -886,7 +886,6 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     Returns:
          desispec.FluxCalib object
-         calibration: mean calibration (without resolution)
 
     Notes:
       - we first resample the model on the input flux wave grid
@@ -902,8 +901,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
       - But we want to return a calibration vector per fiber C_fiber defined by flux^cframe_fiber = flux^frame_fiber/C_fiber,
         such that flux^cframe can be compared with a convolved model of the truth, flux^cframe_fiber = R_fiber*flux^true,
         i.e. (R_fiber*C*flux^true)/C_fiber = R_fiber*true_flux, giving C_fiber = (R_fiber*C*flux^true)/(R_fiber*flux^true)
-      - There is no solution for this for all possible input specta. The solution for a flat spectrum is returned,
+      - There is no solution for this for all possible input specta. The solution for a flat spectrum is calculated,
         which is very close to C_fiber = R_fiber*C (but not exactly).
+
+    An additional subtlety of note is that the returned calibration vector is not the computed C_fiber, but is instead
+    the calbration vector corrected for the flat to psf flux conversion: C_fiber / FLAT_TO_PSF_FLUX
 
     """
     # import only if needed to minimize required dependencies
@@ -1405,13 +1407,15 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     #log.info("number of stars used in fit = {}".format(len(stdstar_fibermap)))
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap)
-
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration,
+                     fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap,
+                     deconvolved_calib=calibration[margin:-margin])
 
 
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask, meancalib=None,
-                 fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None):
+                 fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None,
+                 deconvolved_calib=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1423,6 +1427,7 @@ class FluxCalib(object):
             fibercorr : dictionary of 1D arrays of size nspec (optional)
             fibercorr_comments : dictionnary of string (explaining the fibercorr)
             stdstar_fibermap : table with the fibermap of the std stars actually used
+            deconvolved_calib : 1D[nwave] estimated deconvolved calibration vector C (optional)
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1435,6 +1440,9 @@ class FluxCalib(object):
         assert calib.shape == mask.shape
         assert np.all(ivar >= 0)
 
+        if deconvolved_calib is not None:
+            assert deconvolved_calib.ndim == 1
+
         self.nspec, self.nwave = calib.shape
         self.wave = wave
         self.calib = calib
@@ -1445,6 +1453,8 @@ class FluxCalib(object):
         self.fibercorr_comments= fibercorr_comments
         self.stdstar_fibermap = stdstar_fibermap
         self.meta = dict(units='photons/(erg/s/cm^2)')
+
+        self.deconvolved_calib = deconvolved_calib
 
     def __repr__(self):
         txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(
@@ -1488,6 +1498,7 @@ def apply_flux_calibration(frame, fluxcalib):
     """
 
     C = fluxcalib.calib
+    C_deconvolved = fluxcalib.deconvolved_calib
     good = (fluxcalib.ivar > 0) & (C > 0) & (frame.ivar > 0)
     for i in range(nfibers) :
         ok = good[i]
@@ -1497,7 +1508,23 @@ def apply_flux_calibration(frame, fluxcalib):
                                  (C[i, ok]**2 * fluxcalib.ivar[i, ok] +
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
+
+        if (frame.resolution_data is not None) and (C_deconvolved is not None) and (fluxcalib.fibercorr is not None):
+            # convert R to  C_i^-1 * R * C using the calibration vectors
+            icalib = np.zeros_like(C[i])
+            icalib[ok] = 1 / (C[i, ok] * fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"][i])
+
+            # Aligning the diagonals with the banded storage. This
+            # code originally by Sergey,and confirmed
+            # bit wise equivalent but much faster to C_i^-1 * R * C
+            width = frame.resolution_data[i].shape[0]
+            M1 = [np.roll(icalib, _) for _ in np.arange(-(width//2),(width//2)+1)[::-1]]
+            M2 = [C_deconvolved for _ in np.arange(width)]
+            res_out = frame.resolution_data[i] * M1 * M2
+            frame.resolution_data[i] = res_out
+
         frame.ivar[i, ~ok] = 0
+
     # It is important we update flux *after*
     # updating variance
     frame.flux = frame.flux * (C > 0) / (C + (C == 0))
