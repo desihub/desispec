@@ -14,7 +14,6 @@ import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
 import scipy.stats
-from scipy.ndimage import median_filter
 
 from astropy.table import Table, Column
 
@@ -703,7 +702,7 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 
     return coadded_spectra
 
-def per_exposure_normalization(spectra, filter_width=51):
+def per_exposure_normalization(spectra):
     """
     Compute per‑exposure multiplicative normalization factors for each
     target in a desispec.spectra.Spectra object and store them in the
@@ -718,10 +717,6 @@ def per_exposure_normalization(spectra, filter_width=51):
         ivar, optional mask, wave dictionaries, and a fibermap 
         table that contains at least the columns TARGETID, FIBERSTATUS
         and OBJTYPE.
-        filter_width (int): optional, width of the median filter (in pixels)
-        for estimating the broad-band flux level of each spectrum; the 
-        default is 51 pixels
-
     """
 
     log = get_logger()
@@ -822,10 +817,6 @@ def per_exposure_normalization(spectra, filter_width=51):
     
                 f_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure flux
                 w_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure weights
-
-                # we will want to ignore edge pixels where the median filter is unreliable
-                edge_buffer = int(filter_width/2.) + 1
-                not_edges = np.ones_like(coadd_wave, dtype=bool)
             
                 for b in usable_bands:
 
@@ -842,46 +833,25 @@ def per_exposure_normalization(spectra, filter_width=51):
                     end = start + len(wband)
                     iband = slice(start, end)
 
-                    # update edge mask
-                    not_edges[start:(start+edge_buffer)] = False
-                    not_edges[(end-edge_buffer):end] = False
-
                     # Non-overlapping: directly copy
                     f_i[:, iband] = spectra.flux[b][idx_good][:,pix_mask]
                     w_i[:, iband] = (spectra.ivar[b][idx_good][:,pix_mask]*(spectra_mask == 0))
 
-                if np.any(np.sum(w_i[:,not_edges] != 0, axis=1) < 2*filter_width): 
-                    # the previous check of usable bands should have already caught these instances, 
-                    # but checking again now that edges & overlap are excluded
-                    log.warning(f'spectra for targetid {tgt} could not be rescaled before coaddition, too much of an exposure is masked')
-                    is_converged = True
-                    # update fiberstatus, currently using BADFIBER for all exposures but could consider a dedicated bit
-                    spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
-                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
-                    continue
+                # coadd spectra
+                w_tot = np.sum(w_i, axis=0)
+                crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
                 
-                #snr_exp = np.sum(f_i*np.sqrt(w_i), axis=1)/np.sum(w_i!=0, axis=1)
-                #snr_exp = snr_exp.reshape(snr_exp.size, 1)
-
-                # median smooth individual spectra to capture broad band and reduce noise
-                filtered_exp = np.zeros_like(f_i[:,not_edges])
-                for j,k in enumerate(idx_good):
-                    filtered_exp[j] = median_filter(f_i[j], size=filter_width, mode='reflect')[not_edges]
-            
-                w_tot = np.sum(w_i, axis=0)[not_edges]
-                # coadd of smoothed spectra
-                #smooth_coadd = np.sum(snr_exp*filtered_exp, axis=0) / np.sum(snr_exp)
-                smooth_coadd = np.sum(filtered_exp*w_i[:,not_edges], axis=0) / (w_tot + (w_tot == 0))
-                #smooth_coadd = np.mean(filtered_exp, axis=0)
-
-                # compute normalization constant
+                # compute normalization constant by minimizing chi2
+                # chi2 = sum( w*(f_i - b*f_c )^2 )
+                # optimal scalar for f_i is a = 1/b = ( w*f_i*f_c / w*f_c^2 )^-1
                 a = np.ones(idx.size)
-                
                 for j,k in enumerate(idx_good):
-                    # ignore ivar = 0 pixels
-                    mask = (w_tot != 0) & (w_i[j][not_edges] != 0)
-                    if np.isfinite(np.sum(smooth_coadd[mask]*filtered_exp[j][mask])):
-                        a[np.isin(idx,k)] = np.sum(smooth_coadd[mask]**2)/np.sum(smooth_coadd[mask]*filtered_exp[j][mask])
+                    w = w_i[j] * w_tot
+                    mask = w != 0
+                    numerator = w*crude_coadd**2
+                    denominator = w*crude_coadd*f_i[j]
+                    if np.isfinite(np.sum(denominator[mask])):
+                        a[np.isin(idx,k)] = np.sum(numerator[mask])/np.sum(denominator[mask])
                     else:
                         log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
                         spectra.fibermap['FIBERSTATUS'][k] |= fmsk.BADFIBER
@@ -916,7 +886,6 @@ def per_exposure_normalization(spectra, filter_width=51):
 
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
-
 
 def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     """
