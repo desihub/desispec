@@ -217,3 +217,74 @@ class TestCalibFinder(unittest.TestCase):
         for mask in masks:
             self.assertEqual(mask, 2048+65536)
         self._remove_env_calibdir(reset_calib_env)
+
+    def test_dateobs_begin_end_type_handling_sm1r(self):
+        """Test mixed DATE-OBS-BEGIN/END types using local sm1-r YAML test data."""
+        reset_calib_env = self._set_env_calibdir()
+        source_yaml = resources.files('desispec').joinpath('test/data/calib-sm1-r.yaml')
+
+        cases = [
+            {
+                'label': 'begin-int end-missing',
+                'dateobs': '2024-03-26T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'lbnl_timing2down.txt',
+                'expected_begin': 20240324,
+                'expected_has_end': False,
+                'expected_end': None,
+            },
+            {
+                'label': 'begin-str end-str-none',
+                'dateobs': '2024-01-10T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20231216,
+                'expected_has_end': True,
+                'expected_end': 99999999,
+            },
+            {
+                'label': 'begin-str end-int',
+                'dateobs': '2023-01-10T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20221108,
+                'expected_has_end': True,
+                'expected_end': 20231215,
+            },
+            {
+                'label': 'begin-int end-str-int',
+                'dateobs': '2022-10-10T00:00:00',
+                'detector': 'LBNL-PE-21',
+                'ccdcfg': 'LBNL-PE-21-20211015.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20220201,
+                'expected_has_end': True,
+                'expected_end': 20221107,
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(case=case['label']):
+                header = {
+                    'DATE-OBS': case['dateobs'],
+                    'CAMERA': 'r4',
+                    'SPECID': 1,
+                    'DETECTOR': case['detector'],
+                    'CCDCFG': case['ccdcfg'],
+                    'CCDTMING': case['ccdtming'],
+                }
+                cfinder = CalibFinder([header], yaml_file=str(source_yaml))
+                self.assertIsInstance(cfinder.data['DATE-OBS-BEGIN'], int)
+                self.assertEqual(cfinder.data['DATE-OBS-BEGIN'], case['expected_begin'])
+
+                if case['expected_has_end']:
+                    self.assertIn('DATE-OBS-END', cfinder.data)
+                    self.assertIsInstance(cfinder.data['DATE-OBS-END'], int)
+                    self.assertEqual(cfinder.data['DATE-OBS-END'], case['expected_end'])
+                else:
+                    self.assertNotIn('DATE-OBS-END', cfinder.data)
+
+        self._remove_env_calibdir(reset_calib_env)
