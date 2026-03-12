@@ -738,7 +738,6 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             mask[band].append(bandframe.mask[ii])
             resolution_data[band].append(bandframe.resolution_data[ii])
             fmaps[(spec,night,expid)][band] = bandframe.fibermap[ii]
-            fmaps[(spec,night,expid)][band]['HELIOCOR'] = np.full(np.sum(ii), bandframe.meta.get('HELIOCOR', 1.0), dtype='f4')
 
             if bandframe.scores is not None:
                 scores[band].append(bandframe.scores[ii])

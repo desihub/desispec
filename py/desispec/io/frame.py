@@ -87,8 +87,6 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdus.append(qrimg)
     if fibermap is not None:
         fibermap = Table(fibermap)
-        if 'HELIOCOR' in hdr and 'HELIOCOR' not in fibermap.colnames:
-            fibermap['HELIOCOR'] = np.full(len(fibermap), hdr['HELIOCOR'], dtype='f4')
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         add_dependencies(fibermap.meta)
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
@@ -97,8 +95,6 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdus.append( fmhdu )
     elif frame.fibermap is not None:
         fibermap = Table(frame.fibermap)
-        if 'HELIOCOR' in hdr and 'HELIOCOR' not in fibermap.colnames:
-            fibermap['HELIOCOR'] = np.full(len(fibermap), hdr['HELIOCOR'], dtype='f4')
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
         fmhdu = fits.convenience.table_to_hdu(fibermap)

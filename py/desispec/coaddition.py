@@ -124,7 +124,7 @@ fibermap_exp_cols = (
 fibermap_cframe_cols = (
     'PSF_TO_FIBER_SPECFLUX',
     'FLAT_TO_PSF_FLUX',
-    'HELIOCOR',
+    'HELIOCOR_OFFSET',
     )
 
 #- Columns to include in the per-exposure EXP_FIBERMAP
@@ -430,7 +430,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'HELIOCOR']:
+            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'HELIOCOR_OFFSET']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
@@ -671,7 +671,7 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
-def coadd_exposures(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
+def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     """
     Coadd spectra across exposures, returning new Spectra object without changing original.
 
@@ -681,7 +681,6 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False, shift_resolution=
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       shift_resolution: bool, if True, apply barycentric shift correction to resolution matrix before coadding
 
     Returns:
        coadded_spectra: desispec.spectra.Spectra object
@@ -701,12 +700,11 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False, shift_resolution=
     #- Perform coaddition in place on the copy
     coadd(coadded_spectra,
           cosmics_nsig=cosmics_nsig,
-          onetile=onetile,
-          shift_resolution=shift_resolution)
+          onetile=onetile)
 
     return coadded_spectra
 
-def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
+def coadd(spectra, cosmics_nsig=None, onetile=False):
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -716,7 +714,6 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       shift_resolution: bool, if True, apply barycentric shift correction to resolution matrix before coadding
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -809,15 +806,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, shift_resolution=False):
             tflux[i] = np.sum(weights * spectra.flux[b][jj], axis=0)
 
             if spectra.resolution_data is not None :
-                if shift_resolution and 'HELIOCOR' in spectra.fibermap.colnames:
-                    from desispec.heliocentric import heliocentric_shift_res_data
-                    shifted_res_data = heliocentric_shift_res_data(spectra.fibermap[jj],
-                                                                    spectra.resolution_data[b][jj],
-                                                                    spectra.wave[b])
-                    trdata[i, :, :] = _resolution_coadd(shifted_res_data, weights)[0]
-                else:
-                    trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
-                                                        weights)[0]
+                trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
+                                                    weights)[0]
             # note we ignore the resolution matrix norm (sum of weights)
             # because weights already were normalized
 

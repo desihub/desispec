@@ -140,7 +140,7 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
                     ('PSF_TO_FIBER_SPECFLUX',      'f4',             '', 'Fraction of light captured by a fiber',        'cframe'),
                     ('FLAT_TO_PSF_FLUX',           'f4',             '', 'Fiber aperture correction factor',             'cframe'),
-                    ('HELIOCOR',                   'f4',             '', 'Adopted multiplicative barycentric factor',    'spectra'),
+                    ('HELIOCOR_OFFSET',            'f4',             '', 'Barycentric offset applied to resolution',     'spectra'),
                     ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
                     ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
                     ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),

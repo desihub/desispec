@@ -113,17 +113,19 @@ def barycentric_velocity_multiplicative_corr(ra, dec, mjd) :
 
     return 1.+barycentric_velocity_corr_kms(ra, dec, mjd)/astropy.constants.c.to(u.km/u.s).value
 
-def heliocentric_shift_res_data(fibermap, resolution_data, wave):
+def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
     """
     Shift resolution matrix data based on heliocentric correction mismatch.
 
     Args:
-        fibermap: Table-like object with columns TARGET_RA, TARGET_DEC, HELIOCOR, and (MJD or MJD-OBS)
+        fibermap: Table-like object with columns TARGET_RA, TARGET_DEC, and (MJD or MJD-OBS)
         resolution_data: (nspec, ndiag, nwave) array of resolution matrices
         wave: (nwave,) array of wavelengths
+        heliocor: (float, optional) Adopted multiplicative barycentric factor.
 
     Returns:
         shifted_res_data: (nspec, ndiag, nwave) array of shifted resolution matrices
+        (fibermap is modified in place to add/update HELIOCOR_OFFSET column)
     """
     from .resolution import resolution_mat_torows, resolution_mat_tocolumns, shift_resolution_matrix_by_pixel
 
@@ -143,8 +145,19 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave):
     elif "MJD-OBS" in fibermap.colnames:
         mjd_col = "MJD-OBS"
 
-    if mjd_col is None or 'HELIOCOR' not in fibermap.colnames:
+    if 'HELIOCOR_OFFSET' not in fibermap.colnames:
+        fibermap['HELIOCOR_OFFSET'] = np.zeros(len(fibermap), dtype='f4')
+
+    if mjd_col is None:
         return resolution_data.copy()
+
+    if heliocor is None:
+        return resolution_data.copy()
+
+    if not np.isscalar(heliocor):
+        raise ValueError("heliocor must be a scalar float")
+
+    v_field = (heliocor - 1.0) * c_kms
 
     for j in range(nspec):
         mjd = fibermap[mjd_col][j]
@@ -157,8 +170,8 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave):
                 fibermap["TARGET_DEC"][j],
                 mjd
             )
-            v_field = (fibermap['HELIOCOR'][j] - 1.0) * c_kms
             vshift = v_fiber - v_field
+            fibermap['HELIOCOR_OFFSET'][j] = vshift / c_kms
 
             # only apply if vshift is significant (more than 10 m/s)
             if np.abs(vshift) < 0.01:

@@ -44,8 +44,6 @@ def parse(options=None):
             help="coadd spectra of different cameras. works only if wavelength grids are aligned")
     parser.add_argument("--onetile", action="store_true",
             help="input spectra are from a single tile")
-    parser.add_argument("--shift-resolution", action="store_true",
-            help="apply barycentric shift offsets to resolution matrix before coadding")
 
     if options is None:
         args = parser.parse_args()
@@ -157,8 +155,7 @@ def main(args=None):
                 onetile=args.onetile)
     else :
         log.info("coadding ...")
-        coadd(spectra, cosmics_nsig=args.nsig, onetile=args.onetile,
-              shift_resolution=args.shift_resolution)
+        coadd(spectra, cosmics_nsig=args.nsig, onetile=args.onetile)
 
     if args.lin_step is not None :
         log.info("resampling ...")

@@ -23,6 +23,7 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from desispec.fibercrosstalk import correct_fiber_crosstalk
 
 from desispec.tsnr import calc_tsnr2
+from desispec.heliocentric import heliocentric_shift_res_data
 from desiutil.log import get_logger
 
 import argparse
@@ -155,6 +156,12 @@ def main(args):
 
         comments = {k:"from calc_frame_tsnr" for k in results.keys()}
         append_frame_scores(frame,results,comments,overwrite=True)
+
+    # Shift resolution matrix if needed
+    if frame.resolution_data is not None:
+        log.info("Applying heliocentric shift to resolution matrix")
+        heliocor = frame.meta.get('HELIOCOR')
+        frame.resolution_data = heliocentric_shift_res_data(frame.fibermap, frame.resolution_data, frame.wave, heliocor=heliocor)
 
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
