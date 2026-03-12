@@ -371,13 +371,14 @@ class CalibFinder() :
                 log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
             if "DATE-OBS-END" in data[version] :
+                dateobsend = data[version]["DATE-OBS-END"]
                 try:
-                    dateend=int(data[version]["DATE-OBS-END"])
+                    dateend=int(dateobsend)
                     if dateobs > dateend :
                         log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,dateend,dateobs))
                         continue
-                except ValueError as e :
-                    if not data[version]["DATE-OBS-END"].lower() == "none" :
+                except (ValueError, TypeError) as e :
+                    if not str(dateobsend).strip().lower() == "none" :
                         raise(e)
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
@@ -422,10 +423,11 @@ class CalibFinder() :
         # Make sure that the dates are ints
         self.data['DATE-OBS-BEGIN']=int(self.data['DATE-OBS-BEGIN'])
         if 'DATE-OBS-END' in self.data:
-            if self.data['DATE-OBS-END'].lower()=='none':
+            dateobsend = self.data['DATE-OBS-END']
+            if str(dateobsend).strip().lower()=='none':
                 self.data['DATE-OBS-END']=99999999
             else:
-                self.data['DATE-OBS-END']=int(self.data['DATE-OBS-END'])
+                self.data['DATE-OBS-END']=int(dateobsend)
 
     def haskey(self,key) :
         """
