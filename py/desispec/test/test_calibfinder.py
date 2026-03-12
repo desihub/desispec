@@ -221,6 +221,9 @@ class TestCalibFinder(unittest.TestCase):
     def test_dateobs_begin_end_type_handling_sm1r(self):
         """Test mixed DATE-OBS-BEGIN/END types using local sm1-r YAML test data."""
         reset_calib_env = self._set_env_calibdir()
+        # Unset DESI_SPECTRO_DARK so CalibFinder does not call find_darks_in_desi_spectro_dark(),
+        # which would fail if the env var points to a non-existent directory. tearDown restores it.
+        os.environ.pop('DESI_SPECTRO_DARK', None)
         source_yaml = resources.files('desispec').joinpath('test/data/calib-sm1-r.yaml')
 
         cases = [
