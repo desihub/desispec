@@ -34,7 +34,7 @@ class TestHeliocentric(unittest.TestCase):
         # Use heliocor to exactly match the fiber velocity so vshift=0
         heliocor = 1.0 + v_fiber / c_kms
         
-        # Fiber 1: heliocor matches fiber 0, but fiber 1 will have different RA/DEC/MJD 
+        # Fiber 1: heliocor matches fiber 0, but use different RA/DEC to get non-zero shift
         fmap['TARGET_RA'][1] = 10.0
         v_fiber1 = barycentric_velocity_corr_kms(10, 0, mjd)
         vshift1 = v_fiber1 - (heliocor - 1.0) * c_kms
@@ -49,6 +49,50 @@ class TestHeliocentric(unittest.TestCase):
         # Fiber 1 should be shifted
         self.assertTrue(np.all(shifted_res[1, ndiag//2, :] < 1.0))
         self.assertAlmostEqual(fmap['HELIOCOR_OFFSET'][1], vshift1 / c_kms, places=6)
+
+    def test_pixel_shift(self):
+        """Test that the resolution matrix is shifted by exactly 1 pixel"""
+        nwave = 50
+        ndiag = 11
+        mjd = 58800.0
+        
+        # Field center at (0,0), star at (1,0)
+        ra0, dec0 = 0.0, 0.0
+        ra1, dec1 = 1.0, 0.0
+        
+        v_field = barycentric_velocity_corr_kms(ra0, dec0, mjd)
+        v_star = barycentric_velocity_corr_kms(ra1, dec1, mjd)
+        v_diff = v_star - v_field # ~0.3114 km/s
+        
+        c_kms = astropy.constants.c.to(u.km/u.s).value
+        wave_val = 5000.0
+        
+        # Set dwave exactly to the wavelength shift corresponding to v_diff
+        dwave = np.abs(v_diff) / c_kms * wave_val
+        wave = np.arange(wave_val - nwave//2 * dwave, wave_val + nwave//2 * dwave, dwave)
+        nwave = len(wave)
+        
+        res_data = np.zeros((1, ndiag, nwave))
+        res_data[0, ndiag//2, :] = 1.0 # Delta function in the middle
+        
+        fmap = Table()
+        fmap['TARGET_RA'] = [ra1]
+        fmap['TARGET_DEC'] = [dec1]
+        fmap['MJD'] = [mjd]
+        
+        # heliocor represents the field correction applied during extraction
+        heliocor = 1.0 + v_field / c_kms
+        
+        shifted_res = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
+        
+        # vshift = v_star - v_field = v_diff
+        # dwave was set to |v_diff| / c * wave, so deltas = -v_diff / |v_diff| = -1.0
+        # A shift of deltas = -1.0 pixels corresponds to moving the kernel peak
+        # from index ndiag//2 to ndiag//2 - 1.
+        
+        mid = nwave // 2
+        self.assertAlmostEqual(shifted_res[0, ndiag//2 - 1, mid], 1.0, places=5)
+        self.assertAlmostEqual(shifted_res[0, ndiag//2, mid], 0.0, places=5)
 
     def test_missing_cols(self):
         """Test robustness to missing columns"""
