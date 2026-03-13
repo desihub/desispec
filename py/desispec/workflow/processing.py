@@ -791,8 +791,6 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     ## Update the Slurm jobid cache of job states
     update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
-    import pdb
-    pdb.set_trace()
     return prow
 
 
