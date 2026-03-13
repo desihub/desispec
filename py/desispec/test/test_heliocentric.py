@@ -39,16 +39,15 @@ class TestHeliocentric(unittest.TestCase):
         v_fiber1 = barycentric_velocity_corr_kms(10, 0, mjd)
         vshift1 = v_fiber1 - (heliocor - 1.0) * c_kms
 
-        shifted_res = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
+        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
         
         # Fiber 0 should have zero shift
         self.assertTrue(np.allclose(shifted_res[0, ndiag//2, :], 1.0))
-        self.assertIn('HELIOCOR_OFFSET', fmap.colnames)
-        self.assertAlmostEqual(fmap['HELIOCOR_OFFSET'][0], 0.0, places=6)
+        self.assertAlmostEqual(offset_array[0], 0.0, places=6)
 
         # Fiber 1 should be shifted
         self.assertTrue(np.all(shifted_res[1, ndiag//2, :] < 1.0))
-        self.assertAlmostEqual(fmap['HELIOCOR_OFFSET'][1], vshift1 / c_kms, places=6)
+        self.assertAlmostEqual(offset_array[1], vshift1 / c_kms, places=6)
 
     def test_pixel_shift(self):
         """Test that the resolution matrix is shifted by exactly 1 pixel"""
@@ -69,7 +68,8 @@ class TestHeliocentric(unittest.TestCase):
         
         # Set dwave exactly to the wavelength shift corresponding to v_diff
         dwave = np.abs(v_diff) / c_kms * wave_val
-        wave = np.arange(wave_val - nwave//2 * dwave, wave_val + nwave//2 * dwave, dwave)
+        wave = np.arange(wave_val - nwave//2 * dwave,
+                         wave_val + nwave//2 * dwave, dwave)
         nwave = len(wave)
         
         res_data = np.zeros((1, ndiag, nwave))
@@ -83,7 +83,7 @@ class TestHeliocentric(unittest.TestCase):
         # heliocor represents the field correction applied during extraction
         heliocor = 1.0 + v_field / c_kms
         
-        shifted_res = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
+        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
         
         # vshift = v_star - v_field = v_diff
         # dwave was set to |v_diff| / c * wave, so deltas = -v_diff / |v_diff| = -1.0
@@ -107,12 +107,11 @@ class TestHeliocentric(unittest.TestCase):
         fmap = Table()
         fmap['TARGET_RA'] = np.array([0.0, 0.0])
         
-        shifted_res = heliocentric_shift_res_data(fmap, res_data, wave)
+        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave)
         
         # Should return copy of original
         self.assertTrue(np.all(shifted_res == res_data))
-        self.assertIn('HELIOCOR_OFFSET', fmap.colnames)
-        self.assertTrue(np.all(fmap['HELIOCOR_OFFSET'] == 0.0))
+        self.assertTrue(np.all(offset_array == 0.0))
 
 if __name__ == '__main__':
     unittest.main()
