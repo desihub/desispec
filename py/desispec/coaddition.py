@@ -23,8 +23,6 @@ from desiutil.log import get_logger
 
 from desispec.interpolation import resample_flux
 from desispec.spectra import Spectra
-from desispec.resolution import resolution_mat_torows, resolution_mat_tocolumns, shift_resolution_matrix_by_pixel
-from desispec.heliocentric import barycentric_velocity_corr_kms
 from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.specscore import compute_coadd_scores
