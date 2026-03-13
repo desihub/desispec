@@ -609,6 +609,7 @@ Used for Jura. Requires QuasarNP >=2.x and Redrock >=20.x
 
 .. _`#2217`: https://github.com/desihub/desispec/pull/2217
 .. _`#2221`: https://github.com/desihub/desispec/pull/2221
+.. _`#2222`: https://github.com/desihub/desispec/pull/2222
 .. _`#2223`: https://github.com/desihub/desispec/pull/2223
 .. _`#2224`: https://github.com/desihub/desispec/pull/2224
 .. _`#2226`: https://github.com/desihub/desispec/pull/2226
