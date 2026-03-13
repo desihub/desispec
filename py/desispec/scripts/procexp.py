@@ -159,14 +159,15 @@ def main(args):
 
     # Shift resolution matrix if needed
     if frame.resolution_data is not None:
-        log.info("Applying heliocentric shift to resolution matrix")
+        log.info("Applying barycentric shift (fiber vs tile center) to the "
+                 "resolution matrix")
         heliocor = frame.meta.get('HELIOCOR')
         frame.resolution_data, heliocor_offset = heliocentric_shift_res_data(
             frame.fibermap, frame.resolution_data, frame.wave,
             heliocor=heliocor)
-        if 'HELIOCOR_OFFSET' not in frame.fibermap.colnames:
-            frame.fibermap['HELIOCOR_OFFSET'] = heliocor_offset
 
+        frame.fibermap['HELIOCOR_OFFSET'] = heliocor_offset
+        
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
