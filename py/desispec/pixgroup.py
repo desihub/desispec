@@ -737,6 +737,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
             ivar[band].append(bandframe.ivar[ii])
             mask[band].append(bandframe.mask[ii])
             resolution_data[band].append(bandframe.resolution_data[ii])
+
             fmaps[(spec,night,expid)][band] = bandframe.fibermap[ii]
 
             if bandframe.scores is not None:

@@ -45,6 +45,7 @@ def parse(options=None):
     parser.add_argument("--onetile", action="store_true",
             help="input spectra are from a single tile")
 
+
     if options is None:
         args = parser.parse_args()
     else:

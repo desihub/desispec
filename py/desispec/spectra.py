@@ -113,7 +113,7 @@ class Spectra(object):
             self.meta = {}
         else:
             self.meta = meta.copy()
-        
+
         nspec = 0
 
         # check consistency of input dimensions
@@ -185,7 +185,7 @@ class Spectra(object):
             self.redshifts = redshifts.copy()
         else:
             self.redshifts = None
-        
+
         self.wave = {}
         self.flux = {}
         self.ivar = {}
@@ -372,7 +372,7 @@ class Spectra(object):
             redshifts = self.redshifts[index].copy()
         else:
             redshifts = None
-            
+
         sp = Spectra(bands, wave, flux, ivar,
             mask=mask, resolution_data=rdat,
             fibermap=fibermap, exp_fibermap=exp_fibermap,
