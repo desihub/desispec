@@ -32,7 +32,7 @@ from desispec.workflow.utils import pathjoin, sleep_and_report, \
 from desispec.workflow.tableio import write_table, load_table
 from desispec.workflow.proctable import get_pdarks_from_ptable, table_row_to_dict, erow_to_prow, \
     read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
-    update_full_ptab_cache, default_prow, get_default_qid
+    update_full_ptab_cache, default_prow, get_default_qid, get_err_qid
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -659,6 +659,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    default_qid, err_qid = get_default_qid(), get_err_qid()
     log = get_logger()
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
@@ -673,7 +674,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
     failed_dependency = False
-    if len(dep_qids) > 0 and not dry_run:
+    if len(dep_qids) > 0:
         non_final_states = get_non_final_states()
         state_dict = get_queue_states_from_qids(dep_qids, dry_run_level=dry_run, use_cache=True)
         still_depids = []
@@ -683,14 +684,19 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                    log.info(f"removing completed jobid {depid}")
                 elif state_dict[int(depid)] not in non_final_states:
                     failed_dependency = True
-                    log.info("Found a dependency in a bad final state="
+                    log.warning("Found a dependency in a bad final state="
                              + f"{state_dict[int(depid)]} for depjobid={depid},"
                              + " not submitting this job.")
                     still_depids.append(depid)
                 else:
                     still_depids.append(depid)
+            elif depid in [err_qid]:
+                failed_dependency = True
+                log.warning(f"Found a dependency in a bad final state with depjobid={depid}, not submitting this job.")
+                still_depids.append(depid)
             else:
                 still_depids.append(depid)
+
         dep_qids = np.array(still_depids)
 
     if len(dep_qids) > 0:
@@ -707,7 +713,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         dep_str = f'--dependency={depcond}:'
 
         # Add dependencies, but ignore qid=1 and 0 as fake dependency placeholders
-        use_dep_qids = [str(q) for q in dep_qids if q not in [0, 1]]
+        use_dep_qids = [str(q) for q in dep_qids if q not in [err_qid, default_qid]]
         if len(use_dep_qids) > 0:
             dep_str += ':'.join(use_dep_qids)
         else:
@@ -737,31 +743,32 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     ## If dry_run give it a fake QID
     ## if a dependency has failed don't even try to submit the job because
     ## Slurm will refuse, instead just mark as unsubmitted.
-    if dry_run:
-        current_qid = _get_fake_qid()
-    elif not failed_dependency:
-        #- sbatch sometimes fails; try several times before giving up
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
-                current_qid = int(current_qid.strip(' \t\n'))
-                break
-            except subprocess.CalledProcessError as err:
-                log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
-                log.error(f'{jobname}   {batch_params}')
-                log.error(f'{jobname}   {err.output=}')
-                if attempt < max_attempts - 1:
-                    log.info('Sleeping 60 seconds then retrying')
-                    time.sleep(60)
-        else:  #- for/else happens if loop doesn't succeed
-            msg = f'{jobname} submission failed {max_attempts} times.' \
-                  + ' setting as unsubmitted and moving on'
-            log.error(msg)
-            current_qid = get_default_qid()
-            submitted = False
+    if not failed_dependency:
+        if dry_run:
+            current_qid = _get_fake_qid()
+        else:
+            #- sbatch sometimes fails; try several times before giving up
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
+                    current_qid = int(current_qid.strip(' \t\n'))
+                    break
+                except subprocess.CalledProcessError as err:
+                    log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
+                    log.error(f'{jobname}   {batch_params}')
+                    log.error(f'{jobname}   {err.output=}')
+                    if attempt < max_attempts - 1:
+                        log.info('Sleeping 60 seconds then retrying')
+                        time.sleep(60)
+            else:  #- for/else happens if loop doesn't succeed
+                msg = f'{jobname} submission failed {max_attempts} times.' \
+                    + ' setting as unsubmitted and moving on'
+                log.error(msg)
+                current_qid = err_qid
+                submitted = False
     else:
-        current_qid = get_default_qid()
+        current_qid = err_qid
         submitted = False
 
     ## Update prow with new information
@@ -781,9 +788,11 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         log.info(f"Would have submitted: {batch_params}")
         prow['STATUS'] = 'UNSUBMITTED'
 
-        ## Update the Slurm jobid cache of job states
-        update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
+    ## Update the Slurm jobid cache of job states
+    update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
+    import pdb
+    pdb.set_trace()
     return prow
 
 
@@ -993,7 +1002,7 @@ def still_a_dependency(dependency):
         scheduler needs to be aware of the pending job.
 
     """
-    return dependency['LATEST_QID'] > 0 and dependency['STATUS'] != 'COMPLETED'
+    return dependency['STATUS'] != 'COMPLETED'
 
 def get_type_and_tile(erow):
     """
@@ -2027,7 +2036,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['INTID'] = internal_id
     internal_id += 1
     joint_prow['JOBDESC'] = descriptor
-    joint_prow['LATEST_QID'] = -99
+    joint_prow['LATEST_QID'] = get_default_qid()
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
     joint_prow['STATUS'] = 'UNSUBMITTED'
@@ -2104,7 +2113,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
 
     joint_prow['INTID'] = internal_id
     joint_prow['JOBDESC'] = 'tilenight'
-    joint_prow['LATEST_QID'] = -99
+    joint_prow['LATEST_QID'] = get_default_qid()
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
     joint_prow['STATUS'] = 'UNSUBMITTED'
@@ -2135,7 +2144,7 @@ def make_redshift_prow(prows, tnights, descriptor, internal_id):
 
     redshift_prow['INTID'] = internal_id
     redshift_prow['JOBDESC'] = descriptor
-    redshift_prow['LATEST_QID'] = -99
+    redshift_prow['LATEST_QID'] = get_default_qid()
     redshift_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     redshift_prow['SUBMIT_DATE'] = -99
     redshift_prow['STATUS'] = 'UNSUBMITTED'
