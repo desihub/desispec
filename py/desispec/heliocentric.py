@@ -11,6 +11,9 @@ import astropy.units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.constants
+from desiutil.log import get_logger
+from .resolution import (resolution_mat_torows, resolution_mat_tocolumns,
+                         shift_resolution_matrix_by_pixel)
 
 # In restricted environments, such as ReadTheDocs, this throws
 # an exception.
@@ -20,6 +23,8 @@ try:
                                        height =  2097 * u.m)
 except TypeError:
     kpno = None
+
+log = get_logger()
 
 
 def heliocentric_velocity_corr_kms(ra, dec, mjd) :
@@ -125,10 +130,9 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
 
     Returns:
         shifted_res_data: (nspec, ndiag, nwave) array of shifted resolution matrices
-        (fibermap is modified in place to add/update HELIOCOR_OFFSET column)
+        heliocor_offset: (nspec) array of applied heliocor corrections
     """
-    from .resolution import resolution_mat_torows, resolution_mat_tocolumns, shift_resolution_matrix_by_pixel
-
+    
     nspec, ndiag, nwave = resolution_data.shape
     shifted_res_data = np.zeros_like(resolution_data)
 
@@ -145,17 +149,12 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
     elif "MJD-OBS" in fibermap.colnames:
         mjd_col = "MJD-OBS"
 
-    if 'HELIOCOR_OFFSET' not in fibermap.colnames:
-        fibermap['HELIOCOR_OFFSET'] = np.zeros(len(fibermap), dtype='f4')
+    heliocor_offset = np.zeros(len(fibermap), dtype='f4')
 
-    if mjd_col is None:
-        return resolution_data.copy()
-
-    if heliocor is None:
-        return resolution_data.copy()
-
-    if not np.isscalar(heliocor):
-        raise ValueError("heliocor must be a scalar float")
+    if mjd_col is None or heliocor is None:
+        log.warning('Barycentric correction offset was not applied due to '
+                    'missing MJD or heliocor')
+        return resolution_data.copy(), heliocor_offset
 
     v_field = (heliocor - 1.0) * c_kms
 
@@ -171,7 +170,7 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
                 mjd
             )
             vshift = v_fiber - v_field
-            fibermap['HELIOCOR_OFFSET'][j] = vshift / c_kms
+            heliocor_offset[j] = vshift / c_kms
 
             # only apply if vshift is significant (more than 10 m/s)
             if np.abs(vshift) < 0.01:
@@ -189,7 +188,7 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
         else:
             shifted_res_data[j] = resolution_data[j]
 
-    return shifted_res_data
+    return shifted_res_data, heliocor_offset
 
 
 def main() :
