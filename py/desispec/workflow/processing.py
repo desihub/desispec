@@ -712,7 +712,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 
         dep_str = f'--dependency={depcond}:'
 
-        # Add dependencies, but ignore qid=1 and 0 as fake dependency placeholders
+        # Add dependencies, but ignore default qids, as Slurm doesn't know about them
         use_dep_qids = [str(q) for q in dep_qids if q not in [err_qid, default_qid]]
         if len(use_dep_qids) > 0:
             dep_str += ':'.join(use_dep_qids)
