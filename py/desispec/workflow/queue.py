@@ -9,7 +9,7 @@ import numpy as np
 from astropy.table import Table, vstack
 import subprocess
 
-from desispec.workflow.proctable import get_default_qid
+from desispec.workflow.proctable import get_err_qid, get_default_qid
 from desiutil.log import get_logger
 import time, datetime
 
@@ -85,7 +85,7 @@ def get_termination_states():
     return ['COMPLETED', 'CANCELLED', 'FAILED']
 
 def get_failed_states():
-    """ 
+    """
     Defines what Slurm job states should be considered failed or problematic
 
     All possible values that Slurm returns are:
@@ -113,7 +113,7 @@ def get_failed_states():
         ST STOPPED Job has an allocation, but execution has been stopped with SIGSTOP signal. CPUS have been retained by this job.
         S SUSPENDED Job has an allocation, but execution has been suspended and CPUs have been released for other jobs.
         TO TIMEOUT Job terminated upon reaching its time limit.
-    
+
     Returns:
         list. A list of strings outlining the job states that are considered to be
             failed or problematic.
@@ -287,6 +287,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
 
+    qids = qids[np.bitwise_not(np.isin(qids, [get_err_qid(), get_default_qid()]))]  # avoid default QID values
+
     ## If qids is too long, recursively call self and stack tables; otherwise sacct hangs
     nmax = 100
     if len(qids) > nmax:
@@ -382,7 +384,7 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
     Dict
         Dictionary with the keys as jobids and values as the slurm state of the job.
     """
-    def_qid = get_default_qid()
+    err_qid, def_qid = get_err_qid(), get_default_qid()
     global _cached_slurm_states
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
@@ -399,7 +401,7 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
         outtable = queue_info_from_qids(qids, columns='jobid,state',
                                         dry_run_level=dry_run_level)
         for row in outtable:
-            if int(row['JOBID']) != def_qid:
+            if int(row['JOBID']) not in [err_qid, def_qid]:
                 outdict[int(row['JOBID'])] = row['STATE']
     return outdict
 
@@ -440,7 +442,7 @@ def update_queue_state_cache(qid, state):
 
     """
     global _cached_slurm_states
-    if int(qid) != get_default_qid():
+    if int(qid) not in [get_err_qid(), get_default_qid()]:
         _cached_slurm_states[int(qid)] = state
 
 def clear_queue_state_cache():
@@ -493,10 +495,9 @@ def update_from_queue(ptable, qtable=None, dry_run_level=0, ignore_scriptnames=F
     ptab = ptable.copy()
     if qtable is None:
         log.info("qtable not provided, querying Slurm using ptab's LATEST_QID set")
-        ## Avoid null valued QID's (set to 2)
-        sel = ptab['LATEST_QID'] > 2
         ## Only submit incomplete jobs unless explicitly told to check them
         ## completed jobs shouldn't change status
+        sel = ptab['LATEST_QID'] > 0
         if not check_complete_jobs:
             sel &= (ptab['STATUS'] != 'COMPLETED')
         log.info(f"Querying Slurm for {np.sum(sel)} QIDs from table of length {len(ptab)}.")
@@ -518,7 +519,7 @@ def update_from_queue(ptable, qtable=None, dry_run_level=0, ignore_scriptnames=F
         log.info("Will be verifying that the file names are consistent")
 
     for row in qtable:
-        if int(row['JOBID']) == get_default_qid():
+        if int(row['JOBID']) in [get_err_qid(), get_default_qid()]:
             continue
         match = (int(row['JOBID']) == ptab['LATEST_QID'])
         if np.any(match):
@@ -681,7 +682,7 @@ def get_jobs_in_queue(user=None, include_scron=False, dry_run_level=0):
         log.info("Table retured by squeue couldn't be parsed. The string was:")
         print(table_as_string)
         raise
-    
+
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
 
