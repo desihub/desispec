@@ -497,6 +497,7 @@ def update_from_queue(ptable, qtable=None, dry_run_level=0, ignore_scriptnames=F
         log.info("qtable not provided, querying Slurm using ptab's LATEST_QID set")
         ## Only submit incomplete jobs unless explicitly told to check them
         ## completed jobs shouldn't change status
+        sel = ptab['LATEST_QID'] > 0
         if not check_complete_jobs:
             sel &= (ptab['STATUS'] != 'COMPLETED')
         log.info(f"Querying Slurm for {np.sum(sel)} QIDs from table of length {len(ptab)}.")
