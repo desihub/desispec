@@ -665,7 +665,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     return ox,oy,odx,oex,of,ol
 
-def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
+def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, width=7):
     """
     Prepare the reference spectrum to be used for wavelength offset
     determination. Here we convolve it to the right LSF and rescale it
@@ -716,13 +716,18 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
         hw = int(angstrom_hwidth / dwave) + 1
         wave_range = ref_wave[ipos - hw:ipos + hw + 1]
         kernels = []
+        
+        # hw is the half-width in *wavelength bins* along the dispersion axis (y-axis)
+        # hw_x is the half-width in *CCD pixels* across the cross-dispersion axis (x-axis)
+        # We must use the exact boxcar extraction width (default=7, hw_x=3) used on the data 
+        # to ensure the reference LSF has the same barycenter (and thus no systematic wavelength shift).
+        hw_x = width // 2
         for fiber in fiber_list:
             x, y = psf.xy(fiber, wave_range)
 
-            x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
-            # original code below but I don't understand y[-1]-y[0] part
-            # x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
-            y = np.tile(y, (2 * hw + 1, 1)).T
+            # Evaluate the 2D PSF over the cross-dispersion integration window [-hw_x, hw_x]
+            x = x[:,None] + np.linspace(-hw_x, hw_x, 2*hw_x+1)[None,:]
+            y = np.tile(y, (2 * hw_x + 1, 1)).T
 
             kernel2d = psf._value(x, y, fiber, central_wave)
             kernel1d = np.sum(kernel2d, axis=1)
@@ -863,7 +868,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
 
-    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
+    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
 
     log.info("fit shifts on wavelength bins")
     # define bins
