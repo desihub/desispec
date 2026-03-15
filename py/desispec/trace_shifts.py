@@ -879,7 +879,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     wave_for_dy = np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
-    fiber_for_psf_evaluation = flux.shape[0] //2
+    n_fibers_for_psf = 20
+    fibers_for_psf_evaluation = np.linspace(0, flux.shape[0]-1, n_fibers_for_psf).astype(int) # flux.shape[0] //2
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
@@ -893,19 +894,25 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                 prior_width_dy=prior_width_dy)
         bin_wave  = np.sum(flux_weights * wave[ok]) / flux_weights_sum
         # flux weighted wavelength of the center
-        # Computing the derivative dy/dwavelength
-        x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
-        eps =  0.1
-        x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
-        dydw = (yp - y) / eps
-        if err * dydw < 1 :
+        dydws = []
+        for cur_fiber in fibers_for_psf_evaluation:
+            # Computing the derivative dy/dwavelength averaged over fibers
+            x, y = psf.xy(cur_fiber, bin_wave)
+            eps =  0.1
+            x, yp = psf.xy(cur_fiber, bin_wave+eps)
+            dydw = (yp - y) / eps
+            dydws.append(dydw)
+        dydws = np.array(dydws)
+        dydw = dydws.mean()
+        if err * dydw < 1 : # 1 pixel error limit
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
             dwave_list = np.append(dwave_list, dwave)
             dwave_err_list = np.append(dwave_err_list, err)
-            y_for_dy=np.append(y_for_dy,y)
-            log.info(f"wave = {bin_wave}A , y={y}, measured dwave = {dwave} +- {err} A")
+            y_for_dy=np.append(y_for_dy,y)  # this is only used for printing
+            log.info(f"wave = {bin_wave:.3f}A , y={y:.3f}, measured "
+                     f"dwave = {dwave:.3f} +- {err:.3f} A")
 
     if False : # we don't need this for now
         try :
