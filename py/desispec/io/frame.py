@@ -88,8 +88,6 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if fibermap is not None:
         fibermap = Table(fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
-        add_dependencies(fibermap.meta)
-        hdus.append( fits.convenience.table_to_hdu(fibermap) )
         fmhdu = fits.convenience.table_to_hdu(fibermap)
         fmhdu = annotate_fibermap(fmhdu)
         hdus.append( fmhdu )
