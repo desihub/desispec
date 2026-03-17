@@ -525,14 +525,20 @@ class TestIO(unittest.TestCase):
                 self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
             #- user-supplied fibermap overrides frame.fibermap and appears only once
-            fibermap = empty_fibermap(nspec)
-            fibermap['TARGETID'] = np.arange(nspec) * 99
-            frx2 = Frame(wave, flux, ivar, mask, R, fibermap=fibermap, meta=dict(FLAVOR='science'))
-            write_frame(self.testfile, frx2, fibermap=fibermap)
+            frame_fibermap = empty_fibermap(nspec)
+            frame_fibermap['TARGETID'] = np.arange(nspec) * 10
+            user_fibermap = empty_fibermap(nspec)
+            user_fibermap['TARGETID'] = np.arange(nspec) * 99
+            frx2 = Frame(wave, flux, ivar, mask, R, fibermap=frame_fibermap, meta=dict(FLAVOR='science'))
+            write_frame(self.testfile, frx2, fibermap=user_fibermap)
             #- Only one FIBERMAP HDU should be present
             with fits.open(self.testfile) as hdulist:
                 fibermap_hdus = [hdu for hdu in hdulist if hdu.name == 'FIBERMAP']
                 self.assertEqual(len(fibermap_hdus), 1, 'Expected exactly one FIBERMAP HDU')
+            #- The written fibermap should match the user-supplied one, not frame.fibermap
+            frame3 = read_frame(self.testfile)
+            self.assertTrue(np.all(frame3.fibermap['TARGETID'] == user_fibermap['TARGETID']),
+                            'User-supplied fibermap TARGETID not written correctly')
 
     def test_write_frame_fibermap_not_duplicated(self):
         """Test that write_frame with both frame.fibermap and user-supplied fibermap
