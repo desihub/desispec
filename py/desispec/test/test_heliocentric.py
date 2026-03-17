@@ -25,10 +25,9 @@ class TestHeliocentric(unittest.TestCase):
         fmap = Table()
         fmap['TARGET_RA'] = np.array([0.0, 0.0])
         fmap['TARGET_DEC'] = np.array([0.0, 0.0])
-        fmap['MJD'] = np.array([58800.0, 58800.0])
+        mjd = 58800
         
         # Case 1: zero shift
-        mjd = 58800.0
         v_fiber = barycentric_velocity_corr_kms(0, 0, mjd)
         c_kms = astropy.constants.c.to(u.km/u.s).value
         # Use heliocor to exactly match the fiber velocity so vshift=0
@@ -39,7 +38,7 @@ class TestHeliocentric(unittest.TestCase):
         v_fiber1 = barycentric_velocity_corr_kms(10, 0, mjd)
         vshift1 = v_fiber1 - (heliocor - 1.0) * c_kms
 
-        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
+        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor, mjd=mjd)
         
         # Fiber 0 should have zero shift
         self.assertTrue(np.allclose(shifted_res[0, ndiag//2, :], 1.0))
@@ -78,12 +77,11 @@ class TestHeliocentric(unittest.TestCase):
         fmap = Table()
         fmap['TARGET_RA'] = [ra1]
         fmap['TARGET_DEC'] = [dec1]
-        fmap['MJD'] = [mjd]
         
         # heliocor represents the field correction applied during extraction
         heliocor = 1.0 + v_field / c_kms
         
-        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor)
+        shifted_res, offset_array = heliocentric_shift_res_data(fmap, res_data, wave, heliocor=heliocor, mjd=mjd)
         
         # vshift = v_star - v_field = v_diff
         # dwave was set to |v_diff| / c * wave, so deltas = -v_diff / |v_diff| = -1.0

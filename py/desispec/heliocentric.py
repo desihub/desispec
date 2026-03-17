@@ -118,15 +118,17 @@ def barycentric_velocity_multiplicative_corr(ra, dec, mjd) :
 
     return 1.+barycentric_velocity_corr_kms(ra, dec, mjd)/astropy.constants.c.to(u.km/u.s).value
 
-def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
+def heliocentric_shift_res_data(fibermap, resolution_data, wave,
+                                heliocor=None, mjd=None):
     """
     Shift resolution matrix data based on heliocentric correction mismatch.
 
     Args:
-        fibermap: Table-like object with columns TARGET_RA, TARGET_DEC, and (MJD or MJD-OBS)
+        fibermap: Table-like object with columns TARGET_RA, TARGET_DEC
         resolution_data: (nspec, ndiag, nwave) array of resolution matrices
         wave: (nwave,) array of wavelengths
         heliocor: (float, optional) Adopted multiplicative barycentric factor.
+        mjd: (float, optional) mjd of observations
 
     Returns:
         shifted_res_data: (nspec, ndiag, nwave) array of shifted resolution matrices
@@ -143,15 +145,9 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
     dwave[0] = wave[1] - wave[0]
     dwave[-1] = wave[-1] - wave[-2]
 
-    mjd_col = None
-    if "MJD" in fibermap.colnames:
-        mjd_col = "MJD"
-    elif "MJD-OBS" in fibermap.colnames:
-        mjd_col = "MJD-OBS"
-
     heliocor_offset = np.zeros(len(fibermap), dtype='f4')
 
-    if mjd_col is None or heliocor is None:
+    if mjd is None or heliocor is None:
         log.warning('Barycentric correction offset was not applied due to '
                     'missing MJD or heliocor')
         return resolution_data.copy(), heliocor_offset
@@ -159,7 +155,6 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave, heliocor=None):
     v_field = (heliocor - 1.0) * c_kms
 
     for j in range(nspec):
-        mjd = fibermap[mjd_col][j]
 
         if (not np.isnan(fibermap["TARGET_RA"][j]) and
             not np.isnan(fibermap["TARGET_DEC"][j])):

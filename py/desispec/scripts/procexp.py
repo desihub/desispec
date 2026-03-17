@@ -162,9 +162,21 @@ def main(args):
         log.info("Applying barycentric shift (fiber vs tile center) to the "
                  "resolution matrix")
         heliocor = frame.meta.get('HELIOCOR')
+        if "MJD-OBS" in frame.meta :
+            mjd = frame.meta["MJD-OBS"]
+        elif "MJD" in frame.meta :
+            mjd = frame.meta["MJD"]
+        else :
+            mjd = None
+
+        if "EXPTIME" in frame.meta:
+            exptime = frame.meta["EXPTIME"]
+        else:
+            exptime = 0
+        mjd_center = mjd + exptime / 2. / 3600. / 24.
         frame.resolution_data, heliocor_offset = heliocentric_shift_res_data(
             frame.fibermap, frame.resolution_data, frame.wave,
-            heliocor=heliocor)
+            heliocor=heliocor, mjd=mjd_center)
 
         frame.fibermap['HELIOCOR_OFFSET'] = heliocor_offset
         
