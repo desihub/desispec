@@ -705,7 +705,7 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 def per_exposure_normalization(spectra):
     """
     Compute per‑exposure multiplicative normalization factors for each
-    target in a desispec.spectra.Spectra object and store them in the
+    target in a desispec.spectra.Spectra object and store them in a new
     COADD_NORM column of the fibermap. Objects for which a normalization
     term cannot be computed have a default COADD_NORM value of 1.0, e.g.,
     sky spectra, single exposures, etc. If any exposure yields a negative 
@@ -727,11 +727,11 @@ def per_exposure_normalization(spectra):
     
     targets = ordered_unique(spectra.fibermap["TARGETID"])
 
-    # fatally bad FIBERSTATUS bits, can fully ignore these exposures
+    # bitmask of fatal fiber‑status flags – exposures with any of these bits set are ignored 
     fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
-    # default COADD_NORM = 1.
+    # initialize default COADD_NORM = 1.
     spectra.fibermap['COADD_NORM'] = 1.
     
     # compute normalization terms per exposure
@@ -739,7 +739,7 @@ def per_exposure_normalization(spectra):
 
         idx = np.where(spectra.fibermap['TARGETID'] == tgt)[0]
 
-        # physicality requirement of scaling terms > 0
+        # flag to check if solution is physically reasonable
         is_converged = False
         iteration = 0 # avoiding infinite loop
         while not(is_converged) & (iteration < 5):
@@ -769,7 +769,7 @@ def per_exposure_normalization(spectra):
                     num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx_good] == 0), 1)
                 
                     if np.all(num_masked_pixels < int(0.4*nwave)):
-                        # >40% of the band has unmasked data in all exposures
+                        # Require that less than 40 % of the pixels are masked
                         usable_bands.append(b)
 
                 if len(usable_bands) == 0:
@@ -841,26 +841,26 @@ def per_exposure_normalization(spectra):
                 w_tot = np.sum(w_i, axis=0)
                 crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
                 
-                # compute normalization constant by minimizing chi2
+                # compute unbiased normalization constant by minimizing chi2
                 # chi2 = sum( w*(f_i - b*f_c )^2 )
                 # optimal scalar for f_i is a = 1/b = ( w*f_i*f_c / w*f_c^2 )^-1
                 a = np.ones(idx.size)
                 for j,k in enumerate(idx_good):
-                    w = w_i[j] * w_tot
-                    mask = w != 0
-                    numerator = w*crude_coadd**2
-                    denominator = w*crude_coadd*f_i[j]
-                    if np.isfinite(np.sum(denominator[mask])):
-                        a[np.isin(idx,k)] = np.sum(numerator[mask])/np.sum(denominator[mask])
+                    mask = w_i[j]*w_tot != 0
+                    w = (1./w_i[j][mask] + 1./w_tot[mask])**-1
+                    numerator = w*crude_coadd[mask]**2
+                    denominator = w*crude_coadd[mask]*f_i[j][mask]
+                    if np.isfinite(np.sum(denominator)):
+                        a[np.isin(idx,k)] = np.sum(numerator)/np.sum(denominator)
                     else:
                         log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
                         spectra.fibermap['FIBERSTATUS'][k] |= fmsk.BADFIBER
                         good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
                         # need to retry without this exposure
+                        a[np.isin(idx,k)] = 0
                         continue
 
-                # physicality check
-                # coefficients should not be negative. Also restricting range to OM about 1
+                #  enforce physically plausible scaling factors (positive and not extreme).
                 is_converged = np.all( (a>0.1) & (a<10.) ) 
                 if is_converged:
                     spectra.fibermap['COADD_NORM'][idx] = a
@@ -873,8 +873,7 @@ def per_exposure_normalization(spectra):
                     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
             else: 
-                # do not apply normalization term: 
-                # non-target type, single exposures, or no good exposures
+                # skip normalization for non‑target objects, single‑exposure targets, or when no good exposures remain
                 is_converged = True
 
         if not(is_converged):
