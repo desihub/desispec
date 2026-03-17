@@ -524,6 +524,22 @@ class TestIO(unittest.TestCase):
                 match = np.all(fibermap[name] == frame.fibermap[name])
                 self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
+            #- user-supplied fibermap overrides frame.fibermap and appears only once
+            frame_fibermap = empty_fibermap(nspec)
+            frame_fibermap['TARGETID'] = np.arange(nspec) * 10
+            user_fibermap = empty_fibermap(nspec)
+            user_fibermap['TARGETID'] = np.arange(nspec) * 99
+            frx2 = Frame(wave, flux, ivar, mask, R, fibermap=frame_fibermap, meta=dict(FLAVOR='science'))
+            write_frame(self.testfile, frx2, fibermap=user_fibermap)
+            #- Only one FIBERMAP HDU should be present
+            with fits.open(self.testfile) as hdulist:
+                fibermap_hdus = [hdu for hdu in hdulist if hdu.name == 'FIBERMAP']
+                self.assertEqual(len(fibermap_hdus), 1, 'Expected exactly one FIBERMAP HDU')
+            #- The written fibermap should match the user-supplied one, not frame.fibermap
+            frame3 = read_frame(self.testfile)
+            self.assertTrue(np.all(frame3.fibermap['TARGETID'] == user_fibermap['TARGETID']),
+                            'User-supplied fibermap TARGETID not written correctly')
+
     def test_read_frame_as_spectra(self):
         """Test desispec.io.read_frame_as_spectra
         """
