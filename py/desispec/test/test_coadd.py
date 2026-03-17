@@ -1392,3 +1392,31 @@ class TestCoadd(unittest.TestCase):
         spec.R = None
         spec.mask = None
         coadd = coadd_cameras(spec)
+
+    def test_coadd_spectra_script_multi_input(self):
+        """Test that coadd_spectra script handles multiple input files (regression test for bracket bug)"""
+        import tempfile
+        import os
+        from desispec.io import write_spectra, read_spectra
+        from desispec.scripts.coadd_spectra import main
+
+        nspec, nwave = 2, 10
+        s1 = self._random_spectra(nspec, nwave, seed=1)
+        s2 = self._random_spectra(nspec, nwave, seed=2)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            infile1 = os.path.join(tmpdir, 'spectra1.fits')
+            infile2 = os.path.join(tmpdir, 'spectra2.fits')
+            outfile = os.path.join(tmpdir, 'coadd.fits')
+            write_spectra(infile1, s1)
+            write_spectra(infile2, s2)
+
+            #- This used to fail with TypeError due to misplaced bracket
+            main(['-i', infile1, infile2, '-o', outfile])
+
+            self.assertTrue(os.path.exists(outfile))
+            result = read_spectra(outfile)
+            #- coadd combines all spectra with the same TARGETID;
+            #- each random spectra has TARGETID=12 for all rows, so
+            #- the result should have one coadded spectrum per unique TARGETID
+            self.assertGreater(result.num_spectra(), 0)
