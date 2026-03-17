@@ -1401,8 +1401,8 @@ class TestCoadd(unittest.TestCase):
         from desispec.scripts.coadd_spectra import main
 
         nspec, nwave = 2, 10
-        s1 = self._random_spectra(nspec, nwave, seed=1)
-        s2 = self._random_spectra(nspec, nwave, seed=2)
+        s1 = self._random_spectra(nspec, nwave, seed=1, with_mask=True)
+        s2 = self._random_spectra(nspec, nwave, seed=2, with_mask=True)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             infile1 = os.path.join(tmpdir, 'spectra1.fits')
