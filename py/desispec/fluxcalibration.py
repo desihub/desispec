@@ -1439,9 +1439,11 @@ class FluxCalib(object):
         assert calib.shape == ivar.shape
         assert calib.shape == mask.shape
         assert np.all(ivar >= 0)
+        assert calib.shape[1] == wave.shape[0]
 
         if deconvolved_calib is not None:
             assert deconvolved_calib.ndim == 1
+            assert deconvolved_calib.shape[1] == wave.shape[0]
 
         self.nspec, self.nwave = calib.shape
         self.wave = wave
