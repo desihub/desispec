@@ -709,7 +709,7 @@ class TestIO(unittest.TestCase):
         calib = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
-        deconvolved_calib = np.random.uniform(size=(nspec, nwave))
+        deconvolved_calib = np.random.uniform(size=nwave)
 
         fc = FluxCalib(wave, calib, ivar, mask, deconvolved_calib=deconvolved_calib)
         write_flux_calibration(self.testfile, fc)
@@ -718,9 +718,9 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(fx.calib == fc.calib.astype('f8')))
         self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
-        # DECONVOLVED_CALIB HDU: round-trip equality and dtype
+        # DECONVOLVED_CALIB HDU: round-trip equality and dtype; note no f8 -> f4 -> f8; it is saved as f8
         self.assertEqual(fx.deconvolved_calib.dtype, np.float64)
-        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
 
     def test_image_rw(self):
         """Test reading and writing of Image objects.
