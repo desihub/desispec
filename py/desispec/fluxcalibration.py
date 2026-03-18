@@ -1511,7 +1511,7 @@ def apply_flux_calibration(frame, fluxcalib):
                                   frame.flux[i, ok]**2 * frame.ivar[i, ok]
                                   ))
 
-        if (frame.resolution_data is not None) and (C_deconvolved is not None) and (fluxcalib.fibercorr is not None):
+        if (frame.resolution_data is not None) and (C_deconvolved is not None) and (fluxcalib.fibercorr is not None) and ok.any():
             # convert R to  C_i^-1 * R * C using the calibration vectors
             icalib = np.zeros_like(C[i])
             icalib[ok] = 1 / (C[i, ok] * fluxcalib.fibercorr["FLAT_TO_PSF_FLUX"][i])
@@ -1524,6 +1524,8 @@ def apply_flux_calibration(frame, fluxcalib):
             M2 = [C_deconvolved for _ in np.arange(width)]
             res_out = frame.resolution_data[i] * M1 * M2
             frame.resolution_data[i] = res_out
+            if hasattr(frame, "R") and frame.R is not None:
+                frame.R[i] = Resolution(res_out)
 
         frame.ivar[i, ~ok] = 0
 
