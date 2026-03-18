@@ -169,11 +169,16 @@ def main(args):
         else :
             mjd = None
 
-        if "EXPTIME" in frame.meta:
-            exptime = frame.meta["EXPTIME"]
+        if mjd is not None:
+            if "EXPTIME" in frame.meta:
+                exptime = frame.meta["EXPTIME"]
+            else:
+                exptime = 0
+            mjd_center = mjd + exptime / 2. / 3600. / 24.
         else:
-            exptime = 0
-        mjd_center = mjd + exptime / 2. / 3600. / 24.
+            # heliocentric_shift_res_data will do nothing if mjd_center is None
+            mjd_center = None
+
         frame.resolution_data, heliocor_offset = heliocentric_shift_res_data(
             frame.fibermap, frame.resolution_data, frame.wave,
             heliocor=heliocor, mjd=mjd_center)
