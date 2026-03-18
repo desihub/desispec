@@ -149,7 +149,7 @@ def get_non_final_states():
     Returns:
         list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
     """
-    return ['PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
+    return ['SUBMITTED', 'PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
 
 def get_mock_slurm_data():
     """
