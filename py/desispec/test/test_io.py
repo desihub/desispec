@@ -709,14 +709,18 @@ class TestIO(unittest.TestCase):
         calib = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
+        deconvolved_calib = np.random.uniform(size=(nspec, nwave))
 
-        fc = FluxCalib(wave, calib, ivar, mask)
+        fc = FluxCalib(wave, calib, ivar, mask, deconvolved_calib=deconvolved_calib)
         write_flux_calibration(self.testfile, fc)
         fx = read_flux_calibration(self.testfile)
         self.assertTrue(np.all(fx.wave  == fc.wave.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.calib == fc.calib.astype('f8')))
         self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
+        # DECONVOLVED_CALIB HDU: round-trip equality and dtype
+        self.assertEqual(fx.deconvolved_calib.dtype, np.float64)
+        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib.astype('f4').astype('f8')))
 
     def test_image_rw(self):
         """Test reading and writing of Image objects.
