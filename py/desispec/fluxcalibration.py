@@ -1522,6 +1522,8 @@ def apply_flux_calibration(frame, fluxcalib):
             M2 = [C_deconvolved for _ in np.arange(width)]
             res_out = frame.resolution_data[i] * M1 * M2
             frame.resolution_data[i] = res_out
+            if hasattr(frame, "R") and frame.R is not None:
+                frame.R[i] = Resolution(res_out)
 
         frame.ivar[i, ~ok] = 0
 
