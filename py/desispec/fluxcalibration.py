@@ -901,11 +901,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
       - But we want to return a calibration vector per fiber C_fiber defined by flux^cframe_fiber = flux^frame_fiber/C_fiber,
         such that flux^cframe can be compared with a convolved model of the truth, flux^cframe_fiber = R_fiber*flux^true,
         i.e. (R_fiber*C*flux^true)/C_fiber = R_fiber*true_flux, giving C_fiber = (R_fiber*C*flux^true)/(R_fiber*flux^true)
-      - There is no solution for this for all possible input specta. The solution for a flat spectrum is calculated,
+      - There is no solution for this for all possible input spectra. The solution for a flat spectrum is calculated,
         which is very close to C_fiber = R_fiber*C (but not exactly).
 
     An additional subtlety of note is that the returned calibration vector is not the computed C_fiber, but is instead
-    the calbration vector corrected for the flat to psf flux conversion: C_fiber / FLAT_TO_PSF_FLUX
+    the calibration vector corrected for the flat to psf flux conversion: C_fiber / FLAT_TO_PSF_FLUX
 
     """
     # import only if needed to minimize required dependencies
