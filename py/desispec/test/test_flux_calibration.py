@@ -199,6 +199,60 @@ class TestFluxCalibration(unittest.TestCase):
         with self.assertRaises(SystemExit):  #should be ValueError instead?
             apply_flux_calibration(frame,fc)
 
+    def test_apply_fluxcalibration_resolution(self):
+        """Test that apply_flux_calibration updates resolution_data as C_i^-1 * R * C"""
+        wave = np.arange(5000, 5010, dtype=float)
+        nwave = len(wave)
+        nspec = 2
+
+        flux = np.ones((nspec, nwave))
+        ivar = np.ones((nspec, nwave))
+
+        # Tridiagonal resolution matrix (width=3): identity (diagonal=1, off-diags=0)
+        width = 3
+        resolution_data = np.zeros((nspec, width, nwave))
+        resolution_data[:, 1, :] = 1.0  # set only the diagonal
+
+        frame = Frame(wave, flux.copy(), ivar.copy(),
+                      resolution_data=resolution_data.copy(), spectrograph=0)
+
+        # Known constant calibration values
+        c_val = 2.0        # convolved calib C
+        c_d_val = 3.0      # deconvolved calib C_d
+        f_val = 0.5        # FLAT_TO_PSF_FLUX correction per fiber
+
+        calib = np.full((nspec, nwave), c_val)
+        fcivar = np.ones((nspec, nwave))
+        mask = np.zeros((nspec, nwave), dtype=np.uint32)
+        deconvolved_calib = np.full(nwave, c_d_val)
+        fibercorr = {"FLAT_TO_PSF_FLUX": np.full(nspec, f_val)}
+
+        fc = FluxCalib(wave, calib, fcivar, mask,
+                       deconvolved_calib=deconvolved_calib,
+                       fibercorr=fibercorr)
+
+        apply_flux_calibration(frame, fc)
+
+        # Expected scaling: resolution_data[spec, diag_offset, wave] is scaled by
+        # C_d[wave] / (C[spec, wave] * f[spec]), where diag_offset=1 is the diagonal.
+        # With constant values and identity R (diagonal=1, off-diagonals=0):
+        #   diagonal (offset=1) -> 1 * c_d_val / (c_val * f_val)
+        #   off-diagonals (offset=0, 2) -> 0 * ... = 0 (unchanged)
+        expected_diag = c_d_val / (c_val * f_val)
+        self.assertTrue(np.allclose(frame.resolution_data[:, 1, :], expected_diag),
+                        msg='Diagonal elements do not match expected C_i^-1 * R * C scaling')
+        self.assertTrue(np.allclose(frame.resolution_data[:, 0, :], 0.0),
+                        msg='Upper off-diagonal should remain 0')
+        self.assertTrue(np.allclose(frame.resolution_data[:, 2, :], 0.0),
+                        msg='Lower off-diagonal should remain 0')
+
+        # Verify the cached sparse R matrices are also updated
+        for i in range(nspec):
+            self.assertIsNotNone(frame.R[i])
+            r_diag = frame.R[i].diagonal()
+            self.assertTrue(np.allclose(r_diag, expected_diag),
+                            msg='Cached sparse R diagonal does not match updated resolution_data')
+
     def test_isStdStar(self):
         """test isStdStar works for cmx, main, and sv1 fibermaps"""
         from desispec.fluxcalibration import isStdStar
