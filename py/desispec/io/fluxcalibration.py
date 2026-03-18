@@ -199,7 +199,7 @@ def read_flux_calibration(filename):
             stdstar_fibermap = None
 
         if 'DECONVOLVED_CALIB' in fx:
-            deconvolved_calib = fx['DECONVOLVED_CALIB'].data.astype('f8')
+            deconvolved_calib = native_endian(fx['DECONVOLVED_CALIB'].data.astype('f8'))
         else :
             deconvolved_calib = None
 
