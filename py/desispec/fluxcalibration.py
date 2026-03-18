@@ -905,7 +905,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         which is very close to C_fiber = R_fiber*C (but not exactly).
 
     An additional subtlety of note is that the returned calibration vector is not the computed C_fiber, but is instead
-    the calbration vector corrected for the flat to psf flux conversion: C_fiber / FLAT_TO_PSF_FLUX
+    the calibration vector corrected for the flat to psf flux conversion: C_fiber / FLAT_TO_PSF_FLUX
 
     """
     # import only if needed to minimize required dependencies
