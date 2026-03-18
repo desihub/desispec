@@ -389,16 +389,20 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
 
+    # Exclude placeholder QIDs from cache checks and Slurm queries.
+    # These placeholders are never cached and are not included in the output.
+    real_qids = qids[(qids != err_qid) & (qids != def_qid)]
+
     ## Only use cached values if all are cahced, since the time is dominated
     ## by the call itself rather than the number of jobids, so we may as well
     ## get updated information from all of them if we're submitting a query anyway
     outdict = dict()
-    if use_cache and np.all(np.isin(qids, list(_cached_slurm_states.keys()))):
-        log.info(f"All Slurm {qids=} are cached. Using cached values.")
-        for qid in qids:
+    if use_cache and real_qids.size > 0 and np.all(np.isin(real_qids, list(_cached_slurm_states.keys()))):
+        log.info(f"All Slurm real_qids={real_qids} are cached. Using cached values.")
+        for qid in real_qids:
             outdict[qid] = _cached_slurm_states[qid]
-    else:
-        outtable = queue_info_from_qids(qids, columns='jobid,state',
+    elif real_qids.size > 0:
+        outtable = queue_info_from_qids(real_qids, columns='jobid,state',
                                         dry_run_level=dry_run_level)
         for row in outtable:
             if int(row['JOBID']) not in [err_qid, def_qid]:
