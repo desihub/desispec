@@ -147,7 +147,7 @@ def get_non_final_states():
         TO TIMEOUT Job terminated upon reaching its time limit.
 
     Returns:
-        list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
+        list. A list of strings outlining the job states that are considered non-final
     """
     return ['SUBMITTED', 'PENDING', 'RUNNING', 'REQUEUED', 'RESIZING']
 
