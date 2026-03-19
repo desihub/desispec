@@ -5,6 +5,12 @@ desispec Change Log
 0.71.0 (unreleased)
 -------------------
 
+Major algorithmic changes:
+
+* Adjust the resolution matrix for flux calibration (PR `#2642`_).
+
+Other:
+
 * Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed anyway
   even without dark or bias models (PR `#2577`_).
 * Update _find_zeros to also use exptable PROGRAM (PR `#2578`_).
@@ -50,6 +56,9 @@ desispec Change Log
 * Remove Spectrum1D import in test (PR `#2665`_).
 * fix DATE-OBS-END str vs. int; add tests (PR `#2666`_).
 * Make test_dateobs_begin_end_type_handling_sm1r hermetic by unsetting DESI_SPECTRO_DARK (PR `#2667`_).
+* Fix write_frame duplicating FIBERMAP HDU when fibermap kwarg is supplied (PR `#2671`_).
+* Fix misplaced bracket causing TypeError when coadding multiple spectra files (PR `#2673`_).
+* Add unit test for resolution matrix update in apply_flux_calibration (PR `#2675`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -85,6 +94,7 @@ desispec Change Log
 .. _`#2637`: https://github.com/desihub/desispec/pull/2637
 .. _`#2638`: https://github.com/desihub/desispec/pull/2638
 .. _`#2640`: https://github.com/desihub/desispec/pull/2640
+.. _`#2642`: https://github.com/desihub/desispec/pull/2642
 .. _`#2643`: https://github.com/desihub/desispec/pull/2643
 .. _`#2646`: https://github.com/desihub/desispec/pull/2646
 .. _`#2651`: https://github.com/desihub/desispec/pull/2651
@@ -94,6 +104,10 @@ desispec Change Log
 .. _`#2665`: https://github.com/desihub/desispec/pull/2665
 .. _`#2666`: https://github.com/desihub/desispec/pull/2666
 .. _`#2667`: https://github.com/desihub/desispec/pull/2667
+.. _`#2671`: https://github.com/desihub/desispec/pull/2671
+.. _`#2673`: https://github.com/desihub/desispec/pull/2673
+.. _`#2675`: https://github.com/desihub/desispec/pull/2675
+
 
 0.70.0 (2025-12-04)
 -------------------
