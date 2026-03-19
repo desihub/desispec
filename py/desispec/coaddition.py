@@ -731,13 +731,8 @@ def per_exposure_normalization(spectra):
     fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
-<<<<<<< HEAD
-    # default COADD_NORM = 1.
-    spectra.fibermap['COADD_NORM'] = np.ones(len(spectra.fibermap), dtype=np.float32)
-=======
     # initialize default COADD_NORM = 1.
     spectra.fibermap['COADD_NORM'] = 1.
->>>>>>> df25ea16e5d97a141cfd34a35786faa6e64ce3a1
     
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
