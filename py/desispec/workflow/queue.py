@@ -287,7 +287,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
     qids = np.atleast_1d(qids).astype(int)
     log = get_logger()
 
-    qids = qids[np.bitwise_not(np.isin(qids, [get_err_qid(), get_default_qid()]))]  # avoid default QID values
+    qids = qids[np.isin(qids, [get_err_qid(), get_default_qid()], invert=True)]  # avoid default QID values
 
     ## If qids is too long, recursively call self and stack tables; otherwise sacct hangs
     nmax = 100
