@@ -24,8 +24,6 @@ try:
 except TypeError:
     kpno = None
 
-log = get_logger()
-
 
 def heliocentric_velocity_corr_kms(ra, dec, mjd) :
     """Heliocentric velocity correction routine.
@@ -135,6 +133,7 @@ def heliocentric_shift_res_data(fibermap, resolution_data, wave,
         heliocor_offset: (nspec) array of applied heliocor corrections
     """
     
+    log = get_logger()
     nspec, ndiag, nwave = resolution_data.shape
     shifted_res_data = np.zeros_like(resolution_data)
 
