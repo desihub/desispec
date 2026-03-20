@@ -31,7 +31,7 @@ class TestInspectDark(unittest.TestCase):
             f["IMAGE"].write_key("camera", "B0")
         self.fake_dark_file = dark_path
         # Locate PSF file using importlib.resources
-        self.psf_path = str(resources.files('desispec.test.data.ql').joinpath('psf-b0.fits'))
+        self.psf_path = str(resources.files('desispec').joinpath('test/data/ql/psf-b0.fits'))
 
     def tearDown(self):
         # Cleanup the temporary directory; files within it will be removed automatically
