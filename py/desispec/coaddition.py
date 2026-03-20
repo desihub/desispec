@@ -122,6 +122,7 @@ fibermap_exp_cols = (
 fibermap_cframe_cols = (
     'PSF_TO_FIBER_SPECFLUX',
     'FLAT_TO_PSF_FLUX',
+    'HELIOCOR_OFFSET',
     )
 
 #- Columns to include in the per-exposure EXP_FIBERMAP
@@ -427,7 +428,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX']:
+            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'HELIOCOR_OFFSET']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
