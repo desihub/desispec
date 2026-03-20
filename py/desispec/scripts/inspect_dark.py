@@ -185,7 +185,8 @@ def main(args=None):
             for k in entries.keys() :
                 t[k]=entries[k]
 
-            t["FIBERSTATUS"]=np.repeat(fibermask.BADCOLUMN,len(t))
+            # no BADCOLUMN bit in fibermask, so use BADFIBER instead
+            t["FIBERSTATUS"]=np.repeat(fibermask.BADFIBER,len(t))
 
             camera=head["camera"]
             t["CAMERA"]=np.repeat(camera,len(t))
