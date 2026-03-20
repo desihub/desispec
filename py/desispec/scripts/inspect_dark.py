@@ -30,6 +30,7 @@ def parse(options=None):
     parser.add_argument('--threshold', type = float , default = 0.005, required = False, help = 'threshold in electrons/sec to flag columns. '
                                                                                                 + 'Note not exptime dependent. Always multiplied by 300.')
     parser.add_argument('--sigma', type = float , default = 6, required = False, help = 'required statistical significance of column detection')
+    parser.add_argument('--medsize', type = int , default = 400, required = False, help = 'median filter size')
     parser.add_argument('--psf', type = str , default = None, required = False, help = 'specify psf file for trace coordinates, default is automatically found.')
     parser.add_argument('--dist', type = float , default = 3., required = False, help = 'min distance in pixels between fiber trace and bad column')
     parser.add_argument('--nopsf', action = 'store_true', help = 'do not read the traces and do not associate bad columns to fibers')
@@ -136,7 +137,7 @@ def main(args=None):
             tmpvar=np.sum(pixvar[:,pb:pe],axis=1)
 
             # median filter for column that do not cross the whole amplifier
-            medsize = 400
+            medsize = args.medsize
             medval = scipy.ndimage.median_filter(tmpval, medsize)
             medsigma = scipy.ndimage.median_filter(tmpval/np.sqrt(tmpvar), medsize) * np.sqrt(medsize)/np.sqrt(np.pi/2)
             i = np.argmax(np.abs(medval))

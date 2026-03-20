@@ -13,7 +13,7 @@ class TestInspectDark(unittest.TestCase):
         # Create temporary directory for test files using TemporaryDirectory
         self.temp_dir = tempfile.TemporaryDirectory()
         # Create fake dark image FITS with a bright column
-        ny, nx = 40, 50
+        ny, nx = 50,60
         rnd = np.random.RandomState(0)
         image = rnd.normal(scale=1.0, size=(ny, nx))
         self.badcol = 10
@@ -46,6 +46,7 @@ class TestInspectDark(unittest.TestCase):
             "--psf", self.psf_path,
             "--badfiber-table", badfiber_file,
             "--badcol-table", badcol_file,
+            "--medsize", "20",  # filter smaller than image size
         ]
         # Run inspect_dark; should not raise
         inspect_dark.main(args)
@@ -56,6 +57,7 @@ class TestInspectDark(unittest.TestCase):
 
         t = Table.read(badcol_file)
         self.assertIn(self.badcol, t['COLUMN'], f"Expected bad column {self.badcol} not found in output table {t}")
+
 
 if __name__ == '__main__':
     unittest.main()
