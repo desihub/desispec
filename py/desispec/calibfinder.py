@@ -153,7 +153,10 @@ def ccdregionmask(headers) :
 
 def get_flagged_fibers(expid, filename=None):
     """
-    Read flagged fibers from an ECSV file for a specific exposure ID.
+    Read flagged fibers from an ECSV file for a specific exposure ID. Fiber numbers are parsed from the FIBERS column,
+    with ranges being inclusive of the ending, e.g 10-12 will yield [10, 11, 12]. 10:12 wil also yield [10, 11, 12],
+    but we don't recommend using that syntax to avoid confusion with Python slicing. The fiberstatus mask values are
+    parsed from the FIBERSTATUS_BITNAME column.
 
     Parameters
     ----------
