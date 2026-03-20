@@ -8,6 +8,7 @@ desispec Change Log
 Major algorithmic changes:
 
 * Adjust the resolution matrix for flux calibration (PR `#2642`_).
+* Adjust the cframe resolution matrix for per-fiber heliocentric corrections (PR `#2648`_).
 
 Other:
 
@@ -97,6 +98,7 @@ Other:
 .. _`#2642`: https://github.com/desihub/desispec/pull/2642
 .. _`#2643`: https://github.com/desihub/desispec/pull/2643
 .. _`#2646`: https://github.com/desihub/desispec/pull/2646
+.. _`#2648`: https://github.com/desihub/desispec/pull/2648
 .. _`#2651`: https://github.com/desihub/desispec/pull/2651
 .. _`#2658`: https://github.com/desihub/desispec/pull/2658
 .. _`#2659`: https://github.com/desihub/desispec/pull/2659
