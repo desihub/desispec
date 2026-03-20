@@ -38,7 +38,9 @@ class TestCalibFinder(unittest.TestCase):
 
         table = Table()
         table['EXPID'] = [12345, 12345, 67890, 99999, 4680]
-        table['FIBERS'] = ['0:5', '100,101,102', '4995:5000', '2500', '100-104']
+        table['TILEID'] = [200, 200, 202, 203, 204]
+        table['NIGHT'] = [20250101, 20250101, 20250103, 20250104, 20250105]
+        table['FIBERS'] = ['0-5', '100,101,102', '4995-4999', '2500', '100-104']
         table['FIBERSTATUS_BITNAME'] = ['BRIGHTNEIGHBOR', 'BADFIBER', 'RESERVED31', 'BADTRACE', 'BRIGHTNEIGHBOR|BADFIBER']
         #                 maskval      [ 2048,             65536,      2147483648,   131072,    2048+65536   ]
         #                 bitnum       [ 11,               16,         31,           17,        11;16       ]
@@ -134,8 +136,8 @@ class TestCalibFinder(unittest.TestCase):
         reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(12345, filename=self.test_flaggedfile)
 
-        expected_fibers = [0, 1, 2, 3, 4, 100, 101, 102]
-        expected_masks = [2048, 2048, 2048, 2048, 2048, 65536, 65536, 65536]
+        expected_fibers = [0, 1, 2, 3, 4, 5, 100, 101, 102]
+        expected_masks = [2048, 2048, 2048, 2048, 2048, 2048, 65536, 65536, 65536]
 
         self.assertEqual(fibers, expected_fibers)
         self.assertEqual(masks, expected_masks)
@@ -213,7 +215,7 @@ class TestCalibFinder(unittest.TestCase):
         from ..calibfinder import get_flagged_fibers
         reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(4680, filename=self.test_flaggedfile)
-        self.assertEqual(len(masks), 4)
+        self.assertEqual(len(masks), 5)
         for mask in masks:
             self.assertEqual(mask, 2048+65536)
         self._remove_env_calibdir(reset_calib_env)

@@ -188,7 +188,7 @@ def get_flagged_fibers(expid, filename=None):
     masks = []
     for row in selection:
         fiber_string = row['FIBERS']
-        parsed_fibers = parse_int_args(fiber_string)
+        parsed_fibers = parse_int_args(fiber_string, include_end=True)
 
         try:
             mask = fibermask.mask(row['FIBERSTATUS_BITNAME'])
