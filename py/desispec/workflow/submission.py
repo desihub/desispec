@@ -16,11 +16,12 @@ from desispec.workflow.proctable import default_prow, get_pdarks_from_ptable
 import numpy as np
 
 from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword, \
-camword_intersection, camword_union
+    camword_intersection, camword_union
 from desispec.scripts.link_calibnight import derive_include_exclude
 
 from desispec.io.meta import findfile
-from desispec.workflow.processing import create_and_submit, define_and_assign_dependency, generate_calibration_dict, night_to_starting_iid
+from desispec.workflow.processing import create_and_submit, assign_dependency, define_and_assign_dependency, \
+    generate_calibration_dict, night_to_starting_iid, filename_to_jobname
 from desispec.workflow.utils import load_override_file, sleep_and_report
 from desiutil.log import get_logger
 
@@ -106,15 +107,48 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
         prow['OBSTYPE'] = 'link'
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = night
-        if 'refnight' in cal_override['linkcal']:
-            refnight = int(cal_override['linkcal']['refnight'])
-            prow = define_and_assign_dependency(prow, ptable, refnight=refnight)
+
         if 'camword' in cal_override['linkcal']:
             prow['PROCCAMWORD'] = cal_override['linkcal']['camword']
         else:
             ## If no camword is specified, use the provided camword,
             ## or if not provided, use default to all cameras
             prow['PROCCAMWORD'] = proccamword
+
+        if 'refnight' in cal_override['linkcal']:
+            refnight = int(cal_override['linkcal']['refnight'])
+            ## For link cals only, enable cross-night dependencies if available
+            refproctable = findfile('proctable', night=refnight)
+            if os.path.exists(refproctable):
+                ptab = load_table(tablename=refproctable, tabletype='proctable')
+                ## This isn't perfect because we may depend on jobs that aren't
+                ## actually being linked
+                ## Also allows us to proceed even if jobs don't exist yet
+                deps, expids, proccamwords = [], [], []
+                for filename in files_to_link:
+                    job = filename_to_jobname(filename)
+                    ## this returns 'biaspdark' but that isn't always
+                    ## what is used for early nights and those without pdarks
+                    ## so check for biasnight as well if biaspdark isn't found
+                    if 'bias' in job and job not in ptab['JOBDESC']:
+                        job = 'biasnight'
+                    if job in ptab['JOBDESC']:
+                        ## add prow to dependencies
+                        deprow = ptab[ptab['JOBDESC']==job][0]
+                        deps.append(deprow)
+                        proccamwords.append(deprow['PROCCAMWORD'])
+                        expids.extend(list(deprow['EXPID']))
+                if 'linkcal' in ptab['JOBDESC']:
+                    linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
+                    deps.append(linkcalprow)
+                    proccamwords.append(linkcalprow['PROCCAMWORD'])
+                    expids.extend(list(linkcalprow['EXPID']))
+                if len(deps) > 0:
+                    prow['EXPID'] = np.unique(np.array(expids, dtype=int))
+                    ## The proccamword for the linking job is the largest set available from the reference night
+                    ## but restricting back to those requested for the current night, if fewer cameras are available
+                    prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
+                    prow = assign_dependency(prow, deps)
 
         ## create dictionary to carry linking information
         linkcalargs = cal_override['linkcal']
