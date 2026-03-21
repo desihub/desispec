@@ -798,7 +798,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 ##########   Row Manipulations   ############
 #############################################
 def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
-                                 refnight=None, include_files=None):
+                                 include_files=None):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -817,7 +817,6 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
         use_tilenight, bool. Default is False. If True, use desi_proc_tilenight
             for prestdstar, stdstar,and poststdstar steps for
             science exposures.
-        refnight, int. The reference night for linking jobs
         include_files, list. List of filetypes to include in the linking
 
     Returns:
@@ -883,35 +882,6 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['linkcal']
     elif prow['JOBDESC'] == 'biaspdark':
         dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] == 'linkcal' and refnight is not None:
-        dependency = None
-        ## For link cals only, enable cross-night dependencies if available
-        refproctable = findfile('proctable', night=refnight)
-        if os.path.exists(refproctable):
-            ptab = load_table(tablename=refproctable, tabletype='proctable')
-            ## This isn't perfect because we may depend on jobs that aren't
-            ## actually being linked
-            ## Also allows us to proceed even if jobs don't exist yet
-            deps, proccamwords = [], []
-            #for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            if include_files is not None:
-                for filename in include_files:
-                    job = filename_to_jobname(filename)
-                    if job in ptab['JOBDESC']:
-                        ## add prow to dependencies
-                        deprow = ptab[ptab['JOBDESC']==job][0]
-                        deps.append(deprow)
-                        proccamwords.append(deprow['PROCCAMWORD'])
-                    elif 'linkcal' in ptab['JOBDESC']:
-                        linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
-                        deps.append(linkcalprow)
-                        proccamwords.append(linkcalprow['PROCCAMWORD'])
-            if len(deps) > 0:
-                dependency = np.unique(deps)
-            ## The proccamword for the linking job is the largest set available from the reference night
-            ## but restricting back to those requested for the current night, if fewer cameras are available
-            if len(proccamwords) > 0:
-                prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
     else:
         dependency = None
 
@@ -978,12 +948,12 @@ def assign_dependency(prow, dependency):
                 if still_a_dependency(curdep):
                     # ids.append(curdep['INTID'])
                     qids.append(curdep['LATEST_QID'])
-            prow['INT_DEP_IDS'] = np.array(ids, dtype=int)
-            prow['LATEST_DEP_QID'] = np.array(qids, dtype=int)
+            prow['INT_DEP_IDS'] = np.unique(np.array(ids, dtype=int))
+            prow['LATEST_DEP_QID'] = np.unique(np.array(qids, dtype=int))
         elif type(dependency) in [dict, OrderedDict, Table.Row]:
-            prow['INT_DEP_IDS'] = np.array([dependency['INTID']], dtype=int)
+            prow['INT_DEP_IDS'] = np.unique(np.array([dependency['INTID']], dtype=int))
             if still_a_dependency(dependency):
-                prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
+                prow['LATEST_DEP_QID'] = np.unique(np.array([dependency['LATEST_QID']], dtype=int))
     return prow
 
 def still_a_dependency(dependency):
