@@ -948,12 +948,12 @@ def assign_dependency(prow, dependency):
                 if still_a_dependency(curdep):
                     # ids.append(curdep['INTID'])
                     qids.append(curdep['LATEST_QID'])
-            prow['INT_DEP_IDS'] = np.unique(np.array(ids, dtype=int))
-            prow['LATEST_DEP_QID'] = np.unique(np.array(qids, dtype=int))
+            prow['INT_DEP_IDS'] = np.unique(np.asarray(ids, dtype=int))
+            prow['LATEST_DEP_QID'] = np.unique(np.asarray(qids, dtype=int))
         elif type(dependency) in [dict, OrderedDict, Table.Row]:
-            prow['INT_DEP_IDS'] = np.unique(np.array([dependency['INTID']], dtype=int))
+            prow['INT_DEP_IDS'] = np.unique(np.asarray([dependency['INTID']], dtype=int))
             if still_a_dependency(dependency):
-                prow['LATEST_DEP_QID'] = np.unique(np.array([dependency['LATEST_QID']], dtype=int))
+                prow['LATEST_DEP_QID'] = np.unique(np.asarray([dependency['LATEST_QID']], dtype=int))
     return prow
 
 def still_a_dependency(dependency):
