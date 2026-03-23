@@ -60,6 +60,7 @@ Other:
 * Fix write_frame duplicating FIBERMAP HDU when fibermap kwarg is supplied (PR `#2671`_).
 * Fix misplaced bracket causing TypeError when coadding multiple spectra files (PR `#2673`_).
 * Add unit test for resolution matrix update in apply_flux_calibration (PR `#2675`_).
+* Fix inspect_dark BADCOLUMN vs. BADFIBER typo (PR `#2679`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -109,6 +110,7 @@ Other:
 .. _`#2671`: https://github.com/desihub/desispec/pull/2671
 .. _`#2673`: https://github.com/desihub/desispec/pull/2673
 .. _`#2675`: https://github.com/desihub/desispec/pull/2675
+.. _`#2679`: https://github.com/desihub/desispec/pull/2679
 
 
 0.70.0 (2025-12-04)
@@ -3240,12 +3242,12 @@ Multiple non-backwards compatible changes:
 * Significant pipeline code refactor (PR `#300`_ and `#290`_).
 * fix docstrings for sphinx build (PR `#308`_).
 
-.. _`#288`: https://github.com/desihub/desispec/pull/288
-.. _`#294`: https://github.com/desihub/desispec/pull/294
-.. _`#293`: https://github.com/desihub/desispec/pull/293
 .. _`#285`: https://github.com/desihub/desispec/pull/285
-.. _`#300`: https://github.com/desihub/desispec/pull/300
+.. _`#288`: https://github.com/desihub/desispec/pull/288
 .. _`#290`: https://github.com/desihub/desispec/pull/290
+.. _`#293`: https://github.com/desihub/desispec/pull/293
+.. _`#294`: https://github.com/desihub/desispec/pull/294
+.. _`#300`: https://github.com/desihub/desispec/pull/300
 .. _`#308`: https://github.com/desihub/desispec/pull/308
 
 
