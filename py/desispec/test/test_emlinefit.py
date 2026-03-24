@@ -7,7 +7,8 @@ import unittest
 import tempfile
 
 import numpy as np
-from desispec.emlinefit import get_emlines
+from scipy.special import erf
+from desispec.emlinefit import emlines_gaussfit, get_emlines
 
 #- some tests require data only available at NERSC
 _everest = '/global/cfs/cdirs/desi/spectro/redux/everest'
@@ -52,3 +53,80 @@ class TestFibermap(unittest.TestCase):
         #- but OIII should have NaN for second since it is off wavelength grid
         self.assertFalse(np.isnan(results['OIII']['FLUX'][0]))
         self.assertTrue(np.isnan(results['OIII']['FLUX'][1]))
+
+    def _make_gauss_pixel(self, waves, sigma, F0, w0):
+        """Helper: compute pixel-integrated Gaussian flux density using the same formula as gauss_nocont."""
+        edges = np.zeros(len(waves) + 1)
+        edges[1:-1] = 0.5 * (waves[:-1] + waves[1:])
+        edges[0] = waves[0] - 0.5 * (waves[1] - waves[0])
+        edges[-1] = waves[-1] + 0.5 * (waves[-1] - waves[-2])
+        sqrt2s = np.sqrt(2.0) * sigma
+        pixel_widths = edges[1:] - edges[:-1]
+        integrated = F0 * (erf((edges[1:] - w0) / sqrt2s) - erf((edges[:-1] - w0) / sqrt2s)) / 2.0
+        return integrated / pixel_widths
+
+    def test_flux_normalization(self):
+        """Test that emlines_gaussfit recovers correct integrated flux for a known Gaussian on a coarse grid."""
+        rng = np.random.RandomState(0)
+        # Use a coarse 2 A grid around HALPHA at z=0
+        waves = np.arange(6350.5, 6780.5, 2.0)
+        w0 = 6564.613  # HALPHA rest-frame wavelength
+        true_sigma = 3.5
+        true_flux = 10.0
+        true_cont = 1.0
+
+        # Build pixel-integrated Gaussian model
+        model = self._make_gauss_pixel(waves, true_sigma, true_flux, w0)
+
+        # Verify the model integrates to true_flux over all pixels
+        edges = np.zeros(len(waves) + 1)
+        edges[1:-1] = 0.5 * (waves[:-1] + waves[1:])
+        edges[0] = waves[0] - 0.5 * (waves[1] - waves[0])
+        edges[-1] = waves[-1] + 0.5 * (waves[-1] - waves[-2])
+        pixel_widths = edges[1:] - edges[:-1]
+        self.assertAlmostEqual(np.sum(model * pixel_widths), true_flux, places=6)
+
+        # Add tiny noise so curve_fit produces a non-degenerate covariance;
+        # SNR ~ 1e5 means recovered parameters should be within 0.01% of true values
+        noise_level = 1e-4
+        fluxes = true_cont + model + rng.normal(0.0, noise_level, size=len(waves))
+        ivars = np.ones(len(waves)) / noise_level ** 2
+
+        emdict, succeed = emlines_gaussfit("HALPHA", 0.0, waves, fluxes, ivars)
+
+        self.assertTrue(succeed)
+        # Recovered integrated flux should match true_flux to within 0.1%
+        self.assertAlmostEqual(emdict["FLUX"] / true_flux, 1.0, places=3)
+        # Recovered sigma should match true_sigma to within 0.1%
+        self.assertAlmostEqual(emdict["SIGMA"] / true_sigma, 1.0, places=3)
+
+    def test_chi2_calculation(self):
+        """Test that emlines_gaussfit computes reduced CHI2 consistently with the manual formula."""
+        rng = np.random.RandomState(42)
+
+        # Coarse 2 A grid around HALPHA at z=0
+        waves = np.arange(6350.5, 6780.5, 2.0)
+        w0 = 6564.613
+        true_sigma = 3.5
+        true_flux = 10.0
+        true_cont = 1.0
+        noise_level = 0.1
+
+        # Build pixel-integrated model and add noise consistent with ivar
+        model_fluxes = true_cont + self._make_gauss_pixel(waves, true_sigma, true_flux, w0)
+        fluxes = model_fluxes + rng.normal(0.0, noise_level, size=len(waves))
+        ivars = np.ones(len(waves)) / noise_level ** 2
+
+        emdict, succeed = emlines_gaussfit("HALPHA", 0.0, waves, fluxes, ivars)
+
+        self.assertTrue(succeed)
+        ndof = emdict["NDOF"]
+        self.assertGreater(ndof, 0)
+        # CHI2 must equal sum((model - data)^2 * ivar) / ndof; emdict['fluxes'] and
+        # emdict['ivars'] are the fit-region subset of the input arrays, matching emdict['models']
+        expected_chi2 = np.sum((emdict["models"] - emdict["fluxes"]) ** 2 * emdict["ivars"]) / ndof
+        self.assertAlmostEqual(emdict["CHI2"], expected_chi2, places=10)
+        # For noise matching ivar the reduced chi2 has mean 1 and std sqrt(2/ndof) ~ 0.23 for ndof~38;
+        # bounds [0.3, 3.0] allow for ~3-sigma variation
+        self.assertGreater(emdict["CHI2"], 0.3)
+        self.assertLess(emdict["CHI2"], 3.0)
