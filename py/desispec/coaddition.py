@@ -132,7 +132,7 @@ fibermap_perexp_cols = \
     fibermap_exp_cols + \
     fibermap_fiberassign_cols + \
     fibermap_coords_cols + fibermap_cframe_cols + \
-    ('IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z', 'COADD_NORM')
+    ('IN_COADD_B', 'IN_COADD_R', 'IN_COADD_Z', 'COADD_NORM', 'SIGMA_COADD_NORM')
 
 def calc_mean_std_ra_dec(ras, decs):
     """
@@ -428,7 +428,8 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
     for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
-            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 'COADD_NORM']:
+            'PSF_TO_FIBER_SPECFLUX', 'FLAT_TO_PSF_FLUX', 
+              'COADD_NORM','SIGMA_COADD_NORM']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
@@ -733,6 +734,7 @@ def per_exposure_normalization(spectra):
 
     # initialize default COADD_NORM = 1.
     spectra.fibermap['COADD_NORM'] = 1.
+    spectra.fibermap['SIGMA_COADD_NORM'] = np.inf
     
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
@@ -845,6 +847,7 @@ def per_exposure_normalization(spectra):
                 # chi2 = sum( w*(f_i - b*f_c )^2 )
                 # optimal scalar for f_i is a = 1/b = ( w*f_i*f_c / w*f_c^2 )^-1
                 a = np.ones(idx.size)
+                var_a = np.full(idx.size, np.inf)
                 for j,k in enumerate(idx_good):
                     mask = w_i[j]*w_tot != 0
                     w = (1./w_i[j][mask] + 1./w_tot[mask])**-1
@@ -852,18 +855,21 @@ def per_exposure_normalization(spectra):
                     denominator = w*crude_coadd[mask]*f_i[j][mask]
                     if np.isfinite(np.sum(denominator)):
                         a[np.isin(idx,k)] = np.sum(numerator)/np.sum(denominator)
+                        scalar = a[np.isin(idx,k)]
+                        # compute error on scalar
+                        var_a[np.isin(idx,k)] = scalar**2 / np.sum(w * crude_coadd[mask]**2)
                     else:
                         log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
                         spectra.fibermap['FIBERSTATUS'][k] |= fmsk.BADFIBER
                         good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
                         # need to retry without this exposure
                         a[np.isin(idx,k)] = 0
-                        continue
 
                 #  enforce physically plausible scaling factors (positive and not extreme).
                 is_converged = np.all( (a>0.1) & (a<10.) ) 
                 if is_converged:
                     spectra.fibermap['COADD_NORM'][idx] = a
+                    spectra.fibermap['SIGMA_COADD_NORM'][idx] = np.sqrt(var_a)
                 else:
                     bad_a = np.where((a<0.1) | (a>10.))[0]
                     bad_indices = idx[bad_a]
@@ -885,6 +891,7 @@ def per_exposure_normalization(spectra):
 
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
+    spectra.fibermap['SIGMA_COADD_NORM'] = spectra.fibermap['SIGMA_COADD_NORM'].astype(np.float32)
 
 def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     """
