@@ -53,12 +53,12 @@ def emlines_gaussfit(
     p0_sigma=2.5,
     p0_flux=10,
     p0_share=0.58,
-    min_sigma=1e-5,
+    min_sigma=3.4,  # DESI resolution >= 8 Angstrom in FWHM
     max_sigma=10.,
     min_flux=-1e9,
     max_flux=1e9,
-    min_share=1e-1,
-    max_share=1,
+    min_share=0.26,  # I(3729) / I(3726) > 0.35
+    max_share=0.6,  # I(3729) / I(3726) < 1.5
     log=None,
 ):
     """
