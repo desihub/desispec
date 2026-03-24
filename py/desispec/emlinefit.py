@@ -7,6 +7,7 @@ Routines for desi_emlinefit_afterburner.
 
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.special import erf
 from desiutil.log import get_logger
 
 allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
@@ -50,10 +51,10 @@ def emlines_gaussfit(
     rf_fit_hw=40,
     min_rf_fit_hw=20,
     rf_cont_w=200,
-    p0_sigma=2.5,
+    p0_sigma=3.5,
     p0_flux=10,
-    p0_share=0.58,
-    min_sigma=3.4,  # DESI resolution >= 8 Angstrom in FWHM
+    p0_share=0.5,
+    min_sigma=0.34,  # DESI resolution >= 0.8 Angstrom in FWHM, or 0.34 in sigma
     max_sigma=10.,
     min_flux=-1e9,
     max_flux=1e9,
@@ -118,8 +119,48 @@ def emlines_gaussfit(
         msg = "{} not in {}".format(emname, allowed_emnames)
         log.error(msg)
         raise ValueError(msg)
-    # AR Line models
-    gauss_nocont = lambda ws, sigma, F0, w0: F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
+    # AR Line models - integrated flux per pixel
+    def gauss_nocont(ws, sigma, F0, w0):
+        """
+        Compute integrated Gaussian flux in each wavelength pixel.
+
+        Args:
+            ws: wavelength array (pixel centers)
+            sigma: Gaussian width
+            F0: total integrated flux
+            w0: Gaussian center wavelength
+
+        Returns:
+            Average flux density in each pixel (integrated flux / pixel width)
+        """
+        # Check for minimum number of pixels
+        if len(ws) < 2:
+            raise ValueError("gauss_nocont requires at least 2 wavelength pixels")
+
+        # Calculate pixel edges (boundaries between pixels)
+        edges = np.zeros(len(ws) + 1)
+
+        # Interior edges are midpoints
+        edges[1:-1] = 0.5 * (ws[:-1] + ws[1:])
+
+        # Extrapolate for first and last edges
+        edges[0] = ws[0] - 0.5 * (ws[1] - ws[0])
+        edges[-1] = ws[-1] + 0.5 * (ws[-1] - ws[-2])
+
+        # Compute integrated flux using error function
+        # Integral of Gaussian from a to b is:
+        # F0 * (erf((b - w0)/(sqrt(2)*sigma)) - erf((a - w0)/(sqrt(2)*sigma))) / 2
+        sqrt2_sigma = np.sqrt(2.0) * sigma
+        erf_upper = erf((edges[1:] - w0) / sqrt2_sigma)
+        erf_lower = erf((edges[:-1] - w0) / sqrt2_sigma)
+
+        integrated_flux = F0 * (erf_upper - erf_lower) / 2.0
+
+        # Divide by pixel width to get average flux density
+        pixel_widths = edges[1:] - edges[:-1]
+        flux_density = integrated_flux / pixel_widths
+
+        return flux_density
     # AR vacuum rest-frame wavelength(s)
     rf_em_waves = get_rf_em_waves(emname)
     if emname == "OII":
