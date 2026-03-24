@@ -246,7 +246,7 @@ def emlines_gaussfit(
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
                         models = myfunc(waves[keep_line], popt[0], popt[1])
                     emdict["NDOF"] = keep_line.sum() - len(p0)
-                    emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
+                    emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. * ivars[keep_line])
                     emdict["CHI2"] /= emdict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
                     emdict["SIGMA"] = popt[0]
                     emdict["SIGMA_IVAR"] = diag[0] ** -1
