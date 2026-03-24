@@ -81,8 +81,8 @@ def emlines_gaussfit(
         max_sigma (optional, defaults to 10.): maximum allowed value for the line width in A (float)
         min_flux (optional, defaults to -1e9): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
         max_flux (optional, defaults to 1e9): maximum allowed value for the flux in 1e-17 * erg/cm2/s (float)
-        min_share (optional, defaults to 0.26): minimum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.26 corresponds to I(3729)/I(3726) > 0.35 (float)
-        max_share (optional, defaults to 0.6): maximum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.6 corresponds to I(3729)/I(3726) < 1.5 (float)
+        min_share (optional, defaults to 0.26): minimum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.26 corresponds to I(3729)/I(3726) >= 0.351 (float)
+        max_share (optional, defaults to 0.6): maximum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.6 corresponds to I(3729)/I(3726) <= 1.5 (float)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
