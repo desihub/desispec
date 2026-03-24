@@ -66,7 +66,7 @@ class TestFibermap(unittest.TestCase):
         return integrated / pixel_widths
 
     def test_flux_normalization(self):
-        """Test that emlines_gaussfit recovers correct integrated flux for a known Gaussian on a coarse grid."""
+        """Test that emlines_gaussfit recovers correct integrated flux and CHI2 for a known Gaussian."""
         rng = np.random.RandomState(0)
         # Use a coarse 2 A grid around HALPHA at z=0
         waves = np.arange(6350.5, 6780.5, 2.0)
@@ -86,8 +86,8 @@ class TestFibermap(unittest.TestCase):
         pixel_widths = edges[1:] - edges[:-1]
         self.assertAlmostEqual(np.sum(model * pixel_widths), true_flux, places=6)
 
-        # Add tiny noise so curve_fit produces a non-degenerate covariance;
-        # SNR ~ 1e5 means recovered parameters should be within 0.01% of true values
+        # Add noise so curve_fit produces a non-degenerate covariance;
+        # noise_level=1e-4 gives SNR~1e5 so recovered parameters should be within 0.1% of true values
         noise_level = 1e-4
         fluxes = true_cont + model + rng.normal(0.0, noise_level, size=len(waves))
         ivars = np.ones(len(waves)) / noise_level ** 2
@@ -100,30 +100,10 @@ class TestFibermap(unittest.TestCase):
         # Recovered sigma should match true_sigma to within 0.1%
         self.assertAlmostEqual(emdict["SIGMA"] / true_sigma, 1.0, places=3)
 
-    def test_chi2_calculation(self):
-        """Test that emlines_gaussfit computes reduced CHI2 consistently with the manual formula."""
-        rng = np.random.RandomState(42)
-
-        # Coarse 2 A grid around HALPHA at z=0
-        waves = np.arange(6350.5, 6780.5, 2.0)
-        w0 = 6564.613
-        true_sigma = 3.5
-        true_flux = 10.0
-        true_cont = 1.0
-        noise_level = 0.1
-
-        # Build pixel-integrated model and add noise consistent with ivar
-        model_fluxes = true_cont + self._make_gauss_pixel(waves, true_sigma, true_flux, w0)
-        fluxes = model_fluxes + rng.normal(0.0, noise_level, size=len(waves))
-        ivars = np.ones(len(waves)) / noise_level ** 2
-
-        emdict, succeed = emlines_gaussfit("HALPHA", 0.0, waves, fluxes, ivars)
-
-        self.assertTrue(succeed)
-        ndof = emdict["NDOF"]
-        self.assertGreater(ndof, 0)
         # CHI2 must equal sum((model - data)^2 * ivar) / ndof; emdict['fluxes'] and
         # emdict['ivars'] are the fit-region subset of the input arrays, matching emdict['models']
+        ndof = emdict["NDOF"]
+        self.assertGreater(ndof, 0)
         expected_chi2 = np.sum((emdict["models"] - emdict["fluxes"]) ** 2 * emdict["ivars"]) / ndof
         self.assertAlmostEqual(emdict["CHI2"], expected_chi2, places=10)
         # For noise matching ivar the reduced chi2 has mean 1 and std sqrt(2/ndof) ~ 0.23 for ndof~38;
