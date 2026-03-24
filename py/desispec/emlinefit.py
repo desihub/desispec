@@ -74,15 +74,15 @@ def emlines_gaussfit(
         rf_fit_hw (optional, defaults to 40): *rest-frame* wavelength width (in A) used for fitting on each side of the line (float)
         min_rf_fit_hw (optional, defaults to 20): minimum requested *rest-frame* width (in A) on each side of the line to consider the fitting (float)
         rf_cont_w (optional, defaults to 200): *rest-frame* wavelength extent (in A) to fit the continuum (float)
-        p0_sigma (optional, defaults to 2.5): initial guess on the line width in A (float)
-        p0_flux (optional, defaults to 0.1): initial guess on the line flux in 1e-17 * erg/cm2/s (float)
-        p0_share (optional, defaults to 0.58): initial guess on the share between the two [OII] lines (float)
-        min_sigma (optional, defaults to 1e-5): minimum allowed value for the line width in A (float)
+        p0_sigma (optional, defaults to 3.5): initial guess on the line width in A (float)
+        p0_flux (optional, defaults to 10): initial guess on the line flux in 1e-17 * erg/cm2/s (float)
+        p0_share (optional, defaults to 0.5): initial guess on the share between the two [OII] lines (float)
+        min_sigma (optional, defaults to 0.34): minimum allowed value for the line width in A; corresponds to DESI resolution >= 0.8 A in FWHM (float)
         max_sigma (optional, defaults to 10.): maximum allowed value for the line width in A (float)
-        min_flux (optional, defaults to 1e-5): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
+        min_flux (optional, defaults to -1e9): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
         max_flux (optional, defaults to 1e9): maximum allowed value for the flux in 1e-17 * erg/cm2/s (float)
-        min_share (optional, defaults to 1e-1): minimum allowed value for the share (float)
-        max_share (optional, defaults to 1): maximum allowed value for the share (float)
+        min_share (optional, defaults to 0.26): minimum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.26 corresponds to I(3729)/I(3726) >= 0.351 (float)
+        max_share (optional, defaults to 0.6): maximum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.6 corresponds to I(3729)/I(3726) <= 1.5 (float)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
