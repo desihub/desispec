@@ -78,6 +78,12 @@ def write_spectra(outfile, spec, units=None):
     hdr['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(hdr)
 
+    # for convenience, add some fibermap header keywords to the primary HDU
+    shared_keys = ('TILEID', 'NIGHT', 'SURVEY', 'PROGRAM', 'HPXPIXEL', 'HPXNSIDE', 'HEALPIX')
+    for key in shared_keys:
+        if (key in spec.fibermap.meta) and (key not in hdr):
+            hdr[key] = spec.fibermap.meta[key]
+
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
@@ -91,6 +97,11 @@ def write_spectra(outfile, spec, units=None):
         warnings.filterwarnings('ignore', '.*nanomaggies.*')
         warnings.filterwarnings('ignore', '.*nmgy.*')
         hdu = fits.convenience.table_to_hdu(fmap)
+
+    # For convenience, add some spec.meta keys to the fibermap too
+    for key in shared_keys:
+        if (key in spec.meta) and (key not in hdu.header):
+            hdu.header[key] = spec.meta[key]
 
     # Add comments for fibermap columns.
     hdu = annotate_fibermap(hdu)
@@ -109,6 +120,11 @@ def write_spectra(outfile, spec, units=None):
 
         # Add comments for exp_fibermap columns.
         hdu = annotate_fibermap(hdu)
+
+        # For convenience, add some spec.meta keys to the exp_fibermap too
+        for key in shared_keys:
+            if (key in spec.meta) and (key not in hdu.header):
+                hdu.header[key] = spec.meta[key]
 
         all_hdus.append(hdu)
 
