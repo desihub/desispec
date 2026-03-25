@@ -9,6 +9,7 @@ Major algorithmic changes:
 
 * Adjust the resolution matrix for flux calibration (PR `#2642`_).
 * Adjust the cframe resolution matrix for per-fiber heliocentric corrections (PR `#2648`_).
+* Fix emlinefit outliers (PR `#2685`_)
 
 Other:
 
@@ -61,6 +62,7 @@ Other:
 * Fix misplaced bracket causing TypeError when coadding multiple spectra files (PR `#2673`_).
 * Add unit test for resolution matrix update in apply_flux_calibration (PR `#2675`_).
 * Fix inspect_dark BADCOLUMN vs. BADFIBER typo (PR `#2679`_).
+* Reduce parallelism due to memory constraints for ccdcalib darknight (PR `#2688`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -111,6 +113,8 @@ Other:
 .. _`#2673`: https://github.com/desihub/desispec/pull/2673
 .. _`#2675`: https://github.com/desihub/desispec/pull/2675
 .. _`#2679`: https://github.com/desihub/desispec/pull/2679
+.. _`#2685`: https://github.com/desihub/desispec/pull/2685
+.. _`#2688`: https://github.com/desihub/desispec/pull/2688
 
 
 0.70.0 (2025-12-04)
