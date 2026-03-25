@@ -100,7 +100,7 @@ def write_spectra(outfile, spec, units=None):
 
     # For convenience, add some spec.meta keys to the fibermap too
     for key in shared_keys:
-        if (key in spec.meta) and (key not in hdu.header):
+        if (spec.meta is not None) and (key in spec.meta) and (key not in hdu.header):
             hdu.header[key] = spec.meta[key]
 
     # Add comments for fibermap columns.
@@ -123,7 +123,7 @@ def write_spectra(outfile, spec, units=None):
 
         # For convenience, add some spec.meta keys to the exp_fibermap too
         for key in shared_keys:
-            if (key in spec.meta) and (key not in hdu.header):
+            if (spec.meta is not None) and (key in spec.meta) and (key not in hdu.header):
                 hdu.header[key] = spec.meta[key]
 
         all_hdus.append(hdu)
