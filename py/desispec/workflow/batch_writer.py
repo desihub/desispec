@@ -493,7 +493,7 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
             dn_threads_per_task = int(np.floor(threads_on_node / max_ranks_per_node))
         else:
             dn_ntasks, dn_threads_per_task = ntasks, threads_per_task
-        runtime += 10.*np.ceil(float(ntasks)/float(dn_ntasks)) ## each loop takes about 10 minutes
+        runtime += 7.*np.ceil(float(ntasks)/float(dn_ntasks)) ## each loop takes about 3-5 minutes, but add 7 each for contingency
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dn_ntasks, threads_per_task=dn_threads_per_task, stepname='darknight')
 
     # Then pdarks
