@@ -484,17 +484,17 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         if n_nights_after is not None:
             cmd += f' --after={n_nights_after}'
         cmd += ' --mpi'
-        ## darknight will hit memory limits if more than 15 are done on a
+        ## darknight will hit memory limits if more than 10 are done on a
         ## single node simultaneously
-        if float(ntasks)/float(nodes) > 15:
-            ## will need to run in two batches, so reduce the ntasks and add more runtime
-            runtime += 20 ## two loops of darks takes about 20 minutes
-            dn_ntasks = 15*nodes
+        maxrankspernode = 10
+        if float(ntasks)/float(nodes) > maxrankspernode:
+            ## will need to run in multiple batches, so reduce the ntasks and add more runtime
+            dn_ntasks = maxrankspernode*nodes #  concurrent ranks that won't hit memory limit issues
             threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
-            dn_threads_per_task = int(np.floor((nodes*threads_on_node) // dn_ntasks))
+            dn_threads_per_task = int(np.floor(threads_on_node / maxrankspernode))
         else:
-            runtime += 10 # one loop of darks takes about 10 minutes
             dn_ntasks, dn_threads_per_task = ntasks, threads_per_task
+        runtime += 10.*np.ceil(float(ntasks)/float(dn_ntasks)) ## each loop takes about 10 minutes
         script_body += wrap_command_for_script(cmd, nodes, ntasks=dn_ntasks, threads_per_task=dn_threads_per_task, stepname='darknight')
 
     # Then pdarks
