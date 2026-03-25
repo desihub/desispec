@@ -25,6 +25,7 @@ from desispec.fibercrosstalk import correct_fiber_crosstalk
 from desispec.tsnr import calc_tsnr2
 from desispec.heliocentric import heliocentric_shift_res_data
 from desiutil.log import get_logger
+import desiutil.iers
 
 import argparse
 import sys
@@ -81,6 +82,9 @@ def main(args):
         msg = "Use --apply-sky-throughput-correction OR --no-sky-line-throughput-correction (or neither) but not both"
         log.critical(msg)
         raise ValueError(msg)
+
+    # Freeze IERS coefficients prior to any heliocentric corrections
+    desiutil.iers.freeze_iers()
 
     frame = read_frame(args.infile)
 
