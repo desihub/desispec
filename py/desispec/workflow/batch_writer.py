@@ -486,12 +486,11 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
         cmd += ' --mpi'
         ## darknight will hit memory limits if more than 10 are done on a
         ## single node simultaneously
-        maxrankspernode = 10
-        if float(ntasks)/float(nodes) > maxrankspernode:
+        max_ranks_per_node = 10
+        if float(ntasks)/float(nodes) > max_ranks_per_node:
             ## will need to run in multiple batches, so reduce the ntasks and add more runtime
-            dn_ntasks = maxrankspernode*nodes #  concurrent ranks that won't hit memory limit issues
-            threads_on_node = batch_config['cores_per_node'] * batch_config['threads_per_core']
-            dn_threads_per_task = int(np.floor(threads_on_node / maxrankspernode))
+            dn_ntasks = max_ranks_per_node*nodes #  concurrent ranks that won't hit memory limit issues
+            dn_threads_per_task = int(np.floor(threads_on_node / max_ranks_per_node))
         else:
             dn_ntasks, dn_threads_per_task = ntasks, threads_per_task
         runtime += 10.*np.ceil(float(ntasks)/float(dn_ntasks)) ## each loop takes about 10 minutes
