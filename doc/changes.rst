@@ -63,6 +63,7 @@ Other:
 * Add unit test for resolution matrix update in apply_flux_calibration (PR `#2675`_).
 * Fix inspect_dark BADCOLUMN vs. BADFIBER typo (PR `#2679`_).
 * Reduce parallelism due to memory constraints for ccdcalib darknight (PR `#2688`_).
+* Update desi_tile_vi to automatically validate backup tiles (PR `#2693`_)
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -115,6 +116,7 @@ Other:
 .. _`#2679`: https://github.com/desihub/desispec/pull/2679
 .. _`#2685`: https://github.com/desihub/desispec/pull/2685
 .. _`#2688`: https://github.com/desihub/desispec/pull/2688
+.. _`#2693`: https://github.com/desihub/desispec/pull/2693
 
 
 0.70.0 (2025-12-04)
