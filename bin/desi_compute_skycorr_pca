@@ -20,6 +20,10 @@ parser.add_argument('--min-exptime', type = float, default = 700, required = Fal
                     help = 'minimum exposure time (to ensure a good precision on sky lines)')
 parser.add_argument('--min-nexp', type = int, default = 50, required = False,
                     help = 'the minimum required number of good exposures')
+parser.add_argument('--first-night', type = int, required = False,
+                    help = 'exposures taken before first_night are ignored')
+parser.add_argument('--last-night', type = int, required = False,
+                    help = 'exposures taken after last_night are ignored')
 args = parser.parse_args()
 
 
@@ -33,6 +37,7 @@ wave=None
 head=None
 night_min=None
 night_max=None
+nexp_dict = {}
 
 for what in [ "DWAVE" , "DLSF" ] :
     deltas=[]
@@ -54,6 +59,14 @@ for what in [ "DWAVE" , "DLSF" ] :
             continue
 
         night=head["NIGHT"]
+
+        if args.first_night is not None and night < args.first_night:
+            print("ignore {} with night={} < {}".format(filename,night,args.first_night))
+            continue
+        if args.last_night is not None and night > args.last_night:
+            print("ignore {} with night={} > {}".format(filename,night,args.last_night))
+            continue
+
         if night_min is None :
             night_min = night
             night_max = night
@@ -89,6 +102,8 @@ for what in [ "DWAVE" , "DLSF" ] :
 
     if len(deltas)<args.min_nexp:
         raise ValueError('A minimum of {} exposures are required; only {} exposures available'.format(args.min_nexp, len(deltas)))
+
+    nexp_dict[what] = len(deltas)
 
     print("convert to array")
     deltas=np.array(deltas)
@@ -143,7 +158,9 @@ if head is not None :
     for k in ["CAMERA","DETECTOR"] :
         output_hdulist[0].header[k]=head[k]
 if night_min is not None :
-    output_hdulist[0].header["NIGHTMIN"]=night_min
-    output_hdulist[0].header["NIGHTMAX"]=night_max
+    output_hdulist[0].header["NIGHTMIN"] = (night_min, 'First night of input exposures')
+    output_hdulist[0].header["NIGHTMAX"] = (night_max, 'Last night of input exposures')
+output_hdulist[0].header['NEXPDW'] = (nexp_dict['DWAVE'], 'Number of input exposures used for DWAVE')
+output_hdulist[0].header['NEXPDL'] = (nexp_dict['DLSF'], 'Number of input exposures used for DLSF')
 output_hdulist.writeto(args.outfile,overwrite=True)
 print("wrote",args.outfile)
