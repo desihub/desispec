@@ -880,7 +880,7 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] == 'biaspdark':
+    elif prow['JOBDESC'] in ['biaspdark','biasnight']:
         dependency = calibjobs['linkcal']
     else:
         dependency = None
