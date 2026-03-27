@@ -52,13 +52,9 @@ for what in [ "DWAVE" , "DLSF" ] :
             print("warning: cannot open frame file {}".format(frame_filename))
             continue
 
-        head=fitsio.read_header(frame_filename)
-        exptime=head["EXPTIME"]
-        if exptime < args.min_exptime :
-            print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
-            continue
-
-        night=head["NIGHT"]
+        # A hack to get NIGHT without having to read the gzipped file
+        fn_split = frame_filename.split('/')
+        night = int(fn_split[fn_split.index('exposures')+1])
 
         if args.first_night is not None and night < args.first_night:
             print("ignore {} with night={} < {}".format(filename,night,args.first_night))
@@ -66,6 +62,16 @@ for what in [ "DWAVE" , "DLSF" ] :
         if args.last_night is not None and night > args.last_night:
             print("ignore {} with night={} > {}".format(filename,night,args.last_night))
             continue
+
+        if args.min_exptime!=0:
+            # It's super inefficient to read the fits.gz files just to get EXPTIME
+            head=fitsio.read_header(frame_filename)
+            exptime=head["EXPTIME"]
+            if exptime < args.min_exptime :
+                print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
+                continue
+
+        # night=head["NIGHT"]
 
         if night_min is None :
             night_min = night
