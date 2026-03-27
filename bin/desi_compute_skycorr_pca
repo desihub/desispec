@@ -18,6 +18,8 @@ parser.add_argument('--ncomp', type = int, default = 3, required = False,
                     help = 'number of PCA components to save (in addition to the mean)')
 parser.add_argument('--min-exptime', type = float, default = 700, required = False,
                     help = 'minimum exposure time (to ensure a good precision on sky lines)')
+parser.add_argument('--min-nexp', type = int, default = 50, required = False,
+                    help = 'the minimum required number of good exposures')
 args = parser.parse_args()
 
 
@@ -84,6 +86,9 @@ for what in [ "DWAVE" , "DLSF" ] :
 
         if wave is None :
             wave=h["WAVELENGTH"].data
+
+    if len(deltas)<args.min_nexp:
+        raise ValueError('A minimum of {} exposures are required; only {} exposures available'.format(args.min_nexp, len(deltas)))
 
     print("convert to array")
     deltas=np.array(deltas)
