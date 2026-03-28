@@ -19,6 +19,7 @@ from socket import gethostname
 from astropy.table import Table, vstack
 
 from desispec.scripts.update_exptable import update_exposure_table
+from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
 from desispec.workflow.tableio import load_table, load_tables, write_table
 from desispec.workflow.utils import sleep_and_report, \
     verify_variable_with_environment, load_override_file
@@ -424,16 +425,30 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable')
 
     ## Quickly exit if we haven't processed the biasprdark job yet and we should have
-    bias_requested = 'zero' in biaspdark_proc_obstypes
-    pdark_requested = 'dark' in biaspdark_proc_obstypes
     linkexists = 'linkcal' in ptable['JOBDESC']
     biaspdark_exists = 'biaspdark' in ptable['JOBDESC']
+    ## if bias requested, we should have a biasnight, biaspdark, or linkcal job
+    bias_requested = 'zero' in biaspdark_proc_obstypes
     bias_exists = ('biasnight' in ptable['JOBDESC'] or biaspdark_exists or linkexists)
+    bias_check_passed = (not bias_requested) or (bias_requested and bias_exists)
+
+    ## for dark we should have pdark, biaspdark, linkcal job, or verify that
+    ## we're not still acquiring data and there are no darks that should have been preproc'd
+    dark_requested = 'dark' in biaspdark_proc_obstypes
     pdark_exists = ('pdark' in ptable['JOBDESC'] or biaspdark_exists or linkexists)
-    # ## ptables not saved for levels 3 and over, so if still acquiring, assume not yet available
-    # ## otherwise assume it is available
-    #expect_job_exist = ( dry_run_level<3 or (still_acquiring and dry_run_level>=3) )
-    if require_cals and ((bias_requested and not bias_exists) or (pdark_requested and not pdark_exists)):
+    pdark_check_passed = (not dark_requested) or (dark_requested and pdark_exists)
+    ## in the case where pdark doesn't exist and we are not still acquiring data,
+    ## check if there are any darks that we should have preproc'd. If not it is okay to proceed
+    if dark_requested and not pdark_exists and not still_acquiring:
+        compdarkparser = compute_dark_parser()
+        options = ['--reference-night', str(night), '-o', 'dummy', '-c', 'b1',
+                   '--skip-camera-check', '--dont-search-filesystem',
+                   '--before', '0', '--after', '0']
+        compdarkargs = compdarkparser.parse_args(options)
+        exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
+        pdark_check_passed = len(exptab_for_dark_night) == 0
+
+    if require_cals and not (bias_check_passed and pdark_check_passed):
         log.critical("Bias and preproc dark job not found in processing table. "
                     + "We will need to wait for darks to be processed. "
                     + f"Exiting {night=}.")

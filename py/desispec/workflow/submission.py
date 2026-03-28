@@ -373,7 +373,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         sleep_and_report(sub_wait_time,
                             message_suffix=f"to slow down the queue submission rate",
                             dry_run=(dry_run_level>0), logfunc=log.info)
-        log.info(f"Successfully submitted {prow['JOBDESC']} job submitted for night {night}.")
+        log.info(f"Successfully submitted {prow['JOBDESC']} job for night {night}.")
     else:
         log.info(f"No biasnight or preproc_darks jobs submitted for night {night}.")
 

@@ -10,6 +10,7 @@ import sys
 import time
 import re
 import glob
+from astropy.table import Table
 
 from desispec.parallel import stdouterr_redirected
 from desiutil.log import get_logger
@@ -22,6 +23,8 @@ from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
 import desispec.workflow.proctable
+from desispec.util import wrap_long_logs
+
 
 def get_nights_in_date_range(first_night, last_night):
     """
@@ -65,9 +68,9 @@ def get_all_valid_nights(first_night, last_night):
     nights = nights[((nights>=first_night)&(nights<=last_night))]
     return nights
 
-def get_nights_to_process(production_yaml, verbose=False):
+def get_all_nights_for_prod(production_yaml, verbose=False):
     """
-    Derives the nights to be processed based on a production yaml file and
+    Derives all the nights that should be processed based on a production yaml file and
     returns a list of int nights.
 
     Args:
@@ -127,7 +130,54 @@ def get_nights_to_process(production_yaml, verbose=False):
             log.info("Populating all_nights with all of the nights with valid science "
                      + f"exposures between {first_night} and {last_night} inclusive")
         all_nights = get_all_valid_nights(first_night, last_night)
-    return sorted(all_nights)
+
+    all_nights = sorted(all_nights)
+    log.info(wrap_long_logs(f"All nights in production: {all_nights}"))
+
+    return all_nights
+
+def get_nights_to_process(production_yaml, verbose=False):
+    """
+    Derives the nights that need to be processed based on a production yaml file and
+    processing tables that exist.
+
+    Args:
+        production_yaml (str or dict): Production yaml or pathname of the
+            yaml file that defines the production.
+        verbose (bool): Whether to be verbose in log outputs.
+
+    Returns:
+        nights, list. A list of nights on or after Jan 1 2020 in which data exists at NERSC.
+    """
+    log = get_logger()
+    all_nights = get_all_nights_for_prod(production_yaml=production_yaml, verbose=verbose)
+
+    log.info(f"Assuming nights with science jobs in proctable are complete and removing from the list of nights to process.")
+    nights_to_process, nights_with_proctable = [], dict()
+    for night in all_nights[::-1]:
+        ## If proctable exists, assume we've already completed that night
+        pfile = findfile('proctable', night=night, readonly=True)
+        if os.path.exists(pfile):
+            nights_with_proctable[night] = pfile
+        else:
+            nights_to_process.append(night)
+
+    ## Because of the reverse order in the loop above, this dict is in reverse chronological order
+    skipped_nights = []
+    need_to_check = True
+    for night, pfile in nights_with_proctable.items():
+        ## don't need to open file if need_to_check is False
+        ## and also don't need to use desispec.workflow.tableio.load_table here
+        ## since that brings extra overhead and only matters for multi-value
+        ## columns we don't care about
+        if need_to_check and 'science' not in Table.read(pfile)['OBSTYPE']:
+            nights_to_process.append(night)
+        else:
+            skipped_nights.append(night)
+            need_to_check = False
+
+    log.info(wrap_long_logs(f"Skipped the following nights that already had a proctable with science jobs: {sorted(skipped_nights)}"))
+    return sorted(nights_to_process)
 
 
 def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False):
@@ -239,21 +289,28 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
     else:
         log.info(f"{dry_run_level=} so not creating {logpath}")
 
-    ## Do the main processing
-    finished = False
-    processed_nights, skipped_nights = [], []
-    all_nights = sorted(all_nights)
-    log.info(f"Processing {all_nights=}")
-    for night in sorted(all_nights):
-        ## If proctable exists, assume we've already completed that night
-        if os.path.exists(findfile('proctable', night=night, readonly=True)):
-            skipped_nights.append(night)
-            log.info(f"{night=} already has a proctable, skipping.")
-            continue
-
-        ## If the queue is too full, stop submitting nights
+    ## If in dryrun mode, get the number of jobs in the queue once to
+    ## properly simulate stopping if the queue is too full, but don't
+    ## keep rechecking since we're not submitting new jobs.
+    num_in_queue = 0
+    if dry_run_level >= 1:
         num_in_queue = check_queue_count(user=user, include_scron=False,
                                          dry_run_level=dry_run_level)
+
+    ## Do the main processing
+    finished = False
+    processed_nights = []
+    log.info(wrap_long_logs(f"Processing {all_nights=}"))
+    for night in sorted(all_nights):
+        ## If the queue is too full, stop submitting nights
+        ## don't keep checking if in dry run mode since we're not submitting new jobs
+        if dry_run_level < 1:
+            num_in_queue = check_queue_count(user=user, include_scron=False,
+                                            dry_run_level=dry_run_level)
+        else:
+            log.info(f"{dry_run_level=} so not checking queue count each iteration. "
+                     + f"Would have checked for user {user}.")
+
         ## In Jura the largest night had 115 jobs, to be conservative we submit
         ## up to 4500 jobs (out of a 5000 limit) by default
         if num_in_queue > queue_threshold:
@@ -314,11 +371,7 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
         else:
             log.info(f"{dry_run_level=} so not creating {sentinel_file}")
 
-
-    log.info("Skipped the following nights that already had a processing table:")
-    log.info(skipped_nights)
-    log.info("Processed the following nights:")
-    log.info(processed_nights)
+    log.info(wrap_long_logs(f"Processed the following nights: {processed_nights}"))
     if finished:
         log.info('\n\n\n')
         log.info("All nights submitted")
