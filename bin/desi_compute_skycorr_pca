@@ -121,13 +121,9 @@ for what in [ "DWAVE" , "DLSF" ] :
 
     print("fill scalar product matrix")
     nmeas=len(deltas)
-    mat=np.zeros((nmeas,nmeas))
-    for i in range(nmeas) :
-        print("{}/{}".format(i+1,nmeas))
-        for j in range(i,nmeas) :
-            mat[i,j] = np.sum(deltas[i]*deltas[j])
-            if j != i :
-                mat[j,i] = mat[i,j]
+    # Reshape to (nmeas, nfibers*nwave) for vectorized dot product
+    deltas_flat = deltas.reshape(nmeas, -1)
+    mat = np.dot(deltas_flat, deltas_flat.T)
 
     print("eigen decomposition")
     eigenvals,v = np.linalg.eig(mat)
