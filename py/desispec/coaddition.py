@@ -703,7 +703,7 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 
     return coadded_spectra
 
-def per_exposure_normalization(spectra):
+def per_exposure_normalization(spectra, norm_threshold=0.1):
     """
     Compute per‑exposure multiplicative normalization factors for each
     target in a desispec.spectra.Spectra object and store them in a new
@@ -718,8 +718,11 @@ def per_exposure_normalization(spectra):
         ivar, optional mask, wave dictionaries, and a fibermap 
         table that contains at least the columns TARGETID, FIBERSTATUS
         and OBJTYPE.
+        norm_threshold: minimum reduced chi-squared value between a standard
+        error-weighted coadd and the coadd produced with per-exposure 
+        normalization in this function, such that the per-exposure normalization 
+        is preferred; sets VARIABLE (coadd_)fiberstatus if met
     """
-
     log = get_logger()
 
     bands = spectra.bands
@@ -732,9 +735,10 @@ def per_exposure_normalization(spectra):
     fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
-    # initialize default COADD_NORM = 1.
+    # since the default is not to apply rescaling;
+    # initialize default COADD_NORM = 1., SIGMA_COADD_NORM = 0 (no corrections necessary)
     spectra.fibermap['COADD_NORM'] = 1.
-    spectra.fibermap['SIGMA_COADD_NORM'] = np.inf
+    spectra.fibermap['SIGMA_COADD_NORM'] = 0.
     
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
@@ -778,8 +782,8 @@ def per_exposure_normalization(spectra):
                     log.error(f'spectra for targetid {tgt} could not be rescaled before coaddition, no usable bands')
                     is_converged = True
                     # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
-                    spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
-                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+                    # the bit will be assigned at end of the function
+                    good_fiberstatus[bad_indices] = False
                     continue
  
                 # check for overlap between usable bands, 
@@ -860,8 +864,7 @@ def per_exposure_normalization(spectra):
                         var_a[np.isin(idx,k)] = scalar**2 / np.sum(w * crude_coadd[mask]**2)
                     else:
                         log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
-                        spectra.fibermap['FIBERSTATUS'][k] |= fmsk.BADFIBER
-                        good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+                        good_fiberstatus[bad_indices] = False
                         # need to retry without this exposure
                         a[np.isin(idx,k)] = 0
 
@@ -873,10 +876,12 @@ def per_exposure_normalization(spectra):
                 else:
                     bad_a = np.where((a<0.1) | (a>10.))[0]
                     bad_indices = idx[bad_a]
-                    # set badfiber fiberstatus for these exposures
-                    spectra.fibermap['FIBERSTATUS'][bad_indices] |= fmsk.BADFIBER
-                    # update fiberstatus
-                    good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+                    # set bad fiberstatus for these exposures
+                    good_fiberstatus[bad_indices] = False
+                    
+                    # save the bad values for later debugging
+                    spectra.fibermap['COADD_NORM'][bad_indices] = a[bad_a]
+                    spectra.fibermap['SIGMA_COADD_NORM'][bad_indices] = np.sqrt(var_a[bad_a])                    
 
             else: 
                 # skip normalization for non‑target objects, single‑exposure targets, or when no good exposures remain
@@ -885,10 +890,110 @@ def per_exposure_normalization(spectra):
         if not(is_converged):
             # this should never occur and something is very wrong
             log.error(f"normalization for targetid {tgt} could not converge!")
-            # update fiberstatus
-            spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.BADFIBER
-            good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
+            spectra.fibermap['COADD_NORM'][idx] = 1.
+            spectra.fibermap['SIGMA_COADD_NORM'][idx] = 0.
 
+        # compute crude_coadd and rescaled_crude_coadd over all bands and compare
+        # do not apply to sky spectra or single exposures or all bad exposures 
+        elif np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') & (idx_good.size > 1):
+            
+            # if all bands were used, no need to recompute crude coadd
+            # and can use existing f_i, w_i arrays
+            if np.all(np.isin(bands, usable_bands)):
+
+                # compute new coadd with exposure rescaling
+                used_in_coadd = good_fiberstatus[idx_good]
+                scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
+                new_w_tot = np.sum(w_i*scaling**-2, axis=0)
+                new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))  
+
+            else:
+                
+                # need to compute crude and new coadd across all bands
+                overlap = {}
+                for j,b in enumerate(bands):
+
+                    cam_fiberstatus = use_for_coadd(spectra.fibermap['FIBERSTATUS'][idx_good], b)
+                
+                    wave_b = spectra.wave[b]
+                    nwave = wave_b.size
+                    overlap_flag = np.zeros(nwave, dtype=int)
+
+                    # determine overlap with previous band
+                    if j > 0:
+                        wave_prev = spectra.wave[bands[j - 1]]
+                        # Mark overlapping pixels in current band
+                        for k, w in enumerate(wave_b):
+                            if np.any(np.abs(w - wave_prev) <= 1e-4):
+                                overlap_flag[k] = 1
+        
+                    # Check overlap with next band
+                    if j < len(bands) - 1:
+                        wave_next = spectra.wave[bands[j + 1]]
+                        for k, w in enumerate(wave_b):
+                            if np.any(np.abs(w - wave_next) <= 1e-4):
+                                overlap_flag[k] = 1
+
+                    overlap[b] = overlap_flag
+
+                # construct coadd wave grid, skipping overlap regions
+                coadd_wave = None
+                for b in sbands:
+                    wave_b = spectra.wave[b][overlap[b]==0]
+                    if coadd_wave is None:
+                        coadd_wave = wave_b
+                    else:
+                        coadd_wave = np.append(coadd_wave, wave_b)
+    
+                f_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure flux
+                w_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure weights
+            
+                for b in bands:
+
+                    pix_mask = (overlap[b] == 0)                
+                    if spectra.mask is not None:
+                        spectra_mask = spectra.mask[b][idx_good][:,pix_mask]
+                    else:
+                        # create a zero mask to use
+                        spectra_mask = np.zeros_like(spectra.flux[b][idx_good][:,pix_mask])
+
+                    # where to insert 
+                    wband = spectra.wave[b][pix_mask]
+                    start = np.searchsorted(coadd_wave, wband[0])
+                    end = start + len(wband)
+                    iband = slice(start, end)
+
+                    # Non-overlapping: directly copy
+                    f_i[:, iband] = spectra.flux[b][idx_good][:,pix_mask]
+                    w_i[:, iband] = (spectra.ivar[b][idx_good][:,pix_mask]*(spectra_mask == 0))
+
+                # compute crude coadd
+                w_tot = np.sum(w_i, axis=0)
+                crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
+
+                # compute new coadd with exposure rescaling
+                used_in_coadd = good_fiberstatus[idx_good]
+                scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
+                new_w_tot = np.sum(w_i*scaling**-2, axis=0)
+                new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))              
+
+            # compute chi2dof; dof accounts for missing regions
+            chi2 = np.sum( (crude_coadd - new_crude_coadd)**2 * w_tot)
+            chi2 /= np.sum(w_tot != 0)
+
+            if chi2 < norm_threshold:
+                # if rescaling makes a minimal difference, we coadd as normal
+                spectra.fibermap['COADD_NORM'][idx] = 1.
+                spectra.fibermap['SIGMA_COADD_NORM'][idx] = 0.     
+            else:
+                # suspect for variable calibration owing to positioning offsets 
+                # calib errors, intrinsic variability, etc.
+                spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
+
+                # also need to update fiberstatus for exposures where a was unphysical
+                changed_status = (((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[idx]
+                spectra.fibermap['FIBERSTATUS'][idx][changed_status] |= fmsk.BADFIBER
+    
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
     spectra.fibermap['SIGMA_COADD_NORM'] = spectra.fibermap['SIGMA_COADD_NORM'].astype(np.float32)
@@ -903,7 +1008,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmic rays (default 4)
        onetile: bool, if True, inputs are from a single tile
-       no_normalize: bool, if True, individual exposures are not rescaled prior to coaddition
+       no_normalize: bool, if True, calculation of per-exposure re-normalization
+       constants is skipped
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
