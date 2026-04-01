@@ -902,7 +902,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
             if np.all(np.isin(bands, usable_bands)):
 
                 # compute new coadd with exposure rescaling
-                used_in_coadd = good_fiberstatus[idx_good]
+                used_in_coadd = good_fiberstatus[idx]
                 scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
                 new_w_tot = np.sum(w_i*scaling**-2, axis=0)
                 new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))  
@@ -972,7 +972,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
 
                 # compute new coadd with exposure rescaling
-                used_in_coadd = good_fiberstatus[idx_good]
+                used_in_coadd = good_fiberstatus[idx]
                 scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
                 new_w_tot = np.sum(w_i*scaling**-2, axis=0)
                 new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))              
@@ -991,8 +991,9 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
 
                 # also need to update fiberstatus for exposures where a was unphysical
-                changed_status = (((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[idx]
-                spectra.fibermap['FIBERSTATUS'][idx][changed_status] |= fmsk.BADFIBER
+                changed_status = np.where(((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[0]
+                ii = idx[np.isin(idx,changed_status)]
+                spectra.fibermap['FIBERSTATUS'][ii] |= fmsk.BADFIBER
     
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
