@@ -991,8 +991,9 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
 
                 # also need to update fiberstatus for exposures where a was unphysical
-                changed_status = (((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[idx]
-                spectra.fibermap['FIBERSTATUS'][idx][changed_status] |= fmsk.BADFIBER
+                changed_status = np.where(((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[0]
+                ii = idx[np.isin(idx,changed_status)]
+                spectra.fibermap['FIBERSTATUS'][ii] |= fmsk.BADFIBER
     
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
