@@ -512,13 +512,13 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
         dirname = os.path.dirname(ptab_files[0])
         fname, fext = os.path.splitext(os.path.basename(ptab_files[0]))
         fprefix = '-'.join(fname.split('-')[:-1])
-        nights = [os.path.splitext(os.path.basename(fil))[0].replace(f'{fprefix}-', '') for fil in ptab_files]
+        fnights = [os.path.splitext(os.path.basename(fil))[0].replace(f'{fprefix}-', '') for fil in ptab_files]
     else:
         dirname = ''
         fprefix, fext = '', ''
-        nights = []
+        fnights = []
     log.info(wrap_long_logs(f"Loading the following processing tables for tilenight processing"
-             + f" table cache from directory: {dirname}, filenames={fprefix}-NIGHT.{fext}, nights: {nights}"))
+             + f" table cache from directory: {dirname}, filenames={fprefix}-NIGHT.{fext}, nights: {fnights}"))
 
     ptables = list()
     for ptab_file in ptab_files:

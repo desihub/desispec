@@ -131,7 +131,7 @@ def get_all_nights_for_prod(production_yaml, verbose=False):
                      + f"exposures between {first_night} and {last_night} inclusive")
         all_nights = get_all_valid_nights(first_night, last_night)
 
-    all_nights = sorted(all_nights)
+    all_nights = np.sort(all_nights).tolist()
     log.info(wrap_long_logs(f"All nights in production: {all_nights}"))
 
     return all_nights

@@ -2177,7 +2177,7 @@ def check_darknight_deps_and_update_prow(prow, n_nights_before=None, n_nights_af
 
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable', suppress_logging=True)
         if len(ptable) == 0:
-            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
+            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, {n_nights_before=}, {n_nights_after=}, but didn't find a table. Continuing")
             continue
         else:
             biasdarks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biasnight', b'biaspdark', b'pdark']))]
