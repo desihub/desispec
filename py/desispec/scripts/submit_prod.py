@@ -68,10 +68,11 @@ def get_all_valid_nights(first_night, last_night):
     nights = nights[((nights>=first_night)&(nights<=last_night))]
     return nights
 
-def get_all_nights_for_prod(production_yaml, verbose=False):
+def get_all_science_nights_for_prod(production_yaml, verbose=False):
     """
-    Derives all the nights that should be processed based on a production yaml file and
-    returns a list of int nights.
+    Derives all the nights with valid science exposures that should be processed
+    based on a production yaml file and returns a list of int nights. The yaml
+    file must contain either NIGHTS or FIRST_NIGHT and LAST_NIGHT.
 
     Args:
         production_yaml (str or dict): Production yaml or pathname of the
@@ -139,7 +140,8 @@ def get_all_nights_for_prod(production_yaml, verbose=False):
 def get_nights_to_process(production_yaml, verbose=False):
     """
     Derives the nights that need to be processed based on a production yaml file and
-    processing tables that exist.
+    processing tables that exist. The yaml file must contain either NIGHTS or
+    FIRST_NIGHT and LAST_NIGHT.
 
     Args:
         production_yaml (str or dict): Production yaml or pathname of the
@@ -150,7 +152,7 @@ def get_nights_to_process(production_yaml, verbose=False):
         nights, list. A list of nights on or after Jan 1 2020 in which data exists at NERSC.
     """
     log = get_logger()
-    all_nights = get_all_nights_for_prod(production_yaml=production_yaml, verbose=verbose)
+    all_nights = get_all_science_nights_for_prod(production_yaml=production_yaml, verbose=verbose)
 
     log.info(f"Assuming nights with science jobs in proctable are complete and removing from the list of nights to process.")
     nights_to_process, nights_with_proctable = [], dict()
@@ -163,6 +165,11 @@ def get_nights_to_process(production_yaml, verbose=False):
             nights_to_process.append(night)
 
     ## Because of the reverse order in the loop above, this dict is in reverse chronological order
+    ## Since we submit science nights in chronological order, we want to check the proctables starting
+    ## with the latest night and stop at the first one that has science jobs, as we expect all of the
+    ## earlier nights to also include science exposures (ie be complete).
+    ## However, instead of exiting, we keep looping but add the earlier complete nights to skipped_nights
+    ## since they've already been processed and we want to report them as skipped instead of just silently skipping them.
     skipped_nights = []
     need_to_check = True
     for night, pfile in nights_with_proctable.items():
@@ -183,7 +190,7 @@ def get_nights_to_process(production_yaml, verbose=False):
 def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False):
     """
     Interprets a production_yaml file and submits the respective nights for processing
-    within the defined production.
+    within the defined production. The yaml file must contain SPECPROD and either NIGHTS or FIRST_NIGHT and LAST_NIGHT.
 
     Args:
         production_yaml (str): Pathname of the yaml file that defines the production.
