@@ -155,7 +155,7 @@ def get_nights_to_process(production_yaml, verbose=False):
     log.info(f"Assuming nights with science jobs in proctable are complete and removing from the list of nights to process.")
     nights_to_process, nights_with_proctable = [], dict()
     for night in all_nights[::-1]:
-        ## If proctable exists, assume we've already completed that night
+        ## If proctable exists, file it for further testing about whether the night is completed or not
         pfile = findfile('proctable', night=night, readonly=True)
         if os.path.exists(pfile):
             nights_with_proctable[night] = pfile
