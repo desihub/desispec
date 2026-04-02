@@ -6,11 +6,50 @@ import argparse
 import sys
 from desispec.scripts.submit_prod import submit_production
 
+
+example_yaml = """
+---------------------------------------------------------------------------------------------
+# Kibo configuration for desi_submit_prod
+
+## If FIRST_NIGHT and LAST_NIGHT are specified, then all nights with
+## valid science exposures in that range will be submitted in chronologically
+## order. Otherwise only nights in NIGHTS will be submitted
+## In addition, other nights surrounding the submitted nights will submitted exclusively for producing
+## a dark model. This is true regardless of how the nights are specified.
+
+############
+# Required #
+############
+## specprod name
+SPECPROD: 'kibo'
+## specify the nights with either FIRST_NIGHT and LAST_NIGHT, or NIGHTS
+FIRST_NIGHT: 20201214
+LAST_NIGHT: 20240409
+THRU_NIGHT: 20240409
+# NIGHTS: [20201214, 20210101, 20220202, 20230303, 20240404]
+
+############
+# Optional #
+############
+## redshift job types to submit; if not specified, only cumulative redshifts are submitted
+# Z_SUBMIT_TYPES: ['cumulative',]
+## surveys to include; if not specified, all surveys with valid science exposures
+## in the specified nights will be included
+# SURVEYS: ['cmx', 'sv1', 'sv2', 'sv3', 'main', 'special']
+## the Slurm queue at NERSC to submit to; if not specified, the default is 'regular'
+# QUEUE: 'regular'
+## the NERSC reservation to use; if not specified, no reservation will be used
+#RESERVATION: 'K1res'
+---------------------------------------------------------------------------------------------
+"""
+
+
 def parse_args():  # options=None):
     """
     Creates an arguments parser for the desi run production
     """
-    parser = argparse.ArgumentParser(description="Submit a full production run of the DESI data pipeline for processing.")
+    parser = argparse.ArgumentParser(description="Submit a full production run of the DESI data pipeline for processing.",
+                                     epilog="\n\nExample config file:\n\n" + example_yaml, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument("-p", "--production-yaml", type=str, required=True,
                         help="Relative or absolute pathname to the yaml file summarizing the production.")
@@ -35,4 +74,3 @@ if __name__ == '__main__':
     args = parse_args()
 
     sys.exit(submit_production(**args.__dict__))
-

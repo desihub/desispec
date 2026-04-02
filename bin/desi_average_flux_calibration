@@ -106,7 +106,7 @@ if __name__ == '__main__':
     # AR we restrict to matched_coadd, as exposures not in matched_coadd are a few
     # AR and likely problematic
     # AR as of early Mar. 2021: GFA now reports fiber_fracflux for a 1.52" diameter fiber
-    filenames = np.loadtxt(args.infiles, dtype=np.str)
+    filenames = np.loadtxt(args.infiles, dtype=str)
     log.info("{} files in {}".format(len(filenames), args.infiles))
     expids = np.array([fitsio.read_header(fn)["EXPID"] for fn in filenames])
     airmass = np.nan + np.zeros(len(filenames))
