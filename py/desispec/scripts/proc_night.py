@@ -446,7 +446,12 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                    '--before', '0', '--after', '0']
         compdarkargs = compdarkparser.parse_args(options)
         exptab_for_dark_night = get_stacked_dark_exposure_table(compdarkargs)
-        pdark_check_passed = len(exptab_for_dark_night) == 0
+        if exptab_for_dark_night is None:
+            log.warning("Could not determine stacked dark exposure table for night %s; "
+                        "treating preproc dark check as failed.", night)
+            pdark_check_passed = False
+        else:
+            pdark_check_passed = len(exptab_for_dark_night) == 0
 
     if require_cals and not (bias_check_passed and pdark_check_passed):
         log.critical("Bias and preproc dark job not found in processing table. "
