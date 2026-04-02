@@ -524,6 +524,22 @@ class TestIO(unittest.TestCase):
                 match = np.all(fibermap[name] == frame.fibermap[name])
                 self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
+            #- user-supplied fibermap overrides frame.fibermap and appears only once
+            frame_fibermap = empty_fibermap(nspec)
+            frame_fibermap['TARGETID'] = np.arange(nspec) * 10
+            user_fibermap = empty_fibermap(nspec)
+            user_fibermap['TARGETID'] = np.arange(nspec) * 99
+            frx2 = Frame(wave, flux, ivar, mask, R, fibermap=frame_fibermap, meta=dict(FLAVOR='science'))
+            write_frame(self.testfile, frx2, fibermap=user_fibermap)
+            #- Only one FIBERMAP HDU should be present
+            with fits.open(self.testfile) as hdulist:
+                fibermap_hdus = [hdu for hdu in hdulist if hdu.name == 'FIBERMAP']
+                self.assertEqual(len(fibermap_hdus), 1, 'Expected exactly one FIBERMAP HDU')
+            #- The written fibermap should match the user-supplied one, not frame.fibermap
+            frame3 = read_frame(self.testfile)
+            self.assertTrue(np.all(frame3.fibermap['TARGETID'] == user_fibermap['TARGETID']),
+                            'User-supplied fibermap TARGETID not written correctly')
+
     def test_read_frame_as_spectra(self):
         """Test desispec.io.read_frame_as_spectra
         """
@@ -709,14 +725,18 @@ class TestIO(unittest.TestCase):
         calib = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
+        deconvolved_calib = np.random.uniform(size=nwave)
 
-        fc = FluxCalib(wave, calib, ivar, mask)
+        fc = FluxCalib(wave, calib, ivar, mask, deconvolved_calib=deconvolved_calib)
         write_flux_calibration(self.testfile, fc)
         fx = read_flux_calibration(self.testfile)
         self.assertTrue(np.all(fx.wave  == fc.wave.astype('f4').astype('f8')))
-        self.assertTrue(np.all(fx.calib == fc.calib.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.calib == fc.calib.astype('f8')))
         self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
+        # DECONVOLVED_CALIB HDU: round-trip equality and dtype; note no f8 -> f4 -> f8; it is saved as f8
+        self.assertEqual(fx.deconvolved_calib.dtype, np.float64)
+        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
 
     def test_image_rw(self):
         """Test reading and writing of Image objects.
@@ -751,6 +771,12 @@ class TestIO(unittest.TestCase):
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
         self.assertEqual(img2.mask.dtype, np.uint32)
+
+        #- Check skipping HDUs
+        img3 = read_image(self.testfile, skip=('ivar', 'MASK', 'ReadNoise'))
+        self.assertTrue(img3.ivar is None)
+        self.assertTrue(img3.mask is None)
+        self.assertTrue(img3.readnoise is None)
 
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)

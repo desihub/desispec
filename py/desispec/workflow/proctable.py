@@ -19,6 +19,7 @@ from desispec.workflow.tableio import load_table
 from desispec.workflow.utils import define_variable_from_environment, pathjoin
 from desispec.io.util import difference_camwords, parse_badamps, create_camword, decode_camword
 from desiutil.log import get_logger
+from desispec.util import wrap_long_logs
 
 _full_ptab_cache = dict()
 _tilenight_ptab_cache = None
@@ -113,9 +114,15 @@ def get_processing_table_column_defs(return_default_values=False,
         return colnames, coldtypes
 def get_default_qid():
     """
-    Returns the default slurm job id (QID) for the pipeline
+    Returns the default slurm job id (QID) for the pipeline if files exist and job doesn't need to be submitted.
     """
     return 1 #99999999
+
+def get_err_qid():
+    """
+    Returns a default slurm job id (QID) that the job couldn't be submitted for some reason.
+    """
+    return 9
 
 def default_obstypes_for_proctable():
     """
@@ -420,16 +427,16 @@ def get_pdarks_from_ptable(ptable):
     if ptable is None:
         log.error("Processing table is None, can't extract dark exposures. Exiting.")
         return np.array([])
-    
+
     if len(ptable) == 0:
         log.info("Processing table is empty, can't extract dark exposures. Exiting.")
         return np.array([])
-    
+
     for col in ['EXPID', 'OBSTYPE', 'JOBDESC']:
         if col not in ptable.colnames:
             log.error(f"Processing table does not have {col} column, can't extract dark exposures. Exiting.")
             return np.array([])
-    
+
     ## Select the two JOBDESC's that are relevant for dark preprocessing
     darks = ptable[np.isin(ptable['JOBDESC'].data, [b'pdark', b'biaspdark'])]
     ## Remove bias-only biapdark jobs by requiring OBSTYPE to be dark
@@ -439,7 +446,7 @@ def get_pdarks_from_ptable(ptable):
     if len(darks) == 0:
         log.info("No dark exposures. Exiting.")
         return np.array([])
-    
+
     processed_dark_expid = np.concatenate(darks['EXPID'])
     return processed_dark_expid
 
@@ -503,12 +510,15 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
     ## Less intrusive logging of files we're reading in
     if len(ptab_files) > 0:
         dirname = os.path.dirname(ptab_files[0])
-        shortnames = [fil.replace(dirname+"/", '') for fil in ptab_files]
+        fname, fext = os.path.splitext(os.path.basename(ptab_files[0]))
+        fprefix = '-'.join(fname.split('-')[:-1])
+        fnights = [os.path.splitext(os.path.basename(fil))[0].replace(f'{fprefix}-', '') for fil in ptab_files]
     else:
         dirname = ''
-        shortnames = []
-    log.info(f"Loading the following processing tables for tilenight processing"
-             + f" table cache from directory: {dirname}, filenames: {shortnames}")
+        fprefix, fext = '', ''
+        fnights = []
+    log.info(wrap_long_logs(f"Loading the following processing tables for tilenight processing"
+             + f" table cache from directory: {dirname}, filenames={fprefix}-NIGHT{fext}, nights: {fnights}"))
 
     ptables = list()
     for ptab_file in ptab_files:

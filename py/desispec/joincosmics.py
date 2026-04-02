@@ -17,7 +17,7 @@ from desispec.maskbits import specmask
 
 try:
     # Note: scikit-image is not part of desiconda.
-    from skimage.morphology import binary_closing
+    from skimage.morphology import closing
     from skimage import __version__ as _skimage_version
 except ImportError as e:
     _skimage_version = '0.0.0'
@@ -34,7 +34,7 @@ except ImportError as e:
         scipy.ndimage.binary_erosion(image, structure=selem, output=out, border_value=True)
         return out
 
-    def binary_closing(image, selem=None, out=None):
+    def closing(image, selem=None, out=None):
         dilated = binary_dilation(image, selem)
         out = binary_erosion(dilated, selem, out=out)
         return out
@@ -153,9 +153,9 @@ class RepairMask:
 
         for se in self.selems:
             if _skimage_version < '0.19.0':
-                bc = bc | binary_closing(bmask, selem=se.se)
+                bc = bc | closing(bmask, selem=se.se)
             else:
-                bc = bc | binary_closing(bmask, footprint=se.se)
+                bc = bc | closing(bmask, footprint=se.se)
 
         return bc
 

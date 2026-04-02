@@ -140,6 +140,7 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('EXPTIME',                    'f8',            's', 'Length of time shutter was open',              'empty'),
                     ('PSF_TO_FIBER_SPECFLUX',      'f4',             '', 'Fraction of light captured by a fiber',        'cframe'),
                     ('FLAT_TO_PSF_FLUX',           'f4',             '', 'Fiber aperture correction factor',             'cframe'),
+                    ('HELIOCOR_OFFSET',            'f4',             '', 'Barycentric offset applied to resolution',     'spectra'),
                     ('NIGHT',                      'i4',             '', 'Night of observation (YYYYMMDD)',              'spectra'),
                     ('EXPID',                      'i4',             '', 'DESI Exposure ID number',                      'spectra'),
                     ('MJD',                        'f8',            'd', 'Modified Julian Date when shutter was opened', 'spectra'),
@@ -1340,7 +1341,7 @@ def annotate_fibermap(fibermap):
         try:
             row = fibermap_columns[column_names.index(col)]
         except ValueError:
-            log.error("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
+            log.warning("Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.", col)
             continue
         coltype = fh[tform]
         try:
@@ -1352,16 +1353,16 @@ def annotate_fibermap(fibermap):
                 log.debug("Expected data type, %s, for column %s found.",
                           row[1], col)
             else:
-                log.error("Unexpected data type, %s != %s, for column %s!",
+                log.warning("Unexpected data type, %s != %s, for column %s!",
                           tforms[coltype], row[1], col)
         elif coltype.endswith('A'):
             if int(coltype.replace('A', '')) == row[1][1]:
                 log.debug("Expected string length, %d, for column %s found.", row[1][1], col)
             else:
-                log.error("Unexpected string length, %d != %d, for column %s found.",
+                log.warning("Unexpected string length, %d != %d, for column %s found.",
                           int(coltype.replace('A', '')), row[1][1], col)
         else:
-            log.error('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
+            log.warning('Unknown data type, %s, for column %s encountered when comparing to expected fibermap columns!',
                       coltype, col)
         if row[2]:
             if colunit:

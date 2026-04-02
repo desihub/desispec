@@ -55,7 +55,8 @@ desi_nightly_redshifts $NIGHT
 EOL
 
     echo Submitting $batchfile
-    sbatch --kill-on-invalid-dep=yes $batchfile
+    ### sbatch --kill-on-invalid-dep=yes $batchfile
+    sbatch $batchfile
     exit
 
 fi

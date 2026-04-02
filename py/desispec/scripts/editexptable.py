@@ -268,7 +268,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
               "Not including comment")
 
     ## Assign new value
-    isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
+    isstr = (cur_dtype in [str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
     appendable = (colname not in columns_not_to_append())
 

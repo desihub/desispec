@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import unittest
 import os
 import os.path
+import tempfile
 import warnings
 from astropy.io import fits
 import numpy as np
@@ -30,21 +31,26 @@ class TestPreProc(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'calibdir') and os.path.isdir(self.calibdir) :
             shutil.rmtree(self.calibdir)
+        if hasattr(self, '_orig_calib_env'):
+            if self._orig_calib_env is None:
+                os.environ.pop('DESI_SPECTRO_CALIB', None)
+            else:
+                os.environ['DESI_SPECTRO_CALIB'] = self._orig_calib_env
 
     def setUp(self):
         if not installed('specter'):
             self.skipTest('preproc tests require specter')
 
         #- Create temporary calib directory
-        self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')
-        if not os.path.exists(self.calibdir): os.makedirs(self.calibdir)
+        self.calibdir = tempfile.mkdtemp()
         #- Copy test calibration-data.yaml file
         specdir=os.path.join(self.calibdir,"spec/sp0")
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
             shutil.copy(str(resources.files('desispec').joinpath(f'test/data/ql/{c}0.yaml')), os.path.join(specdir, f"{c}0.yaml"))
-        #- Set calibration environment variable
+        #- Set calibration environment variable, saving original value for tearDown
+        self._orig_calib_env = os.environ.get('DESI_SPECTRO_CALIB')
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
 
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')

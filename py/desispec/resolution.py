@@ -180,5 +180,50 @@ def _gauss_pix(x, mean=0.0, sigma=1.0):
     return (y[1:] - y[:-1])/2
 
 
+def resolution_mat_torows(mat):
+    """
+    Convert a DESI resolution matrix (diagonals) to a kernels-per-column array.
+    Each column of the output corresponds to the kernel for a given wavelength bin.
+    """
+    w = mat.shape[0]
+    w2 = w // 2
+    # Roll each diagonal to align them vertically
+    return np.array([np.roll(mat[_], _ - w2) for _ in range(w)])[::-1]
+
+def resolution_mat_tocolumns(mat):
+    """
+    Convert a kernels-per-column array back to the DESI diagonal format.
+    """
+    w = mat.shape[0]
+    w2 = w // 2
+    # Roll back each kernel pixel to its original diagonal position
+    return np.array([np.roll(mat[::-1][_], w2 - _) for _ in range(w)])
+
+def shift_resolution_matrix_by_pixel(res_rows, deltas):
+    """
+    Shift each kernel in res_rows by the specified pixel amounts.
+    
+    Parameters
+    ----------
+    res_rows : ndarray
+        The kernels-per-column array, shape (ndiag, nwave).
+    deltas : ndarray
+        The shift in pixels for each wavelength bin, shape (nwave,).
+        A positive delta corresponds to a shift towards higher wavelength (redshift).
+    """
+    ndiag, nwave = res_rows.shape
+    # FFT along the kernel axis (axis 0)
+    fft_mat = np.fft.fft(res_rows, axis=0)
+    freqs = np.fft.fftfreq(ndiag)
+    
+    # To shift a spectral feature by +delta pixels, the kernel (which acts as a 
+    # convolution operator) must be shifted by -delta pixels.
+    # K'(x) = K(x + delta)
+    # The Fourier shift theorem says F[K(x - s)] = F[K(x)] * exp(-2j * pi * f * s)
+    # Here s = -delta, so the factor is exp(2j * pi * f * delta)
+    phase = np.exp(2j * np.pi * freqs[:, np.newaxis] * deltas[np.newaxis, :])
+    shifted_fft_mat = fft_mat * phase
+    return np.fft.ifft(shifted_fft_mat, axis=0).real
+
 
 #- (Unit tests moved to desispec.test.test_resolution)
