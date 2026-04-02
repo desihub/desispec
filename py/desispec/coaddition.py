@@ -703,6 +703,84 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 
     return coadded_spectra
 
+def _build_crude_coadd_arrays(spectra, idx, bands_to_use, sbands):
+    """
+    Build per-exposure flux and weight arrays on a merged from wavelength bands 
+    in non-overlapping regions, and compute the corresponding inverse-variance 
+    weighted crude coadd.
+
+    Args:
+        spectra      : desispec.spectra.Spectra object
+        idx          : integer index array into spectra.fibermap for the
+                       good exposures of the target being processed
+        bands_to_use : ordered list of band names to include; must follow
+                       the same wavelength ordering as spectra.bands so
+                       that adjacent entries share wavelength overlaps
+
+    Returns:
+        f_i         ndarray (n_exp, n_wave)  per-exposure flux
+        w_i         ndarray (n_exp, n_wave)  per-exposure ivar weights
+        coadd_wave  ndarray (n_wave,)        merged wavelength grid
+        crude_coadd ndarray (n_wave,)        ivar-weighted coadd
+        w_tot       ndarray (n_wave,)        total ivar weight per pixel
+    """
+    bands_list = list(bands_to_use)
+
+    # check for overlap between usable bands, 
+    # exclude these regions to avoid coadding cameras
+    overlap = {}
+    for j, b in enumerate(bands_list):
+        wave_b = spectra.wave[b]
+        overlap_flag = np.zeros(wave_b.size, dtype=int)
+
+        if j > 0:
+            wave_prev = spectra.wave[bands_list[j - 1]]
+            for k, w in enumerate(wave_b):
+                if np.any(np.abs(w - wave_prev) <= 1e-4):
+                    overlap_flag[k] = 1
+
+        if j < len(bands_list) - 1:
+            wave_next = spectra.wave[bands_list[j + 1]]
+            for k, w in enumerate(wave_b):
+                if np.any(np.abs(w - wave_next) <= 1e-4):
+                    overlap_flag[k] = 1
+
+        overlap[b] = overlap_flag
+
+    # construct coadd wave grid, skipping overlap regions
+    coadd_wave = None
+    for b in sbands[np.isin(sbands, bands_list)]:
+        wave_b = spectra.wave[b][overlap[b] == 0]
+        coadd_wave = wave_b if coadd_wave is None else np.append(coadd_wave, wave_b)
+
+    # fill per-exposure flux and weight arrays
+    f_i = np.zeros((idx.size, coadd_wave.size))
+    w_i = np.zeros((idx.size, coadd_wave.size))
+
+    for b in bands_list:
+        pix_mask = (overlap[b] == 0)
+        if spectra.mask is not None:
+            spectra_mask = spectra.mask[b][idx][:, pix_mask]
+        else:
+            # create a zero mask to use
+            spectra_mask = np.zeros_like(spectra.flux[b][idx][:, pix_mask])
+
+        # where to insert
+        wband = spectra.wave[b][pix_mask]
+        start = np.searchsorted(coadd_wave, wband[0])
+        end = start + len(wband)
+        iband = slice(start, end)
+
+        # directly copy because non-overlapping
+        f_i[:, iband] = spectra.flux[b][idx][:, pix_mask]
+        w_i[:, iband] = spectra.ivar[b][idx][:, pix_mask] * (spectra_mask == 0)
+
+    # compute the crude ivar-weighted coadd
+    w_tot = np.sum(w_i, axis=0)
+    crude_coadd = np.sum(f_i * w_i, axis=0) / (w_tot + (w_tot == 0))
+
+    return f_i, w_i, coadd_wave, crude_coadd, w_tot
+
 def per_exposure_normalization(spectra, norm_threshold=0.1):
     """
     Compute per‑exposure multiplicative normalization factors for each
@@ -786,67 +864,11 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                     is_converged = True
                     idx_good = []
                     continue
- 
-                # check for overlap between usable bands, 
-                # exclude these regions to avoid coadding cameras
-                overlap = {}
-                for j,b in enumerate(usable_bands):
-                
-                    wave_b = spectra.wave[b]
-                    nwave = wave_b.size
-                    overlap_flag = np.zeros(nwave, dtype=int)
 
-                    # determine overlap with previous band
-                    if j > 0:
-                        wave_prev = spectra.wave[usable_bands[j - 1]]
-                        # Mark overlapping pixels in current band
-                        for k, w in enumerate(wave_b):
-                            if np.any(np.abs(w - wave_prev) <= 1e-4):
-                                overlap_flag[k] = 1
-        
-                    # Check overlap with next band
-                    if j < len(usable_bands) - 1:
-                        wave_next = spectra.wave[usable_bands[j + 1]]
-                        for k, w in enumerate(wave_b):
-                            if np.any(np.abs(w - wave_next) <= 1e-4):
-                                overlap_flag[k] = 1
-
-                    overlap[b] = overlap_flag
-
-                # construct coadd wave grid, skipping overlap regions
-                coadd_wave = None
-                for b in sbands[np.isin(sbands, usable_bands)]:
-                    wave_b = spectra.wave[b][overlap[b]==0]
-                    if coadd_wave is None:
-                        coadd_wave = wave_b
-                    else:
-                        coadd_wave = np.append(coadd_wave, wave_b)
-    
-                f_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure flux
-                w_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure weights
-            
-                for b in usable_bands:
-
-                    pix_mask = (overlap[b] == 0)                
-                    if spectra.mask is not None:
-                        spectra_mask = spectra.mask[b][idx_good][:,pix_mask]
-                    else:
-                        # create a zero mask to use
-                        spectra_mask = np.zeros_like(spectra.flux[b][idx_good][:,pix_mask])
-
-                    # where to insert 
-                    wband = spectra.wave[b][pix_mask]
-                    start = np.searchsorted(coadd_wave, wband[0])
-                    end = start + len(wband)
-                    iband = slice(start, end)
-
-                    # Non-overlapping: directly copy
-                    f_i[:, iband] = spectra.flux[b][idx_good][:,pix_mask]
-                    w_i[:, iband] = (spectra.ivar[b][idx_good][:,pix_mask]*(spectra_mask == 0))
-
-                # coadd spectra
-                w_tot = np.sum(w_i, axis=0)
-                crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
+                # construct flux, weights, and crude coadd from the usable_bands
+                f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
+                    spectra, idx_good, usable_bands, sbands
+                )
                 
                 # compute unbiased normalization constant by minimizing chi2
                 # chi2 = sum( w*(f_i - b*f_c )^2 )
@@ -900,83 +922,18 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
             
             # if all bands were used, no need to recompute crude coadd
             # and can use existing f_i, w_i arrays
-            if np.all(np.isin(bands, usable_bands)):
-
-                # compute new coadd with exposure rescaling
-                used_in_coadd = good_fiberstatus[idx]
-                scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
-                new_w_tot = np.sum(w_i*scaling**-2, axis=0)
-                new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))  
-
-            else:
-                
-                # need to compute crude and new coadd across all bands
-                overlap = {}
-                for j,b in enumerate(bands):
-
-                    cam_fiberstatus = use_for_coadd(spectra.fibermap['FIBERSTATUS'][idx_good], b)
-                
-                    wave_b = spectra.wave[b]
-                    nwave = wave_b.size
-                    overlap_flag = np.zeros(nwave, dtype=int)
-
-                    # determine overlap with previous band
-                    if j > 0:
-                        wave_prev = spectra.wave[bands[j - 1]]
-                        # Mark overlapping pixels in current band
-                        for k, w in enumerate(wave_b):
-                            if np.any(np.abs(w - wave_prev) <= 1e-4):
-                                overlap_flag[k] = 1
-        
-                    # Check overlap with next band
-                    if j < len(bands) - 1:
-                        wave_next = spectra.wave[bands[j + 1]]
-                        for k, w in enumerate(wave_b):
-                            if np.any(np.abs(w - wave_next) <= 1e-4):
-                                overlap_flag[k] = 1
-
-                    overlap[b] = overlap_flag
-
-                # construct coadd wave grid, skipping overlap regions
-                coadd_wave = None
-                for b in sbands:
-                    wave_b = spectra.wave[b][overlap[b]==0]
-                    if coadd_wave is None:
-                        coadd_wave = wave_b
-                    else:
-                        coadd_wave = np.append(coadd_wave, wave_b)
-    
-                f_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure flux
-                w_i = np.zeros((idx_good.size, coadd_wave.size)) # exposure weights
+            if not np.all(np.isin(bands, usable_bands)):
+                # usable_bands is a strict subset: recompute over all bands for comparison
+                f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
+                    spectra, idx_good, bands, sbands
+                )
+                # else: f_i, w_i, crude_coadd, w_tot from the normalization loop are still valid
             
-                for b in bands:
-
-                    pix_mask = (overlap[b] == 0)                
-                    if spectra.mask is not None:
-                        spectra_mask = spectra.mask[b][idx_good][:,pix_mask]
-                    else:
-                        # create a zero mask to use
-                        spectra_mask = np.zeros_like(spectra.flux[b][idx_good][:,pix_mask])
-
-                    # where to insert 
-                    wband = spectra.wave[b][pix_mask]
-                    start = np.searchsorted(coadd_wave, wband[0])
-                    end = start + len(wband)
-                    iband = slice(start, end)
-
-                    # Non-overlapping: directly copy
-                    f_i[:, iband] = spectra.flux[b][idx_good][:,pix_mask]
-                    w_i[:, iband] = (spectra.ivar[b][idx_good][:,pix_mask]*(spectra_mask == 0))
-
-                # compute crude coadd
-                w_tot = np.sum(w_i, axis=0)
-                crude_coadd = np.sum(f_i*w_i, axis=0) / (w_tot + (w_tot == 0))
-
-                # compute new coadd with exposure rescaling
-                used_in_coadd = good_fiberstatus[idx]
-                scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd),1)
-                new_w_tot = np.sum(w_i*scaling**-2, axis=0)
-                new_crude_coadd = np.sum(f_i*w_i*scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))              
+            # compute rescaled coadd (was duplicated in both branches before)
+            used_in_coadd = good_fiberstatus[idx]
+            scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd), 1)
+            new_w_tot = np.sum(w_i * scaling**-2, axis=0)
+            new_crude_coadd = np.sum(f_i * w_i * scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))        
 
             # compute chi2dof; dof accounts for missing regions
             chi2 = np.sum( (crude_coadd - new_crude_coadd)**2 * w_tot)
