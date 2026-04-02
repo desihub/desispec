@@ -706,12 +706,15 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 def per_exposure_normalization(spectra, norm_threshold=0.1):
     """
     Compute per‑exposure multiplicative normalization factors for each
-    target in a desispec.spectra.Spectra object and store them in a new
-    COADD_NORM column of the fibermap. Objects for which a normalization
-    term cannot be computed have a default COADD_NORM value of 1.0, e.g.,
-    sky spectra, single exposures, etc. If any exposure yields a negative 
-    normalization factor, the exposure is flagged with the BADFIBER bit 
-    in FIBERSTATUS, and COADD_NORM retains the default value.
+    target in a desispec.spectra.Spectra object. If the rescaling
+    results in the coadd changing by a significance set by norm_threshold
+    the normalization terms and their corresponding error are stored 
+    in the COADD_NORM and SIGMA_COADD_NORM columns of the fibermap and the 
+    VARIABLE fiberstatus bit is set. Objects that a normalization term will 
+    not be applied to have a default COADD_NORM value of 1.0 and 
+    SIGMA_COADD_NORM of 0.0; this includes sky spectra and single exposures. 
+    If any exposure yields an unphysical rescaling factor and the VARIABLE bit
+    was set, the exposure is flagged with the BADFIBER bit in FIBERSTATUS.
 
     Args:
         spectra: desispec.spectra.Spectra object; It must provide flux,
@@ -720,8 +723,8 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
         and OBJTYPE.
         norm_threshold: minimum reduced chi-squared value between a standard
         error-weighted coadd and the coadd produced with per-exposure 
-        normalization in this function, such that the per-exposure normalization 
-        is preferred; sets VARIABLE (coadd_)fiberstatus if met
+        normalization in this function such that the per-exposure normalization 
+        is preferred for a target; sets VARIABLE (coadd_)fiberstatus if met
     """
     log = get_logger()
 
@@ -748,7 +751,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
         # flag to check if solution is physically reasonable
         is_converged = False
         iteration = 0 # avoiding infinite loop
-        while not(is_converged) & (iteration < 5):
+        while not(is_converged) and (iteration < 5):
             iteration += 1
             idx_good = np.where((spectra.fibermap['TARGETID'] == tgt) & good_fiberstatus)[0]
         
@@ -781,9 +784,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 if len(usable_bands) == 0:
                     log.error(f'spectra for targetid {tgt} could not be rescaled before coaddition, no usable bands')
                     is_converged = True
-                    # update fiberstatus, currently using BADFIBER for all exposures but could consider dedicated bit
-                    # the bit will be assigned at end of the function
-                    good_fiberstatus[bad_indices] = False
+                    idx_good = []
                     continue
  
                 # check for overlap between usable bands, 
@@ -863,8 +864,8 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                         # compute error on scalar
                         var_a[np.isin(idx,k)] = scalar**2 / np.sum(w * crude_coadd[mask]**2)
                     else:
-                        log.warning(f'coadd*exposure product is not finite, setting BADFIBER fiberstatus for an exposure of {tgt}')
-                        good_fiberstatus[bad_indices] = False
+                        log.warning(f'coadd*exposure product is not finite for an exposure of {tgt}')
+                        good_fiberstatus[k] = False
                         # need to retry without this exposure
                         a[np.isin(idx,k)] = 0
 
@@ -895,7 +896,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
 
         # compute crude_coadd and rescaled_crude_coadd over all bands and compare
         # do not apply to sky spectra or single exposures or all bad exposures 
-        elif np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') & (idx_good.size > 1):
+        elif np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') and (len(idx_good) > 1):
             
             # if all bands were used, no need to recompute crude coadd
             # and can use existing f_i, w_i arrays
@@ -990,7 +991,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 # calib errors, intrinsic variability, etc.
                 spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
 
-                # also need to update fiberstatus for exposures where a was unphysical
+                # also need to update fiberstatus for exposures where "a" was unphysical
                 changed_status = np.where(((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[0]
                 ii = idx[np.isin(idx,changed_status)]
                 spectra.fibermap['FIBERSTATUS'][ii] |= fmsk.BADFIBER
