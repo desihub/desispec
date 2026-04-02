@@ -24,6 +24,7 @@ from astropy.units import Unit
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
+from desiutil.log import get_logger
 
 from .maskbits import specmask
 from .resolution import Resolution
@@ -930,44 +931,37 @@ class Spectra(object):
                    meta=meta, extra=extra, single=single, scores=scores, redshifts=redshifts,
                    scores_comments=scores_comments, extra_catalog=extra_catalog)
 
-def _is_multitile(headers):
+
+def _remove_conflicting_keywords(headers):
     """
-    If headers contain more than one TILEID, return True, otherwise False
+    Remove keywords that exist in multiple headers and conflict, e.g. TILEID or HPXPIXEL
 
     Args:
-        headers: list of dict-like objects
+        header: list of dict-like objects
 
-    Returns: True if more than one TILEID present, otherwise False
+    Updates headers in place
 
-    Note: if none of the headers have TILEID, also return False
+    Note: this is to prepare Table.meta headers prior to vstack, which offers an option
+    to silently pick the last element, but no option to drop keywords that conflict.
     """
-    tileids = list()
+    log = get_logger()
+
+    # Get a set of all keys that exist in any header
+    allkeys = set()
     for hdr in headers:
-        if 'TILEID' in hdr:
-            tileids.append(hdr['TILEID'])
+        allkeys.update(set(hdr.keys()))
 
-    if len(tileids)>0 and len(np.unique(tileids))>1:
-        return True
-    else:
-        return False
+    log.debug("%d unique keywords in %d headers", len(allkeys), len(headers))
 
-def _remove_tile_keywords(headers):
-    """
-    Remove tile-specific keywords from headers
+    # Remove any that have conflicting values
+    for key in allkeys:
+        values = set([hdr[key] for hdr in headers if key in hdr])
+        if len(values) > 1:
+            log.debug("Removing key %s with %d unique values", key, len(values))
+            for hdr in headers:
+                if key in hdr:
+                    del hdr[key]
 
-    Args:
-        headers: list of dict-like objects
-
-    Note: modified input headers in-place
-    """
-    tile_keywords = ['TILEID', 'TILERA', 'TILEDEC', 'FIELDROT', 'FA_RUN', 'FA_HA',
-                     'NOWTIME', 'SVNDM', 'SVNMTL', 'REQRA', 'REQDEC',
-                     'PMTIME', 'RUNDATE', 'FAARGS', 'MTLTIME', 'EBVFAC']
-
-    for hdr in headers:
-        for key in tile_keywords:
-            if key in hdr:
-                del hdr[key]
 
 def _stack_fibermaps(fibermaps):
     """
@@ -988,9 +982,7 @@ def _stack_fibermaps(fibermaps):
             #- copy tables so that we can update .meta, but ok to not copy underlying data
             fibermaps = [fm.copy(copy_data=False) for fm in fibermaps]
             headers = [fm.meta for fm in fibermaps]
-            if _is_multitile(headers):
-                _remove_tile_keywords(headers)
-
+            _remove_conflicting_keywords(headers)
             fibermap = astropy.table.vstack(fibermaps)
         else:
             raise ValueError("Can't stack fibermaps of type {}".format(
@@ -1081,8 +1073,7 @@ def stack(speclist):
         redshifts = None
 
     headers = [sp.meta.copy() for sp in speclist]
-    if _is_multitile(headers):
-        _remove_tile_keywords(headers)
+    _remove_conflicting_keywords(headers)
 
     sp = Spectra(bands, wave, flux, ivar,
         mask=mask, resolution_data=rdat,

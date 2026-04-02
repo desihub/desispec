@@ -2,28 +2,68 @@
 desispec Change Log
 ===================
 
-0.70.1 (unreleased)
+0.71.0 (unreleased)
 -------------------
+
+Major algorithmic changes:
+
+* Adjust the resolution matrix for flux calibration (PR `#2642`_).
+* Adjust the cframe resolution matrix for per-fiber heliocentric corrections (PR `#2648`_).
+* Fix emlinefit outliers (PR `#2685`_)
+
+Other:
 
 * Set ``$DESI_SPECTRO_ROBUST=True`` for preproc to proceed anyway
   even without dark or bias models (PR `#2577`_).
 * Update _find_zeros to also use exptable PROGRAM (PR `#2578`_).
-* Set FIBERSTATUS=UNASSIGNED for targets with OBJTYPE != TGT or SKY
-  (PR `#2579`_).
-* ``assemble_fibermap`` set OBJTYPE=BAD for non-SKY non-TGT targets
-  (PR `#2580`_).
+* Set FIBERSTATUS=UNASSIGNED for targets with OBJTYPE != TGT or SKY (PR `#2579`_).
+* ``assemble_fibermap`` set OBJTYPE=BAD for non-SKY non-TGT targets (PR `#2580`_).
 * Improve robustness of ``desi_compute_psf`` and ``desi_average_psf`` when
   individual bundles fail (PR `#2584`_).
-* For zcatalogs, make ``EFFTIME_SPEC`` program-dependent to match tile usage
-    (PR `#2583`_).
-* Add ``flagged_fibers.ecsv`` to flag fibers for specific exposures
-  (PR `#2588`_).
+* For zcatalogs, make ``EFFTIME_SPEC`` program-dependent to match tile usage (PR `#2583`_).
+* Add ``flagged_fibers.ecsv`` to flag fibers for specific exposures (PR `#2588`_).
 * Add ``copy`` argument to Spectra object (PR `#2590`_).
 * Apply gains to preprocessed darks (PR `#2591`_).
 * Add ``FLAT_TO_PSF_FLUX`` to fibermap (PR `#2597`_).
 * Make ``FLAT_TO_PSF_FLUX`` and ``PSF_TO_FIBER_SPECFLUX`` float32 (PR `#2598`_).
 * Add detailed control over ordering in zall files (PR `#2568`_).
 * Add tile info in tile QA (PR `#2600`_).
+* Only include biases that are in the exposure table for making a master bias to avoid corrupted data (PR `#2602`_).
+* Darknight date cutoff (PR `#2603`_).
+* Add coadd_spectra that doesn't modify input (PR `#2608`_).
+* Add unit test for coadd_spectra non-mutation guarantee (PR `#2609`_).
+* Dark restart (PR `#2610`_).
+* update BAD2DFIT mask for better cosmics rejection (PR `#2612`_).
+* Fix cte expids during job creation (PR `#2614`_).
+* Add --kill-on-invalid-dep=yes to sbatch calls (PR `#2617`_).
+* Fix preproc_darks_mpi.py ragged array and cleanup some MPI therein (PR `#2619`_).
+* Only process biasnight for night in question and include as dependency (PR `#2625`_).
+* Save tilenight timing (PR `#2626`_).
+* Add regression test for no_darknight=True suppressing surrounding-night biasnight submissions (PR `#2628`_).
+* Logic to ignore a badcol if all values are NaN in raw and not in fa. (PR `#2629`_).
+* Fix desi_resubmit_queue_failures corner cases (PR `#2630`_).
+* Only preproc darks in night_qa based on findfile. (PR `#2631`_).
+* make test_preproc thread-safe using tempfile (PR `#2633`_).
+* Changes to decrease the sbtach time for biases (PR `#2635`_).
+* Replace binary_closing with closing. (PR `#2636`_).
+* trace shift spot fitting bugfix plus tests (PR `#2637`_).
+* Revert "Changes to decrease the sbtach time for biases" (PR `#2638`_).
+* replace .error() by .warning() in annotate_fibermap() (PR `#2640`_).
+* Update bias and pdark resource logic (PR `#2643`_).
+* first version of copilot instructions (PR `#2646`_).
+* read_image options to skip HDUs; use that to save memory for darks (PR `#2651`_).
+* turn off --kill-on-invalid-dep=yes (PR `#2658`_).
+* Cast yaml dates as int for dark reset logic (PR `#2659`_).
+* Fix duplicate HDUs in psf- files (PR `#2662`_).
+* Remove Spectrum1D import in test (PR `#2665`_).
+* fix DATE-OBS-END str vs. int; add tests (PR `#2666`_).
+* Make test_dateobs_begin_end_type_handling_sm1r hermetic by unsetting DESI_SPECTRO_DARK (PR `#2667`_).
+* Fix write_frame duplicating FIBERMAP HDU when fibermap kwarg is supplied (PR `#2671`_).
+* Fix misplaced bracket causing TypeError when coadding multiple spectra files (PR `#2673`_).
+* Add unit test for resolution matrix update in apply_flux_calibration (PR `#2675`_).
+* Fix inspect_dark BADCOLUMN vs. BADFIBER typo (PR `#2679`_).
+* Reduce parallelism due to memory constraints for ccdcalib darknight (PR `#2688`_).
+* Update desi_tile_vi to automatically validate backup tiles (PR `#2693`_)
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -38,6 +78,45 @@ desispec Change Log
 .. _`#2597`: https://github.com/desihub/desispec/pull/2597
 .. _`#2598`: https://github.com/desihub/desispec/pull/2598
 .. _`#2600`: https://github.com/desihub/desispec/pull/2600
+.. _`#2602`: https://github.com/desihub/desispec/pull/2602
+.. _`#2603`: https://github.com/desihub/desispec/pull/2603
+.. _`#2608`: https://github.com/desihub/desispec/pull/2608
+.. _`#2609`: https://github.com/desihub/desispec/pull/2609
+.. _`#2610`: https://github.com/desihub/desispec/pull/2610
+.. _`#2612`: https://github.com/desihub/desispec/pull/2612
+.. _`#2614`: https://github.com/desihub/desispec/pull/2614
+.. _`#2617`: https://github.com/desihub/desispec/pull/2617
+.. _`#2619`: https://github.com/desihub/desispec/pull/2619
+.. _`#2625`: https://github.com/desihub/desispec/pull/2625
+.. _`#2626`: https://github.com/desihub/desispec/pull/2626
+.. _`#2628`: https://github.com/desihub/desispec/pull/2628
+.. _`#2629`: https://github.com/desihub/desispec/pull/2629
+.. _`#2630`: https://github.com/desihub/desispec/pull/2630
+.. _`#2631`: https://github.com/desihub/desispec/pull/2631
+.. _`#2633`: https://github.com/desihub/desispec/pull/2633
+.. _`#2635`: https://github.com/desihub/desispec/pull/2635
+.. _`#2636`: https://github.com/desihub/desispec/pull/2636
+.. _`#2637`: https://github.com/desihub/desispec/pull/2637
+.. _`#2638`: https://github.com/desihub/desispec/pull/2638
+.. _`#2640`: https://github.com/desihub/desispec/pull/2640
+.. _`#2642`: https://github.com/desihub/desispec/pull/2642
+.. _`#2643`: https://github.com/desihub/desispec/pull/2643
+.. _`#2646`: https://github.com/desihub/desispec/pull/2646
+.. _`#2648`: https://github.com/desihub/desispec/pull/2648
+.. _`#2651`: https://github.com/desihub/desispec/pull/2651
+.. _`#2658`: https://github.com/desihub/desispec/pull/2658
+.. _`#2659`: https://github.com/desihub/desispec/pull/2659
+.. _`#2662`: https://github.com/desihub/desispec/pull/2662
+.. _`#2665`: https://github.com/desihub/desispec/pull/2665
+.. _`#2666`: https://github.com/desihub/desispec/pull/2666
+.. _`#2667`: https://github.com/desihub/desispec/pull/2667
+.. _`#2671`: https://github.com/desihub/desispec/pull/2671
+.. _`#2673`: https://github.com/desihub/desispec/pull/2673
+.. _`#2675`: https://github.com/desihub/desispec/pull/2675
+.. _`#2679`: https://github.com/desihub/desispec/pull/2679
+.. _`#2685`: https://github.com/desihub/desispec/pull/2685
+.. _`#2688`: https://github.com/desihub/desispec/pull/2688
+.. _`#2693`: https://github.com/desihub/desispec/pull/2693
 
 
 0.70.0 (2025-12-04)
@@ -382,6 +461,9 @@ First tag used for Kibo/Y3 run.
 0.65.0 (2024-08-16)
 -------------------
 
+* plot_fiber_traces --fibers allow true fiber numbers, not just 0-499 (PR `#2289`_).
+* optionally parallelize group_spectra (PR `#2291`_).
+* Rerun Redrock with dynamic priors based on QN redshift (PR `#2298`_).
 * healpix grouping memory and I/O efficiency improvements (PR `#2290`_).
 * Eliminate hard-coded paths to find fiberassign and surveyops files.
   Obtain the path to fiberassign files with :func:`~desispec.io.meta.findfile`,
@@ -409,6 +491,9 @@ First tag used for Kibo/Y3 run.
 * cleanup redirected stdout crash before re-redirecting (PR `#2311`_).
 * Night_qa: introduce new ctedet row-by-row diagnosis plot (PR `#2312`_).
 
+.. _`#2289`: https://github.com/desihub/desispec/pull/2289
+.. _`#2291`: https://github.com/desihub/desispec/pull/2291
+.. _`#2298`: https://github.com/desihub/desispec/pull/2298
 .. _`#2290`: https://github.com/desihub/desispec/pull/2290
 .. _`#2294`: https://github.com/desihub/desispec/pull/2294
 .. _`#2296`: https://github.com/desihub/desispec/pull/2296
@@ -530,6 +615,8 @@ Used for Jura.
 
 Used for Jura. Requires QuasarNP >=2.x and Redrock >=20.x
 
+* PSF with bad amp (PR `#2217`_).
+* Allow different CTE functions for different nights / cameras. (PR `#2221`_).
 * Remove redundant assemble_fibermap script (PR `#2222`_).
 * Enable qproc on obstype="other" for tests (PR `#2223`_).
 * Optionally gather Tractor phot from just north or south (PR `#2224`_).
@@ -544,6 +631,8 @@ Used for Jura. Requires QuasarNP >=2.x and Redrock >=20.x
 * Add reservation parsing for CPUs vs. GPUs (PR `#2235`_).
 * Move nightlyflat to gpu job (PR `#2236`_).
 
+.. _`#2217`: https://github.com/desihub/desispec/pull/2217
+.. _`#2221`: https://github.com/desihub/desispec/pull/2221
 .. _`#2222`: https://github.com/desihub/desispec/pull/2222
 .. _`#2223`: https://github.com/desihub/desispec/pull/2223
 .. _`#2224`: https://github.com/desihub/desispec/pull/2224
@@ -626,6 +715,7 @@ Smaller items and new features:
 0.61.0 (2024-01-15)
 -------------------
 
+* Set psferr=0.04 for blue cameras (PR `#2129`_).
 * Add VCCDSEC info to tile_qa_plot (PR `#2136`_).
 * Don't skip exp_fibermap in io.spectra.read_spectra (PR `#2137`_).
 * Don't require a resolution matrix when coadding across cameras (PR `#2139`_).
@@ -646,6 +736,7 @@ Smaller items and new features:
   `#2158`_).
 * Check CCDTEMP when generating bias and dark models (PR `#2159`_).
 
+.. _`#2129`: https://github.com/desihub/desispec/pull/2129
 .. _`#2136`: https://github.com/desihub/desispec/pull/2136
 .. _`#2137`: https://github.com/desihub/desispec/pull/2137
 .. _`#2139`: https://github.com/desihub/desispec/pull/2139
@@ -743,6 +834,7 @@ Miscellaneous
 -------------------
 
 * Add recovery robustness for partially completed PSF jobs (PR `#2059`_).
+* Propagate joint fit error code (PR `#2063`_).
 * night_qa optional override of reprocessing darks (PR `#2066`_).
 * desi_vi_tile defaults to only new tiles (PR `#2073`_).
 * Optionally match to DR10 photometry (PR `#2079`_).
@@ -751,6 +843,7 @@ Miscellaneous
 * Fix circular imports with trace_shifts (PR `#2084`_).
 
 .. _`#2059`: https://github.com/desihub/desispec/pull/2059
+.. _`#2063`: https://github.com/desihub/desispec/pull/2063
 .. _`#2066`: https://github.com/desihub/desispec/pull/2066
 .. _`#2073`: https://github.com/desihub/desispec/pull/2073
 .. _`#2079`: https://github.com/desihub/desispec/pull/2079
@@ -768,6 +861,9 @@ Miscellaneous
 0.59.0 (2023-06-12)
 -------------------
 
+* Focus (PR `#2042`_).
+* Night_qa: dark: add possibility of plots with --bkgsub-for-science (PR `#2043`_).
+* Perform final processing check in desi_run_night when processing table is empty (PR `#2056`_).
 * ``desispec.coaddition.coadd_fiberstatus`` bugfixes and add columns
   FIRSTNIGHT, LASTNIGHT, MIN_MJD, MEAN_MJD, MAX_MJD.  Used for EDR zcat VAC.
   (PRs `#2065`_, `#2067`_, `#2070`_)
@@ -775,6 +871,9 @@ Miscellaneous
 .. _`#2065`: https://github.com/desihub/desispec/pull/2065
 .. _`#2067`: https://github.com/desihub/desispec/pull/2067
 .. _`#2070`: https://github.com/desihub/desispec/pull/2070
+.. _`#2042`: https://github.com/desihub/desispec/pull/2042
+.. _`#2043`: https://github.com/desihub/desispec/pull/2043
+.. _`#2056`: https://github.com/desihub/desispec/pull/2056
 
 0.58.4 (2023-06-02)
 -------------------
@@ -787,6 +886,7 @@ Miscellaneous
 0.58.3 (2023-06-01)
 -------------------
 
+* Workaround for sbatch bug on Perlmutter (PR `#2037`_).
 * Warn that purge_night was a dry run (PR `#2040`_).
 * Restore desi_daily_proc_manager dry run and add sacct retries (PR `#2044`_).
 * Add optional masking of specific CCD regions per exposure (PR `#2050`_).
@@ -794,6 +894,7 @@ Miscellaneous
 * desispec.photo handle release 9010 vs. 9012 burst buffer bug, needed
   for lsdr9 photometry VAC (PR `#2057`_).
 
+.. _`#2037`: https://github.com/desihub/desispec/pull/2037
 .. _`#2040`: https://github.com/desihub/desispec/pull/2040
 .. _`#2044`: https://github.com/desihub/desispec/pull/2044
 .. _`#2050`: https://github.com/desihub/desispec/pull/2050
@@ -924,6 +1025,9 @@ Bugfix update for Iron re-processing.
 
 QA and pipelining updates in support of daily ops and Iron/DR1:
 
+* Assess the redshift quality of DESI galaxies and quasars (PR `#1765`_).
+* Add a python script for spectral grouping and redshifting (PR `#1904`_).
+* Merge current daily branch into main to pick up changes for perlmutter (PR `#1948`_, `#1958`_, `#1965`_).
 * Add update_survey_keywords to standardize early FA headers (PR `#1858`_).
 * Standardize GPU options (opt-out with --no-gpu) and fix options for
   desi_run_night auto-deriving GPU vs. CPU per job (PR `#1901`_).
@@ -954,6 +1058,11 @@ QA and pipelining updates in support of daily ops and Iron/DR1:
 * Change zproc on cori realtime to 2 nodes and 30 minutes
   (PRs `#1968`_, `#1969`_).
 
+.. _`#1765`: https://github.com/desihub/desispec/pull/1765
+.. _`#1904`: https://github.com/desihub/desispec/pull/1904
+.. _`#1948`: https://github.com/desihub/desispec/pull/1948
+.. _`#1958`: https://github.com/desihub/desispec/pull/1958
+.. _`#1965`: https://github.com/desihub/desispec/pull/1965
 .. _`#1858`: https://github.com/desihub/desispec/pull/1858
 .. _`#1901`: https://github.com/desihub/desispec/pull/1901
 .. _`#1905`: https://github.com/desihub/desispec/pull/1905
@@ -1038,7 +1147,12 @@ Minor:
 * Add ``desi_job_graph`` to make job dependency graph webpages (PR `#1896`_).
 * Apply job timefactor to nightlyflat jobs too (PR `#1898`_).
 * Add GPU memory and rank allocation tools (PR `#1899`_).
+* Add desi spectro dark (PR `#1818`_).
+* EDR redshift database (PR `#1819`_).
+* add --use-specter to desi_run_night (PR `#1883`_).
 
+.. _`#1818`: https://github.com/desihub/desispec/pull/1818
+.. _`#1819`: https://github.com/desihub/desispec/pull/1819
 .. _`#1822`: https://github.com/desihub/desispec/pull/1822
 .. _`#1824`: https://github.com/desihub/desispec/pull/1824
 .. _`#1825`: https://github.com/desihub/desispec/pull/1825
@@ -1070,6 +1184,7 @@ Minor:
 .. _`#1878`: https://github.com/desihub/desispec/pull/1878
 .. _`#1879`: https://github.com/desihub/desispec/pull/1879
 .. _`#1882`: https://github.com/desihub/desispec/pull/1882
+.. _`#1883`: https://github.com/desihub/desispec/pull/1883
 .. _`#1885`: https://github.com/desihub/desispec/pull/1885
 .. _`#1886`: https://github.com/desihub/desispec/pull/1886
 .. _`#1888`: https://github.com/desihub/desispec/pull/1888
@@ -3133,12 +3248,12 @@ Multiple non-backwards compatible changes:
 * Significant pipeline code refactor (PR `#300`_ and `#290`_).
 * fix docstrings for sphinx build (PR `#308`_).
 
-.. _`#288`: https://github.com/desihub/desispec/pull/288
-.. _`#294`: https://github.com/desihub/desispec/pull/294
-.. _`#293`: https://github.com/desihub/desispec/pull/293
 .. _`#285`: https://github.com/desihub/desispec/pull/285
-.. _`#300`: https://github.com/desihub/desispec/pull/300
+.. _`#288`: https://github.com/desihub/desispec/pull/288
 .. _`#290`: https://github.com/desihub/desispec/pull/290
+.. _`#293`: https://github.com/desihub/desispec/pull/293
+.. _`#294`: https://github.com/desihub/desispec/pull/294
+.. _`#300`: https://github.com/desihub/desispec/pull/300
 .. _`#308`: https://github.com/desihub/desispec/pull/308
 
 

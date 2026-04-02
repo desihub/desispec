@@ -41,7 +41,7 @@ Must specify --infile OR --night and --expid.
                         help = 'path to fibermap file')
     parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'output preprocessed image file')
-    parser.add_argument('--cameras', type = str, default = None, required=False,
+    parser.add_argument('-c', '--cameras', type = str, default = None, required=False,
                         help = 'comma separated list of cameras')
     parser.add_argument('--badamps', type=str, default='', required=False,
                         help = 'comma separated list of bad CCD amps. ' +

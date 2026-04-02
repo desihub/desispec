@@ -382,4 +382,4 @@ class TestIOFibermap(unittest.TestCase):
         fibermap_hdu = annotate_fibermap(fibermap_hdu)
         self.assertEqual(fibermap_hdu.header['TTYPE3'], 'UNEXPECTED')
         self.assertEqual(fibermap_hdu.header.comments['TTYPE3'], '')
-        mock_log().error.assert_called_once_with('Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.', 'UNEXPECTED')
+        mock_log().warning.assert_called_once_with('Unexpected column name, %s, found in fibermap HDU! Annotation will be skipped on this column.', 'UNEXPECTED')
