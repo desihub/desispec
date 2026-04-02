@@ -1,0 +1,167 @@
+# CCD calibration file
+# for each spectrograph arm bx,rx,zx with x from 0 to 9
+#  several versions of the hardware + firmware (not the version of this file or preproc. software)
+#  identified by DATE-OBS-BEGIN,DATE-OBS-END with a compatibility check of CCDNAME,DOSVER,FEEVER
+#
+# For each amplifier X
+# GAINX is in e/ADU
+# SATURLEVX is in ADU : the saturation level above which pixels are masked (applied before multiplication by gain)
+# CROSSTALKXY is the fraction of X in Y (in ADU/ADU, ie applied before multiplication by gain)
+#
+# The orientation of the amplifiers as seen with ds9
+# **after** the ICS transfo for all cameras is by definition:
+# C D
+# A B
+#
+# The orientation of the amplifiers as seen with ds9
+# **before** the ICS transfo depends on the camera.
+# The transformations are given in DESI-1964
+#
+# BLUE CAMERA (before ICS transfo) :
+# (complex tranfo, see etc/ics_transfo.py)
+# A C
+# B D
+#
+# RED CAMERA (before ICS transfo data[::-1,::-1])
+# B A
+# D C
+#
+# NIR CAMERA (before ICS transfo data[,::-1]) :
+# D C
+# B A
+#
+# PLEASE AVOID EDITING THIS FILE BY HAND AND USE INSTEAD THE SCRIPT desi_calib_config
+#
+# Note that comments with '#' below this header will not be saved when using desi_calib_config.
+# Please use instead the keyword COMMENT: 'bla' in each config for a general comment
+# and the format KEY:[VALUE , 'bla'] instead of KEY:VALUE to provide a comment for a specific entry.
+
+sm1-r:
+  V20240324:
+    COMMENT: 2 amp mode
+    DATE-OBS-BEGIN: 20240324
+    AMPLIFIERS: CD
+    DETECTOR: M1-12
+    DOSVER: current
+    FEEVER: v20160312
+    CCDCFG: default_lbnl_20210128.cfg
+    CCDTMING: lbnl_timing2down.txt
+    GAINC: 1.513
+    GAIND: 1.531
+    SATURLEVC: 65535
+    SATURLEVD: 65535
+    BIAS: ccd/bias-sm1-r4-20240326.fits.gz
+    PIXFLAT: ccd/pixflat-sm1-r4-20221109.fits.gz
+    MASK: ccd/pixmask-sm1-r4-20240324.fits.gz
+    DARK: ccd/dark-sm1-r4-20240326.fits.gz
+    PSF: spec/sm1/psfinit-r4-20221110.fits
+    FIBERFLAT: spec/sm1/fiberflatnight-sm1-r4-20241125-20241203.fits
+    BROKENFIBERS: 36,51,132,156
+    FLUXCALIB: spec/fluxcalib/fluxcalibnight-r-20201216.fits
+    SKYCORR: spec/sm1/skycorr-pca-sm1-r4.fits
+    SKYGRADPCA: spec/sm1/skygradpca-sm1-r4.fits
+    TPCORRPARAM: spec/sm1/tpcorrparam-sm1-r4.fits
+  V20231216:
+    COMMENT: new CTE
+    DATE-OBS-BEGIN: '20231216'
+    DATE-OBS-END: None
+    AMPLIFIERS: ABCD
+    DETECTOR: M1-12
+    DOSVER: current
+    FEEVER: v20160312
+    CCDCFG: default_lbnl_20210128.cfg
+    CCDTMING: flatdark_lbnl_timing.txt
+    GAINA: 1.802
+    GAINB: 1.658
+    GAINC: 1.513
+    GAIND: 1.531
+    SATURLEVA: 65535
+    SATURLEVB: 65535
+    SATURLEVC: 65535
+    SATURLEVD: 65535
+    BIAS: ccd/bias-sm1-r4-20221109.fits.gz
+    PIXFLAT: ccd/pixflat-sm1-r4-20221109.fits.gz
+    MASK: ccd/pixmask-sm1-r4-20221109.fits.gz
+    DARK: ccd/dark-sm1-r4-20221109.fits.gz
+    PSF: spec/sm1/psfinit-r4-20221110.fits
+    FIBERFLAT: spec/sm1/fiberflatnight-r4-20240125.fits
+    BROKENFIBERS: 36,51,132,156
+    FLUXCALIB: spec/fluxcalib/fluxcalibnight-r-20201216.fits
+    SKYCORR: spec/sm1/skycorr-pca-sm1-r4.fits
+    SKYGRADPCA: spec/sm1/skygradpca-sm1-r4.fits
+    TPCORRPARAM: spec/sm1/tpcorrparam-sm1-r4.fits
+    OFFCOLSA: 1779:2057
+  V20221108:
+    COMMENT: new cryostat !
+    DATE-OBS-BEGIN: '20221108'
+    DATE-OBS-END: 20231215
+    AMPLIFIERS: ABCD
+    DETECTOR: M1-12
+    DOSVER: current
+    FEEVER: v20160312
+    CCDCFG: default_lbnl_20210128.cfg
+    CCDTMING: flatdark_lbnl_timing.txt
+    GAINA: 1.802
+    GAINB: 1.658
+    GAINC: 1.513
+    GAIND: 1.531
+    SATURLEVA: 65535
+    SATURLEVB: 65535
+    SATURLEVC: 65535
+    SATURLEVD: 65535
+    BIAS: ccd/bias-sm1-r4-20221109.fits.gz
+    PIXFLAT: ccd/pixflat-sm1-r4-20221109.fits.gz
+    MASK: ccd/pixmask-sm1-r4-20221109.fits.gz
+    DARK: ccd/dark-sm1-r4-20221109.fits.gz
+    PSF: spec/sm1/psfinit-r4-20221110.fits
+    FIBERFLAT: spec/sm1/fiberflatnight-r4-20240125.fits
+    BROKENFIBERS: 36,51,132,156
+    FLUXCALIB: spec/fluxcalib/fluxcalibnight-r-20201216.fits
+    SKYCORR: spec/sm1/skycorr-pca-sm1-r4.fits
+    SKYGRADPCA: spec/sm1/skygradpca-sm1-r4.fits
+    TPCORRPARAM: spec/sm1/tpcorrparam-sm1-r4.fits
+  V20220201:
+    COMMENT: average PSF from 20220101 to 20220130
+    DATE-OBS-BEGIN: 20220201
+    DATE-OBS-END: '20221107'
+    AMPLIFIERS: ABCD
+    DETECTOR: LBNL-PE-21
+    DOSVER: current
+    FEEVER: v20160312
+    CCDCFG: LBNL-PE-21-20211015.cfg
+    CCDTMING: flatdark_lbnl_timing.txt
+    GAINA: 1.652
+    GAINB: 1.572
+    GAINC: 1.519
+    GAIND: 1.446
+    CROSSTALKAB: 6.27242e-06
+    CROSSTALKAC: 1.7286e-05
+    CROSSTALKAD: -1.10615e-05
+    CROSSTALKBA: 9.9254e-06
+    CROSSTALKBC: -7.04047e-05
+    CROSSTALKBD: 9.12595e-05
+    CROSSTALKCA: 5.74163e-05
+    CROSSTALKCB: 1.62465e-05
+    CROSSTALKCD: -7.22978e-06
+    CROSSTALKDA: 4.73602e-05
+    CROSSTALKDB: 1.02292e-05
+    CROSSTALKDC: 2.79379e-06
+    DARKTRAILAMPB: 0.00024
+    DARKTRAILWIDTHB: 13.0
+    SATURLEVA: 65535
+    SATURLEVB: 65535
+    SATURLEVC: 65535
+    SATURLEVD: 65535
+    BIAS: ccd/bias-sm1-r4-20211124.fits.gz
+    DARK: ccd/dark-sm1-r4-20211124.fits.gz
+    PSF: spec/sm1/psfmean-r4-20220101-20220130.fits
+    FIBERFLAT: spec/sm1/fiberflatnight-r4-20201214.fits
+    BROKENFIBERS: 36,51,132,156
+    BADCOLUMNFIBERS: 2250:2272
+    USE_ORSEC: true
+    FLUXCALIB: spec/fluxcalib/fluxcalibnight-r-20201216.fits
+    MASK: ccd/pixmask-sm1-r4-20210901.fits.gz
+    PIXFLAT: ccd/pixflat-sm1-r4-20210815.fits.gz
+    SKYCORR: spec/sm1/skycorr-pca-sm1-r4.fits
+    SKYGRADPCA: spec/sm1/skygradpca-sm1-r4.fits
+    TPCORRPARAM: spec/sm1/tpcorrparam-sm1-r4.fits

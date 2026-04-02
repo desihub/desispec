@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys,os
+import sys, os, gc
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,23 +14,33 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
                     help = 'path to skycorr fits files')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output fits file with PCA coefficients')
-parser.add_argument('--ncomp', type = int, default = 3, required = False,
+parser.add_argument('--ncomp', type = int, default = 6, required = False,
                     help = 'number of PCA components to save (in addition to the mean)')
 parser.add_argument('--min-exptime', type = float, default = 700, required = False,
                     help = 'minimum exposure time (to ensure a good precision on sky lines)')
+parser.add_argument('--min-nexp', type = int, default = 50, required = False,
+                    help = 'the minimum required number of good exposures')
+parser.add_argument('--max-nexp', type = int, default = None, required = False,
+                    help = 'randomly downsample to max_nexp if the number good exposures exceeds max_nexp')
+parser.add_argument('--first-night', type = int, required = False,
+                    help = 'exposures taken before first_night are ignored')
+parser.add_argument('--last-night', type = int, required = False,
+                    help = 'exposures taken after last_night are ignored')
 args = parser.parse_args()
 
 
+if os.path.isfile(args.outfile):
+    print(args.outfile, 'already exists; exit')
+    sys.exit()
+
 output_hdulist=pyfits.HDUList()
 first=True
-
-
-
 
 wave=None
 head=None
 night_min=None
 night_max=None
+nexp_dict = {}
 
 for what in [ "DWAVE" , "DLSF" ] :
     deltas=[]
@@ -45,13 +55,27 @@ for what in [ "DWAVE" , "DLSF" ] :
             print("warning: cannot open frame file {}".format(frame_filename))
             continue
 
-        head=fitsio.read_header(frame_filename)
-        exptime=head["EXPTIME"]
-        if exptime < args.min_exptime :
-            print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
+        # A hack to get NIGHT without having to read the gzipped file
+        fn_split = frame_filename.split('/')
+        night = int(fn_split[fn_split.index('exposures')+1])
+
+        if args.first_night is not None and night < args.first_night:
+            print("ignore {} with night={} < {}".format(filename,night,args.first_night))
+            continue
+        if args.last_night is not None and night > args.last_night:
+            print("ignore {} with night={} > {}".format(filename,night,args.last_night))
             continue
 
-        night=head["NIGHT"]
+        if args.min_exptime!=0:
+            # It's super inefficient to read the fits.gz files just to get EXPTIME
+            head=fitsio.read_header(frame_filename)
+            exptime=head["EXPTIME"]
+            if exptime < args.min_exptime :
+                print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
+                continue
+
+        # night=head["NIGHT"]
+
         if night_min is None :
             night_min = night
             night_max = night
@@ -63,11 +87,11 @@ for what in [ "DWAVE" , "DLSF" ] :
         delta=h[what].data
         rms=np.std(delta)
         if rms==0 or rms>1.:
-            print("no valid data for {}".format(filename))
+            print("{}: no valid data for {}; rms = {}".format(what, filename, rms))
             continue
-        print("{} rms {} = {}".format(filename,what,rms))
+        print("{} rms {} = {}".format(os.path.basename(filename),what,rms))
 
-        mdelta=np.max(np.abs(delta))
+        maxdelta=np.max(np.abs(delta))
         if what=="DWAVE" :
             threshold=0.3
         elif what=="DLSF" :
@@ -76,8 +100,8 @@ for what in [ "DWAVE" , "DLSF" ] :
             print(f"ERROR: unknown threshold for {what}; please update code")
             sys.exit(1)
 
-        if mdelta>threshold :
-            print(f"skip {filename} with max {what} = {mdelta} > {threshold} A")
+        if maxdelta>threshold :
+            print(f"skip {filename} with max {what} = {maxdelta} > {threshold} A")
             continue
         threshold=0.
         deltas.append(delta)
@@ -85,23 +109,36 @@ for what in [ "DWAVE" , "DLSF" ] :
         if wave is None :
             wave=h["WAVELENGTH"].data
 
+    if len(deltas)<args.min_nexp:
+        print('A minimum of {} exposures are required; only {} exposures available\n{}'.format(args.min_nexp, len(deltas), args.outfile))
+        sys.exit()
+
+    if args.max_nexp is not None and len(deltas)>args.max_nexp:
+        print('Downsampling the number of exposures from {} to {}'.format(len(deltas), args.max_nexp))
+        np.random.seed(123)
+        idx = np.sort(np.random.choice(len(deltas), size=args.max_nexp, replace=False))
+        deltas1 = []
+        for index in idx:
+            deltas1.append(deltas[index])
+        deltas = deltas1
+
+    nmeas = len(deltas)
+    nexp_dict[what] = nmeas
+
     print("convert to array")
     deltas=np.array(deltas)
     print("number of measurements=",deltas.shape[0])
+
+    gc.collect()
 
     print("subtract mean")
     mdeltas=np.mean(deltas,axis=0)
     deltas[:] -= mdeltas
 
     print("fill scalar product matrix")
-    nmeas=len(deltas)
-    mat=np.zeros((nmeas,nmeas))
-    for i in range(nmeas) :
-        print("{}/{}".format(i+1,nmeas))
-        for j in range(i,nmeas) :
-            mat[i,j] = np.sum(deltas[i]*deltas[j])
-            if j != i :
-                mat[j,i] = mat[i,j]
+    # Reshape to (nmeas, nfibers*nwave) for vectorized dot product
+    deltas_flat = deltas.reshape(nmeas, -1)
+    mat = np.dot(deltas_flat, deltas_flat.T)
 
     print("eigen decomposition")
     eigenvals,v = np.linalg.eig(mat)
@@ -134,11 +171,13 @@ for what in [ "DWAVE" , "DLSF" ] :
     output_hdulist.append(pyfits.ImageHDU(eigenvals[ii][:40],name=what+"_EIGENVALS"))
 
 output_hdulist.append(pyfits.ImageHDU(wave,name="WAVELENGTH"))
-if head is not None :
-    for k in ["CAMERA","DETECTOR"] :
-        output_hdulist[0].header[k]=head[k]
+head=fitsio.read_header(frame_filename)
+for k in ["CAMERA","DETECTOR"] :
+    output_hdulist[0].header[k]=head[k]
 if night_min is not None :
-    output_hdulist[0].header["NIGHTMIN"]=night_min
-    output_hdulist[0].header["NIGHTMAX"]=night_max
+    output_hdulist[0].header["NIGHTMIN"] = (night_min, 'First night of input exposures')
+    output_hdulist[0].header["NIGHTMAX"] = (night_max, 'Last night of input exposures')
+output_hdulist[0].header['NEXPDW'] = (nexp_dict['DWAVE'], 'Number of input exposures used for DWAVE')
+output_hdulist[0].header['NEXPDL'] = (nexp_dict['DLSF'], 'Number of input exposures used for DLSF')
 output_hdulist.writeto(args.outfile,overwrite=True)
 print("wrote",args.outfile)

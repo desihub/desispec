@@ -15,9 +15,8 @@ import datetime
 import collections
 import numbers
 import datetime
-
+import textwrap
 import numpy as np
-
 import subprocess as sp
 
 from desiutil.log import get_logger, INFO
@@ -834,3 +833,16 @@ def argmatch(a, b):
                 raise RuntimeError(f'argmatch failure for unknown reason {a[col]=} {match_indices=} {a[col][match_indices]=} != {b[col]=}')
 
     return match_indices
+
+def wrap_long_logs(text, width=120):
+    """
+    Wraps long log messages to a specified width.
+
+    Args:
+        text: The text message to wrap and log.
+        width: The maximum width of each line in the log message.
+
+    Returns:
+        str: The wrapped log message.
+    """
+    return textwrap.fill(text, width=width)

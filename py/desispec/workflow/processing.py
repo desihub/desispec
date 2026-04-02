@@ -32,7 +32,7 @@ from desispec.workflow.utils import pathjoin, sleep_and_report, \
 from desispec.workflow.tableio import write_table, load_table
 from desispec.workflow.proctable import get_pdarks_from_ptable, table_row_to_dict, erow_to_prow, \
     read_minimal_tilenight_proctab_cols, read_minimal_full_proctab_cols, \
-    update_full_ptab_cache, default_prow, get_default_qid
+    update_full_ptab_cache, default_prow, get_default_qid, get_err_qid
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -659,16 +659,22 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    default_qid, err_qid = get_default_qid(), get_err_qid()
     log = get_logger()
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
+
+    if len(dep_qids) > 0 and dep_qids.dtype.kind != 'i':
+        err = f"Expected prow['LATEST_DEP_QID'] to be an array of integers, but got {dep_qids} with dtype {dep_qids.dtype}"
+        log.error(err)
+        raise ValueError(err)
 
     ## With desi_proc_night we now either resubmit failed jobs or exit, so this
     ## should no longer be necessary in the normal workflow.
     # workaround for sbatch --dependency bug not tracking jobs correctly
     # see NERSC TICKET INC0203024
     failed_dependency = False
-    if len(dep_qids) > 0 and not dry_run:
+    if len(dep_qids) > 0:
         non_final_states = get_non_final_states()
         state_dict = get_queue_states_from_qids(dep_qids, dry_run_level=dry_run, use_cache=True)
         still_depids = []
@@ -678,14 +684,19 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
                    log.info(f"removing completed jobid {depid}")
                 elif state_dict[int(depid)] not in non_final_states:
                     failed_dependency = True
-                    log.info("Found a dependency in a bad final state="
+                    log.warning("Found a dependency in a bad final state="
                              + f"{state_dict[int(depid)]} for depjobid={depid},"
                              + " not submitting this job.")
                     still_depids.append(depid)
                 else:
                     still_depids.append(depid)
+            elif depid in [err_qid]:
+                failed_dependency = True
+                log.warning(f"Found a dependency in a bad final state with depjobid={depid}, not submitting this job.")
+                still_depids.append(depid)
             else:
                 still_depids.append(depid)
+
         dep_qids = np.array(still_depids)
 
     if len(dep_qids) > 0:
@@ -701,20 +712,12 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 
         dep_str = f'--dependency={depcond}:'
 
-        if np.isscalar(dep_qids):
-            dep_list = str(dep_qids).strip(' \t')
-            if dep_list == '':
-                dep_str = ''
-            else:
-                dep_str += dep_list
+        # Add dependencies, but ignore default qids, as Slurm doesn't know about them
+        use_dep_qids = [str(q) for q in dep_qids if q not in [err_qid, default_qid]]
+        if len(use_dep_qids) > 0:
+            dep_str += ':'.join(use_dep_qids)
         else:
-            if len(dep_qids)>1:
-                dep_list = ':'.join(np.array(dep_qids).astype(str))
-                dep_str += dep_list
-            elif len(dep_qids) == 1 and dep_qids[0] not in [None, 0]:
-                dep_str += str(dep_qids[0])
-            else:
-                dep_str = ''
+            dep_str = ''
 
     # script = f'{jobname}.slurm'
     # script_pathname = pathjoin(batchdir, script)
@@ -726,7 +729,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         script_pathname = batch_script_pathname(prow)
         jobname = os.path.basename(script_pathname)
 
-    batch_params = ['sbatch', '--parsable', '--kill-on-invalid-dep=yes']
+    ### batch_params = ['sbatch', '--parsable', '--kill-on-invalid-dep=yes']
+    batch_params = ['sbatch', '--parsable']
     if dep_str != '':
         batch_params.append(f'{dep_str}')
 
@@ -739,31 +743,32 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     ## If dry_run give it a fake QID
     ## if a dependency has failed don't even try to submit the job because
     ## Slurm will refuse, instead just mark as unsubmitted.
-    if dry_run:
-        current_qid = _get_fake_qid()
-    elif not failed_dependency:
-        #- sbatch sometimes fails; try several times before giving up
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
-                current_qid = int(current_qid.strip(' \t\n'))
-                break
-            except subprocess.CalledProcessError as err:
-                log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
-                log.error(f'{jobname}   {batch_params}')
-                log.error(f'{jobname}   {err.output=}')
-                if attempt < max_attempts - 1:
-                    log.info('Sleeping 60 seconds then retrying')
-                    time.sleep(60)
-        else:  #- for/else happens if loop doesn't succeed
-            msg = f'{jobname} submission failed {max_attempts} times.' \
-                  + ' setting as unsubmitted and moving on'
-            log.error(msg)
-            current_qid = get_default_qid()
-            submitted = False
+    if not failed_dependency:
+        if dry_run:
+            current_qid = _get_fake_qid()
+        else:
+            #- sbatch sometimes fails; try several times before giving up
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
+                    current_qid = int(current_qid.strip(' \t\n'))
+                    break
+                except subprocess.CalledProcessError as err:
+                    log.error(f'{jobname} submission failure at {datetime.datetime.now()}')
+                    log.error(f'{jobname}   {batch_params}')
+                    log.error(f'{jobname}   {err.output=}')
+                    if attempt < max_attempts - 1:
+                        log.info('Sleeping 60 seconds then retrying')
+                        time.sleep(60)
+            else:  #- for/else happens if loop doesn't succeed
+                msg = f'{jobname} submission failed {max_attempts} times.' \
+                    + ' setting as unsubmitted and moving on'
+                log.error(msg)
+                current_qid = err_qid
+                submitted = False
     else:
-        current_qid = get_default_qid()
+        current_qid = err_qid
         submitted = False
 
     ## Update prow with new information
@@ -783,8 +788,8 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         log.info(f"Would have submitted: {batch_params}")
         prow['STATUS'] = 'UNSUBMITTED'
 
-        ## Update the Slurm jobid cache of job states
-        update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
+    ## Update the Slurm jobid cache of job states
+    update_queue_state_cache(qid=prow['LATEST_QID'], state=prow['STATUS'])
 
     return prow
 
@@ -793,7 +798,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 ##########   Row Manipulations   ############
 #############################################
 def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
-                                 refnight=None, include_files=None):
+                                 include_files=None):
     """
     Given input processing row and possible calibjobs, this defines the
     JOBDESC keyword and assigns the dependency appropriate for the job type of
@@ -812,7 +817,6 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
         use_tilenight, bool. Default is False. If True, use desi_proc_tilenight
             for prestdstar, stdstar,and poststdstar steps for
             science exposures.
-        refnight, int. The reference night for linking jobs
         include_files, list. List of filetypes to include in the linking
 
     Returns:
@@ -876,37 +880,8 @@ def define_and_assign_dependency(prow, calibjobs, use_tilenight=False,
             dependency = calibjobs['biasnight']
         else:
             dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] == 'biaspdark':
+    elif prow['JOBDESC'] in ['biaspdark','biasnight']:
         dependency = calibjobs['linkcal']
-    elif prow['JOBDESC'] == 'linkcal' and refnight is not None:
-        dependency = None
-        ## For link cals only, enable cross-night dependencies if available
-        refproctable = findfile('proctable', night=refnight)
-        if os.path.exists(refproctable):
-            ptab = load_table(tablename=refproctable, tabletype='proctable')
-            ## This isn't perfect because we may depend on jobs that aren't
-            ## actually being linked
-            ## Also allows us to proceed even if jobs don't exist yet
-            deps, proccamwords = [], []
-            #for job in ['nightlybias', 'ccdcalib', 'psfnight', 'nightlyflat']:
-            if include_files is not None:
-                for filename in include_files:
-                    job = filename_to_jobname(filename)
-                    if job in ptab['JOBDESC']:
-                        ## add prow to dependencies
-                        deprow = ptab[ptab['JOBDESC']==job][0]
-                        deps.append(deprow)
-                        proccamwords.append(deprow['PROCCAMWORD'])
-                    elif 'linkcal' in ptab['JOBDESC']:
-                        linkcalprow = ptab[ptab['JOBDESC']=='linkcal'][0]
-                        deps.append(linkcalprow)
-                        proccamwords.append(linkcalprow['PROCCAMWORD'])
-            if len(deps) > 0:
-                dependency = np.unique(deps)
-            ## The proccamword for the linking job is the largest set available from the reference night
-            ## but restricting back to those requested for the current night, if fewer cameras are available
-            if len(proccamwords) > 0:
-                prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
     else:
         dependency = None
 
@@ -973,12 +948,12 @@ def assign_dependency(prow, dependency):
                 if still_a_dependency(curdep):
                     # ids.append(curdep['INTID'])
                     qids.append(curdep['LATEST_QID'])
-            prow['INT_DEP_IDS'] = np.array(ids, dtype=int)
-            prow['LATEST_DEP_QID'] = np.array(qids, dtype=int)
+            prow['INT_DEP_IDS'] = np.unique(np.asarray(ids, dtype=int))
+            prow['LATEST_DEP_QID'] = np.unique(np.asarray(qids, dtype=int))
         elif type(dependency) in [dict, OrderedDict, Table.Row]:
-            prow['INT_DEP_IDS'] = np.array([dependency['INTID']], dtype=int)
+            prow['INT_DEP_IDS'] = np.unique(np.asarray([dependency['INTID']], dtype=int))
             if still_a_dependency(dependency):
-                prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
+                prow['LATEST_DEP_QID'] = np.unique(np.asarray([dependency['LATEST_QID']], dtype=int))
     return prow
 
 def still_a_dependency(dependency):
@@ -995,7 +970,7 @@ def still_a_dependency(dependency):
         scheduler needs to be aware of the pending job.
 
     """
-    return dependency['LATEST_QID'] > 0 and dependency['STATUS'] != 'COMPLETED'
+    return dependency['STATUS'] != 'COMPLETED'
 
 def get_type_and_tile(erow):
     """
@@ -1302,8 +1277,9 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
 
         * proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
           been updated for those jobs that needed to be resubmitted.
-        * submits: int, the number of submissions made to the queue. This is incremented from the input submits, so it is
+        * submits: int, number of submissions made to the queue. This is incremented from the input submits, so it is
           the number of submissions made from this function call plus the input submits value.
+        * nbad: int, number of jobs not submitted due to dependency issues
 
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
@@ -1358,9 +1334,16 @@ def update_and_recursively_submit(proc_table, submits=0, max_resubs=100,
                                                           reservation=reservation,
                                                           dry_run_level=dry_run_level)
 
+    ## Check if any jobs not resubmitted due to dependency issues
+    nbad = np.sum(proc_table['STATUS']=='DEP_NOT_SUBD')
+    if nbad > 0:
+        log.error(f'{nbad} jobs not re-submitted due to dependency issues; see logs above.')
+
+    ## Reset DEP_NOT_SUBD back to whatever the actual queue state is,
+    ## plus catch up on the state of other jobs that may have run in the meantime
     proc_table = update_from_queue(proc_table, dry_run_level=dry_run_level)
 
-    return proc_table, submits
+    return proc_table, submits, nbad
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs=100, ptab_name=None,
                             resubmission_states=None, reservation=None, dry_run_level=0):
@@ -1404,7 +1387,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
     log = get_logger()
     row = proc_table[rown]
     log.info(f"Identified row {row['INTID']} as needing resubmission.")
-    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}")
+    log.info(f"\t{row['INTID']}: Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, Jobdesc={row['JOBDESC']}, " +
+             f"Dependencies={row['INT_DEP_IDS']}")
     if len(proc_table['ALL_QIDS'][rown]) > max_resubs:
         log.warning(f"Tileid={row['TILEID']}, Expid(s)={row['EXPID']}, "
                     + f"Jobdesc={row['JOBDESC']} has already been submitted "
@@ -1414,15 +1398,19 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
+
+    all_valid_states = list(resubmission_states.copy())
+    good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
+    all_valid_states.extend(good_states)
+    othernight_idep_row_lookup = {}
+    ok_different_night_ideps = list()
     if ideps is None or len(ideps)==0:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
+        ideps = []
     else:
-        all_valid_states = list(resubmission_states.copy())
-        good_states = ['RUNNING','PENDING','SUBMITTED','COMPLETED']
-        all_valid_states.extend(good_states)
-        othernight_idep_row_lookup = {}
         for idep in np.sort(np.atleast_1d(ideps)):
             if idep not in id_to_row_map:
+                # check if dependency YYMMDDnnn is from a different night
                 if idep // 1000 != row['INTID'] // 1000:
                     log.debug("Internal ID: %d not in id_to_row_map. "
                              + "This is expected since it is from another day. ", idep)
@@ -1450,12 +1438,18 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         ## in the next stage
                         othernight_idep_row_lookup[idep] = entry
                         update_full_ptab_cache(reftab)
+                        ok_different_night_ideps.append(idep)
                 else:
                     msg = f"Internal ID: {idep} not in id_to_row_map. " \
                          + f"Since the dependency is from the same night" \
                          + f" and we can't find it, this is a fatal error."
                     log.critical(msg)
                     raise ValueError(msg)
+            elif proc_table['STATUS'][id_to_row_map[idep]] == 'DEP_NOT_SUBD':
+                log.error(f"Already tried and failed to submit dependency {idep};" +
+                          f" not submitting {row['INTID']}.")
+                proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                return proc_table, submits
             elif proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
                 log.error(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
                             f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
@@ -1474,6 +1468,15 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                                                                   id_to_row_map,
                                                                   reservation=reservation,
                                                                   dry_run_level=dry_run_level)
+
+                ## Check if dependency was successfully submitted
+                if proc_table['STATUS'][id_to_row_map[idep]] not in good_states:
+                    dep_state = proc_table['STATUS'][id_to_row_map[idep]]
+                    log.error(f"After attempting resubmission, dependency {idep} in state {dep_state}," +
+                              f" so not submitting {row['INTID']}.")
+                    proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                    return proc_table, submits
+
                 ## Now that we've resubmitted the dependency if necessary,
                 ## add the most recent QID to the list assuming it isn't COMPLETED
                 if still_a_dependency(proc_table[id_to_row_map[idep]]):
@@ -1495,6 +1498,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, max_resubs
                         + f"of queue deps is {len(qdeps)} for Rown {rown}, ideps {ideps}."
                         + " This is expected if the ideps were status=COMPLETED")
 
+
+    ## If we got this far, dependencies should be ok and we can resubmit this job
     proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
                                            strictly_successful=True, dry_run=dry_run_level)
     submits += 1
@@ -1999,7 +2004,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['INTID'] = internal_id
     internal_id += 1
     joint_prow['JOBDESC'] = descriptor
-    joint_prow['LATEST_QID'] = -99
+    joint_prow['LATEST_QID'] = get_default_qid()
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
     joint_prow['STATUS'] = 'UNSUBMITTED'
@@ -2076,7 +2081,7 @@ def make_tnight_prow(prows, calibjobs, internal_id):
 
     joint_prow['INTID'] = internal_id
     joint_prow['JOBDESC'] = 'tilenight'
-    joint_prow['LATEST_QID'] = -99
+    joint_prow['LATEST_QID'] = get_default_qid()
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
     joint_prow['STATUS'] = 'UNSUBMITTED'
@@ -2107,7 +2112,7 @@ def make_redshift_prow(prows, tnights, descriptor, internal_id):
 
     redshift_prow['INTID'] = internal_id
     redshift_prow['JOBDESC'] = descriptor
-    redshift_prow['LATEST_QID'] = -99
+    redshift_prow['LATEST_QID'] = get_default_qid()
     redshift_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     redshift_prow['SUBMIT_DATE'] = -99
     redshift_prow['STATUS'] = 'UNSUBMITTED'
@@ -2172,7 +2177,7 @@ def check_darknight_deps_and_update_prow(prow, n_nights_before=None, n_nights_af
 
         ptable = load_table(tablename=proc_table_pathname, tabletype='proctable', suppress_logging=True)
         if len(ptable) == 0:
-            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, but didn't find a table. Continuing")
+            log.error(f"Expected bias and/or pdark processing on {night=} for expids={nightly_expids}, {n_nights_before=}, {n_nights_after=}, but didn't find a table. Continuing")
             continue
         else:
             biasdarks = ptable[np.isin(ptable['JOBDESC'].data, np.asarray([b'biasnight', b'biaspdark', b'pdark']))]

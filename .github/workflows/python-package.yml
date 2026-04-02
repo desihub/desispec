@@ -76,7 +76,7 @@ jobs:
                 python -m pip install pytest
             - name: Install DESI dependencies
               env:
-                DESIUTIL_VERSION: 3.5.1
+                DESIUTIL_VERSION: 3.6.0   # required for astropy 7.x
                 SPECTER_VERSION: 0.11.0
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
@@ -133,7 +133,7 @@ jobs:
                 python -m pip install pytest pytest-cov coveralls
             - name: Install DESI dependencies
               env:
-                DESIUTIL_VERSION: 3.5.1
+                DESIUTIL_VERSION: 3.6.0   # required for astropy 7.x
                 SPECTER_VERSION: 0.11.0
                 GPU_SPECTER_VERSION: main
                 DESIMODEL_VERSION: 0.19.3
@@ -153,11 +153,13 @@ jobs:
               run: install_desimodel_data --desimodel-version ${DESIMODEL_DATA}
             - name: Run the test
               run: pytest --cov
-            - name: Coveralls
-              env:
-                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: coveralls
+
+# 2026-02-27 : Coveralls is having a major outage; skip the coverage upload
+###            - name: Coveralls
+###              env:
+###                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+###                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+###              run: coveralls
 
     desilite:
         name: Test minimal env

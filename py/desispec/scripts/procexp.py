@@ -23,7 +23,9 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from desispec.fibercrosstalk import correct_fiber_crosstalk
 
 from desispec.tsnr import calc_tsnr2
+from desispec.heliocentric import heliocentric_shift_res_data
 from desiutil.log import get_logger
+import desiutil.iers
 
 import argparse
 import sys
@@ -80,6 +82,9 @@ def main(args):
         msg = "Use --apply-sky-throughput-correction OR --no-sky-line-throughput-correction (or neither) but not both"
         log.critical(msg)
         raise ValueError(msg)
+
+    # Freeze IERS coefficients prior to any heliocentric corrections
+    desiutil.iers.freeze_iers()
 
     frame = read_frame(args.infile)
 
@@ -156,6 +161,34 @@ def main(args):
         comments = {k:"from calc_frame_tsnr" for k in results.keys()}
         append_frame_scores(frame,results,comments,overwrite=True)
 
+    # Shift resolution matrix if needed
+    if frame.resolution_data is not None:
+        log.info("Applying barycentric shift (fiber vs tile center) to the "
+                 "resolution matrix")
+        heliocor = frame.meta.get('HELIOCOR')
+        if "MJD-OBS" in frame.meta :
+            mjd = frame.meta["MJD-OBS"]
+        elif "MJD" in frame.meta :
+            mjd = frame.meta["MJD"]
+        else :
+            mjd = None
+
+        if mjd is not None:
+            if "EXPTIME" in frame.meta:
+                exptime = frame.meta["EXPTIME"]
+            else:
+                exptime = 0
+            mjd_center = mjd + exptime / 2. / 3600. / 24.
+        else:
+            # heliocentric_shift_res_data will do nothing if mjd_center is None
+            mjd_center = None
+
+        frame.resolution_data, heliocor_offset = heliocentric_shift_res_data(
+            frame.fibermap, frame.resolution_data, frame.wave,
+            heliocor=heliocor, mjd=mjd_center)
+
+        frame.fibermap['HELIOCOR_OFFSET'] = heliocor_offset
+        
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)

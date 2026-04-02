@@ -7,6 +7,7 @@ Routines for desi_emlinefit_afterburner.
 
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.special import erf
 from desiutil.log import get_logger
 
 allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
@@ -50,15 +51,15 @@ def emlines_gaussfit(
     rf_fit_hw=40,
     min_rf_fit_hw=20,
     rf_cont_w=200,
-    p0_sigma=2.5,
+    p0_sigma=3.5,
     p0_flux=10,
-    p0_share=0.58,
-    min_sigma=1e-5,
+    p0_share=0.5,
+    min_sigma=0.34,  # DESI resolution >= 0.8 Angstrom in FWHM, or 0.34 in sigma
     max_sigma=10.,
     min_flux=-1e9,
     max_flux=1e9,
-    min_share=1e-1,
-    max_share=1,
+    min_share=0.26,  # I(3729) / I(3726) > 0.35
+    max_share=0.6,  # I(3729) / I(3726) < 1.5
     log=None,
 ):
     """
@@ -73,15 +74,15 @@ def emlines_gaussfit(
         rf_fit_hw (optional, defaults to 40): *rest-frame* wavelength width (in A) used for fitting on each side of the line (float)
         min_rf_fit_hw (optional, defaults to 20): minimum requested *rest-frame* width (in A) on each side of the line to consider the fitting (float)
         rf_cont_w (optional, defaults to 200): *rest-frame* wavelength extent (in A) to fit the continuum (float)
-        p0_sigma (optional, defaults to 2.5): initial guess on the line width in A (float)
-        p0_flux (optional, defaults to 0.1): initial guess on the line flux in 1e-17 * erg/cm2/s (float)
-        p0_share (optional, defaults to 0.58): initial guess on the share between the two [OII] lines (float)
-        min_sigma (optional, defaults to 1e-5): minimum allowed value for the line width in A (float)
+        p0_sigma (optional, defaults to 3.5): initial guess on the line width in A (float)
+        p0_flux (optional, defaults to 10): initial guess on the line flux in 1e-17 * erg/cm2/s (float)
+        p0_share (optional, defaults to 0.5): initial guess on the share between the two [OII] lines (float)
+        min_sigma (optional, defaults to 0.34): minimum allowed value for the line width in A; corresponds to DESI resolution >= 0.8 A in FWHM (float)
         max_sigma (optional, defaults to 10.): maximum allowed value for the line width in A (float)
-        min_flux (optional, defaults to 1e-5): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
+        min_flux (optional, defaults to -1e9): minimum allowed value for the flux in 1e-17 * erg/cm2/s (float)
         max_flux (optional, defaults to 1e9): maximum allowed value for the flux in 1e-17 * erg/cm2/s (float)
-        min_share (optional, defaults to 1e-1): minimum allowed value for the share (float)
-        max_share (optional, defaults to 1): maximum allowed value for the share (float)
+        min_share (optional, defaults to 0.26): minimum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.26 corresponds to I(3729)/I(3726) >= 0.351 (float)
+        max_share (optional, defaults to 0.6): maximum allowed value for the share, where share=r/(1+r) and r=I(3729)/I(3726); 0.6 corresponds to I(3729)/I(3726) <= 1.5 (float)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
@@ -118,8 +119,48 @@ def emlines_gaussfit(
         msg = "{} not in {}".format(emname, allowed_emnames)
         log.error(msg)
         raise ValueError(msg)
-    # AR Line models
-    gauss_nocont = lambda ws, sigma, F0, w0: F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
+    # AR Line models - integrated flux per pixel
+    def gauss_nocont(ws, sigma, F0, w0):
+        """
+        Compute integrated Gaussian flux in each wavelength pixel.
+
+        Args:
+            ws: wavelength array (pixel centers)
+            sigma: Gaussian width
+            F0: total integrated flux
+            w0: Gaussian center wavelength
+
+        Returns:
+            Average flux density in each pixel (integrated flux / pixel width)
+        """
+        # Check for minimum number of pixels
+        if len(ws) < 2:
+            raise ValueError("gauss_nocont requires at least 2 wavelength pixels")
+
+        # Calculate pixel edges (boundaries between pixels)
+        edges = np.zeros(len(ws) + 1)
+
+        # Interior edges are midpoints
+        edges[1:-1] = 0.5 * (ws[:-1] + ws[1:])
+
+        # Extrapolate for first and last edges
+        edges[0] = ws[0] - 0.5 * (ws[1] - ws[0])
+        edges[-1] = ws[-1] + 0.5 * (ws[-1] - ws[-2])
+
+        # Compute integrated flux using error function
+        # Integral of Gaussian from a to b is:
+        # F0 * (erf((b - w0)/(sqrt(2)*sigma)) - erf((a - w0)/(sqrt(2)*sigma))) / 2
+        sqrt2_sigma = np.sqrt(2.0) * sigma
+        erf_upper = erf((edges[1:] - w0) / sqrt2_sigma)
+        erf_lower = erf((edges[:-1] - w0) / sqrt2_sigma)
+
+        integrated_flux = F0 * (erf_upper - erf_lower) / 2.0
+
+        # Divide by pixel width to get average flux density
+        pixel_widths = edges[1:] - edges[:-1]
+        flux_density = integrated_flux / pixel_widths
+
+        return flux_density
     # AR vacuum rest-frame wavelength(s)
     rf_em_waves = get_rf_em_waves(emname)
     if emname == "OII":
@@ -246,7 +287,7 @@ def emlines_gaussfit(
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
                         models = myfunc(waves[keep_line], popt[0], popt[1])
                     emdict["NDOF"] = keep_line.sum() - len(p0)
-                    emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
+                    emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. * ivars[keep_line])
                     emdict["CHI2"] /= emdict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
                     emdict["SIGMA"] = popt[0]
                     emdict["SIGMA_IVAR"] = diag[0] ** -1

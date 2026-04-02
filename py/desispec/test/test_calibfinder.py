@@ -38,7 +38,9 @@ class TestCalibFinder(unittest.TestCase):
 
         table = Table()
         table['EXPID'] = [12345, 12345, 67890, 99999, 4680]
-        table['FIBERS'] = ['0:5', '100,101,102', '4995:5000', '2500', '100-104']
+        table['TILEID'] = [200, 200, 202, 203, 204]
+        table['NIGHT'] = [20250101, 20250101, 20250103, 20250104, 20250105]
+        table['FIBERS'] = ['0-5', '100,101,102', '4995-4999', '2500', '100-104']
         table['FIBERSTATUS_BITNAME'] = ['BRIGHTNEIGHBOR', 'BADFIBER', 'RESERVED31', 'BADTRACE', 'BRIGHTNEIGHBOR|BADFIBER']
         #                 maskval      [ 2048,             65536,      2147483648,   131072,    2048+65536   ]
         #                 bitnum       [ 11,               16,         31,           17,        11;16       ]
@@ -134,8 +136,8 @@ class TestCalibFinder(unittest.TestCase):
         reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(12345, filename=self.test_flaggedfile)
 
-        expected_fibers = [0, 1, 2, 3, 4, 100, 101, 102]
-        expected_masks = [2048, 2048, 2048, 2048, 2048, 65536, 65536, 65536]
+        expected_fibers = [0, 1, 2, 3, 4, 5, 100, 101, 102]
+        expected_masks = [2048, 2048, 2048, 2048, 2048, 2048, 65536, 65536, 65536]
 
         self.assertEqual(fibers, expected_fibers)
         self.assertEqual(masks, expected_masks)
@@ -213,7 +215,81 @@ class TestCalibFinder(unittest.TestCase):
         from ..calibfinder import get_flagged_fibers
         reset_calib_env = self._set_env_calibdir()
         fibers, masks = get_flagged_fibers(4680, filename=self.test_flaggedfile)
-        self.assertEqual(len(masks), 4)
+        self.assertEqual(len(masks), 5)
         for mask in masks:
             self.assertEqual(mask, 2048+65536)
+        self._remove_env_calibdir(reset_calib_env)
+
+    def test_dateobs_begin_end_type_handling_sm1r(self):
+        """Test mixed DATE-OBS-BEGIN/END types using local sm1-r YAML test data."""
+        reset_calib_env = self._set_env_calibdir()
+        # Unset DESI_SPECTRO_DARK so CalibFinder does not call find_darks_in_desi_spectro_dark(),
+        # which would fail if the env var points to a non-existent directory. tearDown restores it.
+        os.environ.pop('DESI_SPECTRO_DARK', None)
+        source_yaml = resources.files('desispec').joinpath('test/data/calib-sm1-r.yaml')
+
+        cases = [
+            {
+                'label': 'begin-int end-missing',
+                'dateobs': '2024-03-26T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'lbnl_timing2down.txt',
+                'expected_begin': 20240324,
+                'expected_has_end': False,
+                'expected_end': None,
+            },
+            {
+                'label': 'begin-str end-str-none',
+                'dateobs': '2024-01-10T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20231216,
+                'expected_has_end': True,
+                'expected_end': 99999999,
+            },
+            {
+                'label': 'begin-str end-int',
+                'dateobs': '2023-01-10T00:00:00',
+                'detector': 'M1-12',
+                'ccdcfg': 'default_lbnl_20210128.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20221108,
+                'expected_has_end': True,
+                'expected_end': 20231215,
+            },
+            {
+                'label': 'begin-int end-str-int',
+                'dateobs': '2022-10-10T00:00:00',
+                'detector': 'LBNL-PE-21',
+                'ccdcfg': 'LBNL-PE-21-20211015.cfg',
+                'ccdtming': 'flatdark_lbnl_timing.txt',
+                'expected_begin': 20220201,
+                'expected_has_end': True,
+                'expected_end': 20221107,
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(case=case['label']):
+                header = {
+                    'DATE-OBS': case['dateobs'],
+                    'CAMERA': 'r4',
+                    'SPECID': 1,
+                    'DETECTOR': case['detector'],
+                    'CCDCFG': case['ccdcfg'],
+                    'CCDTMING': case['ccdtming'],
+                }
+                cfinder = CalibFinder([header], yaml_file=str(source_yaml))
+                self.assertIsInstance(cfinder.data['DATE-OBS-BEGIN'], int)
+                self.assertEqual(cfinder.data['DATE-OBS-BEGIN'], case['expected_begin'])
+
+                if case['expected_has_end']:
+                    self.assertIn('DATE-OBS-END', cfinder.data)
+                    self.assertIsInstance(cfinder.data['DATE-OBS-END'], int)
+                    self.assertEqual(cfinder.data['DATE-OBS-END'], case['expected_end'])
+                else:
+                    self.assertNotIn('DATE-OBS-END', cfinder.data)
+
         self._remove_env_calibdir(reset_calib_env)

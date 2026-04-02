@@ -153,7 +153,10 @@ def ccdregionmask(headers) :
 
 def get_flagged_fibers(expid, filename=None):
     """
-    Read flagged fibers from an ECSV file for a specific exposure ID.
+    Read flagged fibers from an ECSV file for a specific exposure ID. Fiber numbers are parsed from the FIBERS column,
+    with ranges being inclusive of the ending, e.g 10-12 will yield [10, 11, 12]. 10:12 wil also yield [10, 11, 12],
+    but we don't recommend using that syntax to avoid confusion with Python slicing. The fiberstatus mask values are
+    parsed from the FIBERSTATUS_BITNAME column.
 
     Parameters
     ----------
@@ -188,7 +191,7 @@ def get_flagged_fibers(expid, filename=None):
     masks = []
     for row in selection:
         fiber_string = row['FIBERS']
-        parsed_fibers = parse_int_args(fiber_string)
+        parsed_fibers = parse_int_args(fiber_string, include_end=True)
 
         try:
             mask = fibermask.mask(row['FIBERSTATUS_BITNAME'])
@@ -371,13 +374,14 @@ class CalibFinder() :
                 log.debug("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
             if "DATE-OBS-END" in data[version] :
+                dateobsend = data[version]["DATE-OBS-END"]
                 try:
-                    dateend=int(data[version]["DATE-OBS-END"])
+                    dateend=int(dateobsend)
                     if dateobs > dateend :
                         log.debug("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,dateend,dateobs))
                         continue
-                except ValueError as e :
-                    if not data[version]["DATE-OBS-END"].lower() == "none" :
+                except (ValueError, TypeError) as e :
+                    if not str(dateobsend).strip().lower() == "none" :
                         raise(e)
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
@@ -419,6 +423,14 @@ class CalibFinder() :
         self.dark_or_bias_not_found = False
         if "DESI_SPECTRO_DARK" in os.environ:
             self.find_darks_in_desi_spectro_dark(header)
+        # Make sure that the dates are ints
+        self.data['DATE-OBS-BEGIN']=int(self.data['DATE-OBS-BEGIN'])
+        if 'DATE-OBS-END' in self.data:
+            dateobsend = self.data['DATE-OBS-END']
+            if str(dateobsend).strip().lower()=='none':
+                self.data['DATE-OBS-END']=99999999
+            else:
+                self.data['DATE-OBS-END']=int(dateobsend)
 
     def haskey(self,key) :
         """
