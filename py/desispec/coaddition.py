@@ -782,14 +782,14 @@ def _build_crude_coadd_arrays(spectra, idx, bands_to_use, sbands):
 
     return f_i, w_i, coadd_wave, crude_coadd, w_tot
 
-def per_exposure_normalization(spectra, norm_threshold=0.1):
+def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
     """
     Compute per‑exposure multiplicative normalization factors for each target.
 
     The resulting normalization terms and their uncertainties are stored in the
     ``COADD_NORM`` and ``SIGMA_COADD_NORM`` columns of the ``spectra.fibermap``.
     If the rescaling changes the coadded spectrum by a significance larger than
-    ``norm_threshold``, the ``VARIABLE`` bit in ``FIBERSTATUS`` is set.  Objects
+    ``norm_chi2_threshold``, the ``VARIABLE`` bit in ``FIBERSTATUS`` is set.  Objects
     that are not normalized (e.g. sky spectra or single‑exposure objects) receive
     a default ``COADD_NORM=1.0`` and ``SIGMA_COADD_NORM=0.0``.
     If any exposure yields an unphysical scaling factor while the
@@ -802,7 +802,7 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
         Spectra object that must provide ``flux``, ``ivar``, optional ``mask``,
         ``wave`` dictionaries, and a fibermap table containing at least the
         columns ``TARGETID``, ``FIBERSTATUS`` and ``OBJTYPE``.
-    norm_threshold : float
+    norm_chi2_threshold : float
         Minimum reduced chi‑squared value between the standard error‑weighted
         coadd and the coadd produced with per‑exposure normalization for which
         the per‑exposure normalization is preferred for a target.  When this
@@ -956,12 +956,12 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
             chi2 = np.sum( (crude_coadd - new_crude_coadd)**2 * w_tot)
             chi2 /= np.sum(w_tot != 0)
 
-            if chi2 < norm_threshold:
+            if chi2 < norm_chi2_threshold:
                 # if rescaling makes a minimal difference, we coadd as normal
                 spectra.fibermap['COADD_NORM'][idx] = 1.
                 spectra.fibermap['SIGMA_COADD_NORM'][idx] = 0.     
             else:
-                # suspect for variable calibration owing to positioning offsets 
+                # suspect for variable calibration owing to positioning offsets,
                 # calib errors, intrinsic variability, etc.
                 spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
 
@@ -969,12 +969,17 @@ def per_exposure_normalization(spectra, norm_threshold=0.1):
                 changed_status = np.where(((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[0]
                 ii = idx[np.isin(idx,changed_status)]
                 spectra.fibermap['FIBERSTATUS'][ii] |= fmsk.BADFIBER
+
+    # How many are we rescaling?
+    ii = (spectra.fibermap['COADD_NORM'] != 1.)
+    n_rescaled = len(np.unique(spectra.fibermap['TARGETID'][ii]))
+    log.info(f'Rescaling {n_rescaled} variable target(s)')
     
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
     spectra.fibermap['SIGMA_COADD_NORM'] = spectra.fibermap['SIGMA_COADD_NORM'].astype(np.float32)
 
-def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
+def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_chi2_threshold=0.1):
     """
     Coadd spectra for each target and each camera, modifying input spectra obj.
 
@@ -986,6 +991,8 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
        onetile: bool, if True, inputs are from a single tile
        no_normalize: bool, if True, calculation of per-exposure re-normalization
        constants is skipped
+       norm_chi2_threshold: float, minimum reduced chi‑squared value to trigger
+       per‑exposure normalization; only used if no_normalize is False
 
     Notes: if `onetile` is True, additional tile-specific columns
        like LOCATION and FIBER are included the FIBERMAP; otherwise
@@ -1014,7 +1021,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False):
     normalize = not(no_normalize)
     if normalize:
         # compute normalization constants for handling flux calibration offset
-        per_exposure_normalization(spectra)    
+        per_exposure_normalization(spectra, norm_chi2_threshold=norm_chi2_threshold)
 
     for b in spectra.bands:
         log.debug("coadding band '{}'".format(b))
