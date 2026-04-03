@@ -758,10 +758,18 @@ def compute_sky(
             # solve linear system
             #- TODO: replace with X = np.linalg.solve(AA, BB) ?
             try:
-                AAi=np.linalg.inv(AA)
+                AAi = np.linalg.inv(AA)
             except np.linalg.LinAlgError as e:
-                log.warning(str(e))
-                continue
+                log.warning('LinAlgError: '+str(e))
+                # Find which fibers are bad
+                AAi = np.zeros_like(AA)
+                for fiber_idx in range(len(fibers_in_fit)):
+                    try:
+                        AAi[fiber_idx] = np.linalg.inv(AA[fiber_idx])
+                    except np.linalg.LinAlgError:
+                        log.warning(f"Fiber {fibers_in_fit[fiber_idx]} has singular matrix at peak {j}")
+                        # Leave AAi[fiber_idx] as zeros - will produce X=0, flagged by chi2
+                        pass
             # save best fit parameter and errors
             X = np.einsum('ijk,ik->ij', AAi, BB)
             X_err = np.sqrt(AAi*(AAi>0))

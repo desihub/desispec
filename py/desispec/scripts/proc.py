@@ -1201,7 +1201,7 @@ def main(args=None, comm=None):
             if not args.no_sky_wavelength_adjustment : cmd += " --adjust-wavelength"
             if not args.no_sky_lsf_adjustment : cmd += " --adjust-lsf"
             if (not args.no_sky_wavelength_adjustment) and (not args.no_sky_lsf_adjustment) and args.save_sky_adjustments :
-                cmd += " --save-adjustments {}".format(skyfile.replace("sky-","skycorr-"))
+                cmd += " --save-adjustments {}".format(skyfile.replace("sky-","skycorr-").replace(".gz",""))
             if args.adjust_sky_with_more_fibers :
                 cmd += " --adjust-with-more-fibers"
             if (not args.no_sky_wavelength_adjustment) or (not args.no_sky_lsf_adjustment) :
