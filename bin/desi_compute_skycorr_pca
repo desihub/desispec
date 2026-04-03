@@ -51,10 +51,12 @@ for what in [ "DWAVE" , "DLSF" ] :
 
         print("reading {}/{} {}".format(index+1,len(args.infile),filename))
 
-        frame_filename=filename.replace("skycorr-","frame-")+'.gz'
-        if not os.path.isfile(frame_filename) :
-            print("warning: cannot open frame file {}".format(frame_filename))
-            continue
+        frame_filename = filename.replace("skycorr-","frame-")+'.gz'
+        if not os.path.isfile(frame_filename):
+            frame_filename = filename.replace("skycorr-","frame-")
+            if not os.path.isfile(frame_filename):
+                print("warning: cannot open frame file {}".format(frame_filename))
+                continue
 
         # A hack to get NIGHT without having to read the gzipped file
         fn_split = frame_filename.split('/')
