@@ -388,9 +388,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                and np.sum(etable['OBSTYPE']=='arc') > 0 and np.sum(etable['OBSTYPE']=='zero') > 9) )
     ## if zeros requested, no bias job exists, and the exposures are available; then run biasnight or biaspdark
     submit_biasnightorbiaspdark = ('zero' in biaspdark_proc_obstypes) and no_bias_job and exposures_available
-    ## if darks requested, we're no longer acquiring data, and biaspdark jobs has already run; then check if any additional darks should be processed
+    ## if darks requested, we're no longer acquiring data, and biaspdark jobs have already run; then check if any additional darks should be processed
     submit_pdark = ('dark' in biaspdark_proc_obstypes) and (not still_acquiring) and (not no_bias_job)
-    ## if making darknight files and darks are requested, we're not acquiring more data, and there is no ccdcalib or arc job, the existing biaspdark
+    ## if making darknight files and darks are requested, we're not acquiring more data, and there is no ccdcalib or tilenight job, the existing biaspdark
     ## might have been launched for a previous night's darknight. In which case we should still check to make sure
     ## all future nights are submitted for our darknight job that will be run in ccdcalib.
     submit_future_biaspdarks = ('dark' in biaspdark_proc_obstypes) and (not still_acquiring) \
