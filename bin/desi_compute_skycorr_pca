@@ -40,6 +40,7 @@ wave=None
 head=None
 night_min=None
 night_max=None
+head=None
 nexp_dict = {}
 
 for what in [ "DWAVE" , "DLSF" ] :
@@ -73,6 +74,10 @@ for what in [ "DWAVE" , "DLSF" ] :
             if exptime < args.min_exptime :
                 print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
                 continue
+
+        # Need header for CAMERA and DETECTOR
+        if head is None:
+            head=fitsio.read_header(frame_filename)
 
         # night=head["NIGHT"]
 
@@ -179,9 +184,8 @@ for what in [ "DWAVE" , "DLSF" ] :
     output_hdulist.append(pyfits.ImageHDU(eigenvals[ii][:40],name=what+"_EIGENVALS"))
 
 output_hdulist.append(pyfits.ImageHDU(wave,name="WAVELENGTH"))
-head=fitsio.read_header(frame_filename)
-for k in ["CAMERA","DETECTOR"] :
-    output_hdulist[0].header[k]=head[k]
+output_hdulist[0].header['CAMERA']=head['CAMERA']
+output_hdulist[0].header['DETECTOR']=head['DETECTOR']
 if night_min is not None :
     output_hdulist[0].header["NIGHTMIN"] = (night_min, 'First night of input exposures')
     output_hdulist[0].header["NIGHTMAX"] = (night_max, 'Last night of input exposures')
