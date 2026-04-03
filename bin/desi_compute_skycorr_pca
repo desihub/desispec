@@ -137,8 +137,10 @@ for what in [ "DWAVE" , "DLSF" ] :
 
     print("subtract mean")
     mdeltas=np.nanmean(deltas,axis=0)
+    # Replace NaN in mean with 0 (positions where all exposures are bad)
+    mdeltas[np.isnan(mdeltas)] = 0.
     deltas[:] -= mdeltas
-    # Replace NaN with 0 after mean subtraction for PCA computation
+    # Replace remaining NaN with 0 (positions where individual exposures are bad)
     deltas[np.isnan(deltas)] = 0.
 
     print("fill scalar product matrix")
