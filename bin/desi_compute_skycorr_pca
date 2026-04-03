@@ -91,7 +91,6 @@ for what in [ "DWAVE" , "DLSF" ] :
             continue
         print("{} rms {} = {}".format(os.path.basename(filename),what,rms))
 
-        maxdelta=np.max(np.abs(delta))
         if what=="DWAVE" :
             threshold=0.3
         elif what=="DLSF" :
@@ -100,10 +99,15 @@ for what in [ "DWAVE" , "DLSF" ] :
             print(f"ERROR: unknown threshold for {what}; please update code")
             sys.exit(1)
 
-        if maxdelta>threshold :
-            print(f"skip {filename} with max {what} = {maxdelta} > {threshold} A")
-            continue
-        threshold=0.
+        # Mask bad fibers instead of skipping entire exposure
+        mask = np.abs(delta) > threshold
+        if np.any(mask):
+            n_bad = np.sum(mask)
+            maxdelta = np.max(np.abs(delta))
+            print(f"masking {n_bad} bad elements in {filename} with max |{what}| = {maxdelta:.3f} > {threshold}")
+            delta = delta.copy()  # Make a copy to avoid modifying the original
+            delta[mask] = np.nan
+
         deltas.append(delta)
 
         if wave is None :
@@ -132,8 +136,10 @@ for what in [ "DWAVE" , "DLSF" ] :
     gc.collect()
 
     print("subtract mean")
-    mdeltas=np.mean(deltas,axis=0)
+    mdeltas=np.nanmean(deltas,axis=0)
     deltas[:] -= mdeltas
+    # Replace NaN with 0 after mean subtraction for PCA computation
+    deltas[np.isnan(deltas)] = 0.
 
     print("fill scalar product matrix")
     # Reshape to (nmeas, nfibers*nwave) for vectorized dot product
