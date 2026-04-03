@@ -386,12 +386,20 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     exposures_available = ((not still_acquiring)
                            or (len(etable) > 2 and np.sum(etable['OBSTYPE']=='dark') > 0
                                and np.sum(etable['OBSTYPE']=='arc') > 0 and np.sum(etable['OBSTYPE']=='zero') > 9) )
+    ## if zeros requested, no bias job exists, and the exposures are available; then run biasnight or biaspdark
     submit_biasnightorbiaspdark = ('zero' in biaspdark_proc_obstypes) and no_bias_job and exposures_available
+    ## if darks requested, we're no longer acquiring data, and biaspdark jobs has already run; then check if any additional darks should be processed
     submit_pdark = ('dark' in biaspdark_proc_obstypes) and (not still_acquiring) and (not no_bias_job)
+    ## if making darknight files and darks are requested, we're not acquiring more data, and there is no ccdcalib or arc job, the existing biaspdark
+    ## might have been launched for a previous night's darknight. In which case we should still check to make sure
+    ## all future nights are submitted for our darknight job that will be run in ccdcalib.
+    submit_future_biaspdarks = ('dark' in biaspdark_proc_obstypes) and (not still_acquiring) \
+                               and ('ccdcalib' not in init_ptable['JOBDESC']) and ('tilenight' not in init_ptable['JOBDESC'])
+    log.info(f"{submit_biasnightorbiaspdark=}, {submit_pdark=}, {submit_future_biaspdarks=}")
 
     returned_ptable = None
-    if submit_biasnightorbiaspdark or submit_pdark:
-        if submit_biasnightorbiaspdark:
+    if submit_biasnightorbiaspdark or submit_pdark or submit_future_biaspdarks:
+        if submit_biasnightorbiaspdark or submit_future_biaspdarks:
             ## This will populate the processing table with the biases and preproc dark job if
             ## it needed to submit them. It will do it for future and past nights relevant for
             ## the current night's dark nights.

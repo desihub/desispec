@@ -513,6 +513,10 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
         fname, fext = os.path.splitext(os.path.basename(ptab_files[0]))
         fprefix = '-'.join(fname.split('-')[:-1])
         fnights = [os.path.splitext(os.path.basename(fil))[0].replace(f'{fprefix}-', '') for fil in ptab_files]
+        try:
+            fnights = [int(fnight) for fnight in fnights]
+        except ValueError:
+            pass
     else:
         dirname = ''
         fprefix, fext = '', ''
