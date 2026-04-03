@@ -512,6 +512,8 @@ def read_minimal_tilenight_proctab_cols(nights=None, tileids=None,
         dirname = os.path.dirname(ptab_files[0])
         fname, fext = os.path.splitext(os.path.basename(ptab_files[0]))
         fprefix = '-'.join(fname.split('-')[:-1])
+        ## Extract the night from the filename, but be robust to different formats. If we can't extract an int night, just log the string we found.
+        ## Because of the indefinite data type, this variable shouldn't be used for anything downstream other than logging.
         fnights = [os.path.splitext(os.path.basename(fil))[0].replace(f'{fprefix}-', '') for fil in ptab_files]
         try:
             fnights = [int(fnight) for fnight in fnights]
