@@ -220,14 +220,14 @@ def get_tiles_cumulative(sci_etable, z_submit_types, all_cumulatives, night):
         # select only science tiles, not calibs
         tiles_this_night = tiles_this_night[tiles_this_night > 0]
         if all_cumulatives:
-            tiles_cumulative = list(tiles_this_night)
+            tiles_cumulative = tiles_this_night.tolist()
             log.info(f'Submitting cumulative redshifts for all tiles: {tiles_cumulative}')
         else:
             allexp = read_minimal_science_exptab_cols(tileids=tiles_this_night)
             for tileid in tiles_this_night:
                 nights_with_tile = allexp['NIGHT'][allexp['TILEID'] == tileid]
                 if len(nights_with_tile) > 0 and night == np.max(nights_with_tile):
-                    tiles_cumulative.append(tileid)
+                    tiles_cumulative.append(int(tileid))
             log.info(f'Submitting cumulative redshifts for {len(tiles_cumulative)}'
                      + f'/{len(tiles_this_night)} tiles for '
                      + f'which {night} is the last night: {tiles_cumulative}')

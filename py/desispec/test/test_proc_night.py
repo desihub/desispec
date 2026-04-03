@@ -780,3 +780,187 @@ class TestProcNight(unittest.TestCase):
         proctiles = set(proctable['TILEID'][ proctable['OBSTYPE'] == 'science' ])
         exptiles = set(etable['TILEID'][ etable['OBSTYPE'] == 'science' ])
         self.assertEqual(len(proctiles), len(exptiles))
+
+
+def _make_biaspdark_ptable(night, extra_jobdescs=None):
+    """Create a processing table with a biaspdark row and optional extra rows.
+
+    Args:
+        night (int): Observation night in YYYYMMDD format.
+        extra_jobdescs (list of str or None): Additional JOBDESC values to
+            append after the biaspdark row.  Default is None (no extras).
+
+    Returns:
+        Table: Processing table with one completed row per JOBDESC.
+    """
+    from desispec.workflow.proctable import (
+        default_prow,
+        instantiate_processing_table,
+    )
+    jobdescs = ['biaspdark'] + (extra_jobdescs or [])
+    ptable = instantiate_processing_table()
+    for intid, jobdesc in enumerate(jobdescs, start=1):
+        prow = default_prow()
+        prow['INTID'] = intid
+        prow['JOBDESC'] = jobdesc
+        prow['NIGHT'] = night
+        prow['STATUS'] = 'COMPLETED'
+        prow['EXPID'] = np.array([10000 + intid], dtype=int)
+        prow['PROCCAMWORD'] = 'a0123456789'
+        ptable.add_row(prow)
+    return ptable
+
+
+class TestSubmitFutureBiaspdarks(unittest.TestCase):
+    """Regression tests for the submit_future_biaspdarks logic in proc_night.
+
+    The submit_future_biaspdarks flag (issue #2697) is True when all of the
+    following hold:
+    - 'dark' is in the biaspdark obstypes
+    - still_acquiring is False
+    - 'ccdcalib' is NOT in the processing table
+    - 'tilenight' is NOT in the processing table
+
+    When True, proc_night must call submit_necessary_biasnights_and_preproc_darks
+    without explicit n_nights constraints (i.e. with the default full-range
+    kwargs).  When False (e.g. because ccdcalib is present), the function is
+    still called via the submit_pdark path, but restricted to the current night
+    only (n_nights_before=0, n_nights_after=0).
+    """
+
+    # Night after 20240510 (darknight enabled) and after 20211130 (cte flats enabled)
+    _NIGHT = 20240601
+    # Obstypes that include both 'zero' (for bias logic) and 'dark' (for pdark logic)
+    _PROC_OBSTYPES = np.array(['zero', 'dark', 'flat', 'arc', 'science'])
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reduxdir = tempfile.mkdtemp()
+        cls.specprod = 'test'
+        cls.origenv = os.environ.copy()
+        os.environ['DESI_SPECTRO_REDUX'] = cls.reduxdir
+        os.environ['SPECPROD'] = cls.specprod
+        os.environ['NERSC_HOST'] = 'perlmutter'
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.reduxdir)
+        for key in ('DESI_SPECTRO_REDUX', 'SPECPROD', 'NERSC_HOST'):
+            if key in cls.origenv:
+                os.environ[key] = cls.origenv[key]
+            elif key in os.environ:
+                del os.environ[key]
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        # proc_night checks that the exposure table file exists when
+        # update_exptable=False (the default), so create an empty placeholder.
+        self.exp_table_path = os.path.join(self.tmp_dir, 'exposure_table.csv')
+        open(self.exp_table_path, 'w').close()
+        self.proc_table_path = os.path.join(self.tmp_dir, 'processing_table.csv')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir)
+
+    def _run_proc_night_with_mocks(self, init_ptable):
+        """Call proc_night with the heavy internals mocked out.
+
+        Sets up patches needed to exercise the biaspdark submission decision
+        logic without touching the filesystem or Slurm.
+
+        Args:
+            init_ptable (Table): Initial processing table returned by the
+                load_tables mock.
+
+        Returns:
+            MagicMock: The mock for submit_necessary_biasnights_and_preproc_darks
+                so the caller can assert on its call arguments.
+        """
+        from unittest.mock import patch
+        from desispec.workflow.exptable import instantiate_exposure_table
+
+        etable = instantiate_exposure_table()
+
+        with patch('desispec.scripts.proc_night.load_tables',
+                   return_value=(etable, init_ptable)), \
+             patch('desispec.scripts.proc_night.submit_necessary_biasnights_and_preproc_darks',
+                   return_value=init_ptable) as mock_submit, \
+             patch('desispec.scripts.proc_night.update_from_queue',
+                   return_value=init_ptable), \
+             patch('desispec.scripts.proc_night.any_jobs_need_resubmission',
+                   return_value=False), \
+             patch('desispec.scripts.proc_night.load_override_file',
+                   return_value={}), \
+             patch('desispec.scripts.proc_night.generate_calibration_dict',
+                   return_value={'accounted_for': []}), \
+             patch('desispec.scripts.proc_night.all_calibs_submitted',
+                   return_value=True), \
+             patch('desispec.scripts.proc_night.determine_science_to_proc',
+                   return_value=(etable, [])), \
+             patch('desispec.scripts.proc_night.get_tiles_cumulative',
+                   return_value=[]):
+            proc_night(
+                night=self._NIGHT,
+                proc_obstypes=self._PROC_OBSTYPES,
+                z_submit_types=None,
+                exp_table_pathname=self.exp_table_path,
+                proc_table_pathname=self.proc_table_path,
+                dry_run_level=4,
+                still_acquiring=False,
+                no_darknight=False,
+            )
+
+        return mock_submit
+
+    def test_future_biaspdarks_submitted_when_biaspdark_exists_without_ccdcalib(self):
+        """submit_necessary_biasnights_and_preproc_darks is called via the
+        future-nights path when biaspdark exists but ccdcalib and tilenight are absent.
+
+        Regression test for issue #2697: a biaspdark row in the proctable that
+        was submitted for a previous night's darknight run must not suppress
+        the submission of future-night biaspdark jobs.  When ccdcalib and
+        tilenight are absent, submit_future_biaspdarks is True and the function
+        is called without explicit n_nights_before / n_nights_after constraints
+        (i.e. with the default full-range kwargs).
+        """
+        init_ptable = _make_biaspdark_ptable(self._NIGHT)
+
+        mock_submit = self._run_proc_night_with_mocks(init_ptable)
+
+        mock_submit.assert_called_once()
+        # Via the submit_future_biaspdarks path the call uses default
+        # (full-range) kwargs, so n_nights_before/n_nights_after are absent.
+        call_kwargs = mock_submit.call_args[1]
+        self.assertNotIn('n_nights_before', call_kwargs)
+        self.assertNotIn('n_nights_after', call_kwargs)
+
+    def test_future_biaspdarks_not_triggered_when_ccdcalib_present(self):
+        """When ccdcalib is present alongside biaspdark, submit_future_biaspdarks
+        is False and the function is called via submit_pdark with n_nights=0.
+
+        This verifies the negative case: submit_future_biaspdarks is only True
+        when ccdcalib is absent.  When ccdcalib is present the code falls back
+        to the submit_pdark path, which restricts the search to the current
+        night only (n_nights_before=0, n_nights_after=0).
+        """
+        init_ptable = _make_biaspdark_ptable(self._NIGHT, extra_jobdescs=['ccdcalib'])
+
+        mock_submit = self._run_proc_night_with_mocks(init_ptable)
+
+        mock_submit.assert_called_once()
+        call_kwargs = mock_submit.call_args[1]
+        self.assertEqual(call_kwargs.get('n_nights_before'), 0)
+        self.assertEqual(call_kwargs.get('n_nights_after'), 0)
+
+    def test_future_biaspdarks_not_triggered_when_tilenight_present(self):
+        """When tilenight is present alongside biaspdark, submit_future_biaspdarks
+        is False and only the submit_pdark path is used.
+        """
+        init_ptable = _make_biaspdark_ptable(self._NIGHT, extra_jobdescs=['tilenight'])
+
+        mock_submit = self._run_proc_night_with_mocks(init_ptable)
+
+        mock_submit.assert_called_once()
+        call_kwargs = mock_submit.call_args[1]
+        self.assertEqual(call_kwargs.get('n_nights_before'), 0)
+        self.assertEqual(call_kwargs.get('n_nights_after'), 0)
