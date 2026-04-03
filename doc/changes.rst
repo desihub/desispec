@@ -7,6 +7,8 @@ desispec Change Log
 
 Major algorithmic changes:
 
+* Rescale individual exposures before coaddition (PR `#2606`_).
+* Update BAD2DFIT mask for better cosmics rejection (PR `#2612`_).
 * Adjust the resolution matrix for flux calibration (PR `#2642`_).
 * Adjust the cframe resolution matrix for per-fiber heliocentric corrections (PR `#2648`_).
 * Fix emlinefit outliers (PR `#2685`_)
@@ -33,7 +35,6 @@ Other:
 * Add coadd_spectra that doesn't modify input (PR `#2608`_).
 * Add unit test for coadd_spectra non-mutation guarantee (PR `#2609`_).
 * Dark restart (PR `#2610`_).
-* update BAD2DFIT mask for better cosmics rejection (PR `#2612`_).
 * Fix cte expids during job creation (PR `#2614`_).
 * Add --kill-on-invalid-dep=yes to sbatch calls (PR `#2617`_).
 * Fix preproc_darks_mpi.py ragged array and cleanup some MPI therein (PR `#2619`_).
@@ -64,6 +65,18 @@ Other:
 * Fix inspect_dark BADCOLUMN vs. BADFIBER typo (PR `#2679`_).
 * Reduce parallelism due to memory constraints for ccdcalib darknight (PR `#2688`_).
 * Update desi_tile_vi to automatically validate backup tiles (PR `#2693`_)
+* Jobs that depend on unsubmitted jobs shouldn't be submitted (PR `#2668`_).
+* Add regression tests for submit_batch_script dependency failure and sbatch failure handling (PR `#2676`_).
+* Update flagged_fibers  (PR `#2678`_).
+* Update link dependency logic (PR `#2680`_).
+* Add regression tests for linkcal cross-night dependency logic (PR `#2681`_).
+* Fix stale docstring defaults in `emlines_gaussfit` (PR `#2686`_).
+* Add synthetic unit tests for emlinefit flux normalization and CHI2 calculation (PR `#2687`_).
+* freeze iers before any heliocentric corrections (PR `#2690`_).
+* spec/coadd keys in both HDU 0 and FIBERMAP (PR `#2691`_).
+* Fix so that biasnight is now dependent on linkcal (PR `#2695`_).
+* Fix desi_submit_prod and desi_proc_night logic bug (PR `#2696`_).
+* Improved outlier handling for sky-PCA (PR `#2698`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -80,6 +93,7 @@ Other:
 .. _`#2600`: https://github.com/desihub/desispec/pull/2600
 .. _`#2602`: https://github.com/desihub/desispec/pull/2602
 .. _`#2603`: https://github.com/desihub/desispec/pull/2603
+.. _`#2606`: https://github.com/desihub/desispec/pull/2606
 .. _`#2608`: https://github.com/desihub/desispec/pull/2608
 .. _`#2609`: https://github.com/desihub/desispec/pull/2609
 .. _`#2610`: https://github.com/desihub/desispec/pull/2610
@@ -117,6 +131,18 @@ Other:
 .. _`#2685`: https://github.com/desihub/desispec/pull/2685
 .. _`#2688`: https://github.com/desihub/desispec/pull/2688
 .. _`#2693`: https://github.com/desihub/desispec/pull/2693
+.. _`#2668`: https://github.com/desihub/desispec/pull/2668
+.. _`#2676`: https://github.com/desihub/desispec/pull/2676
+.. _`#2678`: https://github.com/desihub/desispec/pull/2678
+.. _`#2680`: https://github.com/desihub/desispec/pull/2680
+.. _`#2681`: https://github.com/desihub/desispec/pull/2681
+.. _`#2686`: https://github.com/desihub/desispec/pull/2686
+.. _`#2687`: https://github.com/desihub/desispec/pull/2687
+.. _`#2690`: https://github.com/desihub/desispec/pull/2690
+.. _`#2691`: https://github.com/desihub/desispec/pull/2691
+.. _`#2695`: https://github.com/desihub/desispec/pull/2695
+.. _`#2696`: https://github.com/desihub/desispec/pull/2696
+.. _`#2698`: https://github.com/desihub/desispec/pull/2698
 
 
 0.70.0 (2025-12-04)
