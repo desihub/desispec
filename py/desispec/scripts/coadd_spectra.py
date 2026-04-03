@@ -44,7 +44,10 @@ def parse(options=None):
             help="coadd spectra of different cameras. works only if wavelength grids are aligned")
     parser.add_argument("--onetile", action="store_true",
             help="input spectra are from a single tile")
-
+    parser.add_argument("--no-normalize", action="store_true",
+            help="multiplicative normalization factors are not computed for each target exposure prior to coaddition")
+    parser.add_argument("--norm-chi2-threshold", type=float, default=0.1,
+            help="minimum reduced chi‑squared value to trigger per‑exposure normalization; use 0 to renormalize all science targets")
 
     if options is None:
         args = parser.parse_args()
@@ -156,7 +159,8 @@ def main(args=None):
                 onetile=args.onetile)
     else :
         log.info("coadding ...")
-        coadd(spectra, cosmics_nsig=args.nsig, onetile=args.onetile)
+        coadd(spectra, cosmics_nsig=args.nsig, onetile=args.onetile,
+              no_normalize=args.no_normalize, norm_chi2_threshold=args.norm_chi2_threshold)
 
     if args.lin_step is not None :
         log.info("resampling ...")

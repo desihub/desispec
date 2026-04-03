@@ -169,6 +169,8 @@ fibermap_columns = (('TARGETID',                   'i8',             '', 'Unique
                     ('IN_COADD_B',                 'bool',           '', 'Was this exposure included in B coadd',        'coadd'),
                     ('IN_COADD_R',                 'bool',           '', 'Was this exposure included in R coadd',        'coadd'),
                     ('IN_COADD_Z',                 'bool',           '', 'Was this exposure included in Z coadd',        'coadd'),
+                    ('COADD_NORM',                 'f4',             '', 'Flux normalization coefficient for coadd',     'coadd'),
+                    ('SIGMA_COADD_NORM',            'f4',             '', 'Error on COADD_NORM',                         'coadd'),
                     )
 
 # dict to allow unit tests etc that augment fibermaps to look up the

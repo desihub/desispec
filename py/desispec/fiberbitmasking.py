@@ -55,7 +55,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         Example bitmask list::
 
             bitmask = [fmsk.BROKENFIBER,fmsk.UNASSIGNED,fmsk.BADFIBER,\
-                        fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
+                        fmsk.BADTRACE, fmsk.MANYREJECTED]
             bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib', band='brz')
             bitmask = 'fluxcalib'
             bitmask = 4128780
@@ -154,8 +154,8 @@ def get_flat_fiberbitmask_val(band):
     Return mask of bad FIBERSTATUS bits for fiberflats
     i.e. fibers with these bits set have a bad fiberflat and cannot be used
     """
-    return (fmsk.BROKENFIBER | fmsk.BRIGHTNEIGHBOR | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
-            fmsk.MANYBADCOL | fmsk.MANYREJECTED )
+    return (fmsk.BROKENFIBER | fmsk.BRIGHTNEIGHBOR | fmsk.BADFIBER | \
+            fmsk.BADTRACE | fmsk.BADARC | fmsk.MANYREJECTED )
 
 def get_fluxcalib_fiberbitmask_val(band):
     """
@@ -182,10 +182,9 @@ def get_all_nonamp_fiberbitmask_val():
         NEARCHARGETRAP and VARIABLETHRU are also not included since
         they are ok for some types of processing but not others.
     """
-    return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
-            fmsk.BADPOSITION | fmsk.BRIGHTNEIGHBOR  | \
-            fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
-            fmsk.MANYBADCOL | fmsk.MANYREJECTED )
+    return (fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | fmsk.BADPOSITION | \
+            fmsk.BRIGHTNEIGHBOR | fmsk.BADFIBER | fmsk.BADTRACE | \
+            fmsk.BADARC | fmsk.BADFLAT | fmsk.MANYREJECTED )
 
 def get_justamps_fiberbitmask():
     """

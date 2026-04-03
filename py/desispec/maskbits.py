@@ -70,7 +70,7 @@ fibermask:
     - [BADTRACE,       17, "Bad trace solution"]
     - [BADFLAT,        18, "Bad fiber flat"]
     - [BADARC,         19, "Bad arc solution"]
-    - [MANYBADCOL,     20, ">10% of spectral bins are bad columns"]
+    - [VARIABLE,       20, "Object or calibration suspected to be variable"]
     - [MANYREJECTED,   21, ">10% of spectral bins rejected in extraction"]
     - [BADAMPB,        22, "Issues in the amplifier readouts of camera B make this unusable"]
     - [BADAMPR,        23, "Issues in the amplifier readouts of camera R make this unusable"]
