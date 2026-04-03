@@ -712,7 +712,9 @@ def gradient_correction(fiberflats, ref_fiberflats, iterations=5, max_gradient=0
         fiberflat = fiberflats[spectro]
         refflat = ref_fiberflats[spectro]
         ff = Table(fiberflat.fibermap)[['FIBERASSIGN_X', 'FIBERASSIGN_Y']].copy()
-        ff['FF_RATIO'] = np.mean(fiberflat.fiberflat, axis=1) / np.mean(refflat.fiberflat, axis=1)
+        refmean = np.mean(refflat.fiberflat, axis=1)
+        ff['FF_RATIO'] = np.mean(fiberflat.fiberflat, axis=1) / (refmean + (refmean==0))  # avoid divide by 0
+        ff['FF_RATIO'][refmean==0] = 0.0  # will get outlier rejected in next step
         ffall.append(ff)
     ff = vstack(ffall)
 
