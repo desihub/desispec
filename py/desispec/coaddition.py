@@ -784,26 +784,42 @@ def _build_crude_coadd_arrays(spectra, idx, bands_to_use, sbands):
 
 def per_exposure_normalization(spectra, norm_threshold=0.1):
     """
-    Compute per‑exposure multiplicative normalization factors for each
-    target in a desispec.spectra.Spectra object. If the rescaling
-    results in the coadd changing by a significance set by norm_threshold
-    the normalization terms and their corresponding error are stored 
-    in the COADD_NORM and SIGMA_COADD_NORM columns of the fibermap and the 
-    VARIABLE fiberstatus bit is set. Objects that a normalization term will 
-    not be applied to have a default COADD_NORM value of 1.0 and 
-    SIGMA_COADD_NORM of 0.0; this includes sky spectra and single exposures. 
-    If any exposure yields an unphysical rescaling factor and the VARIABLE bit
-    was set, the exposure is flagged with the BADFIBER bit in FIBERSTATUS.
+    Compute per‑exposure multiplicative normalization factors for each target.
 
-    Args:
-        spectra: desispec.spectra.Spectra object; It must provide flux,
-        ivar, optional mask, wave dictionaries, and a fibermap 
-        table that contains at least the columns TARGETID, FIBERSTATUS
-        and OBJTYPE.
-        norm_threshold: minimum reduced chi-squared value between a standard
-        error-weighted coadd and the coadd produced with per-exposure 
-        normalization in this function such that the per-exposure normalization 
-        is preferred for a target; sets VARIABLE (coadd_)fiberstatus if met
+    The resulting normalization terms and their uncertainties are stored in the
+    ``COADD_NORM`` and ``SIGMA_COADD_NORM`` columns of the ``spectra.fibermap``.
+    If the rescaling changes the coadded spectrum by a significance larger than
+    ``norm_threshold``, the ``VARIABLE`` bit in ``FIBERSTATUS`` is set.  Objects
+    that are not normalized (e.g. sky spectra or single‑exposure objects) receive
+    a default ``COADD_NORM=1.0`` and ``SIGMA_COADD_NORM=0.0``.
+    If any exposure yields an unphysical scaling factor while the
+    ``VARIABLE`` bit is set, the exposure is flagged with the ``BADFIBER`` bit
+    in ``FIBERSTATUS``.
+
+    Parameters
+    ----------
+    spectra : desispec.spectra.Spectra
+        Spectra object that must provide ``flux``, ``ivar``, optional ``mask``,
+        ``wave`` dictionaries, and a fibermap table containing at least the
+        columns ``TARGETID``, ``FIBERSTATUS`` and ``OBJTYPE``.
+    norm_threshold : float
+        Minimum reduced chi‑squared value between the standard error‑weighted
+        coadd and the coadd produced with per‑exposure normalization for which
+        the per‑exposure normalization is preferred for a target.  When this
+        threshold is met, the ``VARIABLE`` (``coadd_``) fiberstatus bit is set.
+
+    Returns
+    -------
+    None
+        The function updates ``spectra`` in place; it does not return a value.
+
+    Examples
+    --------
+    >>> from desispec.io import read_spectra
+    >>> spec = read_spectra('path/to/spectra-file.fits')
+    >>> compute_per_exposure_norm(spec)
+    # ``spec.fibermap`` now contains COADD_NORM, SIGMA_COADD_NORM,
+    # and updated FIBERSTATUS bits.
     """
     log = get_logger()
 
