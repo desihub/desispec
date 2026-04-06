@@ -150,8 +150,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             #   - to 0 if TILEID=80715 (sv1m31), 80718 (sv1rosette)
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
-                fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
-                fafn = checkgzip(fafn)
+                fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid, readonly=True)
+                fafn = checkgzip(fafn, readonly=True)
                 fahdr = fitsio.read_header(fafn, 0)
                 if "TARG" not in fahdr:
                     log.error("TARG keyword missing in {} header".format(fafn))
