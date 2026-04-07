@@ -961,8 +961,8 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
 
             if chi2 < norm_chi2_threshold:
                 # if rescaling makes a minimal difference, we coadd as normal
-                spectra.fibermap['COADD_NORM'][idx] = 1.
-                spectra.fibermap['SIGMA_COADD_NORM'][idx] = 0.     
+                spectra.fibermap['COADD_NORM'][idx_good] = 1.
+                spectra.fibermap['SIGMA_COADD_NORM'][idx_good] = 0.     
             else:
                 # suspect for variable calibration owing to positioning offsets,
                 # calib errors, intrinsic variability, etc.
