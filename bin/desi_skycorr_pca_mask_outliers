@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+# Example usage in bash
+# for file in /global/cfs/cdirs/desicollab/users/rongpu/data/spectro/skypca-y5/*.fits; do
+#     desi_skycorr_pca_mask_outliers "$file" /global/cfs/cdirs/desicollab/users/rongpu/data/spectro/skypca-y5/outlier_masked
+# done
+
+import sys, os, glob, time, warnings
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.table import Table, vstack, hstack, join
+import fitsio
+# from astropy.io import fits
+import healpy as hp
+import argparse
+import shutil
+
+parser = argparse.ArgumentParser(description='Process sky PCA files and mask outlier fibers')
+parser.add_argument('input_fn', type=str, help='Input FITS file path')
+parser.add_argument('output_dir', type=str, help='Output directory path')
+args = parser.parse_args()
+
+input_fn = args.input_fn
+output_dir = args.output_dir
+if os.path.dirname(input_fn)==output_dir:
+    raise ValueError('output_dir cannot be the same directory as the input file')
+
+os.makedirs(output_dir, exist_ok=True)
+output_fn = os.path.join(output_dir, os.path.basename(input_fn))
+if os.path.isfile(output_fn):
+    print('File already exists:', output_fn)
+    sys.exit()
+
+sm, camsp = os.path.basename(input_fn).replace('.fits', '').split('-')[2:4]
+petal = int(camsp[1])
+detector = '-'.join(os.path.basename(input_fn).replace('.fits', '').split('-')[4:])
+
+print(input_fn)
+print(sm, camsp, detector)
+
+mask_outlier = None
+for ext in ['DWAVE_MEAN', 'DLSF_MEAN']:
+    img = fitsio.read(input_fn, ext=ext)
+    img_median = np.median(img)
+    img_nmad = 1.4826 * np.median(np.abs(img-img_median))
+    if mask_outlier is None:
+        mask_outlier = np.abs(img-img_median) > 10 * img_nmad  # 10-sigma limit
+    else:
+        mask_outlier |= np.abs(img-img_median) > 10 * img_nmad  # 10-sigma limit
+if np.sum(mask_outlier)>0:
+    print(input_fn)
+    img2 = np.sum(mask_outlier, axis=1)
+    outlier_fiber_indices = np.where(img2>0)[0]
+    outlier_fibers = 500*petal + outlier_fiber_indices
+    print('Outlier fibers:', list(outlier_fibers))
+    for index in range(len(outlier_fibers)):
+        fiber_index = outlier_fiber_indices[index]
+        fiber = outlier_fibers[index]
+        print('Fiber {}: {} outlier pixels'.format(fiber, img2[fiber_index]))
+
+    fits = fitsio.FITS(input_fn)
+    with fitsio.FITS(output_fn, 'rw') as f:
+        for index in range(len(fits)):
+            extname = fits[index].get_extname()
+            data, header = fitsio.read(input_fn, ext=index, header=True)
+            if 'EIGENVALS' not in extname and extname!='WAVELENGTH':
+                data[outlier_fiber_indices] = 0.
+            f.write(data, extname=extname, header=header)
+    fits.close()
+else:
+    print('No outlier fibers')
+    shutil.copy2(input_fn, output_fn)
+    print(f'Copied to {output_fn}')
