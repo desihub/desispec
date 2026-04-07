@@ -5,9 +5,11 @@ desispec Change Log
 0.71.0 (unreleased)
 -------------------
 
+First tag used for Matterhorn production.
+
 Major algorithmic changes:
 
-* Rescale individual exposures before coaddition (PR `#2606`_).
+* Rescale individual exposures before coaddition (PR `#2606`_, `#2713`_).
 * Update BAD2DFIT mask for better cosmics rejection (PR `#2612`_).
 * Adjust the resolution matrix for flux calibration (PR `#2642`_).
 * Adjust the cframe resolution matrix for per-fiber heliocentric corrections (PR `#2648`_).
@@ -77,6 +79,12 @@ Other:
 * Fix so that biasnight is now dependent on linkcal (PR `#2695`_).
 * Fix desi_submit_prod and desi_proc_night logic bug (PR `#2696`_).
 * Improved outlier handling for sky-PCA (PR `#2698`_).
+* Submit future biaspdarks even if current one exists (PR `#2699`_).
+* Add regression tests for submit_future_biaspdarks path in proc_night (PR `#2700`_).
+* avoid divide by zero in ff gradient calc (PR `#2704`_).
+* Change default min dark exposures from 6 to 5 (PR `#2705`_).
+* fix tileqa crash for non-gzipped fiberassign file (PR `#2710`_).
+* Add outlier masking script for the skycorr PCA templates (PR `#2712`_).
 
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
@@ -143,6 +151,13 @@ Other:
 .. _`#2695`: https://github.com/desihub/desispec/pull/2695
 .. _`#2696`: https://github.com/desihub/desispec/pull/2696
 .. _`#2698`: https://github.com/desihub/desispec/pull/2698
+.. _`#2699`: https://github.com/desihub/desispec/pull/2699
+.. _`#2700`: https://github.com/desihub/desispec/pull/2700
+.. _`#2704`: https://github.com/desihub/desispec/pull/2704
+.. _`#2705`: https://github.com/desihub/desispec/pull/2705
+.. _`#2710`: https://github.com/desihub/desispec/pull/2710
+.. _`#2712`: https://github.com/desihub/desispec/pull/2712
+.. _`#2713`: https://github.com/desihub/desispec/pull/2713
 
 
 0.70.0 (2025-12-04)
