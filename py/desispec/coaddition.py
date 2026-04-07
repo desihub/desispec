@@ -911,20 +911,23 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                 #  enforce physically plausible scaling factors (positive and not extreme).
                 is_converged = np.all( (a>0.1) & (a<10.) ) 
                 if is_converged:
-                    spectra.fibermap['COADD_NORM'][idx] = a
-                    spectra.fibermap['SIGMA_COADD_NORM'][idx] = np.sqrt(var_a)
+                    spectra.fibermap['COADD_NORM'][idx_good] = a[np.isin(idx,idx_good)]
+                    spectra.fibermap['SIGMA_COADD_NORM'][idx_good] = np.sqrt(var_a[np.isin(idx,idx_good)])
                 else:
                     bad_a = np.where((a<0.1) | (a>10.))[0]
                     bad_indices = idx[bad_a]
+                    
                     # set bad fiberstatus for these exposures
                     good_fiberstatus[bad_indices] = False
-                    
-                    # save the bad values for later debugging
+                    # also need to update fiberstatus for these exposures
+                    spectra.fibermap['FIBERSTATUS'][bad_indices] |= fmsk.BADFIBER
+                        
+                    # save the bad values for further analyses
                     spectra.fibermap['COADD_NORM'][bad_indices] = a[bad_a]
                     spectra.fibermap['SIGMA_COADD_NORM'][bad_indices] = np.sqrt(var_a[bad_a])                    
 
             else: 
-                # skip normalization for non‑target objects, single‑exposure targets, or when no good exposures remain
+                # skip normalization for non‑target objects, single‑exposure targets
                 is_converged = True
 
         if not(is_converged):
@@ -965,13 +968,8 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                 # calib errors, intrinsic variability, etc.
                 spectra.fibermap['FIBERSTATUS'][idx] |= fmsk.VARIABLE
 
-                # also need to update fiberstatus for exposures where "a" was unphysical
-                changed_status = np.where(((spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 ) != good_fiberstatus)[0]
-                ii = idx[np.isin(idx,changed_status)]
-                spectra.fibermap['FIBERSTATUS'][ii] |= fmsk.BADFIBER
-
     # How many are we rescaling?
-    ii = (spectra.fibermap['COADD_NORM'] != 1.)
+    ii = (spectra.fibermap['FIBERSTATUS'] & fmsk.VARIABLE) != 0
     n_rescaled = len(np.unique(spectra.fibermap['TARGETID'][ii]))
     log.info(f'Rescaling {n_rescaled} variable target(s)')
     
