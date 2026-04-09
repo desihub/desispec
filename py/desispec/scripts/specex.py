@@ -580,8 +580,12 @@ def mean_psf(inputs, output):
         i_status=np.where(t["PARAM"]=="STATUS")[0][0]
         bundles=t["COEFF"][i][:,0].astype(int)
         status=t["COEFF"][i_status][:,0].astype(int)
-        missing_mask=(status<0)
-        missing_bundles.append(bundles[missing_mask])
+        # Make sure that all of the fibers are missing in the bundle
+        unique_bundles = np.unique(bundles)
+        missing_mask = np.array(
+            [np.all(status[bundles == bundle] < 0) for bundle in unique_bundles],
+            dtype=bool)
+        missing_bundles.append(unique_bundles[missing_mask])
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
@@ -601,22 +605,6 @@ def mean_psf(inputs, output):
     i=np.where(tables[0]["PARAM"]=="BUNDLE")[0][0]
     bundle_of_fibers=tables[0]["COEFF"][i][:,0].astype(int)
     bundles=np.unique(bundle_of_fibers)
-    # Check to make sure that there are no bad amps
-    # bad_amps=[]
-    # for input in inputs :
-    #     psf=fits.getheader(input)
-    #     preproc_header=fits.getheader(psf['XTRACE'].header['IN_IMAGE'].replace('SPECPROD',f'{os.environ["DESI_SPECTRO_REDUX"]}/{os.environ["SPECPROD"]}'))
-    #     if 'BADAMP' in preproc_header:
-    #         badamp=preproc_header['BADAMP']
-    #         bad_amps.append(badamp)
-    # if len(bad_amps)>1:
-    #     badamp=np.mode(bad_amps) 
-    #     if badamp=='A' or badamp=='C':
-    #         bundles=np.arange(0,10,1)
-    #     elif badamp=='B' or badamp=='D':
-    #         bundles=np.arange(11,20,1)
-    # else:
-    #     bundles=np.arange(0,20,1)
 
     # Ignore bundles that were missing due to a bad amp in all of the exposures
     all_missing_bundles =np.unique(np.hstack(missing_bundles))
@@ -656,7 +644,9 @@ def mean_psf(inputs, output):
         coeff=np.array(coeff)
 
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
+        # Initialize to -1 to identify missing bundles in the output PSF (if any)
         output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
+        output_coeff.fill(-1)
 
         # now merge, using rchi2 as selection score
 
