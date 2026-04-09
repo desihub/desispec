@@ -646,7 +646,8 @@ def mean_psf(inputs, output):
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
         # Initialize to -1 to identify missing bundles in the output PSF (if any)
         output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
-        output_coeff.fill(-1)
+        if PARAM=='STATUS' :
+            output_coeff.fill(-1)
 
         # now merge, using rchi2 as selection score
 
