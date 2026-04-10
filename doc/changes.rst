@@ -3,7 +3,7 @@ desispec Change Log
 ===================
 
 0.71.1 (unreleased)
-------------------
+-------------------
 
 * no changes yet
 
@@ -93,6 +93,7 @@ Other:
 * Propagate badfiber bit for unphysical COADD_NORM (PR `#2713`_).
 * Allow psfnight to skip over bundles that are purposefully skipped (PR `#2714`_).
 * Fix submission bug for linked biasnight jobs (PR `#2716`_).
+
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 .. _`#2578`: https://github.com/desihub/desispec/pull/2578
