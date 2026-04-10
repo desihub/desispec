@@ -374,7 +374,7 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
         if dry_run_level < 4:
             with open(sentinel_file, 'w') as sentinel:
                 all_prod_nights = get_all_science_nights_for_prod(production_yaml=production_yaml,
-                                                                  verbose=verbose)
+                                                                  verbose=False)
                 sentinel.write(f"All done with processing for {production_yaml}\n")
                 sentinel.write(f"Nights processed: {all_prod_nights}\n")
         else:

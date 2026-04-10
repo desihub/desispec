@@ -276,6 +276,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
 
     ## Identify what calibrations have been done
     if 'linkcal' in cal_override:
+        ## define files_to_link even if we already have linkcal
         files_to_link, files_not_linked = None, None
         if 'include' in cal_override['linkcal']:
             files_to_link = cal_override['linkcal']['include']
@@ -283,6 +284,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
+        ## run linkcal if we haven't already
         if 'linkcal' not in ptable['JOBDESC']:
             proccamword = difference_camwords(camword, badcamword)
             ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
@@ -302,7 +304,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    bias_accounted_for = ('biasnight' in files_to_link) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
 
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
