@@ -610,7 +610,7 @@ def mean_psf(inputs, output):
     all_missing_bundles =np.unique(np.hstack(missing_bundles))
     for b in all_missing_bundles :
         if all(b in lst for lst in missing_bundles):
-            log.warning(f"Bundle {b} is missing in all input PSFs, likely due to a bad amp. This bundle will be ignored in the merging.")
+            log.warning(f"Bundle {b} is missing in all input PSFs for camera {refhead['CAMERA']}, likely due to a bad amp. This bundle will be ignored in the merging.")
             bundles = bundles[bundles!=b]
 
     for b in bundles :
