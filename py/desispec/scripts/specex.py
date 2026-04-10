@@ -644,10 +644,15 @@ def mean_psf(inputs, output):
         coeff=np.array(coeff)
 
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
-        # Initialize to -1 to identify missing bundles in the output PSF (if any)
-        output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
+        # Start from the reference PSF coefficients so bundles removed from
+        # fibers_in_bundle keep their original non-STATUS values.
+        output_coeff=np.array(tables[0][entry]["COEFF"], copy=True)
         if PARAM=='STATUS' :
-            output_coeff.fill(-1)
+            # Mark only fibers from bundles ignored during merging as missing.
+            covered_fibers = np.zeros(output_coeff.shape[0], dtype=bool)
+            for fibers in fibers_in_bundle.values() :
+                covered_fibers[np.asarray(fibers, dtype=int)] = True
+            output_coeff[~covered_fibers] = -1
 
         # now merge, using rchi2 as selection score
 
