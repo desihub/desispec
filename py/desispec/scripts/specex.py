@@ -534,7 +534,7 @@ def mean_psf(inputs, output):
     bundle_rchi2=[]
     nbundles=None
     nfibers_per_bundle=None
-
+    missing_bundles=[]
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -574,6 +574,19 @@ def mean_psf(inputs, output):
         nbundles=rchi2.size
         bundle_rchi2.append(rchi2)
 
+        #Check for missing bundles
+        t=psf["PSF"].data
+        i=np.where(t["PARAM"]=="BUNDLE")[0][0]
+        i_status=np.where(t["PARAM"]=="STATUS")[0][0]
+        bundles=t["COEFF"][i][:,0].astype(int)
+        status=t["COEFF"][i_status][:,0].astype(int)
+        # Make sure that all of the fibers are missing in the bundle
+        unique_bundles = np.unique(bundles)
+        missing_mask = np.array(
+            [np.all(status[bundles == bundle] < 0) for bundle in unique_bundles],
+            dtype=bool)
+        missing_bundles.append(unique_bundles[missing_mask])
+
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
     log.debug("bundle_rchi2= {}".format(str(bundle_rchi2)))
@@ -592,6 +605,14 @@ def mean_psf(inputs, output):
     i=np.where(tables[0]["PARAM"]=="BUNDLE")[0][0]
     bundle_of_fibers=tables[0]["COEFF"][i][:,0].astype(int)
     bundles=np.unique(bundle_of_fibers)
+
+    # Ignore bundles that were missing due to a bad amp in all of the exposures
+    all_missing_bundles =np.unique(np.hstack(missing_bundles))
+    for b in all_missing_bundles :
+        if all(b in lst for lst in missing_bundles):
+            log.warning(f"Bundle {b} is missing in all input PSFs for camera {refhead['CAMERA']}, likely due to a bad amp. This bundle will be ignored in the merging.")
+            bundles = bundles[bundles!=b]
+
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
 
@@ -623,7 +644,15 @@ def mean_psf(inputs, output):
         coeff=np.array(coeff)
 
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
-        output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
+        # Start from the reference PSF coefficients so bundles removed from
+        # fibers_in_bundle keep their original non-STATUS values.
+        output_coeff=np.array(tables[0][entry]["COEFF"], copy=True)
+        if PARAM=='STATUS' :
+            # Mark only fibers from bundles ignored during merging as missing.
+            covered_fibers = np.zeros(output_coeff.shape[0], dtype=bool)
+            for fibers in fibers_in_bundle.values() :
+                covered_fibers[np.asarray(fibers, dtype=int)] = True
+            output_coeff[~covered_fibers] = -1
 
         # now merge, using rchi2 as selection score
 
