@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.71.0 (unreleased)
+0.71.1 (unreleased)
+------------------
+
+* no changes yet
+
+0.71.0 (2026-04-10)
 -------------------
 
 First tag used for Matterhorn production.
@@ -85,7 +90,9 @@ Other:
 * Change default min dark exposures from 6 to 5 (PR `#2705`_).
 * fix tileqa crash for non-gzipped fiberassign file (PR `#2710`_).
 * Add outlier masking script for the skycorr PCA templates (PR `#2712`_).
-
+* Propagate badfiber bit for unphysical COADD_NORM (PR `#2713`_).
+* Allow psfnight to skip over bundles that are purposefully skipped (PR `#2714`_).
+* Fix submission bug for linked biasnight jobs (PR `#2716`_).
 .. _`#2568`: https://github.com/desihub/desispec/pull/2568
 .. _`#2577`: https://github.com/desihub/desispec/pull/2577
 .. _`#2578`: https://github.com/desihub/desispec/pull/2578
@@ -158,7 +165,8 @@ Other:
 .. _`#2710`: https://github.com/desihub/desispec/pull/2710
 .. _`#2712`: https://github.com/desihub/desispec/pull/2712
 .. _`#2713`: https://github.com/desihub/desispec/pull/2713
-
+.. _`#2714`: https://github.com/desihub/desispec/pull/2714
+.. _`#2716`: https://github.com/desihub/desispec/pull/2716
 
 0.70.0 (2025-12-04)
 -------------------
