@@ -275,18 +275,28 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         cal_override = overrides['calibration']
 
     ## Identify what calibrations have been done
-    if 'linkcal' in cal_override and 'linkcal' not in ptable['JOBDESC']:
-        proccamword = difference_camwords(camword, badcamword)
-        ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
-                        proccamword=proccamword,
-                        dry_run_level=dry_run_level, queue=queue, reservation=reservation,
-                        psf_linking_without_fflat=psf_linking_without_fflat,
-                        check_outputs=check_for_outputs, system_name=system_name)
-        if len(ptable) > 0 and dry_run_level < 3:
-            write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
-            sleep_and_report(sub_wait_time,
-                             message_suffix=f"to slow down the queue submission rate",
-                             dry_run=dry_run_level>0, logfunc=log.info)
+    if 'linkcal' in cal_override:
+        ## define files_to_link even if we already have linkcal
+        files_to_link, files_not_linked = None, None
+        if 'include' in cal_override['linkcal']:
+            files_to_link = cal_override['linkcal']['include']
+        if 'exclude' in cal_override['linkcal']:
+            files_not_linked = cal_override['linkcal']['exclude']
+        files_to_link, files_not_linked = derive_include_exclude(files_to_link,
+                                                                 files_not_linked)
+        ## run linkcal if we haven't already
+        if 'linkcal' not in ptable['JOBDESC']:
+            proccamword = difference_camwords(camword, badcamword)
+            ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
+                            proccamword=proccamword,
+                            dry_run_level=dry_run_level, queue=queue, reservation=reservation,
+                            psf_linking_without_fflat=psf_linking_without_fflat,
+                            check_outputs=check_for_outputs, system_name=system_name)
+            if len(ptable) > 0 and dry_run_level < 3:
+                write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
+                sleep_and_report(sub_wait_time,
+                                message_suffix=f"to slow down the queue submission rate",
+                                dry_run=dry_run_level>0, logfunc=log.info)
     else:
         files_to_link = set()
 
@@ -294,7 +304,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    bias_accounted_for = ('biasnight' in files_to_link) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
 
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)

@@ -1834,7 +1834,7 @@ def submit_redshifts(ptable, prows, tnight, internal_id, queue, reservation,
                     for prow in matched_prows:
                         if prow['INTID'] != tnight['INTID']:
                             tnights.append(prow)
-                log.info(f"Internal Processing IDs: {[prow['INTID'] for prow in tnights]}.\n")
+                log.info(f"Internal Processing IDs: {sorted([prow['INTID'] for prow in tnights])}.\n")
                 ## Identify all exposures that should go into the fit
                 expids = [prow['EXPID'][0] for prow in zprows]
                 ## note we can actually get the full list of exposures, but for now
