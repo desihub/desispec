@@ -60,7 +60,7 @@ fibermask:
     - [RESTRICTED,      3, "INFO: Positioner has restricted reach (but might still be on valid target)"]
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
-    - [POORPOSITION,   10, "Fiber >30 microns from target location"]
+    - [POORPOSITION,   10, "Fiber 30-100 microns from target location"]
     - [BRIGHTNEIGHBOR, 11, "Fiber has a bright neighbor affecting its flux"]
     - [LOWTRANSMISSION,12, "Low fiber transmission. Cannot use for sky."]
     - [NEARCHARGETRAP, 13, "Fiber trace near charge trap in one of the CCDs"]
