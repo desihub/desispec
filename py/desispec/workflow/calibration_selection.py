@@ -359,6 +359,14 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
     exptable, exptypes = select_valid_calib_exposures(etable=exptable,
                                                       allow_any_laststep=['arc'])
 
+    ## For selecting arcs and flats, the CTE flats get in the way,
+    ## particularly for night 20260415 where we took them before
+    ## redoing lamp 3 flats
+    if len(exptable) > 0:
+        sel = np.asarray(exptypes) != 'cteflat'
+        exptable = exptable[sel]
+        exptypes = exptypes[sel]
+
     ## Make sure they are in chronologial order
     exptable.sort(['EXPID'])
 
