@@ -362,7 +362,7 @@ def find_best_arc_flat_sets(exptable, ngoodarcthreshold=3, nflatlamps=4,
     ## For selecting arcs and flats, the CTE flats get in the way,
     ## particularly for night 20260415 where we took them before
     ## redoing lamp 3 flats
-    sel = np.array(['cte' not in str(erow['PROGRAM']).lower() for erow in exptable])
+    sel = np.array(['cte' not in str(erow['PROGRAM']).lower() for erow in exptable], dtype=bool)
     exptable = exptable[sel]
     exptypes = exptypes[sel]
 
