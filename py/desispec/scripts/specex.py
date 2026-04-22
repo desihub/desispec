@@ -668,12 +668,16 @@ def mean_psf(inputs, output):
             
             # We use all_missing_bundles since we want to avoid flagging bundles are flagged as 
             # bad for only some of the input exposures
-            if bundle not in all_missing_bundles.flatten():
-                nfailed = np.sum(bundle_rchi2[:,bundle]==0)
-                if nfailed > 1 :
-                    message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
-                    log.critical(message)
-                    raise RuntimeError(message)
+            # if bundle not in all_missing_bundles.flatten():
+            mask=[bundle in missing for missing in missing_bundles]
+            masked_bundle_rchi2 = bundle_rchi2.copy()[~np.array(mask)]
+            if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
+                log.warning(f"Bundle {bundle} is missing in some but not all input PSFs for camera {refhead['CAMERA']}. Only {len(masked_bundle_rchi2)} PSFs will be used.")
+            nfailed = np.sum(masked_bundle_rchi2[:,bundle]==0)
+            if nfailed > 1 :
+                message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
+                log.critical(message)
+                raise RuntimeError(message)
 
             # We finally resorted to use a mean instead of a median here for two reasons.
             # First, there is already a vetting of PSF bundles with good chi2 above
