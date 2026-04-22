@@ -258,6 +258,20 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
 
     etable = etable[~bad]
 
+    ## HACK derive the camword from the exposure table and ignore the input
+    ## eventually we want to change this so that the input camword is None
+    ## except when we actually want to restrict the processing to a subset of cameras,
+    ## but for now this is easier and less error prone as a quick-fix
+    if len(etable) > 0:
+        ## camword is any camera that appears on that night
+        log.info(f"Deriving the CAMWORD for night {night} as union of CAMWORD's from the exposure table")
+        camword = camword_union(etable['CAMWORD'].data.astype(str))
+        ## badcamword is any camera that appears in all exposures for the night
+        log.info(f"Deriving the BADCAMWORD for night {night} as intersection of BADCAMWORD's from the exposure table")
+        badcamword = camword_intersection(etable['BADCAMWORD'].data.astype(str))
+    else:
+        log.error(f"No exposures for night {night}. Using provided camword and badcamword.")
+
     ## Require cal_override to exist if explcitly specified
     if override_path is None:
         override_pathname = findfile('override', night=night, readonly=True)
