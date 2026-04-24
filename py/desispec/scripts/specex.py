@@ -664,11 +664,9 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
             
-            # This checks and makes sure that we are only looking for bundles with fit failures
-            
-            # We use all_missing_bundles since we want to avoid flagging bundles are flagged as 
-            # bad for only some of the input exposures
-            # if bundle not in all_missing_bundles.flatten():
+            # Only count fit failures for exposures where this bundle is present.
+            # Exposures listed in missing_bundles are excluded so that bundles
+            # missing from only some input PSFs are not treated as failed fits.
             mask=[bundle in missing for missing in missing_bundles]
             masked_bundle_rchi2 = bundle_rchi2.copy()[~np.array(mask)]
             if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
