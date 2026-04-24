@@ -663,9 +663,15 @@ def mean_psf(inputs, output):
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
-
-
-            nfailed = np.sum(bundle_rchi2[:,bundle]==0)
+            
+            # Only count fit failures for exposures where this bundle is present.
+            # Exposures listed in missing_bundles are excluded so that bundles
+            # missing from only some input PSFs are not treated as failed fits.
+            mask=[bundle in missing for missing in missing_bundles]
+            masked_bundle_rchi2 = bundle_rchi2.copy()[~np.array(mask)]
+            if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
+                log.warning(f"Bundle {bundle} is missing in some but not all input PSFs for camera {refhead['CAMERA']}. Only {len(masked_bundle_rchi2)} PSFs will be used.")
+            nfailed = np.sum(masked_bundle_rchi2[:,bundle]==0)
             if nfailed > 1 :
                 message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
                 log.critical(message)
