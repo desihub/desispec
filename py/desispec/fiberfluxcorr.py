@@ -13,7 +13,7 @@ from desiutil.log import get_logger
 from desimodel.fastfiberacceptance import FastFiberAcceptance
 from desimodel.io import load_platescale
 
-def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
+def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1,normalize=True) :
     """
     Multiplicative factor to apply to the flat-fielded spectroscopic flux of a fiber
     to calibrate the spectrum of a point source, given the current exposure seeing
@@ -21,6 +21,8 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     Args:
       fibermap: fibermap of frame, astropy.table.Table
       exposure_seeing_fwhm: seeing FWHM in arcsec
+      normalize: boolean, if true the correction is median normalized over the
+                fibermap 
 
     Returns: 1D numpy array with correction factor to apply to fiber fielded fluxes, valid for point sources.
     """
@@ -76,7 +78,8 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     point_source_correction[ok] = 1./fiber_frac[ok]/isotropic_platescale[ok]**2
 
     # normalize to one because this is a relative correction here; use median to be robust against outliers
-    point_source_correction[ok] /= np.median(point_source_correction[ok])
+    if normalize and np.any(ok):
+        point_source_correction[ok] /= np.median(point_source_correction[ok])
 
     # set the correction factor to 1 for sky fibers; other low-fiber_frac fibers have value 0.
     point_source_correction[skyfibers] = 1.
