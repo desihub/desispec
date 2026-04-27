@@ -2,10 +2,37 @@
 desispec Change Log
 ===================
 
-0.71.1 (unreleased)
+0.72.0 (unreleased)
 -------------------
 
-* no changes yet
+Changes made for daily operations (daily branch) while Matterhorn was running.
+These changes were not used in Matterhorn.
+
+* Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
+* Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
+
+.. _`#2720`: https://github.com/desihub/desispec/pull/2720
+.. _`#2721`: https://github.com/desihub/desispec/pull/2721
+
+0.71.1 (2026-04-27)
+-------------------
+
+This is the second tag used by Matterhorn.  One change is not backwards
+compatible with 0.71.0, impacting exactly which standard stars are selected.
+
+* Don't median-normalize flat-to-psf corr per petal when selecting standards (PR `#2724`_).
+
+Other changes are backwards compatible or otherwise consistent with how
+Matterhorn jobs were launched.
+
+* Correct POORPOSITION description (PR `#2719`_).
+* use_reservation add biasnight,biaspdark; handle DependencyNeverSatisfied (PR `#2722`_).
+* Fix to crossnight camword bug in submitting biasnight (PR `#2731`_).
+
+.. _`#2719`: https://github.com/desihub/desispec/pull/2719
+.. _`#2722`: https://github.com/desihub/desispec/pull/2722
+.. _`#2724`: https://github.com/desihub/desispec/pull/2724
+.. _`#2731`: https://github.com/desihub/desispec/pull/2731
 
 0.71.0 (2026-04-10)
 -------------------
