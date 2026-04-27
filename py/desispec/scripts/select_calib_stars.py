@@ -127,7 +127,8 @@ def main(args=None):
             raise RuntimeError(message)
         
         # apply point source correction to flux
-        psf_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm=1.1)
+        # do not normalize the correction per petal
+        psf_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm=1.1,normalize=False)
         frame.flux *= psf_correction[:,None]
 
         rivar = np.sum(frame.ivar[indices][:,jj]*(frame.mask[indices][:,jj]==0),axis=1)
