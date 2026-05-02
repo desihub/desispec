@@ -804,27 +804,27 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
             for cam in calib_expdict.keys():
                 expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
                                             night, cam, nzeros, minzeros,
-                                            nskip, anyzeros)
+                                            iter_nskip, anyzeros)
                 if expids is not None:
                     used_expdict[cam] = expids
                 else:
                     log.warning(f'Not enough ZEROs for nightly bias {night} and cam {cam} with nskip={iter_nskip}.')
 
             if len(used_expdict) == len(cameras):
-                log.info(f'Found enough ZEROs for all cameras with nskip={iter_nskip}')
+                log.info(f'Found enough ZEROs for all cameras with nskip={iter_nskip}.')
                 break
             elif len(used_expdict) > 0:
-                log.warning(f'Not enough ZEROs for some cameras with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(used_expdict.keys())}')
+                log.warning(f'Not enough ZEROs for some cameras with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(used_expdict.keys())}.')
             else:
                 log.warning(f'Not enough ZEROs for all cameras with nskip={iter_nskip}.')
 
         expdict=used_expdict
         if len(expdict) == 0:
-            log.error(f'Not enough ZEROs for all cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras)}')
+            log.error(f'Not enough ZEROs for all cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras)}.')
         elif len(expdict) != len(cameras):
-            log.error(f'Not enough ZEROs for some cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(expdict.keys())}')
+            log.error(f'Not enough ZEROs for some cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(expdict.keys())}.')
         for cam, expids in expdict.items():
-            log.info(f'Using {len(expids)} ZEROs for nightly bias {night} and cam {cam}')
+            log.info(f'Using {len(expids)} ZEROs for nightly bias {night} and cam {cam}.')
 
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
