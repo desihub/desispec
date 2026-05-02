@@ -14,6 +14,13 @@ These changes were not used in Matterhorn.
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 
+0.71.2 (2026-05-01)
+-------------------
+
+* Don't drop first 2 calib zeros if they are needed to get to full 15 required (PR `#2743`_).
+
+.. _`#2743`: https://github.com/desihub/desispec/pull/2743
+
 0.71.1 (2026-04-27)
 -------------------
 
