@@ -107,7 +107,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     files_used = []
     for ifile, filename in enumerate(rawfiles):
         log.info(f'Reading {filename} camera {camera}')
-        
+
         # collect exposure times
         primary_header = read_raw_primary_header(filename)
         try:
@@ -115,7 +115,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         except OSError:
             log.warning(f'No camera {camera} in {filename}')
             continue
-        
+
         # Instantiate CalibFinder
         # The images should be sorted as those closest in MJD so I should be able to step out
         calib=CalibFinder([header,primary_header])
@@ -792,22 +792,39 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
     #- Find all zeros for the night
     expdict = None
     if rank == 0:
-        calib_expdict, noncalib_expdict = _find_zeros(night, cameras=cameras,
-                                                      nzeros=nzeros, nskip=nskip)
+        ## Some nights have many zeros and some have few, so loop over nskip to try
+        ## and salvage nights (such as 20241118) that don't have enough zeros if we skip any
+        for iter_nskip in range(nskip, -1, -1):
+            calib_expdict, noncalib_expdict = _find_zeros(night, cameras=cameras,
+                                                        nzeros=nzeros, nskip=iter_nskip)
 
-        used_expdict = {}
-        ## _find_zeros dictionaries already verified to have the same set
-        ## of keys
-        for cam in calib_expdict.keys():
-            expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
-                                         night, cam, nzeros, minzeros,
-                                         nskip, anyzeros)
-            if expids is not None:
-                used_expdict[cam] = expids
-                log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly'
-                         + f'bias {night} and cam {cam}')
+            used_expdict = {}
+            ## _find_zeros dictionaries already verified to have the same set
+            ## of keys
+            for cam in calib_expdict.keys():
+                expids = select_zero_expids(calib_expdict[cam], noncalib_expdict[cam],
+                                            night, cam, nzeros, minzeros,
+                                            nskip, anyzeros)
+                if expids is not None:
+                    used_expdict[cam] = expids
+                else:
+                    log.warning(f'Not enough ZEROs for nightly bias {night} and cam {cam} with nskip={iter_nskip}.')
+
+            if len(used_expdict) == len(cameras):
+                log.info(f'Found enough ZEROs for all cameras with nskip={iter_nskip}')
+                break
+            elif len(used_expdict) > 0:
+                log.warning(f'Not enough ZEROs for some cameras with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(used_expdict.keys())}')
+            else:
+                log.warning(f'Not enough ZEROs for all cameras with nskip={iter_nskip}.')
 
         expdict=used_expdict
+        if len(expdict) == 0:
+            log.error(f'Not enough ZEROs for all cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras)}')
+        elif len(expdict) != len(cameras):
+            log.error(f'Not enough ZEROs for some cameras even with nskip={iter_nskip}. Cameras missing ZEROs: {set(cameras) - set(expdict.keys())}')
+        for cam, expids in expdict.items():
+            log.info(f'Using {len(expids)} ZEROs for nightly bias {night} and cam {cam}')
 
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
