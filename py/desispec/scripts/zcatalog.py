@@ -126,7 +126,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
         # cannot use the "PROGRAM" header keyword because some files have arbitrary values
         hdr1 = fx['EXP_FIBERMAP'].read_header()
-        program = faflavor2program(hdr1['PROGRAM'])
+        program = faflavor2program(hdr1['FAFLAVOR'])
 
         hdr = fx[0].read_header()
 
