@@ -36,7 +36,7 @@ from desitarget.targetmask import desi_mask
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
 from desispec.io.util import get_tempfilename, checkgzip, replace_prefix, write_bintable
-from desispec.io.meta import get_readonly_filepath
+from desispec.io.meta import get_readonly_filepath, faflavor2program
 from desispec.io.table import read_table
 from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
@@ -122,10 +122,13 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         log.info(f'Reading {rrfile}')
 
     with fitsio.FITS(rrfile) as fx:
-        hdr = fx[0].read_header()
 
         # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-        program = hdr['PROGRAM']
+        # cannot use the "PROGRAM" header keyword because some files have arbitrary values
+        hdr1 = fx['EXP_FIBERMAP'].read_header()
+        program = faflavor2program(hdr1['PROGRAM'])
+
+        hdr = fx[0].read_header()
 
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
@@ -498,7 +501,9 @@ def main(args=None):
                 return 1
 
         if args.program is not None:
-            keep = tiles['PROGRAM'] == args.program
+            # use startswith so that bright1b/dark1b are included in bright/dark
+            # need to convert bytes (from Table.read) to string
+            keep = np.char.startswith(np.array(tiles['PROGRAM'], dtype=str), args.program)
             tiles = tiles[keep]
             if len(tiles) == 0:
                 log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')

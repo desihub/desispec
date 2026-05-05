@@ -1192,7 +1192,7 @@ def program_to_tsnr2_colname(program):
     Returns:
       The appropriate TSNR2 column name for that program
     """
-    program_to_tsnr2_colname_dict = {'backup': 'TSNR2_GPBBACKUP', 'bright': 'TSNR2_BGS', 'dark': 'TSNR2_LRG', 'other': 'TSNR2_LRG'}
+    program_to_tsnr2_colname_dict = {'backup': 'TSNR2_GPBBACKUP', 'bright': 'TSNR2_BGS', 'bright1b': 'TSNR2_BGS', 'dark': 'TSNR2_LRG', 'dark1b': 'TSNR2_LRG', 'other': 'TSNR2_LRG'}
     if not program.lower() in program_to_tsnr2_colname_dict.keys():
         msg = '\"{}\" is not a valid program'.format(program.lower())
         log = get_logger()
