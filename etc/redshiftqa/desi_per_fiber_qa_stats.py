@@ -39,6 +39,10 @@ def main():
     ks_test = True
     pvalue_threshold = 1e-4
 
+    # Initialize the accumulated stats table with all fibers
+    all_stats = Table()
+    all_stats['FIBER'] = np.arange(5000)
+
     for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
 
         print(tracer)
@@ -46,7 +50,7 @@ def main():
         if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
             fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
             fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
-            cat = Table(fitsio.read(fn))
+            cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY']))
             cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'Z_QSO', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']))
             cat = hstack([cat, cat1], join_type='exact')
             mask = np.where(cat['DESI_TARGET'] & desi_mask[tracer] > 0)[0]
@@ -54,7 +58,7 @@ def main():
         else:
             fn = os.path.join(indir, 'ztile-main-bright-cumulative.fits')
             fn1 = os.path.join(indir, 'ztile-main-bright-cumulative-extra.fits')
-            cat = Table(fitsio.read(fn))
+            cat = Table(fitsio.read(fn, columns=['BGS_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY']))
             cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'GOOD_Z_BGS']))
             cat = hstack([cat, cat1], join_type='exact')
             mask = np.where(cat['BGS_TARGET'] & bgs_mask[tracer] > 0)[0]
@@ -168,10 +172,11 @@ def main():
                     stats[tracer.lower()+'_ks_pvalue_allz'] = pvalues
 
         stats = join(stats_zcat, stats, keys='FIBER', join_type='outer').filled(-99)
+        all_stats = join(all_stats, stats, keys='FIBER', join_type='outer').filled(-99)
         print()
 
-    stats.sort('FIBER')
-    stats.write(output_fn, overwrite=False)
+    all_stats.sort('FIBER')
+    all_stats.write(output_fn, overwrite=False)
 
     print('Done!', time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start)))
 
