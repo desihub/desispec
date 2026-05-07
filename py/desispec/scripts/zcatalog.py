@@ -122,10 +122,8 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         log.info(f'Reading {rrfile}')
 
     with fitsio.FITS(rrfile) as fx:
-        hdr = fx[0].read_header()
 
-        # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-        program = hdr['PROGRAM']
+        hdr = fx[0].read_header()
 
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
@@ -358,9 +356,6 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     data.add_column(np.full(nrows, val, dtype=dtype),
             index=icol, name='SPGRPVAL')
 
-    # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-    data['PROGRAM'] = program
-
     return data, expfibermap
 
 
@@ -380,7 +375,7 @@ def parse(options=None):
 
     parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
-    parser.add_argument("--program", type=str,
+    parser.add_argument("--program", type=str, required=True,
             help="DESI program, e.g bright, dark")
 
     parser.add_argument("-g", "--group", type=str,
@@ -454,6 +449,10 @@ def main(args=None):
             return 1
 
     survey = args.survey
+    program = args.program
+
+    if program not in ['backup', 'bright', 'dark', 'other']:
+        raise ValueError('Invalid program \"{}\"; it must be one of the following: backup, bright, dark, other'.format(program))
 
     if args.indir is not None:
         indir = args.indir
@@ -461,7 +460,6 @@ def main(args=None):
         pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
     elif args.group == 'healpix':
         pertile = False
-        program = args.program if args.program is not None else "*"
         indir = os.path.join(io.specprod_root(), 'healpix')
 
         # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
@@ -497,12 +495,13 @@ def main(args=None):
                 log.critical(f'No tiles kept after filtering by SURVEY={args.survey}')
                 return 1
 
-        if args.program is not None:
-            keep = tiles['PROGRAM'] == args.program
-            tiles = tiles[keep]
-            if len(tiles) == 0:
-                log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')
-                return 1
+        # use startswith so that bright1b/dark1b are included in bright/dark
+        # need to convert bytes (from Table.read) to string
+        keep = np.char.startswith(np.array(tiles['PROGRAM'], dtype=str), program)
+        tiles = tiles[keep]
+        if len(tiles) == 0:
+            log.critical(f'No tiles kept after filtering by PROGRAM={program}')
+            return 1
 
         tileids = tiles['TILEID']
         log.info(f'Searching disk for redrock*.fits files from {len(tileids)} tiles')
@@ -605,13 +604,8 @@ def main(args=None):
             raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
 
     # Add EFFTIME_SPEC
-    zcat['EFFTIME_SPEC'] = np.full(len(zcat), -999., dtype=np.float32)
-    for program in np.unique(zcat['PROGRAM']):
-        mask = zcat['PROGRAM']==program
-        tsnr2_col = program_to_tsnr2_colname(program)
-        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat[tsnr2_col][mask], tsnr2_col[6:])
-    assert np.all(zcat['EFFTIME_SPEC']!=-999.)  # check that all objects are assigned a EFFTIME_SPEC value
-    zcat.remove_column('PROGRAM')
+    tsnr2_col = program_to_tsnr2_colname(program)
+    zcat['EFFTIME_SPEC'] = tsnr2_to_efftime(zcat[tsnr2_col], tsnr2_col[6:])
 
     log.info('Finding best spectrum for each target')
     nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
@@ -794,11 +788,8 @@ def main(args=None):
             key, value = parse_keyval(keyval)
             header[key] = value
 
-    if survey is not None:
-        header['SURVEY'] = survey
-
-    if args.program is not None:
-        header['PROGRAM'] = args.program
+    header['SURVEY'] = survey
+    header['PROGRAM'] = program
 
     #- Add units if requested
     if add_units:
