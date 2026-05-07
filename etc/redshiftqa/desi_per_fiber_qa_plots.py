@@ -56,7 +56,7 @@ def main():
     if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
         fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
         fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
-        cat = Table(fitsio.read(fn))
+        cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY', 'LASTNIGHT']))
         cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'Z_QSO', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']))
         cat = hstack([cat, cat1], join_type='exact')
         mask = np.where(cat['DESI_TARGET'] & desi_mask[tracer] > 0)[0]
@@ -64,8 +64,8 @@ def main():
     else:
         fn = os.path.join(indir, 'ztile-main-bright-cumulative.fits')
         fn1 = os.path.join(indir, 'ztile-main-bright-cumulative-extra.fits')
-        cat = Table(fitsio.read(fn))
-        cat1 = Table(fitsio.read(fn1, columns=['GOOD_Z_BGS']))
+        cat = Table(fitsio.read(fn, columns=['BGS_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY', 'LASTNIGHT']))
+        cat1 = Table(fitsio.read(fn1, columns=['Z', 'ZWARN', 'GOOD_Z_BGS']))
         cat = hstack([cat, cat1], join_type='exact')
         mask = np.where(cat['BGS_TARGET'] & bgs_mask[tracer] > 0)[0]
         cat = cat[mask]
