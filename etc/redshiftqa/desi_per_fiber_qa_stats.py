@@ -5,7 +5,7 @@
 
 # Usage:
 # export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o per_fiber_qa_stats.fits
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o per_fiber_qa_stats.fits
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc

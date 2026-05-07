@@ -6,12 +6,12 @@
 # Usage:
 # export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
 # export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/new/loa
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats per_fiber_qa_stats.fits -o $QA_DIR
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats per_fiber_qa_stats.fits -o $QA_DIR
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats per_fiber_qa_stats.fits -o $QA_DIR
-# salloc -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats per_fiber_qa_stats.fits -o $QA_DIR
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
