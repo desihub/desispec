@@ -166,6 +166,22 @@ def main():
     f.write('<body>\n')
     f.write('<h1>DESI QA Fiber Directory</h1>\n')
 
+    # List fibers with non-ELG_LOP issues at the top
+    if len(fibers_with_other_issues) > 0:
+        f.write('<h2>Fibers with Issues (excluding ELG_LOP all-only)</h2>\n')
+        f.write('<p style="color:red; font-weight:bold;">Total: {} fibers</p>\n'.format(len(fibers_with_other_issues)))
+        f.write('<p>')
+        sorted_problem_fibers = sorted(fibers_with_other_issues)
+        for i, fiber in enumerate(sorted_problem_fibers):
+            if i > 0:
+                f.write(', ')
+            f.write('<a href=html/fiber_{}.html style="color:red; font-weight:bold;">{}</a>'.format(fiber, fiber))
+        f.write('</p>\n')
+    else:
+        f.write('<h2>No fibers with issues (excluding ELG_LOP all-only)</h2>\n')
+
+    f.write('<h2>All Fibers</h2>\n')
+
     # Group fibers in ranges of 500
     for group_start in range(0, 5000, 500):
         group_end = group_start + 499
