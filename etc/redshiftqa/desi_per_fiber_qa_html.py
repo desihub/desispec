@@ -38,11 +38,34 @@ def main():
 
     f = open(os.path.join(output_dir, 'fiber_directory.html'), "w")
     f.write('<html>\n')
-    f.write('<table>\n')
-    for fiber in np.arange(5000):
-        f.write('<td><a href=html/fiber_{}.html>FIBER_{}</a></td>\n'.format(fiber, fiber))
-        f.write('</tr>\n')
-    f.write('</table>\n')
+    f.write('<head><style>\n')
+    f.write('body { font-family: Arial, sans-serif; margin: 20px; }\n')
+    f.write('h2 { margin-top: 30px; }\n')
+    f.write('table { border-collapse: collapse; }\n')
+    f.write('td { padding: 5px 10px; }\n')
+    f.write('a { text-decoration: none; }\n')
+    f.write('a:hover { text-decoration: underline; }\n')
+    f.write('</style></head>\n')
+    f.write('<body>\n')
+    f.write('<h1>DESI Fiber Directory</h1>\n')
+
+    # Group fibers in ranges of 500
+    for group_start in range(0, 5000, 500):
+        group_end = group_start + 499
+        f.write('<h2></h2>\n')
+        f.write('<table>\n')
+
+        # Write fibers in rows of 10
+        for row_start in range(group_start, group_start + 500, 10):
+            f.write('<tr>\n')
+            for fiber in range(row_start, min(row_start + 10, 5000)):
+                f.write('<td><a href=html/fiber_{}.html>{}</a></td>\n'.format(fiber, fiber))
+            f.write('</tr>\n')
+
+        f.write('</table>\n')
+
+    f.write('</body>\n')
+    f.write('</html>\n')
     f.close()
 
     for fiber in np.arange(5000):
