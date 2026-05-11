@@ -19,6 +19,7 @@ from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
 from desispec.preproc import get_amp_ids,parse_sec_keyword
+from desispec.skymag import compute_skymag_per_petal
 _qa_params = None
 def get_qa_params() :
     """
@@ -119,6 +120,9 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     petalqa_table["BTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["RTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["ZTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["SKY_MAG_G_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    petalqa_table["SKY_MAG_R_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    petalqa_table["SKY_MAG_Z_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
 
     # need to add things
 
@@ -392,6 +396,14 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
         if mval!=0 :
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
+
+    skymag_table = compute_skymag_per_petal(night, expid, specprod_dir)
+    if skymag_table is not None:
+        for row in skymag_table:
+            p = row['PETAL_LOC']
+            petalqa_table['SKY_MAG_G_SPEC'][p] = row['SKY_MAG_G_SPEC']
+            petalqa_table['SKY_MAG_R_SPEC'][p] = row['SKY_MAG_R_SPEC']
+            petalqa_table['SKY_MAG_Z_SPEC'][p] = row['SKY_MAG_Z_SPEC']
 
     # count bad fibers
     for petal in petal_locs :
