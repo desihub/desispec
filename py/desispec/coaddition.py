@@ -954,15 +954,16 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
             if not np.all(np.isin(bands, usable_bands)):
                 # usable_bands is a strict subset: recompute over all bands for comparison
                 f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
-                    spectra, idx_good, idx_good, bands, sbands
+                    spectra, idx_good_init, idx_good, bands, sbands
                 )
                 # else: f_i, w_i, crude_coadd, w_tot from the normalization loop are still valid
             
             # compute rescaled coadd (was duplicated in both branches before)
             used_in_coadd = good_fiberstatus[idx]
+            not_flagged = np.isin(idx_good_init, idx_good)
             scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd), 1)
-            new_w_tot = np.sum(w_i[used_in_coadd] * scaling**-2, axis=0)
-            new_crude_coadd = np.sum(f_i[used_in_coadd] * w_i[used_in_coadd] * scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))        
+            new_w_tot = np.sum(w_i[not_flagged] * scaling**-2, axis=0)
+            new_crude_coadd = np.sum(f_i[not_flagged] * w_i[not_flagged] * scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))        
 
             # compute chi2dof; dof accounts for missing regions
             chi2 = np.sum( (crude_coadd - new_crude_coadd)**2 * w_tot)
