@@ -21,6 +21,7 @@ from desispec.tsnr import tsnr2_to_efftime
 from desispec.preproc import get_amp_ids,parse_sec_keyword
 from desispec.skymag import compute_skymag_per_petal
 _qa_params = None
+_TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 def get_qa_params() :
     """
     Returns a dictionnary with the content of data/qa/qa-params.yaml
@@ -123,6 +124,9 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     petalqa_table["SKY_MAG_G_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
     petalqa_table["SKY_MAG_R_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
     petalqa_table["SKY_MAG_Z_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    for tracer in _TSNR2_TRACERS:
+        for band in ("B", "R", "Z"):
+            petalqa_table["TSNR2_{}_{}" .format(tracer, band)] = np.zeros(npetal, dtype=np.float32)
 
     # need to add things
 
@@ -320,7 +324,7 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
         else:
             scores = petal_cframes[camera].scores
 
-        print(scores.dtype.names)
+        log.debug("scores columns: {}".format(scores.dtype.names))
 
         # AR the tsnr2_petals computation has been removed
         # https://github.com/desihub/desispec/pull/1722
@@ -336,6 +340,13 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
                  scores = petal_cframes[camera].scores
 
              tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
+             # record per-petal per-band TSNR2 median for all tracers
+             for tracer in _TSNR2_TRACERS:
+                 col = "TSNR2_{}_{}".format(tracer, band)
+                 if col in scores.dtype.names:
+                     nonzero = scores[col][scores[col] > 0]
+                     if nonzero.size > 0:
+                         petalqa_table[col][petal] = np.median(nonzero)
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
         efftime = tsnr2_to_efftime(tsnr2_for_efftime_vals,target_type)
 
@@ -424,13 +435,13 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
 
     if frame_header is not None :
         # copy some keys from the frame header
-        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF"]
+        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF","ACQFWHM"]
         for k in keys :
             if k in frame_header :
                 fiberqa_table.meta[k] = frame_header[k]
 
     # copy some keys from the fibermap header
-    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
+    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC","FAFLAVOR"]
     for k in keys :
         if k in fibermap.meta :
             fiberqa_table.meta[k] = fibermap.meta[k]
