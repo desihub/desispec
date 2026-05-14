@@ -328,9 +328,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # z catalogs
         #
         zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
-        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
+        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits', # deprecated
+        zcat_pix = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
         zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
-        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
+        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',       # deprecated
+        zall_pix = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
         zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
         #
         # Dashboard files
@@ -357,12 +359,20 @@ def findfile(filetype, night=None, expid=None, camera=None,
         month = None
 
     #- default group is "cumulative" for tile-based files
-    if groupname is None and tile is not None and filetype in (
-            'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
-            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
-            'zcat_tile', 'zall_tile'
-            ):
-        groupname = 'cumulative'
+    if groupname is None:
+        if filetype in ('zcat_tile', 'zall_tile') or \
+            (tile is not None and filetype in (
+                'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
+                'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile')
+             ):
+                groupname = 'cumulative'
+
+    # zcat v2 added SURVEY/ or zall/ subdirs
+    if version == 'v2':
+        if filetype.startswith('zcat'):
+            version = f'{version}/{survey}'
+        elif filetype.startswith('zall'):
+            version = f'{version}/zall'
 
     # not encouraged, but "spectra" is an alternative name for "uniqpix"
     if groupname == 'spectra':

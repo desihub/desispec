@@ -1102,6 +1102,22 @@ class TestIO(unittest.TestCase):
         filename = findfile('tiles', specprod='blat')
         self.assertEqual(filename, os.environ['DESI_SPECTRO_REDUX']+f'/blat/tiles-blat.fits')
 
+    def test_findfile_zcat(self):
+        """Test desispec.io.findfile for various redshift catalog (zcat) filetypes"""
+        from ..io.meta import findfile
+        zcatdir = os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD/zcatalog')
+        specprod = os.getenv('SPECPROD')
+        opts = dict(survey='main', faprogram='dark')
+        self.assertEqual(findfile('zcat_tile', version='v1', **opts), f'{zcatdir}/v1/ztile-main-dark-cumulative.fits')
+        self.assertEqual(findfile('zcat_tile', version='v2', **opts), f'{zcatdir}/v2/main/ztile-main-dark-cumulative.fits')
+        self.assertEqual(findfile('zcat_pix', version='v1', **opts),  f'{zcatdir}/v1/zpix-main-dark.fits')
+        self.assertEqual(findfile('zcat_pix', version='v2', **opts),  f'{zcatdir}/v2/main/zpix-main-dark.fits')
+        self.assertEqual(findfile('zall_tile', version='v1', **opts), f'{zcatdir}/v1/zall-tilecumulative-{specprod}.fits')
+        self.assertEqual(findfile('zall_tile', version='v2', **opts), f'{zcatdir}/v2/zall/zall-tilecumulative-{specprod}.fits')
+        # note: zall do not have survey/faprogram
+        self.assertEqual(findfile('zall_pix', version='v1'),          f'{zcatdir}/v1/zall-pix-{specprod}.fits')
+        self.assertEqual(findfile('zall_pix', version='v2'),          f'{zcatdir}/v2/zall/zall-pix-{specprod}.fits')
+
     def test_findfile_with_compression(self):
         """Test desispec.io.meta.findfile with or without compression.
         """
