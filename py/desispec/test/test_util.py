@@ -592,6 +592,49 @@ class TestUtil(unittest.TestCase):
         self.assertTrue(np.all(a['x'][ii] == b['x']))
         self.assertTrue(np.all(a['y'][ii] == b['y']))
 
+    def test_convert_to_pandas(self):
+        import pandas as pd
+
+        # shared test data
+        x = np.array([1, 2, 3])
+        y = np.array([4.0, 5.0, 6.0])
+        columns = ['x', 'y']
+
+        # astropy Table input
+        t = Table({'x': x, 'y': y, 'z': np.array([7, 8, 9])})
+        df = util.convert_to_pandas(t, columns)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertEqual(list(df.columns), columns)
+        self.assertTrue(np.all(df['x'].values == x))
+        self.assertTrue(np.all(df['y'].values == y))
+
+        # numpy structured array input (native byte order)
+        arr = np.zeros(3, dtype=[('x', 'i4'), ('y', 'f8'), ('z', 'i4')])
+        arr['x'] = x
+        arr['y'] = y
+        df = util.convert_to_pandas(arr, columns)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertEqual(list(df.columns), columns)
+        self.assertTrue(np.all(df['x'].values == x))
+        self.assertTrue(np.all(df['y'].values == y))
+
+        # numpy structured array with non-native byte order
+        arr_be = arr.astype(arr.dtype.newbyteorder('>'))
+        df = util.convert_to_pandas(arr_be, columns)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertTrue(np.all(df['x'].values == x))
+
+        # pandas DataFrame input
+        df_in = pd.DataFrame({'x': x, 'y': y, 'z': np.array([7, 8, 9])})
+        df = util.convert_to_pandas(df_in, columns)
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertEqual(list(df.columns), columns)
+        self.assertTrue(np.all(df['x'].values == x))
+
+        # invalid input type raises ValueError
+        with self.assertRaises(ValueError):
+            util.convert_to_pandas([1, 2, 3], columns)
+
     def test_test_util_installed(self):
         """Test desispec.test.util.installed"""
         from ..test.util import installed
