@@ -378,23 +378,18 @@ def _dict2ndarray(data, columns=None):
     return xdata
 
 
-def healpix_subdirectory(nside, pixel):
+def healpix_subdirectory(pixel):
     """
-    Return a fixed directory path for healpix grouped files.
+    Return a fixed directory path for healpix/uniqpix grouped files.
 
-    Given an NSIDE and NESTED pixel index, return a directory
-    named after a degraded NSIDE and pixel followed by the
-    original nside and pixel.  This function is just to ensure
-    that this subdirectory path is always created by the same
-    code.
+    This function is just to ensure that this subdirectory path is
+    always created by the same code.
 
     Args:
-        nside (int): a valid NSIDE value.
-        pixel (int): the NESTED pixel index.
+        pixel (int): the NESTED healpixel or uniqpixel index.
 
     Returns (str):
-        a path containing the low and high resolution
-        directories.
+        a path containing the low and high resolution directories.
 
     """
     subdir = str(pixel//100)

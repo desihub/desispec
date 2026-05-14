@@ -18,6 +18,7 @@ import fitsio
 from ..frame import Frame
 
 import desispec.io.meta
+import desiutil.healpix
 
 class TestIO(unittest.TestCase):
     """Test desispec.io.
@@ -1012,6 +1013,27 @@ class TestIO(unittest.TestCase):
         self.assertEqual(c, refpath)
         self.assertEqual(d, refpath)
         self.assertEqual(e, refpath)
+
+        # uniqpix vs. healpix
+        uniqpix = 123456
+        nside, healpix = desiutil.healpix.upix2hpix(uniqpix)
+        upixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                               os.environ['SPECPROD'],
+                               'spectra', 'main', 'bright', str(uniqpix//100), str(uniqpix),
+                               f'coadd-main-bright-{uniqpix}.fits')
+        hpixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                               os.environ['SPECPROD'],
+                               'healpix', 'main', 'bright', str(healpix//100), str(healpix),
+                               f'coadd-main-bright-{healpix}.fits')
+        opts = dict(survey='main', faprogram='BRIGHT')
+        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', uniqpix=uniqpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', uniqpix=uniqpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', nside=nside, healpix=healpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', nside=nside, healpix=healpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', uniqpix=uniqpix, **opts))
+
+        # but: if specifying healpix without groupname, it means old healpix not new spectra/uniqpix
+        self.assertEqual(hpixpath, findfile('coadd', nside=nside, healpix=healpix, **opts))
 
         #- cumulative vs. pernight
         tileid = 1234
