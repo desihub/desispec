@@ -396,22 +396,19 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if uniqpix is not None:
         pix = uniqpix
     elif uniqpix is None and healpix is not None:
-        if groupname in ('uniqpix', 'spectra'):
-            pix = desiutil.healpix.hpix2upix(nside, healpix)
-        else:
+        if groupname == 'healpix':
             pix = healpix
+        else:
+            pix = desiutil.healpix.hpix2upix(nside, healpix)
     else:
         pix = None
 
-    #- Default uniqpix / healpix groupname
-    #- groupname "uniqpix" or "spectra" or uniqpix set -> dirname "spectra", else
-    #- groupname "healpix" -> dirname "healpix"
-    if groupname is None:
-        if uniqpix is not None:
-            groupname = 'spectra'       #- new, starting with matterhorn/nevis/DR3
-        elif healpix is not None:
-            groupname = 'healpix'       #- original, DR1/DR2/iron/loa, before matterhorn/DR3
-    elif groupname == 'uniqpix':
+    #- Default uniqpix / healpix groupname to "spectra" (uniqpix).
+    #- Must specify groupname='healpix' to get old healpix-based files; otherwise will get new uniqpix-based files
+    if groupname is None and (uniqpix is not None or healpix is not None):
+        groupname = 'spectra'
+
+    if groupname == 'uniqpix':
         groupname = 'spectra'
 
     #- be robust to str vs. int

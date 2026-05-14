@@ -1012,7 +1012,13 @@ class TestIO(unittest.TestCase):
         self.assertEqual(b, refpath)
         self.assertEqual(c, refpath)
         self.assertEqual(d, refpath)
-        self.assertEqual(e, refpath)
+        #- change for matterhorn/dr3: default is "spectra" (uniqpix) grouping, not healpix
+        upix = desiutil.healpix.hpix2upix(nside=64, hpix=5286)
+        upixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                               os.environ['SPECPROD'],
+                               'spectra', 'main', 'bright', str(upix//100), str(upix),
+                               f'spectra-main-bright-{upix}.fits.gz')
+        self.assertEqual(e, upixpath)
 
         # uniqpix vs. healpix
         uniqpix = 123456
@@ -1031,9 +1037,10 @@ class TestIO(unittest.TestCase):
         self.assertEqual(upixpath, findfile('coadd', groupname='spectra', nside=nside, healpix=healpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', nside=nside, healpix=healpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', uniqpix=uniqpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', nside=nside, healpix=healpix, **opts))
 
-        # but: if specifying healpix without groupname, it means old healpix not new spectra/uniqpix
-        self.assertEqual(hpixpath, findfile('coadd', nside=nside, healpix=healpix, **opts))
+        # but: can still get healpix path if explicitly asking for groupname='healpix'
+        self.assertEqual(hpixpath, findfile('coadd', groupname='healpix', nside=nside, healpix=healpix, **opts))
 
         #- cumulative vs. pernight
         tileid = 1234
