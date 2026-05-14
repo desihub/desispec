@@ -1032,10 +1032,10 @@ class TestIO(unittest.TestCase):
                                'healpix', 'main', 'bright', str(healpix//100), str(healpix),
                                f'coadd-main-bright-{healpix}.fits')
         opts = dict(survey='main', faprogram='BRIGHT')
-        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', uniqpix=uniqpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', uniqpix=uniqpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', nside=nside, healpix=healpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', nside=nside, healpix=healpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', uniqpix=uniqpix, **opts))
+        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', nside=nside, healpix=healpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', uniqpix=uniqpix, **opts))
         self.assertEqual(upixpath, findfile('coadd', nside=nside, healpix=healpix, **opts))
 

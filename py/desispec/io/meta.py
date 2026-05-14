@@ -90,7 +90,7 @@ def get_findfile_argparser():
     parser.add_argument("-t", "--tile", type=int,
                         help="Integer tile (pointing) number.")
     parser.add_argument("-g", "--groupname", type=str,
-                        help="Spectral grouping name (e.g., 'uniqpix', 'spectra', 'healpix', 'cumulative', 'pernight').")
+                        help="Spectral grouping name (e.g., 'uniqpix', 'healpix', 'cumulative', 'pernight').")
     parser.add_argument("--subgroup", type=str,
                         help="Subgrouping name for non-standard group names.")
     parser.add_argument("--healpix", type=int,
@@ -171,7 +171,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
-        groupname : spectral grouping name (e.g. "spectra", "uniqpix", "healpix", "cumulative", "pernight")
+        groupname : spectral grouping name (e.g. "uniqpix", "healpix", "cumulative", "pernight")
         subgroup : (str) subgrouping name for non-standard groupnames
         healpix : healpix pixel number
         nside : healpix nside
@@ -290,16 +290,16 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- uniqpix and healpix based
         #
-        coadd_hp     = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
-        rrdetails_hp = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
-        rrmodel_hp   = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
-        spectra_hp   = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
-        redrock_hp   = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
-        qso_mgii_hp  = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
-        qso_qn_hp    = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
-        emline_hp    = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
-        hpixexp      = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
-        upixexp      = '{specprod_dir}/{groupname}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
+        coadd_hp     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
+        rrdetails_hp = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
+        rrmodel_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
+        spectra_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
+        redrock_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
+        qso_mgii_hp  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
+        qso_qn_hp    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
+        emline_hp    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
+        hpixexp      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
+        upixexp      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
@@ -364,6 +364,10 @@ def findfile(filetype, night=None, expid=None, camera=None,
             ):
         groupname = 'cumulative'
 
+    # not encouraged, but "spectra" is an alternative name for "uniqpix"
+    if groupname == 'spectra':
+        groupname = 'uniqpix'
+
     if groupname == "cumulative":
         nightprefix = "thru"
         subgroup = str(night)
@@ -372,7 +376,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         subgroup = str(night)
     elif groupname == "perexp":
         nightprefix = "exp"
-    elif groupname in ("healpix", "uniqpix", "spectra"):
+    elif groupname in ("healpix", "uniqpix"):
         nightprefix = ""
     else:
         nightprefix = str(groupname)+'-'
@@ -393,23 +397,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if uniqpix is not None and healpix is not None:
         raise ValueError(f'Set uniqpix or healpix but not both ({uniqpix}, {healpix})')
 
-    if uniqpix is not None:
-        pix = uniqpix
-    elif uniqpix is None and healpix is not None:
-        if groupname == 'healpix':
-            pix = healpix
-        else:
+    pixbase = pix = None
+    if groupname == 'healpix':
+        pixbase = 'healpix'
+        pix = healpix
+    elif groupname in ('uniqpix', None):
+        pixbase = 'spectra'
+        groupname = 'uniqpix'
+        if uniqpix is not None:
+            pix = uniqpix
+        elif healpix is not None:
             pix = desiutil.healpix.hpix2upix(nside, healpix)
-    else:
-        pix = None
-
-    #- Default uniqpix / healpix groupname to "spectra" (uniqpix).
-    #- Must specify groupname='healpix' to get old healpix-based files; otherwise will get new uniqpix-based files
-    if groupname is None and (uniqpix is not None or healpix is not None):
-        groupname = 'spectra'
-
-    if groupname == 'uniqpix':
-        groupname = 'spectra'
 
     #- be robust to str vs. int
     if isinstance(pix, str):     pix = int(pix)
@@ -504,7 +502,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         'specprod_dir':specprod_dir, 'specprod':specprod, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
         'groupname':groupname, 'subgroup':subgroup, 'version':version,
-        'healpix':healpix, 'nside':nside, 'uniqpix':uniqpix, 'pix':pix, 'pixdir':pixdir,
+        'healpix':healpix, 'nside':nside, 'uniqpix':uniqpix, 'pix':pix, 'pixdir':pixdir, 'pixbase':pixbase,
         'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month,
         'compsuffix':compsuffix
