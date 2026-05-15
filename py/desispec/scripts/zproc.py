@@ -60,7 +60,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(usage="{prog} [options]")
 
     parser.add_argument("-g", "--groupname", type=str,
-                        help="Redshift grouping type: cumulative, perexp, pernight, healpix, or custom name")
+                        help="Redshift grouping type: cumulative, perexp, pernight, uniqpix, or custom name")
 
     #- Options for tile-based redshifts
     tiles_options = parser.add_argument_group("tile-based options (--groupname perexp, pernight, or cumulative)")
@@ -79,15 +79,15 @@ def parse(options=None):
     parser.add_argument("--subgroup", type=str,
                         help="subgroup to use for non-standard groupname values")
 
-    #- Options for healpix-based redshifts
-    healpix_options = parser.add_argument_group("healpix-based options (--groupname healpix)")
-    healpix_options.add_argument("-p", "--healpix", type=int, nargs='*', default=None,
-            help="healpix pixels (nested nside=64")
-    healpix_options.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
-    healpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
-    healpix_options.add_argument("--expfiles", nargs='*',
-                        help="csv files with NIGHT,EXPID,SPECTRO,HEALPIX")
-    healpix_options.add_argument("--prodexpfile", help="production summary exposure file (using pre-generated --expfiles is more efficient)")
+    #- Options for uniqpix-based redshifts
+    uniqpix_options = parser.add_argument_group("uniqpix-based options (--groupname uniqpix)")
+    uniqpix_options.add_argument("-p", "--uniqpix", type=int, nargs='*', default=None,
+            help="uniqpix pixels (healpix + 4*nside^2")
+    uniqpix_options.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
+    uniqpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
+    uniqpix_options.add_argument("--expfiles", nargs='*',
+                        help="csv files with NIGHT,EXPID,SPECTRO,UNIQPIX")
+    uniqpix_options.add_argument("--prodexpfile", help="production summary exposure file (using pre-generated --expfiles is more efficient)")
 
     #- Processing options
     processing_options = parser.add_argument_group('processing options')
@@ -174,26 +174,26 @@ def main(args=None, comm=None):
         comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
     stop_mpi_connect = time.time()
 
-    #- set default groupname if needed (cumulative for tiles, otherwise healpix)
+    #- set default groupname if needed (cumulative for tiles, otherwise uniqpix)
     if args.groupname is None:
         if args.tileid is not None:
             args.groupname = 'cumulative'
-        elif args.healpix is not None:
-            args.groupname = 'healpix'
+        elif args.uniqpix is not None:
+            args.groupname = 'uniqpix'
         else:
-            msg = 'Must specify --tileid or --healpix'
+            msg = 'Must specify --tileid or --uniqpix'
             log.critical(msg)
             raise ValueError(msg)
 
     #- consistency of options
-    if args.groupname == 'healpix':
-        assert args.healpix is not None, "--groupname healpix requires setting --healpix too"
-        assert args.nights is None, f"--groupname healpix doesn't use --nights {args.nights}"
-        assert args.expids is None, f"--groupname healpix doesn't use --expids {args.expids}"
-        assert args.thrunight is None, f"--groupname healpix doesn't use --thrunight {args.thrunight}"
-        assert args.cameras is None, f"--groupname healpix doesn't use --cameras {args.cameras}"
+    if args.groupname == 'uniqpix':
+        assert args.uniqpix is not None, "--groupname uniqpix requires setting --uniqpix too"
+        assert args.nights is None, f"--groupname uniqpix doesn't use --nights {args.nights}"
+        assert args.expids is None, f"--groupname uniqpix doesn't use --expids {args.expids}"
+        assert args.thrunight is None, f"--groupname uniqpix doesn't use --thrunight {args.thrunight}"
+        assert args.cameras is None, f"--groupname uniqpix doesn't use --cameras {args.cameras}"
         assert (args.expfiles is None) or (args.prodexpfile is None), \
-                "--groupname healpix use --expfiles OR --prodexpfile but not both"
+                "--groupname uniqpix use --expfiles OR --prodexpfile but not both"
     else:
         assert args.tileid is not None, f"--groupname {args.groupname} requires setting --tileid too"
         if args.cameras is None:
@@ -235,7 +235,7 @@ def main(args=None, comm=None):
             log.error(msg)
             raise ValueError(msg)
 
-    if (args.groupname == 'healpix') and (args.expfiles is None) and (args.prodexpfile is None):
+    if (args.groupname == 'uniqpix') and (args.expfiles is None) and (args.prodexpfile is None):
         args.prodexpfile = findfile('exposures')
         if rank == 0:
             log.info(f'Using default --prodexpfile {args.prodexpfile}')
@@ -249,7 +249,7 @@ def main(args=None, comm=None):
     ## Unpack arguments for shorter names (tileid might be None, ok)
     tileid, groupname, subgroup = args.tileid, args.groupname, args.subgroup
 
-    known_groups = ['cumulative', 'pernight', 'perexp', 'healpix']
+    known_groups = ['cumulative', 'pernight', 'perexp', 'uniqpix']
     if groupname not in known_groups:
         if subgroup is None:
             msg = f'Non-standard --groupname={groupname} requires --subgroup'
@@ -302,7 +302,7 @@ def main(args=None, comm=None):
     timer.start('preflight')
 
     ## Derive the available cameras
-    if args.groupname == 'healpix':
+    if args.groupname == 'uniqpix':
         camword = 'a0123456789'
     elif isinstance(args.cameras, str):
         if rank == 0:
@@ -325,7 +325,7 @@ def main(args=None, comm=None):
                                                         thrunight=args.thrunight,
                                                         nights=args.nights,
                                                         expids=args.expids,
-                                                        healpix=args.healpix,
+                                                        uniqpix=args.uniqpix,
                                                         survey=args.survey,
                                                         program=args.program,
                                                         queue=args.queue,
@@ -350,23 +350,25 @@ def main(args=None, comm=None):
         return int(err)
 
     exposure_table = None
-    hpixexp = None
+    pixexp = None
     if rank == 0:
 
-        if groupname != 'healpix' and args.expfiles is not None:
+        if groupname != 'uniqpix' and args.expfiles is not None:
             tmp = vstack([Table.read(fn) for fn in args.expfiles])
             args.expids = list(tmp['EXPID'])
             args.nights = list(tmp['NIGHT'])
 
-        if groupname == 'healpix':
+        if groupname == 'uniqpix':
             if args.expfiles is not None:
-                hpixexp = vstack([Table.read(fn) for fn in args.expfiles])
+                pixexp = vstack([Table.read(fn) for fn in args.expfiles])
             else:
-                from desispec.pixgroup import get_exp2healpix_map
-                hpixexp = get_exp2healpix_map(args.prodexpfile, survey=args.survey, program=args.program)
+                # TODO: update
+                raise NotImplementedError('--prodexpfile not supported after uniqpix refactor')
+                ### from desispec.pixgroup import get_exp2uniqpix_map
+                ### pixexp = get_exp2uniqpix_map(args.prodexpfile, survey=args.survey, program=args.program)
 
-            keep = np.isin(hpixexp['HEALPIX'], args.healpix)
-            hpixexp = hpixexp[keep]
+            keep = np.isin(pixexp['UNIQPIX'], args.uniqpix)
+            pixexp = pixexp[keep]
 
         elif groupname == 'perexp' and args.nights is not None \
                 and args.cameras is not None and args.expids is not None:
@@ -396,12 +398,12 @@ def main(args=None, comm=None):
     ## Should remove, just nice for printouts while performance isn't important
     if comm is not None:
         comm.barrier()
-        if groupname == 'healpix':
-            hpixexp = comm.bcast(hpixexp, root=0)
+        if groupname == 'uniqpix':
+            pixexp = comm.bcast(pixexp, root=0)
         else:
             exposure_table = comm.bcast(exposure_table, root=0)
 
-    if groupname != 'healpix':
+    if groupname != 'uniqpix':
         if len(exposure_table) == 0:
             msg = f"Didn't find any exposures!"
             log.error(msg)
@@ -427,8 +429,8 @@ def main(args=None, comm=None):
         if subgroup is not None:
             log.info('Subgroup {}'.format(subgroup))
 
-        if args.healpix is not None:
-            log.info(f'Healpixels {args.healpix}')
+        if args.uniqpix is not None:
+            log.info(f'Unique pixels {args.uniqpix}')
         else:
             log.info(f'Tileid={tileid} nights={nights} expids={expids}')
 
@@ -444,8 +446,8 @@ def main(args=None, comm=None):
         comm.barrier()
 
     ## Derive the available spectrographs
-    if groupname == 'healpix':
-        all_subgroups = args.healpix
+    if groupname == 'uniqpix':
+        all_subgroups = args.uniqpix
     else:
         ## Find nights, exposures, and camwords
         expnight_dict = dict()
@@ -472,7 +474,7 @@ def main(args=None, comm=None):
             raise ValueError(msg)
 
     ## options to be used by findfile for all output files
-    if groupname == 'healpix':
+    if groupname == 'uniqpix':
         findfileopts = dict(groupname=groupname, survey=args.survey, faprogram=args.program)
     else:
         findfileopts = dict(tile=tileid, groupname=groupname, subgroup=subgroup)
@@ -494,9 +496,9 @@ def main(args=None, comm=None):
         distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
 
     if rank == 0:
-        if groupname == 'healpix':
-            for hpix in args.healpix:
-                findfileopts['healpix'] = hpix
+        if groupname == 'uniqpix':
+            for pix in args.uniqpix:
+                findfileopts['uniqpix'] = pix
                 splog = findfile('spectra', spectrograph=0, logfile=True, **findfileopts)
                 os.makedirs(os.path.dirname(splog), exist_ok=True)
         else:
@@ -509,14 +511,14 @@ def main(args=None, comm=None):
     if block_rank == 0:
         for i in range(block_num, len(all_subgroups), nblocks):
             result, success = 0, True
-            if groupname == 'healpix':
-                healpix = all_subgroups[i]
-                log.info(f'Coadding spectra for healpix {healpix}')
-                findfileopts['healpix'] = healpix
+            if groupname == 'uniqpix':
+                uniqpix = all_subgroups[i]
+                log.info(f'Coadding spectra for uniqpix {uniqpix}')
+                findfileopts['uniqpix'] = uniqpix
 
                 cframes = []
-                ii = hpixexp['HEALPIX'] == healpix
-                for night, expid, spectro in hpixexp['NIGHT', 'EXPID', 'SPECTRO'][ii]:
+                ii = pixexp['UNIQPIX'] == uniqpix
+                for night, expid, spectro in pixexp['NIGHT', 'EXPID', 'SPECTRO'][ii]:
                     for band in ('b', 'r', 'z'):
                         camera = band+str(spectro)
                         filename = findfile('cframe', night=night, expid=expid, camera=camera,
@@ -527,7 +529,7 @@ def main(args=None, comm=None):
                             log.warning(f'Missing {filename}')
 
                 if len(cframes) < 3:
-                    log.error(f'healpix {healpix} only has {len(cframes)} cframes; skipping')
+                    log.error(f'uniqpix {uniqpix} only has {len(cframes)} cframes; skipping')
                     error_count += 1
                     continue
 
@@ -555,7 +557,7 @@ def main(args=None, comm=None):
                 inputs = [spectrafile,]
                 outputs = [coaddfile,]
                 cmd = f"desi_coadd_spectra -i {spectrafile} -o {coaddfile}"
-                if groupname != 'healpix':
+                if groupname != 'uniqpix':
                     cmd += ' --onetile'
 
             else:
@@ -566,8 +568,8 @@ def main(args=None, comm=None):
                       + f"--outfile {spectrafile} " \
                       + f"--coaddfile {coaddfile} "
 
-                if groupname == 'healpix':
-                    cmd += f"--healpix {healpix} "
+                if groupname == 'uniqpix':
+                    cmd += f"--uniqpix {uniqpix} "
                     cmd += f"--header SURVEY={args.survey} PROGRAM={args.program} "
                 else:
                     cmd += "--onetile "
@@ -605,8 +607,8 @@ def main(args=None, comm=None):
     for subgroup in all_subgroups:
         result, success = 0, True
 
-        if groupname == 'healpix':
-            findfileopts['healpix'] = subgroup
+        if groupname == 'uniqpix':
+            findfileopts['uniqpix'] = subgroup
         else:
             findfileopts['spectrograph'] = subgroup
 
@@ -631,7 +633,7 @@ def main(args=None, comm=None):
 
         ## Since all ranks running redrock, only count failure/success once
         if rank == 0 and not success:
-            log.error(f'Redrock petal/healpix {subgroup} failed; see {rrlog}')
+            log.error(f'Redrock petal/uniqpix {subgroup} failed; see {rrlog}')
             error_count += 1
 
         ## Since all ranks running redrock, ensure we're all moving on to next
@@ -648,7 +650,7 @@ def main(args=None, comm=None):
         log.info("Done with redrock")
 
     #-------------------------------------------------------------------------
-    ## Do tileqa if a tile (i.e. not for healpix)
+    ## Do tileqa if a tile (i.e. not for uniqpix)
     timer.start('tileqa')
 
     if rank == 0 and groupname in ['pernight', 'cumulative']:
@@ -700,8 +702,8 @@ def main(args=None, comm=None):
         if block_rank == 0:
             for i in range(block_num, len(all_subgroups), nblocks):
                 result, success = 0, True
-                if groupname == 'healpix':
-                    findfileopts['healpix'] = all_subgroups[i]
+                if groupname == 'uniqpix':
+                    findfileopts['uniqpix'] = all_subgroups[i]
                 else:
                     findfileopts['spectrograph'] = all_subgroups[i]
 
@@ -719,7 +721,7 @@ def main(args=None, comm=None):
                                                  inputs=[rrfile],
                                                  outputs=[zmtlfile])
                 if not success:
-                    log.error(f'zmtl petal/healpix {all_subgroups[i]} failed; see {zmtllog}')
+                    log.error(f'zmtl petal/uniqpix {all_subgroups[i]} failed; see {zmtllog}')
                     error_count += 1
 
         if rank == 0:
@@ -778,8 +780,8 @@ def main(args=None, comm=None):
                 ## afterburner 2 runs with 10s delay, 3 with 20s delay
                 #time.sleep(0.2*i)
                 subgroup = all_subgroups[i % nsubgroups]
-                if groupname == 'healpix':
-                    findfileopts['healpix'] = subgroup
+                if groupname == 'uniqpix':
+                    findfileopts['uniqpix'] = subgroup
                 else:
                     findfileopts['spectrograph'] = subgroup
 
@@ -787,7 +789,7 @@ def main(args=None, comm=None):
                 rrfile = findfile('redrock', **findfileopts)
                 ## First set of nsubgroups ranks go to desi_qso_mgii_afterburner
                 if i // nsubgroups == 0:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for qso mgii")
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/uniqpix {subgroup} for qso mgii")
                     mgiifile = findfile('qso_mgii', **findfileopts)
                     mgiilog = findfile('qso_mgii', logfile=True, **findfileopts)
                     cmd = f"desi_qso_mgii_afterburner --coadd {coaddfile} " \
@@ -804,11 +806,11 @@ def main(args=None, comm=None):
                                                      outputs=[mgiifile])
 
                         if not success:
-                            log.error(f'qsomgii afterburner petal/healpix {subgroup} failed; see {mgiilog}')
+                            log.error(f'qsomgii afterburner petal/uniqpix {subgroup} failed; see {mgiilog}')
 
                 ## Second set of nsubgroups ranks go to desi_qso_qn_afterburner
                 elif i // nsubgroups == 1:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for qso qn")
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/uniqpix {subgroup} for qso qn")
                     qnfile = findfile('qso_qn', **findfileopts)
                     qnlog = findfile('qso_qn', logfile=True, **findfileopts)
                     cmd = f"desi_qso_qn_afterburner --coadd {coaddfile} " \
@@ -825,11 +827,11 @@ def main(args=None, comm=None):
                                                      outputs=[qnfile], comm=monocomm)
 
                         if not success:
-                            log.error(f'qsoqn afterburner petal/healpix {subgroup} failed; see {qnlog}')
+                            log.error(f'qsoqn afterburner petal/uniqpix {subgroup} failed; see {qnlog}')
 
                 ## Third set of nsubgroups ranks go to desi_emlinefit_afterburner
                 elif i // nsubgroups == 2:
-                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/healpix {subgroup} for emlinefit")
+                    log.info(f"rank {rank}, block_rank {block_rank}, block_num {block_num}, is running spectro/uniqpix {subgroup} for emlinefit")
                     emfile = findfile('emline', **findfileopts)
                     emlog = findfile('emline', logfile=True, **findfileopts)
                     cmd = f"desi_emlinefit_afterburner --coadd {coaddfile} " \
@@ -845,7 +847,7 @@ def main(args=None, comm=None):
                                                      outputs=[emfile])
 
                         if not success:
-                            log.error(f'emlinefit afterburner petal/healpix {subgroup} failed; see {emlog}')
+                            log.error(f'emlinefit afterburner petal/uniqpix {subgroup} failed; see {emlog}')
 
                 ## For now only 3 afterburners, so shout if we loop goes higher than that
                 else:

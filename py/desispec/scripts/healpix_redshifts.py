@@ -7,14 +7,17 @@ spectral regrouping into healpix has already happened.
 """
 
 import os, sys, time
+import json
 import subprocess
 import numpy as np
+import fitsio
+from astropy.table import Table
 
 from desiutil.log import get_logger
 
 from desispec.workflow.redshifts import create_desi_zproc_batch_script, get_zpix_redshift_script_pathname
 from desispec import io
-from desispec.pixgroup import get_exp2healpix_map
+from desispec.pixgroup import get_exp2uniqpix_map, uniqpix_to_map
 from desispec.workflow import batch
 
 def parse(options=None):
@@ -27,10 +30,10 @@ def parse(options=None):
             help='program (e.g. dark, bright, backup)')
     p.add_argument('--expfile', type=str,
             help='exposure summary file with columns NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR')
-    p.add_argument('--healpix', type=str, required=False,
-            help='nested healpix numbers to run (comma separated)')
-    p.add_argument('--bundle-healpix', type=int, default=5,
-                help='bundle N healpix into a single job (default %(default)s)')
+    p.add_argument('--uniqpix', type=str, required=False,
+            help='uniqpix numbers to run (comma separated)')
+    p.add_argument('--bundle-pix', type=int, default=5,
+                help='bundle N pixels into a single job (default %(default)s)')
     p.add_argument("--nosubmit", action="store_true",
             help="generate scripts but don't submit batch jobs")
     p.add_argument("--noafterburners", action="store_true",
@@ -62,7 +65,7 @@ def main(args):
     t0 = time.time()
     log = get_logger()
 
-    log.info(f'Starting {args.survey} {args.program} healpix job submission at {time.asctime()}')
+    log.info(f'Starting {args.survey} {args.program} uniqpix job submission at {time.asctime()}')
     if args.dry_run_level > 0:
         log.info(f"Dry run set: {args.dry_run_level=}; no actual jobs will be submitted")
 
@@ -73,50 +76,78 @@ def main(args):
             log.critical(msg)
             sys.exit(1)
 
-    exppix = get_exp2healpix_map(args.expfile, survey=args.survey, program=args.program)
+    frames = fitsio.read(args.expfile, 'FRAMES')
+
+    ztilefile = io.findfile('zcat_tile', survey=args.survey, faprogram=args.program, version='v2')
+    zcat = fitsio.read(ztilefile, 'ZCATALOG')
+
+    exppix = get_exp2uniqpix_map(zcat, frames)
 
     reduxdir = io.specprod_root()
-    if args.healpix is not None:
-        allpixels = [int(p) for p in args.healpix.split(',')]
+    if args.uniqpix is not None:
+        allpixels = [int(p) for p in args.uniqpix.split(',')]
     else:
-        allpixels = np.unique(np.asarray(exppix['HEALPIX']))
+        allpixels = np.unique(np.asarray(exppix['UNIQPIX']))
+
+    #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
+    # TODO: should this be based upon all the pixels in the exppix table, or just the ones we're going to run on?
+    uniqpix_for_map = np.unique(exppix['UNIQPIX'])
+    hpix2upix_map, nside_max = uniqpix_to_map(uniqpix_for_map)
+    outdir = f'{reduxdir}/spectra/{args.survey}/{args.program}'
+    hpixmap = Table()
+    hpixmap['HEALPIX'] = np.arange(len(hpix2upix_map))  # redundant, just the row of the table
+    hpixmap['UNIQPIX'] = hpix2upix_map
+    hpixmap.meta['EXTNAME'] = 'HPIX2UPIX'
+    hpixmap.meta['NSIDE'] = nside_max
+    hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.fits'
+    hpixmap.write(hpixmapfile, overwrite=True)
+    log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
+
+    #- also save in json format
+    hpixmap = dict()
+    hpixmap['NSIDE'] = int(nside_max)
+    hpixmap['HPIX2UPIX'] = hpix2upix_map.tolist()
+    hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.json'
+    with open(hpixmapfile, 'w') as jsonfile:
+        json.dump(hpixmap, jsonfile)
+    log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
 
     npix = len(allpixels)
     nscripts = 0
-    log.info(f'Submitting jobs for {npix} healpix')
-    for i in range(0, len(allpixels), args.bundle_healpix):
-        healpixels = allpixels[i:i+args.bundle_healpix]
-        hpixexpfiles = list()
+    log.info(f'Submitting jobs for {npix} pixels')
+    for i in range(0, len(allpixels), args.bundle_pix):
+        pixels = allpixels[i:i+args.bundle_pix]
+        pixexpfiles = list()
         ntilepetals = 0
-        for healpix in healpixels:
+        for pix in pixels:
             #- outdir is relative to specprod
-            rrfile = io.findfile('redrock', healpix=healpix, survey=args.survey, faprogram=args.program)
+            rrfile = io.findfile('redrock', uniqpix=pix, survey=args.survey, faprogram=args.program)
             outdir = os.path.dirname(rrfile)
             ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
             if args.dry_run_level < 3:
                 os.makedirs(outdir, exist_ok=True)
             else:
                 log.info(f"Dry run so not making directory: {outdir}")
-            ii = exppix['HEALPIX'] == healpix
-            hpixexpfile = f'{outdir}/hpixexp-{args.survey}-{args.program}-{healpix}.csv'
+            ii = exppix['UNIQPIX'] == pix
+            pixexpfile = f'{outdir}/pixexp-{args.survey}-{args.program}-{pix}.csv'
             ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
             if args.dry_run_level < 3:
-                exppix[ii].write(hpixexpfile, overwrite=True)
+                exppix[ii].write(pixexpfile, overwrite=True)
             else:
-                log.info(f"Dry run so not making the hpixexp file: {hpixexpfile}")
+                log.info(f"Dry run so not making the pixexp file: {pixexpfile}")
             ntilepetals += len(set(list(zip(exppix['TILEID'][ii], exppix['SPECTRO'][ii]))))
-            hpixexpfiles.append(hpixexpfile)
+            pixexpfiles.append(pixexpfile)
 
         cmdline = [
             'desi_zproc',
-            '--groupname', 'healpix',
+            '--groupname', 'uniqpix',
             '--survey', args.survey,
             '--program', args.program,
             ]
-        cmdline.append('--healpix')
-        cmdline.extend( [str(hp) for hp in healpixels] )
+        cmdline.append('--uniqpix')
+        cmdline.extend( [str(p) for p in pixels] )
         cmdline.append('--expfiles')
-        cmdline.extend(hpixexpfiles)
+        cmdline.extend(pixexpfiles)
 
         #- very roughly, one minute per input tile-petal with min/max applied
         runtime = max(20, min(ntilepetals, 120))
@@ -124,8 +155,8 @@ def main(args):
         ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
         if args.dry_run_level < 2:
             batchscript = create_desi_zproc_batch_script(
-                group='healpix',
-                healpix=healpixels,
+                group='uniqpix',
+                uniqpix=pixels,
                 survey=args.survey,
                 program=args.program,
                 queue=args.batch_queue,
@@ -134,10 +165,10 @@ def main(args):
                 runtime=runtime,
             )
         else:
-            batchscript = get_zpix_redshift_script_pathname(healpixels, args.survey,
+            batchscript = get_zpix_redshift_script_pathname(pixels, args.survey,
                                                             args.program)
             log.info(f"Dry run so not creating the batch script: {batchscript}"
-                     + f"\tfor {healpixels=}, {args.survey=}, {args.program=}")
+                     + f"\tfor {pixels=}, {args.survey=}, {args.program=}")
 
         ### cmd = ['sbatch', '--kill-on-invalid-dep=yes']
         cmd = ['sbatch', ]

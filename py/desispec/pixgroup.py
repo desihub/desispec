@@ -21,6 +21,7 @@ import desiutil.depend
 
 from . import io
 from .io.util import get_tempfilename, addkeys
+from .util import convert_to_pandas
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -47,80 +48,124 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2healpix_map(expfile, survey=None, program=None,
-        specprod_dir=None, nights=None, expids=None):
+def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     """
-    Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
+    Maps exposures to unique healpix pixels using zcat and frames
 
     Args:
-        expfile (str): filepath to production exposure file with EXPOSURES and FRAMES HDUs
+        zcat: table with columns TARGETID, TILEID, PETAL_LOC, TARGET_RA, TARGET_DEC, e.g. from ztile file
+        frames: table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from exposures-SPECPROD.fits FRAMES HDU
 
-    Options:
-        survey (str): filter by this survey (main, sv3, sv1, ...)
-        program (str): filter by this FAPRGRM (dark, bright, backup, other)
-        specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
-        nights (array-like): filter to only these nights
-        expids (array-like): filter to only these exposure IDs
-
-    Returns table with columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
+    Returns:
+        Table with columns NIGHT, EXPID, TILEID, PETAL_LOC, UNIQPIX, NSIDE, HEALPIX, NTARGETS
     """
     log = get_logger()
-    if specprod_dir is None:
-        specprod_dir = io.specprod_root()
 
-    log.info(f'Reading exposures list from {expfile}')
-    exps = Table.read(expfile, 'EXPOSURES')
-    frames = Table.read(expfile, 'FRAMES')
+    #- Trim zcat to Pandas DataFrame with just the columns we need
+    log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
+    zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
+    frames = convert_to_pandas(frames, ['NIGHT', 'EXPID', 'TILEID', 'CAMERA'])
 
-    #- override FAPRGRM with what we would set it to now
-    exps['FAPRGRM'] = io.meta.faflavor2program(exps['FAFLAVOR'])
-    keep = exps['TILEID'] > 0
-    if survey is not None:
-        keep &= (exps['SURVEY'] == survey)
-    if program is not None:
-        keep &= (exps['FAPRGRM'] == program)
-    if expids is not None:
-        keep &= np.isin(exps['EXPID'], expids)
-    if nights is not None:
-        keep &= np.isin(exps['NIGHT'], nights)
+    #- Make a table with one row per unique TARGETID plus RA,DEC to calculate UNIQPIX
+    log.info('Trimming zcat to unique TARGETID, RA, DEC')
+    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
+    log.info(f'Calculating unique pixels from {len(targets)} unique targets')
+    targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
 
-    exptab = exps['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+    #- join zcat with targets to get UNIQPIX for each row in zcat
+    log.info('Adding UNIQPIX to zcat')
+    zcat = zcat.merge(targets[['TARGETID', 'UNIQPIX']], on='TARGETID', how='inner')
 
-    #- From FRAMES, determine which petals actually have data
-    exppetals_with_data = dict()
-    for expid, camera in frames['EXPID', 'CAMERA']:
-        if expid not in exppetals_with_data:
-            exppetals_with_data[expid] = set()
-        petal = int(camera[1])
-        exppetals_with_data[expid].add(petal)
+    #- DataFrame-fu: Trim zcat to one row per TILEID, PETAL_LOC, UNIQPIX while
+    #- adding NTARGETS column counting how many targets in each TILEID, PETAL_LOC, UNIQPIX
+    log.info('Trimming zcat to one row per TILEID, PETAL_LOC, UNIQPIX')
+    columns = ['TILEID', 'PETAL_LOC', 'UNIQPIX']
+    upix_tiles = zcat.groupby(columns).size().reset_index(name='NTARGETS')
 
-    #- read one tilepix file per TILEID to get healpix mapping
-    tilepix = dict()
-    for i in np.unique(exptab['TILEID'], return_index=True)[1]:
-        night = exptab['NIGHT'][i]
-        expid = exptab['EXPID'][i]
-        tileid = exptab['TILEID'][i]
-        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid, readonly=True)
-        with open(tilepixfile) as fp:
-            tilepix.update( json.load(fp) )
+    #- Add PETAL_LOC to frames based on CAMERA
+    log.info('Converting frames CAMERA to PETAL_LOC')
+    frames['PETAL_LOC'] = frames['CAMERA'].str[-1].astype(int)  # extract last character of CAMERA and convert to int
 
-    #- rows for table columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
-    rows = list()
+    #- Drop camera; just use PETAL_LOC
+    frames = frames[['NIGHT', 'EXPID', 'TILEID', 'PETAL_LOC']].drop_duplicates(subset=['EXPID', 'PETAL_LOC'])
 
-    #- Add entries for each exposure
-    for night, expid, tileid, survey, program in exptab['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM']:
-        for petal_str in tilepix[str(tileid)]:
-            petal = int(petal_str)
-            if petal in exppetals_with_data[expid]:
-                for healpix in tilepix[str(tileid)][petal_str]:
-                    rows.append( (night, expid, tileid, survey, program, petal, healpix) )
+    #- join upix_tiles with frames to get NIGHT, EXPID, CAMERA
+    log.info('Joining upix_tiles with frames')
+    upix_frames = upix_tiles.merge(frames, on=['TILEID', 'PETAL_LOC'], how='inner')
 
-    if len(rows) == 0:
-        raise RuntimeError('No matching tilepix found')
+    #- Add UNIQPIX -> NSIDE, HEALPIX columns
+    log.info('Calculating NSIDE, HEALPIX from UNIQPIX')
+    nside, healpix = desiutil.healpix.upix2hpix(upix_frames['UNIQPIX'])
+    upix_frames['NSIDE'] = nside
+    upix_frames['HEALPIX'] = healpix
 
-    exp2pix = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'PROGRAM', 'SPECTRO', 'HEALPIX'))
+    #- Reorder columns
+    upix_frames = upix_frames[['NIGHT', 'EXPID', 'TILEID', 'PETAL_LOC', 'UNIQPIX', 'NSIDE', 'HEALPIX', 'NTARGETS']]
 
-    return exp2pix
+    #- Historical compatibility: rename PETAL_LOC to SPECTRO
+    upix_frames.rename(columns={'PETAL_LOC': 'SPECTRO'}, inplace=True)
+
+    nuniq = len(np.unique(upix_frames['UNIQPIX']))
+    nexppetals = len(np.unique(Table.from_pandas(upix_frames[['EXPID', 'SPECTRO']])))
+    log.info(f'{nuniq} unique pixels covered by {nexppetals} exposure-petal combinations')
+
+    return Table.from_pandas(upix_frames)
+
+
+def uniqpix_to_map(uniqpix):
+    """
+    Given an array of UNIQ pixels (possibly at varying NSIDEs, nested scheme),
+    return a map of healpix indices -> uniqpix values at the maximum NSIDE
+    represented in the array.
+
+    Parameters
+    ----------
+    uniqpix : array-like of int
+        Array of UNIQ pixel values.
+
+    Returns
+    -------
+    healpix_map : np.ndarray of int, shape (12 * nside_max**2,)
+        For each HEALPix pixel index at nside_max, the UNIQ pixel value
+        that contains it. Pixels not covered by any UNIQ pixel are set to -1.
+    nside_max : int
+        The maximum NSIDE represented in the input array.
+    """
+    uniqpix = np.asarray(uniqpix, dtype=np.int64)
+
+    # Recover order and ipix for each uniq pixel
+    # order = floor(log2(uniq) / 2) - 1, but more robustly via bit_length
+    order = (np.floor(np.log2(uniqpix)).astype(np.int64) // 2) - 1
+    nside = 2 ** order
+    ipix = uniqpix - 4 * nside ** 2
+
+    order_max = int(order.max())
+    nside_max = 2 ** order_max
+    npix_max = 12 * nside_max ** 2
+
+    healpix_map = np.full(npix_max, -1, dtype=np.int64)
+
+    # For each unique order present, expand pixels to nside_max
+    for o in np.unique(order):
+        mask = order == o
+        ipix_o = ipix[mask]
+        uniq_o = uniqpix[mask]
+
+        # Each pixel at order o covers 4^(order_max - o) pixels at order_max
+        scale = 4 ** (order_max - o)
+
+        # The fine pixel indices covered by each coarse pixel
+        # ipix_o[:, None] * scale + np.arange(scale) gives shape (n, scale)
+        fine_pixels = ipix_o[:, None] * scale + np.arange(scale, dtype=np.int64)
+        fine_pixels = fine_pixels.ravel()
+
+        # Corresponding uniq values, repeated for each fine pixel
+        uniq_repeated = np.repeat(uniq_o, scale)
+
+        healpix_map[fine_pixels] = uniq_repeated
+
+    return healpix_map, nside_max
+
 
 #-----
 class FrameLite(object):

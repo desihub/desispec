@@ -106,35 +106,35 @@ def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
 
-def get_zpix_redshift_script_pathname(healpix, survey, program):
-    """Return healpix-based coadd+redshift+afterburner script pathname
+def get_zpix_redshift_script_pathname(uniqpix, survey, program):
+    """Return uniqpix-based coadd+redshift+afterburner script pathname
 
     Args:
-        healpix (int or array-like): healpixel(s)
+        uniqpix (int or array-like): uniqpixel(s) combining nside and healpix
         survey (str): DESI survey, e.g. main, sv1, sv3
         program (str): survey program, e.g. dark, bright, backup
 
     Returns:
         zpix_script_pathname
     """
-    if np.isscalar(healpix):
-        healpix = [healpix,]
+    if np.isscalar(uniqpix):
+        uniqpix = [uniqpix,]
 
-    hpixmin = np.min(healpix)
-    hpixmax = np.max(healpix)
-    if len(healpix) == 1:
-        scriptname = f'zpix-{survey}-{program}-{healpix[0]}.slurm'
+    upixmin = np.min(uniqpix)
+    upixmax = np.max(uniqpix)
+    if len(uniqpix) == 1:
+        scriptname = f'zpix-{survey}-{program}-{uniqpix[0]}.slurm'
     else:
-        scriptname = f'zpix-{survey}-{program}-{hpixmin}-{hpixmax}.slurm'
+        scriptname = f'zpix-{survey}-{program}-{upixmin}-{upixmax}.slurm'
 
     reduxdir = desispec.io.specprod_root()
-    return os.path.join(reduxdir, 'run', 'scripts', 'healpix',
-                        survey, program, str(hpixmin//100), scriptname)
+    return os.path.join(reduxdir, 'run', 'scripts', 'uniqpix',
+                        survey, program, str(upixmin//100), scriptname)
 
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
                                    thrunight=None, nights=None, expids=None,
-                                   subgroup=None, healpix=None, survey=None,
+                                   subgroup=None, uniqpix=None, survey=None,
                                    program=None, queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
@@ -153,7 +153,7 @@ def create_desi_zproc_batch_script(group,
         nights (list of int), optional: The nights the data was acquired.
         expids (list of int), optional: The exposure id(s) for the data.
         subgroup (str): subgroup name for non-standard group values
-        healpix (list of int), optional: healpixels to process (group='healpix')
+        uniqpix (list of int), optional: uniqpixels to process (group='uniqpix')
         queue (str), optional: Queue to be used.
         batch_opts (str), optional: Other options to give to the slurm batch scheduler (written into the script).
         runtime (str), optional: Timeout wall clock time in minutes.
@@ -183,9 +183,9 @@ def create_desi_zproc_batch_script(group,
         night = np.max(nights)
     elif thrunight is not None:
         night = thrunight
-    elif group == 'healpix':
-        if (healpix is None or survey is None or program is None):
-            msg = f"group='healpix' must define healpix,survey,program (got {healpix},{survey},{program})"
+    elif group == 'uniqpix':
+        if (uniqpix is None or survey is None or program is None):
+            msg = f"group='uniqpix' must define uniqpix,survey,program (got {uniqpix},{survey},{program})"
             log.error(msg)
             raise ValueError(msg)
     else:
@@ -202,8 +202,8 @@ def create_desi_zproc_batch_script(group,
         else:
             expid = expids[0]
 
-    if group == 'healpix':
-        scriptpath = get_zpix_redshift_script_pathname(healpix, survey, program)
+    if group == 'uniqpix':
+        scriptpath = get_zpix_redshift_script_pathname(uniqpix, survey, program)
     else:
         scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                night=night, expid=expid, subgroup=subgroup)
