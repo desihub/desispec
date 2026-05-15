@@ -290,6 +290,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- uniqpix and healpix based
         #
+        spectra_base  = '{specprod_dir}/spectra/{survey}/{faprogram}',
         coadd_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
         rrdetails_pix = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
         rrmodel_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
@@ -359,6 +360,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         month = None
 
     #- default group is "cumulative" for tile-based files
+    #- and "uniqpix" if healpix or uniqpix is set
     if groupname is None:
         if filetype in ('zcat_tile', 'zall_tile') or \
             (tile is not None and filetype in (
@@ -366,6 +368,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile')
              ):
                 groupname = 'cumulative'
+        elif healpix is not None or uniqpix is not None:
+            groupname = 'uniqpix'
 
     # zcat v2 added SURVEY/ or zall/ subdirs
     if version == 'v2':

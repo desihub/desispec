@@ -12,6 +12,7 @@ from desispec.workflow.batch import determine_resources
 from desiutil.log import get_logger
 
 import desispec.io
+from desispec.io.util import pix_subdirectory
 from desispec.workflow import batch
 
 
@@ -106,7 +107,7 @@ def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
 
-def get_zpix_redshift_script_pathname(uniqpix, survey, program):
+def get_zpix_script_pathname(uniqpix, survey, program):
     """Return uniqpix-based coadd+redshift+afterburner script pathname
 
     Args:
@@ -128,8 +129,8 @@ def get_zpix_redshift_script_pathname(uniqpix, survey, program):
         scriptname = f'zpix-{survey}-{program}-{upixmin}-{upixmax}.slurm'
 
     reduxdir = desispec.io.specprod_root()
-    return os.path.join(reduxdir, 'run', 'scripts', 'uniqpix',
-                        survey, program, str(upixmin//100), scriptname)
+    return os.path.join(reduxdir, 'run', 'scripts', 'spectra',
+                        survey, program, str(pix_subdirectory(upixmin)), scriptname)
 
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
@@ -203,7 +204,7 @@ def create_desi_zproc_batch_script(group,
             expid = expids[0]
 
     if group == 'uniqpix':
-        scriptpath = get_zpix_redshift_script_pathname(uniqpix, survey, program)
+        scriptpath = get_zpix_script_pathname(uniqpix, survey, program)
     else:
         scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                night=night, expid=expid, subgroup=subgroup)

@@ -14,7 +14,7 @@ import fitsio
 
 from desiutil.log import get_logger
 
-from desispec.workflow.redshifts import create_desi_zproc_batch_script, get_zpix_redshift_script_pathname
+from desispec.workflow.redshifts import create_desi_zproc_batch_script, get_zpix_script_pathname
 from desispec import io
 from desispec.io.util import get_tempfilename
 from desispec.pixgroup import get_exp2uniqpix_map, get_hpix2upix_map
@@ -94,7 +94,7 @@ def main(args):
     #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
     uniqpix_for_map = np.unique(exppix['UNIQPIX'])
     hpix2upix_map, nside_max = get_hpix2upix_map(uniqpix_for_map, args.nside_max)
-    outdir = f'{reduxdir}/spectra/{args.survey}/{args.program}'
+    outdir = io.findfile('spectra_base', survey=args.survey, faprogram=args.program)
     header = dict(
             NSIDE = nside_max,
             HPXNSIDE = nside_max, # same as NSIDE, but consistent with other files
@@ -174,8 +174,8 @@ def main(args):
                 runtime=runtime,
             )
         else:
-            batchscript = get_zpix_redshift_script_pathname(pixels, args.survey,
-                                                            args.program)
+            batchscript = get_zpix_script_pathname(pixels, args.survey,
+                                                   args.program)
             log.info(f"Dry run so not creating the batch script: {batchscript}"
                      + f"\tfor {pixels=}, {args.survey=}, {args.program=}")
 
