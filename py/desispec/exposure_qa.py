@@ -344,7 +344,8 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
              for tracer in _TSNR2_TRACERS:
                  col = "TSNR2_{}_{}".format(tracer, band)
                  if col in scores.dtype.names:
-                     nonzero = scores[col][scores[col] > 0]
+                     good = (scores[col] > 0) & np.isfinite(scores[col])
+                     nonzero = scores[col][good]
                      if nonzero.size > 0:
                          petalqa_table[col][petal] = np.median(nonzero)
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
