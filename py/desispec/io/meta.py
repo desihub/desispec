@@ -17,7 +17,7 @@ import numpy as np
 from desiutil.log import get_logger
 import desiutil.healpix
 
-from .util import healpix_subdirectory, checkgzip, get_log_pathname
+from .util import pix_subdirectory, checkgzip, get_log_pathname
 
 _desi_root_readonly=None
 def get_desi_root_readonly():
@@ -461,7 +461,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     del loc_copy
 
     if groupname is not None and tile is None and pix is not None:
-        pixdir = healpix_subdirectory(pix)
+        pixdir = pix_subdirectory(pix)
     else:
         #- set to anything so later logic will trip on groupname not pixdir
         pixdir = 'hpix'

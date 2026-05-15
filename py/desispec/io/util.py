@@ -378,7 +378,12 @@ def _dict2ndarray(data, columns=None):
     return xdata
 
 
-def healpix_subdirectory(pixel):
+def healpix_subdirectory(nside, pixel):
+    log = get_logger()
+    log.warning('DEPRECATED: healpix_subdirectory is deprecated. Use pix_subdirectory instead.')
+    return pix_subdirectory(pixel)
+
+def pix_subdirectory(pixel):
     """
     Return a fixed directory path for healpix/uniqpix grouped files.
 
