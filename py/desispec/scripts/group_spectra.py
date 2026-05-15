@@ -131,9 +131,6 @@ def main(args=None, comm=None):
     if args.inframes is not None:
         framefiles = args.inframes
     else:
-        ### TODO ###
-        raise NotImplementedError('grouping spectra with --expfile is temporarily disabled')
-
         assert args.expfile is not None
         nightexp = None
         if rank == 0:
@@ -152,7 +149,10 @@ def main(args=None, comm=None):
             log0.info(f'Filtering by FAPRGRM={args.faprogram}')
             keep &= nightexp['FAPRGRM'] == args.faprogram
 
-        if args.healpix is not None and 'HEALPIX' in nightexp.colnames:
+        if args.uniqpix is not None and 'UNIQPIX' in nightexp.colnames:
+            log0.info(f'Filtering by uniqpix={args.uniqpix}')
+            keep &= nightexp['UNIQPIX'] == args.uniqpix
+        elif args.healpix is not None and 'HEALPIX' in nightexp.colnames:
             log0.info(f'Filtering by healpix={args.healpix}')
             keep &= nightexp['HEALPIX'] == args.healpix
 

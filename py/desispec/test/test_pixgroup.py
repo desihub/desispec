@@ -12,6 +12,7 @@ from ..scripts import group_spectra
 from ..pixgroup import SpectraLite, get_exp2uniqpix_map
 from desispec.maskbits import fibermask
 from desiutil.io import encode_table
+import desiutil.healpix
 
 class TestPixGroup(unittest.TestCase):
 
@@ -34,6 +35,8 @@ class TestPixGroup(unittest.TestCase):
         cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
         
         cls.healpix = 19456
+        cls.nside = 64
+        cls.uniqpix = desiutil.healpix.hpix2upix(cls.nside, cls.healpix)
         cls.survey = 'main'
         cls.faprogram = 'dark'
         cls.specfile = findfile('spectra', groupname=cls.healpix,
@@ -304,10 +307,11 @@ class TestPixGroup(unittest.TestCase):
         for key in hdr:
             print(key, hdr[key])
 
-        self.assertEqual(hdr['SPGRP'], 'healpix')
-        self.assertEqual(hdr['SPGRPVAL'], self.healpix)
+        self.assertEqual(hdr['SPGRP'], 'uniqpix')
+        self.assertEqual(hdr['SPGRPVAL'], self.uniqpix)
+        self.assertEqual(hdr['UNIQPIX'],  self.uniqpix)
         self.assertEqual(hdr['HPXPIXEL'], self.healpix)
-        self.assertEqual(hdr['HPXNSIDE'], 64)
+        self.assertEqual(hdr['HPXNSIDE'], self.nside)
         self.assertEqual(hdr['HPXNEST'], True)
         self.assertEqual(hdr['BLAT'], True)
         self.assertEqual(hdr['BIM'], False)
