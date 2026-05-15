@@ -19,7 +19,7 @@ from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
 from desispec.preproc import get_amp_ids,parse_sec_keyword
-from desispec.skymag import compute_skymag_per_petal
+from desispec.skymag import compute_skymag
 _qa_params = None
 _TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 def get_qa_params() :
@@ -408,13 +408,19 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
 
-    skymag_table = compute_skymag_per_petal(night, expid, specprod_dir)
-    if skymag_table is not None:
-        for row in skymag_table:
-            p = row['PETAL_LOC']
-            petalqa_table['SKY_MAG_G_SPEC'][p] = row['SKY_MAG_G_SPEC']
-            petalqa_table['SKY_MAG_R_SPEC'][p] = row['SKY_MAG_R_SPEC']
-            petalqa_table['SKY_MAG_Z_SPEC'][p] = row['SKY_MAG_Z_SPEC']
+    ## Put the propagated values in the fiberqa header before the computed ones
+    if frame_header is not None :
+        # copy some keys from the frame header
+        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF","ACQFWHM"]
+        for k in keys :
+            if k in frame_header :
+                fiberqa_table.meta[k] = frame_header[k]
+
+    # copy some keys from the fibermap header
+    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC","FAFLAVOR"]
+    for k in keys :
+        if k in fibermap.meta :
+            fiberqa_table.meta[k] = fibermap.meta[k]
 
     # count bad fibers
     for petal in petal_locs :
@@ -433,17 +439,16 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     else:
         fiberqa_table.meta['EFFTIME']=0.0
 
-    if frame_header is not None :
-        # copy some keys from the frame header
-        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF","ACQFWHM"]
-        for k in keys :
-            if k in frame_header :
-                fiberqa_table.meta[k] = frame_header[k]
-
-    # copy some keys from the fibermap header
-    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC","FAFLAVOR"]
-    for k in keys :
-        if k in fibermap.meta :
-            fiberqa_table.meta[k] = fibermap.meta[k]
+    # Compute skymags and add to tables
+    (gmag, rmag, zmag), skymag_table = compute_skymag(night, expid, specprod_dir, return_per_petal=True)
+    if skymag_table is not None:
+        fiberqa_table.meta['SKY_MAG_G_SPEC'] = gmag
+        fiberqa_table.meta['SKY_MAG_R_SPEC'] = rmag
+        fiberqa_table.meta['SKY_MAG_Z_SPEC'] = zmag
+        for row in skymag_table:
+            p = row['PETAL_LOC']
+            petalqa_table['SKY_MAG_G_SPEC'][p] = row['SKY_MAG_G_SPEC']
+            petalqa_table['SKY_MAG_R_SPEC'][p] = row['SKY_MAG_R_SPEC']
+            petalqa_table['SKY_MAG_Z_SPEC'][p] = row['SKY_MAG_Z_SPEC']
 
     return fiberqa_table , petalqa_table

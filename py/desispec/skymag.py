@@ -45,54 +45,31 @@ def _get_decam_filters() :
 # AR grz-band sky mag / arcsec2 from sky-....fits files
 # AR now using work-in-progress throughput
 # AR still provides a better agreement with GFAs than previous method
-def compute_skymag(night, expid, specprod_dir=None):
-    """
-    Computes the sky magnitude for a given exposure. Uses the sky model
-    and apply a fixed calibration for which the fiber aperture loss
-    is well understood.
+def compute_skymag(night, expid, specprod_dir=None, return_per_petal=False):
+    """Compute sky magnitudes for a given exposure.
 
-    Args:
-       night: int, YYYYMMDD
-       expid: int, exposure id
-       specprod_dir: str, optional, specify the production directory.
-            default is $DESI_SPECTRO_REDUX/$SPECPROD
-
-    Returns:
-        (gmag,rmag,zmag) AB magnitudes per arcsec2, tuple with 3 float values.
-        Returns (99., 99., 99.) if no valid petals are found.
-        Delegates per-petal calibration to compute_skymag_per_petal() and
-        returns the mean over all valid petals.
-    """
-    table = compute_skymag_per_petal(night, expid, specprod_dir)
-    if table is None:
-        return (99., 99., 99.)
-    gmag = np.nanmean(table['SKY_MAG_G_SPEC'])
-    rmag = np.nanmean(table['SKY_MAG_R_SPEC'])
-    zmag = np.nanmean(table['SKY_MAG_Z_SPEC'])
-    return (gmag, rmag, zmag)
-
-
-def compute_skymag_per_petal(night, expid, specprod_dir=None):
-    """Compute per-petal sky magnitudes for one exposure.
-
-    Calibrates the sky spectrum for each spectrograph petal and integrates
-    over the DECam g, r, z filter curves.  Requires all three cameras
-    (b, r, z) for a petal to be present with at least one fiber with
-    non-zero IVAR; petals that fail this check are skipped.
-
-    This function contains the per-petal calibration logic shared with
-    compute_skymag(), which delegates to this function.
+    Uses the sky model and a fixed calibration for which the fiber aperture
+    loss is well understood.  The scalar (gmag, rmag, zmag) values are derived
+    from the arithmetic mean of the calibrated sky spectra across all valid
+    petals (flux space), matching the v1 behaviour.
 
     Args:
         night: int, YYYYMMDD.
         expid: int, exposure ID.
         specprod_dir: str, optional. Defaults to $DESI_SPECTRO_REDUX/$SPECPROD.
+        return_per_petal: bool, optional. If True, also return a Table of
+            per-petal sky magnitudes. Default is False.
 
     Returns:
-        astropy.table.Table with columns PETAL_LOC (int16),
-        SKY_MAG_G_SPEC (float32), SKY_MAG_R_SPEC (float32),
-        SKY_MAG_Z_SPEC (float32), one row per valid petal.
-        Returns None if no valid petals are found.
+        If return_per_petal is False (default):
+            (gmag, rmag, zmag): tuple of 3 floats, AB mag/arcsec2.
+            Returns (99., 99., 99.) if no valid petals are found.
+        If return_per_petal is True:
+            ((gmag, rmag, zmag), table) where table is an astropy.table.Table
+            with columns PETAL_LOC (int16), SKY_MAG_G_SPEC (float32),
+            SKY_MAG_R_SPEC (float32), SKY_MAG_Z_SPEC (float32), one row per
+            valid petal.  Returns ((99., 99., 99.), None) if no valid petals
+            are found.
     """
     log = get_logger()
 
@@ -112,6 +89,7 @@ def compute_skymag_per_petal(night, expid, specprod_dir=None):
 
     filts = _get_decam_filters()
 
+    sky_spectra = []   # calibrated sky flux arrays, one per valid petal
     petal_locs = []
     gmags = []
     rmags = []
@@ -166,27 +144,45 @@ def compute_skymag_per_petal(night, expid, specprod_dir=None):
         if not ok:
             continue  # to next spectrograph
 
-        # AR zero-padding spectrum so that it covers the DECam grz passbands
-        # AR looping through filters while waiting issue to be solved (https://github.com/desihub/speclite/issues/64)
-        sky_pad, fullwave_pad = sky.copy(), fullwave.copy()
-        for i in range(len(filts)):
-            sky_pad, fullwave_pad = filts[i].pad_spectrum(sky_pad, fullwave_pad, method="zero")
-        petal_mags = filts.get_ab_magnitudes(
-            sky_pad * units.erg / (units.cm ** 2 * units.s * units.angstrom),
-            fullwave_pad * units.angstrom
-        ).as_array()[0]
+        sky_spectra.append(sky)
 
-        petal_locs.append(spec)
-        gmags.append(petal_mags[0])
-        rmags.append(petal_mags[1])
-        zmags.append(petal_mags[2])
+        if return_per_petal:
+            # AR zero-padding spectrum so that it covers the DECam grz passbands
+            # AR looping through filters while waiting issue to be solved (https://github.com/desihub/speclite/issues/64)
+            sky_pad, fullwave_pad = sky.copy(), fullwave.copy()
+            for i in range(len(filts)):
+                sky_pad, fullwave_pad = filts[i].pad_spectrum(sky_pad, fullwave_pad, method="zero")
+            petal_mags = filts.get_ab_magnitudes(
+                sky_pad * units.erg / (units.cm ** 2 * units.s * units.angstrom),
+                fullwave_pad * units.angstrom
+            ).as_array()[0]
+            petal_locs.append(spec)
+            gmags.append(petal_mags[0])
+            rmags.append(petal_mags[1])
+            zmags.append(petal_mags[2])
 
-    if len(petal_locs) == 0:
-        return None
+    if len(sky_spectra) == 0:
+        if return_per_petal:
+            return (99., 99., 99.), None
+        return (99., 99., 99.)
+
+    # compute scalar mags from the mean spectrum (flux space) to match v1 behaviour
+    mean_sky = np.mean(np.array(sky_spectra), axis=0)
+    sky_pad, fullwave_pad = mean_sky.copy(), fullwave.copy()
+    for i in range(len(filts)):
+        sky_pad, fullwave_pad = filts[i].pad_spectrum(sky_pad, fullwave_pad, method="zero")
+    mags = filts.get_ab_magnitudes(
+        sky_pad * units.erg / (units.cm ** 2 * units.s * units.angstrom),
+        fullwave_pad * units.angstrom
+    ).as_array()[0]
+    gmag, rmag, zmag = mags[0], mags[1], mags[2]
+
+    if not return_per_petal:
+        return (gmag, rmag, zmag)
 
     table = Table()
     table['PETAL_LOC'] = np.array(petal_locs, dtype=np.int16)
     table['SKY_MAG_G_SPEC'] = np.array(gmags, dtype=np.float32)
     table['SKY_MAG_R_SPEC'] = np.array(rmags, dtype=np.float32)
     table['SKY_MAG_Z_SPEC'] = np.array(zmags, dtype=np.float32)
-    return table
+    return (gmag, rmag, zmag), table
