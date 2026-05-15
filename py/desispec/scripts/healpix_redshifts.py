@@ -11,13 +11,13 @@ import json
 import subprocess
 import numpy as np
 import fitsio
-from astropy.table import Table
 
 from desiutil.log import get_logger
 
 from desispec.workflow.redshifts import create_desi_zproc_batch_script, get_zpix_redshift_script_pathname
 from desispec import io
-from desispec.pixgroup import get_exp2uniqpix_map, uniqpix_to_map
+from desispec.io.util import get_tempfilename
+from desispec.pixgroup import get_exp2uniqpix_map, get_hpix2upix_map
 from desispec.workflow import batch
 
 def parse(options=None):
@@ -34,6 +34,8 @@ def parse(options=None):
             help='uniqpix numbers to run (comma separated)')
     p.add_argument('--bundle-pix', type=int, default=5,
                 help='bundle N pixels into a single job (default %(default)s)')
+    p.add_argument('--nside-max', type=int, default=256, required=False,
+            help='maximum nside to use for healpix->uniqpix map file')
     p.add_argument("--nosubmit", action="store_true",
             help="generate scripts but don't submit batch jobs")
     p.add_argument("--noafterburners", action="store_true",
@@ -90,26 +92,33 @@ def main(args):
         allpixels = np.unique(np.asarray(exppix['UNIQPIX']))
 
     #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
-    # TODO: should this be based upon all the pixels in the exppix table, or just the ones we're going to run on?
     uniqpix_for_map = np.unique(exppix['UNIQPIX'])
-    hpix2upix_map, nside_max = uniqpix_to_map(uniqpix_for_map)
+    hpix2upix_map, nside_max = get_hpix2upix_map(uniqpix_for_map, args.nside_max)
     outdir = f'{reduxdir}/spectra/{args.survey}/{args.program}'
-    hpixmap = Table()
-    hpixmap['HEALPIX'] = np.arange(len(hpix2upix_map))  # redundant, just the row of the table
-    hpixmap['UNIQPIX'] = hpix2upix_map
-    hpixmap.meta['EXTNAME'] = 'HPIX2UPIX'
-    hpixmap.meta['NSIDE'] = nside_max
+    header = dict(
+            NSIDE = nside_max,
+            HPXNSIDE = nside_max, # same as NSIDE, but consistent with other files
+            NPXNEST = True,
+            SURVEY = args.survey,
+            PROGRAM = args.program,
+            SPECPROD = os.getenv('SPECPROD', 'unknown'),
+            )
     hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.fits'
-    hpixmap.write(hpixmapfile, overwrite=True)
+    tmpfile = get_tempfilename(hpixmapfile)
+    with fitsio.FITS(tmpfile, 'rw', clobber=True) as fits:
+        fits.write(hpix2upix_map, header=header, extname='HPIX2UPIX')
+        fits[0].write_comment(f'HPIX2UPIX[i] is the {args.survey}/{args.program} UNIQPIX')
+        fits[0].write_comment(f'    that covers nested NSIDE={nside_max} HEALPIX=i')
+    os.rename(tmpfile, hpixmapfile)
     log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
 
-    #- also save in json format
-    hpixmap = dict()
-    hpixmap['NSIDE'] = int(nside_max)
-    hpixmap['HPIX2UPIX'] = hpix2upix_map.tolist()
+    #- also save in json format; augment header with hpix2upix_map array
+    header['HPIX2UPIX'] = hpix2upix_map.tolist()
     hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.json'
-    with open(hpixmapfile, 'w') as jsonfile:
-        json.dump(hpixmap, jsonfile)
+    tmpfile = get_tempfilename(hpixmapfile)
+    with open(tmpfile, 'w') as jsonfile:
+        json.dump(header, jsonfile)
+    os.rename(tmpfile, hpixmapfile)
     log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
 
     npix = len(allpixels)

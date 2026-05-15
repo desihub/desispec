@@ -114,16 +114,19 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     return Table.from_pandas(upix_frames)
 
 
-def uniqpix_to_map(uniqpix):
+def get_hpix2upix_map(uniqpix, nside_max=None):
     """
     Given an array of UNIQ pixels (possibly at varying NSIDEs, nested scheme),
-    return a map of healpix indices -> uniqpix values at the maximum NSIDE
-    represented in the array.
+    return a map of healpix indices -> uniqpix values at requested or
+    derived nside_max.
 
     Parameters
     ----------
     uniqpix : array-like of int
         Array of UNIQ pixel values.
+    nside_max : int, optional
+        Maximum NSIDE to use for the output map.
+        If None, infer from input uniqpix.
 
     Returns
     -------
@@ -131,18 +134,18 @@ def uniqpix_to_map(uniqpix):
         For each HEALPix pixel index at nside_max, the UNIQ pixel value
         that contains it. Pixels not covered by any UNIQ pixel are set to -1.
     nside_max : int
-        The maximum NSIDE represented in the input array.
+        The NSIDE of the healpix_map.
     """
     uniqpix = np.asarray(uniqpix, dtype=np.int64)
+    nside, ipix = desiutil.healpix.upix2hpix(uniqpix)
+    order = np.log2(nside).astype(int)
 
-    # Recover order and ipix for each uniq pixel
-    # order = floor(log2(uniq) / 2) - 1, but more robustly via bit_length
-    order = (np.floor(np.log2(uniqpix)).astype(np.int64) // 2) - 1
-    nside = 2 ** order
-    ipix = uniqpix - 4 * nside ** 2
+    if nside_max is None:
+        nside_max = int(np.max(nside))
+    elif nside_max < np.max(nside):
+        raise ValueError(f"{nside_max=} is too small for the maximum nside {np.max(nside)} in uniqpix")
 
-    order_max = int(order.max())
-    nside_max = 2 ** order_max
+    order_max = np.log2(nside_max).astype(int)
     npix_max = 12 * nside_max ** 2
 
     healpix_map = np.full(npix_max, -1, dtype=np.int64)

@@ -415,9 +415,9 @@ class TestPixGroup(unittest.TestCase):
             self.assertGreater(nside, 0)
             self.assertEqual(nside & (nside - 1), 0)
 
-    def test_uniqpix_to_map(self):
-        """Test desispec.pixgroup.uniqpix_to_map"""
-        from ..pixgroup import uniqpix_to_map
+    def test_get_hpix2upix_map(self):
+        """Test desispec.pixgroup.get_hpix2upix_map"""
+        from ..pixgroup import get_hpix2upix_map
 
         # --- Test 1: single nside, partial coverage ---
         # UNIQPIX = 4 * nside**2 + ipix; for nside=2: UNIQPIX = 16 + ipix
@@ -427,7 +427,7 @@ class TestPixGroup(unittest.TestCase):
         upix_a = 4 * nside2**2 + 0   # 16, covers ipix=0
         upix_b = 4 * nside2**2 + 3   # 19, covers ipix=3
 
-        healpix_map, nside_max = uniqpix_to_map([upix_a, upix_b])
+        healpix_map, nside_max = get_hpix2upix_map([upix_a, upix_b])
 
         self.assertEqual(nside_max, nside2)
         self.assertEqual(len(healpix_map), npix2)
@@ -449,7 +449,7 @@ class TestPixGroup(unittest.TestCase):
         upix_coarse = 4 * nside2**2 + 0   # 16, nside=2, ipix=0
         upix_fine   = 4 * nside4**2 + 5   # 69, nside=4, ipix=5
 
-        healpix_map2, nside_max2 = uniqpix_to_map([upix_coarse, upix_fine])
+        healpix_map2, nside_max2 = get_hpix2upix_map([upix_coarse, upix_fine])
 
         self.assertEqual(nside_max2, nside4)
         self.assertEqual(len(healpix_map2), npix4)
