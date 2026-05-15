@@ -132,7 +132,7 @@ def main(args=None, comm=None):
         framefiles = args.inframes
     else:
         ### TODO ###
-        raise NotImpelmentedError('grouping spectra with --expfile is temporarily disabled')
+        raise NotImplementedError('grouping spectra with --expfile is temporarily disabled')
 
         assert args.expfile is not None
         nightexp = None

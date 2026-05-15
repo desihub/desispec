@@ -18,6 +18,7 @@ from astropy.table import Table, vstack
 from desimodel.footprint import radec2pix
 from desiutil.log import get_logger
 import desiutil.depend
+import desiutil.healpix
 
 from . import io
 from .io.util import get_tempfilename, addkeys
@@ -57,7 +58,8 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
         frames: table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from exposures-SPECPROD.fits FRAMES HDU
 
     Returns:
-        Table with columns NIGHT, EXPID, TILEID, PETAL_LOC, UNIQPIX, NSIDE, HEALPIX, NTARGETS
+        Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE, HEALPIX, NTARGETS
+        (SPECTRO is the petal number, renamed from PETAL_LOC for historical compatibility)
     """
     log = get_logger()
 
@@ -106,7 +108,7 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     upix_frames.rename(columns={'PETAL_LOC': 'SPECTRO'}, inplace=True)
 
     nuniq = len(np.unique(upix_frames['UNIQPIX']))
-    nexppetals = len(np.unique(Table.from_pandas(upix_frames[['EXPID', 'SPECTRO']])))
+    nexppetals = len(upix_frames[['EXPID', 'SPECTRO']].drop_duplicates())
     log.info(f'{nuniq} unique pixels covered by {nexppetals} exposure-petal combinations')
 
     return Table.from_pandas(upix_frames)
