@@ -126,7 +126,7 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     petalqa_table["SKY_MAG_Z_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
     for tracer in _TSNR2_TRACERS:
         for band in ("B", "R", "Z"):
-            petalqa_table["TSNR2_{}_{}" .format(tracer, band)] = np.zeros(npetal, dtype=np.float32)
+            petalqa_table["TSNR2_{}_{}".format(tracer, band)] = np.zeros(npetal, dtype=np.float32)
 
     # need to add things
 
