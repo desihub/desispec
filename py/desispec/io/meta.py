@@ -290,16 +290,16 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- uniqpix and healpix based
         #
-        coadd_hp     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
-        rrdetails_hp = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
-        rrmodel_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
-        spectra_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
-        redrock_hp   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
-        qso_mgii_hp  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
-        qso_qn_hp    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
-        emline_hp    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
-        hpixexp      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
-        upixexp      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
+        coadd_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
+        rrdetails_pix = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
+        rrmodel_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
+        spectra_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
+        redrock_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
+        qso_mgii_pix  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
+        qso_qn_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
+        emline_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
+        hpixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
+        upixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
@@ -328,10 +328,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         # z catalogs
         #
         zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
-        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits', # deprecated
         zcat_pix = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
         zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
-        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',       # deprecated
         zall_pix = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
         zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
         #
@@ -351,6 +349,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
     location['exptable'] = location['exposure_table']
     location['proctable'] = location['processing_table']
     location['unproctable'] = location['unprocessed_table']
+    location['ztile'] = location['zcat_tile']
+    location['zpix'] = location['zcat_pix']
 
     ## Define the month if night is specified
     if night is not None:
@@ -428,7 +428,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     #- Determine if this is healpix-based or tile-based objects, and update
     #- location dict for which flavor of coadd/spectra/redrock/etc is needed,
-    #- removing the _hp, _single, _tile suffixes from the keys
+    #- removing the _pix, _single, _tile suffixes from the keys
     loc_copy = location.copy()
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
@@ -455,8 +455,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         ## If not tile based then use the hp naming scheme
         ## Do loop to improve scaling with additional file types
         for key, val in loc_copy.items():
-            if key.endswith('_hp'):
-                root_key = key.removesuffix('_hp')
+            if key.endswith('_pix'):
+                root_key = key.removesuffix('_pix')
                 location[root_key] = val
     del loc_copy
 

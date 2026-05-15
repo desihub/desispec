@@ -98,7 +98,7 @@ def main(args=None):
 
     ## Define filetype based on healpix vs not healpix
     if args.group == 'healpix':
-        ftype = 'zcat_hp'
+        ftype = 'zcat_pix'
     else:
         ftype = 'zcat_tile'
 
