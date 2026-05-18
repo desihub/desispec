@@ -130,15 +130,14 @@ def main(args):
         ntilepetals = 0
         for pix in pixels:
             #- outdir is relative to specprod
-            rrfile = io.findfile('redrock', uniqpix=pix, survey=args.survey, faprogram=args.program)
-            outdir = os.path.dirname(rrfile)
+            pixexpfile = io.findfile('pixexp', uniqpix=pix, survey=args.survey, faprogram=args.program)
+            outdir = os.path.dirname(pixexpfile)
             ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
             if args.dry_run_level < 3:
                 os.makedirs(outdir, exist_ok=True)
             else:
                 log.info(f"Dry run so not making directory: {outdir}")
             ii = exppix['UNIQPIX'] == pix
-            pixexpfile = f'{outdir}/pixexp-{args.survey}-{args.program}-{pix}.csv'
             ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
             if args.dry_run_level < 3:
                 exppix[ii].write(pixexpfile, overwrite=True)

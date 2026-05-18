@@ -299,8 +299,9 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_mgii_pix  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
         qso_qn_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
         emline_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
+        # hpixexp before matterhorn/DR3; pixexp matterhorn/DR3 and after
         hpixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
-        upixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
+        pixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
