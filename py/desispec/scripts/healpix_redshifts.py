@@ -2,8 +2,7 @@
 desispec.scripts.healpix_redshifts
 ==================================
 
-Script for running healpix-based coadds+redshifts, assuming that the
-spectral regrouping into healpix has already happened.
+Script to submit jobs to run uniqpix-based combine+coadd+redshift
 """
 
 import os, sys, time
@@ -23,7 +22,8 @@ from desispec.workflow import batch
 def parse(options=None):
     import argparse
 
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+            description='Submit batch jobs to run redshifts grouped by unique pixel (adaptive sized healpix)')
     p.add_argument('--survey', type=str, required=True,
             help='survey (e.g. sv3, main)')
     p.add_argument('--program', type=str, required=True,
