@@ -330,6 +330,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
         # z catalogs
+        # Note: v1 and v2 have different subdir structure, handled later as a special case
         #
         zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
         zcat_pix = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
