@@ -19,7 +19,9 @@ from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
 from desispec.preproc import get_amp_ids,parse_sec_keyword
+from desispec.skymag import compute_skymag
 _qa_params = None
+_TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 def get_qa_params() :
     """
     Returns a dictionnary with the content of data/qa/qa-params.yaml
@@ -119,6 +121,12 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     petalqa_table["BTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["RTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
     petalqa_table["ZTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["SKY_MAG_G_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    petalqa_table["SKY_MAG_R_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    petalqa_table["SKY_MAG_Z_SPEC"]=np.full(npetal, np.nan, dtype=np.float32)
+    for tracer in _TSNR2_TRACERS:
+        for band in ("B", "R", "Z"):
+            petalqa_table["TSNR2_{}_{}".format(tracer, band)] = np.zeros(npetal, dtype=np.float32)
 
     # need to add things
 
@@ -316,7 +324,7 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
         else:
             scores = petal_cframes[camera].scores
 
-        print(scores.dtype.names)
+        log.debug("scores columns: {}".format(scores.dtype.names))
 
         # AR the tsnr2_petals computation has been removed
         # https://github.com/desihub/desispec/pull/1722
@@ -332,6 +340,14 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
                  scores = petal_cframes[camera].scores
 
              tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
+             # record per-petal per-band TSNR2 median for all tracers
+             for tracer in _TSNR2_TRACERS:
+                 col = "TSNR2_{}_{}".format(tracer, band)
+                 if col in scores.dtype.names:
+                     good = (scores[col] > 0) & np.isfinite(scores[col])
+                     nonzero = scores[col][good]
+                     if nonzero.size > 0:
+                         petalqa_table[col][petal] = np.median(nonzero)
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
         efftime = tsnr2_to_efftime(tsnr2_for_efftime_vals,target_type)
 
@@ -393,6 +409,20 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
 
+    ## Put the propagated values in the fiberqa header before the computed ones
+    if frame_header is not None :
+        # copy some keys from the frame header
+        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF","ACQFWHM"]
+        for k in keys :
+            if k in frame_header :
+                fiberqa_table.meta[k] = frame_header[k]
+
+    # copy some keys from the fibermap header
+    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC","FAFLAVOR"]
+    for k in keys :
+        if k in fibermap.meta :
+            fiberqa_table.meta[k] = fibermap.meta[k]
+
     # count bad fibers
     for petal in petal_locs :
         entries=(fiberqa_table['PETAL_LOC'] == petal)
@@ -410,17 +440,16 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     else:
         fiberqa_table.meta['EFFTIME']=0.0
 
-    if frame_header is not None :
-        # copy some keys from the frame header
-        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF"]
-        for k in keys :
-            if k in frame_header :
-                fiberqa_table.meta[k] = frame_header[k]
-
-    # copy some keys from the fibermap header
-    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
-    for k in keys :
-        if k in fibermap.meta :
-            fiberqa_table.meta[k] = fibermap.meta[k]
+    # Compute skymags and add to tables
+    (gmag, rmag, zmag), skymag_table = compute_skymag(night, expid, specprod_dir, return_per_petal=True)
+    if skymag_table is not None:
+        fiberqa_table.meta['SKY_MAG_G_SPEC'] = gmag
+        fiberqa_table.meta['SKY_MAG_R_SPEC'] = rmag
+        fiberqa_table.meta['SKY_MAG_Z_SPEC'] = zmag
+        for row in skymag_table:
+            p = row['PETAL_LOC']
+            petalqa_table['SKY_MAG_G_SPEC'][p] = row['SKY_MAG_G_SPEC']
+            petalqa_table['SKY_MAG_R_SPEC'][p] = row['SKY_MAG_R_SPEC']
+            petalqa_table['SKY_MAG_Z_SPEC'][p] = row['SKY_MAG_Z_SPEC']
 
     return fiberqa_table , petalqa_table
