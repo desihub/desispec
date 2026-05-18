@@ -98,7 +98,7 @@ def main(args):
     header = dict(
             NSIDE = nside_max,
             HPXNSIDE = nside_max, # same as NSIDE, but consistent with other files
-            NPXNEST = True,
+            HPXNEST = True,
             SURVEY = args.survey,
             PROGRAM = args.program,
             SPECPROD = os.getenv('SPECPROD', 'unknown'),
