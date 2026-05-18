@@ -82,7 +82,7 @@ def parse(options=None):
     #- Options for uniqpix-based redshifts
     uniqpix_options = parser.add_argument_group("uniqpix-based options (--groupname uniqpix)")
     uniqpix_options.add_argument("-p", "--uniqpix", type=int, nargs='*', default=None,
-            help="uniqpix pixels (healpix + 4*nside^2")
+            help="uniqpix pixels (healpix + 4*nside^2)")
     uniqpix_options.add_argument("--survey", help="survey name, e.g. main,sv1,sv3")
     uniqpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
     uniqpix_options.add_argument("--expfiles", nargs='*',
