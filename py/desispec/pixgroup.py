@@ -138,14 +138,23 @@ def get_hpix2upix_map(uniqpix, nside_max=None):
     """
     uniqpix = np.asarray(uniqpix, dtype=np.int64)
     nside, ipix = desiutil.healpix.upix2hpix(uniqpix)
+
+    # Validate that all nside values from uniqpix are positive powers of 2
+    for n in np.unique(nside):
+        if n <= 0 or (n & (n - 1)) != 0:
+            raise ValueError(f"nside={n} derived from uniqpix is not a positive power of 2")
+
     order = np.log2(nside).astype(int)
 
     if nside_max is None:
         nside_max = int(np.max(nside))
-    elif nside_max < np.max(nside):
-        raise ValueError(f"{nside_max=} is too small for the maximum nside {np.max(nside)} in uniqpix")
+    else:
+        if nside_max <= 0 or (nside_max & (nside_max - 1)) != 0:
+            raise ValueError(f"{nside_max=} is not a positive power of 2")
+        if nside_max < np.max(nside):
+            raise ValueError(f"{nside_max=} is too small for the maximum nside {np.max(nside)} in uniqpix")
 
-    order_max = np.log2(nside_max).astype(int)
+    order_max = int(np.log2(nside_max))
     npix_max = 12 * nside_max ** 2
 
     healpix_map = np.full(npix_max, -1, dtype=np.int64)
