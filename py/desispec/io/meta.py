@@ -416,6 +416,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
     if groupname == 'healpix':
         pixbase = 'healpix'
         pix = healpix
+    # tile-based default cases handled previously, so if groupname is None at this point, it's uniqpix-based files
     elif groupname in ('uniqpix', None):
         pixbase = 'spectra'
         groupname = 'uniqpix'
