@@ -5,7 +5,7 @@ import numpy.testing as nt
 from astropy.io import fits
 from astropy.table import Table
 from copy import deepcopy
-from ..test.util import get_frame_data
+from ..test.util import get_frame_data, installed
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
 from ..scripts import group_spectra
@@ -362,6 +362,7 @@ class TestPixGroup(unittest.TestCase):
         compgz = read_spectra(self.fileiogz)
         self.verify_spectralite(compgz, self.fmap1)
 
+    @unittest.skipIf(not installed('pandas'), 'get_exp2uniqpix_map requires pandas')
     def test_get_exp2uniqpix_map(self):
         """Test desispec.pixgroup.get_exp2uniqpix_map"""
         from ..pixgroup import get_exp2uniqpix_map

@@ -14,6 +14,7 @@ import numpy as np
 from astropy.table import Table
 
 from desispec import util
+from desispec.test.util import installed
 import desispec.parallel as dpl
 
 class TestNight(unittest.TestCase):
@@ -592,6 +593,7 @@ class TestUtil(unittest.TestCase):
         self.assertTrue(np.all(a['x'][ii] == b['x']))
         self.assertTrue(np.all(a['y'][ii] == b['y']))
 
+    @unittest.skipIf(not installed('pandas'), 'convert_to_pandas needs pandas')
     def test_convert_to_pandas(self):
         import pandas as pd
 
