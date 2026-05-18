@@ -290,18 +290,20 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- uniqpix and healpix based
         #
-        spectra_base  = '{specprod_dir}/spectra/{survey}/{faprogram}',
-        coadd_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
-        rrdetails_pix = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
-        rrmodel_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
-        spectra_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
-        redrock_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
-        qso_mgii_pix  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
-        qso_qn_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
-        emline_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
+        hpix2upix      = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.fits', 
+        hpix2upix_fits = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.fits',
+        hpix2upix_json = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.json',
+        coadd_pix      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
+        rrdetails_pix  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
+        rrmodel_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
+        spectra_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
+        redrock_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
+        qso_mgii_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
+        qso_qn_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
+        emline_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
         # hpixexp before matterhorn/DR3; pixexp matterhorn/DR3 and after
-        hpixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
-        pixexp       = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
+        hpixexp        = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
+        pixexp         = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
@@ -314,7 +316,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         #
-        # spectra- single exp tile based requires cusom formatting for expid:08d
+        # spectra- single exp tile based requires custom formatting for expid:08d
         #
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',

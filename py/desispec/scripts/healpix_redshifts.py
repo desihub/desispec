@@ -94,7 +94,6 @@ def main(args):
     #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
     uniqpix_for_map = np.unique(exppix['UNIQPIX'])
     hpix2upix_map, nside_max = get_hpix2upix_map(uniqpix_for_map, args.nside_max)
-    outdir = io.findfile('spectra_base', survey=args.survey, faprogram=args.program)
     header = dict(
             NSIDE = nside_max,
             HPXNSIDE = nside_max, # same as NSIDE, but consistent with other files
@@ -103,7 +102,7 @@ def main(args):
             PROGRAM = args.program,
             SPECPROD = os.getenv('SPECPROD', 'unknown'),
             )
-    hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.fits'
+    hpixmapfile = io.findfile('hpix2upix', survey=args.survey, faprogram=args.program)
     tmpfile = get_tempfilename(hpixmapfile)
     with fitsio.FITS(tmpfile, 'rw', clobber=True) as fits:
         fits.write(hpix2upix_map, header=header, extname='HPIX2UPIX')
@@ -114,7 +113,7 @@ def main(args):
 
     #- also save in json format; augment header with hpix2upix_map array
     header['HPIX2UPIX'] = hpix2upix_map.tolist()
-    hpixmapfile = f'{outdir}/hpix2upix-{args.survey}-{args.program}.json'
+    hpixmapfile = io.findfile('hpix2upix_json', survey=args.survey, faprogram=args.program)
     tmpfile = get_tempfilename(hpixmapfile)
     with open(tmpfile, 'w') as jsonfile:
         json.dump(header, jsonfile)
