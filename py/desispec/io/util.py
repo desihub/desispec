@@ -10,6 +10,7 @@ import re
 import time
 import datetime
 import subprocess
+import warnings
 import fitsio
 import astropy.io
 import numpy as np
@@ -379,8 +380,9 @@ def _dict2ndarray(data, columns=None):
 
 
 def healpix_subdirectory(nside, pixel):
-    log = get_logger()
-    log.warning('DEPRECATED: healpix_subdirectory is deprecated. Use pix_subdirectory instead.')
+    warnings.warn(
+        'healpix_subdirectory is deprecated; use pix_subdirectory instead.',
+        DeprecationWarning, stacklevel=2)
     return pix_subdirectory(pixel)
 
 def pix_subdirectory(pixel):
