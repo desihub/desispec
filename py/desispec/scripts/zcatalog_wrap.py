@@ -27,7 +27,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-g", "--group", type=str, required=True,
             help="Add columns specific to this spectral grouping "
-                 "e.g. pernight, perexp, cumulative, healpix")
+                 "e.g. pernight, perexp, cumulative, uniqpix, healpix")
     parser.add_argument('-V', "--cat-version",type=str, required=True,
             help="The version number of the output catalogs")
 
@@ -96,8 +96,8 @@ def main(args=None):
                          + '--do-not-add-units')
             return 1
 
-    ## Define filetype based on healpix vs not healpix
-    if args.group == 'healpix':
+    ## Define filetype based on uniqpix/healpix vs otherwise (tiles or custom)
+    if args.group in ('uniqpix', 'healpix'):
         ftype = 'zcat_pix'
     else:
         ftype = 'zcat_tile'
@@ -167,9 +167,9 @@ def main(args=None):
             ## update the base command with the program and survey information
             current_cmd = cmd + f" --survey={survey} --program={program} --outfile={outfile}"
             if args.indir is not None:
-                ## the healpix path includes survey and program and the
-                ## zcatalog assumes healpix indir has them included
-                if args.group == 'healpix':
+                ## the uniqpix/healpix path includes survey and program and the
+                ## zcatalog assumes indir has them included
+                if args.group in ('uniqpix', 'healpix'):
                     current_cmd += f" --indir={args.indir}/{survey}/{program}"
                 else:
                     current_cmd += f" --indir={args.indir}"
@@ -196,9 +196,9 @@ def main(args=None):
             else:
                 log.info(f"Success in producing output: {outfile}")
 
-    ## If all runs above were successful and running cumulative or healpix,
+    ## If all runs above were successful and running cumulative, uniqpix, or healpix,
     ## then run zall as well
-    if error_count == 0 and len(survey_program_outfiles) > 0 and args.group in ['healpix', 'cumulative']:
+    if error_count == 0 and len(survey_program_outfiles) > 0 and args.group in ['uniqpix', 'healpix', 'cumulative']:
         """
         create_summary_catalog(specgroup, indir=None, specprod=None,
                                all_columns=True, columns_list=None,
@@ -211,7 +211,7 @@ def main(args=None):
                                               version=args.cat_version))
         outfile = os.path.join(args.outdir, out_fname)
         ## summary catalog code calls these zpix and ztile instead
-        if args.group == 'healpix':
+        if args.group in ('uniqpix', 'healpix'):
             specgroup = 'zpix'
         else:
             specgroup = 'ztile'
