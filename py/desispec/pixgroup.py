@@ -63,6 +63,11 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     """
     log = get_logger()
 
+    #- Implementation note: this uses pandas.DataFrame internally because it is ~10x faster than
+    #- astropy.table.Table for the merge/join operations on 10s of millions of rows in a zcatalog,
+    #- reducing the runtime from minutes to seconds.  The return value is converted back to
+    #- to Table for consistency with the rest of the codebase which generally doesn't use pandas.
+
     #- Trim zcat to Pandas DataFrame with just the columns we need
     log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
     zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
