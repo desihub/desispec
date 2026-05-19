@@ -303,7 +303,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         emline_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
         # hpixexp before matterhorn/DR3; pixexp matterhorn/DR3 and after
         hpixexp        = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
-        pixexp         = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/upixexp-{survey}-{faprogram}-{pix}.csv',
+        pixexp         = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/pixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
