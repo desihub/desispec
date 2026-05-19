@@ -998,49 +998,6 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError):
             findfile('redrock', tile=1234, healpix=1234, night=20201010, groupname='cumulative')
 
-        # More healpix tests
-        refpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                               os.environ['SPECPROD'],
-                               'healpix', 'main', 'bright', '52', '5286',
-                               'spectra-main-bright-5286.fits.gz')
-        a = findfile('spectra', groupname='healpix', healpix=5286, survey='main', faprogram='BRIGHT')
-        b = findfile('spectra', groupname='healpix', healpix='5286', survey='main', faprogram='BRIGHT')
-        c = findfile('spectra', groupname='5286', survey='main', faprogram='BRIGHT')
-        d = findfile('spectra', groupname=5286, survey='main', faprogram='BRIGHT')
-        e = findfile('spectra', healpix=5286, survey='main', faprogram='BRIGHT')
-        self.assertEqual(a, refpath)
-        self.assertEqual(b, refpath)
-        self.assertEqual(c, refpath)
-        self.assertEqual(d, refpath)
-        #- change for matterhorn/dr3: default is "spectra" (uniqpix) grouping, not healpix
-        upix = desiutil.healpix.hpix2upix(nside=64, hpix=5286)
-        upixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                               os.environ['SPECPROD'],
-                               'spectra', 'main', 'bright', str(upix//100), str(upix),
-                               f'spectra-main-bright-{upix}.fits.gz')
-        self.assertEqual(e, upixpath)
-
-        # uniqpix vs. healpix
-        uniqpix = 123456
-        nside, healpix = desiutil.healpix.upix2hpix(uniqpix)
-        upixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                               os.environ['SPECPROD'],
-                               'spectra', 'main', 'bright', str(uniqpix//100), str(uniqpix),
-                               f'coadd-main-bright-{uniqpix}.fits')
-        hpixpath = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                               os.environ['SPECPROD'],
-                               'healpix', 'main', 'bright', str(healpix//100), str(healpix),
-                               f'coadd-main-bright-{healpix}.fits')
-        opts = dict(survey='main', faprogram='BRIGHT')
-        self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', uniqpix=uniqpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', groupname='uniqpix', nside=nside, healpix=healpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', uniqpix=uniqpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', groupname='spectra', nside=nside, healpix=healpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', uniqpix=uniqpix, **opts))
-        self.assertEqual(upixpath, findfile('coadd', nside=nside, healpix=healpix, **opts))
-
-        # but: can still get healpix path if explicitly asking for groupname='healpix'
-        self.assertEqual(hpixpath, findfile('coadd', groupname='healpix', nside=nside, healpix=healpix, **opts))
 
         #- cumulative vs. pernight
         tileid = 1234
@@ -1101,6 +1058,101 @@ class TestIO(unittest.TestCase):
 
         filename = findfile('tiles', specprod='blat')
         self.assertEqual(filename, os.environ['DESI_SPECTRO_REDUX']+f'/blat/tiles-blat.fits')
+
+        # NOTE: see test_findfile_pixels for healpix/uniqpix tests
+
+
+    def test_findfile_pixels(self):
+        """Test desispec.io.findfile for various healpix/uniqpix cases"""
+        from ..io.meta import findfile
+        survey = 'main'
+        program = 'dark'
+        nside = 64
+        healpix = 1234
+        uniqpix = healpix + 4*nside**2
+        specprod_dir = os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD')
+        upix_coadd = f'{specprod_dir}/spectra/{survey}/{program}/{uniqpix//100}/{uniqpix}/coadd-{survey}-{program}-{uniqpix}.fits'
+        hpix_coadd = f'{specprod_dir}/healpix/{survey}/{program}/{healpix//100}/{healpix}/coadd-{survey}-{program}-{healpix}.fits'
+
+        #--- groupname not specified ---
+        opts = dict(survey=survey, faprogram=program)
+        self.assertEqual(upix_coadd, findfile('coadd', uniqpix=uniqpix, **opts))
+        self.assertEqual(hpix_coadd, findfile('coadd', healpix=healpix, **opts))
+        with self.assertRaises(ValueError):
+            findfile('coadd', healpix=healpix, uniqpix=uniqpix, **opts)  # must specify nside with healpix
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, **opts)  # must specify healpix with nside
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, uniqpix=uniqpix, **opts)  # must specify healpix with nside
+
+        #- nside/healpix ok if consistent with uniqpix, but error if not
+        self.assertEqual(upix_coadd, findfile('coadd', nside=nside, healpix=healpix, uniqpix=uniqpix, **opts))
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside*2, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside*2, healpix=healpix, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, healpix=healpix+1, uniqpix=uniqpix, **opts)
+
+        #- potentially surprising: nside+healpix defaults to spectra (uniqpix);
+        #- must specify groupname='healpix' or not include nside if you really want healpix
+        self.assertEqual(upix_coadd, findfile('coadd', nside=nside, healpix=healpix, **opts))
+        self.assertEqual(hpix_coadd, findfile('coadd', nside=None , healpix=healpix, **opts))
+        self.assertEqual(hpix_coadd, findfile('coadd', nside=nside, healpix=healpix, groupname='healpix', **opts))
+
+        #--- groupname=healpix ---
+        opts = dict(groupname='healpix', survey=survey, faprogram=program)
+        self.assertEqual(hpix_coadd, findfile('coadd', healpix=healpix, **opts))
+        self.assertEqual(hpix_coadd, findfile('coadd', nside=nside, healpix=healpix, **opts))
+
+        #- groupname=healpix ok with uniqpix if consistent with nside, healpix
+        self.assertEqual(hpix_coadd, findfile('coadd', nside=nside, healpix=healpix, uniqpix=uniqpix, **opts))
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, healpix=healpix, uniqpix=uniqpix+1, **opts)
+
+        #- but fail if not complete nside+healpix, even if uniqpix is consistent
+        with self.assertRaises(ValueError):
+            findfile('coadd', healpix=healpix, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, uniqpix=uniqpix, **opts)
+
+        #- errors from not enough healpix info
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', uniqpix=uniqpix, **opts)
+
+        #--- groupname=uniqpix ---
+        opts = dict(groupname='uniqpix', survey=survey, faprogram=program)
+        self.assertEqual(upix_coadd, findfile('coadd', uniqpix=uniqpix, **opts))
+        self.assertEqual(upix_coadd, findfile('coadd', nside=nside, healpix=healpix, **opts))
+
+        #- healpix+nside ok if consistent with uniqpix, but error if not
+        self.assertEqual(upix_coadd, findfile('coadd', nside=nside, healpix=healpix, uniqpix=uniqpix, **opts))
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, healpix=healpix, uniqpix=uniqpix+1, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, healpix=healpix+1, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside+1, healpix=healpix, uniqpix=uniqpix, **opts)
+
+        #- other uniqpix error cases
+        with self.assertRaises(ValueError):
+            findfile('coadd', **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', healpix=healpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', healpix=healpix, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, uniqpix=uniqpix, **opts)
+        with self.assertRaises(ValueError):
+            findfile('coadd', nside=nside, **opts)
+
+        #- groupname interpreted as healpix
+        self.assertEqual(hpix_coadd, findfile('coadd', groupname=healpix, survey=survey, faprogram=program))
+
 
     def test_findfile_zcat(self):
         """Test desispec.io.findfile for various redshift catalog (zcat) filetypes"""

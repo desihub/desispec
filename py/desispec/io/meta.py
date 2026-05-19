@@ -154,7 +154,7 @@ def get_fits_compression_suffix() :
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
-        healpix=None, nside=64, uniqpix=None, band=None, spectrograph=None,
+        healpix=None, nside=None, uniqpix=None, band=None, spectrograph=None,
         survey=None, faprogram=None, version=None,
         rawdata_dir=None, specprod_dir=None, specprod=None,
         spectrocalib_dir=None,
@@ -363,8 +363,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else:
         month = None
 
+    # not encouraged, but "spectra" is an alternative name for "uniqpix"
+    if groupname == 'spectra':
+        groupname = 'uniqpix'
+
     #- default group is "cumulative" for tile-based files
-    #- and "uniqpix" if healpix or uniqpix is set
     if groupname is None:
         if filetype in ('zcat_tile', 'zall_tile') or \
             (tile is not None and filetype in (
@@ -372,8 +375,85 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile')
              ):
                 groupname = 'cumulative'
-        elif healpix is not None or uniqpix is not None:
+
+    #- maybe we don't need groupname anyway
+    if groupname is not None:
+        ignore_groupname = False
+        if filetype in location:
+            if ('groupname' not in location[filetype]) and ('pixbase' not in location[filetype]):
+                ignore_groupname = True
+        elif filetype+'_pix' in location:
+            if ('groupname' not in location[filetype+'_pix']) and ('pixbase' not in location[filetype+'_pix']):
+                ignore_groupname = True
+
+        if ignore_groupname:
+            log.warning(f'Ignoring extraneous {groupname=}')
+            groupname = groupname + '_ignored'
+
+    #- groupname defaults for healpix and uniqpix
+    if groupname is None:
+        if uniqpix is not None:
+            test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+            if nside is not None and nside != test_nside:
+                raise ValueError(f"{uniqpix=} is nside={test_nside}, but nside={nside} was provided.")
+            if healpix is not None and healpix != test_healpix:
+                raise ValueError(f"{uniqpix=} is healpix={test_healpix}, but healpix={healpix} was provided.")
             groupname = 'uniqpix'
+        elif healpix is not None:
+            if nside is None:
+                nside = 64
+                groupname = 'healpix'
+            else:
+                uniqpix = desiutil.healpix.hpix2upix(nside, healpix)
+                groupname = 'uniqpix'
+                log.warning(f'Using uniqpix=healpix+4*nside^2; if you really want healpix-based files, set groupname="healpix"')
+
+    #- other healpix / uniqpix standardization and error cases
+    if groupname == 'healpix':
+        if nside is None:
+            if healpix is None and uniqpix is None:
+                raise ValueError("groupname='healpix' but no healpix or uniqpix provided")
+            elif uniqpix is not None:
+                raise ValueError("groupname='healpix' but uniqpix provided")
+            assert healpix is not None
+            nside = 64
+        else:
+            if healpix is None:
+                raise ValueError("groupname='healpix' but no healpix provided")
+            if uniqpix is not None:
+                test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+                if test_healpix != healpix or test_nside != nside:
+                    raise ValueError(f"groupname='healpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
+
+    if groupname == 'uniqpix':
+        if nside is None:
+            if healpix is not None:
+                raise ValueError(f'groupname="uniqpix" but {healpix=} provided without nside')
+            elif uniqpix is None:
+                raise ValueError('groupname="uniqpix" but no healpix or uniqpix provided')
+        else:
+            if healpix is None:
+                if uniqpix is None:
+                    raise ValueError('groupname="uniqpix" but no healpix or uniqpix provided')
+                else:
+                    raise ValueError(f'groupname="uniqpix" and {nside=} but no healpix provided')
+            else:
+                if uniqpix is None:
+                    uniqpix = desiutil.healpix.hpix2upix(nside, healpix)
+                else:
+                    test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+                    if test_healpix != healpix or test_nside != nside:
+                        raise ValueError(f"groupname='healpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
+
+
+    #- backwards compatibility: try interpreting groupname as a healpix number
+    if healpix is None and tile is None and groupname is not None:
+        try:
+            healpix = int(groupname)
+            nside = 64
+            groupname = 'healpix'
+        except (TypeError, ValueError):
+            pass
 
     # zcat v2 added SURVEY/ or zall/ subdirs
     if version == 'v2':
@@ -381,10 +461,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
             version = f'{version}/{survey}'
         elif filetype.startswith('zall'):
             version = f'{version}/zall'
-
-    # not encouraged, but "spectra" is an alternative name for "uniqpix"
-    if groupname == 'spectra':
-        groupname = 'uniqpix'
 
     if groupname == "cumulative":
         nightprefix = "thru"
@@ -399,34 +475,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else:
         nightprefix = str(groupname)+'-'
 
-    #- backwards compatibility: try interpreting groupname as a healpix number
-    if healpix is None and tile is None and groupname is not None:
-        try:
-            healpix = int(groupname)
-            groupname = 'healpix'
-        except (TypeError, ValueError):
-            pass
-
     #- tile or healpix but not both
     if tile is not None and healpix is not None:
         raise ValueError(f'Set healpix or tile but not both ({healpix}, {tile})')
-
-    #- uniqpix or healpix but not both
-    if uniqpix is not None and healpix is not None:
-        raise ValueError(f'Set uniqpix or healpix but not both ({uniqpix}, {healpix})')
 
     pixbase = pix = None
     if groupname == 'healpix':
         pixbase = 'healpix'
         pix = healpix
-    # tile-based default cases handled previously, so if groupname is None at this point, it's uniqpix-based files
-    elif groupname in ('uniqpix', None):
+    elif groupname == 'uniqpix':
         pixbase = 'spectra'
-        groupname = 'uniqpix'
-        if uniqpix is not None:
-            pix = uniqpix
-        elif healpix is not None:
-            pix = desiutil.healpix.hpix2upix(nside, healpix)
+        pix = uniqpix
 
     #- be robust to str vs. int
     if isinstance(pix, str):     pix = int(pix)
@@ -473,7 +532,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         pixdir = pix_subdirectory(pix)
     else:
         #- set to anything so later logic will trip on groupname not pixdir
-        pixdir = 'hpix'
+        pixdir = 'defaultpix'
     log.debug("pixdir = '%s'", pixdir)
 
     #- Do we know about this kind of file?
@@ -546,6 +605,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
             missing_inputs = True
 
     if missing_inputs:
+        print(actual_inputs)
         msg = f"Missing inputs for {location[filetype]}"
         log.critical(msg)
         raise ValueError(msg)
