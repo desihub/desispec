@@ -326,7 +326,7 @@ desispec API
 .. automodule:: desispec.scripts.group_spectra
     :members:
 
-.. automodule:: desispec.scripts.healpix_redshifts
+.. automodule:: desispec.scripts.uniqpix_redshifts
     :members:
 
 .. automodule:: desispec.scripts.humidity_corrected_fiberflat

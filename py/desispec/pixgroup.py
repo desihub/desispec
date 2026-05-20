@@ -53,30 +53,37 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
     """
     Maps exposures to unique healpix pixels using zcat and frames
 
-    Args:
-        zcat: table with columns TARGETID, TILEID, PETAL_LOC, TARGET_RA, TARGET_DEC, e.g. from ztile file
-        frames: table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from exposures-SPECPROD.fits FRAMES HDU
+    Parameters
+    ----------
+    zcat : table
+        Table with columns TARGETID, TILEID, PETAL_LOC, TARGET_RA, TARGET_DEC,
+        e.g. from ztile file.
+    frames : table
+        Table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from
+        exposures-SPECPROD.fits FRAMES HDU.
+    nmax : int, optional
+        Max targets per adaptive healpix pixel (passed to partition_radec).
+    nside_max : int, optional
+        NSIDE for the hpix_ntargets output table; must be a positive power of 2
+        and >= the max NSIDE used internally by partition_radec. Defaults to the
+        max NSIDE found in the adaptive pixelization.
 
-    Options:
-        nmax (int): max targets per adaptive healpix pixel (passed to partition_radec)
-        nside_max (int): NSIDE for the hpix_ntargets output table; must be a positive power
-            of 2 and >= the max NSIDE used internally by partition_radec. Defaults to the
-            max NSIDE found in the adaptive pixelization.
-
-    Returns:
-        tuple (exppix, pix_ntargets, hpix_ntargets):
-
-        exppix: Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE, HEALPIX, NTARGETS
-            (SPECTRO is the petal number, renamed from PETAL_LOC for historical compatibility;
-            NTARGETS is the number of unique targets per TILEID, SPECTRO, UNIQPIX combination)
-
-        upix_ntargets: Table with columns UNIQPIX, NTARGETS counting the number of unique
-            targets per UNIQPIX across all tiles and petals
-
-        hpix_ntargets: Table with one row per healpix pixel at nside_max, with columns
-            HEALPIX, NSIDE, UNIQPIX, NTARGETS. UNIQPIX is the adaptive pixel covering each
-            fine healpix (-1 if not covered by any UNIQPIX with targets). NTARGETS is the
-            number of unique targets in that fine healpix (0 if none).
+    Returns
+    -------
+    exppix : astropy.table.Table
+        Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE,
+        HEALPIX, NTARGETS. SPECTRO is the petal number, renamed from PETAL_LOC
+        for historical compatibility. NTARGETS is the number of unique targets
+        per TILEID, SPECTRO, UNIQPIX combination.
+    upix_ntargets : astropy.table.Table
+        Table with columns UNIQPIX, NTARGETS counting the number of unique
+        targets per UNIQPIX across all tiles and petals.
+    hpix_ntargets : astropy.table.Table
+        Table with one row per healpix pixel at nside_max, with columns
+        HEALPIX, NSIDE, UNIQPIX, NTARGETS. UNIQPIX is the adaptive pixel
+        covering each fine healpix (-1 if not covered by any UNIQPIX with
+        targets). NTARGETS is the number of unique targets in that fine
+        healpix (0 if none).
     """
     log = get_logger()
 
