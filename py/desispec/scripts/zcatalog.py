@@ -328,7 +328,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
                 lastnight = int(rrfile.split('-')[-1].split('.')[0].replace('thru', ''))
             data.add_column(np.full(nrows, lastnight, dtype=np.int32),
                     index=icol, name='LASTNIGHT')
-    elif group == 'healpix':
+    elif group in ('uniqpix', 'healpix'):
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
 
