@@ -387,38 +387,80 @@ class TestPixGroup(unittest.TestCase):
             'CAMERA': np.array(['b5', 'r5', 'b5']),
         })
 
-        result = get_exp2uniqpix_map(zcat, frames)
+        exppix, pix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames)
 
         # Check output columns (PETAL_LOC is renamed to SPECTRO for historical compatibility)
-        self.assertEqual(set(result.colnames),
+        self.assertEqual(set(exppix.colnames),
                          {'NIGHT', 'EXPID', 'TILEID', 'SPECTRO', 'UNIQPIX', 'NSIDE', 'HEALPIX', 'NTARGETS'})
 
         # 2 unique (EXPID, PETAL_LOC) combinations, all targets in same pixel -> 2 rows
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(exppix), 2)
 
         # SPECTRO comes from the last character of CAMERA ('b5' -> 5)
-        self.assertTrue(np.all(result['SPECTRO'] == 5))
+        self.assertTrue(np.all(exppix['SPECTRO'] == 5))
 
         # TILEID should pass through unchanged
-        self.assertTrue(np.all(result['TILEID'] == 1234))
+        self.assertTrue(np.all(exppix['TILEID'] == 1234))
 
         # Both exposures present with correct NIGHT values
-        result_sorted = result[np.argsort(result['EXPID'])]
+        result_sorted = exppix[np.argsort(exppix['EXPID'])]
         self.assertEqual(list(result_sorted['EXPID']), [100, 101])
         self.assertEqual(list(result_sorted['NIGHT']), [20201020, 20201021])
 
         # All targets at the same position -> same UNIQPIX -> NTARGETS == n_targets
-        self.assertTrue(np.all(result['NTARGETS'] == n_targets))
+        self.assertTrue(np.all(exppix['NTARGETS'] == n_targets))
 
         # UNIQPIX encoding: UNIQPIX == 4 * NSIDE**2 + HEALPIX
-        for row in result:
+        for row in exppix:
             self.assertEqual(int(row['UNIQPIX']), 4 * int(row['NSIDE'])**2 + int(row['HEALPIX']))
 
         # NSIDE must be a positive power of 2
-        for row in result:
+        for row in exppix:
             nside = int(row['NSIDE'])
             self.assertGreater(nside, 0)
             self.assertEqual(nside & (nside - 1), 0)
+
+        # Check pix_ntargets table
+        self.assertEqual(set(pix_ntargets.colnames), {'UNIQPIX', 'NTARGETS'})
+
+        # All targets are at the same position -> one UNIQPIX -> one row
+        self.assertEqual(len(pix_ntargets), 1)
+
+        # All n_targets unique targets are in the same UNIQPIX
+        self.assertEqual(int(pix_ntargets['NTARGETS'][0]), n_targets)
+
+        # The UNIQPIX in pix_ntargets matches the one in exppix
+        self.assertEqual(int(pix_ntargets['UNIQPIX'][0]), int(np.unique(exppix['UNIQPIX'])[0]))
+
+        # Check hpix_ntargets table
+        self.assertEqual(set(hpix_ntargets.colnames), {'HEALPIX', 'NSIDE', 'UNIQPIX', 'NTARGETS'})
+
+        # One row per fine healpix at nside_max
+        nside_max = int(hpix_ntargets['NSIDE'][0])
+        npix = 12 * nside_max ** 2
+        self.assertEqual(len(hpix_ntargets), npix)
+
+        # HEALPIX column is 0..npix-1
+        self.assertTrue(np.all(hpix_ntargets['HEALPIX'] == np.arange(npix)))
+
+        # NSIDE is constant and a positive power of 2
+        self.assertTrue(np.all(hpix_ntargets['NSIDE'] == nside_max))
+        self.assertGreater(nside_max, 0)
+        self.assertEqual(nside_max & (nside_max - 1), 0)
+
+        # All targets at the same position -> exactly one fine healpix has NTARGETS == n_targets
+        self.assertEqual(int(np.sum(hpix_ntargets['NTARGETS'])), n_targets)
+        self.assertEqual(int(np.max(hpix_ntargets['NTARGETS'])), n_targets)
+
+        # Pixels with targets always have a valid UNIQPIX; uncovered pixels always have UNIQPIX == -1
+        has_targets = hpix_ntargets['NTARGETS'] > 0
+        self.assertTrue(np.all(hpix_ntargets['UNIQPIX'][has_targets] >= 0))
+        uncovered = hpix_ntargets['UNIQPIX'] == -1
+        self.assertTrue(np.all(hpix_ntargets['NTARGETS'][uncovered] == 0))
+
+        # The covering UNIQPIX for the target pixel matches the one in pix_ntargets
+        target_hpix_uniqpix = hpix_ntargets['UNIQPIX'][has_targets]
+        self.assertTrue(np.all(np.isin(target_hpix_uniqpix, pix_ntargets['UNIQPIX'])))
 
     def test_get_hpix2upix_map(self):
         """Test desispec.pixgroup.get_hpix2upix_map"""

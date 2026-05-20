@@ -49,7 +49,7 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2uniqpix_map(zcat, frames, nmax=5000):
+def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
     """
     Maps exposures to unique healpix pixels using zcat and frames
 
@@ -57,9 +57,26 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
         zcat: table with columns TARGETID, TILEID, PETAL_LOC, TARGET_RA, TARGET_DEC, e.g. from ztile file
         frames: table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from exposures-SPECPROD.fits FRAMES HDU
 
+    Options:
+        nmax (int): max targets per adaptive healpix pixel (passed to partition_radec)
+        nside_max (int): NSIDE for the hpix_ntargets output table; must be a positive power
+            of 2 and >= the max NSIDE used internally by partition_radec. Defaults to the
+            max NSIDE found in the adaptive pixelization.
+
     Returns:
-        Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE, HEALPIX, NTARGETS
-        (SPECTRO is the petal number, renamed from PETAL_LOC for historical compatibility)
+        tuple (exppix, pix_ntargets, hpix_ntargets):
+
+        exppix: Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE, HEALPIX, NTARGETS
+            (SPECTRO is the petal number, renamed from PETAL_LOC for historical compatibility;
+            NTARGETS is the number of unique targets per TILEID, SPECTRO, UNIQPIX combination)
+
+        upix_ntargets: Table with columns UNIQPIX, NTARGETS counting the number of unique
+            targets per UNIQPIX across all tiles and petals
+
+        hpix_ntargets: Table with one row per healpix pixel at nside_max, with columns
+            HEALPIX, NSIDE, UNIQPIX, NTARGETS. UNIQPIX is the adaptive pixel covering each
+            fine healpix (-1 if not covered by any UNIQPIX with targets). NTARGETS is the
+            number of unique targets in that fine healpix (0 if none).
     """
     log = get_logger()
 
@@ -78,6 +95,9 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
     log.info(f'Calculating unique pixels from {len(targets)} unique targets')
     targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
+
+    #- Count unique targets per UNIQPIX
+    upix_ntargets = targets.groupby('UNIQPIX').size().reset_index(name='NTARGETS')
 
     #- join zcat with targets to get UNIQPIX for each row in zcat
     log.info('Adding UNIQPIX to zcat')
@@ -116,7 +136,26 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000):
     nexppetals = len(upix_frames[['EXPID', 'SPECTRO']].drop_duplicates())
     log.info(f'{nuniq} unique pixels covered by {nexppetals} exposure-petal combinations')
 
-    return Table.from_pandas(upix_frames)
+    #- Build hpix_ntargets: one row per fine healpix at nside_max
+    #- Use get_hpix2upix_map for the geometric coverage (handles coarse UNIQPIX expanding
+    #- to their fine children, and -1 for uncovered pixels), then scatter in target counts
+    log.info(f'Building hpix_ntargets table at nside_max={nside_max}')
+    hpix2upix, nside_max = get_hpix2upix_map(targets['UNIQPIX'].values, nside_max)
+    npix = 12 * nside_max ** 2
+
+    fine_healpix = radec2pix(nside_max, targets['TARGET_RA'].values, targets['TARGET_DEC'].values)
+    ntargets_per_hpix = np.zeros(npix, dtype=np.int32)
+    hpix_idx, counts = np.unique(fine_healpix, return_counts=True)
+    ntargets_per_hpix[hpix_idx] = counts
+
+    hpix_ntargets = Table({
+        'HEALPIX': np.arange(npix, dtype=np.int64),
+        'UNIQPIX': hpix2upix,
+        'NTARGETS': ntargets_per_hpix,
+    })
+    hpix_ntargets.meta['NSIDE'] = nside_max
+
+    return Table.from_pandas(upix_frames), Table.from_pandas(upix_ntargets), hpix_ntargets
 
 
 def get_hpix2upix_map(uniqpix, nside_max=None):

@@ -83,7 +83,7 @@ def main(args):
     ztilefile = io.findfile('zcat_tile', survey=args.survey, faprogram=args.program, version='v2')
     zcat = fitsio.read(ztilefile, 'ZCATALOG')
 
-    exppix = get_exp2uniqpix_map(zcat, frames)
+    exppix, upix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames, nside_max=args.nside_max)
 
     reduxdir = io.specprod_root()
     if args.uniqpix is not None:
@@ -92,33 +92,47 @@ def main(args):
         allpixels = np.unique(np.asarray(exppix['UNIQPIX']))
 
     #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
-    uniqpix_for_map = np.unique(exppix['UNIQPIX'])
-    hpix2upix_map, nside_max = get_hpix2upix_map(uniqpix_for_map, args.nside_max)
     header = dict(
-            NSIDE = nside_max,
-            HPXNSIDE = nside_max, # same as NSIDE, but consistent with other files
+            NSIDE = args.nside_max,
+            HPXNSIDE = args.nside_max, # same as NSIDE, but consistent with other files
             HPXNEST = True,
             SURVEY = args.survey,
             PROGRAM = args.program,
             SPECPROD = os.getenv('SPECPROD', 'unknown'),
             )
     hpixmapfile = io.findfile('hpix2upix', survey=args.survey, faprogram=args.program)
+    basedir = os.path.dirname(hpixmapfile)
+    os.makedirs(basedir, exist_ok=True)
     tmpfile = get_tempfilename(hpixmapfile)
     with fitsio.FITS(tmpfile, 'rw', clobber=True) as fits:
-        fits.write(hpix2upix_map, header=header, extname='HPIX2UPIX')
+        fits.write(hpix_ntargets['UNIQPIX'], header=header, extname='HPIX2UPIX')
         fits[0].write_comment(f'HPIX2UPIX[i] is the {args.survey}/{args.program} UNIQPIX')
-        fits[0].write_comment(f'    that covers nested NSIDE={nside_max} HEALPIX=i')
+        fits[0].write_comment(f'    that covers nested NSIDE={args.nside_max} HEALPIX=i')
+        fits.write(hpix_ntargets['NTARGETS'], header=header, extname='HPIX_NTARGETS')
+        fits[0].write_comment(f'HPIX_NTARGETS[i] is the number of {args.survey}/{args.program} targets')
+        fits[0].write_comment(f'    covered by nested NSIDE={args.nside_max} HEALPIX=i')
     os.rename(tmpfile, hpixmapfile)
     log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
 
     #- also save in json format; augment header with hpix2upix_map array
-    header['HPIX2UPIX'] = hpix2upix_map.tolist()
+    header['HPIX2UPIX'] = hpix_ntargets['UNIQPIX'].tolist()
+    header['HPIX_NTARGETS'] = hpix_ntargets['NTARGETS'].tolist()
     hpixmapfile = io.findfile('hpix2upix_json', survey=args.survey, faprogram=args.program)
     tmpfile = get_tempfilename(hpixmapfile)
     with open(tmpfile, 'w') as jsonfile:
         json.dump(header, jsonfile)
     os.rename(tmpfile, hpixmapfile)
     log.info(f'Wrote healpix to uniqpix map for {args.survey} {args.program} to {hpixmapfile}')
+
+    #- One more summary table: for each uniqpix, the number of targets from upix_ntargets
+    upix_ntargets.meta['EXTNAME'] = 'UNIQPIX'
+    upix_ntargets.meta['SURVEY'] = args.survey
+    upix_ntargets.meta['PROGRAM'] = args.program
+    upix_ntargets.meta['SPECPROD'] = os.getenv('SPECPROD', 'unknown')
+    upixfile = io.findfile('upix_ntargets', survey=args.survey, faprogram=args.program)
+    tmpfile = get_tempfilename(upixfile)
+    upix_ntargets.write(tmpfile, overwrite=True)
+    os.rename(tmpfile, upixfile)
 
     npix = len(allpixels)
     nscripts = 0
