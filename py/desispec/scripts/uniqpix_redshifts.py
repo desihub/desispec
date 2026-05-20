@@ -24,9 +24,9 @@ def parse(options=None):
 
     p = argparse.ArgumentParser(
             description='Submit batch jobs to run redshifts grouped by unique pixel (adaptive sized healpix)')
-    p.add_argument('--survey', type=str, required=True,
+    p.add_argument('-s', '--survey', type=str, required=True,
             help='survey (e.g. sv3, main)')
-    p.add_argument('--program', type=str, required=True,
+    p.add_argument('-p', '--program', type=str, required=True,
             help='program (e.g. dark, bright, backup)')
     p.add_argument('--expfile', type=str,
             help='exposure summary file with columns NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR')
@@ -46,7 +46,7 @@ def parse(options=None):
             help="batch reservation name")
     p.add_argument("--batch-dependency", type=str,
             help="job dependencies passed to sbatch --dependency")
-    p.add_argument("--system-name", type=str, default=batch.default_system(),
+    p.add_argument("--system-name", type=str, default=None,
             help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
     p.add_argument("--redrock-nodes", type=int, default=1,
             help="Number of nodes per redrock call (default 1)")
@@ -60,6 +60,12 @@ def parse(options=None):
                     Default is 0 (i.e. not dry run, submit jobs).""")
 
     args = p.parse_args(options)
+
+    # Lookup system after parsing args, to enable --help to work on any system,
+    # even if the default system can't be determined (which raises an exception).
+    if args.system_name is None:
+        args.system_name = batch.default_system()
+
     return args
 
 def main(args):
