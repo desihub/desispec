@@ -154,6 +154,8 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
         'NTARGETS': ntargets_per_hpix,
     })
     hpix_ntargets.meta['NSIDE'] = nside_max
+    hpix_ntargets.meta['HPXNSIDE'] = nside_max
+    hpix_ntargets.meta['HPXNEST'] = True
 
     return Table.from_pandas(upix_frames), Table.from_pandas(upix_ntargets), hpix_ntargets
 

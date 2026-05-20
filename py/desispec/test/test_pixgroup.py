@@ -433,10 +433,11 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(int(pix_ntargets['UNIQPIX'][0]), int(np.unique(exppix['UNIQPIX'])[0]))
 
         # Check hpix_ntargets table
-        self.assertEqual(set(hpix_ntargets.colnames), {'HEALPIX', 'NSIDE', 'UNIQPIX', 'NTARGETS'})
+        self.assertEqual(set(hpix_ntargets.colnames), {'HEALPIX', 'UNIQPIX', 'NTARGETS'})
+        self.assertIn('NSIDE', hpix_ntargets.meta)  # NSIDE is in metadata, not a column
 
         # One row per fine healpix at nside_max
-        nside_max = int(hpix_ntargets['NSIDE'][0])
+        nside_max = int(hpix_ntargets.meta['NSIDE'])
         npix = 12 * nside_max ** 2
         self.assertEqual(len(hpix_ntargets), npix)
 
@@ -444,7 +445,6 @@ class TestPixGroup(unittest.TestCase):
         self.assertTrue(np.all(hpix_ntargets['HEALPIX'] == np.arange(npix)))
 
         # NSIDE is constant and a positive power of 2
-        self.assertTrue(np.all(hpix_ntargets['NSIDE'] == nside_max))
         self.assertGreater(nside_max, 0)
         self.assertEqual(nside_max & (nside_max - 1), 0)
 
