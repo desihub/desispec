@@ -110,9 +110,9 @@ def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None
 
 def get_pixel_hash(pixels):
     """
-    Return unique hash for a list of pixels
+    Return unique hash string for a list of pixels, regardless of order
     """
-    pixels = np.asarray(pixels)
+    pixels = np.sort(np.asarray(pixels, dtype=np.int64))
     return hashlib.blake2b(pixels.tobytes(), digest_size=8).hexdigest()
 
 def get_zpix_script_pathname(uniqpix, survey, program):
