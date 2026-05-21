@@ -41,7 +41,7 @@ from .tpcorrparam import read_tpcorrparam
 from .table import read_table
 from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles,
-                   healpix_subdirectory, replace_prefix)
+                   healpix_subdirectory, pix_subdirectory, replace_prefix)
 
 # import if dependecies are installed
 try:

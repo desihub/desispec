@@ -18,9 +18,11 @@ from astropy.table import Table, vstack
 from desimodel.footprint import radec2pix
 from desiutil.log import get_logger
 import desiutil.depend
+import desiutil.healpix
 
 from . import io
 from .io.util import get_tempfilename, addkeys
+from .util import convert_to_pandas
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -47,80 +49,249 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2healpix_map(expfile, survey=None, program=None,
-        specprod_dir=None, nights=None, expids=None):
+def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
     """
-    Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
+    Maps exposures to unique healpix pixels using zcat and frames
 
-    Args:
-        expfile (str): filepath to production exposure file with EXPOSURES and FRAMES HDUs
+    Parameters
+    ----------
+    zcat : table
+        Table with columns TARGETID, TILEID, PETAL_LOC, TARGET_RA, TARGET_DEC,
+        e.g. from ztile file.
+    frames : table
+        Table with columns NIGHT, EXPID, TILEID, CAMERA, e.g. from
+        exposures-SPECPROD.fits FRAMES HDU.
+    nmax : int, optional
+        Max targets per adaptive healpix pixel (passed to partition_radec).
+    nside_max : int, optional
+        NSIDE for the hpix_ntargets output table; must be a positive power of 2
+        and >= the max NSIDE used internally by partition_radec. Defaults to the
+        max NSIDE found in the adaptive pixelization.
 
-    Options:
-        survey (str): filter by this survey (main, sv3, sv1, ...)
-        program (str): filter by this FAPRGRM (dark, bright, backup, other)
-        specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
-        nights (array-like): filter to only these nights
-        expids (array-like): filter to only these exposure IDs
-
-    Returns table with columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
+    Returns
+    -------
+    exppix : astropy.table.Table
+        Table with columns NIGHT, EXPID, TILEID, SPECTRO, UNIQPIX, NSIDE,
+        HEALPIX, NTARGETS. SPECTRO is the petal number, renamed from PETAL_LOC
+        for historical compatibility. NTARGETS is the number of unique targets
+        per TILEID, SPECTRO, UNIQPIX combination.
+    upix_ntargets : astropy.table.Table
+        Table with columns UNIQPIX, NTARGETS counting the number of unique
+        targets per UNIQPIX across all tiles and petals.
+    hpix_ntargets : astropy.table.Table
+        Table with one row per healpix pixel at nside_max, with columns
+        HEALPIX, NSIDE, UNIQPIX, NTARGETS. UNIQPIX is the adaptive pixel
+        covering each fine healpix (-1 if not covered by any UNIQPIX with
+        targets). NTARGETS is the number of unique targets in that fine
+        healpix (0 if none).
     """
     log = get_logger()
-    if specprod_dir is None:
-        specprod_dir = io.specprod_root()
 
-    log.info(f'Reading exposures list from {expfile}')
-    exps = Table.read(expfile, 'EXPOSURES')
-    frames = Table.read(expfile, 'FRAMES')
+    #- Implementation note: this uses pandas.DataFrame internally because it is ~10x faster than
+    #- astropy.table.Table for the merge/join operations on 10s of millions of rows in a zcatalog,
+    #- reducing the runtime from minutes to seconds.  The return value is converted back to
+    #- to Table for consistency with the rest of the codebase which generally doesn't use pandas.
 
-    #- override FAPRGRM with what we would set it to now
-    exps['FAPRGRM'] = io.meta.faflavor2program(exps['FAFLAVOR'])
-    keep = exps['TILEID'] > 0
-    if survey is not None:
-        keep &= (exps['SURVEY'] == survey)
-    if program is not None:
-        keep &= (exps['FAPRGRM'] == program)
-    if expids is not None:
-        keep &= np.isin(exps['EXPID'], expids)
-    if nights is not None:
-        keep &= np.isin(exps['NIGHT'], nights)
+    #- Trim zcat to Pandas DataFrame with just the columns we need
+    log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
+    zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
+    frames = convert_to_pandas(frames, ['NIGHT', 'EXPID', 'TILEID', 'CAMERA'])
 
-    exptab = exps['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+    #- Make a table with one row per unique TARGETID plus RA,DEC to calculate UNIQPIX
+    log.info('Trimming zcat to unique TARGETID, RA, DEC')
+    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
+    log.info(f'Calculating unique pixels from {len(targets)} unique targets')
+    targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
 
-    #- From FRAMES, determine which petals actually have data
-    exppetals_with_data = dict()
-    for expid, camera in frames['EXPID', 'CAMERA']:
-        if expid not in exppetals_with_data:
-            exppetals_with_data[expid] = set()
-        petal = int(camera[1])
-        exppetals_with_data[expid].add(petal)
+    #- Count unique targets per UNIQPIX
+    upix_ntargets = targets.groupby('UNIQPIX').size().reset_index(name='NTARGETS')
 
-    #- read one tilepix file per TILEID to get healpix mapping
-    tilepix = dict()
-    for i in np.unique(exptab['TILEID'], return_index=True)[1]:
-        night = exptab['NIGHT'][i]
-        expid = exptab['EXPID'][i]
-        tileid = exptab['TILEID'][i]
-        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid, readonly=True)
-        with open(tilepixfile) as fp:
-            tilepix.update( json.load(fp) )
+    #- join zcat with targets to get UNIQPIX for each row in zcat
+    log.info('Adding UNIQPIX to zcat')
+    zcat = zcat.merge(targets[['TARGETID', 'UNIQPIX']], on='TARGETID', how='inner')
 
-    #- rows for table columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
-    rows = list()
+    #- DataFrame-fu: Trim zcat to one row per TILEID, PETAL_LOC, UNIQPIX while
+    #- adding NTARGETS column counting how many targets in each TILEID, PETAL_LOC, UNIQPIX
+    log.info('Trimming zcat to one row per TILEID, PETAL_LOC, UNIQPIX')
+    columns = ['TILEID', 'PETAL_LOC', 'UNIQPIX']
+    upix_tiles = zcat.groupby(columns).size().reset_index(name='NTARGETS')
 
-    #- Add entries for each exposure
-    for night, expid, tileid, survey, program in exptab['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM']:
-        for petal_str in tilepix[str(tileid)]:
-            petal = int(petal_str)
-            if petal in exppetals_with_data[expid]:
-                for healpix in tilepix[str(tileid)][petal_str]:
-                    rows.append( (night, expid, tileid, survey, program, petal, healpix) )
+    #- Add PETAL_LOC to frames based on CAMERA
+    log.info('Converting frames CAMERA to PETAL_LOC')
+    frames['PETAL_LOC'] = frames['CAMERA'].str[-1].astype(int)  # extract last character of CAMERA and convert to int
 
-    if len(rows) == 0:
-        raise RuntimeError('No matching tilepix found')
+    #- Drop camera; just use PETAL_LOC
+    frames = frames[['NIGHT', 'EXPID', 'TILEID', 'PETAL_LOC']].drop_duplicates(subset=['EXPID', 'PETAL_LOC'])
 
-    exp2pix = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'PROGRAM', 'SPECTRO', 'HEALPIX'))
+    #- Count input spectra per UNIQPIX, since each TARGETID can have multiple EXPID
 
-    return exp2pix
+    #- 1. Count unique EXPIDs per TILEID (frames is already deduped by EXPID, PETAL_LOC)
+    nexp_per_tile = frames.groupby('TILEID')['EXPID'].nunique()
+
+    #- 2. One row per (TARGETID, TILEID) — avoid double-counting if PETAL_LOC had duplicates
+    zcat_tt = zcat[['TARGETID', 'TILEID', 'UNIQPIX']].drop_duplicates(subset=['TARGETID', 'TILEID'])
+    zcat_tt = zcat_tt.assign(NEXP=zcat_tt['TILEID'].map(nexp_per_tile))
+
+    #- 3. Sum exposures across all (TARGETID, TILEID) pairs within each UNIQPIX
+    upix_nspectra = zcat_tt.groupby('UNIQPIX')['NEXP'].sum()
+    upix_ntargets['NSPECTRA'] = upix_ntargets['UNIQPIX'].map(upix_nspectra).astype(int)
+
+    #- join upix_tiles with frames to get NIGHT, EXPID, CAMERA
+    log.info('Joining upix_tiles with frames')
+    upix_frames = upix_tiles.merge(frames, on=['TILEID', 'PETAL_LOC'], how='inner')
+
+    #- Add UNIQPIX -> NSIDE, HEALPIX columns
+    log.info('Calculating NSIDE, HEALPIX from UNIQPIX')
+    nside, healpix = desiutil.healpix.upix2hpix(upix_frames['UNIQPIX'])
+    upix_frames['NSIDE'] = nside
+    upix_frames['HEALPIX'] = healpix
+
+    #- Reorder columns
+    upix_frames = upix_frames[['NIGHT', 'EXPID', 'TILEID', 'PETAL_LOC', 'UNIQPIX', 'NSIDE', 'HEALPIX', 'NTARGETS']]
+
+    #- Historical compatibility: rename PETAL_LOC to SPECTRO
+    upix_frames.rename(columns={'PETAL_LOC': 'SPECTRO'}, inplace=True)
+
+    nuniq = len(np.unique(upix_frames['UNIQPIX']))
+    nexppetals = len(upix_frames[['EXPID', 'SPECTRO']].drop_duplicates())
+    log.info(f'{nuniq} unique pixels covered by {nexppetals} exposure-petal combinations')
+
+    #- Build hpix_ntargets: one row per fine healpix at nside_max
+    #- Use get_hpix2upix_map for the geometric coverage (handles coarse UNIQPIX expanding
+    #- to their fine children, and -1 for uncovered pixels), then scatter in target counts
+    log.info(f'Building hpix_ntargets table at nside_max={nside_max}')
+    hpix2upix, nside_max = get_hpix2upix_map(targets['UNIQPIX'].values, nside_max)
+    npix = 12 * nside_max ** 2
+
+    fine_healpix = radec2pix(nside_max, targets['TARGET_RA'].values, targets['TARGET_DEC'].values)
+    ntargets_per_hpix = np.zeros(npix, dtype=np.int32)
+    hpix_idx, counts = np.unique(fine_healpix, return_counts=True)
+    ntargets_per_hpix[hpix_idx] = counts
+
+    hpix_ntargets = Table({
+        'HEALPIX': np.arange(npix, dtype=np.int64),
+        'UNIQPIX': hpix2upix,
+        'NTARGETS': ntargets_per_hpix,
+    })
+    hpix_ntargets.meta['NSIDE'] = nside_max
+    hpix_ntargets.meta['HPXNSIDE'] = nside_max
+    hpix_ntargets.meta['HPXNEST'] = True
+
+    return Table.from_pandas(upix_frames), Table.from_pandas(upix_ntargets), hpix_ntargets
+
+def group_nspectra(nspectra, nmax, max_groupsize=None):
+    """
+    Return list of lists of indices, grouping nspectra array into groups with at most nmax spectra total.
+    The exception is if nspectra[i]>nmax, it becomes a single-element group.
+
+    Args:
+        nspectra: array-like of integers with number of spectra
+        nmax: maximum number of spectra allowable per group
+        max_groupsize: if not None, maximum number of elements per group,
+            regardless of whether the nmax threshold has been reached
+
+    Returns list of lists of indices for each group
+
+    e.g. group_nspectra([3,5,3,10,2,1], 5) -> [[3,], [1,], [0,], [2,4], [5,]]
+    """
+    nspectra = np.asarray(nspectra)
+    sorted_indices = np.argsort(-nspectra)  # sort high -> low
+    groups = list()
+    current_group = list()
+    current_sum = 0
+    for i in sorted_indices:
+        n = nspectra[i]
+        if n > nmax:
+            if current_group:
+                groups.append(current_group)
+                current_group = list()
+                current_sum = 0
+            groups.append([int(i)])
+        elif current_sum + n <= nmax:
+            if max_groupsize is not None and len(current_group) >= max_groupsize:
+                groups.append(current_group)
+                current_group = [int(i)]
+                current_sum = n
+            else:
+                current_group.append(int(i))
+                current_sum += n
+        else:
+            groups.append(current_group)
+            current_group = [int(i)]
+            current_sum = n
+
+    if current_group:
+        groups.append(current_group)
+
+    return groups
+
+
+def get_hpix2upix_map(uniqpix, nside_max=None):
+    """
+    Given an array of UNIQ pixels (possibly at varying NSIDEs, nested scheme),
+    return a map of healpix indices -> uniqpix values at requested or
+    derived nside_max.
+
+    Parameters
+    ----------
+    uniqpix : array-like of int
+        Array of UNIQ pixel values.
+    nside_max : int, optional
+        Maximum NSIDE to use for the output map.
+        If None, infer from input uniqpix.
+
+    Returns
+    -------
+    healpix_map : np.ndarray of int, shape (12 * nside_max**2,)
+        For each HEALPix pixel index at nside_max, the UNIQ pixel value
+        that contains it. Pixels not covered by any UNIQ pixel are set to -1.
+    nside_max : int
+        The NSIDE of the healpix_map.
+    """
+    uniqpix = np.asarray(uniqpix, dtype=np.int64)
+    nside, ipix = desiutil.healpix.upix2hpix(uniqpix)
+
+    # Validate that all nside values from uniqpix are positive powers of 2
+    for n in np.unique(nside):
+        if n <= 0 or (n & (n - 1)) != 0:
+            raise ValueError(f"nside={n} derived from uniqpix is not a positive power of 2")
+
+    order = np.log2(nside).astype(int)
+
+    if nside_max is None:
+        nside_max = int(np.max(nside))
+    else:
+        if nside_max <= 0 or (nside_max & (nside_max - 1)) != 0:
+            raise ValueError(f"{nside_max=} is not a positive power of 2")
+        if nside_max < np.max(nside):
+            raise ValueError(f"{nside_max=} is too small for the maximum nside {np.max(nside)} in uniqpix")
+
+    order_max = int(np.log2(nside_max))
+    npix_max = 12 * nside_max ** 2
+
+    healpix_map = np.full(npix_max, -1, dtype=np.int64)
+
+    # For each unique order present, expand pixels to nside_max
+    for o in np.unique(order):
+        mask = order == o
+        ipix_o = ipix[mask]
+        uniq_o = uniqpix[mask]
+
+        # Each pixel at order o covers 4^(order_max - o) pixels at order_max
+        scale = 4 ** (order_max - o)
+
+        # The fine pixel indices covered by each coarse pixel
+        # ipix_o[:, None] * scale + np.arange(scale) gives shape (n, scale)
+        fine_pixels = ipix_o[:, None] * scale + np.arange(scale, dtype=np.int64)
+        fine_pixels = fine_pixels.ravel()
+
+        # Corresponding uniq values, repeated for each fine pixel
+        uniq_repeated = np.repeat(uniq_o, scale)
+
+        healpix_map[fine_pixels] = uniq_repeated
+
+    return healpix_map, nside_max
+
 
 #-----
 class FrameLite(object):
