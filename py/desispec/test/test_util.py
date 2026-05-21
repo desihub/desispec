@@ -314,9 +314,9 @@ class TestRunCmd(unittest.TestCase):
         cls.testfile = 'test-'+uuid4().hex
 
     def setUp(self):
-        # refresh timestamps so that outfile is older than infile
+        # refresh timestamps so that outfile is older than infile, testfile newest
         os.chdir(self.testdir)
-        for filename in [self.infile, self.outfile]:
+        for filename in [self.infile, self.outfile, self.testfile]:
             with open(filename, 'w') as fx:
                 fx.write('This file is leftover from a test; you can remove it\n')
             time.sleep(0.1)
