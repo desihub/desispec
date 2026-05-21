@@ -857,13 +857,13 @@ def main(args=None, comm=None):
                 if not success:
                     error_count += 1
 
-        if rank == 0:
-            log.info("Done with afterburners")
-
         timer.stop('afterburners')
 
     if comm is not None:
         comm.barrier()
+
+    if rank == 0 and not args.no_afterburners:
+        log.info("Done with afterburners")
 
     #-------------------------------------------------------------------------
     ## Collect error count and wrap up
