@@ -444,7 +444,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
                 else:
                     test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
                     if test_healpix != healpix or test_nside != nside:
-                        raise ValueError(f"groupname='healpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
+                        raise ValueError(f"groupname='uniqpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
 
 
     #- backwards compatibility: try interpreting groupname as a healpix number
