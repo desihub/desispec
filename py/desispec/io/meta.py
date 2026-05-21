@@ -606,7 +606,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
             missing_inputs = True
 
     if missing_inputs:
-        print(actual_inputs)
         msg = f"Missing inputs for {location[filetype]}"
         log.critical(msg)
         raise ValueError(msg)

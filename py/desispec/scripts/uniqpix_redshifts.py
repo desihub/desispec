@@ -1,5 +1,5 @@
 """
-desispec.scripts.healpix_redshifts
+desispec.scripts.uniqpix_redshifts
 ==================================
 
 Script to submit jobs to run uniqpix-based combine+coadd+redshift
@@ -235,7 +235,7 @@ def main(args):
                 qid = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
                 qid = int(qid.strip(' \t\n'))
                 log.info(f'submitted {basename}')
-            except CalledProcessError as err:
+            except subprocess.CalledProcessError as err:
                 qid = -1
                 log.error(f'Error submitting {basename} at {datetime.datetime.now()}')
                 log.error(f'{basename} {err.output=}')
