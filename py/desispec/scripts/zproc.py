@@ -318,7 +318,7 @@ def main(args=None, comm=None):
         ## Create and submit a batch job if requested
         if rank == 0:
             ## create the batch script
-            scriptfile = create_desi_zproc_batch_script(group=groupname,
+            scriptfile, jobhash = create_desi_zproc_batch_script(group=groupname,
                                                         subgroup=subgroup,
                                                         tileid=tileid,
                                                         cameras=camword,

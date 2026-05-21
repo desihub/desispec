@@ -179,6 +179,52 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
 
     return Table.from_pandas(upix_frames), Table.from_pandas(upix_ntargets), hpix_ntargets
 
+def group_nspectra(nspectra, nmax, max_groupsize=None):
+    """
+    Return list of lists of indices, grouping nspectra array into groups with at most nmax spectra total.
+    The exception is if nspectra[i]>nmax, it becomes a single-element group.
+
+    Args:
+        nspectra: array-like of integers with number of spectra
+        nmax: maximum number of spectra allowable per group
+        max_groupsize: if not None, maximum number of elements per group,
+            regardless of whether the nmax threshold has been reached
+
+    Returns list of lists of indices for each group
+
+    e.g. group_nspectra([3,5,3,10,2,1], 5) -> [[3,], [1,], [0,], [2,4], [5,]]
+    """
+    nspectra = np.asarray(nspectra)
+    sorted_indices = np.argsort(-nspectra)  # sort high -> low
+    groups = list()
+    current_group = list()
+    current_sum = 0
+    for i in sorted_indices:
+        n = nspectra[i]
+        if n > nmax:
+            if current_group:
+                groups.append(current_group)
+                current_group = list()
+                current_sum = 0
+            groups.append([int(i)])
+        elif current_sum + n <= nmax:
+            if max_groupsize is not None and len(current_group) >= max_groupsize:
+                groups.append(current_group)
+                current_group = [int(i)]
+                current_sum = n
+            else:
+                current_group.append(int(i))
+                current_sum += n
+        else:
+            groups.append(current_group)
+            current_group = [int(i)]
+            current_sum = n
+
+    if current_group:
+        groups.append(current_group)
+
+    return groups
+
 
 def get_hpix2upix_map(uniqpix, nside_max=None):
     """

@@ -8,15 +8,18 @@ Script to submit jobs to run uniqpix-based combine+coadd+redshift
 import os, sys, time
 import json
 import subprocess
+import datetime
+import hashlib
 import numpy as np
 import fitsio
+from astropy.table import Table
 
 from desiutil.log import get_logger
 
 from desispec.workflow.redshifts import create_desi_zproc_batch_script, get_zpix_script_pathname
 from desispec import io
 from desispec.io.util import get_tempfilename
-from desispec.pixgroup import get_exp2uniqpix_map, get_hpix2upix_map
+from desispec.pixgroup import get_exp2uniqpix_map, get_hpix2upix_map, group_nspectra
 from desispec.workflow import batch
 
 def parse(options=None):
@@ -32,10 +35,14 @@ def parse(options=None):
             help='exposure summary file with columns NIGHT,EXPID,TILEID,SURVEY,FAFLAVOR')
     p.add_argument('--uniqpix', type=str, required=False,
             help='uniqpix numbers to run (comma separated)')
-    p.add_argument('--bundle-pix', type=int, default=5,
-                help='bundle N pixels into a single job (default %(default)s)')
+    p.add_argument('--bundle-pix', type=int, default=16,
+                help='bundle at most N pixels into a single job (default %(default)s)')
     p.add_argument('--nside-max', type=int, default=256, required=False,
-            help='maximum nside to use for healpix->uniqpix map file')
+            help='maximum nside to use for healpix->uniqpix map file (default %(default)s)')
+    p.add_argument('--ntargets-max', type=int, default=5000, required=False,
+            help='maximum number of targets per pixel before splitting into smaller pixels (default %(default)s)')
+    p.add_argument('--nspectra-per-job', type=int, default=50000, required=False,
+            help='maximum number of input spectra per job (default %(default)s)')
     p.add_argument("--nosubmit", action="store_true",
             help="generate scripts but don't submit batch jobs")
     p.add_argument("--noafterburners", action="store_true",
@@ -89,13 +96,10 @@ def main(args):
     ztilefile = io.findfile('zcat_tile', survey=args.survey, faprogram=args.program, version='v2')
     zcat = fitsio.read(ztilefile, 'ZCATALOG')
 
-    exppix, upix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames, nside_max=args.nside_max)
+    exppix, upix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames,
+                                                               nmax=args.ntargets_max, nside_max=args.nside_max)
 
     reduxdir = io.specprod_root()
-    if args.uniqpix is not None:
-        allpixels = [int(p) for p in args.uniqpix.split(',')]
-    else:
-        allpixels = np.unique(np.asarray(exppix['UNIQPIX']))
 
     #- Save mapping of healpix to uniqpix as the maximum nside in uniqpix
     header = dict(
@@ -140,11 +144,28 @@ def main(args):
     upix_ntargets.write(tmpfile, overwrite=True)
     os.rename(tmpfile, upixfile)
 
-    npix = len(allpixels)
+    #- Trim to just the requested pixels to process
+    if args.uniqpix is not None:
+        todo_pixels = [int(p) for p in args.uniqpix.split(',')]
+        keep = np.isin(exppix['UNIQPIX'], todo_pixels)
+        exppix = exppix[keep]
+        keep = np.isin(upix_ntargets['UNIQPIX'], todo_pixels)
+        upix_ntargets = upix_ntargets[keep]
+        keep = np.isin(hpix_ntargets['UNIQPIX'], todo_pixels)
+        hpix_ntargets = hpix_ntargets[keep]
+
+    group_indices = group_nspectra(upix_ntargets['NSPECTRA'], nmax=args.nspectra_per_job, max_groupsize=args.bundle_pix)
+
+    npix = len(upix_ntargets)
     nscripts = 0
+    jobtracker = list()
     log.info(f'Submitting jobs for {npix} pixels')
-    for i in range(0, len(allpixels), args.bundle_pix):
-        pixels = allpixels[i:i+args.bundle_pix]
+    for group in group_indices:
+        pixels = upix_ntargets['UNIQPIX'][group].tolist()
+        ntargets = int(np.sum(upix_ntargets['NTARGETS'][group]))
+        nspectra = int(np.sum(upix_ntargets['NSPECTRA'][group]))
+        npix = len(pixels)
+        log.info(f'Group {nscripts}: {npix=} {ntargets=} {nspectra=} pixels={list(pixels)}')
         pixexpfiles = list()
         ntilepetals = 0
         for pix in pixels:
@@ -181,7 +202,7 @@ def main(args):
 
         ## For none dry_run, dry_run_levels 1 or 2, make the directories and csv files
         if args.dry_run_level < 2:
-            batchscript = create_desi_zproc_batch_script(
+            batchscript, jobhash = create_desi_zproc_batch_script(
                 group='uniqpix',
                 uniqpix=pixels,
                 survey=args.survey,
@@ -192,13 +213,13 @@ def main(args):
                 runtime=runtime,
             )
         else:
-            batchscript = get_zpix_script_pathname(pixels, args.survey,
+            batchscript, jobhash = get_zpix_script_pathname(pixels, args.survey,
                                                    args.program)
             log.info(f"Dry run so not creating the batch script: {batchscript}"
                      + f"\tfor {pixels=}, {args.survey=}, {args.program=}")
 
         ### cmd = ['sbatch', '--kill-on-invalid-dep=yes']
-        cmd = ['sbatch', ]
+        cmd = ['sbatch', '--parsable']
         if args.batch_reservation:
             cmd.extend(['--reservation', args.batch_reservation])
         if args.batch_dependency:
@@ -209,21 +230,32 @@ def main(args):
         nscripts += 1
 
         if not args.nosubmit and args.dry_run_level == 0:
-            err = subprocess.call(cmd)
             basename = os.path.basename(batchscript)
-            if err == 0:
+            try:
+                qid = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+                qid = int(qid.strip(' \t\n'))
                 log.info(f'submitted {basename}')
-            else:
-                log.error(f'Error {err} submitting {basename}')
+            except CalledProcessError as err:
+                qid = -1
+                log.error(f'Error submitting {basename} at {datetime.datetime.now()}')
+                log.error(f'{basename} {err.output=}')
 
             time.sleep(0.1)
         else:
+            qid = -1
             log.info(f"Dry run so not submitting command: {cmd=}")
+
+        pixstr = '|'.join([str(p) for p in pixels])
+        jobtracker.append( (jobhash, qid, npix, ntargets, nspectra, pixstr) )
 
     if not args.nosubmit and args.dry_run_level == 0:
         log.info(f'Submitted {nscripts} batch scripts')
     else:
         log.info(f'Dry run: would have submitted {nscripts} batch scripts')
+
+    jobtracker = Table(rows=jobtracker, names=['JOBHASH', 'QID', 'NPIX', 'NTARGETS', 'NSPECTRA', 'UNIQPIX'])
+    scriptbase = os.path.dirname(os.path.dirname(batchscript))
+    jobtracker.write(f'{scriptbase}/pixjobs-{args.survey}-{args.program}.csv', format='csv', overwrite=True)
 
     dt = time.time() - t0
     log.info(f'All done at {time.asctime()}; duration {dt/60:.2f} minutes')

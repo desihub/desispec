@@ -580,6 +580,79 @@ class TestPixGroup(unittest.TestCase):
         covered2[5] = True
         self.assertTrue(np.all(healpix_map2[~covered2] == -1))
 
+    def test_group_nspectra(self):
+        """Test desispec.pixgroup.group_nspectra"""
+        from ..pixgroup import group_nspectra
+
+        # Docstring example
+        groups = group_nspectra([3, 5, 3, 10, 2, 1], 5)
+        self.assertEqual(groups, [[3], [1], [0], [2, 4], [5]])
+
+        # Each group total must not exceed nmax
+        for nspectra, nmax in [([3, 5, 3, 10, 2, 1], 5), ([1]*20, 7), ([4, 3, 2, 1], 6)]:
+            nspectra_arr = np.asarray(nspectra)
+            groups = group_nspectra(nspectra, nmax)
+            for g in groups:
+                total = sum(nspectra_arr[i] for i in g)
+                self.assertLessEqual(total, max(nmax, max(nspectra_arr)))
+
+        # Oversized (> nmax): each becomes a single-element group
+        groups = group_nspectra([10, 20, 15], 5)
+        self.assertEqual(len(groups), 3)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # Underfilled: all fit in one group
+        groups = group_nspectra([1, 2, 1], 10)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(sorted(groups[0]), [0, 1, 2])
+
+        # Exactly full: [3,2] fills nmax=5 in one group; [1] is a second group
+        groups = group_nspectra([3, 2, 1], 5)
+        self.assertEqual(len(groups), 2)
+
+        # Single element
+        groups = group_nspectra([7], 5)
+        self.assertEqual(groups, [[0]])
+
+        # Empty input
+        groups = group_nspectra([], 5)
+        self.assertEqual(groups, [])
+
+        # Every index appears exactly once across all groups
+        nspectra = [3, 5, 3, 10, 2, 1]
+        groups = group_nspectra(nspectra, 5)
+        all_indices = sorted(i for g in groups for i in g)
+        self.assertEqual(all_indices, list(range(len(nspectra))))
+
+        # max_groupsize limits number of elements per group
+        groups = group_nspectra([1, 1, 1, 1, 1], 10, max_groupsize=2)
+        for g in groups:
+            self.assertLessEqual(len(g), 2)
+        all_indices = sorted(i for g in groups for i in g)
+        self.assertEqual(all_indices, list(range(5)))
+
+        # max_groupsize=1 forces every element into its own group
+        groups = group_nspectra([2, 3, 1], 10, max_groupsize=1)
+        self.assertEqual(len(groups), 3)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # max_groupsize does not affect oversized single-element groups
+        groups = group_nspectra([10, 20], 5, max_groupsize=1)
+        self.assertEqual(len(groups), 2)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # Without max_groupsize, small elements pack into one group
+        groups = group_nspectra([1] * 10, 100)
+        self.assertEqual(len(groups), 1)
+
+        # With max_groupsize, same input is split
+        groups = group_nspectra([1] * 10, 100, max_groupsize=3)
+        for g in groups:
+            self.assertLessEqual(len(g), 3)
+
     def test_frames2spectra(self):
         """Test frames2spectra"""
         from ..pixgroup import FrameLite, frames2spectra

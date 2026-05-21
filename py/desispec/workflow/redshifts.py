@@ -4,6 +4,7 @@ desispec.workflow.redshifts
 
 """
 import sys, os
+import hashlib
 import numpy as np
 
 from desispec.io import findfile
@@ -107,6 +108,13 @@ def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
 
+def get_pixel_hash(pixels):
+    """
+    Return unique hash for a list of pixels
+    """
+    pixels = np.asarray(pixels)
+    return hashlib.blake2b(pixels.tobytes(), digest_size=8).hexdigest()
+
 def get_zpix_script_pathname(uniqpix, survey, program):
     """Return uniqpix-based coadd+redshift+afterburner script pathname
 
@@ -121,16 +129,13 @@ def get_zpix_script_pathname(uniqpix, survey, program):
     if np.isscalar(uniqpix):
         uniqpix = [uniqpix,]
 
-    upixmin = np.min(uniqpix)
-    upixmax = np.max(uniqpix)
-    if len(uniqpix) == 1:
-        scriptname = f'zpix-{survey}-{program}-{uniqpix[0]}.slurm'
-    else:
-        scriptname = f'zpix-{survey}-{program}-{upixmin}-{upixmax}.slurm'
+    jobhash = get_pixel_hash(uniqpix)
+
+    scriptname = f'zpix-{survey}-{program}-{jobhash}.slurm'
 
     reduxdir = desispec.io.specprod_root()
     return os.path.join(reduxdir, 'run', 'scripts', 'spectra',
-                        survey, program, str(pix_subdirectory(upixmin)), scriptname)
+                        survey, program, jobhash[0:2], scriptname), jobhash
 
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
@@ -146,7 +151,7 @@ def create_desi_zproc_batch_script(group,
 
     Args:
         group (str): Description of the job to be performed. zproc options include:
-                     'perexp', 'pernight', 'cumulative'.
+                     'perexp', 'pernight', 'cumulative', 'uniqpix'.
         tileid (int), optional: The tile id for the data.
         cameras (str or list of str), optional: List of cameras to include in the processing
                                       or a camword.
@@ -172,7 +177,7 @@ def create_desi_zproc_batch_script(group,
         no_afterburners (bool), optional: Default false. If true it doesn't run afterburners.
 
     Returns:
-        scriptfile: the full path name for the script written.
+        scriptfile or scriptfile,jobhash: the full path name of script written. jobhash included for group='uniqpix'
 
     Note:
         batchdir and jobname can be used to define an alternative pathname, but
@@ -204,8 +209,9 @@ def create_desi_zproc_batch_script(group,
             expid = expids[0]
 
     if group == 'uniqpix':
-        scriptpath = get_zpix_script_pathname(uniqpix, survey, program)
+        scriptpath, jobhash = get_zpix_script_pathname(uniqpix, survey, program)
     else:
+        jobhash = None
         scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                night=night, expid=expid, subgroup=subgroup)
 
@@ -373,6 +379,7 @@ def create_desi_zproc_batch_script(group,
     print('Wrote {}'.format(scriptfile))
     print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
 
-    return scriptfile
-
-
+    if jobhash is None:
+        return scriptfile
+    else:
+        return scriptfile, jobhash
