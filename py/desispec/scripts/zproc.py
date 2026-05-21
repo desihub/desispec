@@ -87,7 +87,7 @@ def parse(options=None):
     uniqpix_options.add_argument("--program", help="program name, e.g. dark,bright,backup,other")
     uniqpix_options.add_argument("--expfiles", nargs='*',
                         help="csv files with NIGHT,EXPID,SPECTRO,UNIQPIX")
-    uniqpix_options.add_argument("--prodexpfile", help="production summary exposure file (using pre-generated --expfiles is more efficient)")
+    uniqpix_options.add_argument("--prodexpfile", help="Broken: production summary exposure file (using pre-generated --expfiles is more efficient)")
 
     #- Processing options
     processing_options = parser.add_argument_group('processing options')
@@ -132,6 +132,9 @@ def parse(options=None):
         args = parser.parse_args(options)
     else:
         args = parser.parse_args()
+
+    if args.prodexpfile is not None:
+        raise NotImplementedError('--prodexpfile not supported after uniqpix refactor; please use --expfiles created with desi_uniqpix_redshifts or manually')
 
     return args
 

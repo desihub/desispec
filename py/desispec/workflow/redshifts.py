@@ -177,7 +177,7 @@ def create_desi_zproc_batch_script(group,
         no_afterburners (bool), optional: Default false. If true it doesn't run afterburners.
 
     Returns:
-        scriptfile or scriptfile,jobhash: the full path name of script written. jobhash included for group='uniqpix'
+        scriptfile,jobhash: the full path name of script written. jobhash included for group='uniqpix', otherwise None
 
     Note:
         batchdir and jobname can be used to define an alternative pathname, but
@@ -379,7 +379,4 @@ def create_desi_zproc_batch_script(group,
     print('Wrote {}'.format(scriptfile))
     print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
 
-    if jobhash is None:
-        return scriptfile
-    else:
-        return scriptfile, jobhash
+    return scriptfile, jobhash
