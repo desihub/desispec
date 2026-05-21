@@ -421,13 +421,16 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(nside & (nside - 1), 0)
 
         # Check pix_ntargets table
-        self.assertEqual(set(pix_ntargets.colnames), {'UNIQPIX', 'NTARGETS'})
+        self.assertEqual(set(pix_ntargets.colnames), {'UNIQPIX', 'NTARGETS', 'NSPECTRA'})
 
         # All targets are at the same position -> one UNIQPIX -> one row
         self.assertEqual(len(pix_ntargets), 1)
 
         # All n_targets unique targets are in the same UNIQPIX
         self.assertEqual(int(pix_ntargets['NTARGETS'][0]), n_targets)
+
+        # 3 targets each observed once on one tile with 2 exposures -> 3*2=6 spectra
+        self.assertEqual(int(pix_ntargets['NSPECTRA'][0]), n_targets * 2)
 
         # The UNIQPIX in pix_ntargets matches the one in exppix
         self.assertEqual(int(pix_ntargets['UNIQPIX'][0]), int(np.unique(exppix['UNIQPIX'])[0]))
@@ -461,6 +464,71 @@ class TestPixGroup(unittest.TestCase):
         # The covering UNIQPIX for the target pixel matches the one in pix_ntargets
         target_hpix_uniqpix = hpix_ntargets['UNIQPIX'][has_targets]
         self.assertTrue(np.all(np.isin(target_hpix_uniqpix, pix_ntargets['UNIQPIX'])))
+
+    @unittest.skipIf(not installed('pandas'), 'get_exp2uniqpix_map requires pandas')
+    def test_get_exp2uniqpix_map_nspectra(self):
+        """Test NSPECTRA bookkeeping when targets have different numbers of input spectra.
+
+        Scenario: three targets at the same sky position (same UNIQPIX),
+        observed on two tiles with different numbers of exposures each.
+
+          target 10: tile 1 only (3 exposures)              -> 3 spectra
+          target 20: tile 1 (3 exposures) + tile 2 (2 exp)  -> 5 spectra
+          target 30: tile 2 only (2 exposures)              -> 2 spectra
+
+        Expected: NTARGETS=3, NSPECTRA=10
+        """
+        from ..pixgroup import get_exp2uniqpix_map
+
+        # target 20 appears twice in zcat because it was observed on both tiles
+        zcat = Table({
+            'TARGETID':  np.array([10, 20, 20, 30], dtype=np.int64),
+            'TILEID':    np.array([ 1,  1,  2,  2], dtype=np.int32),
+            'PETAL_LOC': np.array([ 5,  5,  5,  5], dtype=np.int16),
+            'TARGET_RA':  np.full(4, 150.0, dtype=np.float64),
+            'TARGET_DEC': np.full(4, 30.0,  dtype=np.float64),
+        })
+
+        # tile 1 has 3 exposures; tile 2 has 2 exposures, all on petal 5
+        frames = Table({
+            'NIGHT':  np.array([20201020, 20201020, 20201020,
+                                20201021, 20201021], dtype=np.int32),
+            'EXPID':  np.array([100, 101, 102, 200, 201],   dtype=np.int32),
+            'TILEID': np.array([  1,   1,   1,   2,   2],   dtype=np.int32),
+            'CAMERA': np.array(['b5', 'b5', 'b5', 'b5', 'b5']),
+        })
+
+        exppix, pix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames)
+
+        # all targets at the same position -> single UNIQPIX -> one row in pix_ntargets
+        self.assertEqual(len(pix_ntargets), 1)
+        self.assertEqual(int(pix_ntargets['NTARGETS'][0]), 3)
+
+        # NSPECTRA column must be present
+        self.assertIn('NSPECTRA', pix_ntargets.colnames)
+
+        # target 10: 3 spectra (tile 1, 3 exp)
+        # target 20: 5 spectra (tile 1 3 exp + tile 2 2 exp)
+        # target 30: 2 spectra (tile 2, 2 exp)
+        # total: 10
+        self.assertEqual(int(pix_ntargets['NSPECTRA'][0]), 10)
+
+        # NSPECTRA >= NTARGETS: every target must have at least one spectrum
+        self.assertTrue(np.all(pix_ntargets['NSPECTRA'] >= pix_ntargets['NTARGETS']))
+
+        # exppix has one row per (EXPID, SPECTRO) combination across both tiles
+        # tile 1 contributes 3 rows, tile 2 contributes 2 rows -> 5 total
+        self.assertEqual(len(exppix), 5)
+
+        # targets 10 and 20 are on tile 1 -> NTARGETS=2 for those rows
+        tile1_rows = exppix[exppix['TILEID'] == 1]
+        self.assertEqual(len(tile1_rows), 3)
+        self.assertTrue(np.all(tile1_rows['NTARGETS'] == 2))
+
+        # targets 20 and 30 are on tile 2 -> NTARGETS=2 for those rows
+        tile2_rows = exppix[exppix['TILEID'] == 2]
+        self.assertEqual(len(tile2_rows), 2)
+        self.assertTrue(np.all(tile2_rows['NTARGETS'] == 2))
 
     def test_get_hpix2upix_map(self):
         """Test desispec.pixgroup.get_hpix2upix_map"""
