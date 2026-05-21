@@ -123,6 +123,19 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
     #- Drop camera; just use PETAL_LOC
     frames = frames[['NIGHT', 'EXPID', 'TILEID', 'PETAL_LOC']].drop_duplicates(subset=['EXPID', 'PETAL_LOC'])
 
+    #- Count input spectra per UNIQPIX, since each TARGETID can have multiple EXPID
+
+    #- 1. Count unique EXPIDs per TILEID (frames is already deduped by EXPID, PETAL_LOC)
+    nexp_per_tile = frames.groupby('TILEID')['EXPID'].nunique()
+
+    #- 2. One row per (TARGETID, TILEID) — avoid double-counting if PETAL_LOC had duplicates
+    zcat_tt = zcat[['TARGETID', 'TILEID', 'UNIQPIX']].drop_duplicates(subset=['TARGETID', 'TILEID'])
+    zcat_tt = zcat_tt.assign(NEXP=zcat_tt['TILEID'].map(nexp_per_tile))
+
+    #- 3. Sum exposures across all (TARGETID, TILEID) pairs within each UNIQPIX
+    upix_nspectra = zcat_tt.groupby('UNIQPIX')['NEXP'].sum()
+    upix_ntargets['NSPECTRA'] = upix_ntargets['UNIQPIX'].map(upix_nspectra).astype(int)
+
     #- join upix_tiles with frames to get NIGHT, EXPID, CAMERA
     log.info('Joining upix_tiles with frames')
     upix_frames = upix_tiles.merge(frames, on=['TILEID', 'PETAL_LOC'], how='inner')
