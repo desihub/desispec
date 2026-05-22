@@ -1222,7 +1222,7 @@ def radec2pix(ra, dec, survey=None, program=None, proddir=None, specprod=None):
         nside = 64
         pixels = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
         return 'healpix', pixels
-    else:
+    elif os.path.isdir(os.path.join(proddir, 'spectra')):
         if survey is None or program is None:
             raise ValueError("survey and program must be provided to determine uniqpix for newer productions")
         # files in spectra/{survey}/{program}/{uniqpix//100}/{uniqpix}/
@@ -1230,7 +1230,7 @@ def radec2pix(ra, dec, survey=None, program=None, proddir=None, specprod=None):
         hpix2upix_filebase = f'{proddir}/spectra/{survey}/{program}/hpix2upix-{survey}-{program}'
         try:
             import fitsio
-            hpix2upix, header = fitsio.read(hpix2upix_filebase+'.fits', header=True)
+            hpix2upix, header = fitsio.read(hpix2upix_filebase+'.fits', 'HPIX2UPIX', header=True)
             nside = header['NSIDE']
         except ImportError:
             # fallback to json file if fitsio isn't installed
@@ -1243,3 +1243,11 @@ def radec2pix(ra, dec, survey=None, program=None, proddir=None, specprod=None):
         healpix = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
         pixels = hpix2upix[healpix]
         return 'spectra', pixels
+    # same as fuji/guadalupe etc. case, but save for last since most rare
+    elif os.path.isdir(os.path.join(proddir, 'healpix')):
+        # files in healpix/{survey}/{program}/{healpix//100}/{healpix}/ for nside=64 nested healpix
+        nside = 64
+        pixels = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        return 'healpix', pixels
+    else:
+        raise ValueError(f"Cannot determine pixel scheme for specprod={specprod} at {proddir}")
