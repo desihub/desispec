@@ -11,6 +11,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import datetime
 import glob
+import json
 import re
 import numpy as np
 
@@ -1148,11 +1149,97 @@ def get_pipe_nightdir():
     return "night"
 
 
-def get_pipe_pixeldir():
+def get_pipe_pixeldir(specprod=None):
     """
     Return the name of the subdirectory containing per-pixel files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "healpix"
+    if specprod is None:
+        specprod = os.environ['SPECPROD']
+
+    # Known cases for standard productions
+    if specprod in ['fuji', 'guadalupe', 'himalayas', 'iron', 'jura', 'kibo', 'loa']:
+        pixdir = 'healpix'
+    elif specprod in ['matterhorn', 'nevis']:
+        pixdir = 'spectra'
+    # otherwise derive by looking at the filesystem
+    else:
+        specprod_dir = specprod_root(specprod)
+        if os.path.isdir(os.path.join(specprod_dir, 'healpix')):
+            pixdir = 'healpix'
+        else:
+            # default to 'spectra', since we might be bootstrapping a new production that doesn't have the dir yet
+            pixdir = 'spectra'
+
+    return pixdir
+
+# this function purposefully doesn't depend on any other DESI code so that it can be
+# copy-and-pasted into other libraries without additional DESI dependencies
+def radec2pix(ra, dec, survey=None, program=None, proddir=None, specprod=None):
+    """
+    Return which pixels covers the given ra,dec, auto-deriving healpix vs. uniqpix
+
+    Args:
+        ra (float or array): Right Ascension in degrees
+        dec (float or array): Declination in degrees
+        survey (str): DESI survey (sv1, sv3, main, special)
+        program (str): DESI program (dark, bright, backup, other)
+
+    Options:
+        proddir (str): full path to production directory
+        specprod (str): overrides $SPECPROD, only used if proddir is None; requires $DESI_ROOT or $DESI_SPECTRO_REDUX
+
+    Returns: pixbase, pixels
+        pixbase: str, either 'healpix' or 'spectra' depending on the specprod
+        pixels: int or array of ints, either healpix or uniqpix depending on the specprod
+
+    The corresponding files will then be under {pixbase}/{survey}/{program}/{pix//100}/{pix}/
+    """
+    import healpy
+
+    # derive where this production is on disk
+    if proddir is None:
+        if specprod is None:
+            specprod = os.environ['SPECPROD']
+        if 'DESI_SPECTRO_REDUX' in os.environ:
+            proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+        elif 'DESI_ROOT' in os.environ:
+            proddir = os.path.join(os.environ['DESI_ROOT'], 'spectro', 'redux', specprod)
+        else:
+            raise KeyError("proddir not provided and cannot be derived from env ($DESI_ROOT, $DESI_SPECTRO_REDUX, $SPECPROD)")
+    else:
+        specprod = os.path.basename(proddir.rstrip('/'))
+
+    # Files are in [healpix|spectra]/{survey}/{program}/{pix//100}/{pix}/
+    # but the base and meaning of pix depend on the production:
+    # Prior to matterhorn (iron/dr1, loa/dr2): base='healpix', pix = nested nside=64 healpix
+    # Starting wth matterhorn: base='spectra', pix = uniqpix = healpix + 4*nside**2, with adaptively sized pixels
+
+    if specprod in ['fuji', 'guadalupe', 'himalayas', 'iron', 'jura', 'kibo', 'loa']:
+        # files in healpix/{survey}/{program}/{healpix//100}/{healpix}/ for nside=64 nested healpix
+        nside = 64
+        pixels = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        return 'healpix', pixels
+    else:
+        if survey is None or program is None:
+            raise ValueError("survey and program must be provided to determine uniqpix for newer productions")
+        # files in spectra/{survey}/{program}/{uniqpix//100}/{uniqpix}/
+        # need to lookup mapping to find which uniqpix covered these ra,dec locations
+        hpix2upix_filebase = f'{proddir}/spectra/{survey}/{program}/hpix2upix-{survey}-{program}'
+        try:
+            import fitsio
+            hpix2upix, header = fitsio.read(hpix2upix_filebase+'.fits', header=True)
+            nside = header['NSIDE']
+        except ImportError:
+            # fallback to json file if fitsio isn't installed
+            with open(hpix2upix_filebase+'.json', 'r') as fp:
+                data = json.load(fp)
+            hpix2upix = np.array(data['HPIX2UPIX'])
+            nside = data['NSIDE']
+
+        # calculate the healpix at this large nside, then lookup the uniqpix
+        healpix = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        pixels = hpix2upix[healpix]
+        return 'spectra', pixels

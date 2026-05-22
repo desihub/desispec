@@ -30,7 +30,7 @@ from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    get_pipe_rundir, get_pipe_scriptdir, get_pipe_database,
                    get_pipe_logdir, get_reduced_frames, get_pipe_pixeldir,
                    get_nights, get_pipe_nightdir, find_exposure_night,
-                   shorten_filename, get_readonly_filepath)
+                   shorten_filename, get_readonly_filepath, radec2pix)
 from .params import read_params
 from .exposure_tile_qa import (read_exposure_qa, write_exposure_qa, read_tile_qa, write_tile_qa)
 from .raw import read_raw, write_raw
