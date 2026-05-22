@@ -1979,3 +1979,196 @@ class TestIO(unittest.TestCase):
         os.environ['DESI_SPECTRO_REDUX'] = '/blat/foo'
         self.assertEqual(specprod_root(),
                          os.path.expandvars('/blat/foo/$SPECPROD'))
+
+    def _make_hpix2upix_fits(self, proddir, survey, program):
+        """Write a minimal hpix2upix FITS file for testing radec2pix.
+
+        The map uses nside_max=4 (192 healpix pixels total). The first 8 fine
+        pixels are merged into 2 coarser nside=2 uniqpix values: in nested
+        healpix, nside=2 pixel j contains nside=4 pixels 4*j .. 4*j+3, so
+        fine pixels 0-3 all map to nside=2 uniqpix 16 and fine pixels 4-7
+        all map to nside=2 uniqpix 17. The remaining 184 pixels each map 1:1
+        to their own nside=4 uniqpix. This reflects the actual adaptive
+        structure of hpix2upix files, where sparse sky regions use coarser
+        pixels.
+
+        Args:
+            proddir (str): production directory path
+            survey (str): survey name
+            program (str): program name
+
+        Returns: (hpix2upix, nside_max)
+            hpix2upix: np.ndarray of int64, shape (192,), the map written
+            nside_max: int, nside stored in the header (4)
+        """
+        import fitsio
+        nside_max = 4
+        npix = 12 * nside_max**2  # 192
+        hpix2upix = np.empty(npix, dtype=np.int64)
+        # In nested healpix, nside=2 pixel j contains nside=4 pixels 4j..4j+3.
+        # uniqpix = healpix + 4*nside**2, so nside=2 pixels have uniqpix 16, 17.
+        hpix2upix[0:4] = 0 + 4 * 2**2   # nside=2, healpix=0 -> uniqpix 16
+        hpix2upix[4:8] = 1 + 4 * 2**2   # nside=2, healpix=1 -> uniqpix 17
+        # Remaining pixels are at full nside=4 resolution (uniqpix = healpix + 64).
+        hpix2upix[8:] = np.arange(8, npix) + 4 * nside_max**2
+        dirpath = os.path.join(proddir, 'spectra', survey, program)
+        os.makedirs(dirpath, exist_ok=True)
+        filepath = os.path.join(dirpath, f'hpix2upix-{survey}-{program}.fits')
+        with fitsio.FITS(filepath, 'rw', clobber=True) as f:
+            f.write(hpix2upix, header={'NSIDE': nside_max}, extname='HPIX2UPIX')
+        return hpix2upix, nside_max
+
+    def _make_hpix2upix_json(self, proddir, survey, program):
+        """Write a minimal hpix2upix JSON file for testing radec2pix.
+
+        Same map structure as _make_hpix2upix_fits: nside_max=4 with the
+        first 8 fine pixels merged into 2 coarser nside=2 uniqpix values.
+
+        Args:
+            proddir (str): production directory path
+            survey (str): survey name
+            program (str): program name
+
+        Returns: (hpix2upix, nside_max)
+            hpix2upix: np.ndarray of int64, shape (192,), the map written
+            nside_max: int, nside stored in the file (4)
+        """
+        import json
+        nside_max = 4
+        npix = 12 * nside_max**2  # 192
+        hpix2upix = np.empty(npix, dtype=np.int64)
+        hpix2upix[0:4] = 0 + 4 * 2**2   # nside=2, healpix=0 -> uniqpix 16
+        hpix2upix[4:8] = 1 + 4 * 2**2   # nside=2, healpix=1 -> uniqpix 17
+        hpix2upix[8:] = np.arange(8, npix) + 4 * nside_max**2
+        dirpath = os.path.join(proddir, 'spectra', survey, program)
+        os.makedirs(dirpath, exist_ok=True)
+        filepath = os.path.join(dirpath, f'hpix2upix-{survey}-{program}.json')
+        with open(filepath, 'w') as f:
+            json.dump({'NSIDE': nside_max, 'HPIX2UPIX': hpix2upix.tolist()}, f)
+        return hpix2upix, nside_max
+
+    def test_radec2pix_legacy(self):
+        from ..io.meta import radec2pix
+        import healpy
+
+        ra, dec = 20.0, -10.0
+        expected = healpy.ang2pix(64, ra, dec, lonlat=True, nest=True)
+
+        for specprod in ['fuji', 'guadalupe', 'himalayas', 'iron', 'jura', 'kibo', 'loa']:
+            pixbase, pixels = radec2pix(ra, dec, specprod=specprod)
+            self.assertEqual(pixbase, 'healpix', msg=f'specprod={specprod}')
+            self.assertEqual(pixels, expected, msg=f'specprod={specprod}')
+
+        # array input
+        ra_arr = np.array([20.0, 100.0, 200.0])
+        dec_arr = np.array([-10.0, 30.0, 5.0])
+        pixbase, pixels = radec2pix(ra_arr, dec_arr, specprod='iron')
+        self.assertEqual(pixbase, 'healpix')
+        expected_arr = healpy.ang2pix(64, ra_arr, dec_arr, lonlat=True, nest=True)
+        np.testing.assert_array_equal(pixels, expected_arr)
+
+    def test_radec2pix_new_fits(self):
+        from ..io.meta import radec2pix
+        import healpy
+
+        survey, program = 'main', 'dark'
+        proddir = self.reduxdir
+        hpix2upix, nside_max = self._make_hpix2upix_fits(proddir, survey, program)
+
+        # Get sky coordinates at the center of healpix pixels 0 and 50 (at nside_max=4).
+        # Pixel 0 falls in the merged region: fine pixels 0-3 all map to nside=2 uniqpix 16.
+        # Pixel 50 falls in the 1:1 region: it maps to nside=4 uniqpix 50+64=114.
+        ra_merged, dec_merged = healpy.pix2ang(nside_max, 0, nest=True, lonlat=True)
+        ra_fine, dec_fine = healpy.pix2ang(nside_max, 50, nest=True, lonlat=True)
+
+        pixbase, pixels = radec2pix(ra_merged, dec_merged, survey=survey, program=program, proddir=proddir)
+        self.assertEqual(pixbase, 'spectra')
+        self.assertEqual(pixels, 16)   # nside=2, healpix=0 -> uniqpix 16
+
+        pixbase, pixels = radec2pix(ra_fine, dec_fine, survey=survey, program=program, proddir=proddir)
+        self.assertEqual(pixbase, 'spectra')
+        self.assertEqual(pixels, 50 + 4 * nside_max**2)  # nside=4, healpix=50 -> uniqpix 114
+
+        # array input covering both a merged and a fine pixel
+        ra_arr = np.array([ra_merged, ra_fine])
+        dec_arr = np.array([dec_merged, dec_fine])
+        pixbase, pixels = radec2pix(ra_arr, dec_arr, survey=survey, program=program, proddir=proddir)
+        self.assertEqual(pixbase, 'spectra')
+        np.testing.assert_array_equal(pixels, [16, 50 + 4 * nside_max**2])
+
+    def test_radec2pix_new_json(self):
+        """Test radec2pix fallback to JSON when fitsio is unavailable."""
+        import sys
+        from ..io.meta import radec2pix
+        import healpy
+
+        survey, program = 'main', 'dark'
+        proddir = self.reduxdir
+        hpix2upix, nside_max = self._make_hpix2upix_json(proddir, survey, program)
+
+        # Use the center of healpix pixel 0 (merged: maps to nside=2 uniqpix 16).
+        ra, dec = healpy.pix2ang(nside_max, 0, nest=True, lonlat=True)
+        with patch.dict(sys.modules, {'fitsio': None}):
+            pixbase, pixels = radec2pix(ra, dec, survey=survey, program=program, proddir=proddir)
+
+        self.assertEqual(pixbase, 'spectra')
+        self.assertEqual(pixels, 16)   # nside=2, healpix=0 -> uniqpix 16
+
+    def test_radec2pix_env_desi_spectro_redux(self):
+        """Test proddir resolution via DESI_SPECTRO_REDUX and SPECPROD env vars."""
+        from ..io.meta import radec2pix
+        import healpy
+
+        survey, program = 'main', 'dark'
+        # self.reduxdir = DESI_SPECTRO_REDUX/SPECPROD, set in testEnv
+        hpix2upix, nside_max = self._make_hpix2upix_fits(self.reduxdir, survey, program)
+
+        ra, dec = healpy.pix2ang(nside_max, 50, nest=True, lonlat=True)
+        # specprod='dailytest' from env; not in the legacy list
+        pixbase, pixels = radec2pix(ra, dec, survey=survey, program=program)
+        self.assertEqual(pixbase, 'spectra')
+        self.assertEqual(pixels, hpix2upix[50])
+
+    def test_radec2pix_env_desi_root(self):
+        """Test proddir resolution via DESI_ROOT when DESI_SPECTRO_REDUX is absent."""
+        from ..io.meta import radec2pix
+        import healpy
+
+        survey, program = 'main', 'dark'
+        # DESI_ROOT/spectro/redux/SPECPROD == self.reduxdir
+        hpix2upix, nside_max = self._make_hpix2upix_fits(self.reduxdir, survey, program)
+
+        ra, dec = healpy.pix2ang(nside_max, 50, nest=True, lonlat=True)
+        del os.environ['DESI_SPECTRO_REDUX']
+        try:
+            pixbase, pixels = radec2pix(ra, dec, survey=survey, program=program)
+            self.assertEqual(pixbase, 'spectra')
+            self.assertEqual(pixels, hpix2upix[50])
+        finally:
+            os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+
+    def test_radec2pix_no_env_error(self):
+        """Test KeyError when neither DESI_SPECTRO_REDUX nor DESI_ROOT is set."""
+        from ..io.meta import radec2pix
+
+        del os.environ['DESI_SPECTRO_REDUX']
+        del os.environ['DESI_ROOT']
+        try:
+            with self.assertRaises(KeyError):
+                radec2pix(20.0, -10.0, survey='main', program='dark', specprod='matterhorn')
+        finally:
+            os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+            os.environ['DESI_ROOT'] = self.testEnv['DESI_ROOT']
+
+    def test_radec2pix_no_survey_program_error(self):
+        """Test ValueError when survey or program is missing for a new production."""
+        from ..io.meta import radec2pix
+
+        with self.assertRaises(ValueError):
+            radec2pix(20.0, -10.0, proddir=self.reduxdir)
+
+        with self.assertRaises(ValueError):
+            radec2pix(20.0, -10.0, survey='main', proddir=self.reduxdir)
+
+        with self.assertRaises(ValueError):
+            radec2pix(20.0, -10.0, program='dark', proddir=self.reduxdir)
