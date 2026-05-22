@@ -14,6 +14,30 @@ These changes were not used in Matterhorn.
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 
+0.71.3 (2026-05-21)
+-------------------
+
+Further updates for Matterhorn, tagged before running cross-tile spectra.
+
+Major data organization change:
+
+* Use adaptively-sized "uniqpix" instead of fixed-size healpix for cross tile coadds (PR `#2755`_, `#2758`_).
+
+Other changes
+
+* Fix program-to-efftime in zcatalog (PR `#2746`_).
+* Add CCD history script (PR `#2751`_).
+* Calculate ``SIGMA_COADD_NORM`` from final recomputed coadd norm (PR `#2753`_).
+* Add more TSNR afterburner information to exposure-qa files (PR `#2756`_).
+
+.. _`#2746`: https://github.com/desihub/desispec/pull/2746
+.. _`#2751`: https://github.com/desihub/desispec/pull/2751
+.. _`#2753`: https://github.com/desihub/desispec/pull/2753
+.. _`#2755`: https://github.com/desihub/desispec/pull/2755
+.. _`#2756`: https://github.com/desihub/desispec/pull/2756
+.. _`#2758`: https://github.com/desihub/desispec/pull/2758
+
+
 0.71.2 (2026-05-01)
 -------------------
 
