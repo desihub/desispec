@@ -115,7 +115,7 @@ def get_pixel_hash(pixels):
     pixels = np.sort(np.asarray(pixels, dtype=np.int64))
     return hashlib.blake2b(pixels.tobytes(), digest_size=8).hexdigest()
 
-def get_zpix_script_pathname(uniqpix, survey, program):
+def get_zpix_script_pathname(uniqpix, survey, program, jobhash=None, specprod=None):
     """Return uniqpix-based coadd+redshift+afterburner script pathname
 
     Args:
@@ -123,17 +123,27 @@ def get_zpix_script_pathname(uniqpix, survey, program):
         survey (str): DESI survey, e.g. main, sv1, sv3
         program (str): survey program, e.g. dark, bright, backup
 
+    Options:
+        jobhash (str): optional hash string to use instead of computing from uniqpix
+        specprod (str): optional specprod name to override $SPECPROD
+
     Returns:
         zpix_script_pathname
     """
-    if np.isscalar(uniqpix):
-        uniqpix = [uniqpix,]
+    log = get_logger()
+    if jobhash is not None:
+        if uniqpix is not None:
+            log = get_logger()
+            log.warning(f"jobhash={jobhash} provided, ignoring uniqpix={uniqpix}")
+    else:
+        if np.isscalar(uniqpix):
+            uniqpix = [uniqpix,]
 
-    jobhash = get_pixel_hash(uniqpix)
+        jobhash = get_pixel_hash(uniqpix)
 
     scriptname = f'zpix-{survey}-{program}-{jobhash}.slurm'
 
-    reduxdir = desispec.io.specprod_root()
+    reduxdir = desispec.io.specprod_root(specprod=specprod)
     return os.path.join(reduxdir, 'run', 'scripts', 'spectra',
                         survey, program, jobhash[0:2], scriptname), jobhash
 

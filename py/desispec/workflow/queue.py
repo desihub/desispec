@@ -255,7 +255,7 @@ def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
     return queue_info_table
 
 def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
-                         'eligible,start,end,elapsed,state,exitcode', dry_run_level=0):
+                         'eligible,start,end,elapsed,state,exitcode', dry_run_level=0, loglevel=None):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get
     information about specific jobs based on their jobids.
@@ -277,6 +277,8 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         3 Doesn't write or submit anything but queries Slurm normally for job status.
         4 Doesn't write, submit jobs, or query Slurm.
         5 Doesn't write, submit jobs, or query Slurm; instead it makes up the status of the jobs.
+    loglevel : str, optional
+        loglevel to use (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns
     -------
@@ -285,7 +287,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         to all jobs submitted by the specified user in the specified time frame.
     """
     qids = np.atleast_1d(qids).astype(int)
-    log = get_logger()
+    log = get_logger(level=loglevel)
 
     qids = qids[np.isin(qids, [get_err_qid(), get_default_qid()], invert=True)]  # avoid default QID values
 
@@ -295,7 +297,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         results = list()
         for i in range(0, len(qids), nmax):
             results.append(queue_info_from_qids(qids[i:i+nmax], columns=columns,
-                                                dry_run_level=dry_run_level))
+                                                dry_run_level=dry_run_level, loglevel=loglevel))
         results = vstack(results)
         return results
     elif len(qids) == 0:
@@ -357,7 +359,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
 
     return queue_info_table
 
-def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
+def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False, loglevel=None):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get
     information on the job STATE. If use_cache is set and all qids have cached
@@ -378,6 +380,8 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
     use_cache : bool
         If True the code first looks for a cached status
         for the qid. If unavailable, then it queries Slurm. Default is False.
+    loglevel : str, optional
+        loglevel to use (DEBUG, INFO, WARNING, ERROR, CRITICAL)0
 
     Returns
     -------
@@ -387,7 +391,7 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
     err_qid, def_qid = get_err_qid(), get_default_qid()
     global _cached_slurm_states
     qids = np.atleast_1d(qids).astype(int)
-    log = get_logger()
+    log = get_logger(level=loglevel)
 
     # Exclude placeholder QIDs from cache checks and Slurm queries.
     # These placeholders are never cached and are not included in the output.
@@ -403,7 +407,7 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False):
             outdict[qid] = _cached_slurm_states[qid]
     elif real_qids.size > 0:
         outtable = queue_info_from_qids(real_qids, columns='jobid,state',
-                                        dry_run_level=dry_run_level)
+                                        dry_run_level=dry_run_level, loglevel=loglevel)
         for row in outtable:
             if int(row['JOBID']) not in [err_qid, def_qid]:
                 outdict[int(row['JOBID'])] = row['STATE']
@@ -742,3 +746,34 @@ def check_queue_count(user=None, include_scron=False, dry_run_level=0):
     """
     return len(get_jobs_in_queue(user=user, include_scron=include_scron,
                                  dry_run_level=dry_run_level))
+
+def submit_script(scriptpath, sbatch_opts=None):
+    """
+    Submit script to queue and return the qid.
+
+    Args:
+        scriptpath (str): Path to the script to submit.
+
+    Options:
+        sbatch_opts (list, optional): List of additional options to pass to sbatch.
+
+    Returns:
+        int: The qid of the submitted job.
+
+    This function automatically adds the sbatch --parsable flag to interpret the qid.
+    The `sbatch_opts` argument is for any additional options like `--reservation ...`
+    """
+    if sbatch_opts is None:
+        sbatch_opts = []
+
+    cmd = ['sbatch', '--parsable',] + sbatch_opts + [scriptpath,]
+    try:
+        qid = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+        qid = int(qid.strip(' \t\n'))
+    except subprocess.CalledProcessError as err:
+        log = get_logger()
+        log.error(f"Error submitting script {scriptpath} with command {' '.join(cmd)}")
+        log.error(f"Error message: {err.output}")
+        raise err
+
+    return qid
