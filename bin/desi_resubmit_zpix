@@ -114,6 +114,7 @@ def main():
     if len(resub_scripts) == 0:
         print("SUCCESS: no jobs need to be resubmitted")
     else:
+        print(f'{len(resub_scripts)} scripts needed to be resubmitted')
         if args.dry_run:
             print(f'DRY RUN: not updating {pixjobs_file} with new QIDs')
         else:
