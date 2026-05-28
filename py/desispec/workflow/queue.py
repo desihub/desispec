@@ -381,7 +381,7 @@ def get_queue_states_from_qids(qids, dry_run_level=0, use_cache=False, loglevel=
         If True the code first looks for a cached status
         for the qid. If unavailable, then it queries Slurm. Default is False.
     loglevel : str, optional
-        loglevel to use (DEBUG, INFO, WARNING, ERROR, CRITICAL)0
+        loglevel to use (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns
     -------
