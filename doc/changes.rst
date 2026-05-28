@@ -14,6 +14,13 @@ These changes were not used in Matterhorn.
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 
+0.71.4 (2026-05-28)
+-------------------
+
+* Update to `desi_resubmit_zpix` bookkeeping for matterhorn (PR `#2759`_).
+
+.. _`#2759`: https://github.com/desihub/desispec/pull/2759
+
 0.71.3 (2026-05-21)
 -------------------
 
