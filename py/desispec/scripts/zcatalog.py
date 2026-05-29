@@ -328,9 +328,18 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
                 lastnight = int(rrfile.split('-')[-1].split('.')[0].replace('thru', ''))
             data.add_column(np.full(nrows, lastnight, dtype=np.int32),
                     index=icol, name='LASTNIGHT')
-    elif group in ('uniqpix', 'healpix'):
+    elif group == 'healpix':
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
+    elif group == 'uniqpix':
+        data.add_column(np.full(nrows, hdr['UNIQPIX'], dtype=np.int32),
+                index=icol, name='UNIQPIX')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['HPXNSIDE'], dtype=np.int32),
+                index=icol, name='NSIDE')
 
     icol += 1
 
@@ -457,7 +466,7 @@ def main(args=None):
     if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
-        pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
+        pertile = args.group not in ('healpix', 'uniqpix')
     elif args.group == 'healpix':
         pertile = False
         indir = os.path.join(io.specprod_root(), 'healpix')
@@ -468,6 +477,17 @@ def main(args=None):
         # specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
         globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
         log.info(f'Looking for healpix redrock files in {globstr}')
+        redrockfiles = sorted(glob.glob(globstr))
+    elif args.group == 'uniqpix':
+        pertile = False
+        indir = os.path.join(io.specprod_root(), 'spectra')
+
+        # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        indir = get_readonly_filepath(indir)
+
+        # specprod/spectra/SURVEY/PROGRAM/UPIXGROUP/UPIX/redrock*.fits
+        globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
+        log.info(f'Looking for uniqpix redrock files in {globstr}')
         redrockfiles = sorted(glob.glob(globstr))
     else:
         pertile = True
@@ -740,6 +760,8 @@ def main(args=None):
             zcat['OBSCONDITIONS'] = zcat['OBSCONDITIONS'].astype('int16')
 
     columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
+    if args.group == 'uniqpix':
+        columns_basic = ['UNIQPIX' if col == 'HEALPIX' else col for col in columns_basic]
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
@@ -768,7 +790,7 @@ def main(args=None):
     #- across multiple files
     header = fitsio.read_header(redrockfiles[0], 0)
     for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL',
-                'NAXIS', 'BITPIX', 'SIMPLE', 'EXTEND']:
+                'UNIQPIX', 'HPXNSIDE', 'NAXIS', 'BITPIX', 'SIMPLE', 'EXTEND']:
         if key in header:
             header.delete(key)
 
