@@ -57,6 +57,7 @@ survey_program=(
     "special dark"
     "special bright"
     "special backup"
+    "special other"
 )
 
 # I/O saturates so don't use all the cores for parallel reads
