@@ -11,19 +11,27 @@
 #
 # Use --dry-run to print commands without executing them:
 #   source $DESISPEC/etc/zcatalog_commands.sh --dry-run
+#
+# Use --healpix to use --group healpix instead of the default --group uniqpix:
+#   source $DESISPEC/etc/zcatalog_commands.sh --healpix
 
 # NOTE: desi_zcatalog will skip over any SURVEY/PROGRAM combinations already done,
 # so it is safe to re-run this script until all files are generated.
 
 # Parse options
 _DRY_RUN=false
-[ "$1" = "--dry-run" ] && _DRY_RUN=true
+_PIX_GROUP=uniqpix
+for _arg in "$@"; do
+    [ "$_arg" = "--dry-run" ] && _DRY_RUN=true
+    [ "$_arg" = "--healpix" ] && _PIX_GROUP=healpix
+done
+unset _arg
 
 # requires "module load desidatamodel" first to be able to add units
 python -c "import desidatamodel"
 if [ $? -ne 0 ]; then
     echo 'Please run "module load desidatamodel" first'
-    unset _DRY_RUN
+    unset _DRY_RUN _PIX_GROUP
     return 1  # note: return not exit so that if this is sourced, it won't exit parent shell
 fi
 
@@ -61,9 +69,9 @@ for pair in "${survey_program[@]}"; do
     # Generate the zpix and ztile catalogs
     echo $(date '+%Y-%m-%d %T') "Generating zpix  for $SURVEY $PROGRAM"
     if $_DRY_RUN; then
-        echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log"
+        echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log"
     else
-        desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
+        desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
     fi
     echo $(date '+%Y-%m-%d %T') "Generating ztile for $SURVEY $PROGRAM"
     if $_DRY_RUN; then
@@ -75,7 +83,4 @@ done
 
 echo $(date '+%Y-%m-%d %T') All done
 
-unset _DRY_RUN
-
-
-
+unset _DRY_RUN _PIX_GROUP
