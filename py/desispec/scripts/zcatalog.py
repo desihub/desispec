@@ -30,6 +30,7 @@ from desiutil.log import get_logger, DEBUG
 from desiutil.annotate import load_csv_units
 from desiutil.names import radec_to_desiname
 import desiutil.depend
+import desiutil.healpix
 
 from desitarget.targetmask import desi_mask
 
@@ -332,7 +333,8 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
     elif group == 'uniqpix':
-        data.add_column(np.full(nrows, hdr['UNIQPIX'], dtype=np.int32),
+        uniqpix = desiutil.healpix.hpix2upix(hdr['HPXNSIDE'], hdr['HPXPIXEL'])
+        data.add_column(np.full(nrows, uniqpix, dtype=np.int32),
                 index=icol, name='UNIQPIX')
         icol += 1
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
