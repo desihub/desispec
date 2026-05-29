@@ -251,7 +251,7 @@ def get_morning_dark_night_expid(night, prod, exptime=1200):
 
 def get_ctedet_night_expid(night, prod):
     """
-    Returns the EXPID of the 1s FLAT exposure for a given night.
+    Returns the EXPID of the 1s/3s/10s FLAT exposure for a given night.
     If not present, takes the science exposure with the lowest sky counts.
 
     Args:
@@ -282,37 +282,40 @@ def get_ctedet_night_expid(night, prod):
             )
         ]
     )
-    ctedet_expid = None
-    # AR checking preproc-??-{EXPID}.fits
-    for expid in expids:
-        fns = sorted(
-            glob(
-                os.path.join(
-                    prod,
-                    "preproc",
-                    "{}".format(night),
-                    "{:08d}".format(expid),
-                    "preproc-??-{:08d}.fits*".format(expid),
+    ctedet_expid, ctedet_reqt = None, None
+    # AR checking preproc-??-{EXPID}.fits; prioritize 1s, then 3s, then 10s FLATs
+    for reqt in [1, 3, 10]:
+        for expid in expids:
+            fns = sorted(
+                glob(
+                    os.path.join(
+                        prod,
+                        "preproc",
+                        "{}".format(night),
+                        "{:08d}".format(expid),
+                        "preproc-??-{:08d}.fits*".format(expid),
+                    )
                 )
             )
-        )
-        # AR if some preproc files, just pick the first one
-        if len(fns) > 0:
-            hdr = fitsio.read_header(fns[0], "IMAGE")
-            if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
-                ctedet_expid = hdr["EXPID"]
-                break
+            # AR if some preproc files, just pick the first one
+            if len(fns) > 0:
+                hdr = fitsio.read_header(fns[0], "IMAGE")
+                if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == reqt):
+                    ctedet_expid, ctedet_reqt = hdr["EXPID"], reqt
+                    break
+        if ctedet_expid is not None:
+            break
     if ctedet_expid is not None:
         log.info(
-            "found EXPID={} as the 1s FLAT for NIGHT={}".format(
-                expid, night,
+            "found EXPID={} as the {}s FLAT for NIGHT={}".format(
+                ctedet_expid, ctedet_reqt, night,
             )
         )
-    # AR if no 1s FLAT, go for the SCIENCE exposure with the lowest sky counts
+    # AR if no 1s/3s/10s FLAT, go for the SCIENCE exposure with the lowest sky counts
     # AR using the r-band sky
     else:
         log.warning(
-            "no EXPID found as the 1s FLAT for NIGHT={}; going for SCIENCE exposures".format(night)
+            "no EXPID found as the 1s/3s/10s FLAT for NIGHT={}; going for SCIENCE exposures".format(night)
         )
         minsky = 1e10
         # AR checking sky-r?-{EXPID}.fits
