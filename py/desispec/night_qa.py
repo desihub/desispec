@@ -283,26 +283,33 @@ def get_ctedet_night_expid(night, prod):
         ]
     )
     ctedet_expid, ctedet_reqt = None, None
-    # AR checking preproc-??-{EXPID}.fits; prioritize 1s, then 3s, then 10s FLATs
-    for reqt in [1, 3, 10]:
-        for expid in expids:
-            fns = sorted(
-                glob(
-                    os.path.join(
-                        prod,
-                        "preproc",
-                        "{}".format(night),
-                        "{:08d}".format(expid),
-                        "preproc-??-{:08d}.fits*".format(expid),
-                    )
+    ctedet_reqts_by_expid = dict()
+    # AR checking preproc-??-{EXPID}.fits, with early break on an optimal 1s FLAT
+    for expid in expids:
+        fns = sorted(
+            glob(
+                os.path.join(
+                    prod,
+                    "preproc",
+                    "{}".format(night),
+                    "{:08d}".format(expid),
+                    "preproc-??-{:08d}.fits*".format(expid),
                 )
             )
-            # AR if some preproc files, just pick the first one
-            if len(fns) > 0:
-                hdr = fitsio.read_header(fns[0], "IMAGE")
-                if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == reqt):
-                    ctedet_expid, ctedet_reqt = hdr["EXPID"], reqt
+        )
+        # AR if some preproc files, just pick the first one
+        if len(fns) > 0:
+            hdr = fitsio.read_header(fns[0], "IMAGE")
+            if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] in [1, 3, 10]):
+                ctedet_reqts_by_expid[hdr["EXPID"]] = hdr["REQTIME"]
+                if hdr["REQTIME"] == 1:
                     break
+    # AR prioritize 1s, then 3s, then 10s FLATs
+    for reqt in [1, 3, 10]:
+        for expid in expids:
+            if ctedet_reqts_by_expid.get(expid) == reqt:
+                ctedet_expid, ctedet_reqt = expid, reqt
+                break
         if ctedet_expid is not None:
             break
     if ctedet_expid is not None:
