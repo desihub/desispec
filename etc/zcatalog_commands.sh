@@ -8,19 +8,27 @@
 #   export SPECPROD=loa
 #   cd $DESI_ROOT/spectro/redux/$SPECPROD/zcatalog/v2
 #   source $DESISPEC/etc/zcatalog_commands.sh
+#
+# Use --dry-run to print commands without executing them:
+#   source $DESISPEC/etc/zcatalog_commands.sh --dry-run
 
 # NOTE: desi_zcatalog will skip over any SURVEY/PROGRAM combinations already done,
 # so it is safe to re-run this script until all files are generated.
+
+# Parse options
+_DRY_RUN=false
+[ "$1" = "--dry-run" ] && _DRY_RUN=true
 
 # requires "module load desidatamodel" first to be able to add units
 python -c "import desidatamodel"
 if [ $? -ne 0 ]; then
     echo 'Please run "module load desidatamodel" first'
+    unset _DRY_RUN
     return 1  # note: return not exit so that if this is sourced, it won't exit parent shell
 fi
 
 # create output log directory
-mkdir -p logs
+if $_DRY_RUN; then echo "mkdir -p logs"; else mkdir -p logs; fi
 
 # SURVEY PROGRAM combinations to process
 survey_program=(
@@ -52,12 +60,22 @@ for pair in "${survey_program[@]}"; do
 
     # Generate the zpix and ztile catalogs
     echo $(date '+%Y-%m-%d %T') "Generating zpix  for $SURVEY $PROGRAM"
-    desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
+    if $_DRY_RUN; then
+        echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log"
+    else
+        desi_zcatalog --survey $SURVEY --program $PROGRAM --group healpix    --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
+    fi
     echo $(date '+%Y-%m-%d %T') "Generating ztile for $SURVEY $PROGRAM"
-    desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log
+    if $_DRY_RUN; then
+        echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log"
+    else
+        desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log
+    fi
 done
 
 echo $(date '+%Y-%m-%d %T') All done
+
+unset _DRY_RUN
 
 
 
