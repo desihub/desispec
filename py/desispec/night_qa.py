@@ -35,6 +35,14 @@ from desispec.correct_cte import get_rowbyrow_image_model
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
+## Shouldn't need to try-except, but Sphinx must be mocking
+## this because it fails autodocs
+try:
+    matplotlib.rcParams["image.interpolation_stage"] = "data"
+except TypeError:
+    # likely mocked by Sphinx autodoc
+    pass
+
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
