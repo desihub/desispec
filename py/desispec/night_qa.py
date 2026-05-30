@@ -35,6 +35,7 @@ from desispec.correct_cte import get_rowbyrow_image_model
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
+matplotlib.rcParams['image.interpolation_stage'] = 'data'
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
