@@ -79,7 +79,7 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     ressize = resinfo['node_count']
 
     #- job types for CPU and GPU, in the order they should be considered for the reservation
-    cpujobs = ['linkcal', 'ccdcalib', 'psfnight', 'arc']
+    cpujobs = ['psfnight', 'arc', 'ccdcalib', 'biasnight', 'biaspdark', 'linkcal']
     gpujobs = ['nightlyflat', 'flat', 'ztile', 'tilenight', 'zpix']
 
     #- which regular queue partition is eligible for this reservation?
@@ -111,8 +111,11 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
 
     #- Only move jobs that are currently eligible to run, not those waiting for dependencies
     #- so that we don't fill reservation with jobs that can't run
+    #- Note: NODELISTREASON can have multiple values for eligible jobs, not just "Priority",
+    #-       so we exclude Dependency-jobs rather than try to include every possible good state
     eligible_for_reservation &= jobs['ST'] == 'PD'
     eligible_for_reservation &= jobs['NODELISTREASON'] != 'Dependency'
+    eligible_for_reservation &= jobs['NODELISTREASON'] != 'DependencyNeverSatisfied'
     jobs_eligible = jobs[eligible_for_reservation]
 
     #- if there are 20x more tilenight or ztile jobs eligible than flats,

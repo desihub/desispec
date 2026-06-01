@@ -11,11 +11,14 @@ from __future__ import absolute_import, division, print_function
 import os
 import datetime
 import glob
+import json
 import re
 import numpy as np
 
 from desiutil.log import get_logger
-from .util import healpix_subdirectory, checkgzip, get_log_pathname
+import desiutil.healpix
+
+from .util import pix_subdirectory, checkgzip, get_log_pathname
 
 _desi_root_readonly=None
 def get_desi_root_readonly():
@@ -88,11 +91,13 @@ def get_findfile_argparser():
     parser.add_argument("-t", "--tile", type=int,
                         help="Integer tile (pointing) number.")
     parser.add_argument("-g", "--groupname", type=str,
-                        help="Spectral grouping name (e.g., 'healpix', 'cumulative', 'pernight').")
+                        help="Spectral grouping name (e.g., 'uniqpix', 'healpix', 'cumulative', 'pernight').")
     parser.add_argument("--subgroup", type=str,
                         help="Subgrouping name for non-standard group names.")
     parser.add_argument("--healpix", type=int,
                         help="Healpix pixel number.")
+    parser.add_argument("--uniqpix", type=int,
+                        help="Uniqpix pixel number.")
     parser.add_argument("--nside", type=int, default=64,
                         help="Healpix nside (default: 64).")
     parser.add_argument("--band", type=str, choices=['b', 'r', 'z'],
@@ -150,7 +155,7 @@ def get_fits_compression_suffix() :
 
 def findfile(filetype, night=None, expid=None, camera=None,
         tile=None, groupname=None, subgroup=None,
-        healpix=None, nside=64, band=None, spectrograph=None,
+        healpix=None, nside=None, uniqpix=None, band=None, spectrograph=None,
         survey=None, faprogram=None, version=None,
         rawdata_dir=None, specprod_dir=None, specprod=None,
         spectrocalib_dir=None,
@@ -167,10 +172,11 @@ def findfile(filetype, night=None, expid=None, camera=None,
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
-        groupname : spectral grouping name (e.g. "healpix", "cumulative", "pernight")
+        groupname : spectral grouping name (e.g. "uniqpix", "healpix", "cumulative", "pernight")
         subgroup : (str) subgrouping name for non-standard groupnames
         healpix : healpix pixel number
         nside : healpix nside
+        uniqpix: uniqpix number (alternative to healpix)
         band : one of 'b','r','z' identifying the camera band
         spectrograph : integer spectrograph number, 0-9
         survey : e.g. sv1, sv3, main, special
@@ -283,17 +289,23 @@ def findfile(filetype, night=None, expid=None, camera=None,
         ctecorrnight = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.yaml',
         ctecorr      = '{specprod_dir}/calibnight/{night}/ctecorr-{night}.yaml', #- alias, same file
         #
-        # spectra- healpix based
+        # spectra- uniqpix and healpix based
         #
-        coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{healpix}.fits',
-        rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{healpix}.h5',
-        rrmodel_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrmodel-{survey}-{faprogram}-{healpix}.fits',
-        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{healpix}.fits{compsuffix}',
-        redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{healpix}.fits',
-        qso_mgii_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_mgii-{survey}-{faprogram}-{healpix}.fits',
-        qso_qn_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/qso_qn-{survey}-{faprogram}-{healpix}.fits',
-        emline_hp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/emline-{survey}-{faprogram}-{healpix}.fits',
-        hpixexp='{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/hpixexp-{survey}-{faprogram}-{healpix}.csv',
+        hpix2upix      = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.fits', 
+        hpix2upix_fits = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.fits',
+        hpix2upix_json = '{specprod_dir}/spectra/{survey}/{faprogram}/hpix2upix-{survey}-{faprogram}.json',
+        upix_ntargets  = '{specprod_dir}/spectra/{survey}/{faprogram}/uniqpix-{survey}-{faprogram}.fits',
+        coadd_pix      = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/coadd-{survey}-{faprogram}-{pix}.fits',
+        rrdetails_pix  = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrdetails-{survey}-{faprogram}-{pix}.h5',
+        rrmodel_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/rrmodel-{survey}-{faprogram}-{pix}.fits',
+        spectra_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/spectra-{survey}-{faprogram}-{pix}.fits{compsuffix}',
+        redrock_pix    = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/redrock-{survey}-{faprogram}-{pix}.fits',
+        qso_mgii_pix   = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_mgii-{survey}-{faprogram}-{pix}.fits',
+        qso_qn_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/qso_qn-{survey}-{faprogram}-{pix}.fits',
+        emline_pix     = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/emline-{survey}-{faprogram}-{pix}.fits',
+        # hpixexp before matterhorn/DR3; pixexp matterhorn/DR3 and after
+        hpixexp        = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/hpixexp-{survey}-{faprogram}-{pix}.csv',
+        pixexp         = '{specprod_dir}/{pixbase}/{survey}/{faprogram}/{pixdir}/pixexp-{survey}-{faprogram}-{pix}.csv',
         #
         # spectra- tile based
         #
@@ -306,7 +318,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         qso_qn_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/qso_qn-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         emline_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{subgroup}/emline-{spectrograph:d}-{tile:d}-{nightprefix}{subgroup}.fits',
         #
-        # spectra- single exp tile based requires cusom formatting for expid:08d
+        # spectra- single exp tile based requires custom formatting for expid:08d
         #
         coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
         rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
@@ -320,11 +332,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
         # z catalogs
+        # Note: v1 and v2 have different subdir structure, handled later as a special case
         #
         zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',  # deprecated
-        zcat_hp = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
+        zcat_pix = '{specprod_dir}/zcatalog/{version}/zpix-{survey}-{faprogram}.fits',
         zcat_tile = '{specprod_dir}/zcatalog/{version}/ztile-{survey}-{faprogram}-{groupname}.fits',
-        zall_hp = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
+        zall_pix = '{specprod_dir}/zcatalog/{version}/zall-pix-{specprod}.fits',
         zall_tile='{specprod_dir}/zcatalog/{version}/zall-tile{groupname}-{specprod}.fits',
         #
         # Dashboard files
@@ -343,6 +356,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
     location['exptable'] = location['exposure_table']
     location['proctable'] = location['processing_table']
     location['unproctable'] = location['unprocessed_table']
+    location['ztile'] = location['zcat_tile']
+    location['zpix'] = location['zcat_pix']
 
     ## Define the month if night is specified
     if night is not None:
@@ -350,13 +365,104 @@ def findfile(filetype, night=None, expid=None, camera=None,
     else:
         month = None
 
+    # not encouraged, but "spectra" is an alternative name for "uniqpix"
+    if groupname == 'spectra':
+        groupname = 'uniqpix'
+
     #- default group is "cumulative" for tile-based files
-    if groupname is None and tile is not None and filetype in (
-            'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
-            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile',
-            'zcat_tile', 'zall_tile'
-            ):
-        groupname = 'cumulative'
+    if groupname is None:
+        if filetype in ('zcat_tile', 'zall_tile') or \
+            (tile is not None and filetype in (
+                'spectra', 'coadd', 'redrock', 'rrdetails', 'rrmodel', 'tileqa', 'tileqapng', 'zmtl',
+                'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile', 'rrmodel_tile')
+             ):
+                groupname = 'cumulative'
+
+    #- maybe we don't need groupname anyway
+    if groupname is not None:
+        ignore_groupname = False
+        if filetype in location:
+            if ('groupname' not in location[filetype]) and ('pixbase' not in location[filetype]):
+                ignore_groupname = True
+        elif filetype+'_pix' in location:
+            if ('groupname' not in location[filetype+'_pix']) and ('pixbase' not in location[filetype+'_pix']):
+                ignore_groupname = True
+
+        if ignore_groupname:
+            log.warning(f'Ignoring extraneous {groupname=}')
+            groupname = groupname + '_ignored'
+
+    #- groupname defaults for healpix and uniqpix
+    if groupname is None:
+        if uniqpix is not None:
+            test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+            if nside is not None and nside != test_nside:
+                raise ValueError(f"{uniqpix=} is nside={test_nside}, but nside={nside} was provided.")
+            if healpix is not None and healpix != test_healpix:
+                raise ValueError(f"{uniqpix=} is healpix={test_healpix}, but healpix={healpix} was provided.")
+            groupname = 'uniqpix'
+        elif healpix is not None:
+            if nside is None:
+                nside = 64
+                groupname = 'healpix'
+            else:
+                uniqpix = desiutil.healpix.hpix2upix(nside, healpix)
+                groupname = 'uniqpix'
+                log.warning(f'Using uniqpix=healpix+4*nside^2; if you really want healpix-based files, set groupname="healpix"')
+
+    #- other healpix / uniqpix standardization and error cases
+    if groupname == 'healpix':
+        if nside is None:
+            if healpix is None and uniqpix is None:
+                raise ValueError("groupname='healpix' but no healpix or uniqpix provided")
+            elif uniqpix is not None:
+                raise ValueError("groupname='healpix' but uniqpix provided")
+            assert healpix is not None
+            nside = 64
+        else:
+            if healpix is None:
+                raise ValueError("groupname='healpix' but no healpix provided")
+            if uniqpix is not None:
+                test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+                if test_healpix != healpix or test_nside != nside:
+                    raise ValueError(f"groupname='healpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
+
+    if groupname == 'uniqpix':
+        if nside is None:
+            if healpix is not None:
+                raise ValueError(f'groupname="uniqpix" but {healpix=} provided without nside')
+            elif uniqpix is None:
+                raise ValueError('groupname="uniqpix" but no healpix or uniqpix provided')
+        else:
+            if healpix is None:
+                if uniqpix is None:
+                    raise ValueError('groupname="uniqpix" but no healpix or uniqpix provided')
+                else:
+                    raise ValueError(f'groupname="uniqpix" and {nside=} but no healpix provided')
+            else:
+                if uniqpix is None:
+                    uniqpix = desiutil.healpix.hpix2upix(nside, healpix)
+                else:
+                    test_nside, test_healpix = desiutil.healpix.upix2hpix(uniqpix)
+                    if test_healpix != healpix or test_nside != nside:
+                        raise ValueError(f"groupname='uniqpix' but {nside=}, {healpix=} are inconsistent with {uniqpix=}")
+
+
+    #- backwards compatibility: try interpreting groupname as a healpix number
+    if healpix is None and tile is None and groupname is not None:
+        try:
+            healpix = int(groupname)
+            nside = 64
+            groupname = 'healpix'
+        except (TypeError, ValueError):
+            pass
+
+    # zcat v2 added SURVEY/ or zall/ subdirs
+    if version == 'v2':
+        if filetype.startswith('zcat'):
+            version = f'{version}/{survey}'
+        elif filetype.startswith('zall'):
+            version = f'{version}/zall'
 
     if groupname == "cumulative":
         nightprefix = "thru"
@@ -366,29 +472,25 @@ def findfile(filetype, night=None, expid=None, camera=None,
         subgroup = str(night)
     elif groupname == "perexp":
         nightprefix = "exp"
-    elif groupname == "healpix":
+    elif groupname in ("healpix", "uniqpix"):
         nightprefix = ""
     else:
         nightprefix = str(groupname)+'-'
-
-    #- backwards compatibility: try interpreting groupname as a healpix number
-    if healpix is None and tile is None and groupname is not None:
-        try:
-            healpix = int(groupname)
-            groupname = 'healpix'
-        except (TypeError, ValueError):
-            pass
 
     #- tile or healpix but not both
     if tile is not None and healpix is not None:
         raise ValueError(f'Set healpix or tile but not both ({healpix}, {tile})')
 
-    #- Setting healpix implies groupname='healpix'
-    if healpix is not None and groupname is None:
-        groupname = 'healpix'
+    pixbase = pix = None
+    if groupname == 'healpix':
+        pixbase = 'healpix'
+        pix = healpix
+    elif groupname == 'uniqpix':
+        pixbase = 'spectra'
+        pix = uniqpix
 
     #- be robust to str vs. int
-    if isinstance(healpix, str): healpix = int(healpix)
+    if isinstance(pix, str):     pix = int(pix)
     if isinstance(night, str):   night = int(night)
     if isinstance(expid, str):   expid = int(expid)
     if isinstance(tile, str):    tile = int(tile)
@@ -396,7 +498,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     #- Determine if this is healpix-based or tile-based objects, and update
     #- location dict for which flavor of coadd/spectra/redrock/etc is needed,
-    #- removing the _hp, _single, _tile suffixes from the keys
+    #- removing the _pix, _single, _tile suffixes from the keys
     loc_copy = location.copy()
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
@@ -423,17 +525,17 @@ def findfile(filetype, night=None, expid=None, camera=None,
         ## If not tile based then use the hp naming scheme
         ## Do loop to improve scaling with additional file types
         for key, val in loc_copy.items():
-            if key.endswith('_hp'):
-                root_key = key.removesuffix('_hp')
+            if key.endswith('_pix'):
+                root_key = key.removesuffix('_pix')
                 location[root_key] = val
     del loc_copy
 
-    if groupname is not None and tile is None and healpix is not None:
-        hpixdir = healpix_subdirectory(nside, healpix)
+    if groupname is not None and tile is None and pix is not None:
+        pixdir = pix_subdirectory(pix)
     else:
-        #- set to anything so later logic will trip on groupname not hpixdir
-        hpixdir = 'hpix'
-    log.debug("hpixdir = '%s'", hpixdir)
+        #- set to anything so later logic will trip on groupname not pixdir
+        pixdir = 'defaultpix'
+    log.debug("pixdir = '%s'", pixdir)
 
     #- Do we know about this kind of file?
     if filetype not in location:
@@ -480,7 +582,8 @@ def findfile(filetype, night=None, expid=None, camera=None,
         'specprod_dir':specprod_dir, 'specprod':specprod, 'tiles_dir':tiles_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera,
         'groupname':groupname, 'subgroup':subgroup, 'version':version,
-        'healpix':healpix, 'nside':nside, 'hpixdir':hpixdir, 'band':band,
+        'healpix':healpix, 'nside':nside, 'uniqpix':uniqpix, 'pix':pix, 'pixdir':pixdir, 'pixbase':pixbase,
+        'band':band,
         'spectrograph':spectrograph, 'nightprefix':nightprefix, 'month':month,
         'compsuffix':compsuffix
         }
@@ -787,6 +890,32 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     # Return
     return sorted(nights)
 
+def get_lastnight(tileid, specprod=None):
+    """
+    Return the lastnight in SPECPROD/tiles/cumulative/TILEID/NIGHT
+
+    Args:
+        tileid (int): DESI Tile ID
+
+    Options:
+        specprod (str): overrides $SPECPROD
+
+    Returns lastnight (int), or raises ValueError if no night found for that tile
+    """
+    tiledir = os.path.join(specprod_root(specprod), 'tiles', 'cumulative', str(tileid))
+    if not os.path.isdir(tiledir):
+        raise ValueError(f'{tiledir} not found')
+
+    nightdirs = sorted(glob.glob(f'{tiledir}/20??????'))
+    nights = [os.path.basename(path) for path in nightdirs]
+    nights = [int(x) for x in nights if x.isdigit()]
+    if len(nights) == 0:
+        raise ValueError(f'No nights found in {tiledir}/YEARMMDD')
+
+    lastnight = nights[-1]
+
+    return lastnight
+
 def shorten_filename(filename):
     """Attempt to shorten filename to fit in FITS header without CONTINUE
 
@@ -1020,11 +1149,105 @@ def get_pipe_nightdir():
     return "night"
 
 
-def get_pipe_pixeldir():
+def get_pipe_pixeldir(specprod=None):
     """
     Return the name of the subdirectory containing per-pixel files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "healpix"
+    if specprod is None:
+        specprod = os.environ['SPECPROD']
+
+    # Known cases for standard productions
+    if specprod in ['fuji', 'guadalupe', 'himalayas', 'iron', 'jura', 'kibo', 'loa']:
+        pixdir = 'healpix'
+    elif specprod in ['matterhorn', 'nevis']:
+        pixdir = 'spectra'
+    # otherwise derive by looking at the filesystem
+    else:
+        specprod_dir = specprod_root(specprod)
+        if os.path.isdir(os.path.join(specprod_dir, 'healpix')):
+            pixdir = 'healpix'
+        else:
+            # default to 'spectra', since we might be bootstrapping a new production that doesn't have the dir yet
+            pixdir = 'spectra'
+
+    return pixdir
+
+# this function purposefully doesn't depend on any other DESI code so that it can be
+# copy-and-pasted into other libraries without additional DESI dependencies
+def radec2pix(ra, dec, survey=None, program=None, proddir=None, specprod=None):
+    """
+    Return which pixels covers the given ra,dec, auto-deriving healpix vs. uniqpix
+
+    Args:
+        ra (float or array): Right Ascension in degrees
+        dec (float or array): Declination in degrees
+        survey (str): DESI survey (sv1, sv3, main, special)
+        program (str): DESI program (dark, bright, backup, other)
+
+    Options:
+        proddir (str): full path to production directory
+        specprod (str): overrides $SPECPROD, only used if proddir is None; requires $DESI_ROOT or $DESI_SPECTRO_REDUX
+
+    Returns: pixbase, pixels
+        pixbase: str, either 'healpix' or 'spectra' depending on the specprod
+        pixels: int or array of ints, either healpix or uniqpix depending on the specprod
+
+    The corresponding files will then be under {pixbase}/{survey}/{program}/{pix//100}/{pix}/
+    """
+    import healpy
+
+    # derive where this production is on disk
+    if proddir is None:
+        if specprod is None:
+            specprod = os.environ['SPECPROD']
+        if 'DESI_SPECTRO_REDUX' in os.environ:
+            proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
+        elif 'DESI_ROOT' in os.environ:
+            proddir = os.path.join(os.environ['DESI_ROOT'], 'spectro', 'redux', specprod)
+        else:
+            raise KeyError("proddir not provided and cannot be derived from env ($DESI_ROOT, $DESI_SPECTRO_REDUX, $SPECPROD)")
+    else:
+        specprod = os.path.basename(proddir.rstrip('/'))
+
+    # Files are in [healpix|spectra]/{survey}/{program}/{pix//100}/{pix}/
+    # but the base and meaning of pix depend on the production:
+    # Prior to matterhorn (iron/dr1, loa/dr2): base='healpix', pix = nested nside=64 healpix
+    # Starting wth matterhorn: base='spectra', pix = uniqpix = healpix + 4*nside**2, with adaptively sized pixels
+
+    if specprod in ['fuji', 'guadalupe', 'himalayas', 'iron', 'jura', 'kibo', 'loa']:
+        # files in healpix/{survey}/{program}/{healpix//100}/{healpix}/ for nside=64 nested healpix
+        nside = 64
+        pixels = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        return 'healpix', pixels
+    elif os.path.isdir(os.path.join(proddir, 'spectra')):
+        if survey is None or program is None:
+            raise ValueError("survey and program must be provided to determine uniqpix for newer productions")
+        # files in spectra/{survey}/{program}/{uniqpix//100}/{uniqpix}/
+        # need to lookup mapping to find which uniqpix covered these ra,dec locations
+        hpix2upix_filebase = f'{proddir}/spectra/{survey}/{program}/hpix2upix-{survey}-{program}'
+        try:
+            import fitsio
+            hpix2upix, header = fitsio.read(hpix2upix_filebase+'.fits', 'HPIX2UPIX', header=True)
+            nside = header['NSIDE']
+        except ImportError:
+            # fallback to json file if fitsio isn't installed
+            with open(hpix2upix_filebase+'.json', 'r') as fp:
+                data = json.load(fp)
+            hpix2upix = np.array(data['HPIX2UPIX'])
+            nside = data['NSIDE']
+
+        # calculate the healpix at this large nside, then lookup the uniqpix
+        healpix = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        pixels = hpix2upix[healpix]
+        return 'spectra', pixels
+    # same as fuji/guadalupe etc. case, but save for last since most rare
+    elif os.path.isdir(os.path.join(proddir, 'healpix')):
+        # files in healpix/{survey}/{program}/{healpix//100}/{healpix}/ for nside=64 nested healpix
+        nside = 64
+        pixels = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+        return 'healpix', pixels
+    else:
+        raise ValueError(f"Cannot determine pixel scheme for specprod={specprod} at {proddir}")

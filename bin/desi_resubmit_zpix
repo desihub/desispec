@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Resubmit failed healpix-based redshift jobs (zpix) by comparing slurm
+Resubmit failed uniqpix-based redshift jobs (zpix) by comparing slurm
 scripts to outputs on disk.  Optionally skip over output directories
 that are completely missing (purposefully removed).
 """
@@ -9,98 +9,35 @@ that are completely missing (purposefully removed).
 import os, sys, glob, argparse, subprocess
 import multiprocessing
 import numpy as np
+from astropy.table import Table
 
 import desispec.io
+from desispec.io.util import get_tempfilename
+from desispec.workflow.queue import get_queue_states_from_qids, get_resubmission_states, submit_script
+from desispec.workflow.redshifts import get_zpix_script_pathname
 
-def check_zpix_output(survey, program, healpix, allfiles=False, missing_dir_ok=False):
+def check_zpix_output(survey, program, uniqpix):
     """
-    Check if healpix-based redshift outputs exist
+    Check if uniqpix-based redshift outputs exist
 
     Args:
         survey (str): main, sv1, sv2, sv3, ...
         program (str): dark, bright, backup, other
-        healpix (int): healpix number (typically nested nside=64 matching prod)
-
-    Options:
-        allfiles (bool): if True, check all files, not just redrock
-        missing_dir_ok (bool): if True, ok if output directory is completely missing,
-            i.e. only check for files if directory exists
+        uniqpix (int): uniqpix number (healpix + 4*nside^2)
 
     Returns True/False whether output files exist
     """
-    if missing_dir_ok:
-      hpixdir = os.path.dirname(desispec.io.findfile('redrock', survey=survey,
-                                     faprogram=program, healpix=healpix))
-      if not os.path.isdir(hpixdir):
-          print(f'WARNING: missing {hpixdir}')
-          return True
-
-    if allfiles:
-        filetypes = ['spectra', 'coadd', 'redrock', 'rrdetails',
-                     'emline', 'qso_qn', 'qso_mgii']
-    else:
-        filetypes = ['redrock',]
-
+    filetypes = ['spectra', 'coadd', 'redrock', 'rrdetails', 'emline', 'qso_qn', 'qso_mgii']
     ok = True
     for filetype in filetypes:
-      outfile = desispec.io.findfile(filetype, survey=survey,
-                                     faprogram=program, healpix=healpix)
-      ok &= os.path.exists(outfile)
-      if not ok:
-          print(f"ERROR: missing {outfile}")
-          break
+        outfile = desispec.io.findfile(filetype, survey=survey,
+                                       faprogram=program, uniqpix=uniqpix)
+        ok &= os.path.exists(outfile)
+        if not ok:
+            print(f"ERROR: missing {outfile}")
+            break
 
     return ok
-
-def check_slurm_script(filename, survey, program, allfiles=False, missing_dir_ok=False, quiet=False):
-    """
-    Check for existence of outputs from a zpix slurm script
-
-    Args:
-        filename (str): zpix batch slurm script
-        survey (str): DESI survey (sv1, sv3, main...)
-        program (str): DESI program (dark, bright, ...)
-
-    Options:
-        allfiles (bool): check afterburners too (default just check redrock)
-        missing_dir_ok (bool): if output dir is completely blank, treat that as ok
-        quiet (bool): don't log things that are ok
-
-    Returns list of healpix with missing outputs, empty list if all is fine
-    """
-    basename = os.path.basename(filename)
-
-    healpix = list()
-    with open(filename) as fx:
-        for line in fx.readlines():
-            if line.startswith('srun ') and line.count(' --healpix ')>0:
-                tmp = line.split()
-                i = tmp.index('--healpix')+1
-                healpix = list()
-                while i<len(tmp) and not tmp[i].startswith('--'):
-                    healpix.append(int(tmp[i]))
-                    i += 1
-
-                break
-
-    if len(healpix) == 0:
-        print('ERROR: no healpix found in {basename}')
-        return []
-
-    missing_hpix = list()
-    for hpix in healpix:
-        if not check_zpix_output(survey, program, hpix,
-                                 allfiles=allfiles,
-                                 missing_dir_ok=missing_dir_ok):
-            missing_hpix.append(hpix)
-
-    if len(missing_hpix) > 0:
-        print(f'ERROR: {basename} missing healpix {missing_hpix}')
-    else:
-        if not quiet:
-            print(os.path.basename(filename), '- OK')
-
-    return missing_hpix
 
 #--------------------------------------------------------------------
 def main():
@@ -111,14 +48,14 @@ def main():
                 help='DESI program (dark, bright, backup, other)')
     p.add_argument('--dry-run', action='store_true',
                 help="print what to do instead of actually resubmitting jobs")
-    p.add_argument('--allfiles', action='store_true',
-                help="Full check of all files including afterburners")
-    p.add_argument('--missing-dir-ok', action='store_true',
-                help="Skip over completely missing output directories")
+    p.add_argument('--check-files', action='store_true',
+                help="Full check of all files even for successful jobs")
     p.add_argument('--quiet', action='store_true',
-                help="Don't report healpix for which no action is needed")
-    p.add_argument('--nproc', type=int, default=16,
-                help='Number of parallel processes to use')
+                help="Don't report uniqpix for which no action is needed")
+    p.add_argument('--debug', action='store_true',
+                help="Start IPython session at end of script for debugging")
+    # p.add_argument('--nproc', type=int, default=16,
+    #             help='Number of parallel processes to use')
 
     args = p.parse_args()
 
@@ -126,33 +63,69 @@ def main():
     survey = args.survey
     program = args.program
 
-#- Parse the slurm scripts to know which healpix they intended to create
-    slurm_scripts = glob.glob(f'{specprod_dir}/run/scripts/healpix/{survey}/{program}/*/zpix-{survey}-{program}-*.slurm')
+    #- Load table of jobs
+    pixjobs_file = f'{specprod_dir}/run/scripts/spectra/{survey}/{program}/pixjobs-{survey}-{program}.csv'
+    pixjobs = Table.read(pixjobs_file)
 
-    fnargs = [(filename, survey, program, args.allfiles, args.missing_dir_ok, args.quiet) for filename in slurm_scripts]
+    #- Add STATUS column from slurm queue state
+    status = get_queue_states_from_qids(pixjobs['QID'], loglevel='WARNING')
+    pixjobs['STATUS'] = np.zeros(len(pixjobs), dtype='U20')
+    for i, qid in enumerate(pixjobs['QID']):
+        pixjobs['STATUS'][i] = status[qid]
 
-    with multiprocessing.Pool(args.nproc) as pool:
-        missing_healpix = pool.starmap(check_slurm_script, fnargs)
+    #- Optionally check for missing output files even for jobs that appear to have completed successfully
+    if args.check_files:
+        for i, (jobhash, status, pixels) in enumerate(pixjobs['JOBHASH', 'STATUS', 'UNIQPIX']):
+            if status != 'COMPLETED':
+                continue
 
-    num_resubmit = 0
-    for i, filename in enumerate(slurm_scripts):
-        if len(missing_healpix[i]) > 0:
-            num_resubmit += 1
-            ### cmd = f'sbatch --kill-on-invalid-dep=yes {filename}'
-            cmd = f'sbatch {filename}'
+            jobinfo = f"{str(jobhash)} with status={str(status)} for pixels={str(pixels)}"
+            print(f"Checking outputs for {jobinfo}")
+            # pixels can be string "QID1|QDI2|..." or scalar int if only one pixel
+            if isinstance(pixels, str):
+                pixels = [int(p) for p in pixels.split('|')]
+            elif np.isscalar(pixels):
+                pixels = [pixels,]
+
+            for uniqpix in pixels:
+                if not check_zpix_output(survey, program, uniqpix):
+                    print(f"--> missing outputs for {jobhash} with uniqpix={uniqpix}")
+                    pixjobs['STATUS'][i] = 'FAILED'
+                    break
+
+    #- Resubmit anything failed / timeout / cancelled / etc
+    resubmission_states = get_resubmission_states()
+    resub_scripts = list()
+    for i, (jobhash, status, pixels) in enumerate(pixjobs['JOBHASH', 'STATUS', 'UNIQPIX']):
+        jobinfo = f"{str(jobhash)} with status={str(status)} for pixels={str(pixels)}"
+        if status in resubmission_states:
+            print(f"FAILED: {jobinfo}")
+            zpix_script = get_zpix_script_pathname(None, survey, program, jobhash=jobhash)[0]
+            resub_scripts.append(zpix_script)
             if args.dry_run:
-                print(f"TODO: {cmd}")
+                print(f"DRY RUN: not resubmitting {zpix_script}")
             else:
-                err = subprocess.call(cmd.split())
-                if err == 0:
-                    print(f'--> resubmitted {basename}')
-                else:
-                    print(f'ERROR: resubmitting {basename}')
+                print(f"Resubmitting {zpix_script}")
+                qid = submit_script(zpix_script)
+                pixjobs['QID'][i] = qid
+        elif status == 'COMPLETED' and not args.quiet:
+            print(f"OK: {jobinfo}")
 
-    if args.dry_run:
-        print(f'{num_resubmit} zpix jobs to resubmit')
+    if len(resub_scripts) == 0:
+        print("SUCCESS: no jobs need to be resubmitted")
     else:
-        print(f'Resubmitted {num_resubmit} zpix jobs')
+        print(f'{len(resub_scripts)} scripts needed to be resubmitted')
+        if args.dry_run:
+            print(f'DRY RUN: not updating {pixjobs_file} with new QIDs')
+        else:
+            print(f'Updating {pixjobs_file} with new QIDs')
+            tempfile = get_tempfilename(pixjobs_file)
+            pixjobs.write(tempfile, overwrite=True)
+            os.rename(tempfile, pixjobs_file)
+
+    if args.debug:
+        import IPython; IPython.embed()
+
 
 if __name__ == '__main__':
     main()

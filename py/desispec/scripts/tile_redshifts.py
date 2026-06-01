@@ -347,7 +347,7 @@ def batch_tile_redshifts(tileid, exptable, group, camword=None,
     if no_afterburners:
         cmdline.append('--no-afterburners')
 
-    scriptfile = create_desi_zproc_batch_script(group=group, tileid=tileid, cameras=camword,
+    scriptfile, jobhash = create_desi_zproc_batch_script(group=group, tileid=tileid, cameras=camword,
                                                 nights=nights, expids=expids,
                                                 queue=queue,
                                                 cmdline=cmdline,

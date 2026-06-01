@@ -2,10 +2,75 @@
 desispec Change Log
 ===================
 
-0.71.1 (unreleased)
+0.72.0 (unreleased)
 -------------------
 
-* no changes yet
+Changes made for daily operations (daily branch) while Matterhorn was running.
+These changes were not used in Matterhorn.
+
+* Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
+* Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
+
+.. _`#2720`: https://github.com/desihub/desispec/pull/2720
+.. _`#2721`: https://github.com/desihub/desispec/pull/2721
+
+0.71.4 (2026-05-28)
+-------------------
+
+* Update to `desi_resubmit_zpix` bookkeeping for matterhorn (PR `#2759`_).
+
+.. _`#2759`: https://github.com/desihub/desispec/pull/2759
+
+0.71.3 (2026-05-21)
+-------------------
+
+Further updates for Matterhorn, tagged before running cross-tile spectra.
+
+Major data organization change:
+
+* Use adaptively-sized "uniqpix" instead of fixed-size healpix for cross tile coadds (PR `#2755`_, `#2758`_).
+
+Other changes
+
+* Fix program-to-efftime in zcatalog (PR `#2746`_).
+* Add CCD history script (PR `#2751`_).
+* Calculate ``SIGMA_COADD_NORM`` from final recomputed coadd norm (PR `#2753`_).
+* Add more TSNR afterburner information to exposure-qa files (PR `#2756`_).
+
+.. _`#2746`: https://github.com/desihub/desispec/pull/2746
+.. _`#2751`: https://github.com/desihub/desispec/pull/2751
+.. _`#2753`: https://github.com/desihub/desispec/pull/2753
+.. _`#2755`: https://github.com/desihub/desispec/pull/2755
+.. _`#2756`: https://github.com/desihub/desispec/pull/2756
+.. _`#2758`: https://github.com/desihub/desispec/pull/2758
+
+
+0.71.2 (2026-05-01)
+-------------------
+
+* Don't drop first 2 calib zeros if they are needed to get to full 15 required (PR `#2743`_).
+
+.. _`#2743`: https://github.com/desihub/desispec/pull/2743
+
+0.71.1 (2026-04-27)
+-------------------
+
+This is the second tag used by Matterhorn.  One change is not backwards
+compatible with 0.71.0, impacting exactly which standard stars are selected.
+
+* Don't median-normalize flat-to-psf corr per petal when selecting standards (PR `#2724`_).
+
+Other changes are backwards compatible or otherwise consistent with how
+Matterhorn jobs were launched.
+
+* Correct POORPOSITION description (PR `#2719`_).
+* use_reservation add biasnight,biaspdark; handle DependencyNeverSatisfied (PR `#2722`_).
+* Fix to crossnight camword bug in submitting biasnight (PR `#2731`_).
+
+.. _`#2719`: https://github.com/desihub/desispec/pull/2719
+.. _`#2722`: https://github.com/desihub/desispec/pull/2722
+.. _`#2724`: https://github.com/desihub/desispec/pull/2724
+.. _`#2731`: https://github.com/desihub/desispec/pull/2731
 
 0.71.0 (2026-04-10)
 -------------------

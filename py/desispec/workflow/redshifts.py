@@ -4,6 +4,7 @@ desispec.workflow.redshifts
 
 """
 import sys, os
+import hashlib
 import numpy as np
 
 from desispec.io import findfile
@@ -12,6 +13,7 @@ from desispec.workflow.batch import determine_resources
 from desiutil.log import get_logger
 
 import desispec.io
+from desispec.io.util import pix_subdirectory
 from desispec.workflow import batch
 
 
@@ -106,35 +108,49 @@ def get_ztile_script_suffix(tileid, group, night=None, expid=None, subgroup=None
         log.warning(f'Non-standard tile group={group}; writing outputs to {suffix}.*')
     return suffix
 
-def get_zpix_redshift_script_pathname(healpix, survey, program):
-    """Return healpix-based coadd+redshift+afterburner script pathname
+def get_pixel_hash(pixels):
+    """
+    Return unique hash string for a list of pixels, regardless of order
+    """
+    pixels = np.sort(np.asarray(pixels, dtype=np.int64))
+    return hashlib.blake2b(pixels.tobytes(), digest_size=8).hexdigest()
+
+def get_zpix_script_pathname(uniqpix, survey, program, jobhash=None, specprod=None):
+    """Return uniqpix-based coadd+redshift+afterburner script pathname
 
     Args:
-        healpix (int or array-like): healpixel(s)
+        uniqpix (int or array-like): uniqpixel(s) combining nside and healpix
         survey (str): DESI survey, e.g. main, sv1, sv3
         program (str): survey program, e.g. dark, bright, backup
+
+    Options:
+        jobhash (str): optional hash string to use instead of computing from uniqpix
+        specprod (str): optional specprod name to override $SPECPROD
 
     Returns:
         zpix_script_pathname
     """
-    if np.isscalar(healpix):
-        healpix = [healpix,]
-
-    hpixmin = np.min(healpix)
-    hpixmax = np.max(healpix)
-    if len(healpix) == 1:
-        scriptname = f'zpix-{survey}-{program}-{healpix[0]}.slurm'
+    log = get_logger()
+    if jobhash is not None:
+        if uniqpix is not None:
+            log = get_logger()
+            log.warning(f"jobhash={jobhash} provided, ignoring uniqpix={uniqpix}")
     else:
-        scriptname = f'zpix-{survey}-{program}-{hpixmin}-{hpixmax}.slurm'
+        if np.isscalar(uniqpix):
+            uniqpix = [uniqpix,]
 
-    reduxdir = desispec.io.specprod_root()
-    return os.path.join(reduxdir, 'run', 'scripts', 'healpix',
-                        survey, program, str(hpixmin//100), scriptname)
+        jobhash = get_pixel_hash(uniqpix)
+
+    scriptname = f'zpix-{survey}-{program}-{jobhash}.slurm'
+
+    reduxdir = desispec.io.specprod_root(specprod=specprod)
+    return os.path.join(reduxdir, 'run', 'scripts', 'spectra',
+                        survey, program, jobhash[0:2], scriptname), jobhash
 
 def create_desi_zproc_batch_script(group,
                                    tileid=None, cameras=None,
                                    thrunight=None, nights=None, expids=None,
-                                   subgroup=None, healpix=None, survey=None,
+                                   subgroup=None, uniqpix=None, survey=None,
                                    program=None, queue='regular', batch_opts=None,
                                    runtime=None, timingfile=None, batchdir=None,
                                    jobname=None, cmdline=None, system_name=None,
@@ -145,7 +161,7 @@ def create_desi_zproc_batch_script(group,
 
     Args:
         group (str): Description of the job to be performed. zproc options include:
-                     'perexp', 'pernight', 'cumulative'.
+                     'perexp', 'pernight', 'cumulative', 'uniqpix'.
         tileid (int), optional: The tile id for the data.
         cameras (str or list of str), optional: List of cameras to include in the processing
                                       or a camword.
@@ -153,7 +169,7 @@ def create_desi_zproc_batch_script(group,
         nights (list of int), optional: The nights the data was acquired.
         expids (list of int), optional: The exposure id(s) for the data.
         subgroup (str): subgroup name for non-standard group values
-        healpix (list of int), optional: healpixels to process (group='healpix')
+        uniqpix (list of int), optional: uniqpixels to process (group='uniqpix')
         queue (str), optional: Queue to be used.
         batch_opts (str), optional: Other options to give to the slurm batch scheduler (written into the script).
         runtime (str), optional: Timeout wall clock time in minutes.
@@ -171,7 +187,7 @@ def create_desi_zproc_batch_script(group,
         no_afterburners (bool), optional: Default false. If true it doesn't run afterburners.
 
     Returns:
-        scriptfile: the full path name for the script written.
+        scriptfile,jobhash: the full path name of script written. jobhash included for group='uniqpix', otherwise None
 
     Note:
         batchdir and jobname can be used to define an alternative pathname, but
@@ -183,9 +199,9 @@ def create_desi_zproc_batch_script(group,
         night = np.max(nights)
     elif thrunight is not None:
         night = thrunight
-    elif group == 'healpix':
-        if (healpix is None or survey is None or program is None):
-            msg = f"group='healpix' must define healpix,survey,program (got {healpix},{survey},{program})"
+    elif group == 'uniqpix':
+        if (uniqpix is None or survey is None or program is None):
+            msg = f"group='uniqpix' must define uniqpix,survey,program (got {uniqpix},{survey},{program})"
             log.error(msg)
             raise ValueError(msg)
     else:
@@ -202,9 +218,10 @@ def create_desi_zproc_batch_script(group,
         else:
             expid = expids[0]
 
-    if group == 'healpix':
-        scriptpath = get_zpix_redshift_script_pathname(healpix, survey, program)
+    if group == 'uniqpix':
+        scriptpath, jobhash = get_zpix_script_pathname(uniqpix, survey, program)
     else:
+        jobhash = None
         scriptpath = get_ztile_script_pathname(tileid, group=group,
                                                night=night, expid=expid, subgroup=subgroup)
 
@@ -229,7 +246,7 @@ def create_desi_zproc_batch_script(group,
 
     ## Derive job description name from group
     jobdesc = group
-    if jobdesc not in ('perexp', 'pernight', 'cumulative'):
+    if jobdesc not in ('perexp', 'pernight', 'cumulative', 'healpix', 'uniqpix'):
         jobdesc = 'customztile'
         log.warning(f'Unrecognized {group=}, using {jobdesc=}')
 
@@ -372,6 +389,4 @@ def create_desi_zproc_batch_script(group,
     print('Wrote {}'.format(scriptfile))
     print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
 
-    return scriptfile
-
-
+    return scriptfile, jobhash

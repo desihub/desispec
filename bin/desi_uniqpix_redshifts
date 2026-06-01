@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+"""
+Coadding and fitting redshift by uniqpix (adaptively size healpix)
+"""
+
+import sys
+from desispec.scripts import uniqpix_redshifts
+
+if __name__ == '__main__':
+    args = uniqpix_redshifts.parse()
+    sys.exit(uniqpix_redshifts.main(args))
+
+

@@ -36,14 +36,9 @@ def main():
     if not os.path.isdir(html_dir):
         os.makedirs(html_dir)
 
-    f = open(os.path.join(output_dir, 'fiber_directory.html'), "w")
-    f.write('<html>\n')
-    f.write('<table>\n')
-    for fiber in np.arange(5000):
-        f.write('<td><a href=html/fiber_{}.html>FIBER_{}</a></td>\n'.format(fiber, fiber))
-        f.write('</tr>\n')
-    f.write('</table>\n')
-    f.close()
+    # Track fibers with problematic p-values
+    fibers_with_elg_lop_allz_issues = set()
+    fibers_with_other_issues = set()
 
     for fiber in np.arange(5000):
 
@@ -90,6 +85,11 @@ def main():
                     f.write('<td>N/A</td>\n')
                 elif pvalue<pvalue_threshold:
                     f.write('<th><p style="color:red;">{:.4g}</p></th>\n'.format(pvalue))
+                    # Track which fibers have issues
+                    if tracer == 'ELG_LOP' and apply_good_z_cut is False:
+                        fibers_with_elg_lop_allz_issues.add(fiber)
+                    else:
+                        fibers_with_other_issues.add(fiber)
                 else:
                     f.write('<td>{:.4g}</td>\n'.format(pvalue))
         f.write('</tr>\n')
@@ -151,6 +151,62 @@ def main():
         f.write('</table>\n')
         f.close()
 
+    ################################## Fiber directory ##################################
+
+    f = open(os.path.join(output_dir, 'fiber_directory.html'), "w")
+    f.write('<html>\n')
+    f.write('<head><style>\n')
+    f.write('body { font-family: Arial, sans-serif; margin: 20px; }\n')
+    f.write('h2 { margin-top: 30px; }\n')
+    f.write('table { border-collapse: collapse; }\n')
+    f.write('td { padding: 5px 10px; }\n')
+    f.write('a { text-decoration: none; }\n')
+    f.write('a:hover { text-decoration: underline; }\n')
+    f.write('</style></head>\n')
+    f.write('<body>\n')
+    f.write('<h1>DESI QA Fiber Directory</h1>\n')
+
+    # List fibers with non-ELG_LOP issues at the top
+    if len(fibers_with_other_issues) > 0:
+        f.write('<h2>Fibers with Issues (excluding ELG_LOP all-only)</h2>\n')
+        f.write('<p style="color:red; font-weight:bold;">Total: {} fibers</p>\n'.format(len(fibers_with_other_issues)))
+        f.write('<p>')
+        sorted_problem_fibers = sorted(fibers_with_other_issues)
+        for i, fiber in enumerate(sorted_problem_fibers):
+            if i > 0:
+                f.write(', ')
+            f.write('<a href=html/fiber_{}.html style="color:red; font-weight:bold;">{}</a>'.format(fiber, fiber))
+        f.write('</p>\n')
+    else:
+        f.write('<h2>No fibers with issues (excluding ELG_LOP all-only)</h2>\n')
+
+    f.write('<h2>All Fibers</h2>\n')
+
+    # Group fibers in ranges of 500
+    for group_start in range(0, 5000, 500):
+        group_end = group_start + 499
+        f.write('<h2></h2>\n')
+        f.write('<table>\n')
+
+        # Write fibers in rows of 10
+        for row_start in range(group_start, group_start + 500, 10):
+            f.write('<tr>\n')
+            for fiber in range(row_start, min(row_start + 10, 5000)):
+                if fiber in fibers_with_other_issues:
+                    # Red and bold for fibers with issues other than ELG_LOP (all)
+                    f.write('<td><a href=html/fiber_{}.html style="color:red; font-weight:bold;">{}</a></td>\n'.format(fiber, fiber))
+                elif fiber in fibers_with_elg_lop_allz_issues:
+                    # Red only for fibers with only ELG_LOP (all) issues
+                    f.write('<td><a href=html/fiber_{}.html style="color:red;">{}</a></td>\n'.format(fiber, fiber))
+                else:
+                    f.write('<td><a href=html/fiber_{}.html>{}</a></td>\n'.format(fiber, fiber))
+            f.write('</tr>\n')
+
+        f.write('</table>\n')
+
+    f.write('</body>\n')
+    f.write('</html>\n')
+    f.close()
 
 if __name__ == '__main__':
     main()

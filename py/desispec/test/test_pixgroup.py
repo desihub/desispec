@@ -5,13 +5,14 @@ import numpy.testing as nt
 from astropy.io import fits
 from astropy.table import Table
 from copy import deepcopy
-from ..test.util import get_frame_data
+from ..test.util import get_frame_data, installed
 from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root, iterfiles
 from ..io.util import add_columns
 from ..scripts import group_spectra
-from ..pixgroup import SpectraLite, get_exp2healpix_map
+from ..pixgroup import SpectraLite, get_exp2uniqpix_map
 from desispec.maskbits import fibermask
 from desiutil.io import encode_table
+import desiutil.healpix
 
 class TestPixGroup(unittest.TestCase):
 
@@ -34,6 +35,8 @@ class TestPixGroup(unittest.TestCase):
         cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
         
         cls.healpix = 19456
+        cls.nside = 64
+        cls.uniqpix = desiutil.healpix.hpix2upix(cls.nside, cls.healpix)
         cls.survey = 'main'
         cls.faprogram = 'dark'
         cls.specfile = findfile('spectra', groupname=cls.healpix,
@@ -304,10 +307,11 @@ class TestPixGroup(unittest.TestCase):
         for key in hdr:
             print(key, hdr[key])
 
-        self.assertEqual(hdr['SPGRP'], 'healpix')
-        self.assertEqual(hdr['SPGRPVAL'], self.healpix)
+        self.assertEqual(hdr['SPGRP'], 'uniqpix')
+        self.assertEqual(hdr['SPGRPVAL'], self.uniqpix)
+        self.assertEqual(hdr['UNIQPIX'],  self.uniqpix)
         self.assertEqual(hdr['HPXPIXEL'], self.healpix)
-        self.assertEqual(hdr['HPXNSIDE'], 64)
+        self.assertEqual(hdr['HPXNSIDE'], self.nside)
         self.assertEqual(hdr['HPXNEST'], True)
         self.assertEqual(hdr['BLAT'], True)
         self.assertEqual(hdr['BIM'], False)
@@ -358,48 +362,296 @@ class TestPixGroup(unittest.TestCase):
         compgz = read_spectra(self.fileiogz)
         self.verify_spectralite(compgz, self.fmap1)
 
-    def test_exp2healpix_map(self):
-        """Test get_exp2healpix_map"""
-        os.environ['DESI_SPECTRO_REDUX'] = str(resources.files('desispec').joinpath('test/data'))
-        os.environ['SPECPROD'] = 'miniprod'
-        expfile = findfile('exposures')
+    @unittest.skipIf(not installed('pandas'), 'get_exp2uniqpix_map requires pandas')
+    def test_get_exp2uniqpix_map(self):
+        """Test desispec.pixgroup.get_exp2uniqpix_map"""
+        from ..pixgroup import get_exp2uniqpix_map
 
-        #- Try a few combinations that shouldn't crash
-        exp2hpix = get_exp2healpix_map(expfile)
-        self.assertGreater(len(exp2hpix), 0)
-        exp2hpix = get_exp2healpix_map(expfile, survey='sv1', program='other')
-        self.assertGreater(len(exp2hpix), 0)
-        exp2hpix = get_exp2healpix_map(expfile, survey='sv2', program='dark')
-        self.assertGreater(len(exp2hpix), 0)
+        # 3 targets all on the same tile, petal, and at the same sky position
+        # so they all land in the same UNIQPIX
+        n_targets = 3
+        zcat = Table({
+            'TARGETID': np.arange(n_targets, dtype=np.int64),
+            'TILEID': np.full(n_targets, 1234, dtype=np.int32),
+            'PETAL_LOC': np.full(n_targets, 5, dtype=np.int16),
+            'TARGET_RA': np.full(n_targets, 150.0, dtype=np.float64),
+            'TARGET_DEC': np.full(n_targets, 30.0, dtype=np.float64),
+        })
 
-        #- filter by expids
-        exp2hpix = get_exp2healpix_map(expfile, expids=[88056,88057])
-        self.assertEqual(list(np.unique(exp2hpix['EXPID'])), [88056,88057])
+        # 2 exposures: expid 100 has 2 cameras on the same petal and should be
+        # deduplicated to one row per exposure-petal combination
+        frames = Table({
+            'NIGHT': np.array([20201020, 20201020, 20201021], dtype=np.int32),
+            'EXPID': np.array([100, 100, 101], dtype=np.int32),
+            'TILEID': np.array([1234, 1234, 1234], dtype=np.int32),
+            'CAMERA': np.array(['b5', 'r5', 'b5']),
+        })
 
-        #- tile 562 petal 6 was marked as bad in all exposures so shouldn't appear in map
-        #- tile 562 petal 0 was marked as bad for only a single exposure 88049
-        #- other petals should appear for all exposures
-        exp2hpix = get_exp2healpix_map(expfile, survey='sv3', program='bright')
-        is0 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 0)
-        is1 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 1)
-        is6 = (exp2hpix['TILEID'] == 562) & (exp2hpix['SPECTRO'] == 6)
-        n0 = np.sum(is0)
-        n1 = np.sum(is1)
-        n6 = np.sum(is6)
-        print(exp2hpix[exp2hpix['TILEID']==562])
-        self.assertGreater(n0, 0)
-        self.assertGreater(n1, 0)
-        self.assertLess(n0, n1)
-        self.assertEqual(n6, 0)
+        exppix, pix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames)
 
-        self.assertNotIn(88049, list(np.unique(exp2hpix['EXPID'][is0])))
-        self.assertIn(88049, list(np.unique(exp2hpix['EXPID'][is1])))
-        self.assertNotIn(88049, list(np.unique(exp2hpix['EXPID'][is6])))
+        # Check output columns (PETAL_LOC is renamed to SPECTRO for historical compatibility)
+        self.assertEqual(set(exppix.colnames),
+                         {'NIGHT', 'EXPID', 'TILEID', 'SPECTRO', 'UNIQPIX', 'NSIDE', 'HEALPIX', 'NTARGETS'})
 
-        self.assertIn(88056, list(np.unique(exp2hpix['EXPID'][is0])))
-        self.assertIn(88056, list(np.unique(exp2hpix['EXPID'][is1])))
-        self.assertNotIn(88056, list(np.unique(exp2hpix['EXPID'][is6])))
+        # 2 unique (EXPID, PETAL_LOC) combinations, all targets in same pixel -> 2 rows
+        self.assertEqual(len(exppix), 2)
 
+        # SPECTRO comes from the last character of CAMERA ('b5' -> 5)
+        self.assertTrue(np.all(exppix['SPECTRO'] == 5))
+
+        # TILEID should pass through unchanged
+        self.assertTrue(np.all(exppix['TILEID'] == 1234))
+
+        # Both exposures present with correct NIGHT values
+        result_sorted = exppix[np.argsort(exppix['EXPID'])]
+        self.assertEqual(list(result_sorted['EXPID']), [100, 101])
+        self.assertEqual(list(result_sorted['NIGHT']), [20201020, 20201021])
+
+        # All targets at the same position -> same UNIQPIX -> NTARGETS == n_targets
+        self.assertTrue(np.all(exppix['NTARGETS'] == n_targets))
+
+        # UNIQPIX encoding: UNIQPIX == 4 * NSIDE**2 + HEALPIX
+        for row in exppix:
+            self.assertEqual(int(row['UNIQPIX']), 4 * int(row['NSIDE'])**2 + int(row['HEALPIX']))
+
+        # NSIDE must be a positive power of 2
+        for row in exppix:
+            nside = int(row['NSIDE'])
+            self.assertGreater(nside, 0)
+            self.assertEqual(nside & (nside - 1), 0)
+
+        # Check pix_ntargets table
+        self.assertEqual(set(pix_ntargets.colnames), {'UNIQPIX', 'NTARGETS', 'NSPECTRA'})
+
+        # All targets are at the same position -> one UNIQPIX -> one row
+        self.assertEqual(len(pix_ntargets), 1)
+
+        # All n_targets unique targets are in the same UNIQPIX
+        self.assertEqual(int(pix_ntargets['NTARGETS'][0]), n_targets)
+
+        # 3 targets each observed once on one tile with 2 exposures -> 3*2=6 spectra
+        self.assertEqual(int(pix_ntargets['NSPECTRA'][0]), n_targets * 2)
+
+        # The UNIQPIX in pix_ntargets matches the one in exppix
+        self.assertEqual(int(pix_ntargets['UNIQPIX'][0]), int(np.unique(exppix['UNIQPIX'])[0]))
+
+        # Check hpix_ntargets table
+        self.assertEqual(set(hpix_ntargets.colnames), {'HEALPIX', 'UNIQPIX', 'NTARGETS'})
+        self.assertIn('NSIDE', hpix_ntargets.meta)  # NSIDE is in metadata, not a column
+
+        # One row per fine healpix at nside_max
+        nside_max = int(hpix_ntargets.meta['NSIDE'])
+        npix = 12 * nside_max ** 2
+        self.assertEqual(len(hpix_ntargets), npix)
+
+        # HEALPIX column is 0..npix-1
+        self.assertTrue(np.all(hpix_ntargets['HEALPIX'] == np.arange(npix)))
+
+        # NSIDE is constant and a positive power of 2
+        self.assertGreater(nside_max, 0)
+        self.assertEqual(nside_max & (nside_max - 1), 0)
+
+        # All targets at the same position -> exactly one fine healpix has NTARGETS == n_targets
+        self.assertEqual(int(np.sum(hpix_ntargets['NTARGETS'])), n_targets)
+        self.assertEqual(int(np.max(hpix_ntargets['NTARGETS'])), n_targets)
+
+        # Pixels with targets always have a valid UNIQPIX; uncovered pixels always have UNIQPIX == -1
+        has_targets = hpix_ntargets['NTARGETS'] > 0
+        self.assertTrue(np.all(hpix_ntargets['UNIQPIX'][has_targets] >= 0))
+        uncovered = hpix_ntargets['UNIQPIX'] == -1
+        self.assertTrue(np.all(hpix_ntargets['NTARGETS'][uncovered] == 0))
+
+        # The covering UNIQPIX for the target pixel matches the one in pix_ntargets
+        target_hpix_uniqpix = hpix_ntargets['UNIQPIX'][has_targets]
+        self.assertTrue(np.all(np.isin(target_hpix_uniqpix, pix_ntargets['UNIQPIX'])))
+
+    @unittest.skipIf(not installed('pandas'), 'get_exp2uniqpix_map requires pandas')
+    def test_get_exp2uniqpix_map_nspectra(self):
+        """Test NSPECTRA bookkeeping when targets have different numbers of input spectra.
+
+        Scenario: three targets at the same sky position (same UNIQPIX),
+        observed on two tiles with different numbers of exposures each.
+
+          target 10: tile 1 only (3 exposures)              -> 3 spectra
+          target 20: tile 1 (3 exposures) + tile 2 (2 exp)  -> 5 spectra
+          target 30: tile 2 only (2 exposures)              -> 2 spectra
+
+        Expected: NTARGETS=3, NSPECTRA=10
+        """
+        from ..pixgroup import get_exp2uniqpix_map
+
+        # target 20 appears twice in zcat because it was observed on both tiles
+        zcat = Table({
+            'TARGETID':  np.array([10, 20, 20, 30], dtype=np.int64),
+            'TILEID':    np.array([ 1,  1,  2,  2], dtype=np.int32),
+            'PETAL_LOC': np.array([ 5,  5,  5,  5], dtype=np.int16),
+            'TARGET_RA':  np.full(4, 150.0, dtype=np.float64),
+            'TARGET_DEC': np.full(4, 30.0,  dtype=np.float64),
+        })
+
+        # tile 1 has 3 exposures; tile 2 has 2 exposures, all on petal 5
+        frames = Table({
+            'NIGHT':  np.array([20201020, 20201020, 20201020,
+                                20201021, 20201021], dtype=np.int32),
+            'EXPID':  np.array([100, 101, 102, 200, 201],   dtype=np.int32),
+            'TILEID': np.array([  1,   1,   1,   2,   2],   dtype=np.int32),
+            'CAMERA': np.array(['b5', 'b5', 'b5', 'b5', 'b5']),
+        })
+
+        exppix, pix_ntargets, hpix_ntargets = get_exp2uniqpix_map(zcat, frames)
+
+        # all targets at the same position -> single UNIQPIX -> one row in pix_ntargets
+        self.assertEqual(len(pix_ntargets), 1)
+        self.assertEqual(int(pix_ntargets['NTARGETS'][0]), 3)
+
+        # NSPECTRA column must be present
+        self.assertIn('NSPECTRA', pix_ntargets.colnames)
+
+        # target 10: 3 spectra (tile 1, 3 exp)
+        # target 20: 5 spectra (tile 1 3 exp + tile 2 2 exp)
+        # target 30: 2 spectra (tile 2, 2 exp)
+        # total: 10
+        self.assertEqual(int(pix_ntargets['NSPECTRA'][0]), 10)
+
+        # NSPECTRA >= NTARGETS: every target must have at least one spectrum
+        self.assertTrue(np.all(pix_ntargets['NSPECTRA'] >= pix_ntargets['NTARGETS']))
+
+        # exppix has one row per (EXPID, SPECTRO) combination across both tiles
+        # tile 1 contributes 3 rows, tile 2 contributes 2 rows -> 5 total
+        self.assertEqual(len(exppix), 5)
+
+        # targets 10 and 20 are on tile 1 -> NTARGETS=2 for those rows
+        tile1_rows = exppix[exppix['TILEID'] == 1]
+        self.assertEqual(len(tile1_rows), 3)
+        self.assertTrue(np.all(tile1_rows['NTARGETS'] == 2))
+
+        # targets 20 and 30 are on tile 2 -> NTARGETS=2 for those rows
+        tile2_rows = exppix[exppix['TILEID'] == 2]
+        self.assertEqual(len(tile2_rows), 2)
+        self.assertTrue(np.all(tile2_rows['NTARGETS'] == 2))
+
+    def test_get_hpix2upix_map(self):
+        """Test desispec.pixgroup.get_hpix2upix_map"""
+        from ..pixgroup import get_hpix2upix_map
+
+        # --- Test 1: single nside, partial coverage ---
+        # UNIQPIX = 4 * nside**2 + ipix; for nside=2: UNIQPIX = 16 + ipix
+        # nside=2 has 12*4 = 48 pixels total
+        nside2 = 2
+        npix2 = 12 * nside2**2   # 48
+        upix_a = 4 * nside2**2 + 0   # 16, covers ipix=0
+        upix_b = 4 * nside2**2 + 3   # 19, covers ipix=3
+
+        healpix_map, nside_max = get_hpix2upix_map([upix_a, upix_b])
+
+        self.assertEqual(nside_max, nside2)
+        self.assertEqual(len(healpix_map), npix2)
+        self.assertEqual(healpix_map[0], upix_a)
+        self.assertEqual(healpix_map[3], upix_b)
+        # All uncovered pixels should be -1
+        covered = np.zeros(npix2, dtype=bool)
+        covered[0] = True
+        covered[3] = True
+        self.assertTrue(np.all(healpix_map[~covered] == -1))
+
+        # --- Test 2: mixed nside, coarse pixel expands to multiple fine slots ---
+        # Coarse: nside=2, ipix=0 -> UNIQPIX=16
+        #   Expands to 4^(order_max - order_coarse) = 4^(2-1) = 4 fine pixels at nside=4: ipix 0,1,2,3
+        # Fine:   nside=4, ipix=5 -> UNIQPIX=4*16+5=69
+        # nside_max=4, output shape = 12*16 = 192
+        nside4 = 4
+        npix4 = 12 * nside4**2   # 192
+        upix_coarse = 4 * nside2**2 + 0   # 16, nside=2, ipix=0
+        upix_fine   = 4 * nside4**2 + 5   # 69, nside=4, ipix=5
+
+        healpix_map2, nside_max2 = get_hpix2upix_map([upix_coarse, upix_fine])
+
+        self.assertEqual(nside_max2, nside4)
+        self.assertEqual(len(healpix_map2), npix4)
+        # Coarse pixel (nside=2, ipix=0) maps to fine pixels 0,1,2,3
+        self.assertTrue(np.all(healpix_map2[0:4] == upix_coarse))
+        # Fine pixel (nside=4, ipix=5) maps to exactly slot 5
+        self.assertEqual(healpix_map2[5], upix_fine)
+        # Slot 4 is between the two covered regions and should be uncovered
+        self.assertEqual(healpix_map2[4], -1)
+        # All remaining slots are -1
+        covered2 = np.zeros(npix4, dtype=bool)
+        covered2[0:4] = True
+        covered2[5] = True
+        self.assertTrue(np.all(healpix_map2[~covered2] == -1))
+
+    def test_group_nspectra(self):
+        """Test desispec.pixgroup.group_nspectra"""
+        from ..pixgroup import group_nspectra
+
+        # Docstring example
+        groups = group_nspectra([3, 5, 3, 10, 2, 1], 5)
+        self.assertEqual(groups, [[3], [1], [0], [2, 4], [5]])
+
+        # Each group total must not exceed nmax
+        for nspectra, nmax in [([3, 5, 3, 10, 2, 1], 5), ([1]*20, 7), ([4, 3, 2, 1], 6)]:
+            nspectra_arr = np.asarray(nspectra)
+            groups = group_nspectra(nspectra, nmax)
+            for g in groups:
+                total = sum(nspectra_arr[i] for i in g)
+                self.assertLessEqual(total, max(nmax, max(nspectra_arr)))
+
+        # Oversized (> nmax): each becomes a single-element group
+        groups = group_nspectra([10, 20, 15], 5)
+        self.assertEqual(len(groups), 3)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # Underfilled: all fit in one group
+        groups = group_nspectra([1, 2, 1], 10)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(sorted(groups[0]), [0, 1, 2])
+
+        # Exactly full: [3,2] fills nmax=5 in one group; [1] is a second group
+        groups = group_nspectra([3, 2, 1], 5)
+        self.assertEqual(len(groups), 2)
+
+        # Single element
+        groups = group_nspectra([7], 5)
+        self.assertEqual(groups, [[0]])
+
+        # Empty input
+        groups = group_nspectra([], 5)
+        self.assertEqual(groups, [])
+
+        # Every index appears exactly once across all groups
+        nspectra = [3, 5, 3, 10, 2, 1]
+        groups = group_nspectra(nspectra, 5)
+        all_indices = sorted(i for g in groups for i in g)
+        self.assertEqual(all_indices, list(range(len(nspectra))))
+
+        # max_groupsize limits number of elements per group
+        groups = group_nspectra([1, 1, 1, 1, 1], 10, max_groupsize=2)
+        for g in groups:
+            self.assertLessEqual(len(g), 2)
+        all_indices = sorted(i for g in groups for i in g)
+        self.assertEqual(all_indices, list(range(5)))
+
+        # max_groupsize=1 forces every element into its own group
+        groups = group_nspectra([2, 3, 1], 10, max_groupsize=1)
+        self.assertEqual(len(groups), 3)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # max_groupsize does not affect oversized single-element groups
+        groups = group_nspectra([10, 20], 5, max_groupsize=1)
+        self.assertEqual(len(groups), 2)
+        for g in groups:
+            self.assertEqual(len(g), 1)
+
+        # Without max_groupsize, small elements pack into one group
+        groups = group_nspectra([1] * 10, 100)
+        self.assertEqual(len(groups), 1)
+
+        # With max_groupsize, same input is split
+        groups = group_nspectra([1] * 10, 100, max_groupsize=3)
+        for g in groups:
+            self.assertLessEqual(len(g), 3)
 
     def test_frames2spectra(self):
         """Test frames2spectra"""

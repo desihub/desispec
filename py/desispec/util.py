@@ -846,3 +846,28 @@ def wrap_long_logs(text, width=120):
         str: The wrapped log message.
     """
     return textwrap.fill(text, width=width)
+
+def convert_to_pandas(data, columns):
+    """
+    Convert table-like data to pandas DataFrame with specified columns.
+
+    Args:
+        data: astropy Table, numpy structured array, or pandas DataFrame.
+        columns: List of column names to select from the input data.
+
+    Returns:
+        A pandas DataFrame containing only the specified columns.
+    """
+    from astropy.table import Table
+    import pandas as pd
+    if isinstance(data, Table):
+        return data[columns].to_pandas()
+    elif isinstance(data, np.ndarray):
+        data = data[columns]
+        data = data.astype(data.dtype.newbyteorder('='))  # ensure native byte order for pandas
+        return pd.DataFrame(data)
+    elif isinstance(data, pd.DataFrame):
+        return data[columns]
+    else:
+        raise ValueError(f'Unexpected {type(data)=}, should be astropy Table, numpy structured array, or pandas DataFrame')
+
