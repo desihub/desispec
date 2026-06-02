@@ -25,8 +25,9 @@ def get_good_fiberstatus(cat):
         good_fiberstatus: boolean array
     '''
 
-    # allow bit 3 (restricted fiber reach)
-    good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==fibermask.RESTRICTED)
+    # allow bit 3 (restricted fiber reach) and bit 20 (variable object or calibration)
+    okmask = fibermask.mask('RESTRICTED|VARIABLE')
+    good_fiberstatus = (cat['COADD_FIBERSTATUS'] & okmask) == cat['COADD_FIBERSTATUS']
     return good_fiberstatus
 
 
