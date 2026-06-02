@@ -14,6 +14,22 @@ These changes were not used in Matterhorn.
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 
+0.71.5 (2026-06-02)
+-------------------
+
+Updated tag for Matterhorn zcatalogs.
+
+* Add uniqpix support to desi_zcatalog v2; allow COADD_FIBERSTATUS=VARIABLE as GOOD_SPEC. (PR `#2762`_).
+
+For daily ops:
+
+* Prioritize 3s/10s CTE flats before science fallback for CTE QA (PR `#2763`_).
+* Fix nightqa cterowbyrow plot range (PR `#2764`_).
+
+.. _`#2762`: https://github.com/desihub/desispec/pull/2762
+.. _`#2763`: https://github.com/desihub/desispec/pull/2763
+.. _`#2764`: https://github.com/desihub/desispec/pull/2764
+
 0.71.4 (2026-05-28)
 -------------------
 
