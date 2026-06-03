@@ -4,7 +4,8 @@ desispec.validredshifts
 
 """
 # Example usage:
-# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/guadalupe/tiles/cumulative/1392/20210517/redrock-5-1392-thru20210517.fits'
+# from desispec import validredshifts
+# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/matterhorn/tiles/cumulative/101151/20251019/redrock-0-101151-thru20251019.fits'
 # cat = validate(redrock_path, return_target_columns=True)
 
 import os, warnings
@@ -155,12 +156,9 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         cat: astropy table with the necessary columns for redshift quality determination
 
     Options:
-        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS and ZWARN
-        return_target_columns: bool (default False), if True, include columns that indicate if the object belongs to each class of DESI targets
-        extra_columns: list of str (default None), additional columns to include in the output
-        emline_path: str (default None), specify the location of the emline file; by default the emline file is in the same directory as the redrock file
-        ignore_emline: bool (default False), if True, ignore the emline file and do not validate the ELG redshift
-        ignore_qso: bool (default False), if True, do not validate the QSO redshift
+        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS
+        ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
+        ignore_qso: bool (default False), if True, do not validate QSO redshifts
 
     Returns:
         res: astropy table with boolean columns (e.g., GOOD_BGS)
