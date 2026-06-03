@@ -7,6 +7,9 @@ desispec.validredshifts
 # from desispec import validredshifts
 # redrock_path = '/global/cfs/cdirs/desi/spectro/redux/matterhorn/tiles/cumulative/101151/20251019/redrock-0-101151-thru20251019.fits'
 # cat = validate(redrock_path, return_target_columns=True)
+# Returns an astropy table with columns: TARGETID, Z, ZWARN, COADD_FIBERSTATUS,
+# target membership booleans: LRG, ELG, QSO, LGE, ELG_LOP, ELG_HIP, ELG_VLO, BGS_ANY, BGS_FAINT, BGS_BRIGHT,
+# and redshift quality booleans: GOOD_Z_BGS, GOOD_Z_LRG (which includes both LRG and LGE), GOOD_Z_ELG, GOOD_Z_QSO.
 
 import os, warnings
 import numpy as np
