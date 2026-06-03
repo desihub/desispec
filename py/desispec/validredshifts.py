@@ -45,7 +45,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         extra_columns: list of str (default None), additional columns to include in the output
 
     Returns:
-        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_BGS)
+        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_Z_BGS)
              that indicate if each object meets the redshift quality criteria of specific tracers
     '''
 
@@ -162,7 +162,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         ignore_qso: bool (default False), if True, do not validate QSO redshifts
 
     Returns:
-        res: astropy table with boolean columns (e.g., GOOD_BGS)
+        res: astropy table with boolean columns (e.g., GOOD_Z_BGS)
     '''
 
     res = Table()
