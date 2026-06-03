@@ -3,20 +3,22 @@ desispec.validredshifts
 =======================
 
 """
-# Script to apply the LSS redshift quality cuts.
+# Functions to apply the LSS redshift quality cuts.
+#
 # Example usage:
-# 
+#
 # from desispec import validredshifts
 # redrock_path = '/global/cfs/cdirs/desi/spectro/redux/matterhorn/tiles/cumulative/101151/20251019/redrock-0-101151-thru20251019.fits'
 # cat = validate(redrock_path, return_target_columns=True)
-# 
-# This returns an astropy table with:
-# target membership booleans (LRG, ELG, QSO, LGE, ...) and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO).
-# 
-# Note that the redshift quality boolean itself does not check the target membership. Both the quality boolean and the membership boolean
-# should be applied to obtain the LSS redshift quality flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
-# 
-# Also note that GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
+#
+# This returns an astropy table with columns: TARGETID, Z, ZWARN, COADD_FIBERSTATUS,
+# target membership booleans (LRG, ELG, QSO, LGE, ELG_LOP, ELG_HIP, ELG_VLO, BGS_ANY, BGS_FAINT, BGS_BRIGHT),
+# and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO).
+#
+# Note: the redshift quality boolean does not check target membership. Both the quality boolean and the
+# membership boolean must be applied to obtain the LSS redshift quality flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
+#
+# Note: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
 
 import os, warnings
 import numpy as np
