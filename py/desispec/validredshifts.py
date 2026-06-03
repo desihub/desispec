@@ -51,7 +51,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
 
     output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']
     if return_target_columns:
-        output_columns = ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
+        output_columns = ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
 
     if extra_columns is None:
         extra_columns = ['TARGETID', 'Z', 'ZWARN', 'COADD_FIBERSTATUS']
@@ -120,7 +120,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         cat = hstack([cat, tmp_qso_mgii, tmp_qso_qn], join_type='exact')
 
     if return_target_columns:
-        for name in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
+        for name in ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
                 cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
             else:
@@ -132,6 +132,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['LRG'] = cat['DESI_TARGET'] & 2**0 > 0
         # cat['ELG'] = cat['DESI_TARGET'] & 2**1 > 0
         # cat['QSO'] = cat['DESI_TARGET'] & 2**2 > 0
+        # cat['LGE'] = cat['DESI_TARGET'] & 2**3 > 0
         # cat['ELG_LOP'] = cat['DESI_TARGET'] & 2**5 > 0
         # cat['ELG_HIP'] = cat['DESI_TARGET'] & 2**6 > 0
         # cat['ELG_VLO'] = cat['DESI_TARGET'] & 2**7 > 0
@@ -172,7 +173,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     if fiberstatus_cut:
         res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
 
-    # LRG
+    # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
     res['GOOD_Z_LRG'] &= cat['Z']<1.5
     res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
