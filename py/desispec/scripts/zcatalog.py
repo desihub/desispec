@@ -674,7 +674,7 @@ def main(args=None):
     # - core DESI tracer target selection (and not e.g. secondary QSOs)
     # - SURVEY is main/sv1/sv2/sv3 (not special)
 
-    # LSS cuts
+    # LSS redshift quality cuts
     zqual = validredshifts.actually_validate(zcat)
 
     # GOOD_SPEC: true if it is a science spectrum with good hardware status
@@ -692,9 +692,9 @@ def main(args=None):
         else:
             desi_target_col = survey.upper()+'_DESI_TARGET'
 
-        # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
+        # The BGS_ANY, LRG+LGE, ELG and QSO target bits are the same in SV1 to main
         is_bgs = (zcat[desi_target_col] & desi_mask.BGS_ANY) != 0
-        is_lrg = (zcat[desi_target_col] & desi_mask.LRG) != 0
+        is_lrg = (zcat[desi_target_col] & (desi_mask.LRG | desi_mask.LGE)) != 0
         is_elg = (zcat[desi_target_col] & desi_mask.ELG) != 0
         is_qso = (zcat[desi_target_col] & desi_mask.QSO) != 0
 
@@ -703,7 +703,7 @@ def main(args=None):
         # False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut;
         # They apply to the Z column
         zqual['GOOD_Z_BGS'] &= is_bgs
-        zqual['GOOD_Z_LRG'] &= is_lrg
+        zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_LRG includes both LRG and LGE
         zqual['GOOD_Z_ELG'] &= is_elg
 
         # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column

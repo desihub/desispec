@@ -3,9 +3,22 @@ desispec.validredshifts
 =======================
 
 """
+# Functions to apply the LSS redshift quality cuts.
+#
 # Example usage:
-# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/guadalupe/tiles/cumulative/1392/20210517/redrock-5-1392-thru20210517.fits'
+#
+# from desispec import validredshifts
+# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/matterhorn/tiles/cumulative/101151/20251019/redrock-0-101151-thru20251019.fits'
 # cat = validate(redrock_path, return_target_columns=True)
+#
+# This returns an astropy table with columns: TARGETID, Z, ZWARN, COADD_FIBERSTATUS,
+# target membership booleans (LRG, ELG, QSO, LGE, ELG_LOP, ELG_HIP, ELG_VLO, BGS_ANY, BGS_FAINT, BGS_BRIGHT),
+# and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO).
+#
+# Note: the redshift quality boolean does not check target membership. Both the quality boolean and the
+# membership boolean must be applied to obtain the LSS redshift quality flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
+#
+# Note: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
 
 import os, warnings
 import numpy as np
@@ -44,13 +57,13 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         extra_columns: list of str (default None), additional columns to include in the output
 
     Returns:
-        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_BGS)
+        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_Z_BGS)
              that indicate if each object meets the redshift quality criteria of specific tracers
     '''
 
     output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']
     if return_target_columns:
-        output_columns = ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
+        output_columns = ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
 
     if extra_columns is None:
         extra_columns = ['TARGETID', 'Z', 'ZWARN', 'COADD_FIBERSTATUS']
@@ -119,7 +132,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         cat = hstack([cat, tmp_qso_mgii, tmp_qso_qn], join_type='exact')
 
     if return_target_columns:
-        for name in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
+        for name in ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
                 cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
             else:
@@ -131,6 +144,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['LRG'] = cat['DESI_TARGET'] & 2**0 > 0
         # cat['ELG'] = cat['DESI_TARGET'] & 2**1 > 0
         # cat['QSO'] = cat['DESI_TARGET'] & 2**2 > 0
+        # cat['LGE'] = cat['DESI_TARGET'] & 2**3 > 0
         # cat['ELG_LOP'] = cat['DESI_TARGET'] & 2**5 > 0
         # cat['ELG_HIP'] = cat['DESI_TARGET'] & 2**6 > 0
         # cat['ELG_VLO'] = cat['DESI_TARGET'] & 2**7 > 0
@@ -155,15 +169,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         cat: astropy table with the necessary columns for redshift quality determination
 
     Options:
-        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS and ZWARN
-        return_target_columns: bool (default False), if True, include columns that indicate if the object belongs to each class of DESI targets
-        extra_columns: list of str (default None), additional columns to include in the output
-        emline_path: str (default None), specify the location of the emline file; by default the emline file is in the same directory as the redrock file
-        ignore_emline: bool (default False), if True, ignore the emline file and do not validate the ELG redshift
-        ignore_qso: bool (default False), if True, do not validate the QSO redshift
+        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS
+        ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
+        ignore_qso: bool (default False), if True, do not validate QSO redshifts
 
     Returns:
-        res: astropy table with boolean columns (e.g., GOOD_BGS)
+        res: astropy table with boolean columns (e.g., GOOD_Z_BGS)
     '''
 
     res = Table()
@@ -174,7 +185,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     if fiberstatus_cut:
         res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
 
-    # LRG
+    # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
     res['GOOD_Z_LRG'] &= cat['Z']<1.5
     res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
