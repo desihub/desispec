@@ -14,6 +14,15 @@ These changes were not used in Matterhorn.
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 
+0.71.6 (2026-06-03)
+-------------------
+
+Last Matterhorn tag, used to generate final redshift catalogs.
+
+* Add LGE support to validredshifts and zcatalog (PR `#2765`_).
+
+.. _`#2765`: https://github.com/desihub/desispec/pull/2765
+
 0.71.5 (2026-06-02)
 -------------------
 
