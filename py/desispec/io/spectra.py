@@ -801,7 +801,7 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
     but not used.
     """
     #- What columns should we group by to split by file?
-    specgroup, keycols = determine_specgroup(targets.colnames)
+    specgroup, keycols = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':
         filecolumns = ('HEALPIX', 'SURVEY', 'PROGRAM')
     elif specgroup in ('tiles', 'cumulative'):

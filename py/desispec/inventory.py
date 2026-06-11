@@ -198,7 +198,7 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
     print(f'Loading {len(tiledirs)} tiles')
     with multiprocessing.Pool(nproc) as pool:
         results = pool.map(_inventory_tiledir, tiledirs)
-    
+
     zcat = vstack(results)
     create_inventory_zcat(zcat, outfile, ngroups=ngroups)
 

@@ -48,7 +48,7 @@ def read_redrock(filename, fmcols=None):
 
 def read_redrock_targetcat(tcat, fmcols=None, specprod=None):
     """
-    Read and stack multiple redrock files 
+    Read and stack multiple redrock files
     """
 
     #- Copy structure of tcat (but not data) in case we need to add columns
