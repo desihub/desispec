@@ -244,6 +244,15 @@ def main(args=None, comm=None):
                           "value {} running {}".format(rank, retval, comstr))
                 failcount += 1
                 failed_bundles.append(b)
+                # f =  "{}_{:02d}.fits".format(outroot, b)
+                # other_psf_hdulist=fits.open(f)
+
+                # # look at what fibers where actually fit
+                # i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
+                # status_of_fibers = \
+                #     other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
+                # log.info(f'status_of_fibers: {status_of_fibers}')
+                bundles_to_merge.append(b)
         else:
             log.info(f"proc {rank} succeeded generating {outbundlefits}")
             bundles_to_merge.append(b)
@@ -305,6 +314,13 @@ def main(args=None, comm=None):
             log.warning(f"The fit of the following bundles failed: {failed_bundles}")
             for x in failed_bundles :
                 f =  "{}_{:02d}.fits".format(outroot, x)
+                # other_psf_hdulist=fits.open(f)
+
+                # # look at what fibers where actually fit
+                # i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
+                # status_of_fibers = \
+                #     other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
+                # log.info(f'status_of_fibers: {status_of_fibers}')
                 if  os.path.isfile(f):
                     os.remove(f)
 
@@ -457,15 +473,20 @@ def merge_psf(inpsffile, inputs, output):
 
     for input_filename in inputs :
         log.info("merging {} into {}".format(input_filename, inpsffile))
-        other_psf_hdulist=fits.open(input_filename)
+        other_psf_hdulist=fits.open(input_filename,memmap=False)
 
         # look at what fibers where actually fit
         i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
         status_of_fibers = \
             other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
+        # log.info("status of fibers in PSF {} = {}".format(input_filename,
+        #     status_of_fibers))
         selected_fibers = np.where(status_of_fibers==0)[0]
+        failed_fibers=np.where(status_of_fibers>0)[0]
         log.info("fitted fibers in PSF {} = {}".format(input_filename,
             selected_fibers))
+        log.info("failed fibers in PSF {} = {}".format(input_filename,
+            failed_fibers))
         if selected_fibers.size == 0 :
             log.warning("no fiber with status=0 found in {}".format(
                 input_filename))
@@ -485,6 +506,9 @@ def merge_psf(inpsffile, inputs, output):
             i1=np.where(other_psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
             psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = \
                 other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
+            if param=="STATUS" :
+                psf_hdulist["PSF"].data["COEFF"][i0][failed_fibers] = \
+                    other_psf_hdulist["PSF"].data["COEFF"][i1][failed_fibers]
 
         # copy bundle chi2
         i = np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
@@ -535,6 +559,7 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
     missing_bundles=[]
+    failed_bundles=[]
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -585,7 +610,11 @@ def mean_psf(inputs, output):
         missing_mask = np.array(
             [np.all(status[bundles == bundle] < 0) for bundle in unique_bundles],
             dtype=bool)
+        failed_mask=np.array(
+            [np.any(status[bundles == bundle] > 0) for bundle in unique_bundles],
+            dtype=bool)
         missing_bundles.append(unique_bundles[missing_mask])
+        failed_bundles.append(unique_bundles[failed_mask])
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
@@ -599,6 +628,8 @@ def mean_psf(inputs, output):
     WAVEMAX=refhead["WAVEMAX"]
     FIBERMIN=int(refhead["FIBERMIN"])
     FIBERMAX=int(refhead["FIBERMAX"])
+    log.info(f"Input {input} has failed bundles: {failed_bundles}")
+    failed_bundles=np.array([x for sublist in failed_bundles for x in sublist])
 
 
     fibers_in_bundle={}
@@ -672,6 +703,7 @@ def mean_psf(inputs, output):
                 if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
                     log.warning(f"Bundle {bundle} is missing in some but not all input PSFs for camera {refhead['CAMERA']}. Only {len(masked_bundle_rchi2)} PSFs will be used.")
                 nfailed = np.sum(masked_bundle_rchi2[:,bundle]==0)
+                nfailed += len(failed_bundles[failed_bundles==bundle])
                 if nfailed > 1 :
                     message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF for camera {refhead['CAMERA']}."
                     log.critical(message)
