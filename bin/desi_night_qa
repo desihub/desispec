@@ -159,8 +159,11 @@ def main():
     # DG - the following steps require science data, so if any of them
     # are requested, check and find expids, tileids and surveys observed on the night.
     # fF we find no science data that night, then remove these steps from steps_tbd.
-    steps_need_science = ["sframesky", "tileqa", "skyzfiber", "petalnz"]#, "html"]
-    if np.isin(steps_need_science, steps_tbd).sum() > 0:
+    steps_need_science = ["sframesky", "tileqa", "skyzfiber", "petalnz"]
+    # DG - HTML doesn't need science data to exist, but needs the values in expids
+    # tileids, surveys for generation, so we consider for triggering looking
+    # for those values, but don't remove it if there's no science data.
+    if np.isin(steps_need_science + ["html"], steps_tbd).sum() > 0:
         expids, tileids, surveys = get_surveys_night_expids(args.night)
 
         if len(expids) == 0:
