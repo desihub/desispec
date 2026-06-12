@@ -486,6 +486,28 @@ class TestInventoryUniqpix(unittest.TestCase):
             'radec2targetids returned no targets for uniqpix-based inventory')
         self.assertIn(tid, targetids)
 
+    def test_target_healpix_uniqpix(self):
+        with h5py.File(self.h5file) as hx:
+            first_group = next(iter(hx['target_uniqpix'].keys()))
+            tid = int(hx[f'target_uniqpix/{first_group}']['TARGETID'][0])
+        result = target_healpix(targetids=[tid], filename=self.h5file)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result['TARGETID'][0], tid)
+        for col in ('SURVEY', 'PROGRAM', 'UNIQPIX'):
+            self.assertIn(col, result.colnames)
+        self.assertNotIn('HEALPIX', result.colnames)
+
+    def test_target_healpix_by_radec_uniqpix(self):
+        with h5py.File(self.h5file) as hx:
+            first_upix = next(iter(hx['uniqpix_targets'].keys()))
+            row = hx[f'uniqpix_targets/{first_upix}'][0]
+            ra  = float(row['TARGET_RA'])
+            dec = float(row['TARGET_DEC'])
+        result = target_healpix(radec=(ra, dec, 120.0), filename=self.h5file)
+        self.assertGreater(len(result), 0)
+        self.assertIn('UNIQPIX', result.colnames)
+        self.assertNotIn('HEALPIX', result.colnames)
+
 
 if __name__ == '__main__':
     unittest.main()

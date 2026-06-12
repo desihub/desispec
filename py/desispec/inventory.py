@@ -413,9 +413,10 @@ def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
     results = list()
     with h5py.File(filename) as hx:
         ngroups = hx.attrs['ngroups']
+        pixgroup = 'target_uniqpix' if 'target_uniqpix' in hx else 'target_healpix'
         for tid in targetids:
             subgroup = tid % ngroups
-            data = hx[f'target_healpix/{subgroup}'][:]
+            data = hx[f'{pixgroup}/{subgroup}'][:]
             results.append(Table(data[data['TARGETID'] == tid]))
 
     if len(results)>0:
@@ -425,7 +426,8 @@ def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
         blank.add_column(Column(name='TARGETID', dtype=int))
         blank.add_column(Column(name='SURVEY', dtype='S7'))
         blank.add_column(Column(name='PROGRAM', dtype='S6'))
-        blank.add_column(Column(name='HEALPIX', dtype=int))
+        pixcol = 'UNIQPIX' if pixgroup == 'target_uniqpix' else 'HEALPIX'
+        blank.add_column(Column(name=pixcol, dtype=int))
         result = blank
 
     result.meta.update(_create_header(radec, specprod))
