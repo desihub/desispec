@@ -9,8 +9,9 @@ import glob
 import numpy as np
 import h5py
 from astropy.table import Table, Column, vstack
+import fitsio
 
-from desispec.io.meta import faflavor2program
+from desispec.io.meta import faflavor2program, findfile
 
 def _inventory_tiledir(tiledir):
     """
@@ -21,9 +22,6 @@ def _inventory_tiledir(tiledir):
 
     Returns Table with columns TARGETID, SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC
     """
-    from desimodel.footprint import radec2pix
-    import fitsio
-
     tiledir = sorted(glob.glob(f'{tiledir}/20??????'))[-1]  #- most recent tiledir/NIGHT/
     print(f'Loading {tiledir}')
     lastnight = int(os.path.basename(tiledir))
@@ -37,14 +35,19 @@ def _inventory_tiledir(tiledir):
             header = fx['FIBERMAP'].read_header()
             hdr0 = fx[0].read_header()
 
-        tables.append(Table(fibermap))
+        keep = np.isfinite(fibermap['TARGET_RA']) & np.isfinite(fibermap['TARGET_DEC'])
+        tables.append(Table(fibermap[keep]))
 
     #- Stack first, then add columns that are the same for every row
     tiletable = vstack(tables)
-    tiletable['TILEID'] = header['TILEID']
-    tiletable['SURVEY'] = header['SURVEY']
-    tiletable['PROGRAM'] = faflavor2program(header['FAFLAVOR'])
-    tiletable['LASTNIGHT'] = hdr0['NIGHT']   # in HDU 0 instead of FIBERMAP HDU
+    tiletable['TILEID'] = hdr0['TILEID']
+    tiletable['LASTNIGHT'] = hdr0['NIGHT']
+
+    # Missing in Iron, in header for Loa, and hdr0 and header for Matterhorn
+    if 'SURVEY' in header:
+        tiletable['SURVEY'] = header['SURVEY']
+    if 'FAFLAVOR' in header:
+        tiletable['PROGRAM'] = faflavor2program(header['FAFLAVOR'])
 
     return tiletable
 
@@ -75,42 +78,33 @@ def _get_unique_indices(arr):
 
     return indices_dict
 
-def create_inventory_zcat(zcat, outfile, ngroups=1000):
+def create_inventory_zcat(zcat, outfile, ngroups=1000, hpix2upix=None):
     """
     Create an inventory file given a zall-tilecumulative redshift catalog file
 
     Args:
-        zcat (str|Table): path to zall-tilecumulative*.fits file or Table read from that file
+        zcat Table: zcatalog Table with columns TARGETID, SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC, and HEALPIX or UNIQPIX
         outfile (str): output inventory hdf5 filepath
 
     Options:
         ngroups (int): number of TARGETID subgroups
     """
-    from desimodel.footprint import radec2pix
-    import fitsio
-
-    #- Read the zcatalog file with all columns that we need
-    if isinstance(zcat, str):
-        print(f'Reading {zcat}')
-        columns = ('TARGETID', 'SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
-        zcat = Table(fitsio.read(zcat, 'ZCATALOG', columns=columns))
-    elif isinstance(zcat, Table):
-        pass  # ok, zcat is already a Table
-    else:
-        raise ValueError(f'zcat should be a filepath or Table, not {type(zcat)}')
-
-    print('Calculating healpix')
-    zcat['HEALPIX'] = radec2pix(nside=64, ra=zcat['TARGET_RA'], dec=zcat['TARGET_DEC'])
-
     print('Converting str -> bytes')
     zcat['SURVEY'] = zcat['SURVEY'].astype(bytes)
     zcat['PROGRAM'] = zcat['PROGRAM'].astype(bytes)
 
+    if 'UNIQPIX' in zcat.colnames:
+        pixtype = 'UNIQPIX'
+    elif 'HEALPIX' in zcat.colnames:
+        pixtype = 'HEALPIX'
+    else:
+        raise ValueError('Unable to find HEALPIX or UNIQPIX column in zcat')
+
     #- Create views with a subset of columns for different purposes
     zcat_tile = zcat.copy(copy_data=False)
     zcat_tile.keep_columns(['TARGETID', 'TILEID', 'LASTNIGHT', 'FIBER'])
-    zcat_healpix = zcat.copy(copy_data=False)
-    zcat_healpix.keep_columns(['TARGETID', 'SURVEY', 'PROGRAM', 'HEALPIX'])
+    zcat_pix = zcat.copy(copy_data=False)
+    zcat_pix.keep_columns(['TARGETID', 'SURVEY', 'PROGRAM', pixtype])
     zcat_radec = zcat.copy(copy_data=False)
     zcat_radec.keep_columns(['TARGETID', 'TARGET_RA', 'TARGET_DEC'])
     zcat_targetid = zcat.copy(copy_data=False)
@@ -118,53 +112,56 @@ def create_inventory_zcat(zcat, outfile, ngroups=1000):
 
     """
     NGROUPS = targets are subdivided by TGROUP = TARGETID % NGROUPS
-    target_tiles
-        TGROUP = Table TARGETID, TILEID, LASTNIGHT, FIBER
-    target_healpix
-        TGROUP = Table TARGETID, SURVEY, PROGRAM, HEALPIX
-    healpix
-        HEALPIX = Table TARGETID, TARGET_RA, TARGET_DEC
-    tiles
-        TILEID = Table TARGETID
+    target_tiles/TGROUP
+        Table TARGETID, TILEID, LASTNIGHT, FIBER
+    target_(healpix|uniqpix)/TGROUP
+        Table TARGETID, SURVEY, PROGRAM, HEALPIX|UNIQPIX
+    (healpix|uniqpix)_targets/HEALPIX|UNIQPIX
+        Table TARGETID, TARGET_RA, TARGET_DEC
+    tile_targets/TILEID
+        Table TARGETID
     """
     print('Grouping by TARGETID')
     target_tiles = dict()
-    target_healpix = dict()
+    target_pix = dict()
     target_group = zcat['TARGETID'] % ngroups
     target_indices = _get_unique_indices(target_group)
     for tgroup, ii in target_indices.items():
         if tgroup%100 == 0:
             print(f'targetid group {tgroup}/{ngroups}')
         target_tiles[tgroup] = Table(np.unique(zcat_tile[ii]))
-        target_healpix[tgroup] = Table(np.unique(zcat_healpix[ii]))
+        target_pix[tgroup] = Table(np.unique(zcat_pix[ii]))
 
-    print('Grouping by HEALPIX')
-    healpix_targets = dict()
-    healpix_indices = _get_unique_indices(zcat['HEALPIX'])
-    npix = len(healpix_indices.keys())
-    for hpix, ii in healpix_indices.items():
-        if hpix%1000 == 0:
-            print(f'healpix {hpix}')
-        healpix_targets[hpix] = Table(np.unique(zcat_radec[ii]))
+    print(f'Grouping by {pixtype}')
+    pix_targets = dict()
+    pix_indices = _get_unique_indices(zcat[pixtype])
+    npix = len(pix_indices.keys())
+    for pix, ii in pix_indices.items():
+        if pix%1000 == 0:
+            print(f'{pixtype} {pix}')
+        pix_targets[pix] = Table(np.unique(zcat_radec[ii]))
 
     print('Grouping by TILEID')
     tile_targets = dict()
     tile_indices = _get_unique_indices(zcat['TILEID'])
     ntiles = len(tile_indices.keys())
-    for tileid, ii in tile_indices.items():
-        if tileid%100 == 0:
-            print(f'tile {tileid}/{ntiles}')
+    for tileindex, (tileid, ii) in enumerate(tile_indices.items()):
+        if tileindex%100 == 0:
+            print(f'tile {tileid} ({tileindex}/{ntiles})')
         tile_targets[tileid] = Table(np.unique(zcat_targetid[ii]))
 
     inventory = dict()
     inventory['target_tiles'] = target_tiles
-    inventory['target_healpix'] = target_healpix
-    inventory['healpix_targets'] = healpix_targets
+    inventory[f'target_{pixtype.lower()}'] = target_pix
+    inventory[f'{pixtype.lower()}_targets'] = pix_targets
     inventory['tile_targets'] = tile_targets
 
-    write_inventory(outfile, inventory, ngroups)
+    if hpix2upix is not None:
+        nside = zcat.meta['NSIDEMAX']
 
-def write_inventory(filename, inventory, ngroups):
+    write_inventory(outfile, inventory, ngroups, hpix2upix=hpix2upix, nside=nside)
+
+def write_inventory(filename, inventory, ngroups, hpix2upix=None, nside=None):
     """
     Write inventory struction to filename; include ngroups in attr metadata
     """
@@ -178,6 +175,15 @@ def write_inventory(filename, inventory, ngroups):
             for subgroup in inventory[group].keys():
                 hx[f'{group}/{subgroup}'] = inventory[group][subgroup]
 
+        if hpix2upix is not None:
+            hx.create_group('hpix2upix')
+            hx['hpix2upix'].attrs['nside'] = nside
+            for survey, programs in hpix2upix.items():
+                hx.create_group(f'hpix2upix/{survey}')
+                for program, hpix2upix_array in programs.items():
+                    print(f'Writing hpix2upix/{survey}/{program} {len(hpix2upix_array)}')
+                    hx[f'hpix2upix/{survey}/{program}'] = hpix2upix_array
+
     os.rename(tmpfile, filename)
     print(f'Wrote {filename}')
 
@@ -187,20 +193,75 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
 
     TODO: document; WIP
     """
+    import healpy
     import desispec.io
+    from desimodel.footprint import radec2pix
     import multiprocessing
 
+    zcatfile = findfile('zall_tile', version='v2', specprod=specprod, readonly=True)
     specdir = desispec.io.specprod_root(specprod, readonly=True)
-    tiledirs = sorted(glob.glob(f'{specdir}/tiles/cumulative/[0-9]*'))
-    if ntiles is not None:
-        tiledirs = tiledirs[0:ntiles]
+    if os.path.exists(zcatfile):
+        print(f"Found {zcatfile}, using it to create inventory")
+        columns = ('TARGETID', 'SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
+        zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
 
-    print(f'Loading {len(tiledirs)} tiles')
-    with multiprocessing.Pool(nproc) as pool:
-        results = pool.map(_inventory_tiledir, tiledirs)
+        if ntiles is not None:
+            print(f"Limiting to {ntiles} tiles")
+            tileids = np.unique(zcat['TILEID'])
+            keep_tiles = tileids[0:ntiles]
+            zcat = zcat[np.isin(zcat['TILEID'], keep_tiles)]
+    else:
+        print(f"Unable to find {zcatfile}, creating inventory from tiledirs")
+        tiledirs = sorted(glob.glob(f'{specdir}/tiles/cumulative/[0-9]*'))
+        if ntiles is not None:
+            tiledirs = tiledirs[0:ntiles]
 
-    zcat = vstack(results)
-    create_inventory_zcat(zcat, outfile, ngroups=ngroups)
+        print(f'Loading {len(tiledirs)} tiles')
+        with multiprocessing.Pool(nproc) as pool:
+            results = pool.map(_inventory_tiledir, tiledirs)
+
+        zcat = vstack(results)
+
+    #- Support Iron and earlier, which didn't have SURVEY and PROGRAM in coadd files (!)
+    #- This implementation takes ~20 seconds, but is lower memory than joins creating new tables
+    if 'SURVEY' not in zcat.colnames:
+        tiles = Table.read(findfile('tiles', specprod=specprod, readonly=True), 1, format='fits')
+        survey_map = dict(zip(tiles['TILEID'], tiles['SURVEY']))
+        program_map = dict(zip(tiles['TILEID'], tiles['PROGRAM']))
+        zcat['SURVEY'] = np.array([survey_map[tid] for tid in zcat['TILEID']])
+        zcat['PROGRAM'] = np.array([program_map[tid] for tid in zcat['TILEID']])
+
+    #- fill in either UNIQPIX (matterhorn+) or HEALPIX (loa-)
+    hpix2upix = None
+    if os.path.isdir(os.path.join(specdir, 'spectra')):
+        print('Calculating UNIQPIX')
+        zcat['UNIQPIX'] = np.full(len(zcat), fill_value=-1, dtype=np.int32)
+        hpix2upix = dict()
+        for survey, program in np.unique(zcat['SURVEY', 'PROGRAM']):
+            ii = (zcat['SURVEY'] == survey) & (zcat['PROGRAM'] == program)
+            ra = zcat['TARGET_RA'][ii]
+            dec = zcat['TARGET_DEC'][ii]
+            hpix2upix_file = findfile('hpix2upix', specprod=specprod, survey=survey, faprogram=program, readonly=True)
+            h2u, header = fitsio.read(hpix2upix_file, 'HPIX2UPIX', header=True)
+            nside = header['NSIDE']
+            hpix = healpy.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+            upix = h2u[hpix]
+            zcat['UNIQPIX'][ii] = upix
+            if survey not in hpix2upix:
+                hpix2upix[survey] = dict()
+            hpix2upix[survey][program] = h2u
+
+        zcat.meta['NSIDEMAX'] = nside   # same for all hpix2upix files in a specprod
+        assert np.all(zcat['UNIQPIX'] >= 0), 'Some UNIQPIX values are still -1'
+
+    elif os.path.isdir(os.path.join(specdir, 'healpix')):
+        print('Calculating HEALPIX')
+        zcat['HEALPIX'] = radec2pix(nside=64, ra=zcat['TARGET_RA'], dec=zcat['TARGET_DEC'])
+    else:
+        raise ValueError(f'Unable to find spectra/ or healpix/ in {specdir}')
+
+    #- Create the final output inventory file
+    create_inventory_zcat(zcat, outfile, ngroups=ngroups, hpix2upix=hpix2upix)
 
 def update_inventory(filename, specprod=None):
     raise NotImplementedError
@@ -236,6 +297,7 @@ def target_tiles(targetids=None, radec=None, filename=None, inventory=None, spec
 
     Must input `targetids` or `radec` but not both.
     """
+    from desimodel.footprint import radec2pix
     assert (targetids is None) or (radec is None)
     if filename is None:
         filename = _get_default_inventory_filename(specprod)
@@ -335,6 +397,7 @@ def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
 
     Must input `targetids` or `radec` but not both.
     """
+    from desimodel.footprint import radec2pix
     assert (targetids is None) or (radec is None)
     if filename is None:
         filename = _get_default_inventory_filename(specprod)
@@ -493,28 +556,37 @@ def parse_radec(radec):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='Search, create, or update DESI target inventory')
-    parser.add_argument('-s', '--specprod',  help='Input specprod, overrides $SPECPROD')
-    parser.add_argument('-f', '--filename', help='Inventory file')
+
+    # parser = argparse.ArgumentParser(description='Search, create, or update DESI target inventory')
+
+    #- shared options
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument('-s', '--specprod',  help='Input specprod, overrides $SPECPROD')
+    shared.add_argument('-f', '--filename', help='Inventory file')
+
+    scriptname = os.path.basename(sys.argv[0])
+    parser = argparse.ArgumentParser(description='Search, create, or update DESI target inventory',
+                                     epilog=f"Run '{scriptname} <subcommand> --help' for subcommand-specific options.",
+                                     parents=[shared])
 
     # Add subparsers
     subparsers = parser.add_subparsers(dest='subcommand', help='Sub-command help')
 
     #- create
-    sub1 = subparsers.add_parser('create', help='Create a target inventory')
+    sub1 = subparsers.add_parser('create', help='Create a target inventory', parents=[shared])
     sub1.add_argument('-n', '--ntiles', type=int, help='Number of tiles to include')
     sub1.add_argument('--nproc', type=int, help='Number of parallel processes to use')
 
     # update
-    sub2 = subparsers.add_parser('update', help='Update target inventory')
+    sub2 = subparsers.add_parser('update', help='Update target inventory', parents=[shared])
 
     # search tiles
-    sub3 = subparsers.add_parser('tiles', help='Search tiles for targetids')
+    sub3 = subparsers.add_parser('tiles', help='Search tiles for targetids', parents=[shared])
     sub3.add_argument('-t', '--targetids', help='comma separated TARGETIDs')
     sub3.add_argument('--radec', help='RA_DEGREES,DEC_DEGREES[,RADIUS_ARCSEC]')
 
     # search healpix
-    sub4 = subparsers.add_parser('healpix', help='Search healpix for targetids')
+    sub4 = subparsers.add_parser('healpix', help='Search healpix for targetids', parents=[shared])
     sub4.add_argument('-t', '--targetids', help='comma separated TARGETIDs')
     sub4.add_argument('--radec', help='RA_DEGREES,DEC_DEGREES[,RADIUS_ARCSEC]')
 
