@@ -156,6 +156,7 @@ def create_inventory_zcat(zcat, outfile, ngroups=1000, hpix2upix=None):
     inventory[f'{pixtype.lower()}_targets'] = pix_targets
     inventory['tile_targets'] = tile_targets
 
+    nside = None
     if hpix2upix is not None:
         nside = zcat.meta['NSIDEMAX']
 
@@ -187,11 +188,12 @@ def write_inventory(filename, inventory, ngroups, hpix2upix=None, nside=None):
     os.rename(tmpfile, filename)
     print(f'Wrote {filename}')
 
-def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8):
+def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8, nrows=None):
     """
     Create target inventory from specprod that doesn't have a zall-tilecumulative file
 
     TODO: document; WIP
+    nrows = number of rows to read from zcat
     """
     import healpy
     import desispec.io
@@ -203,7 +205,8 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8)
     if os.path.exists(zcatfile):
         print(f"Found {zcatfile}, using it to create inventory")
         columns = ('TARGETID', 'SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT', 'FIBER', 'TARGET_RA', 'TARGET_DEC')
-        zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
+        rows = np.arange(nrows) if nrows is not None else None
+        zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns, rows=rows))
 
         if ntiles is not None:
             print(f"Limiting to {ntiles} tiles")
@@ -340,7 +343,7 @@ def target_tiles(targetids=None, radec=None, filename=None, inventory=None, spec
 
     return result
 
-def db_target_tiles(targetids=None, radec=None, specprod=None):
+def _db_target_tiles(targetids=None, radec=None, specprod=None):
     """
     WIP: database equivalent of `target_tiles`
     """
@@ -428,7 +431,7 @@ def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
     result.meta.update(_create_header(radec, specprod))
     return result
 
-def db_target_healpix(targetids=None, radec=None, specprod=None):
+def _db_target_healpix(targetids=None, radec=None, specprod=None):
     """
     WIP: database equivalent of `target_healpix`
     """
