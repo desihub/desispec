@@ -488,17 +488,34 @@ def radec2targetids(radec, filename=None, specprod=None):
 
     ra, dec, radius_arcsec = radec
     radius_radians = radius_arcsec * np.pi / (3600*180.)
-    nside = 64
     vec = ang2vec(ra, dec, lonlat=True)
-    pixels = query_disc(nside, vec, radius_radians, nest=True, inclusive=True)
 
     tables = list()
     with h5py.File(filename) as hx:
-        for hpix in pixels:
-            try:
-                tables.append(Table(hx[f'healpix_targets/{hpix}'][:]))
-            except KeyError:
-                pass
+        if 'hpix2upix' in hx:
+            #- uniqpix-based inventory: use hpix2upix to map healpix -> uniqpix
+            nside = hx['hpix2upix'].attrs['nside']
+            hpix_candidates = query_disc(nside, vec, radius_radians, nest=True, inclusive=True)
+            upix_set = set()
+            for survey in hx['hpix2upix'].keys():
+                for program in hx[f'hpix2upix/{survey}'].keys():
+                    h2u = hx[f'hpix2upix/{survey}/{program}'][:]
+                    upix = h2u[hpix_candidates]
+                    upix_set.update(upix[upix >= 0])
+            for upix in upix_set:
+                try:
+                    tables.append(Table(hx[f'uniqpix_targets/{upix}'][:]))
+                except KeyError:
+                    pass
+        else:
+            #- healpix-based inventory
+            nside = 64
+            pixels = query_disc(nside, vec, radius_radians, nest=True, inclusive=True)
+            for hpix in pixels:
+                try:
+                    tables.append(Table(hx[f'healpix_targets/{hpix}'][:]))
+                except KeyError:
+                    pass
 
     if len(tables) == 0:
         return np.array([], dtype=int)

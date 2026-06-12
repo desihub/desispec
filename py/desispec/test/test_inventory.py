@@ -474,6 +474,18 @@ class TestInventoryUniqpix(unittest.TestCase):
         for col in ('TILEID', 'LASTNIGHT', 'FIBER'):
             self.assertIn(col, result.colnames)
 
+    def test_radec2targetids_uniqpix(self):
+        with h5py.File(self.h5file) as hx:
+            first_upix = next(iter(hx['uniqpix_targets'].keys()))
+            row = hx[f'uniqpix_targets/{first_upix}'][0]
+            tid = int(row['TARGETID'])
+            ra  = float(row['TARGET_RA'])
+            dec = float(row['TARGET_DEC'])
+        targetids = radec2targetids((ra, dec, 120.0), filename=self.h5file)
+        self.assertGreater(len(targetids), 0,
+            'radec2targetids returned no targets for uniqpix-based inventory')
+        self.assertIn(tid, targetids)
+
 
 if __name__ == '__main__':
     unittest.main()
