@@ -29,6 +29,7 @@ from desispec.inventory import (
     parse_radec,
     update_inventory,
     _get_default_inventory_filename,
+    main,
 )
 
 # ---------------------------------------------------------------------------
@@ -507,6 +508,71 @@ class TestInventoryUniqpix(unittest.TestCase):
         self.assertGreater(len(result), 0)
         self.assertIn('UNIQPIX', result.colnames)
         self.assertNotIn('HEALPIX', result.colnames)
+
+
+# ===========================================================================
+# CLI main() tests
+# ===========================================================================
+
+class TestInventoryMain(unittest.TestCase):
+    """Test main() argument parsing and dispatch using mocks."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp()
+        cls.h5file = os.path.join(cls.tmpdir, 'test_inventory.h5')
+        cls.ngroups = 10
+        cls.zcat = _make_synthetic_zcat(cls.ngroups)
+        create_inventory_zcat(cls.zcat, cls.h5file, ngroups=cls.ngroups)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmpdir)
+
+    def _run_main(self, args):
+        """Run main() with sys.argv set to args."""
+        import sys
+        old_argv = sys.argv
+        sys.argv = ['desi_inventory'] + args
+        try:
+            main()
+        finally:
+            sys.argv = old_argv
+
+    def test_tiles_targetids(self):
+        from unittest.mock import patch
+        with patch('desispec.inventory.target_tiles') as mock_tt:
+            mock_tt.return_value = Table()
+            self._run_main(['tiles', '--filename', self.h5file, '--targetids', '1001,1002'])
+            mock_tt.assert_called_once()
+            tids = mock_tt.call_args.kwargs['targetids']
+            self.assertIn(1001, tids)
+            self.assertIn(1002, tids)
+
+    def test_tiles_radec(self):
+        from unittest.mock import patch
+        with patch('desispec.inventory.target_tiles') as mock_tt:
+            mock_tt.return_value = Table()
+            self._run_main(['tiles', '--filename', self.h5file, '--radec', '10.0,0.0,60.0'])
+            mock_tt.assert_called_once()
+            radec = mock_tt.call_args.kwargs['radec']
+            self.assertAlmostEqual(radec[0], 10.0)
+
+    def test_healpix_targetids(self):
+        from unittest.mock import patch
+        with patch('desispec.inventory.target_healpix') as mock_th:
+            mock_th.return_value = Table()
+            self._run_main(['healpix', '--filename', self.h5file, '--targetids', '1001'])
+            mock_th.assert_called_once()
+            tids = mock_th.call_args.kwargs['targetids']
+            self.assertIn(1001, tids)
+
+    def test_healpix_radec(self):
+        from unittest.mock import patch
+        with patch('desispec.inventory.target_healpix') as mock_th:
+            mock_th.return_value = Table()
+            self._run_main(['healpix', '--filename', self.h5file, '--radec', '10.0,0.0,60.0'])
+            mock_th.assert_called_once()
 
 
 if __name__ == '__main__':

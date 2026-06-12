@@ -620,7 +620,7 @@ def main():
 
     if args.subcommand in ('tiles', 'healpix'):
         #- can't set both --targetids and --radec
-        assert (args.targetids is None) or (args.ra_dec_radius is None)
+        assert (args.targetids is None) or (args.radec is None)
 
         if args.radec is not None:
             ra_dec_radius = parse_radec(args.radec)
@@ -628,7 +628,7 @@ def main():
             ra_dec_radius = None
 
         if args.targetids is not None:
-            targetids = np.array([int(t) for t in args.targetid.split(',')])
+            targetids = np.array([int(t) for t in args.targetids.split(',')])
         else:
             targetids = None
 
@@ -639,7 +639,7 @@ def main():
     elif args.subcommand == 'tiles':
         print(target_tiles(targetids=targetids, radec=ra_dec_radius, filename=args.filename))
     elif args.subcommand == 'healpix':
-        print(target_healpix(targetids, radec=ra_dec_radius, filename=args.filename))
+        print(target_healpix(targetids=targetids, radec=ra_dec_radius, filename=args.filename))
     else:
         parser.print_help()
 
