@@ -471,7 +471,7 @@ class TestSpectra(unittest.TestCase):
             fibermap=self.fmap1, meta=self.meta, extra=self.extra)
 
         write_spectra(self.coaddfile, spec)        # coadd-*.fits
-        self.redshifts.write(self.redshiftfile)    # redrock-*.fits
+        self.redshifts.write(self.redshiftfile, overwrite=True)    # redrock-*.fits
 
         #- Test reading redshifts from a companion redrock*.fits file
         test = read_spectra(self.coaddfile, return_redshifts=True)
@@ -890,10 +890,14 @@ class TestSpectra(unittest.TestCase):
                          'cumulative')
         self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
                          'healpix')
-        #- tiles/cumulative trumps healpix
+        self.assertEqual(spgrp(['SURVEY', 'PROGRAM', 'UNIQPIX', 'TARGETID'])[0],
+                         'uniqpix')
+        #- tiles/cumulative trumps healpix and uniqpix
         self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
                          'cumulative')
         self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'FIBER', 'SURVEY', 'PROGRAM', 'HEALPIX', 'TARGETID'])[0],
+                         'cumulative')
+        self.assertEqual(spgrp(['TILEID', 'LASTNIGHT', 'PETAL_LOC', 'SURVEY', 'PROGRAM', 'UNIQPIX', 'TARGETID'])[0],
                          'cumulative')
 
         with self.assertRaises(ValueError):
@@ -982,6 +986,70 @@ class TestSpectra(unittest.TestCase):
         del targets.meta['PROGRAM']
         with self.assertRaises(ValueError):
             spectra6 = read_spectra_parallel(targets, nproc=2)
+
+    def test_read_spectra_parallel_uniqpix(self):
+        """test parallel uniqpix-based spectra I/O"""
+
+        #- setup two uniqpix pixels of targets
+        #- uniqpix = 4*nside**2 + ipix (UNIQ healpix scheme)
+        nspec = 5
+        survey = 'main'
+        program = 'dark'
+        upix1 = 4*16**2 + 100  # nside=16, hpix=100 -> upix=1124
+        upix2 = 4*16**2 + 200  # nside=16, hpix=200 -> upix=1224
+
+        sp1 = get_blank_spectra(nspec)
+        sp1.fibermap['TARGETID'] = 1000 + np.arange(nspec)
+        sp1.meta['SURVEY'] = survey
+        sp1.meta['PROGRAM'] = program
+        file1 = findfile('coadd', uniqpix=upix1, survey=survey, faprogram=program)
+
+        sp2 = get_blank_spectra(nspec)
+        sp2.fibermap['TARGETID'] = 2000 + np.arange(nspec)
+        sp2.meta['SURVEY'] = survey
+        sp2.meta['PROGRAM'] = program
+        file2 = findfile('coadd', uniqpix=upix2, survey=survey, faprogram=program)
+
+        write_spectra(file1, sp1)
+        write_spectra(file2, sp2)
+
+        #- create targets table, purposefully in different order than
+        #- they appear in the files
+        targets = Table()
+        targets['TARGETID'] = [1001, 1000, 2002, 2001]
+        targets['UNIQPIX'] = [upix1, upix1, upix2, upix2]
+        targets['SURVEY'] = survey
+        targets['PROGRAM'] = program
+
+        #- basic parallel read
+        spectra = read_spectra_parallel(targets, nproc=2)
+        self.assertEqual(len(spectra), len(targets))
+        self.assertTrue(np.all(spectra.fibermap['TARGETID'] == targets['TARGETID']))
+        self.assertTrue(np.all(spectra.fibermap['UNIQPIX'] == targets['UNIQPIX']))
+
+        #- read serially instead of parallel
+        spectra2 = read_spectra_parallel(targets, nproc=1)
+        self.assertTrue(np.all(spectra2.fibermap == spectra.fibermap))
+
+        #- test that input order is preserved when shuffled
+        for ii in ([0, 3, 2, 1], [3, 2, 1, 0], [3, 1, 0, 2], [1, 3, 2, 0]):
+            sp = read_spectra_parallel(targets[ii], nproc=2)
+            self.assertTrue(np.all(sp.fibermap['TARGETID'] == targets['TARGETID'][ii]))
+
+        #- use header for SURVEY and PROGRAM if not in columns
+        targets.meta['SURVEY'] = survey
+        targets.meta['PROGRAM'] = program
+        targets.remove_column('SURVEY')
+        targets.remove_column('PROGRAM')
+
+        spectra3 = read_spectra_parallel(targets, nproc=2)
+        self.assertTrue(np.all(spectra3.fibermap == spectra.fibermap))
+
+        #- but we do have to find 'SURVEY' and 'PROGRAM' somewhere
+        del targets.meta['SURVEY']
+        del targets.meta['PROGRAM']
+        with self.assertRaises(ValueError):
+            read_spectra_parallel(targets, nproc=2)
 
     def test_read_spectra_parallel_tiles(self):
         """test parallel tile-based spectra I/O"""
@@ -1191,6 +1259,50 @@ class TestSpectra(unittest.TestCase):
         sp = read_spectra_parallel(targets[ii], nproc=2)
         for col in targets.colnames:
             self.assertTrue(np.all(sp.fibermap[col] == targets[col][ii]))
+
+        #- targets tables across various uniqpix, surveys, programs
+        #- uniqpix = 4*nside**2 + ipix (UNIQ healpix scheme)
+        nspec = 5
+        upix1 = 4*16**2 + 100  # nside=16, hpix=100 -> upix=1124
+        upix2 = 4*16**2 + 200  # nside=16, hpix=200 -> upix=1224
+
+        t1 = Table()
+        t1['TARGETID'] = 1000 + np.arange(nspec)
+        t1['UNIQPIX'] = upix1
+        t1['SURVEY'] = 'main'
+        t1['PROGRAM'] = 'bright'
+
+        t2 = t1.copy()
+        t2['PROGRAM'] = 'dark'
+
+        t3 = t1.copy()
+        t3['SURVEY'] = 'sv3'
+
+        tupix1 = vstack([t1, t2, t3])
+        tupix2 = tupix1.copy()
+        tupix2['TARGETID'] += 1000
+        tupix2['UNIQPIX'] = upix2
+
+        targets = vstack([tupix1, tupix2])
+
+        for tt in targets.group_by(['UNIQPIX', 'SURVEY', 'PROGRAM']).groups:
+            upix = tt['UNIQPIX'][0]
+            survey = tt['SURVEY'][0]
+            program = tt['PROGRAM'][0]
+            filename = findfile('coadd', uniqpix=upix, survey=survey, faprogram=program)
+            sp = get_blank_spectra(len(tt))
+            sp.fibermap['TARGETID'] = tt['TARGETID']
+            sp.meta['SURVEY'] = survey
+            sp.meta['PROGRAM'] = program
+
+            write_spectra(filename, sp)
+
+        ii = np.arange(len(targets))
+        cols = targets.colnames
+        for test in range(10):
+            np.random.shuffle(ii)
+            sp = read_spectra_parallel(targets[ii], nproc=2)
+            self.assertTrue(np.all(sp.fibermap[cols] == targets[ii]))
 
         #- targets tables across various tileids
         nspec = 5

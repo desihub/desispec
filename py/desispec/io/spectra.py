@@ -293,7 +293,13 @@ def read_spectra(
     if return_redshifts:
         redshift_ext_exists = "REDSHIFTS" in hdu_names
         if not redshift_ext_exists:
-            redrock_file = replace_prefix(infile, 'coadd', 'redrock')
+            _, filename = os.path.split(infile)
+            if filename.startswith('coadd'):
+                redrock_file = replace_prefix(infile, 'coadd', 'redrock')
+            elif filename.startswith('spectra'):
+                redrock_file = replace_prefix(infile, 'spectra', 'redrock')
+            else:
+                raise ValueError(f'Cannot determine redrock file from {filename}; expected coadd or spectra prefix')
             if not os.path.isfile(redrock_file):
                 raise IOError("{} does not exist".format(redrock_file))
         else:
@@ -763,12 +769,12 @@ def read_tile_spectra(tileid, night=None, specprod=None, reduxdir=None, coadd=Fa
         return spectra
 
 def determine_specgroup(colnames):
-    """Determine specgroup 'healpix' or 'cumulative' based upon column names
+    """Determine specgroup 'healpix', 'uniqpix', or 'cumulative' based upon column names
 
     Args:
         colnames: list of str column names
 
-    Returns (specgroup, keycols) where specgroup is 'cumulative' or 'healpix',
+    Returns (specgroup, keycols) where specgroup is 'cumulative', 'healpix', or 'uniqpix',
     and keycols is list of columns to use for unique primary key.
     """
     colnames = set(colnames) # for faster lookup
@@ -781,8 +787,10 @@ def determine_specgroup(colnames):
             raise ValueError(f'TILEID+LASTNIGHT requires either FIBER or PETAL_LOC+TARGETID')
     elif 'HEALPIX' in colnames:
         return 'healpix', ('HEALPIX', 'SURVEY', 'PROGRAM', 'TARGETID')
+    elif 'UNIQPIX' in colnames:
+        return 'uniqpix', ('UNIQPIX', 'SURVEY', 'PROGRAM', 'TARGETID')
     else:
-        raise ValueError(f'Unable to determine healpix or tiles(cumulative) from columns {colnames}')
+        raise ValueError(f'Unable to determine healpix, uniqpix, or tiles(cumulative) from columns {colnames}')
 
 def split_targets_by_file(targets, n, specgroup='healpix'):
     """
@@ -791,12 +799,13 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
     Args:
         targets (table): table of targets; see notes for columns
         n (int): number of groups to split into
-        specgroup (str): 'healpix', 'tiles', or 'cumulative'
+        specgroup (str): 'healpix', 'uniqpix', 'tiles', or 'cumulative'
 
     Returns: list of n subtables, grouped by file
 
     Notes: if specgroup=='healpix', group by HEALPIX, SURVEY, and PROGRAM;
-    if spectroup=='tiles' or 'cumulative', group by 'TILEID', 'LASTNIGHT',
+    if specgroup=='uniqpix', group by UNIQPIX, SURVEY, and PROGRAM;
+    if specgroup=='tiles' or 'cumulative', group by 'TILEID', 'LASTNIGHT',
     and 'PETAL_LOC'.  Additional columns are allowed and propagated,
     but not used.
     """
@@ -804,6 +813,8 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
     specgroup, keycols = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':
         filecolumns = ('HEALPIX', 'SURVEY', 'PROGRAM')
+    elif specgroup == 'uniqpix':
+        filecolumns = ('UNIQPIX', 'SURVEY', 'PROGRAM')
     elif specgroup in ('tiles', 'cumulative'):
         filecolumns = ('TILEID', 'LASTNIGHT', 'PETAL_LOC')
 
@@ -815,17 +826,19 @@ def split_targets_by_file(targets, n, specgroup='healpix'):
 
     return target_tables
 
-def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
+def _readspec_pixels(targets, prefix, rdspec_kwargs, specprod=None, pixcol='HEALPIX'):
     """
-    Read healpix-based spectra for targets table
+    Read healpix- or uniqpix-based spectra for targets table
 
     Args:
-        targets (table): table of targets with TARGETID,HEALPIX,SURVEY,PROGRAM
+        targets (table): table of targets with TARGETID,SURVEY,PROGRAM, and
+            either HEALPIX or UNIQPIX
         prefix (str): 'coadd' or 'spectra'
         rdspec_kwargs (dict): additional key/value args to pass to read_spectra
 
     Options:
         specprod (str): production name or full path to production
+        pixcol (str): pixel column name, either 'HEALPIX' or 'UNIQPIX'
 
     Returns: Spectra for targets table
 
@@ -836,14 +849,16 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
 
     log = get_logger()
 
+    findfile_kwarg = 'healpix' if pixcol == 'HEALPIX' else 'uniqpix'
+
     spectra = list()
-    for zz in targets.group_by(['HEALPIX', 'SURVEY', 'PROGRAM']).groups:
-        hpix = zz['HEALPIX'][0]
+    for zz in targets.group_by([pixcol, 'SURVEY', 'PROGRAM']).groups:
+        pix = zz[pixcol][0]
         survey = zz['SURVEY'][0]
         program = zz['PROGRAM'][0]
         targetids = np.array(zz['TARGETID'])
 
-        specfile = findfile(prefix, healpix=hpix, survey=survey,
+        specfile = findfile(prefix, **{findfile_kwarg: pix}, survey=survey,
                             faprogram=program, readonly=True, specprod=specprod)
         log.debug('Reading spectra from %s', specfile)
         sp = read_spectra(specfile, targetids=targetids, **rdspec_kwargs)
@@ -852,8 +867,8 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
             log.warning(f'No matching targets found in {specfile}')
             continue
 
-        if 'HEALPIX' not in sp.fibermap.colnames:
-            sp.fibermap['HEALPIX'] = hpix
+        if pixcol not in sp.fibermap.colnames:
+            sp.fibermap[pixcol] = pix
 
         #- String columns force dtype to match number of chars to input targets
         if 'SURVEY' not in sp.fibermap.colnames:
@@ -874,7 +889,7 @@ def _readspec_healpix(targets, prefix, rdspec_kwargs, specprod=None):
     spectra = stack_spectra(spectra)
 
     assert np.all(spectra.fibermap['TARGETID'] == targets['TARGETID'])
-    assert np.all(spectra.fibermap['HEALPIX'] == targets['HEALPIX'])
+    assert np.all(spectra.fibermap[pixcol] == targets[pixcol])
     assert np.all(spectra.fibermap['SURVEY'] == targets['SURVEY'])
     assert np.all(spectra.fibermap['PROGRAM'] == targets['PROGRAM'])
 
@@ -987,14 +1002,15 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     serially but still read each file only once to get the necessary targets.
 
     If targets table has columns TARGETID,TILEID,LASTNIGHT,PETAL_LOC,
-    then specta will be read from tiles/cumulative files.  Otherwise,
+    then spectra will be read from tiles/cumulative files.  Otherwise,
     if targets has columns TARGETID,SURVEY,PROGRAM,HEALPIX (or HPXPIXEL),
-    spectra will be read from healpix-based spectra.  Additional columns
-    are allowed and ignored.
+    spectra will be read from healpix-based spectra.  If targets has
+    TARGETID,SURVEY,PROGRAM,UNIQPIX, spectra will be read from
+    uniqpix-based spectra.  Additional columns are allowed and ignored.
 
     determine_specgroup(colnames) is used to determine tiles/cumulative
-    vs. healpix and can be used to pre-check how a targets table will
-    be interpreted.
+    vs. healpix vs. uniqpix and can be used to pre-check how a targets
+    table will be interpreted.
     """
     log = get_logger()
 
@@ -1022,9 +1038,14 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     #- Determine which reader to use
     specgroup, keycols = determine_specgroup(targets.dtype.names)
     if specgroup == 'healpix':
-        readspec = _readspec_healpix
+        readspec = _readspec_pixels
+        pixcol = 'HEALPIX'
+    elif specgroup == 'uniqpix':
+        readspec = _readspec_pixels
+        pixcol = 'UNIQPIX'
     elif specgroup in ('tiles', 'cumulative'):
         readspec = _readspec_tiles
+        pixcol = None
 
     #- promote columns from targets.meta if needed
     #- e.g. target.meta['SURVEY'] -> targets['SURVEY']
@@ -1058,8 +1079,11 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     target_groups = [t for t in target_groups if len(t)>0]
     nproc = min(nproc, len(target_groups))
 
-    #- list of (targets, prefix, rdspec_kwargs)
-    arglist = [(t, prefix, rdspec_kwargs, specprod) for t in target_groups]
+    #- list of args for readspec; pixel-based readers take an extra pixcol arg
+    if pixcol is not None:
+        arglist = [(t, prefix, rdspec_kwargs, specprod, pixcol) for t in target_groups]
+    else:
+        arglist = [(t, prefix, rdspec_kwargs, specprod) for t in target_groups]
 
     if comm is not None:
         #- MPI parallelism
