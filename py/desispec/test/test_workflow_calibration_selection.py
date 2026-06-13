@@ -519,6 +519,62 @@ class TestWorkflowCalibrationSelection(unittest.TestCase):
         self.assertEqual(cal_etable['EXPID'][idark], 101)
 
 
+    def test_cte_flats_interleaved(self):
+        """
+        Test that CTE flats interleaved between lamp flat sequences do not
+        disrupt flat set detection.
+
+        Example: night 20260415 where CTE flats were taken before redoing
+        lamp 3 flats, i.e. CTE flats appeared between the last two lamp sets.
+        """
+        from desispec.workflow.calibration_selection import find_best_arc_flat_sets
+
+        arcflatset = self._make_arcflatset_etable()
+        expected = self._get_cleaned_table(arcflatset)
+
+        # Insert CTE flat rows into the EXPID gaps between lamp flat sequences.
+        # _make_arcflatset_etable uses nflatsperset=3, nflatsets=4, flatflatgap=3
+        # so EXPID gaps exist between each consecutive pair of lamp sets.
+        isflat = np.array(arcflatset['OBSTYPE']) == 'flat'
+        flat_expids = sorted(arcflatset['EXPID'][isflat])
+
+        nflatsperset = 3
+        nflatsets = 4
+
+        # Compute interleaved CTE EXPID and MJD-OBS values from the gap slots
+        flat_mjd_by_expid = {int(row['EXPID']): float(row['MJD-OBS'])
+                             for row in arcflatset[isflat]}
+        cte_expids, cte_mjds = [], []
+        for i in range(nflatsets - 1):
+            last_idx = i * nflatsperset + nflatsperset - 1
+            next_idx = (i + 1) * nflatsperset
+            last_expid = int(flat_expids[last_idx])
+            next_expid = int(flat_expids[next_idx])
+            # Gap EXPID is always available since flatflatgap >= 2
+            cte_expids.append(last_expid + 1)
+            cte_mjds.append((flat_mjd_by_expid[last_expid]
+                             + flat_mjd_by_expid[next_expid]) / 2.)
+
+        ncte = len(cte_expids)
+        cte_table = Table()
+        cte_table['EXPID'] = cte_expids
+        cte_table['SEQNUM'] = [1] * ncte
+        cte_table['SEQTOT'] = [1] * ncte
+        cte_table['PROGRAM'] = ['led03 flat for cte check'] * ncte
+        cte_table['EXPTIME'] = [1.0] * ncte
+        cte_table['LASTSTEP'] = ['all'] * ncte
+        cte_table['CAMWORD'] = ['a0123456789'] * ncte
+        cte_table['BADCAMWORD'] = [''] * ncte
+        cte_table['BADAMPS'] = [''] * ncte
+        cte_table['OBSTYPE'] = np.array(['flat'] * ncte, dtype='<U7')
+        cte_table['MJD-OBS'] = cte_mjds
+
+        combined = vstack([arcflatset, cte_table])
+        combined.sort(['EXPID'])
+
+        best = find_best_arc_flat_sets(combined)
+        self._test_tables_equal(expected, best)
+
     def test_select_calib_dark(self):
         """Test workflow.calibration_selection.select_calib_dark"""
         from desispec.workflow.calibration_selection import select_calib_darks
