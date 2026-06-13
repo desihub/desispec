@@ -1,5 +1,20 @@
 """
-desispec.inventory - TARGETID -> (SURVEY,PROGRAM,HEALPIX) and (TILEID,FIBER)
+desispec.inventory - tools for rapidly locating targets and spectra within a
+DESI spectroscopic production.
+
+Supports both healpix-based productions (e.g. loa, which store targets by
+HEALPIX pixel at nside=64) and uniqpix-based productions (e.g. matterhorn+,
+which store targets by survey/program-specific UNIQPIX pixels).
+
+Typical usage::
+
+    from desispec.inventory import target_tiles, target_healpix, radec2targetids
+
+    # look up which tiles observed a set of targets
+    tiles = target_tiles(targetids=[12345, 67890], filename='target_inventory.h5')
+
+    # cone search: which targets are within 30 arcsec of a position?
+    targetids = radec2targetids((150.1, 2.3, 30.0), filename='target_inventory.h5')
 """
 
 import os
@@ -15,12 +30,17 @@ from desispec.io.meta import faflavor2program, findfile
 
 def _inventory_tiledir(tiledir):
     """
-    Generate tiles, healpix, and radec Tables for data in tiledir
+    Read FIBERMAP data from the most recent night in a cumulative tile directory.
 
     Args:
-        tiledir (str): path to a directory of tile redshifts
+        tiledir (str): path to a cumulative tile directory (e.g.
+            ``{specprod}/tiles/cumulative/1234``); the most recent
+            night subdirectory (20XXXXXX) is selected automatically.
 
-    Returns Table with columns TARGETID, SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC
+    Returns:
+        astropy.table.Table: table with columns TARGETID, FIBER,
+            TARGET_RA, TARGET_DEC, TILEID, LASTNIGHT, and SURVEY and/or
+            PROGRAM where available in the coadd headers.
     """
     tiledir = sorted(glob.glob(f'{tiledir}/20??????'))[-1]  #- most recent tiledir/NIGHT/
     print(f'Loading {tiledir}')
@@ -53,14 +73,14 @@ def _inventory_tiledir(tiledir):
 
 def _get_unique_indices(arr):
     """
-    Return dict of indices for each unique element in an array
+    Return a dict mapping each unique element to its indices in the array.
 
     Args:
-        arr: numpy array
+        arr (numpy.ndarray): input array.
 
-    Returns dict(unique_value) = list of indices in arr with that value
-
-    From LBL CBorg Coder AI Model
+    Returns:
+        dict: keys are unique values from arr; values are numpy arrays of
+            integer indices where that value appears.
     """
 
     # Get unique values and inverse indices
@@ -80,14 +100,23 @@ def _get_unique_indices(arr):
 
 def create_inventory_zcat(zcat, outfile, ngroups=1000, hpix2upix=None):
     """
-    Create an inventory file given a zall-tilecumulative redshift catalog file
+    Create an inventory HDF5 file from a zcatalog Table.
 
     Args:
-        zcat Table: zcatalog Table with columns TARGETID, SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC, and HEALPIX or UNIQPIX
-        outfile (str): output inventory hdf5 filepath
+        zcat (astropy.table.Table): zcatalog table with columns TARGETID,
+            SURVEY, PROGRAM, TILEID, LASTNIGHT, FIBER, TARGET_RA, TARGET_DEC,
+            and either HEALPIX or UNIQPIX.
+        outfile (str): output inventory HDF5 filepath; written atomically via
+            a temporary file.
+        ngroups (int): number of TARGETID subgroups; targets are assigned to
+            subgroup ``TARGETID % ngroups``. Default 1000.
+        hpix2upix (dict or None): nested dict
+            ``{survey: {program: array}}`` mapping healpix index to uniqpix
+            value for each survey/program combination. Required when zcat
+            contains UNIQPIX; must have ``zcat.meta['NSIDEMAX']`` set.
 
-    Options:
-        ngroups (int): number of TARGETID subgroups
+    Returns:
+        None
     """
     print('Converting str -> bytes')
     zcat['SURVEY'] = zcat['SURVEY'].astype(bytes)
@@ -164,7 +193,22 @@ def create_inventory_zcat(zcat, outfile, ngroups=1000, hpix2upix=None):
 
 def write_inventory(filename, inventory, ngroups, hpix2upix=None, nside=None):
     """
-    Write inventory struction to filename; include ngroups in attr metadata
+    Write an inventory dict to an HDF5 file atomically.
+
+    Args:
+        filename (str): output HDF5 filepath.
+        inventory (dict): nested dict ``{group: {subgroup: Table}}`` defining
+            the HDF5 group structure to write.
+        ngroups (int): number of TARGETID subgroups, stored as a file-level
+            HDF5 attribute.
+        hpix2upix (dict or None): nested dict
+            ``{survey: {program: array}}`` of healpix-to-uniqpix mappings.
+            Written under ``hpix2upix/{survey}/{program}`` if provided.
+        nside (int or None): healpix nside stored as an attribute on the
+            ``hpix2upix`` group. Required when hpix2upix is not None.
+
+    Returns:
+        None
     """
     tmpfile = filename+'.tmp'
     with h5py.File(tmpfile, 'w') as hx:
@@ -190,10 +234,36 @@ def write_inventory(filename, inventory, ngroups, hpix2upix=None, nside=None):
 
 def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8, nrows=None):
     """
-    Create target inventory from specprod that doesn't have a zall-tilecumulative file
+    Create a target inventory HDF5 file from a spectroscopic production.
 
-    TODO: document; WIP
-    nrows = number of rows to read from zcat
+    Prefers a ``zall-tilecumulative`` FITS catalog if one exists; otherwise
+    reads FIBERMAP data from individual tile directories in parallel.
+    Automatically detects whether the production uses healpix (nside=64) or
+    uniqpix pixel indexing based on the presence of ``spectra/`` vs
+    ``healpix/`` subdirectories.
+
+    Args:
+        outfile (str): output inventory HDF5 filepath.
+        specprod (str or None): spectroscopic production name, overrides
+            ``$SPECPROD``.
+        ntiles (int or None): if set, limit to the first ntiles tiles.
+            When using the zcat path this selects the first ntiles unique
+            TILEIDs; when reading tile directories it takes the first ntiles
+            directories alphabetically.
+        ngroups (int): number of TARGETID subgroups for the inventory index.
+            Default 1000.
+        nproc (int): number of parallel processes when reading tile
+            directories. Default 8. Ignored when a zcat file is found.
+        nrows (int or None): if set, read only the first nrows rows from the
+            zcat FITS file. Intended for testing; ignored when reading tile
+            directories.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: if neither ``spectra/`` nor ``healpix/`` directories are
+            found under the specprod root.
     """
     import healpy
     import desispec.io
@@ -267,9 +337,32 @@ def create_inventory(outfile, specprod=None, ntiles=None, ngroups=1000, nproc=8,
     create_inventory_zcat(zcat, outfile, ngroups=ngroups, hpix2upix=hpix2upix)
 
 def update_inventory(filename, specprod=None):
+    """
+    Update an existing inventory file with new data from specprod.
+
+    Args:
+        filename (str): path to an existing inventory HDF5 file.
+        specprod (str or None): spectroscopic production name, overrides
+            ``$SPECPROD``.
+
+    Raises:
+        NotImplementedError: always; not yet implemented.
+    """
     raise NotImplementedError
 
 def _create_header(radec, specprod):
+    """
+    Build a metadata dict for attaching to result table metadata.
+
+    Args:
+        radec (tuple or None): (RA, DEC, RADIUS_arcsec) if a cone search was
+            performed, else None.
+        specprod (str or None): spectroscopic production name; falls back to
+            ``$SPECPROD`` environment variable if None.
+
+    Returns:
+        dict: keys RA, DEC, RADIUS (if radec provided) and SPECPROD.
+    """
     header = dict()
     if radec is not None:
         header['RA'] = radec[0]
@@ -285,20 +378,28 @@ def _create_header(radec, specprod):
 
 def target_tiles(targetids=None, radec=None, filename=None, inventory=None, specprod=None):
     """
-    Return table of TARGETID,TILEID,LASTNIGHT,FIBER
+    Return tile observations for one or more targets.
+
+    Exactly one of targetids or radec must be provided.
 
     Args:
-        targetids (int or array of int): TARGETID(s)
-        radec (tuple): RA_degrees, DEC_degrees, RADIUS_arcsec
+        targetids (int or array-like of int, optional): TARGETID(s) to look up.
+        radec (tuple, optional): (RA_deg, DEC_deg, RADIUS_arcsec) cone search;
+            all targets within the cone are returned.
+        filename (str, optional): path to the inventory HDF5 file. Derived
+            from specprod or ``$SPECPROD`` if not provided.
+        inventory (dict, optional): pre-loaded inventory dict (as returned by
+            loading the HDF5 file into memory). If provided, filename is not
+            opened. Expected keys: ``meta`` (with ``ngroups``),
+            ``target_tiles``.
+        specprod (str, optional): spectroscopic production name, used to find
+            the default inventory file and stored in result metadata.
 
-    Options:
-        filename (str): inventory filename
-        inventory (dict): inventory structure pre-loaded in memory
-        specprod (str): spectroscopic production
-
-    Returns Table(TARGETID,TILEID,LASTNIGHT,FIBER)
-
-    Must input `targetids` or `radec` but not both.
+    Returns:
+        astropy.table.Table: columns TARGETID, TILEID, LASTNIGHT, FIBER.
+            One row per (target, tile) observation. Empty table with correct
+            schema if no matches found. Table metadata includes RA, DEC,
+            RADIUS (if radec was given) and SPECPROD.
     """
     from desimodel.footprint import radec2pix
     assert (targetids is None) or (radec is None)
@@ -386,19 +487,25 @@ WHERE q3c_radial_query(p.ra, p.dec, {ra}, {dec}, {radius_deg});
 
 def target_healpix(targetids=None, radec=None, filename=None, specprod=None):
     """
-    Return table of TARGETID,SURVEY,PROGRAM,HEALPIX
+    Return the pixel and survey/program membership for one or more targets.
+
+    Exactly one of targetids or radec must be provided.
 
     Args:
-        targetids (int or array of int): TARGETID(s)
-        radec (tuple): RA_degrees, DEC_degrees, RADIUS_arcsec
+        targetids (int or array-like of int, optional): TARGETID(s) to look up.
+        radec (tuple, optional): (RA_deg, DEC_deg, RADIUS_arcsec) cone search;
+            all targets within the cone are returned.
+        filename (str, optional): path to the inventory HDF5 file. Derived
+            from specprod or ``$SPECPROD`` if not provided.
+        specprod (str, optional): spectroscopic production name, used to find
+            the default inventory file and stored in result metadata.
 
-    Options:
-        filename (str): inventory filename
-        specprod (str): spectroscopic production
-
-    Returns Table(TARGETID,SURVEY,PROGRAM,HEALPIX)
-
-    Must input `targetids` or `radec` but not both.
+    Returns:
+        astropy.table.Table: columns TARGETID, SURVEY, PROGRAM, and either
+            HEALPIX (healpix-based inventory) or UNIQPIX (uniqpix-based
+            inventory). Empty table with correct schema if no matches found.
+            Table metadata includes RA, DEC, RADIUS (if radec was given)
+            and SPECPROD.
     """
     from desimodel.footprint import radec2pix
     assert (targetids is None) or (radec is None)
@@ -470,16 +577,21 @@ WHERE q3c_radial_query(p.ra, p.dec, {ra}, {dec}, {radius_deg});
 
 def radec2targetids(radec, filename=None, specprod=None):
     """
-    Return TARGETIDs in ra,dec[,radius] search
+    Return TARGETIDs of targets within a cone search.
+
+    Works with both healpix-based and uniqpix-based inventory files.
 
     Args:
-        radec (tuple): RA,DEC or RA,DEC,RADIUS_arcsec
+        radec (tuple): (RA_deg, DEC_deg) or (RA_deg, DEC_deg, RADIUS_arcsec).
+            Default radius is 10 arcsec if not provided.
+        filename (str, optional): path to the inventory HDF5 file. Derived
+            from specprod or ``$SPECPROD`` if not provided.
+        specprod (str, optional): spectroscopic production name, used to find
+            the default inventory file.
 
-    Options:
-        filename (str): inventory filename
-        specprod (str): spectroscopic production name
-
-    Return array of TARGETIDs
+    Returns:
+        numpy.ndarray: integer array of TARGETIDs within the cone. Empty
+            array if no targets found.
     """
     from healpy import ang2vec, query_disc
     from astropy.coordinates import SkyCoord
@@ -533,12 +645,20 @@ def radec2targetids(radec, filename=None, specprod=None):
 
 def _get_default_inventory_filename(specprod=None):
     """
-    Return default inventory filename
+    Return the path to the default inventory file for a specprod.
+
+    Searches in order: ``{specprod_root}/target_inventory.h5``, then
+    ``$DESI_TARGET_INVENTORY_DIR/target_inventory-{specprod}.h5``.
 
     Args:
-        specprod (str): overrides $SPECPROD
+        specprod (str, optional): spectroscopic production name, overrides
+            ``$SPECPROD``.
 
-    Returns filepath to inventory file (which may not yet exist)
+    Returns:
+        str: path to the first inventory file found.
+
+    Raises:
+        IOError: if no inventory file is found in any of the search locations.
     """
     import desispec.io
 
@@ -559,7 +679,20 @@ def _get_default_inventory_filename(specprod=None):
 
 def parse_radec(radec):
     """
-    interpret radec as RA,DEC or RA,DEC,RADIUS (str, list, or tuple)
+    Parse a radec specification into (RA, DEC, RADIUS) floats.
+
+    Args:
+        radec (str, list, or tuple): RA and DEC in degrees, with an optional
+            radius in arcsec. May be a comma-separated string
+            (``"150.1,2.3"`` or ``"150.1,2.3,30.0"``), or a list/tuple with
+            2 or 3 elements.
+
+    Returns:
+        tuple: (RA_deg, DEC_deg, RADIUS_arcsec) as floats. Default radius is
+            10.0 arcsec if not provided.
+
+    Raises:
+        ValueError: if radec does not have 2 or 3 elements.
     """
     if isinstance(radec, str):
         radec = radec.split(',')
