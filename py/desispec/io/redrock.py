@@ -73,13 +73,17 @@ def read_redrock_targetcat(tcat, fmcols=None, specprod=None):
     specgroup, keycols = determine_specgroup(tcat.colnames)
 
     zcat_tables = list()
-    if specgroup == 'healpix':
+    if specgroup in ('healpix', 'uniqpix'):
+        pixcol = 'HEALPIX' if specgroup == 'healpix' else 'UNIQPIX'
         keycols = ['TARGETID', 'SURVEY', 'PROGRAM']
-        for tt in tcat.group_by(('HEALPIX', 'SURVEY', 'PROGRAM')).groups:
-            healpix = tt['HEALPIX'][0]
+        for tt in tcat.group_by((pixcol, 'SURVEY', 'PROGRAM')).groups:
+            pix = tt[pixcol][0]
             survey = tt['SURVEY'][0]
             program = tt['PROGRAM'][0]
-            redrockfile = findfile('redrock', healpix=healpix, survey=survey, faprogram=program, specprod=specprod)
+            if specgroup == 'uniqpix':
+                redrockfile = findfile('redrock', uniqpix=pix, survey=survey, faprogram=program, specprod=specprod)
+            else:
+                redrockfile = findfile('redrock', healpix=pix, survey=survey, faprogram=program, specprod=specprod)
             zcat = read_redrock(redrockfile, fmcols=fmcols)
             keep = np.isin(zcat['TARGETID'], tt['TARGETID'])
             zcat = zcat[keep]
@@ -136,7 +140,7 @@ def read_redrock_targetcat(tcat, fmcols=None, specprod=None):
         zcat = zcat[ii]
 
     #- Drop any bookkeeping columns that weren't part of original request
-    for extracol in ['TILEID', 'FIBER', 'SURVEY', 'PROGRAM', 'HEALPIX']:
+    for extracol in ['TILEID', 'FIBER', 'SURVEY', 'PROGRAM', 'HEALPIX', 'UNIQPIX']:
         if (extracol in zcat.colnames) and ((fmcols is None) or (extracol not in fmcols)):
             zcat.remove_column(extracol)
 
