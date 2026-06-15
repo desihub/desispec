@@ -1769,7 +1769,8 @@ def create_petalnz_pdf(
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
-        faprgrm = hdr["FAPRGRM"].lower().replace("1b", "") # AR merge bright+bright1b, dark+dark1b
+        faprgrm_orig = hdr["FAPRGRM"].lower()
+        faprgrm = faprgrm_orig.replace("1b", "") # AR merge bright+bright1b, dark+dark1b
         if faprgrm not in ["bright", "dark"]:
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
@@ -1811,6 +1812,8 @@ def create_petalnz_pdf(
                         sel |= (d["BGS_TARGET"] & bgs_mask[msk]) > 0
                 if faprgrm == "dark":
                     for msk in ["LGE", "LRG", "ELG", "QSO"]:
+                        if msk == "LGE" and faprgrm_orig != "dark1b":
+                            continue
                         sel |= (d["DESI_TARGET"] & desi_mask[msk]) > 0
                 log.info("selecting {} tracer targets from {}".format(sel.sum(), fn))
                 d = d[sel]
