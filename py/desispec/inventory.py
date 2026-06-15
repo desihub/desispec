@@ -675,7 +675,7 @@ def _get_default_inventory_filename(specprod=None):
             return filename
     #- Raise an error if none are found
     else:
-        raise IOError(f'Unable to find {specprod} inventory file')
+        raise IOError(f'Unable to find {specprod} inventory file; searched {files}')
 
 def parse_radec(radec):
     """
