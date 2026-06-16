@@ -1769,7 +1769,8 @@ def create_petalnz_pdf(
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
-        faprgrm = hdr["FAPRGRM"].lower().replace("1b", "") # AR merge bright+bright1b, dark+dark1b
+        faprgrm_orig = hdr["FAPRGRM"].lower()
+        faprgrm = faprgrm_orig.replace("1b", "") # AR merge bright+bright1b, dark+dark1b
         if faprgrm not in ["bright", "dark"]:
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
@@ -1805,6 +1806,7 @@ def create_petalnz_pdf(
                 d["SURVEY"] = np.array([survey for x in range(len(d))], dtype=object)
                 d["TILEID"] = np.array([tileid for x in range(len(d))], dtype=int)
                 d["PETAL_LOC"] = petal + np.zeros(len(d), dtype=int)
+                d["FAPRGRM"] = np.array([faprgrm_orig for x in range(len(d))], dtype=object)
                 sel = np.zeros(len(d), dtype=bool)
                 if faprgrm == "bright":
                     for msk in ["BGS_BRIGHT", "BGS_FAINT"]:
@@ -1967,6 +1969,10 @@ def create_petalnz_pdf(
                     faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
                     istracer = ds[faprgrm]["SURVEY"] == survey
                     istracer &= (ds[faprgrm][dtkey] & mask[tracer]) > 0
+                    if tracer == "LGE":
+                        istracer &= ds[faprgrm]["FAPRGRM"] == "dark1b"
+                    if tracer == "LGE" and istracer.sum() == 0:
+                        continue
                     istracer &= ds[faprgrm]["VALID"]
                     ys = np.nan + np.zeros(len(petals))
                     for petal in petals:
@@ -2051,6 +2057,10 @@ def create_petalnz_pdf(
                     faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
                     istracer = ds[faprgrm]["SURVEY"] == survey
                     istracer &= (ds[faprgrm][dtkey] & mask[tracer]) > 0
+                    if tracer == "LGE":
+                        istracer &= ds[faprgrm]["FAPRGRM"] == "dark1b"
+                    if tracer == "LGE" and istracer.sum() == 0:
+                        continue
                     istracer &= ds[faprgrm]["VALID"]
                     istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
                     bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
