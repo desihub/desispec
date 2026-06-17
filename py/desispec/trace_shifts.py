@@ -665,7 +665,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     return ox,oy,odx,oex,of,ol
 
-def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
+def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, width=7):
     """
     Prepare the reference spectrum to be used for wavelength offset
     determination. Here we convolve it to the right LSF and rescale it
@@ -716,13 +716,18 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
         hw = int(angstrom_hwidth / dwave) + 1
         wave_range = ref_wave[ipos - hw:ipos + hw + 1]
         kernels = []
+        
+        # hw is the half-width in *wavelength bins* along the dispersion axis (y-axis)
+        # hw_x is the half-width in *CCD pixels* across the cross-dispersion axis (x-axis)
+        # We must use the exact boxcar extraction width (default=7, hw_x=3) used on the data 
+        # to ensure the reference LSF has the same barycenter (and thus no systematic wavelength shift).
+        hw_x = width // 2
         for fiber in fiber_list:
             x, y = psf.xy(fiber, wave_range)
 
-            x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
-            # original code below but I don't understand y[-1]-y[0] part
-            # x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
-            y = np.tile(y, (2 * hw + 1, 1)).T
+            # Evaluate the 2D PSF over the cross-dispersion integration window [-hw_x, hw_x]
+            x = x[:,None] + np.linspace(-hw_x, hw_x, 2*hw_x+1)[None,:]
+            y = np.tile(y, (2 * hw_x + 1, 1)).T
 
             kernel2d = psf._value(x, y, fiber, central_wave)
             kernel1d = np.sum(kernel2d, axis=1)
@@ -863,7 +868,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
 
-    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
+    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
 
     log.info("fit shifts on wavelength bins")
     # define bins
@@ -874,7 +879,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     wave_for_dy = np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
-    fiber_for_psf_evaluation = flux.shape[0] //2
+    n_fibers_for_psf = 20
+    fibers_for_psf_evaluation = np.linspace(0, flux.shape[0]-1, n_fibers_for_psf).astype(int) # flux.shape[0] //2
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
@@ -888,19 +894,25 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                 prior_width_dy=prior_width_dy)
         bin_wave  = np.sum(flux_weights * wave[ok]) / flux_weights_sum
         # flux weighted wavelength of the center
-        # Computing the derivative dy/dwavelength
-        x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
-        eps =  0.1
-        x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
-        dydw = (yp - y) / eps
-        if err * dydw < 1 :
+        dydws = []
+        for cur_fiber in fibers_for_psf_evaluation:
+            # Computing the derivative dy/dwavelength averaged over fibers
+            x, y = psf.xy(cur_fiber, bin_wave)
+            eps =  0.1
+            x, yp = psf.xy(cur_fiber, bin_wave+eps)
+            dydw = (yp - y) / eps
+            dydws.append(dydw)
+        dydws = np.array(dydws)
+        dydw = dydws.mean()
+        if err * dydw < 1 : # 1 pixel error limit
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
             dwave_list = np.append(dwave_list, dwave)
             dwave_err_list = np.append(dwave_err_list, err)
-            y_for_dy=np.append(y_for_dy,y)
-            log.info(f"wave = {bin_wave}A , y={y}, measured dwave = {dwave} +- {err} A")
+            y_for_dy=np.append(y_for_dy,y)  # this is only used for printing
+            log.info(f"wave = {bin_wave:.3f}A , y={y:.3f}, measured "
+                     f"dwave = {dwave:.3f} +- {err:.3f} A")
 
     if False : # we don't need this for now
         try :
