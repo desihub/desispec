@@ -100,7 +100,7 @@ def _wrap_read_redrock(optdict):
     """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
 
-def read_redrock(rrfile, group=None, pertile=False, counter=None):
+def read_redrock(rrfile, group=None, pertile=False, counter=None, old_qn=False):
     """
     Read Redrock, emline, mgii, and qso_qn files, combining HDUs into single table
 
@@ -111,6 +111,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         group (str): add group-specific columns for cumulative, pernight, healpix
         pertile (bool): input Redrock file is single tile (not healpix)
         counter (tuple): (i,n) log loading ith file out of n
+        old_qn (bool): qso_qn file has the older QN_RR column set
 
     Returns (zcat, expfibermap) where zcat is a join of the redrock REDSHIFTS
     catalog and the coadded FIBERMAP
@@ -400,6 +401,8 @@ def parse(options=None):
             help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
     parser.add_argument('--recoadd-fibermap', action='store_true',
             help="Re-coadd FIBERMAP from spectra files")
+    parser.add_argument('--old-qn', action='store_true',
+            help="Read old qso_qn files without the newer QN_RR columns")
     parser.add_argument('--do-not-add-units', action='store_true',
             help="Don't add units to output catalog from desidatamodel "
                  "column descriptions")
@@ -567,7 +570,7 @@ def main(args=None):
     read_args = list()
     for ifile, rrfile in enumerate(redrockfiles):
         read_args.append(dict(rrfile=rrfile, group=args.group, pertile=pertile,
-                              counter=(ifile+1, nfiles)))
+                              counter=(ifile+1, nfiles), old_qn=getattr(args, 'old_qn', False)))
 
     #- Read individual Redrock files
     t0 = time.time()

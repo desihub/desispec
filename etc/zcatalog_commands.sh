@@ -20,6 +20,9 @@
 #
 # Use --healpix to use --group healpix instead of the default --group uniqpix:
 #   source $DESISPEC/etc/zcatalog_commands.sh --zpix --healpix
+#
+# Use --old-qn when qso_qn files have the older QN_RR column set:
+#   source $DESISPEC/etc/zcatalog_commands.sh --zpix --ztile --old-qn
 
 # NOTE: desi_zcatalog will skip over any SURVEY/PROGRAM combinations already done,
 # so it is safe to re-run this script until all files are generated.
@@ -29,17 +32,19 @@ _DRY_RUN=false
 _PIX_GROUP=uniqpix
 _RUN_ZPIX=false
 _RUN_ZTILE=false
+_OLD_QN=""
 for _arg in "$@"; do
     [ "$_arg" = "--dry-run" ] && _DRY_RUN=true
     [ "$_arg" = "--healpix" ] && _PIX_GROUP=healpix
     [ "$_arg" = "--zpix"    ] && _RUN_ZPIX=true
     [ "$_arg" = "--ztile"   ] && _RUN_ZTILE=true
+    [ "$_arg" = "--old-qn"  ] && _OLD_QN=" --old-qn"
 done
 unset _arg
 
 if ! $_RUN_ZPIX && ! $_RUN_ZTILE; then
     echo 'Please specify --zpix or --ztile'
-    unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE
+    unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE _OLD_QN
     return 1
 fi
 
@@ -47,7 +52,7 @@ fi
 python -c "import desidatamodel"
 if [ $? -ne 0 ]; then
     echo 'Please run "module load desidatamodel" first'
-    unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE
+    unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE _OLD_QN
     return 1  # note: return not exit so that if this is sourced, it won't exit parent shell
 fi
 
@@ -87,21 +92,21 @@ for pair in "${survey_program[@]}"; do
     if $_RUN_ZPIX; then
         echo $(date '+%Y-%m-%d %T') "Generating zpix  for $SURVEY $PROGRAM"
         if $_DRY_RUN; then
-            echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log"
+            echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC$_OLD_QN -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log"
         else
-            desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
+            desi_zcatalog --survey $SURVEY --program $PROGRAM --group $_PIX_GROUP --nproc $NPROC $_OLD_QN -o $SURVEY/zpix-$SURVEY-$PROGRAM             >> logs/zpix-$SURVEY-$PROGRAM.log
         fi
     fi
     if $_RUN_ZTILE; then
         echo $(date '+%Y-%m-%d %T') "Generating ztile for $SURVEY $PROGRAM"
         if $_DRY_RUN; then
-            echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log"
+            echo "desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC$_OLD_QN -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log"
         else
-            desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log
+            desi_zcatalog --survey $SURVEY --program $PROGRAM --group cumulative --nproc $NPROC $_OLD_QN -o $SURVEY/ztile-$SURVEY-$PROGRAM-cumulative >> logs/ztile-$SURVEY-$PROGRAM-cumulative.log
         fi
     fi
 done
 
 echo $(date '+%Y-%m-%d %T') All done
 
-unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE
+unset _DRY_RUN _PIX_GROUP _RUN_ZPIX _RUN_ZTILE _OLD_QN
