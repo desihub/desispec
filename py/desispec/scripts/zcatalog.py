@@ -745,6 +745,8 @@ def main(args=None):
 
     # Create "best redshift" columns, choosing between Z and Z_QSO
     z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
+    if getattr(args, 'old_qn', False):
+        z_cols = ['Z', 'ZERR']
     for col in z_cols:
         zcat[col+'_BEST'] = zcat[col].copy()
 
