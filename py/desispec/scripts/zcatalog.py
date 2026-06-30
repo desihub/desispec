@@ -757,6 +757,8 @@ def main(args=None):
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
+            if getattr(args, 'old_qn', False) and col in ('SPECTYPE', 'SUBTYPE'):
+                continue
             zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
     if getattr(args, 'old_qn', False):
         zcat['SPECTYPE_BEST'][mask] = 'QSO'
