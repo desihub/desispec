@@ -746,7 +746,7 @@ def main(args=None):
     # Create "best redshift" columns, choosing between Z and Z_QSO
     z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
     if getattr(args, 'old_qn', False):
-        z_cols = ['Z', 'ZERR']
+        z_cols = ['Z', 'ZERR', 'SPECTYPE', 'SUBTYPE']
     for col in z_cols:
         zcat[col+'_BEST'] = zcat[col].copy()
 
@@ -758,6 +758,14 @@ def main(args=None):
     for col in z_cols:
         if col!='Z':
             zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
+    if getattr(args, 'old_qn', False):
+        zcat['SPECTYPE_BEST'][mask] = 'QSO'
+        mask1 = mask & (zcat['Z_QSO']<1.4)
+        zcat['SUBTYPE_BEST'][mask1] = 'LOZ'
+        mask1 = mask & (zcat['Z_QSO']>1.5983)
+        zcat['SUBTYPE_BEST'][mask1] = 'HIZ'
+        mask1 = mask & (zcat['Z_QSO']>=1.4) & (zcat['Z_QSO']<=1.5983)
+        zcat['SUBTYPE_BEST'][mask1] = '   '  # unknown QSO subtype as it was not saved in QN
 
     # Downgrade some of the columns to lower precision
     if 'LOCATION' in zcat.colnames:
