@@ -221,6 +221,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['ZERR_QSO'] = cat['ZERR'].copy()
         res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
 
+    # reject stars
+    mask_nonstar = (res['SPECTYPE']!='STAR') & (res['Z']>0.001)
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG']:  # No GOOD_Z_QSO because QuasarNet does not fit below z=0.05
+        if col in res.colnames:
+            cat[col] &= mask_nonstar
+
     # Remove unnecessary columns
     columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
