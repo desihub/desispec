@@ -1916,9 +1916,9 @@ def create_petalnz_pdf(
         "ELG" : "b",
         "QSO" : "orange",
     }
-    with PdfPages(tmp_outpdf) as pdf:
-        # AR we need some tiles to plot!
-        if ntiles["bright"] + ntiles["dark"] > 0:
+    # AR we need some tiles to plot!
+    if ntiles["bright"] + ntiles["dark"] > 0:
+        with PdfPages(tmp_outpdf) as pdf:
             for survey in np.unique(surveys):
                 ntiles_surv = {
                     faprgrm : np.unique(
@@ -1927,6 +1927,7 @@ def create_petalnz_pdf(
                 }
                 # AR plotting only if some tiles
                 if np.sum([ntiles_surv[faprgrm] for faprgrm in faprgrms]) == 0:
+                    log.info(f"no SURVEY={survey} tiles with FAPRGRM in {faprgrms}, skipping plots")
                     continue
                 # AR three plots:
                 # AR - fraction of VALID fibers, bright+dark together
@@ -2116,8 +2117,15 @@ def create_petalnz_pdf(
                         pdf.savefig(fig, bbox_inches="tight")
                         plt.close()
 
-    # AR move to final location
-    os.rename(tmp_outpdf, outpdf)
+        # AR move to final location
+        if os.path.exists(tmp_outpdf):
+            os.rename(tmp_outpdf, outpdf)
+        else:
+            # could happen if no tiles pass within the pdf creation loop
+            log.error(f"{tmp_outpdf} not created")
+
+    else:
+        log.warning("no tiles to plot for night {}".format(night))
 
 
 def path_full2web(fn):
