@@ -2118,14 +2118,20 @@ def create_petalnz_pdf(
                         plt.close()
 
         # AR move to final location
-        if os.path.exists(tmp_outpdf):
+        if os.path.exists(tmp_outpdf) and os.path.getsize(tmp_outpdf) > 0:
             os.rename(tmp_outpdf, outpdf)
         else:
             # could happen if no tiles pass within the pdf creation loop
-            log.error(f"{tmp_outpdf} not created")
+            if os.path.exists(tmp_outpdf):
+                os.remove(tmp_outpdf)
+            if os.path.exists(outpdf):
+                os.remove(outpdf)
+            log.warning(f"{tmp_outpdf} not created (or empty); skipping {outpdf}")
 
     else:
-        log.warning("no tiles to plot for night {}".format(night))
+        log.warning(f"no tiles to plot for night {night}")
+        if os.path.exists(outpdf):
+            os.remove(outpdf)
 
 
 def path_full2web(fn):
