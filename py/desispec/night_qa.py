@@ -1699,9 +1699,6 @@ def create_petalnz_pdf(
           surveys other than main..
     """
 
-    # AR temporary output file
-    tmp_outpdf = get_tempfilename(outpdf)
-
     petals = np.arange(10, dtype=int)
     n_dark_passids = 9 # dark+dark1b
     # AR safe
@@ -1916,6 +1913,15 @@ def create_petalnz_pdf(
         "ELG" : "b",
         "QSO" : "orange",
     }
+
+    # SB cleanup from prior run; do this even if this run has no tiles to plot
+    if os.path.isfile(outpdf):
+        log.info(f"removing pre-existing {outpdf}")
+        os.remove(outpdf)
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
     # AR we need some tiles to plot!
     if ntiles["bright"] + ntiles["dark"] > 0:
         with PdfPages(tmp_outpdf) as pdf:
@@ -2124,14 +2130,10 @@ def create_petalnz_pdf(
             # could happen if no tiles pass within the pdf creation loop
             if os.path.exists(tmp_outpdf):
                 os.remove(tmp_outpdf)
-            if os.path.exists(outpdf):
-                os.remove(outpdf)
             log.warning(f"{tmp_outpdf} not created (or empty); skipping {outpdf}")
 
     else:
         log.warning(f"no tiles to plot for night {night}")
-        if os.path.exists(outpdf):
-            os.remove(outpdf)
 
 
 def path_full2web(fn):
