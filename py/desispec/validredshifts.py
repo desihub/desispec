@@ -184,6 +184,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     res['GOOD_Z_BGS'] &= cat['DELTACHI2']>40
     if fiberstatus_cut:
         res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
+    res['GOOD_Z_BGS'] &= cat['Z']<0.8  # RZ: few real BGS galaxies at z>0.8
 
     # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
@@ -198,6 +199,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
             warnings.simplefilter('ignore')
             res['GOOD_Z_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
             res['GOOD_Z_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
+            # RZ: The ELGs outside of 0.6<z<1.6 appear to all have good fits; so not redshift range cuts
         if fiberstatus_cut:
             res['GOOD_Z_ELG'] &= get_good_fiberstatus(cat)
 
@@ -218,14 +220,24 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         mask_new_z = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
         res['Z_QSO'] = cat['Z'].copy()
         res['Z_QSO'][mask_new_z] = cat['Z_NEW'][mask_new_z].copy()
+
+        res['GOOD_Z_QSO'] &= res['Z_QSO'] < 5.0  # RZ: all the z>5.0 QSO redrock fits look bad
+
+        # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
+        res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
+        res['DELTACHI2_QSO'][mask_new_z] = cat['DELTACHI2_NEW'][mask_new_z].copy()
+        bad_lowz = res['Z_QSO']<0.5
+        bad_lowz &= np.log10(res['DELTACHI2_QSO']) < 3 - 3.5 * res['Z_QSO']
+        res['GOOD_Z_QSO'] &= (~bad_lowz)
+
         res['ZERR_QSO'] = cat['ZERR'].copy()
         res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
 
     # reject stars
-    mask_nonstar = (res['SPECTYPE']!='STAR') & (res['Z']>0.001)
+    mask_nonstar = (cat['SPECTYPE']!='STAR') & (cat['Z']>0.001)
     for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG']:  # No GOOD_Z_QSO because QuasarNet does not fit below z=0.05
         if col in res.colnames:
-            cat[col] &= mask_nonstar
+            res[col] &= mask_nonstar
 
     # Remove unnecessary columns
     columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
