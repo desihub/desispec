@@ -1699,9 +1699,6 @@ def create_petalnz_pdf(
           surveys other than main..
     """
 
-    # AR temporary output file
-    tmp_outpdf = get_tempfilename(outpdf)
-
     petals = np.arange(10, dtype=int)
     n_dark_passids = 9 # dark+dark1b
     # AR safe
@@ -1916,9 +1913,18 @@ def create_petalnz_pdf(
         "ELG" : "b",
         "QSO" : "orange",
     }
-    with PdfPages(tmp_outpdf) as pdf:
-        # AR we need some tiles to plot!
-        if ntiles["bright"] + ntiles["dark"] > 0:
+
+    # SB cleanup from prior run; do this even if this run has no tiles to plot
+    if os.path.isfile(outpdf):
+        log.info(f"removing pre-existing {outpdf}")
+        os.remove(outpdf)
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
+    # AR we need some tiles to plot!
+    if ntiles["bright"] + ntiles["dark"] > 0:
+        with PdfPages(tmp_outpdf) as pdf:
             for survey in np.unique(surveys):
                 ntiles_surv = {
                     faprgrm : np.unique(
@@ -1927,6 +1933,7 @@ def create_petalnz_pdf(
                 }
                 # AR plotting only if some tiles
                 if np.sum([ntiles_surv[faprgrm] for faprgrm in faprgrms]) == 0:
+                    log.info(f"no SURVEY={survey} tiles with FAPRGRM in {faprgrms}, skipping plots")
                     continue
                 # AR three plots:
                 # AR - fraction of VALID fibers, bright+dark together
@@ -2116,8 +2123,17 @@ def create_petalnz_pdf(
                         pdf.savefig(fig, bbox_inches="tight")
                         plt.close()
 
-    # AR move to final location
-    os.rename(tmp_outpdf, outpdf)
+        # AR move to final location
+        if os.path.exists(tmp_outpdf) and os.path.getsize(tmp_outpdf) > 0:
+            os.rename(tmp_outpdf, outpdf)
+        else:
+            # could happen if no tiles pass within the pdf creation loop
+            if os.path.exists(tmp_outpdf):
+                os.remove(tmp_outpdf)
+            log.warning(f"{tmp_outpdf} not created (or empty); skipping {outpdf}")
+
+    else:
+        log.warning(f"no tiles to plot for night {night}")
 
 
 def path_full2web(fn):
