@@ -32,7 +32,7 @@ from desiutil.names import radec_to_desiname
 import desiutil.depend
 import desiutil.healpix
 
-from desitarget.targetmask import desi_mask
+from desitarget.targetmask import desi_mask, scnd_mask
 
 from desispec import io
 from desispec.zcatalog import find_primary_spectra
@@ -706,15 +706,37 @@ def main(args=None):
         zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_LRG includes both LRG and LGE
         zqual['GOOD_Z_ELG'] &= is_elg
 
+        # GOOD_Z_LYA is superset of the final GOOD_Z_QSO
+        # adapted from https://github.com/desihub/LSS/blob//main/scripts/main/mkQSO_v2.py
+        spectype_qso = zcat['SPECTYPE'] == 'QSO'
+        is_mgii = np.asarray(zcat['IS_QSO_MGII']).astype(bool)
+        # Define relaxed QN criteria for BGS/ELG
+        is_qn6 = np.max(np.array([zcat[name] for name in ['C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']]), axis=0) > 0.6
+        
+        # WISE_VAR_QSO uses same cuts as main QSO
+        scnd_col = 'SCND_TARGET' if survey == 'main' else survey.upper() + '_SCND_TARGET'
+        is_wise_qso = (zcat[scnd_col] & scnd_mask.WISE_VAR_QSO) != 0
+        is_OK_WISE_QSO = zqual['GOOD_Z_QSO'] & is_wise_qso & ~is_qso & ~is_elg & ~is_bgs
+        
+        # BGS and ELG targeted Lya QSOs require two classifications
+        is_OK_LYA_ELG = spectype_qso & is_qn6 & is_elg & good_spec & ~is_qso
+        is_OK_LYA_BGS = spectype_qso & (is_qn6 | is_mgii) & is_bgs & good_spec & ~is_qso & ~is_elg & ~is_wise_qso
+
+        zqual['GOOD_Z_LYA'] = zqual['GOOD_Z_QSO'] & is_qso
+        zqual['GOOD_Z_LYA'] |= (is_OK_LYA_BGS | is_OK_LYA_ELG | is_OK_WISE_VAR_QSO)
+
+        # need to update Z_QSO for BGS/ELG QSOs
+        # GOOD_Z_LYA & IS_QSO_QN_NEW_RR
+
         # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
         # True if it is a QSO target AND passes the QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
-        
+
         # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts
         # as the per-target class and GOOD_SPEC requirements are added here
 
     else:
-        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             zqual[col] = False
 
     ######
