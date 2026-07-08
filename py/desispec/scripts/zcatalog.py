@@ -722,11 +722,14 @@ def main(args=None):
         is_OK_LYA_ELG = spectype_qso & is_qn6 & is_elg & good_spec & ~is_qso
         is_OK_LYA_BGS = spectype_qso & (is_qn6 | is_mgii) & is_bgs & good_spec & ~is_qso & ~is_elg & ~is_wise_qso
 
+        # GOOD_Z_LYA applyes to Z_QSO column
         zqual['GOOD_Z_LYA'] = zqual['GOOD_Z_QSO'] & is_qso
         zqual['GOOD_Z_LYA'] |= (is_OK_LYA_BGS | is_OK_LYA_ELG | is_OK_WISE_VAR_QSO)
 
-        # need to update Z_QSO for BGS/ELG QSOs
-        # GOOD_Z_LYA & IS_QSO_QN_NEW_RR
+        # need to update Z_QSO for BGS/ELG QSOs; redundant operation for QSO/WISE_QSO
+        update_z_qso = (zqual['GOOD_Z_LYA'] & zcat['IS_QSO_QN_NEW_RR'])
+        zqual['Z_QSO'][update_z_qso] = zcat['Z_NEW'][update_z_qso].copy()
+        zqual['ZERR_QSO'][update_z_qso] = zcat['ZERR_NEW'][update_z_qso].copy()
 
         # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
         # True if it is a QSO target AND passes the QSO redshift quality cut
