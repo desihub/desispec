@@ -117,6 +117,20 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None, old_qn=False):
     catalog and the coadded FIBERMAP
     """
     log = get_logger()
+
+    emline_file = replace_prefix(rrfile, 'redrock', 'emline')
+    qso_mgii_file = replace_prefix(rrfile, 'redrock', 'qso_mgii')
+    qso_qn_file = replace_prefix(rrfile, 'redrock', 'qso_qn')
+
+    input_files = [rrfile, emline_file, qso_mgii_file, qso_qn_file]
+    missing_files = [filename for filename in input_files if not os.path.exists(filename)]
+    if missing_files:
+        log.warning(
+            "Skipping input set for %s; missing files: %s",
+            rrfile, ", ".join(missing_files)
+        )
+        return None, None
+
     if counter is not None:
         i, n = counter
         log.info(f'Reading {i}/{n} {rrfile}')
@@ -131,7 +145,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None, old_qn=False):
                 hdr['SPGRP'] != group:
             log.warning("Skipping {} with SPGRP {} != group {}".format(
                 rrfile, hdr['SPGRP'], group))
-            return None
+            return None, None
 
         if 'REDSHIFTS' in fx:
             redshifts = Table(fx['REDSHIFTS'].read())
@@ -191,10 +205,6 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None, old_qn=False):
                         else:
                             tsnr2 = append_fields(tsnr2, colname,
                                                   np.zeros(tsnr2.shape, dtype=np.float32), dtypes=np.float32)
-
-    emline_file = replace_prefix(rrfile, 'redrock', 'emline')
-    qso_mgii_file = replace_prefix(rrfile, 'redrock', 'qso_mgii')
-    qso_qn_file = replace_prefix(rrfile, 'redrock', 'qso_qn')
 
     with fitsio.FITS(emline_file) as fx:
         emline = Table(fx['EMLINEFIT'].read())
@@ -581,7 +591,8 @@ def main(args=None):
     else:
         results = [_wrap_read_redrock(a) for a in read_args]
     dt = time.time() - t0
-    log.info(f"Successfully read {nfiles} redrock files in {dt:.1f} sec")
+    nread = sum(data is not None for data, expfibermap in results)
+    log.info(f"Successfully read {nread}/{nfiles} redrock files in {dt:.1f} sec")
 
     #- Stack catalogs
     zcatdata = list()
@@ -880,4 +891,3 @@ def main(args=None):
     log.info("Successfully wrote {}".format(outfile_expfm))
 
     log.info(f'desi_zcatalog all done at {time.asctime()}')
-
