@@ -16,7 +16,7 @@ desispec.validredshifts
 # and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO, GOOD_Z_LYA).
 #
 # Note 1: except for GOOD_Z_LYA, the redshift quality booleans do not check target membership.
-# Both the quality boolean and the # membership boolean must be applied to obtain the LSS redshift quality
+# Both the quality boolean and the membership boolean must be applied to obtain the LSS redshift quality
 # flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
 #
 # Note 2: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
@@ -155,7 +155,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['BGS_BRIGHT'] = cat['BGS_TARGET'] & 2**1 > 0
 
     if surv.lower()!='main':
-        ignore_lya = False
+        ignore_lya = True
     else:
         ignore_lya = ignore_qso
 

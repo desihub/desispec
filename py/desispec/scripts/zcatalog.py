@@ -668,7 +668,7 @@ def main(args=None):
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
     ######
-    # Add GOOD_Z_{BGS,LRG,ELG,QSO,GOOD_Z_LYA} redshift quality flags
+    # Add GOOD_Z_{BGS,LRG,ELG,QSO,LYA} redshift quality flags
     # - passes LSS quality cuts from validredshifts.actually_validate
     # - science target with good hardware
     # - core DESI tracer target selection (and not e.g. secondary QSOs)
