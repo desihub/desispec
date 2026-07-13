@@ -283,7 +283,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
             res[col] &= mask_nonstar
 
     # Remove unnecessary columns
-    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
     res = res[columns_to_keep]
 
