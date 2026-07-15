@@ -687,8 +687,7 @@ def main(args=None):
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
 
     for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
-        if col in zqual.colnames:
-            zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
+        zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
 
     # Require primary tracer targeting
     if survey in ['main', 'sv1', 'sv2', 'sv3']:
@@ -722,8 +721,7 @@ def main(args=None):
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
-            if col in zqual.colnames:
-                zqual[col] = False
+            zqual[col] = False
 
     ######
     # evaluate Z_CONF; proceed from low-confidence to high-confidence
