@@ -182,7 +182,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
         ignore_qso: bool (default False), if True, do not validate QSO redshifts
         ignore_lya: bool (default False), if True, do not assess LyA WG's QSO quality cuts
-        populate_empty_columns: bool (default Fulase), if True, populate the missing GOOD_Z_* columns with value=False
+        populate_empty_columns: bool (default False), if True, populate the missing GOOD_Z_* columns with value=False
 
     Returns:
         res: astropy table with boolean columns (e.g., GOOD_Z_BGS)

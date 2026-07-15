@@ -677,9 +677,9 @@ def main(args=None):
 
     # LSS redshift quality cuts
     if survey=='main':
-        zqual = validredshifts.actually_validate(zcat)
+        zqual = validredshifts.actually_validate(zcat, populate_empty_columns=True)
     else:
-        zqual = validredshifts.actually_validate(zcat, ignore_lya=True)
+        zqual = validredshifts.actually_validate(zcat, ignore_lya=True, populate_empty_columns=True)
 
     # GOOD_SPEC: true if it is a science spectrum with good hardware status
     good_spec = validredshifts.get_good_fiberstatus(zcat)
