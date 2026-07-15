@@ -722,7 +722,8 @@ def main(args=None):
 
     else:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
-            zqual[col] = False
+            if col in zqual.colnames:
+                zqual[col] = False
 
     ######
     # evaluate Z_CONF; proceed from low-confidence to high-confidence
