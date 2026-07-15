@@ -170,7 +170,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
 
 
 def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso=False, ignore_lya=False,
-                      populate_empty_columns=False):
+                      populate_missing_columns=False):
     '''
     Apply redshift quality criteria
 
@@ -182,7 +182,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
         ignore_qso: bool (default False), if True, do not validate QSO redshifts
         ignore_lya: bool (default False), if True, do not assess LyA WG's QSO quality cuts
-        populate_empty_columns: bool (default False), if True, populate the missing GOOD_Z_* columns with value=False
+        populate_missing_columns: bool (default False), if True, populate the missing GOOD_Z_* columns with value=False
 
     Returns:
         res: astropy table with boolean columns (e.g., GOOD_Z_BGS)
@@ -284,7 +284,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         if col in res.colnames:
             res[col] &= mask_nonstar
 
-    if populate_empty_columns:
+    if populate_missing_columns:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             if col not in res.colnames:
                 res[col] = False
