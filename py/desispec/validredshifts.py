@@ -193,16 +193,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     # BGS
     res['GOOD_Z_BGS'] = cat['ZWARN']==0
     res['GOOD_Z_BGS'] &= cat['DELTACHI2']>40
-    if fiberstatus_cut:
-        res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
     res['GOOD_Z_BGS'] &= cat['Z']<0.8  # RZ: few real BGS galaxies at z>0.8
 
     # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
     res['GOOD_Z_LRG'] &= cat['Z']<1.5
     res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
-    if fiberstatus_cut:
-        res['GOOD_Z_LRG'] &= get_good_fiberstatus(cat)
 
     # ELG
     if not ignore_emline:
@@ -211,8 +207,6 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
             res['GOOD_Z_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
             res['GOOD_Z_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
             # RZ: The ELGs outside of 0.6<z<1.6 appear to all have good fits; so not redshift range cuts
-        if fiberstatus_cut:
-            res['GOOD_Z_ELG'] &= get_good_fiberstatus(cat)
 
     if not ignore_qso:
         # QSO - adopted from the code from Edmond
@@ -226,8 +220,6 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['QSO_MASKBITS'][res['IS_QSO_QN_NEW_RR']] += 2**4
         res['GOOD_Z_QSO'] = res['QSO_MASKBITS']>0
         res['GOOD_Z_QSO'] &= cat['OBJTYPE']=='TGT'
-        if fiberstatus_cut:
-            res['GOOD_Z_QSO'] &= get_good_fiberstatus(cat)
 
     # GOOD_Z_LYA from the LyA WG for the main survey
     # It identifies good QSOs from non-QSO targets
@@ -283,6 +275,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG']:  # No GOOD_Z_QSO because QuasarNet does not fit below z=0.05
         if col in res.colnames:
             res[col] &= mask_nonstar
+
+    if fiberstatus_cut:
+        good_fiberstatus = get_good_fiberstatus(cat)
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
+            if col in res.colnames:
+                res[col] &= get_good_fiberstatus(cat)
 
     if populate_missing_columns:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
