@@ -280,7 +280,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         good_fiberstatus = get_good_fiberstatus(cat)
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             if col in res.colnames:
-                res[col] &= get_good_fiberstatus(cat)
+                res[col] &= good_fiberstatus
 
     if populate_missing_columns:
         for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
