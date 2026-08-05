@@ -668,21 +668,25 @@ def main(args=None):
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
     ######
-    # Add GOOD_Z_{BGS,LRG,ELG,QSO} redshift quality flags
+    # Add GOOD_Z_{BGS,LRG,ELG,QSO,LYA} redshift quality flags
     # - passes LSS quality cuts from validredshifts.actually_validate
     # - science target with good hardware
     # - core DESI tracer target selection (and not e.g. secondary QSOs)
     # - SURVEY is main/sv1/sv2/sv3 (not special)
+    # - GOOD_Z_LYA is only available for main survey
 
     # LSS redshift quality cuts
-    zqual = validredshifts.actually_validate(zcat)
+    if survey=='main':
+        zqual = validredshifts.actually_validate(zcat, populate_missing_columns=True)
+    else:
+        zqual = validredshifts.actually_validate(zcat, ignore_lya=True, populate_missing_columns=True)
 
     # GOOD_SPEC: true if it is a science spectrum with good hardware status
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'    # not included in LSS BGS,LRG,ELG cuts
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
 
-    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
         zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
 
     # Require primary tracer targeting
@@ -706,15 +710,17 @@ def main(args=None):
         zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_LRG includes both LRG and LGE
         zqual['GOOD_Z_ELG'] &= is_elg
 
-        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
+        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to the Z_QSO column, not the Z column
         # True if it is a QSO target AND passes the QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
-        
-        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts
-        # as the per-target class and GOOD_SPEC requirements are added here
+        # GOOD_Z_LYA (if available) also applies to the Z_QSO column
+        # For GOOD_Z_LYA we do not check for target membership here because it was done in desispec.validredshifts
+
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO,LYA} definitions are more restrictive than in desispec.validredshifts
+        # as the target membership and GOOD_SPEC requirements are added here
 
     else:
-        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             zqual[col] = False
 
     ######
@@ -733,7 +739,7 @@ def main(args=None):
     # Z_CONF=3: highly confident redshift
     # criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO)
     # and pass the LSS redshift quality cuts
-    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO'] | zqual['GOOD_Z_LYA']
     zqual['Z_CONF'][mask] = 3
 
     zcat = hstack([zcat, zqual], join_type='exact')
@@ -746,7 +752,7 @@ def main(args=None):
     # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs by more than 1000 km/s from Z
     c = astropy.constants.c.to('km/s').value
     dv = c*(zcat['Z']-zcat['Z_QSO'])/(1+zcat['Z_QSO'])
-    mask = zcat['GOOD_Z_QSO'] & (np.abs(dv) > 1000)
+    mask = (zcat['GOOD_Z_QSO'] | zcat['GOOD_Z_LYA']) & (np.abs(dv) > 1000)
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
@@ -863,4 +869,3 @@ def main(args=None):
     log.info("Successfully wrote {}".format(outfile_expfm))
 
     log.info(f'desi_zcatalog all done at {time.asctime()}')
-

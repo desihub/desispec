@@ -13,12 +13,13 @@ desispec.validredshifts
 #
 # This returns an astropy table with columns: TARGETID, Z, ZWARN, COADD_FIBERSTATUS,
 # target membership booleans (LRG, ELG, QSO, LGE, ELG_LOP, ELG_HIP, ELG_VLO, BGS_ANY, BGS_FAINT, BGS_BRIGHT),
-# and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO).
+# and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO, GOOD_Z_LYA).
 #
-# Note: the redshift quality boolean does not check target membership. Both the quality boolean and the
-# membership boolean must be applied to obtain the LSS redshift quality flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
+# Note 1: except for GOOD_Z_LYA, the redshift quality booleans do not check target membership.
+# Both the quality boolean and the membership boolean must be applied to obtain the LSS redshift quality
+# flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
 #
-# Note: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
+# Note 2: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
 
 import os, warnings
 import numpy as np
@@ -26,6 +27,7 @@ from astropy.table import Table, hstack, join
 import fitsio
 
 from desispec.maskbits import fibermask
+
 
 def get_good_fiberstatus(cat):
     '''
@@ -152,7 +154,13 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['BGS_FAINT'] = cat['BGS_TARGET'] & 2**0 > 0
         # cat['BGS_BRIGHT'] = cat['BGS_TARGET'] & 2**1 > 0
 
-    res = actually_validate(cat, fiberstatus_cut=fiberstatus_cut, ignore_emline=ignore_emline, ignore_qso=ignore_qso)
+    if surv.lower()!='main':
+        ignore_lya = True
+    else:
+        ignore_lya = ignore_qso
+
+    res = actually_validate(cat, fiberstatus_cut=fiberstatus_cut, ignore_emline=ignore_emline, 
+                            ignore_qso=ignore_qso, ignore_lya=ignore_lya)
     cat = hstack([cat, res])
 
     output_columns = [col for col in output_columns if col in cat.colnames]
@@ -161,7 +169,8 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     return cat
 
 
-def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso=False):
+def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso=False, ignore_lya=False,
+                      populate_missing_columns=False):
     '''
     Apply redshift quality criteria
 
@@ -172,6 +181,8 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS
         ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
         ignore_qso: bool (default False), if True, do not validate QSO redshifts
+        ignore_lya: bool (default False), if True, do not assess LyA WG's QSO quality cuts
+        populate_missing_columns: bool (default False), if True, populate the missing GOOD_Z_* columns with value=False
 
     Returns:
         res: astropy table with boolean columns (e.g., GOOD_Z_BGS)
@@ -182,16 +193,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     # BGS
     res['GOOD_Z_BGS'] = cat['ZWARN']==0
     res['GOOD_Z_BGS'] &= cat['DELTACHI2']>40
-    if fiberstatus_cut:
-        res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
     res['GOOD_Z_BGS'] &= cat['Z']<0.8  # RZ: few real BGS galaxies at z>0.8
 
     # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
     res['GOOD_Z_LRG'] &= cat['Z']<1.5
     res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
-    if fiberstatus_cut:
-        res['GOOD_Z_LRG'] &= get_good_fiberstatus(cat)
 
     # ELG
     if not ignore_emline:
@@ -200,8 +207,6 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
             res['GOOD_Z_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
             res['GOOD_Z_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
             # RZ: The ELGs outside of 0.6<z<1.6 appear to all have good fits; so not redshift range cuts
-        if fiberstatus_cut:
-            res['GOOD_Z_ELG'] &= get_good_fiberstatus(cat)
 
     if not ignore_qso:
         # QSO - adopted from the code from Edmond
@@ -215,23 +220,55 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['QSO_MASKBITS'][res['IS_QSO_QN_NEW_RR']] += 2**4
         res['GOOD_Z_QSO'] = res['QSO_MASKBITS']>0
         res['GOOD_Z_QSO'] &= cat['OBJTYPE']=='TGT'
-        if fiberstatus_cut:
-            res['GOOD_Z_QSO'] &= get_good_fiberstatus(cat)
-        mask_new_z = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
+
+    # GOOD_Z_LYA from the LyA WG for the main survey
+    # It identifies good QSOs from non-QSO targets
+    if not ignore_lya:
+
+        if ignore_qso:
+            raise ValueError('QSO quality cannot be skipped (i.e., ignore_qso must be False) when assessing GOOD_Z_LYA')
+
+        spectype_qso = cat['SPECTYPE'] == 'QSO'
+        # Define relaxed QN criteria for ELG
+        is_qn6 = np.max(np.array([cat[name] for name in ['C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']]), axis=0) > 0.6
+        
+        is_elg = (cat['DESI_TARGET'] & 2**1) != 0  # desi_mask.ELG
+        is_qso = (cat['DESI_TARGET'] & 2**2) != 0  # desi_mask.QSO
+        is_bgs = (cat['DESI_TARGET'] & 2**60) != 0  # desi_mask.BGS
+        is_wise_qso = (cat['SCND_TARGET'] & 2**35) != 0  # scnd_mask.WISE_VAR_QSO
+        
+        # Lya QSOs targeted as ELGs
+        is_ok_lya_elg = spectype_qso & is_qn6 & is_elg & ~is_qso
+
+        # WISE_VAR_QSO uses same cuts as main QSO
+        is_ok_lya_wise = res['GOOD_Z_QSO'] & is_wise_qso & ~is_qso & ~is_elg & ~is_bgs
+        
+        # GOOD_Z_LYA applies to Z_QSO column
+        res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
+        res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
+
+    if not ignore_qso:
+
+        use_z_new = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
+        if not ignore_lya:
+            use_z_new |= (~res['GOOD_Z_QSO']) & res['GOOD_Z_LYA'] & cat['IS_QSO_QN_NEW_RR']  # GOOD_Z_LYA uses the original IS_QSO_QN_NEW_RR for choosing Z vs Z_NEW
         res['Z_QSO'] = cat['Z'].copy()
-        res['Z_QSO'][mask_new_z] = cat['Z_NEW'][mask_new_z].copy()
-
-        res['GOOD_Z_QSO'] &= res['Z_QSO'] < 5.0  # RZ: all the z>5.0 QSO redrock fits look bad
-
-        # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
+        res['ZERR_QSO'] = cat['ZERR'].copy()
         res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
-        res['DELTACHI2_QSO'][mask_new_z] = cat['DELTACHI2_NEW'][mask_new_z].copy()
+        res['Z_QSO'][use_z_new] = cat['Z_NEW'][use_z_new].copy()
+        res['ZERR_QSO'][use_z_new] = cat['ZERR_NEW'][use_z_new].copy()
+        res['DELTACHI2_QSO'][use_z_new] = cat['DELTACHI2_NEW'][use_z_new].copy()
+
+        # RZ: all the z>5.0 QSO redrock fits look bad
+        bad_qso = res['Z_QSO'] > 5.0
+        # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
         bad_lowz = res['Z_QSO']<0.5
         bad_lowz &= np.log10(res['DELTACHI2_QSO']) < 3 - 3.5 * res['Z_QSO']
-        res['GOOD_Z_QSO'] &= (~bad_lowz)
-
-        res['ZERR_QSO'] = cat['ZERR'].copy()
-        res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
+        bad_qso |= bad_lowz
+        
+        res['GOOD_Z_QSO'][bad_qso] = False
+        if not ignore_lya:
+            res['GOOD_Z_LYA'][bad_qso] = False
 
     # reject stars
     mask_nonstar = (cat['SPECTYPE']!='STAR') & (cat['Z']>0.001)
@@ -239,8 +276,19 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         if col in res.colnames:
             res[col] &= mask_nonstar
 
+    if fiberstatus_cut:
+        good_fiberstatus = get_good_fiberstatus(cat)
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
+            if col in res.colnames:
+                res[col] &= good_fiberstatus
+
+    if populate_missing_columns:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
+            if col not in res.colnames:
+                res[col] = False
+
     # Remove unnecessary columns
-    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
     res = res[columns_to_keep]
 
