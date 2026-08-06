@@ -756,7 +756,17 @@ def main(args=None):
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
+            if col in ('SPECTYPE', 'SUBTYPE'):
+                continue
             zcat[col+'_BEST'][mask] = zcat[col+'_NEW'][mask].copy()
+
+    zcat['SPECTYPE_BEST'][mask] = 'QSO'
+    mask1 = mask & (zcat['Z_QSO']<1.4)
+    zcat['SUBTYPE_BEST'][mask1] = 'LOZ'
+    mask1 = mask & (zcat['Z_QSO']>1.5983)
+    zcat['SUBTYPE_BEST'][mask1] = 'HIZ'
+    mask1 = mask & (zcat['Z_QSO']>=1.4) & (zcat['Z_QSO']<=1.5983)
+    zcat['SUBTYPE_BEST'][mask1] = '   '  # unknown QSO subtype as it was not saved in QN
 
     # Downgrade some of the columns to lower precision
     if 'LOCATION' in zcat.colnames:
