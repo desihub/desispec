@@ -279,6 +279,17 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             log.info(f'Reading {filename}')
             t = read_table(filename, ext=file_extension)
 
+            # DR1 v2 zcat does not contain ZWARN_BEST or ZWARN in the primary catalog
+            # We need to read ZWARN from the extra file
+            if file_extension == 'ZCATALOG' and 'ZWARN' not in t.colnames and 'ZWARN_BEST' not in t.colnames:
+                extra_filename = filename.replace('.fits', '-extra.fits')
+                log.info(f'Reading {extra_filename} for primary-spectrum ZWARN')
+                extra = read_table(extra_filename, ext='ZCATALOG_EXTRA', columns=['TARGETID', 'ZWARN'])
+                if not np.all(t['TARGETID'] == extra['TARGETID']):
+                    raise ValueError(f'TARGETID mismatch between {filename} and {extra_filename}')
+                t['ZWARN'] = extra['ZWARN']
+                added_zwarn = True
+
             ## Merge DEPNAMnn and DEPVERnn, then remove from header
             desiutil.depend.mergedep(t.meta, dependencies)
             desiutil.depend.remove_dependencies(t.meta)
@@ -382,6 +393,9 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                 tab['MAIN_PRIMARY'][is_main] = specprim
 
             ###############################################################################################
+
+            if added_zwarn:
+                tab.remove_column('ZWARN')
 
             # Sanity check that the TARGETIDs match in the row-matched catalogs
             if file_extension=='ZCATALOG':

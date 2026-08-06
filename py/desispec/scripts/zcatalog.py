@@ -213,7 +213,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
 
     emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
     qso_mgii_cols = ['IS_QSO_MGII']
-    qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW', 'ZWARN_NEW', 'SPECTYPE_NEW', 'SUBTYPE_NEW', 'CHI2_NEW', 'DELTACHI2_NEW', 'COEFF_NEW']
+    qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW']
 
     tsnr2cols = list(tsnr2.dtype.names)
     tsnr2cols.remove('TARGETID')
@@ -745,7 +745,7 @@ def main(args=None):
     zcat = hstack([zcat, zqual], join_type='exact')
 
     # Create "best redshift" columns, choosing between Z and Z_QSO
-    z_cols = ['Z', 'ZERR', 'ZWARN', 'SPECTYPE', 'SUBTYPE', 'CHI2', 'DELTACHI2', 'COEFF']
+    z_cols = ['Z', 'ZERR', 'SPECTYPE', 'SUBTYPE']
     for col in z_cols:
         zcat[col+'_BEST'] = zcat[col].copy()
 
