@@ -271,6 +271,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
         elif file_extension=='ZCATALOG_EXTRA':
             zcat1 = [fn.replace('.fits', '-extra.fits') for fn in zcat]
 
+        added_zwarn = False
+
         ## Looping through the different zcatalogs and adding the survey and program columns
         for filename in zcat1:
             basefile = os.path.basename(filename)
@@ -281,7 +283,6 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 
             # DR1 v2 zcat does not contain ZWARN_BEST or ZWARN in the primary catalog
             # We need to read ZWARN from the extra file
-            added_zwarn = False
             if file_extension == 'ZCATALOG' and 'ZWARN' not in t.colnames and 'ZWARN_BEST' not in t.colnames:
                 extra_filename = filename.replace('.fits', '-extra.fits')
                 log.info(f'Reading {extra_filename} for primary-spectrum ZWARN')
