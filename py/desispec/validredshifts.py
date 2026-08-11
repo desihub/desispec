@@ -63,9 +63,9 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
              that indicate if each object meets the redshift quality criteria of specific tracers
     '''
 
-    output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']
+    output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']
     if return_target_columns:
-        output_columns = ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
+        output_columns = ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT', 'WISE_VAR_QSO'] + output_columns
 
     if extra_columns is None:
         extra_columns = ['TARGETID', 'Z', 'ZWARN', 'COADD_FIBERSTATUS']
@@ -77,7 +77,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'OBJTYPE']
     columns_emline = ['TARGETID', 'OII_FLUX', 'OII_FLUX_IVAR']
     columns_qso_mgii = ['TARGETID', 'IS_QSO_MGII']
-    columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
+    columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'DELTACHI2_NEW', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
 
     dir_path = os.path.dirname(redrock_path)
     qso_mgii_path = os.path.join(dir_path, os.path.basename(redrock_path).replace('redrock-', 'qso_mgii-'))
@@ -90,12 +90,12 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     # read the full fibermap until we determine the targeting columns
     from desitarget.targets import main_cmx_or_sv
     tmp_fibermap = fitsio.read(redrock_path, ext='FIBERMAP')
-    surv_target, surv_mask, surv = main_cmx_or_sv(tmp_fibermap)
+    surv_target, surv_mask, surv = main_cmx_or_sv(tmp_fibermap, scnd=True)
     if surv.lower() == 'cmx':
         raise NotImplementedError('Determining valid redshifts for commissioning targets is not supported.')
 
-    desi_target_col, bgs_target_col, _ = surv_target
-    desi_mask, bgs_mask, _ = surv_mask
+    desi_target_col, bgs_target_col, _, scnd_target_col = surv_target
+    desi_mask, bgs_mask, _, scnd_mask = surv_mask
     tmp_fibermap = Table(tmp_fibermap[columns_fibermap + surv_target])
     assert np.all(tid==tmp_fibermap['TARGETID'])
     tmp_fibermap.remove_column('TARGETID')
@@ -134,9 +134,11 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         cat = hstack([cat, tmp_qso_mgii, tmp_qso_qn], join_type='exact')
 
     if return_target_columns:
-        for name in ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
+        for name in ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT', 'WISE_VAR_QSO']:
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
                 cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
+            elif name in ['WISE_VAR_QSO']:
+                cat[name] = cat[bgs_target_col] & scnd_mask[name] > 0
             else:
                 if name in desi_mask.names(): # not all bits were used in SV (e.g., ELG_LOP)
                     cat[name] = cat[desi_target_col] & desi_mask[name] > 0
@@ -153,8 +155,10 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['BGS_ANY'] = cat['DESI_TARGET'] & 2**60 > 0
         # cat['BGS_FAINT'] = cat['BGS_TARGET'] & 2**0 > 0
         # cat['BGS_BRIGHT'] = cat['BGS_TARGET'] & 2**1 > 0
+        # cat['WISE_VAR_QSO'] = cat['SCND_TARGET'] & 2**35 > 0
 
     if surv.lower()!='main':
+        # only defined for main survey targets
         ignore_lya = True
     else:
         ignore_lya = ignore_qso
