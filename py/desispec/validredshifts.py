@@ -138,7 +138,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
                 cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
             elif name in ['WISE_VAR_QSO']:
-                cat[name] = cat[bgs_target_col] & scnd_mask[name] > 0
+                cat[name] = cat[scnd_target_col] & scnd_mask[name] > 0
             else:
                 if name in desi_mask.names(): # not all bits were used in SV (e.g., ELG_LOP)
                     cat[name] = cat[desi_target_col] & desi_mask[name] > 0
