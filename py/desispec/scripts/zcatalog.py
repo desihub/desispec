@@ -773,11 +773,16 @@ def main(args=None):
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
-    # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
-    if survey!='main':
+    # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
+    if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
         for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
             if col in zcat.colnames:
                 zcat.remove_column(col)
+    elif survey not in ('main', 'special'):
+        # force a choice about future new surveys
+        msg = f'Unknown if SURVEY={survey} has valid DESI_TARGET, BGS_TARGET, MWS_TARGET, SCND_TARGET bits'
+        log.critical(msg)
+        raise ValueError(msg)
 
     # Remove the columns that do not exist
     columns_basic = [col for col in columns_basic if col in zcat.colnames]
