@@ -608,10 +608,5 @@ class TestValidRedshifts(unittest.TestCase):
             validate(redrock_path)
 
 
-def test_suite():
-    """Allows testing a single module within the desispec.test suite."""
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-
 if __name__ == '__main__':
     unittest.main()
