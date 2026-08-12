@@ -462,8 +462,19 @@ def main(args=None):
     survey = args.survey
     program = args.program
 
-    if program not in ['backup', 'bright', 'dark', 'other']:
-        raise ValueError('Invalid program \"{}\"; it must be one of the following: backup, bright, dark, other'.format(program))
+    # Confirm valid survey and program before doing much work
+    # e.g. survey is used to know which target columns to keep
+    valid_programs = ['backup', 'bright', 'dark', 'other']
+    if program not in valid_programs:
+        msg = f'Invalid program={program}; it must be one of {valid_programs}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    valid_surveys = ['cmx', 'sv1', 'sv2', 'sv3', 'main', 'special']
+    if survey not in valid_surveys:
+        msg = f'Invalid survey={survey}; it must be one of {valid_surveys}'
+        log.critical(msg)
+        raise ValueError(msg)
 
     if args.indir is not None:
         indir = args.indir
@@ -779,7 +790,8 @@ def main(args=None):
             if col in zcat.colnames:
                 zcat.remove_column(col)
     elif survey not in ('main', 'special'):
-        # force a choice about future new surveys
+        # valid survey should already be checked at start, but belt-and-suspenders re-check here
+        # to avoid silently guessing what a new survey should do
         msg = f'Unknown if SURVEY={survey} has valid DESI_TARGET, BGS_TARGET, MWS_TARGET, SCND_TARGET bits'
         log.critical(msg)
         raise ValueError(msg)
