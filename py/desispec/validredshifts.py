@@ -120,6 +120,10 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         ignore_qso = True
 
     if os.path.isfile(qso_qn_path):
+        with fitsio.FITS(qso_qn_path) as qso_qn:
+            qso_qn_colnames = qso_qn[1].get_colnames()
+        if 'DELTACHI2_NEW' not in qso_qn_colnames:
+            columns_qso_qn.remove('DELTACHI2_NEW')
         tmp_qso_qn = Table(fitsio.read(qso_qn_path, columns=(columns_qso_qn)))
         assert np.all(tid==tmp_qso_qn['TARGETID'])
         tmp_qso_qn.remove_column('TARGETID')
@@ -264,7 +268,8 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
         res['Z_QSO'][use_z_new] = cat['Z_NEW'][use_z_new].copy()
         res['ZERR_QSO'][use_z_new] = cat['ZERR_NEW'][use_z_new].copy()
-        res['DELTACHI2_QSO'][use_z_new] = cat['DELTACHI2_NEW'][use_z_new].copy()
+        if 'DELTACHI2_NEW' in cat.colnames:
+            res['DELTACHI2_QSO'][use_z_new] = cat['DELTACHI2_NEW'][use_z_new].copy()
 
         # RZ: all the z>5.0 QSO redrock fits look bad
         bad_qso = res['Z_QSO'] > 5.0
