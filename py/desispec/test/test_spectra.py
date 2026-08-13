@@ -210,7 +210,10 @@ class TestSpectra(unittest.TestCase):
         # manually create the spectra and write
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux,
             ivar=self.ivar, mask=self.mask, resolution_data=self.res,
-            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
+            meta=self.meta.copy(), extra=self.extra)
+        spec.meta['HPXPIXEL'] = 12345
+        spec.meta['UNIQPIX'] = 28729
 
         self.verify(spec, self.fmap1)
 
@@ -224,6 +227,15 @@ class TestSpectra(unittest.TestCase):
         self.verify(comp, self.fmap1)
         self.assertIn('BLAT', comp.fibermap.meta)
         self.assertEqual(comp.fibermap.meta['BLAT'], 'foo')
+        self.assertEqual(comp.fibermap.meta['HPXPIXEL'], spec.meta['HPXPIXEL'])
+        self.assertEqual(comp.fibermap.meta['UNIQPIX'], spec.meta['UNIQPIX'])
+        self.assertEqual(comp.exp_fibermap.meta['HPXPIXEL'], spec.meta['HPXPIXEL'])
+        self.assertEqual(comp.exp_fibermap.meta['UNIQPIX'], spec.meta['UNIQPIX'])
+
+        with fits.open(self.fileio) as hdus:
+            for extname in ('FIBERMAP', 'EXP_FIBERMAP'):
+                self.assertEqual(hdus[extname].header['HPXPIXEL'], spec.meta['HPXPIXEL'])
+                self.assertEqual(hdus[extname].header['UNIQPIX'], spec.meta['UNIQPIX'])
 
         # test writing/reading with scores
         spec.scores = self.scores
