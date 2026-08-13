@@ -280,7 +280,9 @@ class TestPixGroup(unittest.TestCase):
 
     def test_regroup_healpix(self):
         """Test grouping table of exposures with healpix filter"""
+        coaddfile = os.path.join(self.testdir, 'test-uniqpix-coadd.fits')
         cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        cmd += f' -c {coaddfile}'
         cmd += f' --healpix {self.healpix}'
         cmd += f' --header BLAT=True BIM=False BAM=false FOO=bar BIZ=1 BAT=2.3'
 
@@ -302,6 +304,7 @@ class TestPixGroup(unittest.TestCase):
         with fits.open(self.specfile, memmap=True) as fx:
             mask = fx['B_MASK'].data
             hdr = fx[0].header
+            fmaphdr = fx['FIBERMAP'].header
 
         print(f"HEADER {type(hdr)} is")
         for key in hdr:
@@ -313,12 +316,20 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(hdr['HPXPIXEL'], self.healpix)
         self.assertEqual(hdr['HPXNSIDE'], self.nside)
         self.assertEqual(hdr['HPXNEST'], True)
+        self.assertEqual(fmaphdr['UNIQPIX'], self.uniqpix)
+        self.assertEqual(fmaphdr['HPXPIXEL'], self.healpix)
         self.assertEqual(hdr['BLAT'], True)
         self.assertEqual(hdr['BIM'], False)
         self.assertEqual(hdr['BAM'], 'false')
         self.assertEqual(hdr['FOO'], 'bar')
         self.assertEqual(hdr['BIZ'], 1)
         self.assertEqual(hdr['BAT'], 2.3)
+
+        with fits.open(coaddfile, memmap=True) as fx:
+            self.assertEqual(fx['FIBERMAP'].header['UNIQPIX'], self.uniqpix)
+            self.assertEqual(fx['FIBERMAP'].header['HPXPIXEL'], self.healpix)
+            self.assertEqual(fx['EXP_FIBERMAP'].header['UNIQPIX'], self.uniqpix)
+            self.assertEqual(fx['EXP_FIBERMAP'].header['HPXPIXEL'], self.healpix)
 
 
     def test_reduxdir(self):
@@ -713,5 +724,4 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(fr.fibermap.meta['TILEID'], 1234)
             self.assertEqual(fr.fibermap.meta['SURVEY'], 'main')
             self.assertEqual(fr.fibermap.meta['PROGRAM'], 'dark')
-
 

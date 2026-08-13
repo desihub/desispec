@@ -79,7 +79,7 @@ def write_spectra(outfile, spec, units=None):
     add_dependencies(hdr)
 
     # for convenience, add some fibermap header keywords to the primary HDU
-    shared_keys = ('TILEID', 'NIGHT', 'SURVEY', 'PROGRAM', 'HPXPIXEL', 'HPXNSIDE', 'HEALPIX')
+    shared_keys = ('TILEID', 'NIGHT', 'SURVEY', 'PROGRAM', 'HPXPIXEL', 'HPXNSIDE', 'HEALPIX', 'UNIQPIX')
     for key in shared_keys:
         if (key in spec.fibermap.meta) and (key not in hdr):
             hdr[key] = spec.fibermap.meta[key]
