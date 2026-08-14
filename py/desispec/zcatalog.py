@@ -206,7 +206,8 @@ def find_target_priority(table):
     is_secondary = np.zeros(n, dtype=int)
     for col in _scnd_target_cols:
         if col in table.colnames:
-            is_secondary |= (np.asarray(table[col]) != 0)
+            values = table[col].filled(0) if isinstance(table[col], MaskedColumn) else table[col]
+            is_secondary |= (np.asarray(values) != 0)
 
     ## Determine SURVEY priority tier, if a SURVEY column is available;
     ## otherwise every row ties (tier 0), leaving step 1 / 3 to decide.
