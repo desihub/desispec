@@ -213,7 +213,9 @@ def find_target_priority(table):
     ## otherwise every row ties (tier 0), leaving step 1 / 3 to decide.
     if 'SURVEY' in table.colnames:
         survey = np.asarray(table['SURVEY']).astype(str)
-        survey_tier = np.array([_survey_priority_tiers.get(s, 2) for s in survey])
+        survey_tier = np.full(n, 2, dtype=int)
+        for tier_survey, tier in _survey_priority_tiers.items():
+            survey_tier[survey == tier_survey] = tier
     else:
         survey_tier = np.zeros(n, dtype=int)
 
