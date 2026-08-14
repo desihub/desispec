@@ -455,6 +455,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             target_priority_row = winner_idx[sortorder][pos]
             tab['TARGET_RA'] = tab['TARGET_RA'][target_priority_row]
             tab['TARGET_DEC'] = tab['TARGET_DEC'][target_priority_row]
+            if 'DESINAME' in tab.colnames:
+                tab['DESINAME'] = tab['DESINAME'][target_priority_row]
 
             ############################### Adding SV/Main Primary Flags ##################################
 
