@@ -58,6 +58,17 @@ class TestZCatalog(unittest.TestCase):
         targets3, idx3 = find_target_priority(t3)
         self.assertEqual(idx3[0], 1)  # main wins even though every row is secondary
 
+        #- targets is sorted ascending by TARGETID, NOT in first-appearance order
+        #- (unlike desispec.util.ordered_unique); here TARGETID=300 appears first
+        #- in the table but should come last in the output.
+        t4 = Table()
+        t4['TARGETID'] = [300, 100, 200]
+        targets4, idx4 = find_target_priority(t4)
+        self.assertTrue(np.all(targets4 == [100, 200, 300]))
+        self.assertEqual(idx4[0], 1)  # TARGETID=100 -> row 1
+        self.assertEqual(idx4[1], 2)  # TARGETID=200 -> row 2
+        self.assertEqual(idx4[2], 0)  # TARGETID=300 -> row 0
+
     def test_find_primary_spectra(self):
         #- TARGETID ZWARN TSNR2_LRG TEST
         rows = [

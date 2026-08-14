@@ -771,6 +771,23 @@ class TestCoadd(unittest.TestCase):
         with self.assertRaises(ValueError):
             cofm, expfm = coadd_fibermap(fm, onetile=True)
 
+    def test_coadd_fibermap_order(self):
+        """coadd_fibermap output should preserve first-appearance order of
+        TARGETID, not get resorted numerically (find_target_priority itself
+        returns ascending order; coadd_fibermap must restore first-appearance
+        order since coadd() builds other same-length arrays that way)."""
+        fm = Table()
+        fm['TARGETID'] = [333, 333, 111, 111, 222, 222]
+        fm['DESI_TARGET'] = [16, 16, 4, 4, 8, 8]
+        fm['TILEID'] = [1, 1, 1, 1, 1, 1]
+        fm['NIGHT'] = [20201220, 20201221] * 3
+        fm['EXPID'] = [10, 20, 11, 21, 12, 22]
+        fm['FIBER'] = [5, 6] * 3
+        fm['FIBERSTATUS'] = [0, 0, 0, 0, 0, 0]
+        fm['TARGET_RA'] = [30.0, 30.0, 10.0, 10.0, 20.0, 20.0]
+        fm['TARGET_DEC'] = [3.0, 3.0, 1.0, 1.0, 2.0, 2.0]
+        cofm, expfm = coadd_fibermap(fm, onetile=True)
+        self.assertTrue(np.all(cofm['TARGETID'] == [333, 111, 222]))
 
     def test_coadd_fibermap_multitile(self):
         """Test coadding a fibermap covering multiple tiles"""

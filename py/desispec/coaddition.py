@@ -239,7 +239,13 @@ def coadd_fibermap(fibermap, onetile=False):
     #- instead of just picking the first-appearing exposure; see find_target_priority.
     #- exp_fibermap has no SURVEY column (a coadd is always for a single survey/program),
     #- so SURVEY-based tie-breaking does not apply here; find_target_priority detects that.
-    targets, ii = find_target_priority(exp_fibermap)
+    #- find_target_priority returns TARGETIDs sorted ascending (not first-appearance
+    #- order), so re-derive first-appearance order here and map it onto that sorted
+    #- result; the caller of coadd_fibermap() builds other same-length arrays (flux,
+    #- ivar, ...) using this same first-appearance order, so it must be preserved.
+    sorted_targets, sorted_ii = find_target_priority(exp_fibermap)
+    targets = ordered_unique(exp_fibermap["TARGETID"])
+    ii = sorted_ii[np.searchsorted(sorted_targets, targets)]
     tfmap = exp_fibermap[ii]
     assert np.all(targets == tfmap['TARGETID'])
     ntarget = targets.size

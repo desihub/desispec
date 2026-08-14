@@ -49,7 +49,6 @@ from astropy.table import Table, Column, MaskedColumn, vstack
 ## DESI related functions
 from desispec.io import specprod_root, read_table
 from desispec.io.util import get_tempfilename, write_bintable
-from desispec.util import ordered_unique
 from desiutil.log import get_logger
 import desiutil.depend
 
@@ -192,8 +191,11 @@ def find_target_priority(table):
     Returns
     -------
     targets : ndarray
-        Unique TARGETIDs, in the order they first appear in `table`; same as
-        `desispec.util.ordered_unique(table['TARGETID'])`.
+        Unique TARGETIDs, sorted in ascending order. Note this is NOT the same
+        order as `desispec.util.ordered_unique(table['TARGETID'])` (which
+        preserves first-appearance order); callers that need first-appearance
+        order should compute it separately and map it onto this function's
+        output via `np.searchsorted`, since `targets` here is sorted.
     indices : ndarray
         For each entry in `targets`, the index into `table` of the row to use
         as the authoritative source of target-level quantities.
@@ -229,15 +231,22 @@ def find_target_priority(table):
     ## final tie-break so that ties keep their original (first-row) order.
     tsel.sort(['TARGETID', 'IS_SECONDARY', 'SURVEY_TIER', 'ROW_NUMBER'])
 
-    ## First occurrence of each TARGETID in this sorted table is the winner
-    targets_sorted, idx_in_sorted = np.unique(tsel['TARGETID'].data, return_index=True)
-    winner_by_sorted_target = tsel['ROW_NUMBER'].data[idx_in_sorted]
+    if n == 0:
+        return np.asarray(table['TARGETID'])[:0], np.arange(0)
 
-    ## Recast into the order that TARGETIDs first appear in the input table,
-    ## to match desispec.util.ordered_unique's convention
-    targets = ordered_unique(np.asarray(table['TARGETID']))
-    pos = np.searchsorted(targets_sorted, targets)
-    indices = winner_by_sorted_target[pos]
+    ## tsel is now sorted with TARGETID as the primary key, so the first
+    ## occurrence of each TARGETID in this sorted table is both (a) the
+    ## priority winner for that TARGETID and (b) a group boundary that can be
+    ## found with a single O(n) scan instead of another O(n log n) sort/unique.
+    targetid_sorted = tsel['TARGETID'].data
+    row_number_sorted = tsel['ROW_NUMBER'].data
+    is_first = np.empty(n, dtype=bool)
+    is_first[0] = True
+    np.not_equal(targetid_sorted[1:], targetid_sorted[:-1], out=is_first[1:])
+    idx_in_sorted = np.flatnonzero(is_first)
+
+    targets = targetid_sorted[idx_in_sorted]
+    indices = row_number_sorted[idx_in_sorted]
 
     return targets, indices
 
@@ -453,9 +462,8 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             ## occurrence. See https://github.com/desihub/desitarget/issues/892
             log.debug('Harmonizing TARGET_RA, TARGET_DEC by target priority')
             targets, winner_idx = find_target_priority(tab)
-            sortorder = np.argsort(targets)
-            pos = np.searchsorted(targets[sortorder], tab['TARGETID'])
-            target_priority_row = winner_idx[sortorder][pos]
+            pos = np.searchsorted(targets, tab['TARGETID'])
+            target_priority_row = winner_idx[pos]
             tab['TARGET_RA'] = tab['TARGET_RA'][target_priority_row]
             tab['TARGET_DEC'] = tab['TARGET_DEC'][target_priority_row]
             if 'DESINAME' in tab.colnames:
