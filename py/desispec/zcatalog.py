@@ -49,6 +49,7 @@ from astropy.table import Table, Column, MaskedColumn, vstack
 ## DESI related functions
 from desispec.io import specprod_root, read_table
 from desispec.io.util import get_tempfilename, write_bintable
+from desispec.util import ordered_unique
 from desiutil.log import get_logger
 import desiutil.depend
 
@@ -153,6 +154,93 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 ####################################################################################################
 ####################################################################################################
 
+#- Secondary-target bitmask columns to check, across all surveys.  Checking these
+#- directly (rather than the SCND_ANY bit of a survey-specific DESI_TARGET column)
+#- works without needing to know which survey a row belongs to, since at most one
+#- of these is ever populated for a given row.
+_scnd_target_cols = ('SCND_TARGET', 'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET')
+
+#- SURVEY priority tiers for find_target_priority; lower is preferred.
+#- Surveys not listed here (sv1, sv2, sv3, cmx, ...) all share the lowest tier.
+_survey_priority_tiers = {'main': 0, 'special': 1}
+
+def find_target_priority(table):
+    """
+    Find the row to use as the authoritative source of target-level quantities
+    (e.g. TARGET_RA, TARGET_DEC, REF_EPOCH, PMRA, PMDEC) for each TARGETID with
+    multiple candidate rows.
+
+    The winning row per TARGETID is chosen by, in order:
+
+    1. Primary target preferred over secondary target, i.e. a row where none
+       of SCND_TARGET, SV1_SCND_TARGET, SV2_SCND_TARGET, SV3_SCND_TARGET are
+       set is preferred over a row where any of those are nonzero.
+    2. If `table` has a SURVEY column, SURVEY=='main' is preferred over
+       'special', which is preferred over any other SURVEY value (sv1, sv2,
+       sv3, cmx, ...). Tables with no SURVEY column (e.g. a single-survey
+       coadd or zcatalog) skip straight to step 3.
+    3. Otherwise, the first occurrence in `table` (stable tie-break).
+
+    Parameters
+    ----------
+    table : Table or ndarray
+        Must have a TARGETID column. May have a SURVEY column and any of
+        SCND_TARGET, SV1_SCND_TARGET, SV2_SCND_TARGET, SV3_SCND_TARGET;
+        missing columns are treated as all-zero / not applicable, so callers
+        do not need to know in advance whether `table` spans multiple surveys.
+
+    Returns
+    -------
+    targets : ndarray
+        Unique TARGETIDs, in the order they first appear in `table`; same as
+        `desispec.util.ordered_unique(table['TARGETID'])`.
+    indices : ndarray
+        For each entry in `targets`, the index into `table` of the row to use
+        as the authoritative source of target-level quantities.
+    """
+    table = Table(table)
+    n = len(table)
+
+    ## Determine secondary-ness survey-agnostically from whichever
+    ## SCND_TARGET-family columns are present.
+    is_secondary = np.zeros(n, dtype=int)
+    for col in _scnd_target_cols:
+        if col in table.colnames:
+            is_secondary |= (np.asarray(table[col]) != 0)
+
+    ## Determine SURVEY priority tier, if a SURVEY column is available;
+    ## otherwise every row ties (tier 0), leaving step 1 / 3 to decide.
+    if 'SURVEY' in table.colnames:
+        survey = np.asarray(table['SURVEY']).astype(str)
+        survey_tier = np.array([_survey_priority_tiers.get(s, 2) for s in survey])
+    else:
+        survey_tier = np.zeros(n, dtype=int)
+
+    tsel = Table()
+    tsel['TARGETID'] = table['TARGETID']
+    tsel['IS_SECONDARY'] = is_secondary
+    tsel['SURVEY_TIER'] = survey_tier
+    tsel['ROW_NUMBER'] = np.arange(n)
+
+    ## Sort by TARGETID, then priority tiers in order, with ROW_NUMBER as the
+    ## final tie-break so that ties keep their original (first-row) order.
+    tsel.sort(['TARGETID', 'IS_SECONDARY', 'SURVEY_TIER', 'ROW_NUMBER'])
+
+    ## First occurrence of each TARGETID in this sorted table is the winner
+    targets_sorted, idx_in_sorted = np.unique(tsel['TARGETID'].data, return_index=True)
+    winner_by_sorted_target = tsel['ROW_NUMBER'].data[idx_in_sorted]
+
+    ## Recast into the order that TARGETIDs first appear in the input table,
+    ## to match desispec.util.ordered_unique's convention
+    targets = ordered_unique(np.asarray(table['TARGETID']))
+    pos = np.searchsorted(targets_sorted, targets)
+    indices = winner_by_sorted_target[pos]
+
+    return targets, indices
+
+####################################################################################################
+####################################################################################################
+
 def _get_survey_program_from_filename(filename):
     """
     Return SURVEY,PROGRAM parsed from zpix/ztile filename; fragile!
@@ -243,6 +331,12 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
     zcat.sort()
+
+    ## Per-row index (into the row-matched ZCATALOG/ZCATALOG_IMAGING/ZCATALOG_EXTRA
+    ## tables) of the target-priority winner for that row's TARGETID; computed while
+    ## processing ZCATALOG and reused for ZCATALOG_IMAGING to harmonize TARGET_RA,
+    ## TARGET_DEC, REF_EPOCH, PMRA, PMDEC across all rows sharing a TARGETID.
+    target_priority_row = None
 
     for file_extension in ['ZCATALOG', 'ZCATALOG_IMAGING', 'ZCATALOG_EXTRA']:
         fn_suffix = file_extension.replace('ZCATALOG', '').replace('_', '-').lower()
@@ -346,6 +440,22 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             tab['ZCAT_NSPEC'] = nspec
             tab['ZCAT_PRIMARY'] = specprim
 
+            ############################### Harmonizing TARGET_RA/TARGET_DEC ##############################
+
+            ## For a given TARGETID, different rows (e.g. from different surveys, or a
+            ## secondary vs. later primary targeting run) can carry slightly different
+            ## TARGET_RA/TARGET_DEC. Propagate a single, consistent value to every row
+            ## sharing a TARGETID, chosen via find_target_priority: primary target over
+            ## secondary, then SURVEY=main over special over anything else, then first
+            ## occurrence. See https://github.com/desihub/desitarget/issues/892
+            log.debug('Harmonizing TARGET_RA, TARGET_DEC by target priority')
+            targets, winner_idx = find_target_priority(tab)
+            sortorder = np.argsort(targets)
+            pos = np.searchsorted(targets[sortorder], tab['TARGETID'])
+            target_priority_row = winner_idx[sortorder][pos]
+            tab['TARGET_RA'] = tab['TARGET_RA'][target_priority_row]
+            tab['TARGET_DEC'] = tab['TARGET_DEC'][target_priority_row]
+
             ############################### Adding SV/Main Primary Flags ##################################
 
             survey_col = tab['SURVEY'].astype(str)
@@ -381,13 +491,25 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
                 tab['MAIN_NSPEC'][is_main] = nspec
                 tab['MAIN_PRIMARY'][is_main] = specprim
 
-            ###############################################################################################
+        elif file_extension == 'ZCATALOG_IMAGING':
 
-            # Sanity check that the TARGETIDs match in the row-matched catalogs
-            if file_extension=='ZCATALOG':
-                targetid_arr = np.array(tab['TARGETID']).copy()
-            else:
-                assert np.all(tab['TARGETID']==targetid_arr)
+            ## Harmonize REF_EPOCH, PMRA, PMDEC using the same per-row target-priority
+            ## winner computed above while processing ZCATALOG; ZCATALOG_IMAGING is
+            ## row-matched to ZCATALOG (see sanity check below) so the same index
+            ## array applies.
+            log.debug('Harmonizing REF_EPOCH, PMRA, PMDEC by target priority')
+            assert target_priority_row is not None
+            for col in ('REF_EPOCH', 'PMRA', 'PMDEC'):
+                if col in tab.colnames:
+                    tab[col] = tab[col][target_priority_row]
+
+        ###############################################################################################
+
+        # Sanity check that the TARGETIDs match in the row-matched catalogs
+        if file_extension=='ZCATALOG':
+            targetid_arr = np.array(tab['TARGETID']).copy()
+        else:
+            assert np.all(tab['TARGETID']==targetid_arr)
 
         ## Convert the masked column table to normal astropy table and select required columns
         final_table = update_table_columns(tab, columns_list=columns_list)

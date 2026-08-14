@@ -25,6 +25,7 @@ from .io.util import get_tempfilename, addkeys
 from .util import convert_to_pandas
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
+from .zcatalog import find_target_priority
 
 def fibermap2tilepix(fibermap, nside=64):
     """
@@ -92,6 +93,13 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
     #- reducing the runtime from minutes to seconds.  The return value is converted back to
     #- to Table for consistency with the rest of the codebase which generally doesn't use pandas.
 
+    #- Determine, for each TARGETID, which row to use for TARGET_RA/TARGET_DEC when
+    #- there are multiple (possibly discrepant) candidates, preferring a primary
+    #- target over a secondary one. zcat here is always for a single survey/program
+    #- (see get_exp2uniqpix_map callers), so SURVEY-based tie-breaking does not apply;
+    #- find_target_priority detects the absence of a SURVEY column automatically.
+    _, priority_idx = find_target_priority(zcat)
+
     #- Trim zcat to Pandas DataFrame with just the columns we need
     log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
     zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
@@ -99,7 +107,7 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
 
     #- Make a table with one row per unique TARGETID plus RA,DEC to calculate UNIQPIX
     log.info('Trimming zcat to unique TARGETID, RA, DEC')
-    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
+    targets = zcat.iloc[priority_idx][['TARGETID', 'TARGET_RA', 'TARGET_DEC']].reset_index(drop=True)
     log.info(f'Calculating unique pixels from {len(targets)} unique targets')
     targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
 

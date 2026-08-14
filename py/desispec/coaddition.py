@@ -28,6 +28,7 @@ from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nona
 from desispec.maskbits import fibermask as fmsk
 from desispec.specscore import compute_coadd_scores
 from desispec.util import ordered_unique
+from desispec.zcatalog import find_target_priority
 
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
@@ -233,7 +234,12 @@ def coadd_fibermap(fibermap, onetile=False):
 
     #- Get TARGETIDs, preserving order in which they first appear
     #- tfmap = "Target Fiber Map", i.e. one row per target instead of one row per exposure
-    targets, ii = ordered_unique(exp_fibermap["TARGETID"], return_index=True)
+    #- For targets with discrepant target-level quantities (e.g. TARGET_RA/TARGET_DEC)
+    #- across exposures, prefer a primary-target exposure over a secondary-target one
+    #- instead of just picking the first-appearing exposure; see find_target_priority.
+    #- exp_fibermap has no SURVEY column (a coadd is always for a single survey/program),
+    #- so SURVEY-based tie-breaking does not apply here; find_target_priority detects that.
+    targets, ii = find_target_priority(exp_fibermap)
     tfmap = exp_fibermap[ii]
     assert np.all(targets == tfmap['TARGETID'])
     ntarget = targets.size
