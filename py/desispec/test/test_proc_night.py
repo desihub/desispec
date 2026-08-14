@@ -111,9 +111,12 @@ class TestProcNight(unittest.TestCase):
         # every tile is represented
         self.assertEqual(set(self.etable['TILEID']), set(proctable['TILEID']))
 
-        # every step is represented
-        for jobdesc in ('ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat', 'tilenight', 'cumulative'):
+        # every step is represented. Note arcs and flats are bundled into the
+        # psfnight/nightlyflat jobs, so they have no rows of their own.
+        for jobdesc in ('ccdcalib', 'psfnight', 'nightlyflat', 'cteflat', 'tilenight', 'cumulative'):
             self.assertIn(jobdesc, set(proctable['JOBDESC']))
+        for jobdesc in ('arc', 'flat'):
+            self.assertNotIn(jobdesc, set(proctable['JOBDESC']))
 
         # tilenight jobs created
         for tileid in np.unique(proctable['TILEID']):
@@ -140,7 +143,7 @@ class TestProcNight(unittest.TestCase):
         self.assertEqual(len(prodfiles), 1)
         self.assertTrue(prodfiles[0].endswith('exposure_tables'))
 
-    def test_proc_night_dryrun3(self):
+    def test_proc_night_dryrun4(self):
         """Test that dry_run_level=4 doesn't produce any output"""
         proctable, unproctable = proc_night(self.night, z_submit_types=['cumulative',],
                                             dry_run_level=4, sub_wait_time=0.0)
@@ -253,6 +256,312 @@ class TestProcNight(unittest.TestCase):
                         msg='Cross night resubmission should have 2 DEP_NOT_SUBDs' \
                             + ' after forcing failed previous night jobs.')
 
+
+    def _bundle_row(self, proctable, jobdesc):
+        """Return the single processing row with the given JOBDESC"""
+        sel = proctable['JOBDESC'] == jobdesc
+        self.assertEqual(np.sum(sel), 1,
+                         f'expected exactly one {jobdesc} row')
+        return proctable[sel][0]
+
+    def _bundle_script(self, night, jobdesc):
+        """Return the text of the one generated script for the given JOBDESC"""
+        scriptdir = get_desi_proc_batch_file_path(night, reduxdir=self.proddir)
+        scripts = glob.glob(os.path.join(scriptdir, f'{jobdesc}*.slurm'))
+        self.assertEqual(len(scripts), 1, f'expected one {jobdesc} script')
+        with open(scripts[0], 'r') as fil:
+            return fil.read()
+
+    def test_proc_night_calibration_bundles(self):
+        """Arcs, normal flats, and CTE flats are each submitted as one job.
+
+        A normal night should produce exactly one psfnight row holding every
+        selected arc, one nightlyflat row holding every selected normal flat,
+        and one cteflat row holding every selected CTE flat, with no individual
+        per-exposure calibration rows at all.
+        """
+        night = self.laternight
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=1,
+                                            sub_wait_time=0.0)
+
+        ## no individual arc or flat rows remain
+        for jobdesc in ('arc', 'flat'):
+            self.assertNotIn(jobdesc, set(proctable['JOBDESC']))
+
+        arcbundle = self._bundle_row(proctable, 'psfnight')
+        flatbundle = self._bundle_row(proctable, 'nightlyflat')
+        ctebundle = self._bundle_row(proctable, 'cteflat')
+
+        ## a normal night has 5 arcs, 12 flats, and 3 CTE flats
+        self.assertEqual(len(arcbundle['EXPID']), 5)
+        self.assertEqual(len(flatbundle['EXPID']), 12)
+        self.assertEqual(len(ctebundle['EXPID']), 3)
+
+        ## the bundles carry the OBSTYPE of their exposures
+        self.assertEqual(arcbundle['OBSTYPE'], 'arc')
+        self.assertEqual(flatbundle['OBSTYPE'], 'flat')
+        self.assertEqual(ctebundle['OBSTYPE'], 'flat')
+
+        ## CTE flats belong to the cteflat bundle, not the nightlyflat bundle
+        self.assertEqual(len(set(ctebundle['EXPID']) & set(flatbundle['EXPID'])), 0)
+
+        ## all three are calibrators with unique internal IDs
+        for bundle in (arcbundle, flatbundle, ctebundle):
+            self.assertEqual(bundle['CALIBRATOR'], 1)
+        self.assertEqual(len(np.unique(proctable['INTID'])), len(proctable))
+
+        ## dependencies: arcs on ccdcalib, flats on arcs, CTE on arcs
+        ccdcalib = self._bundle_row(proctable, 'ccdcalib')
+        self.assertEqual(list(arcbundle['INT_DEP_IDS']), [ccdcalib['INTID']])
+        self.assertEqual(list(flatbundle['INT_DEP_IDS']), [arcbundle['INTID']])
+        self.assertEqual(list(ctebundle['INT_DEP_IDS']), [arcbundle['INTID']])
+        self.assertNotIn(flatbundle['INTID'], list(ctebundle['INT_DEP_IDS']))
+
+        ## the temporary per-exposure step rows must never be referenced
+        intids = set(np.array(proctable['INTID']))
+        for prow in proctable:
+            for depid in prow['INT_DEP_IDS']:
+                self.assertIn(depid, intids,
+                              f"dangling dependency {depid} in {prow['JOBDESC']}")
+
+        ## each bundle recorded the script that was actually written
+        scriptdir = get_desi_proc_batch_file_path(night, reduxdir=self.proddir)
+        for bundle in (arcbundle, flatbundle, ctebundle):
+            self.assertNotEqual(bundle['SCRIPTNAME'], '')
+            self.assertTrue(os.path.exists(os.path.join(scriptdir,
+                                                        bundle['SCRIPTNAME'])))
+
+    def test_proc_night_bundle_dependency_of_tilenight(self):
+        """Tilenight depends on the bundled nightlyflat job"""
+        night = self.laternight
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            dry_run_level=3, sub_wait_time=0.0)
+        flatbundle = self._bundle_row(proctable, 'nightlyflat')
+        tnights = proctable[proctable['JOBDESC'] == 'tilenight']
+        self.assertGreater(len(tnights), 0)
+        for tnight in tnights:
+            self.assertEqual(list(tnight['INT_DEP_IDS']), [flatbundle['INTID']])
+
+    def test_proc_night_bundle_scripts(self):
+        """The three generated bundle scripts have the required structure"""
+        night = self.laternight
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=1,
+                                            sub_wait_time=0.0)
+        arcbundle = self._bundle_row(proctable, 'psfnight')
+        flatbundle = self._bundle_row(proctable, 'nightlyflat')
+        ctebundle = self._bundle_row(proctable, 'cteflat')
+
+        arctext = self._bundle_script(night, 'psfnight')
+        flattext = self._bundle_script(night, 'nightlyflat')
+        ctetext = self._bundle_script(night, 'cteflat')
+
+        ## one exposure command per EXPID. Arcs and CTE flats echo the command
+        ## before running it, so they appear twice; flats are run by parallel,
+        ## whose -v flag does the echoing, so they appear once.
+        for text, bundle, ncopies in ((arctext, arcbundle, 2),
+                                      (flattext, flatbundle, 1),
+                                      (ctetext, ctebundle, 2)):
+            for expid in bundle['EXPID']:
+                cmd = (f"desi_proc --cameras {bundle['PROCCAMWORD']}"
+                       + f' -n {night} -e {expid} --mpi')
+                self.assertEqual(text.count(cmd), ncopies,
+                                 f'unexpected number of commands for {expid}')
+
+        ## exactly one joint fit for arcs and flats (echoed then run)
+        self.assertEqual(arctext.count('desi_proc_joint_fit --obstype arc'), 2)
+        self.assertEqual(flattext.count('desi_proc_joint_fit --obstype flat'), 2)
+
+        ## the nightlyflat joint fit lists only the normal flats
+        expid_str = ','.join([str(e) for e in flatbundle['EXPID']])
+        self.assertIn(f'-e {expid_str} --mpi', flattext)
+        for expid in ctebundle['EXPID']:
+            self.assertNotIn(str(expid), expid_str)
+
+        ## arcs are backgrounded and waited on individually
+        self.assertEqual(arctext.count(' &\npids="$pids $!"'), 5)
+        self.assertIn('wait $pid || nfail=$((nfail+1))', arctext)
+        self.assertNotIn('\nwait\n', arctext)
+
+        ## flats use GNU parallel throttled by the allocation
+        self.assertIn('parallel -v -j "$SLURM_JOB_NUM_NODES"', flattext)
+        self.assertIn("STARTTIMESTR='--starttime $(date +%s)'", flattext)
+        self.assertIn('nfail=$?', flattext)
+        self.assertIn('echo FAILED to process $nfail individual flats', flattext)
+
+        ## CTE flats are serial, have no joint fit, and accumulate failures
+        self.assertNotIn('parallel', ctetext)
+        self.assertNotIn(' &\n', ctetext)
+        self.assertNotIn('desi_proc_joint_fit', ctetext)
+        self.assertIn('nfail=$((nfail+1))', ctetext)
+        for expid in ctebundle['EXPID']:
+            self.assertIn(f'-e {expid} --mpi', ctetext)
+
+        ## every command runs directly under MPI, and no exposure is abandoned
+        ## because a sibling failed
+        for text in (arctext, flattext, ctetext):
+            self.assertNotIn('--batch', text)
+            self.assertNotIn('--nosubmit', text)
+            self.assertNotIn('--halt', text)
+            self.assertNotIn('kill ', text)
+            for line in text.split('\n'):
+                if line.startswith('srun ') or line.startswith('"srun '):
+                    self.assertIn(' --mpi ', line)
+
+    def test_proc_night_cteflat_idempotency(self):
+        """Re-running proc_night doesn't submit a second CTE bundle"""
+        night = self.laternight
+        proctable1, unproc1 = proc_night(night, z_submit_types=None, tiles=[],
+                                         dry_run_level=1, sub_wait_time=0.0)
+        self.assertEqual(np.sum(proctable1['JOBDESC'] == 'cteflat'), 1)
+
+        proctable2, unproc2 = proc_night(night, z_submit_types=None, tiles=[],
+                                         dry_run_level=1, sub_wait_time=0.0)
+        self.assertEqual(np.sum(proctable2['JOBDESC'] == 'cteflat'), 1)
+        self.assertEqual(len(proctable2), len(proctable1))
+
+    def test_proc_night_cteflat_with_linked_calibrations(self):
+        """A night with every standard calibration accounted for still processes CTE flats.
+
+        The cteflat bundle is independent of the standard calibrations: its
+        preproc images feed the nightly detector QA, not fiberflatnight, so
+        linking psfnight and fiberflatnight from a reference night must not
+        suppress it.
+        """
+        night = self.laternight
+        ## link every linkable calibration and skip darknight, so that every
+        ## accounted_for flag is True and the CTE flats are the only work left
+        override_dict = {'calibration':
+                            {'linkcal':
+                                {'refnight': night - 1}}}
+        proctable, unproctable = self._override_write_run_delete(
+                override_dict, night=night, tiles=[], z_submit_types=None,
+                no_darknight=True, dry_run_level=1)
+
+        self.assertIn('linkcal', set(proctable['JOBDESC']))
+        ## all the standard calibrations are accounted for by the link
+        for jobdesc in ('psfnight', 'nightlyflat', 'ccdcalib', 'biasnight',
+                        'biaspdark', 'pdark'):
+            self.assertNotIn(jobdesc, set(proctable['JOBDESC']))
+        ## but the CTE flats still need to be processed
+        ctebundle = self._bundle_row(proctable, 'cteflat')
+        self.assertEqual(len(ctebundle['EXPID']), 3)
+        ## with nothing else to depend on, it depends on the linkcal job
+        linkcal = self._bundle_row(proctable, 'linkcal')
+        self.assertEqual(list(ctebundle['INT_DEP_IDS']), [linkcal['INTID']])
+
+    def test_proc_night_failed_cteflat_blocks_science(self):
+        """A failed CTE bundle is caught by the calibrator-failure check.
+
+        The cteflat row has CALIBRATOR=1, so an unrecoverable failure must stop
+        proc_night from submitting more work unless the user explicitly passes
+        ignore_proc_table_failures.
+        """
+        from unittest.mock import patch
+
+        night = self.laternight
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=1,
+                                            sub_wait_time=0.0)
+        ## Mark the cteflat bundle as failed and save it back to disk
+        ctesel = proctable['JOBDESC'] == 'cteflat'
+        self.assertEqual(proctable['CALIBRATOR'][ctesel][0], 1)
+        proctable['STATUS'][ctesel] = 'TIMEOUT'
+        write_table(proctable, tablename=findfile('processing_table', night),
+                    tabletype='proctable')
+
+        ## Pretend that resubmitting the failure didn't fix it, which is what
+        ## happens once a job has used up its resubmission attempts.
+        with patch('desispec.scripts.proc_night.update_from_queue',
+                   side_effect=lambda ptab, **kwargs: ptab), \
+             patch('desispec.scripts.proc_night.update_and_recursively_submit',
+                   side_effect=lambda ptab, **kwargs: (ptab, 0, 1)):
+            with self.assertRaises(AssertionError):
+                proc_night(night, z_submit_types=None, tiles=[],
+                           dry_run_level=4, sub_wait_time=0.0)
+
+            ## the documented override lets the user proceed anyway
+            proctable2, unproctable2 = proc_night(
+                    night, z_submit_types=None, tiles=[], dry_run_level=4,
+                    sub_wait_time=0.0, ignore_proc_table_failures=True)
+        self.assertEqual(np.sum(proctable2['JOBDESC'] == 'cteflat'), 1)
+
+    def _touch_camera_files(self, filetype, night, expid=None, cameras=None):
+        """Create empty per-camera output files so restarts can find them"""
+        if cameras is None:
+            cameras = [f'{band}{spectro}' for spectro in range(10)
+                       for band in 'brz']
+        for camera in cameras:
+            pathname = findfile(filetype, night=night, expid=expid,
+                                camera=camera)
+            os.makedirs(os.path.dirname(pathname), exist_ok=True)
+            open(pathname, 'w').close()
+
+    def test_proc_night_bundle_restarts(self):
+        """Existing products prune bundle steps or suppress bundles entirely"""
+        night = self.laternight
+        scriptdir = get_desi_proc_batch_file_path(night, reduxdir=self.proddir)
+
+        ## First find out which exposures the bundles would use
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=3,
+                                            sub_wait_time=0.0)
+        arc_expids = list(self._bundle_row(proctable, 'psfnight')['EXPID'])
+        cte_expids = list(self._bundle_row(proctable, 'cteflat')['EXPID'])
+
+        ## An existing psfnight for every camera suppresses the arc bundle,
+        ## and existing fitpsf files drop the finished arcs from the script
+        self._touch_camera_files('psfnight', night)
+        for expid in arc_expids[:2]:
+            self._touch_camera_files('fitpsf', night, expid=expid)
+        ## Existing CTE frames drop the finished CTE exposures
+        self._touch_camera_files('frame', night, expid=cte_expids[0])
+
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=1,
+                                            sub_wait_time=0.0)
+
+        ## psfnight is already on disk, so no arc bundle script was written
+        arcbundle = self._bundle_row(proctable, 'psfnight')
+        self.assertEqual(arcbundle['STATUS'], 'COMPLETED')
+        self.assertEqual(arcbundle['SCRIPTNAME'], '',
+                         'a bundle completed before script generation must '
+                         'not name a script that was never written')
+        self.assertEqual(len(glob.glob(os.path.join(scriptdir, 'psfnight*.slurm'))), 0)
+
+        ## the CTE bundle still runs, but only for the unfinished exposures
+        ctetext = self._bundle_script(night, 'cteflat')
+        self.assertNotIn(f'-e {cte_expids[0]} ', ctetext)
+        for expid in cte_expids[1:]:
+            self.assertIn(f'-e {expid} --mpi', ctetext)
+        ## and its walltime shrank with the number of remaining steps
+        self.assertIn('#SBATCH --time=00:40:00', ctetext)
+
+    def test_proc_night_bundle_resubmission_pathname(self):
+        """A bundle can be resubmitted using the SCRIPTNAME it recorded"""
+        from desispec.workflow.processing import batch_script_pathname
+
+        night = self.laternight
+        proctable, unproctable = proc_night(night, z_submit_types=None,
+                                            tiles=[], dry_run_level=1,
+                                            sub_wait_time=0.0)
+
+        for jobdesc in ('psfnight', 'nightlyflat', 'cteflat'):
+            bundle = self._bundle_row(proctable, jobdesc)
+            ## the stored name is nonempty and is what resubmission rebuilds
+            self.assertNotEqual(bundle['SCRIPTNAME'], '')
+            pathname = batch_script_pathname(bundle)
+            self.assertEqual(os.path.basename(pathname), bundle['SCRIPTNAME'])
+            self.assertTrue(os.path.exists(pathname), f'missing {pathname}')
+
+        ## a failed bundle is resubmitted rather than left behind
+        proctable['STATUS'][proctable['JOBDESC'] == 'cteflat'] = 'TIMEOUT'
+        updated, nsubmits, nbad = update_and_recursively_submit(
+                proctable, submits=0, dry_run_level=4)
+        self.assertEqual(nbad, 0)
+        self.assertGreater(nsubmits, 0)
+        self.assertNotIn('TIMEOUT', set(updated['STATUS']))
 
     def _override_write_run_delete(self, override_dict, night=None, **kwargs):
         """Write override, run proc_night, remove override file, and return outputs"""

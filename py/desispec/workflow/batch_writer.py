@@ -7,12 +7,19 @@ Utilities for writing slurm batch scripts.
 
 import os
 import sys
-from desispec.workflow.batch import determine_resources
+from desispec.workflow.batch import determine_resources, max_nodes_for_jobdesc
 import numpy as np
 from desispec.io import findfile
 from desispec.io.util import decode_camword, parse_cameras
 from desispec.workflow import batch
 from desiutil.log import get_logger
+
+## Minimum memory in GB required per MPI rank of an arc (PSF) fit
+_ARC_MEMORY_PER_RANK = 3.2
+
+## desispec.workflow.schedule.Schedule consumes ranks in groups of this size
+## plus one scheduler rank, so arc rank counts must be 20*k + 1
+_ARC_RANKS_PER_GROUP = 20
 
 
 def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
@@ -123,6 +130,40 @@ def get_desi_proc_tilenight_batch_file_pathname(night, tileid, reduxdir=None):
     path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
     name = get_desi_proc_tilenight_batch_file_name(night,tileid)
     return os.path.join(path, name)
+
+
+def adjust_arc_resources(ncores, nodes, batch_config):
+    """
+    Adjust node count and thread count for an arc (PSF fit) job.
+
+    Arc fits require _ARC_MEMORY_PER_RANK GB of memory per bundle, so the node
+    count is increased until that is satisfied.
+
+    Args:
+        ncores (int): number of MPI ranks requested, including the one extra
+            desispec.workflow.schedule scheduler rank.
+        nodes (int): number of nodes currently requested.
+        batch_config (dict): batch configuration from batch.get_config().
+
+    Returns:
+        tuple: A tuple containing:
+
+        * nodes: int, number of nodes, possibly increased to satisfy the memory
+          requirement.
+        * ranks_per_node: int, the largest number of worker ranks that will land
+          on a single node.
+        * threads_per_task: int, number of threads to give each rank.
+    """
+    ranks_per_node = (ncores - 1) // nodes + ((ncores - 1) % nodes > 0)
+    mem_per_node = float(batch_config['memory'])
+    mem_per_rank = mem_per_node / ranks_per_node
+    while mem_per_rank < _ARC_MEMORY_PER_RANK:
+        nodes += 1
+        ranks_per_node = (ncores - 1) // nodes + ((ncores - 1) % nodes > 0)
+        mem_per_rank = mem_per_node / ranks_per_node
+    threads_per_node = batch_config['threads_per_core'] * batch_config['cores_per_node']
+    threads_per_task = (threads_per_node * nodes) // ncores
+    return nodes, ranks_per_node, threads_per_task
 
 
 def wrap_command_for_script(cmd, nodes, ntasks, threads_per_task, stepname='step'):
@@ -549,6 +590,424 @@ def create_ccdcalib_batch_script(night, expids, camword='a0123456789',
     return scriptpathname
 
 
+def get_calibration_bundle_step_resources(step_jobdesc, ncameras, queue=None,
+                                          system_name=None):
+    """
+    Determine the resources for one exposure step inside a calibration bundle.
+
+    Every bundle step runs on a single node so that the bundle's allocation is
+    simply one node per concurrent exposure.
+
+    Args:
+        step_jobdesc (str): resource class of the step, 'ARC', 'FLAT', or
+            'CTEFLAT'.
+        ncameras (int): number of cameras this step will process.
+        queue (str, optional): the Slurm queue that will be used.
+        system_name (str, optional): name of batch system, e.g. perlmutter-cpu.
+
+    Returns:
+        tuple: A tuple containing:
+
+        * nodes: int, number of nodes for this step, always 1.
+        * ntasks: int, number of MPI ranks for this step.
+        * threads_per_task: int, number of threads per rank.
+        * runtime: float, estimated runtime of this step in minutes.
+    """
+    step_jobdesc = step_jobdesc.upper()
+    ## determine_resources() guesses the system from an already uppercased
+    ## jobdesc, which never matches its lowercase CPU-only list, so resolve the
+    ## system here from the lowercase name instead
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=step_jobdesc.lower())
+    batch_config = batch.get_config(system_name)
+    ncores, nodes, runtime = determine_resources(ncameras, step_jobdesc,
+                                                 queue=queue,
+                                                 system_name=system_name)
+    threads_per_node = batch_config['threads_per_core'] * batch_config['cores_per_node']
+    if step_jobdesc == 'ARC':
+        ## determine_resources sizes an arc for a multi-node job. Reshape that
+        ## layout onto a single node by giving the step the number of ranks
+        ## that would have landed on one node, rounded down to a valid
+        ## 20*k + 1 count for desispec.workflow.schedule.Schedule.
+        ## NOTE: this gives fewer concurrent camera groups, and therefore more
+        ## waves, than the single-exposure arc job the 45 minute ARC runtime
+        ## constant was calibrated against. See the rollout notes before
+        ## enabling bundles in the realtime queue.
+        nodes, ranks_per_node, threads_per_task = adjust_arc_resources(
+                ncores, nodes, batch_config)
+        ntasks = (ranks_per_node // _ARC_RANKS_PER_GROUP) * _ARC_RANKS_PER_GROUP + 1
+        threads_per_task = max(threads_per_node // ntasks, 1)
+    else:
+        ntasks = ncores
+        threads_per_task = batch_config['threads_per_core']
+    return 1, ntasks, threads_per_task, runtime
+
+
+def _calibration_bundle_step_filenames(step_jobdesc, night, expid, camword,
+                                       jobid_var='$SLURM_JOBID'):
+    """
+    Return the timing and log filenames of one calibration bundle exposure step.
+
+    Args:
+        step_jobdesc (str): the step's own descriptor, 'arc', 'flat', or
+            'cteflat'. Note this is not the bundle's JOBDESC.
+        night (str or int): the night the data was acquired.
+        expid (int): the exposure id of this step.
+        camword (str): the camword this step will process.
+        jobid_var (str): shell expression giving the Slurm job id.
+
+    Returns:
+        tuple: (timingfile, logfile) basenames, both relative to the batch dir.
+    """
+    base = '{}-{}-{:08d}-{}'.format(step_jobdesc, night, int(expid), camword)
+    return f'{base}-timing-{jobid_var}.json', f'{base}-{jobid_var}.log'
+
+
+def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
+                                           steps, joint_cmd=None,
+                                           joint_camword=None, queue=None,
+                                           system_name=None, runtime=None,
+                                           batch_opts=None, concurrency=None,
+                                           reduxdir=None):
+    """
+    Generate a SLURM batch script that processes every exposure of a nightly
+    calibration bundle within a single allocation.
+
+    Arc bundles launch one backgrounded srun per exposure and then run
+    psfnight, normal-flat bundles throttle their exposures with GNU parallel
+    and then run nightlyflat, and CTE-flat bundles run their exposures
+    sequentially and have no joint fit.
+
+    In all three cases every selected exposure is attempted even if a sibling
+    fails, but a joint fit is never run over an incomplete set of exposures.
+
+    Args:
+        night (str or int): The night the data was acquired.
+        jobdesc (str): The bundle job description: 'psfnight', 'nightlyflat',
+            or 'cteflat'.
+        expids (list of int or np.array): All exposure ids of the bundle, used
+            for the script pathname. This is the full selected set, not the
+            possibly smaller set of exposures still needing to be processed.
+        camword (str): The full camword of the bundle, used for the script and
+            job name so the pathname is stable under camera pruning.
+        steps (list of dict): One entry per exposure that still needs to be
+            processed, each with keys 'expid' (int), 'camword' (str), and
+            'cmd' (str). The command is a complete desi_proc command line
+            without the srun prefix, --starttime, or --timingfile.
+        joint_cmd (str, optional): Complete desi_proc_joint_fit command line
+            without the srun prefix, --starttime, or --timingfile. Required
+            for 'psfnight' and 'nightlyflat', must be None for 'cteflat'.
+        joint_camword (str, optional): The camword the joint fit will process.
+            Defaults to camword.
+        queue (str, optional): Queue to be used. Default is 'regular'.
+        system_name (str, optional): name of batch system, e.g. perlmutter-cpu.
+        runtime (int, optional): Force the wall clock request in minutes rather
+            than deriving it from determine_resources().
+        batch_opts (str, optional): Other options to give to the slurm batch
+            scheduler (written into the script).
+        concurrency (int, optional): Number of normal-flat exposure steps to
+            run at once. Ignored by the other two bundle types. Default is
+            the number of remaining steps divided by three.
+        reduxdir (str, optional): base directory where run/scripts lives.
+
+    Returns:
+        str: The full path name for the batch script file written.
+    """
+    log = get_logger()
+    jobdesc = str(jobdesc).lower()
+    if jobdesc not in ('psfnight', 'nightlyflat', 'cteflat'):
+        msg = f'Unknown calibration bundle jobdesc={jobdesc}'
+        log.critical(msg)
+        raise ValueError(msg)
+    if jobdesc == 'cteflat' and joint_cmd is not None:
+        msg = 'cteflat bundles have no joint fit, but a joint_cmd was given'
+        log.critical(msg)
+        raise ValueError(msg)
+    if jobdesc != 'cteflat' and joint_cmd is None:
+        msg = f'{jobdesc} bundles require a joint fit command'
+        log.critical(msg)
+        raise ValueError(msg)
+    if len(steps) == 0 and joint_cmd is None:
+        msg = f'{jobdesc} bundle has no exposure steps and no joint fit to run'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    ## Default to regular queue
+    if queue is None:
+        queue = 'regular'
+
+    if joint_camword is None:
+        joint_camword = camword
+
+    ## If system name isn't specified, pick it based upon jobdesc
+    if system_name is None:
+        system_name = batch.default_system(jobdesc=jobdesc)
+
+    batch_config = batch.get_config(system_name)
+
+    ## Resource class of each exposure step, and the descriptor used in the
+    ## per-step filenames. Note the step descriptor is not the bundle's JOBDESC.
+    if jobdesc == 'psfnight':
+        step_jobdesc, step_class, joint_class = 'arc', 'ARC', 'PSFNIGHT'
+    elif jobdesc == 'nightlyflat':
+        step_jobdesc, step_class, joint_class = 'flat', 'FLAT', 'NIGHTLYFLAT'
+    else:
+        step_jobdesc, step_class, joint_class = 'cteflat', 'CTEFLAT', None
+
+    ## Deterministic exposure ordering
+    steps = sorted(steps, key=lambda step: int(step['expid']))
+    nsteps = len(steps)
+
+    scriptpathname = get_desi_proc_batch_file_pathname(night=night, exp=expids,
+                                                       jobdesc=jobdesc,
+                                                       cameras=camword,
+                                                       reduxdir=reduxdir)
+    scriptpathname += '.slurm'
+    batchdir = os.path.dirname(scriptpathname)
+    os.makedirs(batchdir, exist_ok=True)
+    jobname = os.path.basename(scriptpathname).removesuffix('.slurm')
+
+    ## Resources of each remaining exposure step. These are computed per step
+    ## because camera pruning can leave the steps with different camwords.
+    step_resources = []
+    for step in steps:
+        ncam = len(decode_camword(step['camword']))
+        step_resources.append(get_calibration_bundle_step_resources(
+                step_class, ncam, queue=queue, system_name=system_name))
+
+    nodes_per_step = max([res[0] for res in step_resources], default=1)
+    step_runtimes = [res[3] for res in step_resources]
+
+    ## Resources of the joint fit, if there is one
+    joint_nodes, joint_ntasks, joint_runtime = 1, 0, 0.
+    joint_threads = batch_config['threads_per_core']
+    if joint_cmd is not None:
+        njointcams = len(decode_camword(joint_camword))
+        joint_ntasks, joint_nodes, joint_runtime = determine_resources(
+                njointcams, joint_class, queue=queue, system_name=system_name)
+
+    ## Size the allocation. Every bundle requests one node per concurrent
+    ## exposure step, with at least enough nodes for the joint fit.
+    if jobdesc == 'cteflat':
+        ## CTE flats run one at a time on a single node
+        nodes, concurrency = nodes_per_step, 1
+        npasses = nsteps
+        est_runtime = float(np.sum(step_runtimes))
+    else:
+        cap = max_nodes_for_jobdesc(joint_class)
+        if joint_nodes > cap:
+            msg = (f'{jobdesc} joint fit requires {joint_nodes} nodes, which '
+                   + f'exceeds the {cap} node cap for {joint_class}')
+            log.critical(msg)
+            raise ValueError(msg)
+        if jobdesc == 'psfnight':
+            ## every selected arc should be processed at the same time
+            requested_concurrency = max(nsteps, 1)
+        elif concurrency is not None:
+            requested_concurrency = max(int(concurrency), 1)
+        else:
+            ## throttle flats so that the allocation stays small enough for
+            ## two jobs to run together in the 10 node realtime queue
+            requested_concurrency = max(1, nsteps // 3)
+        nodes = min(max(requested_concurrency * nodes_per_step, joint_nodes), cap)
+        concurrency = max(1, min(requested_concurrency, nodes // nodes_per_step))
+        if 0 < concurrency < nsteps and jobdesc == 'psfnight':
+            log.warning(f'{jobdesc} bundle has {nsteps} arc exposures but the '
+                        + f'{cap} node cap for {joint_class} only allows '
+                        + f'{concurrency} at a time, so the arcs will be '
+                        + 'processed in multiple passes.')
+        npasses = int(np.ceil(float(nsteps) / float(concurrency)))
+        est_runtime = npasses * max(step_runtimes, default=0.)
+        est_runtime += joint_runtime
+
+    if runtime is not None:
+        est_runtime = runtime
+
+    ## Never request a degenerate wall clock, e.g. for a bundle that somehow
+    ## has neither exposure steps nor a joint fit runtime
+    est_runtime = max(float(est_runtime), 5.)
+    runtime_hh = int(est_runtime // 60)
+    runtime_mm = int(est_runtime % 60)
+
+    ## GPU systems run the exposure steps through the MPS wrapper and request
+    ## GPUs per step; the joint step inherits the allocation's GPUs
+    mps_wrapper, step_gpu_opt = '', ''
+    if system_name == 'perlmutter-gpu':
+        mps_wrapper = 'desi_mps_wrapper'
+        step_gpu_opt = '--gpus-per-node={} '.format(batch_config['gpus_per_node'])
+
+    ## OMP_NUM_THREADS is exported once for the whole exposure block
+    if step_class == 'ARC':
+        step_threads = max([res[2] for res in step_resources], default=1)
+    else:
+        step_threads = 1
+
+    def _step_srun(step, resources, jobid_var='$SLURM_JOBID'):
+        """Return (srun_command, logfile) for one exposure step"""
+        stepnodes, ntasks, threads, _ = resources
+        timingfile, logfile = _calibration_bundle_step_filenames(
+                step_jobdesc, night, step['expid'], step['camword'],
+                jobid_var=jobid_var)
+        cmd = step['cmd']
+        if jobdesc == 'nightlyflat':
+            ## STARTTIMESTR is expanded by the shell parallel spawns per job
+            cmd += ' ${STARTTIMESTR}'
+        else:
+            cmd += ' --starttime $(date +%s)'
+        cmd += f' --timingfile {timingfile}'
+        srun = (f'srun {step_gpu_opt}-N {stepnodes} -n {ntasks} -c {threads} '
+                + '--cpu-bind=cores ' + mps_wrapper + f' {cmd}')
+        return srun, logfile
+
+    script_body = ''
+    if nsteps == 0:
+        ## Every exposure already has its per-exposure products, so the script
+        ## contains only the joint fit that creates the nightly product
+        script_body += '\n## All individual exposures already have their expected outputs,\n'
+        script_body += f'## so this script only runs {jobdesc}\n'
+    elif jobdesc == 'psfnight':
+        script_body += '\n## Launch every arc exposure at once, one node each, and collect the\n'
+        script_body += '## PIDs so that each one can be waited on individually below\n'
+        script_body += 'pids=""\n'
+        for step, resources in zip(steps, step_resources):
+            srun, logfile = _step_srun(step, resources)
+            script_body += f"\n# Process exposure {step['expid']}\n"
+            script_body += f'echo Running {srun}\n'
+            script_body += f'{srun} > {logfile} 2>&1 &\n'
+            script_body += 'pids="$pids $!"\n'
+        script_body += '\n## Wait for every exposure, counting failures. A failed arc must not cut\n'
+        script_body += '## its siblings short, but psfnight must not be built from a subset.\n'
+        script_body += 'nfail=0\n'
+        script_body += 'for pid in $pids; do\n'
+        script_body += '    wait $pid || nfail=$((nfail+1))\n'
+        script_body += 'done\n'
+        script_body += 'if [ $nfail -ne 0 ]; then\n'
+        script_body += f'  echo FAILED: $nfail of {nsteps} arc exposures failed,' \
+                       + ' not running psfnight at $(date)\n'
+        script_body += '  exit 1\n'
+        script_body += 'fi\n'
+        script_body += 'echo Successfully completed arcs at $(date)\n'
+        script_body += '\n# Switch back to num threads of 1\n'
+        script_body += 'export OMP_NUM_THREADS=1\n'
+    elif jobdesc == 'nightlyflat':
+        joblog = 'joblog-flats-{}-{:08d}-$SLURM_JOBID.log'.format(
+                night, int(np.min(expids)))
+        script_body += '\n# Process individual exposures\n'
+        script_body += '## Run with "$SLURM_JOB_NUM_NODES" workers, each with 1 node of resources\n'
+        script_body += '## -v prints the command before executing it, -j is the number of workers\n'
+        script_body += '## --joblog saves basic timing of the jobs\n'
+        script_body += "## after ':::' is the list of commands to be run\n"
+        script_body += '## STARTTIMESTR is single quoted so that $(date +%s) reaches parallel as a\n'
+        script_body += '## literal and is evaluated by the shell parallel spawns for each job,\n'
+        script_body += '## giving every exposure its own start time\n'
+        script_body += "STARTTIMESTR='--starttime $(date +%s)'\n"
+        script_body += f'parallel -v -j "$SLURM_JOB_NUM_NODES" --joblog "{joblog}" ::: \\\n'
+        srun_strings = []
+        for step, resources in zip(steps, step_resources):
+            srun, logfile = _step_srun(step, resources,
+                                       jobid_var='${SLURM_JOBID}')
+            ## parallel runs each string through $PARALLEL_SHELL/$SHELL, which
+            ## isn't guaranteed to be bash, so use POSIX redirection
+            srun_strings.append(f'"{srun} > {logfile} 2>&1"')
+        script_body += ' \\\n'.join(srun_strings) + '\n'
+        script_body += 'nfail=$?\n'
+        script_body += '\n## By default parallel exits with the number of failed jobs. Capture that\n'
+        script_body += '## into nfail before the test below, since [ ] would overwrite $?.\n'
+        script_body += '## Every flat is attempted, but nightlyflat must not be built from a subset.\n'
+        script_body += 'if [ $nfail -ne 0 ]; then\n'
+        script_body += '  echo FAILED to process $nfail individual flats,' \
+                       + ' not running nightlyflat at $(date)\n'
+        script_body += '  exit 1\n'
+        script_body += 'fi\n'
+        script_body += 'echo Successfully completed flats at $(date)\n'
+    else:
+        script_body += '\n## Note each exposure uses its own camword. CTE flats have no joint fit,\n'
+        script_body += '## so there is no common camera set to intersect against; a camera missing\n'
+        script_body += '## from one CTE exposure must not remove it from the others.\n'
+        script_body += '## A failed exposure must not stop the ones after it, so accumulate the\n'
+        script_body += '## failures rather than exiting between steps.\n'
+        script_body += 'nfail=0\n'
+        for step, resources in zip(steps, step_resources):
+            srun, logfile = _step_srun(step, resources)
+            script_body += f"\n# Process exposure {step['expid']}\n"
+            script_body += f'echo Running {srun}\n'
+            script_body += f'{srun} > {logfile} 2>&1\n'
+            script_body += 'if [ $? -ne 0 ]; then\n'
+            script_body += '  nfail=$((nfail+1))\n'
+            script_body += f"  echo FAILED: cteflat {step['expid']} at $(date)\n"
+            script_body += 'else\n'
+            script_body += f"  echo cteflat {step['expid']} succeeded at $(date)\n"
+            script_body += 'fi\n'
+
+    if joint_cmd is not None:
+        joint_timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        cmd = joint_cmd + ' --starttime $(date +%s)'
+        cmd += f' --timingfile {joint_timingfile}'
+        srun = (f'srun -N {joint_nodes} -n {joint_ntasks} -c {joint_threads} '
+                + '--cpu-bind=cores ' + mps_wrapper + f' {cmd}')
+        script_body += f'\n# Process {jobdesc}\n'
+        script_body += f'echo Running {srun}\n'
+        script_body += f'{srun}\n'
+        script_body += '\nif [ $? -eq 0 ]; then\n'
+        script_body += '  echo SUCCESS: done at $(date)\n'
+        script_body += 'else\n'
+        script_body += '  echo FAILED: done at $(date)\n'
+        script_body += '  exit 1\n'
+        script_body += 'fi\n'
+    else:
+        script_body += '\n## No joint fit for CTE flats; the accumulated failure count is the only gate.\n'
+        script_body += 'if [ $nfail -eq 0 ]; then\n'
+        script_body += '  echo SUCCESS: done at $(date)\n'
+        script_body += 'else\n'
+        script_body += f'  echo FAILED: $nfail of {nsteps} CTE exposures failed:' \
+                       + ' done at $(date)\n'
+        script_body += '  exit 1\n'
+        script_body += 'fi\n'
+
+    with open(scriptpathname, 'w') as fx:
+        fx.write('#!/bin/bash -l\n\n')
+        fx.write('#SBATCH -N {}\n'.format(nodes))
+        fx.write('#SBATCH --qos {}\n'.format(queue))
+        for opts in batch_config['batch_opts']:
+            fx.write('#SBATCH {}\n'.format(opts))
+        if batch_opts is not None:
+            fx.write('#SBATCH {}\n'.format(batch_opts))
+        if system_name == 'perlmutter-gpu':
+            # perlmutter-gpu requires projects name with "_g" appended
+            fx.write('#SBATCH --account desi_g\n')
+        else:
+            fx.write('#SBATCH --account desi\n')
+        fx.write('#SBATCH --job-name {}\n'.format(jobname))
+        fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
+        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
+        fx.write('#SBATCH --exclusive\n')
+
+        fx.write('\n')
+
+        if jobdesc == 'psfnight':
+            fx.write('## Processing individual arcs, one node each, then psfnight\n')
+        elif jobdesc == 'nightlyflat':
+            fx.write('## Processing individual flats, {} at a time, then nightlyflat\n'.format(concurrency))
+        else:
+            fx.write('## Processing CTE flats serially on a single node.\n')
+            fx.write('## Unlike the arc and normal-flat bundles there is no joint fit, and\n')
+            fx.write('## exposures are run one at a time rather than concurrently, so the whole\n')
+            fx.write('## job needs only the resources of a single exposure.\n')
+
+        fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
+        fx.write('export OMP_NUM_THREADS={}\n'.format(step_threads))
+        if system_name == 'perlmutter-gpu':
+            fx.write('export MPICH_GPU_SUPPORT_ENABLED=1\n')
+
+        fx.write(script_body)
+
+    print('Wrote {}'.format(scriptpathname))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
+
+    return scriptpathname
+
+
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
                                   runtime=None, batch_opts=None, timingfile=None,
                                   batchdir=None, jobname=None, cmdline=None,
@@ -664,15 +1123,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue,
 
     #- arc fits require 3.2 GB of memory per bundle, so increase nodes as needed
     if jobdesc.lower() == 'arc':
-        cores_per_node = (ncores-1) // nodes + ((ncores-1) % nodes > 0)
-        mem_per_node = float(batch_config['memory'])
-        mem_per_core = mem_per_node / cores_per_node
-        while mem_per_core < 3.2:
-            nodes += 1
-            cores_per_node = (ncores-1) // nodes + ((ncores-1) % nodes > 0)
-            mem_per_core = mem_per_node / cores_per_node
-        threads_per_node = batch_config['threads_per_core'] * batch_config['cores_per_node']
-        threads_per_core = (threads_per_node * nodes) // ncores
+        nodes, cores_per_node, threads_per_core = adjust_arc_resources(
+                ncores, nodes, batch_config)
 
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)

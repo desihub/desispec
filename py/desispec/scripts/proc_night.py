@@ -34,8 +34,8 @@ from desispec.workflow.processing import define_and_assign_dependency, \
     create_and_submit, \
     submit_tilenight_and_redshifts, \
     generate_calibration_dict, \
-    night_to_starting_iid, make_joint_prow, \
-    set_calibrator_flag, make_exposure_prow, \
+    night_to_starting_iid, make_exposure_prow, \
+    make_calibration_bundle_prow, \
     all_calibs_submitted, \
     update_and_recursively_submit, update_accounted_for_with_linking, \
     submit_redshifts, check_darknight_deps_and_update_prow
@@ -586,12 +586,27 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
     calibjobs = generate_calibration_dict(ptable, files_to_link)
 
     ## Determine the appropriate set of calibrations
-    ## Only run if we haven't already linked or done fiberflatnight's
+    ## Only run if we haven't already linked or done fiberflatnight's, or if
+    ## cte flats might still be missing. The cte flat bundle is independent of
+    ## the standard calibrations: a night can have every standard calibration
+    ## accounted for, including a linked fiberflatnight, and still need its own
+    ## cte flats processed for the nightly detector QA.
+    standard_calibs_needed = not all_calibs_submitted(calibjobs['accounted_for'],
+                                                      do_cte_flats, do_darknight)
+    ## cheap pre-check so nights that took no cte flats behave exactly as before
+    night_has_cte_flats = len(split_normal_and_cte_flats(etable)[1]) > 0
     cal_etable = etable[[]]
-    if not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats, do_darknight):
+    if standard_calibs_needed or (do_cte_flats and night_has_cte_flats):
         cal_etable = determine_calibrations_to_proc(etable,
                                                     do_cte_flats=do_cte_flats,
                                                     still_acquiring=still_acquiring)
+
+    cte_flats_needed = False
+    if do_cte_flats and len(cal_etable) > 0:
+        selected_ctes = split_normal_and_cte_flats(cal_etable)[1]
+        processed_cte_expids = get_processed_cte_expids(ptable)
+        cte_flats_needed = bool(np.any(~np.isin(selected_ctes['EXPID'],
+                                                processed_cte_expids)))
 
     ## Determine the appropriate science exposures
     sci_etable, tiles_to_proc = determine_science_to_proc(
@@ -632,8 +647,9 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         return prow, proctable
 
     ## Actually process the calibrations
-    ## Only run if we haven't already linked or done fiberflatnight's
-    if not all_calibs_submitted(calibjobs['accounted_for'], do_cte_flats, do_darknight):
+    ## Only run if we haven't already linked or done fiberflatnight's, or if
+    ## there are cte flats that no cteflat bundle covers yet
+    if standard_calibs_needed or cte_flats_needed:
         ptable, calibjobs, int_id = submit_calibrations(cal_etable, ptable,
                                                 cal_override, calibjobs,
                                                 int_id, night, files_to_link,
@@ -820,32 +836,19 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     if len(cal_etable) == 0:
         return ptable, calibjobs, int_id
 
-    if len(ptable) > 0:
-        ## we use this to check for individual jobs rather than combination
-        ## jobs, so only check for scalar jobs where JOBDESC == OBSTYPE
-        ## ex. dark, zero, arc, and flat
-        explists = ptable['EXPID'][ptable['JOBDESC']==ptable['OBSTYPE']]
-        if len(explists) == 0:
-            processed_cal_expids = np.array([]).astype(int)
-        elif len(explists) == 1:
-            processed_cal_expids = np.unique(explists[0]).astype(int)
-        else:
-            processed_cal_expids = np.unique(np.concatenate(explists).astype(int))
-    else:
-        processed_cal_expids = np.array([]).astype(int)
+    ## CTE flats are submitted independently of the other calibrations, so
+    ## track which of them a cteflat bundle already covers. Arcs and normal
+    ## flats are covered by the psfnight/nightlyflat accounted_for flags.
+    processed_cte_expids = get_processed_cte_expids(ptable)
 
     ## Otherwise proceed with submitting the calibrations
     ## Define objects to process
-    darks, flats, ctes = list(), list(), list()
+    darks = list()
     zeros = cal_etable[cal_etable['OBSTYPE']=='zero']
     arcs = cal_etable[cal_etable['OBSTYPE']=='arc']
     if 'dark' in cal_etable['OBSTYPE']:
         darks = cal_etable[cal_etable['OBSTYPE']=='dark']
-    if 'flat' in cal_etable['OBSTYPE']:
-        allflats = cal_etable[cal_etable['OBSTYPE']=='flat']
-        is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
-        flats = allflats[~is_cte]
-        ctes = allflats[is_cte]
+    flats, ctes = split_normal_and_cte_flats(cal_etable)
 
     do_darknight = do_darknight and not calibjobs['accounted_for']['darknight']
     do_badcol = len(darks) > 0 and not calibjobs['accounted_for']['badcolumns']
@@ -920,70 +923,92 @@ def submit_calibrations(cal_etable, ptable, cal_override, calibjobs, int_id,
     if do_cte:
         calibjobs['accounted_for']['ctecorrnight'] = True
 
-    ######## Submit arcs and psfnight ########
-    if len(arcs)>0 and not calibjobs['accounted_for']['psfnight']:
-        arc_prows = []
-        for arc_erow in arcs:
-            if arc_erow['EXPID'] in processed_cal_expids:
-                matches = np.where([arc_erow['EXPID'] in itterprow['EXPID']
-                                    for itterprow in ptable])[0]
-                if len(matches) == 1:
-                    prow = ptable[matches[0]]
-                    log.info("Found existing arc prow in ptable, "
-                             + f"including it for psfnight job: {list(prow)}")
-                    arc_prows.append(prow)
-                continue
-            prow, int_id = make_exposure_prow(arc_erow, int_id, calibjobs)
-            prow, ptable = create_submit_add_and_save(prow, ptable)
-            arc_prows.append(prow)
-
-        joint_prow, int_id = make_joint_prow(arc_prows, descriptor='psfnight',
-                                             internal_id=int_id)
-        ptable = set_calibrator_flag(arc_prows, ptable)
-        joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable)
-        calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
+    ######## Submit the arc bundle that produces psfnight ########
+    ## One Slurm job processes every selected arc and then creates psfnight
+    if len(arcs) > 0 and not calibjobs['accounted_for']['psfnight']:
+        bundle_prow, step_prows, int_id = make_calibration_bundle_prow(
+                arcs, descriptor='psfnight', internal_id=int_id,
+                calibjobs=calibjobs)
+        extra_job_args = {'calibration_bundle_steps': step_prows,
+                          'bundle_full_camword': bundle_prow['PROCCAMWORD']}
+        bundle_prow, ptable = create_submit_add_and_save(bundle_prow, ptable,
+                                                         extra_job_args=extra_job_args)
+        calibjobs[bundle_prow['JOBDESC']] = bundle_prow.copy()
         calibjobs['accounted_for']['psfnight'] = True
 
-    ######## Submit flats and nightlyflat ########
+    ######## Submit the flat bundle that produces fiberflatnight ########
     ## If nightlyflat defined we don't need to process more normal flats
     if len(flats) > 0 and not calibjobs['accounted_for']['fiberflatnight']:
-        flat_prows = []
-        for flat_erow in flats:
-            if flat_erow['EXPID'] in processed_cal_expids:
-                matches = np.where([flat_erow['EXPID'] in itterprow['EXPID']
-                                    for itterprow in ptable])[0]
-                if len(matches) == 1:
-                    prow = ptable[matches[0]]
-                    log.info("Found existing flat prow in ptable, "
-                             + f"including it for nightlyflat job: {list(prow)}")
-                    flat_prows.append(prow)
-                continue
-
-            jobdesc = 'flat'
-            prow, int_id = make_exposure_prow(flat_erow, int_id, calibjobs,
-                                              jobdesc=jobdesc)
-            prow, ptable = create_submit_add_and_save(prow, ptable)
-            flat_prows.append(prow)
-
-        joint_prow, int_id = make_joint_prow(flat_prows, descriptor='nightlyflat',
-                                             internal_id=int_id)
-        ptable = set_calibrator_flag(flat_prows, ptable)
+        bundle_prow, step_prows, int_id = make_calibration_bundle_prow(
+                flats, descriptor='nightlyflat', internal_id=int_id,
+                calibjobs=calibjobs)
+        extra_job_args = {}
         if 'nightlyflat' in cal_override:
-            extra_args = cal_override['nightlyflat']
-        else:
-            extra_args = None
-        joint_prow, ptable = create_submit_add_and_save(joint_prow, ptable,
-                                                        extra_job_args=extra_args)
-        calibjobs[joint_prow['JOBDESC']] = joint_prow.copy()
+            extra_job_args.update(cal_override['nightlyflat'])
+        ## Assign the reserved bundle keys after merging the override so that
+        ## an override file can't replace the workflow metadata
+        extra_job_args['calibration_bundle_steps'] = step_prows
+        extra_job_args['bundle_full_camword'] = bundle_prow['PROCCAMWORD']
+        bundle_prow, ptable = create_submit_add_and_save(bundle_prow, ptable,
+                                                         extra_job_args=extra_job_args)
+        calibjobs[bundle_prow['JOBDESC']] = bundle_prow.copy()
         calibjobs['accounted_for']['fiberflatnight'] = True
 
-    ######## Submit cte flats ########
-    jobdesc = 'flat'
-    for cte_erow in ctes:
-        if cte_erow['EXPID'] in processed_cal_expids:
-            continue
-        prow, int_id = make_exposure_prow(cte_erow, int_id, calibjobs,
-                                      jobdesc=jobdesc)
-        prow, ptable = create_submit_add_and_save(prow, ptable)
+    ######## Submit the cte flat bundle ########
+    ## CTE flats have no joint fit and no nightly product, so they get their own
+    ## bundle that is a sibling of nightlyflat rather than part of it
+    new_ctes = [cte_erow for cte_erow in ctes
+                if cte_erow['EXPID'] not in processed_cte_expids]
+    if len(new_ctes) > 0:
+        bundle_prow, step_prows, int_id = make_calibration_bundle_prow(
+                new_ctes, descriptor='cteflat', internal_id=int_id,
+                calibjobs=calibjobs)
+        extra_job_args = {'calibration_bundle_steps': step_prows,
+                          'bundle_full_camword': bundle_prow['PROCCAMWORD']}
+        bundle_prow, ptable = create_submit_add_and_save(bundle_prow, ptable,
+                                                         extra_job_args=extra_job_args)
 
     return ptable, calibjobs, int_id
+
+
+def get_processed_cte_expids(ptable):
+    """
+    Return the CTE flat exposure ids already represented by a cteflat bundle.
+
+    Args:
+        ptable (Table): the processing table for the night.
+
+    Returns:
+        np.array of int: the exposure ids found in cteflat rows.
+    """
+    if len(ptable) == 0:
+        return np.array([]).astype(int)
+
+    explists = ptable['EXPID'][ptable['JOBDESC'] == 'cteflat']
+    if len(explists) == 0:
+        return np.array([]).astype(int)
+    elif len(explists) == 1:
+        return np.unique(explists[0]).astype(int)
+    else:
+        return np.unique(np.concatenate(explists)).astype(int)
+
+
+def split_normal_and_cte_flats(cal_etable):
+    """
+    Split the flat exposures of a calibration table into normal and CTE flats.
+
+    Args:
+        cal_etable (Table): exposure table rows selected for calibration.
+
+    Returns:
+        tuple: (flats, ctes), each a Table of exposure rows. Both are empty
+        tables if the input contains no flats.
+    """
+    flats = cal_etable[[]]
+    ctes = cal_etable[[]]
+    if len(cal_etable) > 0 and 'flat' in cal_etable['OBSTYPE']:
+        allflats = cal_etable[cal_etable['OBSTYPE'] == 'flat']
+        is_cte = np.array(['cte' in prog.lower() for prog in allflats['PROGRAM']])
+        flats = allflats[~is_cte]
+        ctes = allflats[is_cte]
+    return flats, ctes
