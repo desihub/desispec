@@ -198,7 +198,7 @@ def find_target_priority(table):
         For each entry in `targets`, the index into `table` of the row to use
         as the authoritative source of target-level quantities.
     """
-    table = Table(table)
+    table = Table(table, copy=False)
     n = len(table)
 
     ## Determine secondary-ness survey-agnostically from whichever
