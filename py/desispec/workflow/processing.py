@@ -2170,16 +2170,16 @@ def make_joint_prow(prows, descriptor, internal_id):
     input prows).
 
     Args:
-        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
+        prows (list or array of dict): The rows corresponding to the individual exposure jobs that are
             inputs to the joint fit.
-        descriptor, str. Description of the joint fitting job. Can either be 'stdstarfit', 'psfnight', 'nightlyflat',
-            or 'cteflat'. Note 'cteflat' has no joint fit; it is a bundle of
-            exposures that is represented by a single row.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        descriptor (str): Description of the joint fitting job. Can either be 'stdstarfit', 'psfnight',
+            or 'nightlyflat'.
+        internal_id (int): The next internal id to be used for assignment (already incremented up from
+            the last used id number used).
 
     Returns:
-        dict: Row of a processing table corresponding to the joint fit job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        tuple: ``(joint_prow, internal_id)`` where ``joint_prow`` is the row corresponding to the
+            joint fit job and ``internal_id`` is the next internal id to be used for assignment.
     """
     log = get_logger()
     first_row = table_row_to_dict(prows[0])
