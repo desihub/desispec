@@ -120,8 +120,9 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         ignore_qso = True
 
     if os.path.isfile(qso_qn_path):
+        # DELTACHI2_NEW missing from iron; remove from column list if needed
         with fitsio.FITS(qso_qn_path) as qso_qn:
-            qso_qn_colnames = qso_qn[1].get_colnames()
+            qso_qn_colnames = qso_qn['QN_RR'].get_colnames()
         if 'DELTACHI2_NEW' not in qso_qn_colnames:
             columns_qso_qn.remove('DELTACHI2_NEW')
         tmp_qso_qn = Table(fitsio.read(qso_qn_path, columns=(columns_qso_qn)))
@@ -275,7 +276,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         bad_qso = res['Z_QSO'] > 5.0
         # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
         bad_lowz = res['Z_QSO']<0.5
-        bad_lowz &= np.log10(res['DELTACHI2_QSO']) < 3 - 3.5 * res['Z_QSO']
+        bad_lowz &= np.log10(res['DELTACHI2_QSO']+1e-6) < 3 - 3.5 * res['Z_QSO']  # 1e-6 to avoid log10(0)
         bad_qso |= bad_lowz
         
         res['GOOD_Z_QSO'][bad_qso] = False
