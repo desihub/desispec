@@ -836,12 +836,6 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
         mps_wrapper = 'desi_mps_wrapper'
         step_gpu_opt = '--gpus-per-node={} '.format(batch_config['gpus_per_node'])
 
-    ## OMP_NUM_THREADS is exported once for the whole exposure block
-    if step_class == 'ARC':
-        step_threads = max([res[2] for res in step_resources], default=1)
-    else:
-        step_threads = 1
-
     def _step_srun(step, resources, jobid_var='$SLURM_JOBID'):
         """Return (srun_command, logfile) for one exposure step"""
         stepnodes, ntasks, threads, _ = resources
@@ -871,8 +865,11 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
         script_body += 'pids=""\n'
         for step, resources in zip(steps, step_resources):
             srun, logfile = _step_srun(step, resources)
-            script_body += f"\n# Process exposure {step['expid']}\n"
+            script_body += f"\n# Process arc exposure {step['expid']}\n"
+            threads = resources[2]   # could be different per exposure if different number of cameras
+            script_body += f'export OMP_NUM_THREADS={threads}\n'
             script_body += f'echo Running {srun}\n'
+            script_body += f'echo Logging to {logfile}\n'
             script_body += f'{srun} > {logfile} 2>&1 &\n'
             script_body += 'pids="$pids $!"\n'
         script_body += '\n## Wait for every exposure, counting failures. A failed arc must not cut\n'
@@ -892,7 +889,7 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
     elif jobdesc == 'nightlyflat':
         joblog = 'joblog-flats-{}-{:08d}-$SLURM_JOBID.log'.format(
                 night, int(np.min(expids)))
-        script_body += '\n# Process individual exposures\n'
+        script_body += '\n# Process individual flat exposures\n'
         script_body += '## Run with "$SLURM_JOB_NUM_NODES" workers, each with 1 node of resources\n'
         script_body += '## -v prints the command before executing it, -j is the number of workers\n'
         script_body += '## --joblog saves basic timing of the jobs\n'
@@ -909,7 +906,7 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
             ## parallel runs each string through $PARALLEL_SHELL/$SHELL, which
             ## isn't guaranteed to be bash, so use POSIX redirection
             srun_strings.append(f'"{srun} > {logfile} 2>&1"')
-        script_body += ' \\\n'.join(srun_strings) + '\n'
+        script_body += ' \\\n  '.join(srun_strings) + '\n'
         script_body += 'nfail=$?\n'
         script_body += '\n## By default parallel exits with the number of failed jobs. Capture that\n'
         script_body += '## into nfail before the test below, since [ ] would overwrite $?.\n'
@@ -996,7 +993,7 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
 
         fx.write('echo Starting job $SLURM_JOB_ID on $(hostname) at $(date)\n')
         fx.write(f'cd {batchdir}\n')
-        fx.write('export OMP_NUM_THREADS={}\n'.format(step_threads))
+        fx.write('export OMP_NUM_THREADS=1\n')
         if system_name == 'perlmutter-gpu':
             fx.write('export MPICH_GPU_SUPPORT_ENABLED=1\n')
 
