@@ -9,7 +9,7 @@ import time
 import numpy as np
 
 from desispec.io.meta import findfile
-
+from desispec.io.util import decode_camword, create_camword
 
 def valid_night(night):
     """
@@ -30,6 +30,23 @@ def valid_night(night):
     if not isvalid:
         print(f"--> Received invalid response: '{night}'. Must be YEARMMDD.")
     return isvalid
+
+def valid_cameras(cameras):
+    """
+    Test whether or not the input camera is valid as a DESI Camera or not
+
+    Args:
+        camera(s), str, follows DESI camera input (a,b,r,z)(0-9)
+
+    Returns:
+        bool, True if valid camera sequence
+    """
+    cams = decode_camword(cameras)
+    string = create_camword(cams)
+    isvalid =  isinstance(string, str)
+    if not isvalid:
+        print(f"--> Received invalid response: '{cameras}'. Must be in DESI format (i.e. a1, b2, r3, z4, r8z6, etc.).")
+    return(isvalid)
 
 def valid_yes_no(string):
     """
@@ -75,6 +92,13 @@ def get_night(prompt):
     """
     night = get_response(prompt, valid_night)
     return int(night)
+
+def get_camera(prompt):
+    """
+    Prompt the user for a camera string and return the camera string as a string
+    """
+    cameras = get_response(prompt, valid_cameras)
+    return(cameras)
 
 def is_yes(prompt):
     """
@@ -144,8 +168,13 @@ def create_override_file(args):
             else:
                 goods.append('flats')
             linkcal_include = ','.join(linkcal_include_list)
-            outdict['calibration']['linkcal'] = {'refnight': refnight,
+            if args.cameras==None:
+                outdict['calibration']['linkcal'] = {'refnight': refnight,
                                                  'include': linkcal_include}
+            else:
+                outdict['calibration']['linkcal'] = {'refnight': refnight,
+                                                    'include': linkcal_include,
+                                                    'camword': args.cameras}
 
     if args.ff_solve_grad is None:
         ff_solve_grad = is_yes("Do we need to set --solve-gradient in autocalib_fiberflat? ")
