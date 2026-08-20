@@ -324,7 +324,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC']) or bias_all_cam_override
+    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC'] and bias_all_cam_override) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
     log.info(f'bias_accounted_for: {bias_accounted_for}, dobias: {dobias}')
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
