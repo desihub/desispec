@@ -287,6 +287,12 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     cal_override = {}
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
+        if 'camword' in cal_override.get('linkcal', {}):
+            log.warning(f'Warning: {cal_override['linkcal']['camword']}')
+            biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
+            bias_all_cam_override=False
+        else:
+            bias_all_cam_override=True
 
     ## Identify what calibrations have been done
     if 'linkcal' in cal_override:
@@ -318,7 +324,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC']) or bias_all_cam_override
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
 
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
@@ -362,22 +368,32 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         prow['INTID'] = int_id
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = night
-        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
-                                                     suppress_logging=True, exclude_badamps=True)
+        # prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
+                                                    #  suppress_logging=True, exclude_badamps=True)
 
     ## If submit bias and darks, submit joint job, otherwise submit one or the other
-    if dobias and dodarks:
+    ## If there is a linkcal job that targets one but not the other and only certain cameras \
+    ## Split them
+    if dobias and dodarks and bias_all_cam_override:
         log.info(f"Submitting biaspdark for night {night}.")
         prow['JOBDESC'] = 'biaspdark'
         prow['OBSTYPE'] = 'dark'
         prow['EXPID'] = dark_expid_to_process
     elif dobias:
         log.info(f"Submitting biasnight for night {night}.")
+        if biascamword:
+            proccamword = biascamword
+        else:
+            proccamword = camword
+        prow['PROCCAMWORD'] = columns_to_goodcamword(proccamword, badcamword, badamps,
+                                                             suppress_logging=True, exclude_badamps=True)
         prow['JOBDESC'] = 'biasnight'
         prow['OBSTYPE'] = 'zero'
         prow['EXPID'] = zero_expids[:1] # set as first zero expid
     elif dodarks:
         log.info(f"Submitting pdark for night {night}.")
+        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
+                                                                     suppress_logging=True, exclude_badamps=True)
         prow['JOBDESC'] = 'pdark'
         prow['OBSTYPE'] = 'dark'
         prow['EXPID'] = dark_expid_to_process
