@@ -839,16 +839,6 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
         mps_wrapper = 'desi_mps_wrapper'
         step_gpu_opt = '--gpus-per-node={} '.format(batch_config['gpus_per_node'])
 
-<<<<<<< HEAD
-    ## OMP_NUM_THREADS is exported once for the whole exposure block
-    if step_class == 'ARC':
-        step_threads = max([res['threads_per_task'] for res in step_resources],
-                           default=1)
-    else:
-        step_threads = 1
-
-=======
->>>>>>> 57f5f91c0083f0dc618c5cae49dde8016fdff85a
     def _step_srun(step, resources, jobid_var='$SLURM_JOBID'):
         """Return (srun_command, logfile) for one exposure step"""
         stepnodes = resources['nodes']
@@ -881,7 +871,7 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
         for step, resources in zip(steps, step_resources):
             srun, logfile = _step_srun(step, resources)
             script_body += f"\n# Process arc exposure {step['expid']}\n"
-            threads = resources[2]   # could be different per exposure if different number of cameras
+            threads = resources['threads_per_task']   # could be different per exposure if different number of cameras
             script_body += f'export OMP_NUM_THREADS={threads}\n'
             script_body += f'echo Running {srun}\n'
             script_body += f'echo Logging to {logfile}\n'
