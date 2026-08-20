@@ -287,7 +287,8 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     cal_override = {}
     ## bias_all_cam_override is True and only becomes False \
     ## if there is an override and it doesn't involve all cameras
-    bias_all_cam_override=True
+    bias_all_cam_override = True
+    biascamword = None
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
         if 'camword' in cal_override.get('linkcal', {}):
@@ -382,7 +383,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         prow['EXPID'] = dark_expid_to_process
     elif dobias:
         log.info(f"Submitting biasnight for night {night}.")
-        if biascamword:
+        if biascamword is not None:
             proccamword = biascamword
         else:
             proccamword = camword
