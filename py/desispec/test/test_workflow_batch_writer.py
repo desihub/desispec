@@ -241,10 +241,8 @@ class TestCalibrationBundleBatchScript(unittest.TestCase):
         ## the gate sits before the joint fit
         gate = text.index('not running psfnight')
         self.assertLess(gate, text.index('desi_proc_joint_fit'))
-        ## OMP_NUM_THREADS is exported once, then reset before psfnight
-        self.assertEqual(text.count('export OMP_NUM_THREADS'), 2)
-        self.assertLess(text.index('export OMP_NUM_THREADS=2'),
-                        text.index('export OMP_NUM_THREADS=1'))
+        ## OMP_NUM_THREADS is exported at start, plus once per arc exp, then reset before psfnight
+        self.assertEqual(text.count('export OMP_NUM_THREADS'), 7)
         self.assertLess(text.index('export OMP_NUM_THREADS=1'),
                         text.index('desi_proc_joint_fit'))
 
