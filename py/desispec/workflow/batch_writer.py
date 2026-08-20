@@ -606,12 +606,12 @@ def get_calibration_bundle_step_resources(step_jobdesc, ncameras, queue=None,
         system_name (str, optional): name of batch system, e.g. perlmutter-cpu.
 
     Returns:
-        tuple: A tuple containing:
+        dict: The resources of this step, with keys:
 
-        * nodes: int, number of nodes for this step, always 1.
-        * ntasks: int, number of MPI ranks for this step.
-        * threads_per_task: int, number of threads per rank.
-        * runtime: float, estimated runtime of this step in minutes.
+        * 'nodes': int, number of nodes for this step, always 1.
+        * 'ntasks': int, number of MPI ranks for this step.
+        * 'threads_per_task': int, number of threads per rank.
+        * 'runtime': float, estimated runtime of this step in minutes.
     """
     step_jobdesc = step_jobdesc.upper()
     ## determine_resources() guesses the system from an already uppercased
@@ -640,7 +640,10 @@ def get_calibration_bundle_step_resources(step_jobdesc, ncameras, queue=None,
     else:
         ntasks = ncores
         threads_per_task = batch_config['threads_per_core']
-    return 1, ntasks, threads_per_task, runtime
+    ## nodes is always 1; the multi-node layout determine_resources() returned
+    ## has already been reshaped onto a single node above
+    return {'nodes': 1, 'ntasks': ntasks,
+            'threads_per_task': threads_per_task, 'runtime': runtime}
 
 
 def _calibration_bundle_step_filenames(step_jobdesc, night, expid, camword,
@@ -775,8 +778,8 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
         step_resources.append(get_calibration_bundle_step_resources(
                 step_class, ncam, queue=queue, system_name=system_name))
 
-    nodes_per_step = max([res[0] for res in step_resources], default=1)
-    step_runtimes = [res[3] for res in step_resources]
+    nodes_per_step = max([res['nodes'] for res in step_resources], default=1)
+    step_runtimes = [res['runtime'] for res in step_resources]
 
     ## Resources of the joint fit, if there is one
     joint_nodes, joint_ntasks, joint_runtime = 1, 0, 0.
@@ -838,13 +841,16 @@ def create_calibration_bundle_batch_script(night, jobdesc, expids, camword,
 
     ## OMP_NUM_THREADS is exported once for the whole exposure block
     if step_class == 'ARC':
-        step_threads = max([res[2] for res in step_resources], default=1)
+        step_threads = max([res['threads_per_task'] for res in step_resources],
+                           default=1)
     else:
         step_threads = 1
 
     def _step_srun(step, resources, jobid_var='$SLURM_JOBID'):
         """Return (srun_command, logfile) for one exposure step"""
-        stepnodes, ntasks, threads, _ = resources
+        stepnodes = resources['nodes']
+        ntasks = resources['ntasks']
+        threads = resources['threads_per_task']
         timingfile, logfile = _calibration_bundle_step_filenames(
                 step_jobdesc, night, step['expid'], step['camword'],
                 jobid_var=jobid_var)

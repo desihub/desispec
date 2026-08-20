@@ -136,20 +136,23 @@ class TestCalibrationBundleBatchScript(unittest.TestCase):
 
     def test_step_resources(self):
         """Every bundle exposure step runs on a single node"""
-        nodes, ntasks, threads, runtime = get_calibration_bundle_step_resources(
+        res = get_calibration_bundle_step_resources(
                 'ARC', 30, system_name='perlmutter-cpu')
-        self.assertEqual(nodes, 1)
+        ## the writer looks these up by name, so the keys are part of the API
+        self.assertEqual(set(res.keys()),
+                         {'nodes', 'ntasks', 'threads_per_task', 'runtime'})
+        self.assertEqual(res['nodes'], 1)
         ## Schedule() consumes ranks in groups of 20 plus one scheduler rank
-        self.assertEqual(ntasks % 20, 1)
-        self.assertEqual(ntasks, 101)
-        self.assertEqual(threads, 2)
+        self.assertEqual(res['ntasks'] % 20, 1)
+        self.assertEqual(res['ntasks'], 101)
+        self.assertEqual(res['threads_per_task'], 2)
 
         for jobclass in ('FLAT', 'CTEFLAT'):
-            nodes, ntasks, threads, runtime = get_calibration_bundle_step_resources(
+            res = get_calibration_bundle_step_resources(
                     jobclass, 30, system_name='perlmutter-gpu')
-            self.assertEqual(nodes, 1)
-            self.assertEqual(ntasks, 64)
-            self.assertEqual(threads, 2)
+            self.assertEqual(res['nodes'], 1)
+            self.assertEqual(res['ntasks'], 64)
+            self.assertEqual(res['threads_per_task'], 2)
 
     def test_allocation_nodes(self):
         """Allocations hold one node per concurrent exposure step"""
