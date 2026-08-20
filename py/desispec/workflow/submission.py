@@ -285,14 +285,15 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     ## Load calibration_override_file
     overrides = load_override_file(filepathname=override_pathname)
     cal_override = {}
+    ## bias_all_cam_override is True and only becomes False \
+    ## if there is an override and it doesn't involve all cameras
+    bias_all_cam_override=True
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
         if 'camword' in cal_override.get('linkcal', {}):
             log.warning(f'Warning: {cal_override['linkcal']['camword']}')
             biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
             bias_all_cam_override=False
-        else:
-            bias_all_cam_override=True
 
     ## Identify what calibrations have been done
     if 'linkcal' in cal_override:
