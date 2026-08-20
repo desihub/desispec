@@ -292,7 +292,8 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
         if 'camword' in cal_override.get('linkcal', {}):
-            log.warning(f'Warning: {cal_override['linkcal']['camword']}')
+            log.warning(f"Warning: {cal_override['linkcal']['camword']} will be linked to another "
+                        " night using the override.yaml file")
             biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
             bias_all_cam_override=False
 
