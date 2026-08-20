@@ -326,7 +326,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
 
     bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC']) or bias_all_cam_override
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
-
+    log.info(f'bias_accounted_for: {bias_accounted_for}, dobias: {dobias}')
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
     ## Technically this is no longer needed, but left for belt and suspenders
     dark_date=night>20240408
