@@ -461,9 +461,12 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
             ## secondary, then SURVEY=main over special over anything else, then first
             ## occurrence. See https://github.com/desihub/desitarget/issues/892
             log.debug('Harmonizing TARGET_RA, TARGET_DEC by target priority')
-            targets, winner_idx = find_target_priority(tab)
-            pos = np.searchsorted(targets, tab['TARGETID'])
-            target_priority_row = winner_idx[pos]
+            target_priority_row = np.arange(len(tab))
+            is_target = tab['TARGETID'] >= 0
+            targets, winner_idx = find_target_priority(tab[is_target])
+            target_rows = np.flatnonzero(is_target)
+            pos = np.searchsorted(targets, tab['TARGETID'][is_target])
+            target_priority_row[is_target] = target_rows[winner_idx[pos]]
             tab['TARGET_RA'] = tab['TARGET_RA'][target_priority_row]
             tab['TARGET_DEC'] = tab['TARGET_DEC'][target_priority_row]
             if 'DESINAME' in tab.colnames:
