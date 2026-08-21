@@ -1056,8 +1056,13 @@ class TestProcNight(unittest.TestCase):
                     ## if 1sec flat has arrived, cals should be submitted.
                     ## Note: this could be different if we switch to testing a daily night with
                     ## and override file, in which case e.g. it could have linkcal instead of nightlyflat
-                    for jobdesc in ('biasnight', 'ccdcalib', 'arc', 'psfnight', 'flat', 'nightlyflat'):
+                    ## Note arcs and flats are bundled into the psfnight/nightlyflat/cteflat
+                    ## jobs, so they have no rows of their own.
+                    for jobdesc in ('biasnight', 'ccdcalib', 'psfnight',
+                                    'nightlyflat', 'cteflat'):
                         self.assertIn(jobdesc, set(proctable['JOBDESC']))
+                    for jobdesc in ('arc', 'flat'):
+                        self.assertNotIn(jobdesc, set(proctable['JOBDESC']))
                 elif should_submit_biaspdark:
                     ## arc have started coming in and there are biases and darks, so we expect
                     ## the biasnight or biaspdark job to be submitted

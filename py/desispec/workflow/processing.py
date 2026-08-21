@@ -2172,8 +2172,10 @@ def make_joint_prow(prows, descriptor, internal_id):
     Args:
         prows (list or array of dict): The rows corresponding to the individual exposure jobs that are
             inputs to the joint fit.
-        descriptor (str): Description of the joint fitting job. Can either be 'stdstarfit', 'psfnight',
-            or 'nightlyflat'.
+        descriptor (str): Description of the joint fitting job. Can be 'stdstarfit', 'psfnight',
+            'nightlyflat', or 'cteflat' for the calibration jobs, or 'pernight' or 'cumulative'
+            for the redshift jobs. Note a 'cteflat' bundle has no joint fit, so its PROCCAMWORD is
+            the union over the bundle's exposures rather than a set every exposure shares.
         internal_id (int): The next internal id to be used for assignment (already incremented up from
             the last used id number used).
 

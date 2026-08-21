@@ -548,7 +548,22 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
         # else:
         #     ptable_expids = set()
         etable_expids = set(etable['EXPID'][etable['OBSTYPE'] == 'science'])
-        if terminal_cal_reached:
+        ## The cte flat bundle is independent of the standard calibrations and
+        ## its exposures arrive after the normal flats, so the terminal
+        ## calibration can land while cte flats are still unrepresented. A
+        ## calibration only night never gets a science exposure to carry us
+        ## past the exit below, so don't leave while a bundle is still owed.
+        ## Only chase them once science has arrived or the night has stopped
+        ## acquiring, so that a night still taking cte flats keeps waiting and
+        ## bundles them in one job instead of one job per exposure.
+        unprocessed_cte_flats = False
+        if do_cte_flats and (len(etable_expids) > 0 or not still_acquiring):
+            night_cte_flats = split_normal_and_cte_flats(good_etab)[1]
+            if len(night_cte_flats) > 0:
+                unprocessed_cte_flats = bool(np.any(~np.isin(
+                        night_cte_flats['EXPID'],
+                        get_processed_cte_expids(ptable))))
+        if terminal_cal_reached and not unprocessed_cte_flats:
             if len(etable_expids) == 0:
                 log.info(f"No science exposures yet. Exiting at {time.asctime()}.")
                 return ptable, None
