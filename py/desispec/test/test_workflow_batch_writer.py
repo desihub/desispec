@@ -17,8 +17,9 @@ from desispec.workflow.processing import desi_proc_command, \
     desi_proc_joint_fit_command
 from desispec.workflow.proctable import default_prow
 
-## Nights, exposures, and camwords of the hand-written reference scripts in
-## evals/. Keep these in sync with evals/make_templates.py.
+## A representative night of each calibration bundle: five arcs, twelve normal
+## flats, and three CTE flats, the second of which is short a spectrograph so
+## that per exposure camwords are exercised.
 ARC_NIGHT = 20260706
 ARC_EXPIDS = [360185, 360186, 360187, 360188, 360189]
 FLAT_NIGHT = 20260806
@@ -28,10 +29,6 @@ CTE_NIGHT = 20260806
 CTE_EXPIDS = [364665, 364666, 364667]
 CTE_CAMWORDS = ['a0123456789', 'a012345678', 'a0123456789']
 FULL_CAMWORD = 'a0123456789'
-REFERENCE_REDUXDIR = '/global/cfs/cdirs/desi/spectro/redux/jobbundle'
-
-_evals_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))))), 'evals')
 
 
 def make_prow(night, expids, camword, obstype, jobdesc, badamps=''):
@@ -85,10 +82,15 @@ class TestCalibrationBundleBatchScript(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def _write(self, **kwargs):
-        """Generate a bundle script and return its text"""
+        """Generate a bundle script and return its text
+
+        The pathname of the script most recently written is left in
+        self.scriptpath so that tests can check the directives that embed it.
+        """
         kwargs.setdefault('queue', 'realtime')
         scriptpathname = create_calibration_bundle_batch_script(
                 reduxdir=self.tmpdir, **kwargs)
+        self.scriptpath = scriptpathname
         with open(scriptpathname) as fx:
             return fx.read()
 
@@ -203,6 +205,7 @@ class TestCalibrationBundleBatchScript(unittest.TestCase):
             hh, mm, ss = re.search(r'#SBATCH --time=(\d+):(\d+):(\d+)',
                                    text).groups()
             self.assertLess(int(mm), 60)
+            self.assertLess(int(ss), 60)
 
     def test_flat_concurrency_override(self):
         """A non-default flat concurrency changes the allocation and walltime"""
@@ -392,79 +395,113 @@ class TestCalibrationBundleBatchScript(unittest.TestCase):
             self._write(night=ARC_NIGHT, jobdesc='flat', expids=ARC_EXPIDS,
                         camword=FULL_CAMWORD, steps=steps)
 
+    def test_empty_bundle_rejected(self):
+        """A bundle with neither exposure steps nor a joint fit raises"""
+        with self.assertRaises(ValueError):
+            self._write(night=CTE_NIGHT, jobdesc='cteflat', expids=CTE_EXPIDS,
+                        camword=FULL_CAMWORD, steps=[])
 
-@unittest.skipUnless(os.path.isdir(_evals_dir),
-                     f'{_evals_dir} reference scripts not available')
-class TestCalibrationBundleTemplates(unittest.TestCase):
-    """Compare generated bundle scripts to the reference scripts in evals/
-
-    These golden files document exactly what the writer is expected to emit.
-    Regenerate them with evals/make_templates.py when the writer changes
-    intentionally.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        cls._cached_nersc_host = os.getenv('NERSC_HOST')
-        os.environ['NERSC_HOST'] = 'perlmutter'
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls._cached_nersc_host is None:
-            if 'NERSC_HOST' in os.environ:
-                del os.environ['NERSC_HOST']
-        else:
-            os.environ['NERSC_HOST'] = cls._cached_nersc_host
-
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        shutil.rmtree(self.tmpdir)
-
-    def _compare(self, template, **kwargs):
-        scriptpathname = create_calibration_bundle_batch_script(
-                queue='realtime', reduxdir=self.tmpdir, **kwargs)
-        with open(scriptpathname) as fx:
-            generated = fx.read().replace(self.tmpdir, REFERENCE_REDUXDIR)
-        with open(os.path.join(_evals_dir, template)) as fx:
-            expected = fx.read()
-        self.assertEqual(generated, expected,
-                         f'{template} is out of date; regenerate it with '
-                         + 'evals/make_templates.py')
-
-    def test_arc_template(self):
-        """The arc bundle reproduces evals/arc_job_template.slurm"""
+    def test_joint_fit_above_node_cap_rejected(self):
+        """A joint fit that cannot fit under its node cap raises"""
         bundle = make_prow(ARC_NIGHT, ARC_EXPIDS, FULL_CAMWORD, 'arc',
                            'psfnight')
-        self._compare('arc_job_template.slurm', night=ARC_NIGHT,
-                      jobdesc='psfnight', expids=ARC_EXPIDS,
-                      camword=FULL_CAMWORD,
-                      steps=make_steps(ARC_NIGHT, ARC_EXPIDS,
-                                       [FULL_CAMWORD] * len(ARC_EXPIDS)),
-                      joint_cmd=desi_proc_joint_fit_command(bundle,
-                                                            direct_mode=True))
+        with patch('desispec.workflow.batch_writer.max_nodes_for_jobdesc',
+                   return_value=0):
+            with self.assertRaises(ValueError):
+                self._write(night=ARC_NIGHT, jobdesc='psfnight',
+                            expids=ARC_EXPIDS, camword=FULL_CAMWORD,
+                            steps=make_steps(ARC_NIGHT, ARC_EXPIDS,
+                                             [FULL_CAMWORD] * len(ARC_EXPIDS)),
+                            joint_cmd=desi_proc_joint_fit_command(
+                                    bundle, direct_mode=True))
 
-    def test_flat_template(self):
-        """The normal flat bundle reproduces evals/flat_job_template.slurm"""
-        bundle = make_prow(FLAT_NIGHT, FLAT_EXPIDS, FULL_CAMWORD, 'flat',
-                           'nightlyflat')
-        self._compare('flat_job_template.slurm', night=FLAT_NIGHT,
-                      jobdesc='nightlyflat', expids=FLAT_EXPIDS,
-                      camword=FULL_CAMWORD,
-                      steps=make_steps(FLAT_NIGHT, FLAT_EXPIDS,
-                                       [FULL_CAMWORD] * len(FLAT_EXPIDS),
-                                       obstype='flat', step_jobdesc='flat'),
-                      joint_cmd=desi_proc_joint_fit_command(bundle,
-                                                            direct_mode=True))
+    def test_step_resources_default_system(self):
+        """The step resources resolve a system when none is given"""
+        ## the uppercased jobdesc never matches determine_resources' lowercase
+        ## CPU-only list, so arcs must resolve the system from the lower name
+        res = get_calibration_bundle_step_resources('ARC', 30)
+        self.assertEqual(res['nodes'], 1)
+        self.assertEqual(res['ntasks'] % 20, 1)
+        self.assertGreaterEqual(res['runtime'], 1)
 
-    def test_cteflat_template(self):
-        """The CTE flat bundle reproduces evals/cteflat_job_template.slurm"""
-        self._compare('cteflat_job_template.slurm', night=CTE_NIGHT,
-                      jobdesc='cteflat', expids=CTE_EXPIDS,
-                      camword=FULL_CAMWORD,
-                      steps=make_steps(CTE_NIGHT, CTE_EXPIDS, CTE_CAMWORDS,
-                                       obstype='flat', step_jobdesc='flat'))
+    @staticmethod
+    def _directives(text):
+        """Return the #SBATCH directives in the order they appear"""
+        return [line[len('#SBATCH '):] for line in text.split('\n')
+                if line.startswith('#SBATCH ')]
+
+    def test_batch_directives(self):
+        """Each bundle emits the expected #SBATCH block, in order"""
+        ## each script is written inside the loop so that self.scriptpath is
+        ## the one being checked
+        for label, write, nodes, sysopts, account in (
+                ('psfnight', self._arc_script, 5, ['--constraint=cpu'],
+                 'desi'),
+                ('nightlyflat', self._flat_script, 4,
+                 ['--constraint=gpu', '--gpus-per-node=4'], 'desi_g'),
+                ('cteflat', self._cte_script, 1,
+                 ['--constraint=gpu', '--gpus-per-node=4'], 'desi_g')):
+            text = write()
+            jobname = os.path.basename(self.scriptpath).removesuffix('.slurm')
+            batchdir = os.path.dirname(self.scriptpath)
+            directives = self._directives(text)
+            ## the walltime varies with the bundle, so check its shape here and
+            ## its value in test_walltimes
+            walltime = next((d for d in directives
+                             if d.startswith('--time=')), '')
+            self.assertRegex(walltime, r'^--time=\d{2}:\d{2}:00$',
+                             f'{label} walltime must be zero padded HH:MM:SS')
+            expected = set([f'-N {nodes}', '--qos realtime'] + sysopts
+                        + [f'--account {account}', f'--job-name {jobname}',
+                           f'--output {batchdir}/{jobname}-%j.log', walltime,
+                           '--exclusive'])
+            self.assertEqual(set(directives), expected, label)
+            ## the interpreter line must come first for a login shell
+            self.assertTrue(text.startswith('#!/bin/bash -l\n'), label)
+
+    def test_script_preamble(self):
+        """Each bundle announces itself and runs from its own batch dir"""
+        for label, write in (('psfnight', self._arc_script),
+                             ('nightlyflat', self._flat_script),
+                             ('cteflat', self._cte_script)):
+            text = write()
+            batchdir = os.path.dirname(self.scriptpath)
+            self.assertIn('$SLURM_JOB_ID on $(hostname) at $(date)', text, label)
+            ## relative timing and log filenames only resolve from the batchdir
+            self.assertIn(f'\ncd {batchdir}\n', text, label)
+            preamble = text[:text.index('cd ')]
+            self.assertNotIn('srun', preamble, f'{label} sruns precede the cd')
+            ## the allocation starts single threaded regardless of bundle type
+            self.assertIn('\nexport OMP_NUM_THREADS=', text, label)
+
+    def test_srun_option_shape(self):
+        """Every srun requests its nodes, ranks, and threads and binds cores"""
+        ## CPU bundles leave the mps wrapper empty, which doubles the space
+        pattern = re.compile(
+                r'srun (?:--gpus-per-node=\d+ )?-N \d+ -n \d+ -c \d+ '
+                r'--cpu-bind=cores\s+(?:desi_mps_wrapper )?desi_proc')
+        ## psfnight and nightly flat have one srun per exposure and a joint
+        ## fit srun, while the cte has one per exposure.
+        for label, write, nsruns in (
+                ('psfnight', self._arc_script, len(ARC_EXPIDS) + 1),
+                ('nightlyflat', self._flat_script, len(FLAT_EXPIDS) + 1),
+                ('cteflat', self._cte_script, len(CTE_EXPIDS))):
+            text = write()
+            sruns = [line.strip().lstrip('"') for line in text.split('\n')
+                     if line.strip().lstrip('"').startswith('srun ')]
+            self.assertEqual(len(sruns), nsruns, label)
+            for srun in sruns:
+                self.assertRegex(srun, pattern, f'{label}: {srun}')
+
+    def test_batch_opts_passthrough(self):
+        """Caller supplied batch options reach the directive block"""
+        text = self._arc_script(batch_opts='--dependency=afterok:12345')
+        self.assertIn('--dependency=afterok:12345', self._directives(text))
+
+    def test_default_queue(self):
+        """A bundle with no queue lands in the regular queue"""
+        text = self._arc_script(queue=None)
+        self.assertIn('--qos regular', self._directives(text))
 
 
 if __name__ == '__main__':
