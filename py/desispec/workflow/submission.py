@@ -291,7 +291,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     biascamword = None
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
-        if 'camword' in cal_override.get('linkcal', {}):
+        if 'camword' in cal_override.get('linkcal', {}) and 'biasnight' in cal_override['linkcal'].get('include', {}):
             log.warning(f"Warning: {cal_override['linkcal']['camword']} will be linked to another "
                         " night using the override.yaml file")
             biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
@@ -371,12 +371,12 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         prow['INTID'] = int_id
         prow['CALIBRATOR'] = 1
         prow['NIGHT'] = night
-        # prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
-                                                    #  suppress_logging=True, exclude_badamps=True)
+        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
+                                                     suppress_logging=True, exclude_badamps=True)
 
     ## If submit bias and darks, submit joint job, otherwise submit one or the other
     ## If there is a linkcal job that targets one but not the other and only certain cameras \
-    ## Split them
+    ## Split the jobs into bias and darks
     if dobias and dodarks and bias_all_cam_override:
         log.info(f"Submitting biaspdark for night {night}.")
         prow['JOBDESC'] = 'biaspdark'
@@ -395,8 +395,6 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         prow['EXPID'] = zero_expids[:1] # set as first zero expid
     elif dodarks:
         log.info(f"Submitting pdark for night {night}.")
-        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
-                                                                     suppress_logging=True, exclude_badamps=True)
         prow['JOBDESC'] = 'pdark'
         prow['OBSTYPE'] = 'dark'
         prow['EXPID'] = dark_expid_to_process
@@ -420,6 +418,35 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     else:
         log.info(f"No biasnight or preproc_darks jobs submitted for night {night}.")
 
+    if not bias_all_cam_override and dodarks:
+        prow = default_prow()
+        prow['INTID'] = int_id
+        prow['CALIBRATOR'] = 1
+        prow['NIGHT'] = night
+        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
+                                                     suppress_logging=True, exclude_badamps=True)
+        log.info(f"Submitting pdark for night {night}.")
+        prow['JOBDESC'] = 'pdark'
+        prow['OBSTYPE'] = 'dark'
+        prow['EXPID'] = dark_expid_to_process
+        if prow is not None:
+            prow = define_and_assign_dependency(prow, ptable)
+            prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
+                                        reservation=reservation,
+                                        strictly_successful=True,
+                                        check_for_outputs=True,
+                                        system_name=system_name,
+                                        extra_job_args=extra_job_args)
+            ## Add the processing row to the processing table
+            ptable.add_row(prow)
+            if len(ptable) > 0 and dry_run_level < 3:
+                write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
+            sleep_and_report(sub_wait_time,
+                                message_suffix=f"to slow down the queue submission rate",
+                                dry_run=(dry_run_level>0), logfunc=log.info)
+            log.info(f"Successfully submitted {prow['JOBDESC']} job for night {night}.")
+        else:
+            log.info(f"No preproc_darks jobs submitted for night {night}.")
     return ptable
 
 
