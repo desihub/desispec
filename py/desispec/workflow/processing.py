@@ -8,7 +8,7 @@ import json
 from astropy.io import fits
 from astropy.table import Table, join
 from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_exposure_table
-from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_ccdcalib_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
+from desispec.workflow.batch_writer import create_biaspdark_batch_script, create_calibration_bundle_batch_script, create_ccdcalib_batch_script, create_desi_proc_batch_script, create_desi_proc_tilenight_batch_script, create_linkcal_batch_script, get_desi_proc_batch_file_pathname, get_desi_proc_tilenight_batch_file_pathname
 import numpy as np
 
 import time, datetime
@@ -116,6 +116,12 @@ def get_jobdesc_to_file_map():
         dict. Dictionary with keys as lowercase job descriptions and to the
             filename of their expected outputs.
 
+    Note:
+        'cteflat' maps to 'frame' rather than 'fiberflat' because desi_proc
+        only writes a fiberflat for exposures longer than 10 seconds, and CTE
+        flats are 10s, 3s, and 1s. 'frame' is the last product desi_proc writes
+        for them, and since preproc is written before extraction an existing
+        frame also implies the preproc file that nightly CTE QA reads.
     """
     return {'biasnight': 'biasnight',
             'biaspdark': 'preproc_for_dark',
@@ -124,6 +130,7 @@ def get_jobdesc_to_file_map():
             'arc': 'fitpsf',
             'psfnight': 'psfnight',
             'flat': 'fiberflat',
+            'cteflat': 'frame',
             'nightlyflat': 'fiberflatnight',
             'prestdstar': 'sframe',
             'stdstarfit': 'stdstars',
@@ -249,6 +256,67 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
                  f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
     return prow
 
+def check_calibration_bundle_steps_on_disk(bundle_prow, step_prows,
+                                           resubmit_partial_complete=True):
+    """
+    Determine which exposure steps of a calibration bundle still need to run.
+
+    Args:
+        bundle_prow (Table.Row or dict): The processing row of the bundle.
+            Must include keyword accessible definitions for 'JOBDESC' and
+            'PROCCAMWORD'.
+        step_prows (list of dict): The bundle's command metadata rows, one per
+            exposure, as returned by make_calibration_bundle_prow().
+        resubmit_partial_complete (bool, optional): Default is True. If True, a
+            step whose expected products exist for only some cameras is pruned
+            down to the remaining cameras rather than being run in full.
+
+    Returns:
+        list of dict: Copies of the step rows that still have work to do, with
+        'PROCCAMWORD' pruned as appropriate. Steps whose expected outputs all
+        already exist, and steps left with an empty camword, are omitted.
+
+    Note:
+        A cteflat bundle is checked exposure by exposure rather than with the
+        bundle's union camword, since its exposures may legitimately have
+        different camera sets.
+    """
+    log = get_logger()
+    bundle_jobdesc = str(bundle_prow['JOBDESC'])
+    bundle_camword = str(bundle_prow['PROCCAMWORD'])
+    remaining = []
+    for step_prow in step_prows:
+        step = table_row_to_dict(step_prow).copy()
+        if bundle_jobdesc != 'cteflat':
+            ## A joint fit imposes a common camera set, so don't create
+            ## per-exposure products for cameras that cannot contribute to
+            ## the requested nightly product.
+            step['PROCCAMWORD'] = camword_intersection([step['PROCCAMWORD'],
+                                                        bundle_camword])
+        if step['PROCCAMWORD'] == '':
+            log.info(f"{bundle_jobdesc} bundle step for exposure "
+                     + f"{step['EXPID']} has no cameras left to process.")
+            continue
+
+        ## Check the products this step would produce. The copy carries the
+        ## bundle descriptor for CTE flats so that frames rather than
+        ## fiberflats are checked, but the metadata row keeps JOBDESC='flat'
+        ## so that its command is built the same way as it is today.
+        check_row = step.copy()
+        if bundle_jobdesc == 'cteflat':
+            check_row['JOBDESC'] = 'cteflat'
+        check_row = check_for_outputs_on_disk(check_row,
+                                              resubmit_partial_complete)
+        if check_row['STATUS'].upper() == 'COMPLETED':
+            continue
+
+        step['PROCCAMWORD'] = check_row['PROCCAMWORD']
+        if step['PROCCAMWORD'] == '':
+            continue
+        remaining.append(step)
+
+    return remaining
+
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
                       joint=False, strictly_successful=False,
                       check_for_outputs=True, resubmit_partial_complete=True,
@@ -297,15 +365,46 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    log = get_logger()
     orig_prow = prow.copy()
+    if extra_job_args is None:
+        extra_job_args = {}
+    is_cal_bundle = (prow['JOBDESC'] in ['psfnight', 'nightlyflat', 'cteflat']
+                     and 'calibration_bundle_steps' in extra_job_args)
+
     if check_for_outputs:
-        prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
-        if prow['STATUS'].upper() == 'COMPLETED':
-            return prow
+        if is_cal_bundle and prow['JOBDESC'] == 'cteflat':
+            ## A cteflat bundle produces no single nightly product, and its
+            ## union camword can't represent the per-exposure camera sets, so
+            ## don't run the generic multi-exposure check on it. It is complete
+            ## only when every one of its exposures is complete.
+            remaining = check_calibration_bundle_steps_on_disk(
+                    prow, extra_job_args['calibration_bundle_steps'],
+                    resubmit_partial_complete)
+            if len(remaining) == 0:
+                prow['STATUS'] = 'COMPLETED'
+                log.info(f"cteflat bundle with exposure(s) {prow['EXPID']} "
+                         + "already has all of its expected frames. "
+                         + "Not submitting this job.")
+                return prow
+            prow['STATUS'] = 'UNKNOWN'
+        else:
+            prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
+            if prow['STATUS'].upper() == 'COMPLETED':
+                return prow
 
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint,
                                system_name=system_name, use_specter=use_specter,
+                               check_for_outputs=check_for_outputs,
+                               resubmit_partial_complete=resubmit_partial_complete,
                                extra_job_args=extra_job_args)
+
+    ## A bundle script is named with the bundle's full camword so that later
+    ## resubmissions can find it, so restore that camword before
+    ## submit_batch_script() reconstructs the pathname from the row.
+    if is_cal_bundle and 'bundle_full_camword' in extra_job_args:
+        prow['PROCCAMWORD'] = extra_job_args['bundle_full_camword']
+
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run,
                                strictly_successful=strictly_successful)
 
@@ -314,7 +413,11 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0,
     ## retain the full job's value, so get those from the old job.
     if resubmit_partial_complete:
         prow['PROCCAMWORD'] = orig_prow['PROCCAMWORD']
-        prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
+        ## Bundles keep the canonical SCRIPTNAME returned by the bundle writer,
+        ## which was derived from the full camword and names a file that
+        ## actually exists. Everything else keeps the original behavior.
+        if not (is_cal_bundle and prow['SCRIPTNAME'] != ''):
+            prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
 def desi_link_calibnight_command(prow, refnight, include=None):
@@ -341,7 +444,8 @@ def desi_link_calibnight_command(prow, refnight, include=None):
         cmd += f' --include=' + ','.join(list(include))
     return cmd
 
-def desi_proc_command(prow, system_name, use_specter=False, queue=None):
+def desi_proc_command(prow, system_name, use_specter=False, queue=None,
+                      direct_mode=False):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -351,15 +455,20 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
         queue (str, optional): The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
         use_specter (bool, optional): Default is False. If True, use specter, otherwise use gpu_specter by default.
+        direct_mode (bool, optional): Default is False, which returns a command
+            that asks desi_proc to generate another batch script. If True, the
+            returned command runs the processing directly and can be placed
+            after srun in a batch script.
 
     Returns:
         str: The proper command to be submitted to desi_proc to process the job defined by the prow values.
     """
     cmd = 'desi_proc'
-    cmd += ' --batch'
-    cmd += ' --nosubmit'
-    if queue is not None:
-        cmd += f' -q {queue}'
+    if not direct_mode:
+        cmd += ' --batch'
+        cmd += ' --nosubmit'
+        if queue is not None:
+            cmd += f' -q {queue}'
     if prow['OBSTYPE'].lower() == 'science':
         if prow['JOBDESC'] == 'prestdstar':
             cmd += ' --nostdstarfit --nofluxcalib'
@@ -371,17 +480,22 @@ def desi_proc_command(prow, system_name, use_specter=False, queue=None):
     elif prow['JOBDESC'] in ['flat', 'prestdstar'] and use_specter:
         cmd += ' --use-specter'
     pcamw = str(prow['PROCCAMWORD'])
-    cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
+    if direct_mode:
+        cmd += f" --cameras {pcamw} -n {prow['NIGHT']}"
+    else:
+        cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
     if len(prow['EXPID']) > 0:
         ## If ccdcalib job without a dark exposure, don't assign the flat expid
         ## since it would incorrectly process the flat using desi_proc
         if prow['OBSTYPE'].lower() != 'flat' or prow['JOBDESC'] != 'ccdcalib':
             cmd += f" -e {prow['EXPID'][0]}"
+    if direct_mode:
+        cmd += ' --mpi'
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
 
-def desi_proc_joint_fit_command(prow, queue=None):
+def desi_proc_joint_fit_command(prow, queue=None, direct_mode=False):
     """
     Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
@@ -389,16 +503,21 @@ def desi_proc_joint_fit_command(prow, queue=None):
     Args:
         prow (Table.Row or dict): Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
         queue (str): The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
+        direct_mode (bool, optional): Default is False, which returns a command
+            that asks desi_proc_joint_fit to generate another batch script. If
+            True, the returned command runs the joint fit directly and can be
+            placed after srun in a batch script.
 
     Returns:
         str: The proper command to be submitted to desi_proc_joint_fit
             to process the job defined by the prow values.
     """
     cmd = 'desi_proc_joint_fit'
-    cmd += ' --batch'
-    cmd += ' --nosubmit'
-    if queue is not None:
-        cmd += f' -q {queue}'
+    if not direct_mode:
+        cmd += ' --batch'
+        cmd += ' --nosubmit'
+        if queue is not None:
+            cmd += f' -q {queue}'
 
     descriptor = prow['OBSTYPE'].lower()
 
@@ -407,14 +526,21 @@ def desi_proc_joint_fit_command(prow, queue=None):
     expid_str = ','.join([str(eid) for eid in prow['EXPID']])
 
     cmd += f' --obstype {descriptor}'
-    cmd += f' --cameras={specs} -n {night}'
+    if direct_mode:
+        cmd += f' --cameras {specs} -n {night}'
+    else:
+        cmd += f' --cameras={specs} -n {night}'
     if len(expid_str) > 0:
         cmd += f' -e {expid_str}'
+    if direct_mode:
+        cmd += ' --mpi'
     return cmd
 
 
 def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
-                        system_name=None, use_specter=False, extra_job_args=None):
+                        system_name=None, use_specter=False,
+                        check_for_outputs=True, resubmit_partial_complete=True,
+                        extra_job_args=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -434,9 +560,17 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
             run with desi_proc_joint_fit when not using tilenight. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
         use_specter, bool, optional. Default is False. If True, use specter, otherwise use gpu_specter by default.
+        check_for_outputs, bool, optional. Default is True. Only used by
+            calibration bundles, where it controls whether exposure steps whose
+            products already exist are left out of the generated script.
+        resubmit_partial_complete, bool, optional. Default is True. Only used by
+            calibration bundles, where it controls whether individual exposure
+            steps are pruned to the cameras still missing their products.
         extra_job_args (dict): Dictionary with key-value pairs that specify additional
             information used for a specific type of job. Examples include refnight
             and include/exclude lists for linkcal, laststeps for tilenight, etc.
+            Calibration bundles reserve the keys 'calibration_bundle_steps' and
+            'bundle_full_camword'.
 
     Returns:
         Table.Row or dict: The same prow type and keywords as input except with modified values updated values for
@@ -532,6 +666,54 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
                                                    n_nights_after=n_nights_after,
                                                    dark_expid=dark_expid, cte_expids=cte_expids,
                                                    queue=queue, system_name=system_name)
+    elif (prow['JOBDESC'] in ['psfnight', 'nightlyflat', 'cteflat']
+          and 'calibration_bundle_steps' in extra_job_args):
+        ## A nightly calibration bundle: one Slurm job that processes every
+        ## selected exposure and, for arcs and normal flats, then performs the
+        ## joint fit. The extra-argument guard keeps ordinary joint-fit callers
+        ## on their existing code path.
+        full_camword = extra_job_args.get('bundle_full_camword',
+                                          prow['PROCCAMWORD'])
+        if check_for_outputs:
+            remaining = check_calibration_bundle_steps_on_disk(
+                    prow, extra_job_args['calibration_bundle_steps'],
+                    resubmit_partial_complete=resubmit_partial_complete)
+        else:
+            remaining = list(extra_job_args['calibration_bundle_steps'])
+
+        steps = []
+        for step_prow in remaining:
+            steps.append({'expid': int(step_prow['EXPID'][0]),
+                          'camword': str(step_prow['PROCCAMWORD']),
+                          'cmd': desi_proc_command(step_prow, system_name,
+                                                   use_specter, queue=queue,
+                                                   direct_mode=True)})
+
+        joint_cmd = None
+        if prow['JOBDESC'] in ['psfnight', 'nightlyflat']:
+            joint_cmd = desi_proc_joint_fit_command(prow, queue=queue,
+                                                    direct_mode=True)
+            if 'extra_cmd_args' in extra_job_args:
+                joint_cmd += ' ' + ' '.join(np.atleast_1d(extra_job_args['extra_cmd_args']))
+
+        if dry_run > 1:
+            scriptpathname = get_desi_proc_batch_file_pathname(
+                    night=prow['NIGHT'], exp=prow['EXPID'],
+                    jobdesc=prow['JOBDESC'], cameras=full_camword) + '.slurm'
+            log.info("Output file would have been: {}".format(scriptpathname))
+            for step in steps:
+                log.info("Command to be run: {}".format(step['cmd'].split()))
+            if joint_cmd is not None:
+                log.info("Command to be run: {}".format(joint_cmd.split()))
+        else:
+            log.info(f"Creating {prow['JOBDESC']} bundle script for: {prow}")
+            scriptpathname = create_calibration_bundle_batch_script(
+                    night=prow['NIGHT'], jobdesc=prow['JOBDESC'],
+                    expids=prow['EXPID'], camword=full_camword, steps=steps,
+                    joint_cmd=joint_cmd, joint_camword=prow['PROCCAMWORD'],
+                    queue=queue, system_name=system_name,
+                    concurrency=extra_job_args.get('concurrency', None),
+                    runtime=extra_job_args.get('runtime', None))
     elif prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
         if dry_run > 1:
             scriptpathname = get_ztile_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
@@ -1988,14 +2170,18 @@ def make_joint_prow(prows, descriptor, internal_id):
     input prows).
 
     Args:
-        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
+        prows (list or array of dict): The rows corresponding to the individual exposure jobs that are
             inputs to the joint fit.
-        descriptor, str. Description of the joint fitting job. Can either be 'stdstarfit', 'psfnight', or 'nightlyflat'.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        descriptor (str): Description of the joint fitting job. Can be 'stdstarfit', 'psfnight',
+            'nightlyflat', or 'cteflat' for the calibration jobs, or 'pernight' or 'cumulative'
+            for the redshift jobs. Note a 'cteflat' bundle has no joint fit, so its PROCCAMWORD is
+            the union over the bundle's exposures rather than a set every exposure shares.
+        internal_id (int): The next internal id to be used for assignment (already incremented up from
+            the last used id number used).
 
     Returns:
-        dict: Row of a processing table corresponding to the joint fit job.
-        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
+        tuple: ``(joint_prow, internal_id)`` where ``joint_prow`` is the row corresponding to the
+            joint fit job and ``internal_id`` is the next internal id to be used for assignment.
     """
     log = get_logger()
     first_row = table_row_to_dict(prows[0])
@@ -2026,6 +2212,12 @@ def make_joint_prow(prows, descriptor, internal_id):
     elif descriptor == 'nightlyflat':
         joint_prow['PROCCAMWORD'] = camword_intersection(pcamwords,
                                                          full_spectros_only=False)
+    elif descriptor == 'cteflat':
+        ## CTE flats have no joint fit and therefore no common camera set. The
+        ## union documents every camera the bundle touches; it is metadata and
+        ## must never be treated as though every exposure has every camera.
+        joint_prow['PROCCAMWORD'] = camword_union(pcamwords,
+                                                  full_spectros_only=False)
     elif descriptor == 'psfnight':
         ## Count number of exposures each camera is present for
         camcheck = {}
@@ -2047,6 +2239,73 @@ def make_joint_prow(prows, descriptor, internal_id):
 
     joint_prow = assign_dependency(joint_prow, dependency=prows)
     return joint_prow, internal_id
+
+def make_calibration_bundle_prow(erows, descriptor, internal_id, calibjobs):
+    """
+    Create one processing row for a nightly calibration bundle.
+
+    A bundle is a single Slurm job that processes all of the given calibration
+    exposures. The returned bundle row is the only row that should be added to
+    the processing table; the returned step rows are command metadata used to
+    generate the individual exposure commands within the bundle's script.
+
+    Args:
+        erows (list or Table): The exposure table rows of the exposures that
+            make up the bundle.
+        descriptor (str): The bundle job description, one of 'psfnight',
+            'nightlyflat', or 'cteflat'.
+        internal_id (int): the next internal id to be used for assignment
+            (already incremented up from the last used id number used).
+        calibjobs (dict): Dictionary of the calibration jobs this bundle may
+            depend on, as returned by generate_calibration_dict().
+
+    Returns:
+        tuple: A tuple containing:
+
+        * bundle_prow, dict. The processing table row representing the bundle.
+        * step_prows, list of dict. One row per exposure, used only to build
+          the per-exposure commands. These must never be added to the
+          processing table, since an UNSUBMITTED row would be treated as a job
+          that needs resubmission.
+        * internal_id, int, the next internal id to be used for assignment.
+    """
+    log = get_logger()
+    if descriptor not in ['psfnight', 'nightlyflat', 'cteflat']:
+        msg = f'Unknown calibration bundle descriptor {descriptor}'
+        log.critical(msg)
+        raise ValueError(msg)
+    if len(erows) == 0:
+        msg = f'No exposures given for the {descriptor} bundle'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    ## The steps themselves are ordinary single exposure arc or flat jobs;
+    ## only the bundle row carries the bundle descriptor
+    if descriptor == 'psfnight':
+        step_jobdesc = 'arc'
+    else:
+        step_jobdesc = 'flat'
+
+    step_prows = []
+    for erow in erows:
+        prow = erow_to_prow(erow)
+        prow['JOBDESC'] = step_jobdesc
+        step_prows.append(prow)
+
+    ## Deterministic exposure ordering
+    step_prows = sorted(step_prows, key=lambda prow: int(prow['EXPID'][0]))
+
+    bundle_prow, internal_id = make_joint_prow(step_prows,
+                                               descriptor=descriptor,
+                                               internal_id=internal_id)
+
+    ## make_joint_prow() assigned dependencies on the temporary step rows,
+    ## whose INTIDs will never appear in the processing table. Replace them
+    ## with the real upstream calibration job before anything can see them.
+    bundle_prow = define_and_assign_dependency(bundle_prow, calibjobs)
+    bundle_prow['CALIBRATOR'] = 1
+
+    return bundle_prow, step_prows, internal_id
 
 def make_exposure_prow(erow, int_id, calibjobs, jobdesc=None):
     prow = erow_to_prow(erow)
