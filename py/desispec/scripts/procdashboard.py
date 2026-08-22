@@ -214,9 +214,14 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         proctab = update_from_queue(proctab)
         new_proc_expids = set(np.concatenate(proctab['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
+        ## Calibration bundles carry one row for many exposures, so the
+        ## bundle's status is what each of its exposures should show. Arcs and
+        ## flats no longer have rows of their own, so without the bundle
+        ## descriptors here their exposures would all read 'unknown'.
         expjobs_ptab = proctab[np.isin(proctab['JOBDESC'],
                                        [b'arc', b'flat', b'tilenight',
-                                        b'prestdstar', b'stdstar', b'poststdstar'])]
+                                        b'prestdstar', b'stdstar', b'poststdstar',
+                                        b'psfnight', b'nightlyflat', b'cteflat'])]
         for i,erow in enumerate(exptab):
             ## proctable has an array of expids, so check for them in a loop
             for prow in expjobs_ptab:
@@ -226,7 +231,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
                     exptab['PTAB_INTID'][i] = prow['INTID']
                     exptab['JOBDESC'][i] = prow['JOBDESC']
         caljobs_ptab = proctab[np.isin(proctab['JOBDESC'],
-                                       [b'ccdcalib', b'psfnight', b'nightlyflat'])]
+                                       [b'ccdcalib', b'psfnight', b'nightlyflat',
+                                        b'cteflat'])]
         for prow in caljobs_ptab:
             jobdesc = prow['JOBDESC']
             expids = prow['EXPID']
