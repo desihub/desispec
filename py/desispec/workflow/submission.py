@@ -291,11 +291,6 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     biascamword = None
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
-        if 'camword' in cal_override.get('linkcal', {}) and 'biasnight' in cal_override['linkcal'].get('include', {}):
-            log.warning(f"Warning: {cal_override['linkcal']['camword']} will be linked to another "
-                        " night using the override.yaml file")
-            biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
-            bias_all_cam_override=False
 
     ## Identify what calibrations have been done
     if 'linkcal' in cal_override:
@@ -303,6 +298,11 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
         files_to_link, files_not_linked = None, None
         if 'include' in cal_override['linkcal']:
             files_to_link = cal_override['linkcal']['include']
+            if 'biaslink_camword' in cal_override['linkcal'] and 'biasnight' in files_to_link:
+                log.warning(f"Warning: {cal_override['linkcal']['biaslink_camword']} will be linked to another "
+                        " night using the override.yaml file")
+                biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
+                bias_all_cam_override=False
         if 'exclude' in cal_override['linkcal']:
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,

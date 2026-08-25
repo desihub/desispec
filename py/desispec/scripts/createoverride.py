@@ -9,7 +9,8 @@ import time
 import numpy as np
 
 from desispec.io.meta import findfile
-from desispec.io.util import decode_camword, create_camword
+# from desispec.io.util import decode_camword, create_camword
+from desispec.io.util import parse_cameras
 
 def valid_night(night):
     """
@@ -41,9 +42,11 @@ def valid_cameras(cameras):
     Returns:
         bool, True if valid camera sequence
     """
-    cams = decode_camword(cameras)
-    string = create_camword(cams)
-    isvalid =  isinstance(string, str)
+    try:
+        cams = parse_cameras(cameras)
+        isvalid =  isinstance(cams, str)
+    except:
+        isvalid = False
     if not isvalid:
         print(f"--> Received invalid response: '{cameras}'. Must be in DESI format (i.e. a1, b2, r3, z4, r8z6, etc.).")
     return(isvalid)
@@ -118,6 +121,7 @@ def create_override_file(args):
         night = int(args.night)
 
     outdict = {'calibration': dict()}
+    biaslink_camword = None
     if args.linkcal is None:
         linkcal = is_yes("Does this night require cal linking? ")
     else:
@@ -130,6 +134,13 @@ def create_override_file(args):
         good_psf = is_yes("Are there valid arcs for psf generation? ")
         good_flats = is_yes("Are there valid flats for "
                             + "fiberflatnight generation? ")
+        if not good_bias:
+            biaslink_camword = get_camera("What cameras need a biasnight link? " +
+                                          "If all, input 'a0123456789'")
+            if biaslink_camword == 'a0123456789':
+                print("Since all cameras need a biasnight link, " +
+                      "'biaslink_camword' will NOT be set")
+                biaslink_camword = None
         if not good_psf and good_flats:
             print("Since good_psf is False, we cannot use the flats. "
                   + "Setting good_flats to False")
@@ -168,13 +179,13 @@ def create_override_file(args):
             else:
                 goods.append('flats')
             linkcal_include = ','.join(linkcal_include_list)
-            if args.cameras==None:
+            if biaslink_camword is None:
                 outdict['calibration']['linkcal'] = {'refnight': refnight,
                                                  'include': linkcal_include}
             else:
                 outdict['calibration']['linkcal'] = {'refnight': refnight,
                                                     'include': linkcal_include,
-                                                    'camword': args.cameras}
+                                                    'biaslink_camword': biaslink_camword}
 
     if args.ff_solve_grad is None:
         ff_solve_grad = is_yes("Do we need to set --solve-gradient in autocalib_fiberflat? ")

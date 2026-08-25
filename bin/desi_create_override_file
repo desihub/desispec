@@ -19,9 +19,6 @@ def get_parser():
                         help="Set to define whether to to use '--autocal-ff-solve-grad' "
                              + "in the nightlyflat job. If not set the user will be prompted"
                              + " to give that information.")
-    parser.add_argument("-c","--cameras", type=str,default=None, required=False,
-                        help="Camera(s) that need the override file. "
-                             + "If none, will assume all cameras need to have an override.")
     return parser
 
 
