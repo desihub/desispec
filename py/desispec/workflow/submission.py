@@ -301,7 +301,7 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             if 'biaslink_camword' in cal_override['linkcal'] and 'biasnight' in files_to_link:
                 log.warning(f"Warning: {cal_override['linkcal']['biaslink_camword']} will be linked to another "
                         " night using the override.yaml file")
-                biascamword = difference_camwords(camword, cal_override['linkcal']['camword'])
+                biascamword = difference_camwords(camword, cal_override['linkcal']['biaslink_camword'])
                 bias_all_cam_override=False
         if 'exclude' in cal_override['linkcal']:
             files_not_linked = cal_override['linkcal']['exclude']
