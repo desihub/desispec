@@ -48,7 +48,8 @@ def valid_cameras(cameras):
     except:
         isvalid = False
     if not isvalid:
-        print(f"--> Received invalid response: '{cameras}'. Must be in DESI format (i.e. a1, b2, r3, z4, r8z6, etc.).")
+        print(f"--> Received invalid response: '{cameras}'. Must be a list "
+              + "of cameras or camwords, i.e. a1, b2, r3, z4, r8z6, etc..")
     return(isvalid)
 
 def valid_yes_no(string):
@@ -101,7 +102,9 @@ def get_camera(prompt):
     Prompt the user for a camera string and return the camera string as a string
     """
     cameras = get_response(prompt, valid_cameras)
-    return(cameras)
+    if cameras == '':
+        cameras = 'a0123456789'
+    return parse_cameras(cameras, loglevel='ERROR')
 
 def is_yes(prompt):
     """
@@ -129,14 +132,14 @@ def create_override_file(args):
     if linkcal:
         refnight = get_night("What is the reference night? ")
         good_bias = is_yes("Are there valid zeros for biases? ")
-        good_cte = is_yes("Are there valid falts for cte corections? ")
+        good_cte = is_yes("Are there valid flats for cte corections? ")
         good_badcol = is_yes("Is there a valid dark for badcolumn detection? ")
         good_psf = is_yes("Are there valid arcs for psf generation? ")
         good_flats = is_yes("Are there valid flats for "
                             + "fiberflatnight generation? ")
         if not good_bias:
             biaslink_camword = get_camera("What cameras need a biasnight link? " +
-                                          "If all, input 'a0123456789'")
+                                          "Leave blank if all. ")
             if biaslink_camword == 'a0123456789':
                 print("Since all cameras need a biasnight link, " +
                       "'biaslink_camword' will NOT be set")
