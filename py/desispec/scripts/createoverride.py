@@ -132,7 +132,7 @@ def create_override_file(args):
     if linkcal:
         refnight = get_night("What is the reference night? ")
         good_bias = is_yes("Are there valid zeros for biases? ")
-        good_cte = is_yes("Are there valid flats for cte corections? ")
+        good_cte = is_yes("Are there valid flats for cte corrections? ")
         good_badcol = is_yes("Is there a valid dark for badcolumn detection? ")
         good_psf = is_yes("Are there valid arcs for psf generation? ")
         good_flats = is_yes("Are there valid flats for "
