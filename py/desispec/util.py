@@ -759,10 +759,11 @@ def ordered_unique(ar, return_index=False):
     else:
         return unique
 
-# If not in the table, gets set to max(tbl) + 1
-survey_priorities = {"main": 0, "special" : 1}
 def ordered_unique_by_priority(tbl):
     # TODO docstring
+    # If not in the table, gets set to max(tbl) + 1
+    survey_priorities = {"main": 0, "special" : 1}
+
     targetids = np.array(tbl["TARGETID"])
     # We will use priority as lower = better since default sort
     # functions sort lowest to highest.
