@@ -891,16 +891,43 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
         #  Sort them so we are ordered by spectrograph, then night, then exposure
         band_keys = sorted(allkeys[band])
 
+        # TODO: Better way to condense all of this?
+        if pix is not None:
+            # We will determine which of the spectra make it into this
+            # pix group based on their "canoncial" TARGET_RA/DEC
+            # in case a target has two different locations that might cause it
+            # to end up in two different heal/uniqpixels.
+            keep_cols = ['TARGETID', 'TARGET_RA', 'TARGET_DEC']
+            # We will assume that all the fibermaps have the same structure
+            # in so far as they have the same "flavor" of SCND_TARGET. Shoule
+            # be a safe assumption as long as this is only ever run
+            # on a single survey/program combination.
+            _, first_night, first_expid, first_cam  = band_keys[0]
+            scnd_targ_cols = [x for x in
+                            frames[(first_night, first_expid, first_cam)].fibermap.colnames
+                            if "SCND_TARGET" in x]
+
+            keep_cols += scnd_targ_cols
+            band_fmaps = [frames[(night,expid,cam)].fibermap[keep_cols]
+                        for _, night, expid, cam in band_keys]
+            all_fmaps = np.concatenate(band_fmaps)
+
+            tids, idcs = ordered_unique_by_priority(all_fmaps)
+            ra, dec = all_fmaps['TARGET_RA'][idcs], all_fmaps['TARGET_DEC'][idcs]
+
+            ok = ~np.isnan(ra) & ~np.isnan(dec)
+            ra[~ok] = 0.0
+            dec[~ok] = 0.0
+            allpix = radec2pix(nside, ra, dec)
+            ii = (allpix == pix) & ok
+            kept_tids = tids[ii]
+
         #- Select flux, ivar, etc. for just the spectra on this healpix
         for spec,night,expid,cam in band_keys:
             bandframe = frames[(night,expid,cam)]
             if pix is not None:
-                ra, dec = bandframe.fibermap['TARGET_RA'], bandframe.fibermap['TARGET_DEC']
-                ok = ~np.isnan(ra) & ~np.isnan(dec)
-                ra[~ok] = 0.0
-                dec[~ok] = 0.0
-                allpix = radec2pix(nside, ra, dec)
-                ii = (allpix == pix) & ok
+                frame_tids = bandframe.fibermap['TARGETID']
+                ii = np.where(np.isin(frame_tids, kept_tids))[0]
             else:
                 ii = np.ones(bandframe.flux.shape[0]).astype(bool)
 
