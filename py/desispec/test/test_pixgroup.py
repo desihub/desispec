@@ -24,7 +24,7 @@ class TestPixGroup(unittest.TestCase):
         cls.origenv = dict()
         for key in ['DESI_SPECTRO_REDUX', 'SPECPROD']:
             cls.origenv[key] = os.getenv(key)  #- will be None if not set
-        
+
         os.environ['DESI_SPECTRO_REDUX'] = cls.testdir
         os.environ['SPECPROD'] = 'grouptest'
 
@@ -33,7 +33,7 @@ class TestPixGroup(unittest.TestCase):
         cls.nights = [20200101, 20200102, 20200103] # needs to be at least 3 nights
         cls.badnight = cls.nights[-1]
         cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
-        
+
         cls.healpix = 19456
         cls.nside = 64
         cls.uniqpix = desiutil.healpix.hpix2upix(cls.nside, cls.healpix)
@@ -70,7 +70,7 @@ class TestPixGroup(unittest.TestCase):
             for ii,night in enumerate(cls.nights):
                 for nfram in range(cls.nframe_per_night):
                     expid = (ii*cls.nframe_per_night) + (nfram + 1)
-                    
+
                     if night == cls.badnight and \
                        (nfram == bad_nfram_on_night or nfram == bad_brz_nfram):
                         curframe = deepcopy(frame)
@@ -199,7 +199,7 @@ class TestPixGroup(unittest.TestCase):
             spectra = read_spectra(self.specfile)
             num_nights = i+1
             nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-        
+
             self.assertEqual(len(spectra.fibermap), nspec)
             self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
@@ -215,14 +215,14 @@ class TestPixGroup(unittest.TestCase):
 
         fibermap_array = np.array(spectra.fibermap['FIBERSTATUS'])
         self.assertEqual(len(fibermap_array), nspec)
-        
+
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPB) > 0 ), 2*len(self.badslice))
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPR) > 0 ), 2*len(self.badslice))
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPZ) > 0 ), 2*len(self.badslice))
 
         badamp_brz = ( fibermask.BADAMPB | fibermask.BADAMPR | fibermask.BADAMPZ )
         self.assertEqual(np.sum( (fibermap_array == badamp_brz) ), len(self.badslice))
-        
+
     def test_regroup_nights(self):
         """Test filtering to a specific set of nights"""
         num_nights = 2
@@ -234,10 +234,10 @@ class TestPixGroup(unittest.TestCase):
 
         spectra = read_spectra(self.specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-        
+
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
-        
+
     def test_regroup_inframes(self):
         """Test grouping from an input list of frames"""
         cmd = 'desi_group_spectra -o {}'.format(self.specfile)
@@ -270,7 +270,7 @@ class TestPixGroup(unittest.TestCase):
         spectra = read_spectra(self.specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-    
+
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
@@ -713,5 +713,46 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(fr.fibermap.meta['TILEID'], 1234)
             self.assertEqual(fr.fibermap.meta['SURVEY'], 'main')
             self.assertEqual(fr.fibermap.meta['PROGRAM'], 'dark')
+
+    def test_frames2spectra_discrepant_radec(self):
+        """A target with disagreeing TARGET_RA/DEC across exposures should
+        still land in a single pixel, keeping all of its exposures"""
+        from ..pixgroup import FrameLite, frames2spectra
+        from desimodel.footprint import radec2pix
+
+        #- reuse two already-written good (non-badnight) exposures from self.framefiles
+        night = self.nights[0]
+        expid1, expid2 = 2, 3
+
+        #- TARGETID 100: secondary occurrence (expid1, RA=10.0) and primary
+        #- occurrence (expid2, RA=15.0), chosen so the two RA values land in
+        #- different healpix pixels at this nside
+        pix_secondary = radec2pix(self.nside, 10.0, 0.0)
+        pix_primary = radec2pix(self.nside, 15.0, 0.0)
+        self.assertNotEqual(pix_secondary, pix_primary)
+
+        frames = dict()
+        for camera in ['b0', 'r0', 'z0']:
+            f1 = FrameLite.read(findfile('cframe', night, expid1, camera))
+            f1.fibermap['TARGETID'][0:2] = [100, 200]
+            f1.fibermap['TARGET_RA'][0:2] = [10.0, 50.0]
+            f1.fibermap['TARGET_DEC'][0:2] = [0.0, 0.0]
+            f1.fibermap['SCND_TARGET'][0:2] = [8, 0]
+            frames[(night, expid1, camera)] = f1
+
+            f2 = FrameLite.read(findfile('cframe', night, expid2, camera))
+            f2.fibermap['TARGETID'][0:2] = [100, 300]
+            f2.fibermap['TARGET_RA'][0:2] = [15.0, 60.0]
+            f2.fibermap['TARGET_DEC'][0:2] = [0.0, 0.0]
+            f2.fibermap['SCND_TARGET'][0:2] = [0, 0]
+            frames[(night, expid2, camera)] = f2
+
+        spectra = frames2spectra(frames, pix=int(pix_primary), nside=self.nside)
+        tids = np.asarray(spectra.fibermap['TARGETID'])
+
+        #- both exposures of TARGETID 100 should be kept, under the primary's pixel
+        self.assertEqual(np.sum(tids == 100), 2)
+        self.assertNotIn(200, tids)
+        self.assertNotIn(300, tids)
 
 
