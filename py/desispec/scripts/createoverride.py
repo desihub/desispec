@@ -27,7 +27,7 @@ def valid_night(night):
     isvalid = night.isnumeric() \
         and np.abs(int(night[:4]) - 2023) < 10 \
         and np.abs(int(night[4:6]) - 6.5) < 6 \
-        and np.abs(int(night[6:]) - 16) < 15
+        and np.abs(int(night[6:]) - 16) < 16
     if not isvalid:
         print(f"--> Received invalid response: '{night}'. Must be YEARMMDD.")
     return isvalid
