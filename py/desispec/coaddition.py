@@ -210,10 +210,10 @@ def ordered_unique_by_priority(tbl):
 
     # This may not be passed to sanity check that it exists first.
     if 'SURVEY' in colnames:
-        for srvy in survey_priorities.keys:
+        for srvy in survey_priorities.keys():
             is_this_srvy = tbl['SURVEY'].lower() == srvy
             targ_priorities[is_this_srvy] += 10 * survey_priorities[srvy]
-        not_in_surveys = np.isin(tbl['SURVEY'], survey_priorities.keys)
+        not_in_surveys = np.isin(tbl['SURVEY'], survey_priorities.keys())
         targ_priorities[not_in_surveys] += 10 * (np.max(survey_priorities.values()) + 1)
 
     # Sort by TARGETID, then by priority, then by row number
