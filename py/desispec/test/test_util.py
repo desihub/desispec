@@ -414,6 +414,22 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(a), [1,2,3,0])
         self.assertEqual(list(idx), [0,2,3,4])
 
+    def test_ordered_unique_by_priority(self):
+        tbl = Table()
+        tbl['TARGETID']    = [1, 1, 2, 2, 3, 3, 4, 5]
+        tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 0]
+        tbl['SURVEY']      = ['special', 'main', 'special', 'main', 'main', 'cmx', 'main', 'other']
+        targets, ii = util.ordered_unique_by_priority(tbl)
+        self.assertEqual(list(targets), [1,2,3,4,5])
+        self.assertEqual(list(ii), [0,3,5,6,7])
+
+        tbl2 = Table()
+        tbl2['TARGETID']    = [40, 10, 30, 10, 20]
+        tbl2['SCND_TARGET'] = [0,   8,  0,  0,  0]
+        targets2, ii2 = util.ordered_unique_by_priority(tbl2)
+        self.assertEqual(list(targets2), [40,10,30,20])
+        self.assertEqual(list(ii2), [0,3,2,4])
+
     def test_itemindices(self):
         r = util.itemindices([10,30,20,30])
         self.assertEqual(r, {10: [0], 30: [1,3], 20: [2]})
