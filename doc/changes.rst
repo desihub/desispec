@@ -10,6 +10,11 @@ These changes were not used in Matterhorn.
 
 * Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
 * Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
+* Bundle the nightly arc, normal-flat, and CTE-flat calibrations into one
+  Slurm job each, replacing the previous one-job-per-exposure submissions.
+  A normal night now submits 3 calibration jobs instead of 22. Note this
+  also lowers the ``ARC`` node cap in ``determine_resources()`` from 10 to 5;
+  ``PSFNIGHT`` is raised to 15 so a bundle can run every arc at once.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721

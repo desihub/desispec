@@ -462,8 +462,19 @@ def main(args=None):
     survey = args.survey
     program = args.program
 
-    if program not in ['backup', 'bright', 'dark', 'other']:
-        raise ValueError('Invalid program \"{}\"; it must be one of the following: backup, bright, dark, other'.format(program))
+    # Confirm valid survey and program before doing much work
+    # e.g. survey is used to know which target columns to keep
+    valid_programs = ['backup', 'bright', 'dark', 'other']
+    if program not in valid_programs:
+        msg = f'Invalid program={program}; it must be one of {valid_programs}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    valid_surveys = ['cmx', 'sv1', 'sv2', 'sv3', 'main', 'special']
+    if survey not in valid_surveys:
+        msg = f'Invalid survey={survey}; it must be one of {valid_surveys}'
+        log.critical(msg)
+        raise ValueError(msg)
 
     if args.indir is not None:
         indir = args.indir
@@ -668,21 +679,25 @@ def main(args=None):
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
     ######
-    # Add GOOD_Z_{BGS,LRG,ELG,QSO} redshift quality flags
+    # Add GOOD_Z_{BGS,LRG,ELG,QSO,LYA} redshift quality flags
     # - passes LSS quality cuts from validredshifts.actually_validate
     # - science target with good hardware
     # - core DESI tracer target selection (and not e.g. secondary QSOs)
     # - SURVEY is main/sv1/sv2/sv3 (not special)
+    # - GOOD_Z_LYA is only available for main survey
 
     # LSS redshift quality cuts
-    zqual = validredshifts.actually_validate(zcat)
+    if survey=='main':
+        zqual = validredshifts.actually_validate(zcat, populate_missing_columns=True)
+    else:
+        zqual = validredshifts.actually_validate(zcat, ignore_lya=True, populate_missing_columns=True)
 
     # GOOD_SPEC: true if it is a science spectrum with good hardware status
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'    # not included in LSS BGS,LRG,ELG cuts
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
 
-    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
         zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
 
     # Require primary tracer targeting
@@ -706,15 +721,17 @@ def main(args=None):
         zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_LRG includes both LRG and LGE
         zqual['GOOD_Z_ELG'] &= is_elg
 
-        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
+        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to the Z_QSO column, not the Z column
         # True if it is a QSO target AND passes the QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
-        
-        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts
-        # as the per-target class and GOOD_SPEC requirements are added here
+        # GOOD_Z_LYA (if available) also applies to the Z_QSO column
+        # For GOOD_Z_LYA we do not check for target membership here because it was done in desispec.validredshifts
+
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO,LYA} definitions are more restrictive than in desispec.validredshifts
+        # as the target membership and GOOD_SPEC requirements are added here
 
     else:
-        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             zqual[col] = False
 
     ######
@@ -733,7 +750,7 @@ def main(args=None):
     # Z_CONF=3: highly confident redshift
     # criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO)
     # and pass the LSS redshift quality cuts
-    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO'] | zqual['GOOD_Z_LYA']
     zqual['Z_CONF'][mask] = 3
 
     zcat = hstack([zcat, zqual], join_type='exact')
@@ -746,7 +763,7 @@ def main(args=None):
     # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs by more than 1000 km/s from Z
     c = astropy.constants.c.to('km/s').value
     dv = c*(zcat['Z']-zcat['Z_QSO'])/(1+zcat['Z_QSO'])
-    mask = zcat['GOOD_Z_QSO'] & (np.abs(dv) > 1000)
+    mask = (zcat['GOOD_Z_QSO'] | zcat['GOOD_Z_LYA']) & (np.abs(dv) > 1000)
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
@@ -767,11 +784,17 @@ def main(args=None):
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
-    # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
-    if survey!='main':
+    # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
+    if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
         for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
             if col in zcat.colnames:
                 zcat.remove_column(col)
+    elif survey not in ('main', 'special'):
+        # valid survey should already be checked at start, but belt-and-suspenders re-check here
+        # to avoid silently guessing what a new survey should do
+        msg = f'Unknown if SURVEY={survey} has valid DESI_TARGET, BGS_TARGET, MWS_TARGET, SCND_TARGET bits'
+        log.critical(msg)
+        raise ValueError(msg)
 
     # Remove the columns that do not exist
     columns_basic = [col for col in columns_basic if col in zcat.colnames]
@@ -863,4 +886,3 @@ def main(args=None):
     log.info("Successfully wrote {}".format(outfile_expfm))
 
     log.info(f'desi_zcatalog all done at {time.asctime()}')
-

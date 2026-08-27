@@ -156,9 +156,20 @@ def main():
                 log.warning(f"\t{fn} already exists and args.recompute = False,"
                             + f" so skipping this step")
 
-    # AR expids, tileids, surveys
-    if np.isin(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], steps_tbd).sum() > 0:
+    # DG - the following steps require science data, so if any of them
+    # are requested, check and find expids, tileids and surveys observed on the night.
+    # fF we find no science data that night, then remove these steps from steps_tbd.
+    steps_need_science = ["sframesky", "tileqa", "skyzfiber", "petalnz"]
+    # DG - HTML doesn't need science data to exist, but needs the values in expids
+    # tileids, surveys for generation, so we consider for triggering looking
+    # for those values, but don't remove it if there's no science data.
+    if np.isin(steps_need_science + ["html"], steps_tbd).sum() > 0:
         expids, tileids, surveys = get_surveys_night_expids(args.night)
+
+        if len(expids) == 0:
+            skipped = [x for x in steps_tbd if x in steps_need_science]
+            steps_tbd = [x for x in steps_tbd if x not in steps_need_science]
+            log.warning(f"Did not find any science data from {args.night}. Skipping steps: {skipped}")
 
     # AR dark expid
     if np.isin(["dark", "badcol"], steps_tbd).sum() > 0:
