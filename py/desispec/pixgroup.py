@@ -22,7 +22,7 @@ import desiutil.healpix
 
 from . import io
 from .io.util import get_tempfilename, addkeys
-from .util import convert_to_pandas
+from .util import convert_to_pandas, ordered_unique_by_priority
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -94,12 +94,13 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
 
     #- Trim zcat to Pandas DataFrame with just the columns we need
     log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
+    _, ii = ordered_unique_by_priority(zcat)
     zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
     frames = convert_to_pandas(frames, ['NIGHT', 'EXPID', 'TILEID', 'CAMERA'])
 
     #- Make a table with one row per unique TARGETID plus RA,DEC to calculate UNIQPIX
     log.info('Trimming zcat to unique TARGETID, RA, DEC')
-    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
+    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].iloc[ii].reset_index(drop=True)
     log.info(f'Calculating unique pixels from {len(targets)} unique targets')
     targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
 
@@ -340,12 +341,12 @@ class FrameLite(object):
             scores = self.scores[index]
         else:
             scores = None
-            
+
         if self.redshifts is not None:
             redshifts = self.redshifts[index]
         else:
             redshifts = None
-            
+
         if self.model is not None:
             model = {}
             for b in self.flux.keys():
@@ -393,7 +394,7 @@ class FrameLite(object):
                 redshifts = Table(fx["REDSHIFTS"].read())
             else:
                 redshifts = None
-                
+
         #- Add extra fibermap columns NIGHT, EXPID, TILEID
         nspec = len(fibermap)
         night = np.tile(header['NIGHT'], nspec).astype('i4')
@@ -483,7 +484,7 @@ class SpectraLite(object):
             self.model = model.copy()
         else:
             self.model = None
-            
+
         #- optional tables
         if exp_fibermap is not None:
             self.exp_fibermap = Table(exp_fibermap)
@@ -499,7 +500,7 @@ class SpectraLite(object):
             self.redshifts = Table(redshifts)
         else:
             self.redshifts = None
-            
+
         #- for compatibility with full Spectra objects
         self.meta = None
         self.extra = None
@@ -563,7 +564,7 @@ class SpectraLite(object):
             model = {}
         else:
             model = None
-            
+
         for band in self.bands:
             flux[band] = np.vstack([self.flux[band], other.flux[band]])
             ivar[band] = np.vstack([self.ivar[band], other.ivar[band]])
