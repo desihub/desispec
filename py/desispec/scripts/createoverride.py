@@ -9,7 +9,8 @@ import time
 import numpy as np
 
 from desispec.io.meta import findfile
-
+# from desispec.io.util import decode_camword, create_camword
+from desispec.io.util import parse_cameras
 
 def valid_night(night):
     """
@@ -26,10 +27,30 @@ def valid_night(night):
     isvalid = night.isnumeric() \
         and np.abs(int(night[:4]) - 2023) < 10 \
         and np.abs(int(night[4:6]) - 6.5) < 6 \
-        and np.abs(int(night[6:]) - 16) < 15
+        and np.abs(int(night[6:]) - 16) < 16
     if not isvalid:
         print(f"--> Received invalid response: '{night}'. Must be YEARMMDD.")
     return isvalid
+
+def valid_cameras(cameras):
+    """
+    Test whether or not the input camera is valid as a DESI Camera or not
+
+    Args:
+        camera(s), str, follows DESI camera input (a,b,r,z)(0-9)
+
+    Returns:
+        bool, True if valid camera sequence
+    """
+    try:
+        cams = parse_cameras(cameras)
+        isvalid =  isinstance(cams, str)
+    except:
+        isvalid = False
+    if not isvalid:
+        print(f"--> Received invalid response: '{cameras}'. Must be a list "
+              + "of cameras or camwords, i.e. a1, b2, r3, z4, r8z6, etc..")
+    return(isvalid)
 
 def valid_yes_no(string):
     """
@@ -76,6 +97,15 @@ def get_night(prompt):
     night = get_response(prompt, valid_night)
     return int(night)
 
+def get_camera(prompt):
+    """
+    Prompt the user for a camera string and return the camera string as a string
+    """
+    cameras = get_response(prompt, valid_cameras)
+    if cameras == '':
+        cameras = 'a0123456789'
+    return parse_cameras(cameras, loglevel='ERROR')
+
 def is_yes(prompt):
     """
     Prompt the user with a yes/no question and return a boolean yes<->True
@@ -94,6 +124,7 @@ def create_override_file(args):
         night = int(args.night)
 
     outdict = {'calibration': dict()}
+    biaslink_camword = None
     if args.linkcal is None:
         linkcal = is_yes("Does this night require cal linking? ")
     else:
@@ -101,11 +132,18 @@ def create_override_file(args):
     if linkcal:
         refnight = get_night("What is the reference night? ")
         good_bias = is_yes("Are there valid zeros for biases? ")
-        good_cte = is_yes("Are there valid falts for cte corections? ")
+        good_cte = is_yes("Are there valid flats for cte corrections? ")
         good_badcol = is_yes("Is there a valid dark for badcolumn detection? ")
         good_psf = is_yes("Are there valid arcs for psf generation? ")
         good_flats = is_yes("Are there valid flats for "
                             + "fiberflatnight generation? ")
+        if not good_bias:
+            biaslink_camword = get_camera("What cameras need a biasnight link? " +
+                                          "Leave blank if all. ")
+            if biaslink_camword == 'a0123456789':
+                print("Since all cameras need a biasnight link, " +
+                      "'biaslink_camword' will NOT be set")
+                biaslink_camword = None
         if not good_psf and good_flats:
             print("Since good_psf is False, we cannot use the flats. "
                   + "Setting good_flats to False")
@@ -144,8 +182,13 @@ def create_override_file(args):
             else:
                 goods.append('flats')
             linkcal_include = ','.join(linkcal_include_list)
-            outdict['calibration']['linkcal'] = {'refnight': refnight,
+            if biaslink_camword is None:
+                outdict['calibration']['linkcal'] = {'refnight': refnight,
                                                  'include': linkcal_include}
+            else:
+                outdict['calibration']['linkcal'] = {'refnight': refnight,
+                                                    'include': linkcal_include,
+                                                    'biaslink_camword': biaslink_camword}
 
     if args.ff_solve_grad is None:
         ff_solve_grad = is_yes("Do we need to set --solve-gradient in autocalib_fiberflat? ")

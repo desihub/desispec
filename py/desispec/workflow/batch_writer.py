@@ -209,7 +209,7 @@ def wrapup_for_script():
 def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
                                 batch_opts=None, timingfile=None,
                                 batchdir=None, jobname=None, cmd=None,
-                                system_name=None):
+                                system_name=None, biascmd=None):
     """
     Generate a batch script to be submitted to the slurm scheduler to run
     desi_link_calibnight.
@@ -226,6 +226,7 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
         cmd (str, optional): Complete command as would be given in terminal to
             run desi_link_calibnight.
         system_name (str, optional): name of batch system, e.g. cori-haswell, cori-knl
+        biascmd (str, optional): a second command just for biasnight linking if it has a different camword
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -297,8 +298,12 @@ def create_linkcal_batch_script(newnight, queue, cameras=None, runtime=None,
         # fx.write("export OMP_NUM_THREADS=1\n")
         fx.write(f'cd {batchdir}\n')
 
-        fx.write(f'\n# Link refnight to new night\n')
-        fx.write(wrap_command_for_script(cmd, nodes, ntasks=ncores, threads_per_task=threads_per_core))
+        if biascmd is not None:
+            fx.write(f'\n# Link refnight to new night for biasnights')
+            fx.write(wrap_command_for_script(biascmd, nodes, ntasks=ncores, threads_per_task=threads_per_core, stepname='biasnight linking'))
+
+        fx.write(f'\n# Link refnight to new night')    
+        fx.write(wrap_command_for_script(cmd, nodes, ntasks=ncores, threads_per_task=threads_per_core, stepname='job linking'))
         fx.write(wrapup_for_script())
 
     print('Wrote {}'.format(scriptfile))

@@ -587,7 +587,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         extra_job_args = {}
 
     if prow['JOBDESC'] == 'linkcal':
-        refnight, include, exclude = -99, None, None
+        refnight, biaslink_camword, include, exclude = -99, None, None, None
+        biascmd = None
         if 'refnight' in extra_job_args:
             refnight = extra_job_args['refnight']
         if 'include' in extra_job_args:
@@ -595,6 +596,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         if 'exclude' in extra_job_args:
             exclude = extra_job_args['exclude']
         include, exclude = derive_include_exclude(include, exclude)
+        if 'biasnight' in include and 'biaslink_camword' in extra_job_args:
+            biaslink_camword = extra_job_args['biaslink_camword']
         ## Fiberflatnights shouldn't to be generated with psfs from same time, so
         ## shouldn't link psfs without also linking fiberflatnight
         ## However, this should be checked at a higher level. If set here,
@@ -603,25 +606,41 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False,
         #     err = "Must link fiberflatnight if linking psfnight"
         #     log.error(err)
         #     raise ValueError(err)
+        ## biasnight only needs its own command if it links a different set of
+        ## cameras than something else that is also being linked. If it is the
+        ## only thing being linked, prow already carries biaslink_camword
+        nonbias_include = include - {'biasnight'}
+        if biaslink_camword is not None and len(nonbias_include) > 0:
+            cmd = desi_link_calibnight_command(prow, refnight, nonbias_include)
+            biasprow = {'PROCCAMWORD': biaslink_camword, 'NIGHT': prow['NIGHT']}
+            biascmd = desi_link_calibnight_command(biasprow, refnight=refnight, include={'biasnight'})
+            log.info("First command to be run: {}".format(biascmd.split()))
+            log.info("Second command to be run: {}".format(cmd.split()))
+        else:
+            ## biasnight alone is linked with the single command below, so prow
+            ## must already carry biaslink_camword (set in submit_linkcal_jobs)
+            if biaslink_camword is not None and prow['PROCCAMWORD'] != biaslink_camword:
+                err = f"For {prow=} linking only biasnight, but PROCCAMWORD" \
+                      + f" does not match {biaslink_camword=}"
+                log.error(err)
+                raise ValueError(err)
+            cmd = desi_link_calibnight_command(prow, refnight, include)
+            log.info("Command to be run: {}".format(cmd.split()))
         if dry_run > 1:
             scriptpathname = batch_script_pathname(prow)
             log.info("Output file would have been: {}".format(scriptpathname))
-            cmd = desi_link_calibnight_command(prow, refnight, include)
-            log.info("Command to be run: {}".format(cmd.split()))
         else:
             if refnight == -99:
                 err = f'For {prow=} asked to link calibration but not given' \
                       + ' a valid refnight'
                 log.error(err)
                 raise ValueError(err)
-
-            cmd = desi_link_calibnight_command(prow, refnight, include)
-            log.info(f"Running: {cmd.split()}")
             scriptpathname = create_linkcal_batch_script(newnight=prow['NIGHT'],
                                                          cameras=prow['PROCCAMWORD'],
                                                          queue=queue,
                                                          cmd=cmd,
-                                                         system_name=system_name)
+                                                         system_name=system_name,
+                                                         biascmd=biascmd)
     elif prow['JOBDESC'] in ['biasnight','pdark','biaspdark']:
         if dry_run > 1:
             scriptpathname = get_desi_proc_batch_file_pathname(night=prow['NIGHT'], exp=prow['EXPID'],
