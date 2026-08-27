@@ -415,6 +415,8 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(idx), [0,2,3,4])
 
     def test_ordered_unique_by_priority(self):
+        # This tests disambiguating both between primary > secondary but also
+        # main > special > anything else
         tbl = Table()
         tbl['TARGETID']    = [1, 1, 2, 2, 3, 3, 4, 4, 5]
         tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 8, 0]
@@ -423,6 +425,8 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(targets), [1,2,3,4,5])
         self.assertEqual(list(ii), [0,3,5,6,8])
 
+        # Testing that the returned order matches the "first seen" order
+        # of the input targetids.
         tbl2 = Table()
         tbl2['TARGETID']    = [40, 10, 30, 10, 20]
         tbl2['SCND_TARGET'] = [0,   8,  0,  0,  0]
