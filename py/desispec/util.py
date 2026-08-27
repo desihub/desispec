@@ -760,6 +760,39 @@ def ordered_unique(ar, return_index=False):
         return unique
 
 def ordered_unique_by_priority(tbl):
+    """Find the unique TARGETIDs of a tbl, ordered in the original order they appear,
+    but disambiguated based on priority.
+
+    Like numpy.unique, but preserves original order instead of sorting. This
+    version always returns the indices of the elements, where if a TARGETID
+    appears multiple times in the table the chosen index to keep
+    that TARGETID is picked via the following rules:
+
+    - Prefer targets with no secondary bits set to any with secondary bits
+    - Prefer main survey over special over any other survey
+    - If everything else equal, prefer the first occurence
+
+    This helper function is designed to help disambiguate between multiple
+    TARGETIDs in cases where the TARGET_RA and TARGET_DEC values were changed
+    between survey, program, or primary vs secondary targeting.
+
+    For context, see https://github.com/desihub/desitarget/issues/892
+
+    Args:
+        tbl: Table or ndarray
+        Must have a TARGETID column. May have a SURVEY column and any of
+        SCND_TARGET, SV1_SCND_TARGET, SV2_SCND_TARGET, SV3_SCND_TARGET.
+        Missing columns are ignored or otherwise treated as all equal.
+
+    Returns (tuple)
+        targetids : ndarray
+            Unique TARGETIDs, sorted to match the first appearance order.
+        indices : ndarray
+            For each entry in `targetids`, the index of the row in `tbl` corresponding
+            to that TARGETID, chosen according to the aforementinoed rules.
+
+    """
+
     # TODO docstring
     # If not in the table, gets set to max(tbl) + 1
     survey_priorities = {"main": 0, "special" : 1}
