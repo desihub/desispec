@@ -27,7 +27,7 @@ from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.maskbits import fibermask as fmsk
 from desispec.specscore import compute_coadd_scores
-from desispec.util import ordered_unique
+from desispec.util import ordered_unique, ordered_unique_by_priority
 
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
@@ -188,55 +188,6 @@ def use_for_coadd(fiberstatus, band):
     fiberstatus_bits = get_all_fiberbitmask_with_amp(band)
     good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
     return good_fiberstatus
-
-# If not in the table, gets set to max(tbl) + 1
-survey_priorities = {"main": 0, "special" : 1}
-def ordered_unique_by_priority(tbl):
-    # TODO docstring
-    # TODO put this somewhere else.
-    tbl = Table(tbl)
-    targetids = np.array(tbl["TARGETID"])
-    # We will use priority as lower = better since default sort
-    # functions sort lowest to highest.
-    targ_priorities = np.zeros_like(targetids)
-
-    colnames = tbl.colnames
-    scnd_targs = [c for c in colnames if "SCND_TARGET" in c]
-    # Prefer primary over secondary, so if the target has any secondary
-    # bit set penalize its priority.
-    for scnd_col in scnd_targs:
-        has_scnd_bit = tbl[scnd_col] != 0
-        targ_priorities[has_scnd_bit] += 10
-
-    # This may not be passed to sanity check that it exists first.
-    if 'SURVEY' in colnames:
-        for srvy in survey_priorities.keys():
-            is_this_srvy = tbl['SURVEY'] == srvy
-            targ_priorities[is_this_srvy] += survey_priorities[srvy]
-        not_in_surveys = np.isin(tbl['SURVEY'], survey_priorities.keys())
-        targ_priorities[not_in_surveys] += (max(survey_priorities.values()) + 1)
-
-    # Sort by TARGETID, then by priority, then by row number
-    row_num = np.arange(len(targetids))
-    ii = np.lexsort(keys=[row_num, targ_priorities, targetids])
-
-    # jj will return the first instance of each, which in tids[ii_l]
-    # will be the one with the lowest priority, then the lowest row number if
-    # priorities are the same (thanks to the lex sort).
-    unq, jj = np.unique(targetids[ii], return_index=True)
-
-    # We just need to build a reverse mapping from the smaller array
-    # back to which row it came from in the original.
-    # Reverse mapping we build from row_num.
-    # Sorting row num returns the TARGETIDs to the original order.
-    kk = ii[jj]
-    reverse = np.argsort(row_num[kk])
-
-    # kk[reverse] will give the indices of the original
-    # targetids array (any by extension input table)
-    # that reduce that table down to the chosen version of
-    # each targetid.
-    return unq[reverse], kk[reverse]
 
 def coadd_fibermap(fibermap, onetile=False):
     """

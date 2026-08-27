@@ -759,6 +759,56 @@ def ordered_unique(ar, return_index=False):
     else:
         return unique
 
+# If not in the table, gets set to max(tbl) + 1
+survey_priorities = {"main": 0, "special" : 1}
+def ordered_unique_by_priority(tbl):
+    # TODO docstring
+    targetids = np.array(tbl["TARGETID"])
+    # We will use priority as lower = better since default sort
+    # functions sort lowest to highest.
+    targ_priorities = np.zeros_like(targetids)
+
+    # Works for astropy tables or falls back on numpy array otherwise.
+    colnames = tbl.colnames if hasattr(tbl, 'colnames') else tbl.dtype.names
+
+    scnd_targs = [c for c in colnames if "SCND_TARGET" in c]
+    # Prefer primary over secondary, so if the target has any secondary
+    # bit set penalize its priority.
+    for scnd_col in scnd_targs:
+        has_scnd_bit = tbl[scnd_col] != 0
+        targ_priorities[has_scnd_bit] += 10
+
+    # This may not be passed to sanity check that it exists first.
+    if 'SURVEY' in colnames:
+        for srvy in survey_priorities.keys():
+            is_this_srvy = tbl['SURVEY'] == srvy
+            targ_priorities[is_this_srvy] += survey_priorities[srvy]
+        not_in_surveys = np.isin(tbl['SURVEY'], survey_priorities.keys())
+        targ_priorities[not_in_surveys] += (max(survey_priorities.values()) + 1)
+
+    # Sort by TARGETID, then by priority, then by row number
+    row_num = np.arange(len(targetids))
+    ii = np.lexsort(keys=[row_num, targ_priorities, targetids])
+
+    # jj will return the first instance of each, which in tids[ii_l]
+    # will be the one with the lowest priority, then the lowest row number if
+    # priorities are the same (thanks to the lex sort).
+    unq, jj = np.unique(targetids[ii], return_index=True)
+
+    # We need to build a reverse mapping that reorders the TARGETIDs
+    # to match the original input ordering, but keeping the row
+    # corresponding to the chosen tie breaker. Get the unique/sorted version
+    # of targetids, then argsort the indices to reconstruct the original order.
+    _, when_seen = np.unique(targetids, return_index=True)
+    reverse = np.argsort(when_seen)
+
+    # ii[jj][reverse] will give the in
+    # dices of the original
+    # targetids array (any by extension input table)
+    # that reduce that table down to the chosen version of
+    # each targetid in the original order of TARGETIDs.
+    return unq[reverse], ii[jj][reverse]
+
 #- Not yet used, but a snippet of code that might be useful
 #- e.g. for mapping TARGETID to the rows in which they appear
 def itemindices(a):
