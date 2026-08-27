@@ -768,8 +768,13 @@ def ordered_unique_by_priority(tbl):
     # functions sort lowest to highest.
     targ_priorities = np.zeros_like(targetids)
 
-    # Works for astropy tables or falls back on numpy array otherwise.
-    colnames = tbl.colnames if hasattr(tbl, 'colnames') else tbl.dtype.names
+    # Works for astropy tables, pandas DataFrames, or numpy structured arrays.
+    if hasattr(tbl, 'colnames'):
+        colnames = tbl.colnames
+    elif hasattr(tbl, 'columns'):
+        colnames = list(tbl.columns)
+    else:
+        colnames = tbl.dtype.names
 
     scnd_targs = [c for c in colnames if "SCND_TARGET" in c]
     # Prefer primary over secondary, so if the target has any secondary
