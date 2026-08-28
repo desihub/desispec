@@ -433,6 +433,11 @@ class TestUtil(unittest.TestCase):
         # 6: prefer (10) over (9) because it is main > cmx
         self.assertEqual(list(ii), [0, 3, 5, 6, 8, 10])
 
+        # Also check that it works with a numpy structured array
+        targets, ii = util.ordered_unique_by_provenance(tbl.as_array())
+        self.assertEqual(list(targets), [1, 2, 3, 4, 5, 6])
+        self.assertEqual(list(ii), [0, 3, 5, 6, 8, 10])
+
         # Testing that the returned order matches the "first seen" order
         # of the input targetids.
         tbl2 = Table()
