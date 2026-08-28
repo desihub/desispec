@@ -100,6 +100,38 @@ def _wrap_read_redrock(optdict):
     """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
 
+
+def _match_qa_targets(table, targetids, filename):
+    """Filter and reorder a QA table to match a Redrock TARGETID array."""
+    keep = np.isin(table['TARGETID'], targetids)
+    table = table[keep]
+
+    if len(table) != len(targetids) or not np.all(np.isin(targetids, table['TARGETID'])):
+        msg = f'{filename} does not contain exactly one row for every Redrock TARGETID'
+        raise ValueError(msg)
+
+    if not np.all(table['TARGETID'] == targetids):
+        ii = np.argsort(table['TARGETID'])
+        jj = np.searchsorted(table['TARGETID'][ii], targetids)
+        table = table[ii[jj]]
+
+    assert np.all(table['TARGETID'] == targetids)
+    return table
+
+
+def _read_qafiberstatus(rrfile, targetids):
+    """Read tile-qa QAFIBERSTATUS, matched to Redrock rows."""
+
+    dirname, basename = os.path.split(rrfile)
+    tmp = basename.split('-')
+    tileqa_file = os.path.join(dirname, '-'.join(['tile-qa'] + tmp[2:]))
+
+    tileqa = Table(fitsio.read(tileqa_file, 'FIBERQA',
+                              columns=['TARGETID', 'QAFIBERSTATUS']))
+    tileqa = _match_qa_targets(tileqa, targetids, tileqa_file)
+
+    return np.array(tileqa['QAFIBERSTATUS'])
+
 def read_redrock(rrfile, group=None, pertile=False, counter=None):
     """
     Read Redrock, emline, mgii, and qso_qn files, combining HDUs into single table
@@ -211,7 +243,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     fmcols = list(fibermap.dtype.names)
     fmcols.remove('TARGETID')
 
-    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
+    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR', 'OIII_FLUX', 'OIII_FLUX_IVAR']
     qso_mgii_cols = ['IS_QSO_MGII']
     qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW', 'ZWARN_NEW', 'SPECTYPE_NEW', 'SUBTYPE_NEW', 'CHI2_NEW', 'DELTACHI2_NEW', 'COEFF_NEW']
 
@@ -225,6 +257,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         qso_mgii[qso_mgii_cols],
         qso_qn[qso_qn_cols]
         ], join_type='exact')
+
+    if group == 'cumulative':
+        data['QAFIBERSTATUS'] = _read_qafiberstatus(rrfile, redshifts['TARGETID'])
 
     #
     # These old columns show up in zbest files. They have been replaced with
