@@ -418,12 +418,20 @@ class TestUtil(unittest.TestCase):
         # This tests disambiguating both between primary > secondary but also
         # main > special > anything else
         tbl = Table()
-        tbl['TARGETID']    = [1, 1, 2, 2, 3, 3, 4, 4, 5]
-        tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 8, 0]
-        tbl['SURVEY']      = ['special', 'main', 'special', 'main', 'main', 'cmx', 'main', 'main', 'other']
+        tbl['TARGETID']    = [1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6]
+        tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 8, 0, 0, 0]
+        tbl['SURVEY']      = ['special', 'main', 'special', 'main', 'main',
+                              'cmx', 'main', 'main', 'other', 'cmx', 'main']
         targets, ii = util.ordered_unique_by_priority(tbl)
-        self.assertEqual(list(targets), [1,2,3,4,5])
-        self.assertEqual(list(ii), [0,3,5,6,8])
+        self.assertEqual(list(targets), [1, 2, 3, 4, 5, 6])
+        # Logic per targetid:
+        # 1: prefer (0) over (1) because it is primary, even though main >  special
+        # 2: prefer (3) over (2) because it is main, not special
+        # 3: prefer (5) over (4) because it is primary, even though main > cmx
+        # 4: prefer (6) overe (7) because it is primary, and both are main
+        # 5: only occurs once, should always be 8
+        # 6: prefer (10) over (9) because it is main > cmx
+        self.assertEqual(list(ii), [0, 3, 5, 6, 8, 10])
 
         # Testing that the returned order matches the "first seen" order
         # of the input targetids.

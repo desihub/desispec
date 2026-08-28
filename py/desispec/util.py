@@ -792,8 +792,6 @@ def ordered_unique_by_priority(tbl):
             to that TARGETID, chosen according to the aforementinoed rules.
 
     """
-
-    # TODO docstring
     # If not in the table, gets set to max(tbl) + 1
     survey_priorities = {"main": 0, "special" : 1}
 
@@ -822,7 +820,7 @@ def ordered_unique_by_priority(tbl):
         for srvy in survey_priorities.keys():
             is_this_srvy = tbl['SURVEY'] == srvy
             targ_priorities[is_this_srvy] += survey_priorities[srvy]
-        not_in_surveys = np.isin(tbl['SURVEY'], survey_priorities.keys())
+        not_in_surveys = ~np.isin(tbl['SURVEY'], list(survey_priorities.keys()))
         targ_priorities[not_in_surveys] += (max(survey_priorities.values()) + 1)
 
     # Sort by TARGETID, then by priority, then by row number
@@ -841,8 +839,7 @@ def ordered_unique_by_priority(tbl):
     _, when_seen = np.unique(targetids, return_index=True)
     reverse = np.argsort(when_seen)
 
-    # ii[jj][reverse] will give the in
-    # dices of the original
+    # ii[jj][reverse] will give the indices of the original
     # targetids array (any by extension input table)
     # that reduce that table down to the chosen version of
     # each targetid in the original order of TARGETIDs.
