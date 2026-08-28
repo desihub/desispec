@@ -27,7 +27,7 @@ from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.maskbits import fibermask as fmsk
 from desispec.specscore import compute_coadd_scores
-from desispec.util import ordered_unique, ordered_unique_by_priority
+from desispec.util import ordered_unique, ordered_unique_by_provenance
 
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
@@ -233,7 +233,7 @@ def coadd_fibermap(fibermap, onetile=False):
     #- Get TARGETIDs, preserving order in which they first appear,
     #- but disambiguating targetid by priority if they appear more than once.
     #- tfmap = "Target Fiber Map", i.e. one row per target instead of one row per exposure
-    targets, ii = ordered_unique_by_priority(exp_fibermap)
+    targets, ii = ordered_unique_by_provenance(exp_fibermap)
 
     tfmap = exp_fibermap[ii]
     assert np.all(targets == tfmap['TARGETID'])

@@ -759,9 +759,9 @@ def ordered_unique(ar, return_index=False):
     else:
         return unique
 
-def ordered_unique_by_priority(tbl):
+def ordered_unique_by_provenance(tbl):
     """Find the unique TARGETIDs of a tbl, ordered in the original order they appear,
-    but disambiguated based on priority.
+    but disambiguated based on provenance.
 
     Like numpy.unique, but preserves original order instead of sorting. This
     version always returns the indices of the elements, where if a TARGETID

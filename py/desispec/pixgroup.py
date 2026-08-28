@@ -22,7 +22,7 @@ import desiutil.healpix
 
 from . import io
 from .io.util import get_tempfilename, addkeys
-from .util import convert_to_pandas, ordered_unique_by_priority
+from .util import convert_to_pandas, ordered_unique_by_provenance
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -94,7 +94,7 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
 
     #- Trim zcat to Pandas DataFrame with just the columns we need
     log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
-    _, ii = ordered_unique_by_priority(zcat)
+    _, ii = ordered_unique_by_provenance(zcat)
     zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
     frames = convert_to_pandas(frames, ['NIGHT', 'EXPID', 'TILEID', 'CAMERA'])
 
@@ -912,7 +912,7 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
                         for _, night, expid, cam in band_keys]
             all_fmaps = np.concatenate(band_fmaps)
 
-            tids, idcs = ordered_unique_by_priority(all_fmaps)
+            tids, idcs = ordered_unique_by_provenance(all_fmaps)
             ra, dec = all_fmaps['TARGET_RA'][idcs], all_fmaps['TARGET_DEC'][idcs]
 
             ok = ~np.isnan(ra) & ~np.isnan(dec)

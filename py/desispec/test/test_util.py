@@ -414,7 +414,7 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(a), [1,2,3,0])
         self.assertEqual(list(idx), [0,2,3,4])
 
-    def test_ordered_unique_by_priority(self):
+    def test_ordered_unique_by_provenance(self):
         # This tests disambiguating both between primary > secondary but also
         # main > special > anything else
         tbl = Table()
@@ -422,7 +422,7 @@ class TestUtil(unittest.TestCase):
         tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 8, 0, 0, 0]
         tbl['SURVEY']      = ['special', 'main', 'special', 'main', 'main',
                               'cmx', 'main', 'main', 'other', 'cmx', 'main']
-        targets, ii = util.ordered_unique_by_priority(tbl)
+        targets, ii = util.ordered_unique_by_provenance(tbl)
         self.assertEqual(list(targets), [1, 2, 3, 4, 5, 6])
         # Logic per targetid:
         # 1: prefer (0) over (1) because it is primary, even though main >  special
@@ -438,7 +438,7 @@ class TestUtil(unittest.TestCase):
         tbl2 = Table()
         tbl2['TARGETID']    = [40, 10, 30, 10, 20]
         tbl2['SCND_TARGET'] = [0,   8,  0,  0,  0]
-        targets2, ii2 = util.ordered_unique_by_priority(tbl2)
+        targets2, ii2 = util.ordered_unique_by_provenance(tbl2)
         self.assertEqual(list(targets2), [40,10,30,20])
         self.assertEqual(list(ii2), [0,3,2,4])
 
