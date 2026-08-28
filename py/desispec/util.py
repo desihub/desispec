@@ -836,9 +836,12 @@ def ordered_unique_by_priority(tbl):
     # to match the original input ordering, but keeping the row
     # corresponding to the chosen tie breaker. Get the unique/sorted version
     # of targetids, then argsort the indices to reconstruct the original order.
-    _, when_seen = np.unique(targetids, return_index=True)
+    unq_global, when_seen = np.unique(targetids, return_index=True)
     reverse = np.argsort(when_seen)
 
+    # This reverse mapping only works if these are the same. They should be
+    # but let's sanity check anyway.
+    assert np.all(unq == unq_global), "TARGETIDS disambiguated by priority does not equal the list of unique TARGETIDs!"
     # ii[jj][reverse] will give the indices of the original
     # targetids array (any by extension input table)
     # that reduce that table down to the chosen version of
