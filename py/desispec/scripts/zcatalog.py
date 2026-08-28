@@ -122,6 +122,8 @@ def _match_qa_targets(table, targetids, filename):
 def _read_qafiberstatus(rrfile, targetids):
     """Read tile-qa QAFIBERSTATUS, matched to Redrock rows."""
 
+    # Map redrock -> tile-qa filepath, dropping petal N
+    # /path/to/redrock-N-TILEID-blat.fits -> /path/to/tile-qa-TILEID-blat.fits
     dirname, basename = os.path.split(rrfile)
     tmp = basename.split('-')
     tileqa_file = os.path.join(dirname, '-'.join(['tile-qa'] + tmp[2:]))
