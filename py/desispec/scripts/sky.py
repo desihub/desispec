@@ -56,6 +56,8 @@ def parse(options=None):
                         help = 'List of TARGETIDs to exclude from sky calculation (comma separated)')
     parser.add_argument('--override-sky-targetids', type = str, default = None, required = False,
                         help='List of TARGETIDs to use as skies to completely override fibermap info (comma separated)')
+    parser.add_argument('--save-peak-metrics', action='store_true',
+                        help='Save peak_dw, peak_dlsf, and peak_chi2pdf before and after PCA correction (only when using --adjust-wavelength or --adjust-lsf)')
 
     args = parser.parse_args(options)
 
@@ -124,7 +126,8 @@ def main(args=None) :
                            pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat,
                            skygradpca=skygradpca, tpcorrparam=tpcorrparam,
                            exclude_sky_targetids=exclude_sky_targetids,
-                           override_sky_targetids=override_sky_targetids
+                           override_sky_targetids=override_sky_targetids,
+                           save_peak_metrics=args.save_peak_metrics
     )
 
     if args.save_adjustments is not None :

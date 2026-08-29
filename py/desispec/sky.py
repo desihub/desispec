@@ -522,7 +522,8 @@ def compute_sky(
     only_use_skyfibers_for_adjustments=True, pcacorr=None,
     fit_offsets=False, fiberflat=None, skygradpca=None,
         min_iterations=5, tpcorrparam=None,
-        exclude_sky_targetids=None, override_sky_targetids=None):
+        exclude_sky_targetids=None, override_sky_targetids=None,
+        save_peak_metrics=False):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -551,6 +552,8 @@ def compute_sky(
         min_iterations : int, minimum number of iterations
         tpcorrparam : TPCorrParam object to use to fit fiber throughput
             variations, or None
+        save_peak_metrics : bool, if True save peak_dw, peak_dlsf, and peak_chi2pdf
+            before and after PCA correction (only when adjust_wavelength or adjust_lsf is True)
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -661,6 +664,13 @@ def compute_sky(
     # See if we can improve the sky model by readjusting the wavelength and/or the width of sky lines
     dwavecoeff = None
     dlsfcoeff = None
+    # Initialize peak metrics (will be set if adjust_wavelength or adjust_lsf is True)
+    peak_dw_before = None
+    peak_dlsf_before = None
+    peak_chi2pdf_before = None
+    peak_dw_after = None
+    peak_dlsf_after = None
+    peak_chi2pdf_after = None
     if adjust_wavelength or adjust_lsf :
         log.info("adjust the wavelength of sky spectrum on sky lines to improve sky subtraction ...")
 
@@ -794,6 +804,12 @@ def compute_sky(
             variance = 1.0/(ivar+(ivar==0)) + (0.05*M[:,1])**2
             peak_chi2pdf[fibers_in_fit, j] = np.sum((ivar>0)/variance*(residuals)**2, axis=1)/(npix-nparam)
 
+        # Save the "before" peak metrics (before PCA correction) if requested
+        if save_peak_metrics:
+            peak_dw_before = peak_dw.copy() if adjust_wavelength else None
+            peak_dlsf_before = peak_dlsf.copy() if adjust_lsf else None
+            peak_chi2pdf_before = peak_chi2pdf.copy()
+
         for i in fibers_in_fit :
             # for each fiber, select valid peaks and interpolate
             ok=(peak_chi2pdf[i]<2)
@@ -886,6 +902,86 @@ def compute_sky(
                     pcacorr.dlsf_mean,pcacorr.dlsf_eigenvectors,label="LSF")
                 cskyflux  += correction*dskydlsf
 
+        # Recompute peak metrics after PCA correction to get "after" values (only if requested)
+        if save_peak_metrics and (adjust_wavelength or adjust_lsf):
+            log.info("Recomputing peak metrics after PCA correction...")
+
+            # Recompute derivatives with corrected sky flux
+            if adjust_wavelength:
+                dskydwave_after = np.gradient(cskyflux,axis=1)/np.gradient(frame.wave)
+            else:
+                dskydwave_after = None
+
+            if adjust_lsf:
+                dwave = np.mean(np.gradient(frame.wave))
+                dsigma_A   = 0.3 #A
+                dsigma_bin = dsigma_A/dwave
+                hw=int(4*dsigma_bin)+1
+                x=np.arange(-hw,hw+1)
+                k=np.zeros((3,x.size))
+                k[1]=np.exp(-x**2/dsigma_bin**2/2.)
+                k/=np.sum(k)
+                tmp = fftconvolve(cskyflux,k,mode="same")
+                dskydlsf_after = (tmp-cskyflux)/dsigma_A
+            else:
+                dskydlsf_after = None
+
+            # Recompute peak fits
+            peak_dw_after = np.zeros((frame.nspec,peaks.size))
+            peak_dlsf_after = np.zeros((frame.nspec,peaks.size))
+            peak_chi2pdf_after = np.zeros((frame.nspec,peaks.size))
+
+            for j,peak in enumerate(peaks):
+                b = peak-dpix
+                e = peak+dpix+1
+                npix = e - b
+                flux = frame.flux[fibers_in_fit][:,b:e]
+                ivar = frame.ivar[fibers_in_fit][:,b:e]
+                if b < 0 or e > frame.flux.shape[1]:
+                    continue
+                M = np.zeros((fibers_in_fit.size, nparam, npix))
+                index = 0
+                M[:, index] = np.ones(npix); index += 1
+                M[:, index] = cskyflux[fibers_in_fit][:, b:e]; index += 1
+                if adjust_wavelength : M[:, index] = dskydwave_after[fibers_in_fit][:, b:e]; index += 1
+                if adjust_lsf        : M[:, index] = dskydlsf_after[fibers_in_fit][:, b:e]; index += 1
+
+                BB = np.einsum('ijk,ik->ij', M, ivar*flux)
+                AA = np.einsum('ijk,ik,ilk->ijl', M, ivar, M)
+
+                try:
+                    AAi = np.linalg.inv(AA)
+                except np.linalg.LinAlgError:
+                    AAi = np.zeros_like(AA)
+                    for fiber_idx in range(len(fibers_in_fit)):
+                        try:
+                            AAi[fiber_idx] = np.linalg.inv(AA[fiber_idx])
+                        except np.linalg.LinAlgError:
+                            pass
+
+                X = np.einsum('ijk,ik->ij', AAi, BB)
+                index = 1
+                index += 1  # skip scale parameter
+                if adjust_wavelength:
+                    peak_dw_after[fibers_in_fit, j] = X[:, index]
+                    index += 1
+                if adjust_lsf:
+                    peak_dlsf_after[fibers_in_fit, j] = X[:, index]
+                    index += 1
+
+                residuals = flux
+                for index in range(nparam):
+                    residuals -= X[:,index][:, np.newaxis]*M[:,index]
+
+                variance = 1.0/(ivar+(ivar==0)) + (0.05*M[:,1])**2
+                peak_chi2pdf_after[fibers_in_fit, j] = np.sum((ivar>0)/variance*(residuals)**2, axis=1)/(npix-nparam)
+
+            # Convert to None if not computed
+            if not adjust_wavelength:
+                peak_dw_after = None
+            if not adjust_lsf:
+                peak_dlsf_after = None
+
 
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
@@ -929,7 +1025,11 @@ def compute_sky(
                         dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff,
                         throughput_corrections_model=skytpcorr,
                         skygradpcacoeff=skygradpcacoeff,
-                        skytargetid=frame.fibermap['TARGETID'][skyfibers])
+                        skytargetid=frame.fibermap['TARGETID'][skyfibers],
+                        peak_dw_before=peak_dw_before, peak_dlsf_before=peak_dlsf_before,
+                        peak_chi2pdf_before=peak_chi2pdf_before,
+                        peak_dw_after=peak_dw_after, peak_dlsf_after=peak_dlsf_after,
+                        peak_chi2pdf_after=peak_chi2pdf_after)
     # keep a record of the statistical ivar for QA
     if adjust_wavelength :
         skymodel.dwave = interpolated_sky_dwave
@@ -947,7 +1047,9 @@ class SkyModel(object):
                  stat_ivar=None, throughput_corrections=None,
                  throughput_corrections_model=None,
                  dwavecoeff=None, dlsfcoeff=None, skygradpcacoeff=None,
-                 skytargetid=None):
+                 skytargetid=None, peak_dw_before=None, peak_dlsf_before=None,
+                 peak_chi2pdf_before=None, peak_dw_after=None,
+                 peak_dlsf_after=None, peak_chi2pdf_after=None):
         """Create SkyModel object
 
         Args:
@@ -965,6 +1067,12 @@ class SkyModel(object):
             skygradpcacoeff : (optional) 1D[ncoeff] vector of gradient amplitudes for
                 sky gradient spectra.
             skytargetid : (optional) 1D[nsky] vector of TARGETIDs of fibers used for sky determination
+            peak_dw_before : (optional) 2D[nspec, npeaks] wavelength offsets at peaks before PCA correction
+            peak_dlsf_before : (optional) 2D[nspec, npeaks] LSF width changes at peaks before PCA correction
+            peak_chi2pdf_before : (optional) 2D[nspec, npeaks] chi2/dof at peaks before PCA correction
+            peak_dw_after : (optional) 2D[nspec, npeaks] wavelength offsets at peaks after PCA correction
+            peak_dlsf_after : (optional) 2D[nspec, npeaks] LSF width changes at peaks after PCA correction
+            peak_chi2pdf_after : (optional) 2D[nspec, npeaks] chi2/dof at peaks after PCA correction
         All input arguments become attributes
         """
         assert wave.ndim == 1
@@ -988,6 +1096,12 @@ class SkyModel(object):
         self.dlsfcoeff = dlsfcoeff
         self.skygradpcacoeff = skygradpcacoeff
         self.skytargetid = skytargetid
+        self.peak_dw_before = peak_dw_before
+        self.peak_dlsf_before = peak_dlsf_before
+        self.peak_chi2pdf_before = peak_chi2pdf_before
+        self.peak_dw_after = peak_dw_after
+        self.peak_dlsf_after = peak_dlsf_after
+        self.peak_chi2pdf_after = peak_chi2pdf_after
 
     def __getitem__(self, index):
         """
@@ -1013,8 +1127,42 @@ class SkyModel(object):
         else:
             tcorr = None
 
+        if self.peak_dw_before is not None:
+            peak_dw_before = self.peak_dw_before[index]
+        else:
+            peak_dw_before = None
+
+        if self.peak_dlsf_before is not None:
+            peak_dlsf_before = self.peak_dlsf_before[index]
+        else:
+            peak_dlsf_before = None
+
+        if self.peak_chi2pdf_before is not None:
+            peak_chi2pdf_before = self.peak_chi2pdf_before[index]
+        else:
+            peak_chi2pdf_before = None
+
+        if self.peak_dw_after is not None:
+            peak_dw_after = self.peak_dw_after[index]
+        else:
+            peak_dw_after = None
+
+        if self.peak_dlsf_after is not None:
+            peak_dlsf_after = self.peak_dlsf_after[index]
+        else:
+            peak_dlsf_after = None
+
+        if self.peak_chi2pdf_after is not None:
+            peak_chi2pdf_after = self.peak_chi2pdf_after[index]
+        else:
+            peak_chi2pdf_after = None
+
         sky2 = SkyModel(self.wave, flux, ivar, mask, header=self.header, nrej=self.nrej,
-                stat_ivar=stat_ivar, throughput_corrections=tcorr)
+                stat_ivar=stat_ivar, throughput_corrections=tcorr,
+                peak_dw_before=peak_dw_before, peak_dlsf_before=peak_dlsf_before,
+                peak_chi2pdf_before=peak_chi2pdf_before,
+                peak_dw_after=peak_dw_after, peak_dlsf_after=peak_dlsf_after,
+                peak_chi2pdf_after=peak_chi2pdf_after)
 
         sky2.dwave = self.dwave
         if self.dlsf is not None:
