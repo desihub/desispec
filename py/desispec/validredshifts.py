@@ -258,12 +258,14 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         # GOOD_Z_LYA applies to Z_QSO column
         res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
         res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
+        # update new redshifts
+        res['IS_QSO_QN_NEW_RR'] = cat['IS_QSO_QN_NEW_RR'] & is_qn6 & (is_ok_lya_wise | is_ok_lya_elg) 
 
     if not ignore_qso:
 
         use_z_new = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
         if not ignore_lya:
-            use_z_new |= (~res['GOOD_Z_QSO']) & res['GOOD_Z_LYA'] & cat['IS_QSO_QN_NEW_RR']  # GOOD_Z_LYA uses the original IS_QSO_QN_NEW_RR for choosing Z vs Z_NEW
+            use_z_new |= res['GOOD_Z_LYA'] & res['IS_QSO_NEW_RR']
         res['Z_QSO'] = cat['Z'].copy()
         res['ZERR_QSO'] = cat['ZERR'].copy()
         res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
