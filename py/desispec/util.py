@@ -789,7 +789,7 @@ def ordered_unique_by_provenance(tbl):
             Unique TARGETIDs, sorted to match the first appearance order.
         indices : ndarray
             For each entry in `targetids`, the index of the row in `tbl` corresponding
-            to that TARGETID, chosen according to the aforementinoed rules.
+            to that TARGETID, chosen according to the aforementioned rules.
 
     """
     # If not in the table, gets set to max(tbl) + 1
