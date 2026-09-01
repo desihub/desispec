@@ -259,13 +259,14 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
         res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
         # update new redshifts
-        res['IS_QSO_QN_NEW_RR'] = cat['IS_QSO_QN_NEW_RR'] & is_qn6 & (is_ok_lya_wise | is_ok_lya_elg) 
+        res['IS_QSO_QN_NEW_RR'] |= cat['IS_QSO_QN_NEW_RR'] & is_ok_lya_elg # QN a requirement for all detections
+        res['IS_QSO_QN_NEW_RR'] |= res['IS_QSO_QN_NEW_RR'] & is_ok_lya_wise # quasarnet not required for detection so must additionally require QN99 to use Z_NEW
 
     if not ignore_qso:
 
         use_z_new = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
         if not ignore_lya:
-            use_z_new |= res['GOOD_Z_LYA'] & res['IS_QSO_NEW_RR']
+            use_z_new |= res['GOOD_Z_LYA'] & res['IS_QSO_QN_NEW_RR']
         res['Z_QSO'] = cat['Z'].copy()
         res['ZERR_QSO'] = cat['ZERR'].copy()
         res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
@@ -280,7 +281,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         bad_lowz = res['Z_QSO']<0.5
         bad_lowz &= np.log10(res['DELTACHI2_QSO']+1e-6) < 3 - 3.5 * res['Z_QSO']  # 1e-6 to avoid log10(0)
         bad_qso |= bad_lowz
-        
+
         res['GOOD_Z_QSO'][bad_qso] = False
         if not ignore_lya:
             res['GOOD_Z_LYA'][bad_qso] = False
