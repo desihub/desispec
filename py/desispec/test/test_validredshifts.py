@@ -304,7 +304,7 @@ class TestValidRedshifts(unittest.TestCase):
     #- LyA criteria
 
     def test_good_z_lya(self):
-        cat = make_cat(11)
+        cat = make_cat(12)
         #- QSO target with a redrock QSO classification
         cat['DESI_TARGET'][0] = QSO_BIT
         cat['SPECTYPE'][0] = 'QSO'
@@ -331,7 +331,9 @@ class TestValidRedshifts(unittest.TestCase):
         cat['Z'][4] = 2.1
         #- QSO target with no QSO evidence at all
         cat['DESI_TARGET'][5] = QSO_BIT
-        #- QSO target at z>5 is rejected for both GOOD_Z_QSO and GOOD_Z_LYA
+        #- QSO target at z>5 is rejected for GOOD_Z_QSO, but allowed for
+        #- GOOD_Z_LYA (z>5 Lya QSOs are real; only GOOD_Z_QSO treats z>5 as
+        #- evidence of a bad fit)
         cat['DESI_TARGET'][6] = QSO_BIT
         cat['SPECTYPE'][6] = 'QSO'
         cat['Z'][6] = 6.0
@@ -364,12 +366,19 @@ class TestValidRedshifts(unittest.TestCase):
         cat['IS_QSO_QN_NEW_RR'][10] = True
         cat['Z'][10] = 1.0
         cat['Z_NEW'][10] = 2.5
+        #- QSO target with the low-z misclassification failure mode
+        #- (see DESI-doc-9981) is rejected for both GOOD_Z_QSO and GOOD_Z_LYA
+        cat['DESI_TARGET'][11] = QSO_BIT
+        cat['SPECTYPE'][11] = 'QSO'
+        cat['Z'][11] = 0.2
+        cat['DELTACHI2'][11] = 10.0
 
         res = actually_validate(cat)
-        expected = np.array([True, True, False, True, False, False, False,
-                             True, True, False, True])
+        expected = np.array([True, True, False, True, False, False, True,
+                             True, True, False, True, False])
         self.assertTrue(np.all(res['GOOD_Z_LYA'] == expected))
         self.assertFalse(res['GOOD_Z_QSO'][6])
+        self.assertFalse(res['GOOD_Z_QSO'][11])
 
         #- ELG relaxed branch without a rerun keeps the original redrock Z
         self.assertAlmostEqual(res['Z_QSO'][1], cat['Z'][1])
