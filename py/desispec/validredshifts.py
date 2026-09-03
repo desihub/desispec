@@ -258,8 +258,9 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         # GOOD_Z_LYA applies to Z_QSO column
         res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
         res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
-        # update new redshifts
-        res['IS_QSO_QN_NEW_RR'] |= res['IS_QSO_QN_NEW_RR'] & is_ok_lya_wise # quasarnet not required for detection so must additionally require QN99 to use Z_NEW
+
+        # update new redshifts for elg qsos
+        # WISE QSOs already covered by IS_QSO_QN_NEW_RR since criteria matches main QSO
         res['IS_QSO_QN_NEW_RR'] |= cat['IS_QSO_QN_NEW_RR'] & is_ok_lya_elg # QN a requirement for all detections
 
     if not ignore_qso:
