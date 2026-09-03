@@ -1059,8 +1059,13 @@ def read_all_exptables(nproc=default_nproc, specprod=None):
     """
     log = get_logger()
     etab_path = findfile('exptable', night='99999999', readonly=True, specprod=specprod)
-    glob_path = etab_path.replace('99999999', '202?????').replace('999999', '202???')
+    ## Wildcard the century+decade digits too so this keeps working past 2029
+    glob_path = etab_path.replace('99999999', '20??????').replace('999999', '20????')
     etab_files = sorted(glob.glob(glob_path))
+    if len(etab_files) == 0:
+        msg = f"No exposure tables found matching {glob_path}"
+        log.critical(msg)
+        raise ValueError(msg)
     log.info(f"Found {len(etab_files)} exposure tables to read")
 
     if nproc is not None and nproc > 1 and len(etab_files) > 1:
