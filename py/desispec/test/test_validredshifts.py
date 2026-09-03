@@ -304,12 +304,13 @@ class TestValidRedshifts(unittest.TestCase):
     #- LyA criteria
 
     def test_good_z_lya(self):
-        cat = make_cat(7)
+        cat = make_cat(12)
         #- QSO target with a redrock QSO classification
         cat['DESI_TARGET'][0] = QSO_BIT
         cat['SPECTYPE'][0] = 'QSO'
         cat['Z'][0] = 2.3
-        #- ELG target, spectype QSO, relaxed (>0.6) QuasarNet confidence
+        #- ELG target, spectype QSO, relaxed (>0.6) QuasarNet confidence,
+        #- no rerun disagreement -> Z_QSO stays at the original redrock Z
         cat['DESI_TARGET'][1] = ELG_BIT
         cat['SPECTYPE'][1] = 'QSO'
         cat['C_LYA'][1] = 0.7
@@ -330,15 +331,61 @@ class TestValidRedshifts(unittest.TestCase):
         cat['Z'][4] = 2.1
         #- QSO target with no QSO evidence at all
         cat['DESI_TARGET'][5] = QSO_BIT
-        #- QSO target at z>5 is rejected for both GOOD_Z_QSO and GOOD_Z_LYA
+        #- QSO target at z>5 is rejected for GOOD_Z_QSO, but allowed for
+        #- GOOD_Z_LYA (z>5 Lya QSOs are real; only GOOD_Z_QSO treats z>5 as
+        #- evidence of a bad fit)
         cat['DESI_TARGET'][6] = QSO_BIT
         cat['SPECTYPE'][6] = 'QSO'
         cat['Z'][6] = 6.0
+        #- QSO target identified purely by the MgII afterburner
+        #- (not a redrock QSO, no QuasarNet evidence)
+        cat['DESI_TARGET'][7] = QSO_BIT
+        cat['IS_QSO_MGII'][7] = True
+        cat['Z'][7] = 2.5
+        #- QSO target identified purely by QuasarNet (>0.99), not redrock or
+        #- MgII, with a rerun that disagrees with redrock -> use Z_NEW
+        cat['DESI_TARGET'][8] = QSO_BIT
+        cat['C_CIV'][8] = 0.995
+        cat['IS_QSO_QN_NEW_RR'][8] = True
+        cat['Z'][8] = 1.0
+        cat['Z_NEW'][8] = 2.5
+        #- WISE_VAR_QSO secondary that is also an ELG target is excluded from
+        #- the WISE_VAR_QSO branch (QuasarNet confidence left below the 0.6
+        #- relaxed threshold, so it does not qualify via the ELG branch either)
+        cat['SCND_TARGET'][9] = WISE_VAR_QSO_BIT
+        cat['DESI_TARGET'][9] = ELG_BIT
+        cat['SPECTYPE'][9] = 'QSO'
+        cat['Z'][9] = 2.1
+        #- ELG target, spectype QSO, relaxed (>0.6 but <0.99) QuasarNet
+        #- confidence, WITH a rerun that disagrees with redrock -> use Z_NEW.
+        #- Regression check: on a buggy version of this code, this case
+        #- incorrectly kept the original (bad) redrock redshift.
+        cat['DESI_TARGET'][10] = ELG_BIT
+        cat['SPECTYPE'][10] = 'QSO'
+        cat['C_LYA'][10] = 0.75
+        cat['IS_QSO_QN_NEW_RR'][10] = True
+        cat['Z'][10] = 1.0
+        cat['Z_NEW'][10] = 2.5
+        #- QSO target with the low-z misclassification failure mode
+        #- (see DESI-doc-9981) is rejected for both GOOD_Z_QSO and GOOD_Z_LYA
+        cat['DESI_TARGET'][11] = QSO_BIT
+        cat['SPECTYPE'][11] = 'QSO'
+        cat['Z'][11] = 0.2
+        cat['DELTACHI2'][11] = 10.0
 
         res = actually_validate(cat)
-        expected = np.array([True, True, False, True, False, False, False])
+        expected = np.array([True, True, False, True, False, False, True,
+                             True, True, False, True, False])
         self.assertTrue(np.all(res['GOOD_Z_LYA'] == expected))
         self.assertFalse(res['GOOD_Z_QSO'][6])
+        self.assertFalse(res['GOOD_Z_QSO'][11])
+
+        #- ELG relaxed branch without a rerun keeps the original redrock Z
+        self.assertAlmostEqual(res['Z_QSO'][1], cat['Z'][1])
+        #- QN>0.99-only branch with a rerun uses Z_NEW
+        self.assertAlmostEqual(res['Z_QSO'][8], cat['Z_NEW'][8])
+        #- ELG relaxed branch with a rerun uses Z_NEW (the regression case)
+        self.assertAlmostEqual(res['Z_QSO'][10], cat['Z_NEW'][10])
 
     def test_correct_target_column(self):
         """The WISE_VAR_QSO LyA branch reads SCND_TARGET, not DESI_ or BGS_TARGET."""

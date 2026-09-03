@@ -259,11 +259,15 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
         res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
 
+        # update new redshifts for elg qsos
+        # WISE QSOs already covered by IS_QSO_QN_NEW_RR since criteria matches main QSO
+        res['IS_QSO_QN_NEW_RR'] |= cat['IS_QSO_QN_NEW_RR'] & is_ok_lya_elg # QN a requirement for all detections
+
     if not ignore_qso:
 
         use_z_new = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
         if not ignore_lya:
-            use_z_new |= (~res['GOOD_Z_QSO']) & res['GOOD_Z_LYA'] & cat['IS_QSO_QN_NEW_RR']  # GOOD_Z_LYA uses the original IS_QSO_QN_NEW_RR for choosing Z vs Z_NEW
+            use_z_new |= res['GOOD_Z_LYA'] & res['IS_QSO_QN_NEW_RR']
         res['Z_QSO'] = cat['Z'].copy()
         res['ZERR_QSO'] = cat['ZERR'].copy()
         res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
@@ -277,11 +281,11 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
         bad_lowz = res['Z_QSO']<0.5
         bad_lowz &= np.log10(res['DELTACHI2_QSO']+1e-6) < 3 - 3.5 * res['Z_QSO']  # 1e-6 to avoid log10(0)
-        bad_qso |= bad_lowz
-        
-        res['GOOD_Z_QSO'][bad_qso] = False
+
+        res['GOOD_Z_QSO'][bad_qso|bad_lowz] = False
         if not ignore_lya:
-            res['GOOD_Z_LYA'][bad_qso] = False
+            # do not apply z>5 flag to lya
+            res['GOOD_Z_LYA'][bad_lowz] = False
 
     # reject stars
     mask_nonstar = (cat['SPECTYPE']!='STAR') & (cat['Z']>0.001)
