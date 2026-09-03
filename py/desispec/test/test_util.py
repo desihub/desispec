@@ -369,7 +369,7 @@ class TestUtil(unittest.TestCase):
                 importlib.reload(dpl)
                 self.assertTrue(dpl.on_nersc_login_node())
                 login_node_nproc = dpl.default_nproc
-                self.assertLessEqual(login_node_nproc, 4)
+                self.assertEqual(login_node_nproc, 8)
 
                 #- Simulate being inside a Slurm job on that same NERSC
                 #- system: default_nproc should scale with core count
