@@ -5,6 +5,7 @@ desispec.workflow.exptable
 """
 import os
 import glob
+import multiprocessing as mp
 import numpy as np
 from astropy.table import Table, vstack
 from astropy.io import fits
@@ -17,6 +18,7 @@ from desiutil.log import get_logger
 from desispec.util import header2night
 from desispec.io.util import create_camword, parse_badamps, checkgzip
 from desispec.io.meta import findfile
+from desispec.parallel import default_nproc
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -1027,6 +1029,49 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None,
         outtable = outtable[np.isin(outtable['TILEID'], tileids)]
 
     return outtable
+
+
+def _read_one_exptable(etab_file):
+    """
+    Helper function for read_all_exptables() that reads a single exposure
+    table file. Defined at module level so that it can be pickled for use
+    with multiprocessing.
+    """
+    from desispec.workflow.tableio import load_table
+    return load_table(tablename=etab_file, tabletype='exptable', suppress_logging=True)
+
+
+def read_all_exptables(nproc=default_nproc, specprod=None):
+    """
+    Reads and stacks all exposure tables for a production.
+
+    Args:
+        nproc (int, optional): Number of multiprocessing processes to use
+            when reading the exposure table files. Default is
+            desispec.parallel.default_nproc.
+        specprod (str, optional): Production name, or full path to a
+            production, passed to findfile(). Default is None, i.e. use
+            $DESI_SPECTRO_REDUX/$SPECPROD.
+
+    Returns:
+        astropy.table.Table: The exposure table entries from every exposure
+        table file in the production, stacked into a single table.
+    """
+    log = get_logger()
+    etab_path = findfile('exptable', night='99999999', readonly=True, specprod=specprod)
+    glob_path = etab_path.replace('99999999', '202?????').replace('999999', '202???')
+    etab_files = sorted(glob.glob(glob_path))
+    log.info(f"Found {len(etab_files)} exposure tables to read")
+
+    if nproc is not None and nproc > 1 and len(etab_files) > 1:
+        with mp.Pool(nproc) as pool:
+            etables = pool.map(_read_one_exptable, etab_files)
+    else:
+        etables = [_read_one_exptable(etab_file) for etab_file in etab_files]
+
+    etables = [t for t in etables if t is not None and len(t) > 0]
+
+    return vstack(etables)
 
 
 def _select_sciences_from_etab(etab):
