@@ -473,6 +473,9 @@ def merge_psf(inpsffile, inputs, output):
 
     for input_filename in inputs :
         log.info("merging {} into {}".format(input_filename, inpsffile))
+
+        # JB Keep memmap=False to avoid issues with specex qa and memory mapping
+        # See desispec PR 2732 for more details
         other_psf_hdulist=fits.open(input_filename,memmap=False)
 
         # look at what fibers where actually fit
@@ -483,10 +486,16 @@ def merge_psf(inpsffile, inputs, output):
         #     status_of_fibers))
         selected_fibers = np.where(status_of_fibers==0)[0]
         failed_fibers=np.where(status_of_fibers>0)[0]
+
+        if failed_fibers.size > 0 :
+            log.warning("failed fibers in PSF {} = {}".format(input_filename,
+                failed_fibers))
+            i_p=np.where(psf_hdulist["PSF"].data["PARAM"]=='STATUS')[0][0]
+            psf_hdulist["PSF"].data["COEFF"][i_p][failed_fibers] = \
+                                other_psf_hdulist["PSF"].data["COEFF"][i][failed_fibers]
+
         log.info("fitted fibers in PSF {} = {}".format(input_filename,
             selected_fibers))
-        log.info("failed fibers in PSF {} = {}".format(input_filename,
-            failed_fibers))
         if selected_fibers.size == 0 :
             log.warning("no fiber with status=0 found in {}".format(
                 input_filename))
@@ -506,9 +515,6 @@ def merge_psf(inpsffile, inputs, output):
             i1=np.where(other_psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
             psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = \
                 other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
-            if param=="STATUS" :
-                psf_hdulist["PSF"].data["COEFF"][i0][failed_fibers] = \
-                    other_psf_hdulist["PSF"].data["COEFF"][i1][failed_fibers]
 
         # copy bundle chi2
         i = np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
