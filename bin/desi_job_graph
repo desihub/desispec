@@ -126,7 +126,13 @@ for row in proctable:
         logfile = get_ztile_script_pathname(tileid, jobdesc, expid=e1)
         logfile = logfile.replace('.slurm', f'-{qid}.log')
     else:
-        logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}-{e1:08d}-{proccamword}-{qid}.log'
+        #- mirrors get_desi_proc_batch_file_name(): linkcal script names carry
+        #- no expid even though the row has exposures, so don't format one in
+        if jobdesc.lower() == 'linkcal' or e1 < 0:
+            expstr = ''
+        else:
+            expstr = f'-{e1:08d}'
+        logfile = f'{specproddir}/run/scripts/night/{args.night}/{jobdesc}-{args.night}{expstr}-{proccamword}-{qid}.log'
 
     logurl = os.path.relpath(logfile, outputdir)
 
