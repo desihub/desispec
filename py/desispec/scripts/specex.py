@@ -244,15 +244,10 @@ def main(args=None, comm=None):
                           "value {} running {}".format(rank, retval, comstr))
                 failcount += 1
                 failed_bundles.append(b)
-                # f =  "{}_{:02d}.fits".format(outroot, b)
-                # other_psf_hdulist=fits.open(f)
-
-                # # look at what fibers where actually fit
-                # i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
-                # status_of_fibers = \
-                #     other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
-                # log.info(f'status_of_fibers: {status_of_fibers}')
-                bundles_to_merge.append(b)
+                if os.path.isfile(outbundlefits):
+                    bundles_to_merge.append(b)
+                else:
+                    log.error(f"no output file {outbundlefits} from failed bundle {b}; not merging it")
         else:
             log.info(f"proc {rank} succeeded generating {outbundlefits}")
             bundles_to_merge.append(b)
@@ -309,20 +304,7 @@ def main(args=None, comm=None):
                 if os.path.isfile(f):
                     os.remove(f)
 
-        if len(failed_bundles) > 0 :
-            failed_bundles = np.hstack(failed_bundles).astype(int)
             log.warning(f"The fit of the following bundles failed: {failed_bundles}")
-            for x in failed_bundles :
-                f =  "{}_{:02d}.fits".format(outroot, x)
-                # other_psf_hdulist=fits.open(f)
-
-                # # look at what fibers where actually fit
-                # i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
-                # status_of_fibers = \
-                #     other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
-                # log.info(f'status_of_fibers: {status_of_fibers}')
-                if  os.path.isfile(f):
-                    os.remove(f)
 
     return
 
@@ -565,7 +547,7 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
     missing_bundles=[]
-    failed_bundles=[]
+    failed_bundles_per_psf=[]
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -616,11 +598,12 @@ def mean_psf(inputs, output):
         missing_mask = np.array(
             [np.all(status[bundles == bundle] < 0) for bundle in unique_bundles],
             dtype=bool)
+        # Only works with changes made in desihub/specex#91
         failed_mask=np.array(
             [np.any(status[bundles == bundle] > 0) for bundle in unique_bundles],
             dtype=bool)
         missing_bundles.append(unique_bundles[missing_mask])
-        failed_bundles.append(unique_bundles[failed_mask])
+        failed_bundles_per_psf.append(unique_bundles[failed_mask])
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
@@ -634,9 +617,6 @@ def mean_psf(inputs, output):
     WAVEMAX=refhead["WAVEMAX"]
     FIBERMIN=int(refhead["FIBERMIN"])
     FIBERMAX=int(refhead["FIBERMAX"])
-    log.info(f"Input {input} has failed bundles: {failed_bundles}")
-    failed_bundles=np.array([x for sublist in failed_bundles for x in sublist])
-
 
     fibers_in_bundle={}
     i=np.where(tables[0]["PARAM"]=="BUNDLE")[0][0]
@@ -700,20 +680,22 @@ def mean_psf(inputs, output):
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
-            
                 # Only count fit failures for exposures where this bundle is present.
                 # Exposures listed in missing_bundles are excluded so that bundles
                 # missing from only some input PSFs are not treated as failed fits.
                 mask=[bundle in missing for missing in missing_bundles]
-                masked_bundle_rchi2 = bundle_rchi2.copy()[~np.array(mask)]
+                masked_bundle_rchi2 = bundle_rchi2[~np.array(mask,dtype=bool)]
                 if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
-                    log.warning(f"Bundle {bundle} is missing in some but not all input PSFs for camera {refhead['CAMERA']}. Only {len(masked_bundle_rchi2)} PSFs will be used.")
-                nfailed = np.sum(masked_bundle_rchi2[:,bundle]==0)
-                nfailed += len(failed_bundles[failed_bundles==bundle])
+                    log.warning(f"Bundle {bundle} is present in only {len(masked_bundle_rchi2)} of {len(bundle_rchi2)} input PSFs for camera {refhead['CAMERA']}")
+                present = ~np.array(mask, dtype=bool)
+                failed  = np.array([bundle in f for f in failed_bundles_per_psf], dtype=bool)
+                nfailed = np.sum(present & ((bundle_rchi2[:, bundle] == 0) | failed))
                 if nfailed > 1 :
                     message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF for camera {refhead['CAMERA']}."
                     log.critical(message)
                     raise RuntimeError(message)
+                elif nfailed == 1 :
+                    log.warning(f"1 fit failure for bundle {bundle} so some fibers may be affected")
 
             # We finally resorted to use a mean instead of a median here for two reasons.
             # First, there is already a vetting of PSF bundles with good chi2 above
@@ -737,8 +719,13 @@ def mean_psf(inputs, output):
                 output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
 
             else : # we have a problem here, take the smallest rchi2
-                log.debug("bundle #{} : take smallest chi2 ".format(bundle))
-                i=np.argmin(bundle_rchi2[:,bundle])
+                log.debug("bundle #{} : take smallest non-zero chi2 ".format(bundle))
+                # Make sure the np.argmin is non-zero
+                col = bundle_rchi2[:,bundle]
+                if np.all(col == 0):
+                    i = 0  # set it to the first element since all bundles are zero
+                else:
+                    i = np.argmin(np.where(col == 0, np.inf, col))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[i,f]
                 output_rchi2[bundle]=bundle_rchi2[i,bundle]
