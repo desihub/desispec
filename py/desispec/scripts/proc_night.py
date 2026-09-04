@@ -418,7 +418,8 @@ def proc_night(night=None, proc_obstypes=None, z_submit_types=None,
                                                                         proc_table_pathname=proc_table_pathname,
                                                                         specprod=specprod, path_to_data=path_to_data,
                                                                         sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
-                                                                        queue=queue, system_name=system_name,
+                                                                        queue=queue, reservation=reservation,
+                                                                        system_name=system_name,
                                                                         psf_linking_without_fflat=psf_linking_without_fflat,
                                                                         **kwargs)
         log.info("Done with submit_necessary_biasnights_and_preproc_darks.\n\n")

@@ -16,10 +16,13 @@ from desispec.parallel import stdouterr_redirected
 from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.scripts.proc_night import proc_night
+from desispec.scripts.link_calibnight import derive_include_exclude
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import verify_variable_with_environment, listpath, \
-    remove_slurm_environment_variables
+    remove_slurm_environment_variables, load_override_file
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
+from desispec.workflow.proctable import default_obstypes_for_proctable
+from desispec.workflow.submission import submit_necessary_biasnights_and_preproc_darks
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
 import desispec.workflow.proctable
@@ -177,6 +180,12 @@ def get_nights_to_process(production_yaml, verbose=False):
         ## and also don't need to use desispec.workflow.tableio.load_table here
         ## since that brings extra overhead and only matters for multi-value
         ## columns we don't care about
+        ## Note the test is specifically for science jobs and not merely for the
+        ## existence of the proctable. Reference nights that are linked to by an
+        ## earlier night have their calibrations submitted ahead of time by
+        ## submit_early_refnight_calibrations(), which leaves behind a proctable
+        ## with calibration jobs but no science jobs. Those nights still need to
+        ## be submitted for science here, so don't simplify this to os.path.exists.
         if need_to_check and 'science' not in Table.read(pfile)['OBSTYPE']:
             nights_to_process.append(night)
         else:
@@ -185,6 +194,254 @@ def get_nights_to_process(production_yaml, verbose=False):
 
     log.info(wrap_long_logs(f"Skipped the following nights that already had a proctable with science jobs: {sorted(skipped_nights)}"))
     return sorted(nights_to_process)
+
+
+def get_linkcal_refnight(night):
+    """
+    Return the reference night that the given night links calibrations from,
+    based on that night's override file, if any.
+
+    Args:
+        night (int): The night to inspect, in YYYYMMDD format.
+
+    Returns:
+        tuple: (refnight, files_to_link) where refnight is an int night or None
+            if the night has no override file or no linkcal refnight, and
+            files_to_link is the set of calibration filename prefixes that would
+            be linked (an empty set when refnight is None).
+
+    Raises:
+        Exception: If the override file exists but its linkcal entry can't be
+            interpreted. The pathname is logged before the error propagates.
+    """
+    log = get_logger()
+
+    override_pathname = findfile('override', night=night, readonly=True)
+    if not os.path.exists(override_pathname):
+        return None, set()
+
+    overrides = load_override_file(filepathname=override_pathname)
+    if not overrides or 'calibration' not in overrides:
+        return None, set()
+
+    cal_override = overrides['calibration']
+    if 'linkcal' not in cal_override or 'refnight' not in cal_override['linkcal']:
+        return None, set()
+
+    linkcal = cal_override['linkcal']
+    ## Resolve include/exclude exactly as submit_linkcal_jobs() does. A
+    ## malformed override file is fatal, but this inspects the override file of
+    ## every night in the production, so name the offending file rather than
+    ## leaving a bare error from deep inside derive_include_exclude.
+    try:
+        files_to_link, _ = derive_include_exclude(linkcal.get('include', None),
+                                                 linkcal.get('exclude', None))
+        refnight = int(linkcal['refnight'])
+    except Exception as err:
+        log.critical(f"Could not interpret the linkcal entry in {override_pathname}")
+        raise
+    return refnight, files_to_link
+
+
+def get_refnights_needing_early_calibration(nights, verbose=False):
+    """
+    Identify reference nights that must have their calibrations submitted before
+    the nights that link to them are submitted.
+
+    Normally a night links its calibrations from an earlier night, which the
+    chronological submission order handles for free. Occasionally an override
+    file points *forward* in time, e.g. when a night's flats are bad but the
+    following night's are good. In that case the reference night's calibrations
+    have to be submitted first so that the earlier night's linkcal job can be
+    given a cross-night dependency on them.
+
+    Args:
+        nights (list of int): The nights that will be submitted for processing.
+        verbose (bool): Whether to be verbose in log outputs.
+
+    Returns:
+        list: A list of (night, needs_bias_first) tuples in the order they
+            should be submitted, i.e. any night that another entry depends on
+            comes first. needs_bias_first is True when something links
+            'biasnight' from that night, in which case its biasnight must be
+            submitted on its own before the rest of its calibrations.
+    """
+    log = get_logger()
+
+    ## needs_bias_first[refnight] is True if any night links biasnight from it
+    needs_bias_first = dict()
+
+    def note_edge(refnight, files_to_link):
+        """Record that some night links files_to_link from refnight"""
+        if 'biasnight' in files_to_link:
+            needs_bias_first[refnight] = True
+
+    ## Seed with the reference nights that are later than the night linking to them
+    seeds = []
+    for night in sorted(nights):
+        refnight, files_to_link = get_linkcal_refnight(night)
+        if refnight is None or refnight <= night:
+            continue
+        log.info(f"Night {night} links calibrations {sorted(files_to_link)} from "
+                 + f"the later night {refnight}, so {refnight} must have its "
+                 + "calibrations submitted first.")
+        note_edge(refnight, files_to_link)
+        if refnight not in seeds:
+            seeds.append(refnight)
+
+    if len(seeds) == 0:
+        if verbose:
+            log.info("No override files link calibrations from a later night, "
+                     + "so no calibrations need to be submitted out of order.")
+        return []
+
+    ## Walk the chain of linkcal references from each seed so that anything a
+    ## seed itself links from is submitted before the seed. Nights are appended
+    ## in post-order, i.e. dependencies first.
+    ordered, visited, in_progress = [], set(), set()
+
+    def walk(night):
+        if night in visited:
+            return
+        if night in in_progress:
+            log.error(f"Circular linkcal reference detected involving {night=}, "
+                      + "not following the chain any further.")
+            return
+        in_progress.add(night)
+        refnight, files_to_link = get_linkcal_refnight(night)
+        if refnight is not None:
+            note_edge(refnight, files_to_link)
+            walk(refnight)
+        in_progress.discard(night)
+        visited.add(night)
+        if not os.path.exists(findfile('exposure_table', night=night, readonly=True)):
+            log.error(f"No exposure table for {night=}, so it can't be submitted "
+                      + "for early calibration processing. Skipping it.")
+            return
+        ordered.append(night)
+
+    for seed in seeds:
+        walk(seed)
+
+    return [(night, needs_bias_first.get(night, False)) for night in ordered]
+
+
+def submit_early_refnight_calibrations(nights, logpath, specprod=None,
+                                       queue=None, reservation=None,
+                                       dry_run_level=0):
+    """
+    Submit the calibrations for any reference night that an earlier night links
+    its calibrations from, so that those calibrations exist before the earlier
+    night is submitted.
+
+    Args:
+        nights (list of int): The nights that will be submitted for processing.
+        logpath (str): Directory in which to write the per-night logs.
+        specprod (str, optional): Name of the spectroscopic production.
+        queue (str, optional): The Slurm queue to submit the jobs to.
+        reservation (str, optional): The reservation to submit jobs to.
+        dry_run_level (int, optional): Default is 0. Passed to proc_night.
+
+    Returns:
+        list: The nights whose calibrations were submitted, in submission order.
+    """
+    log = get_logger()
+
+    refnights = get_refnights_needing_early_calibration(nights, verbose=True)
+    if len(refnights) == 0:
+        return []
+
+    log.info(wrap_long_logs("Submitting calibrations ahead of the normal "
+                            + f"chronological order for {refnights=}"))
+
+    ## Calibration-only processing, so that no science jobs are submitted out of
+    ## chronological order. determine_calibrations_to_proc() drops science
+    ## exposures itself, so removing them here doesn't change which calibrations
+    ## get selected, it only keeps determine_science_to_proc() from seeing them.
+    calib_obstypes = [obstype for obstype in default_obstypes_for_proctable()
+                      if obstype != 'science']
+
+    ## Stage A: for any reference night that an earlier night links 'biasnight'
+    ## from, submit that night's biasnight on its own first.
+    ##
+    ## This has to happen before *any* of the stage B submissions below, because
+    ## the darknight generation in stage B spans nights: it calls
+    ## submit_necessary_biasnights_and_preproc_darks(), which loops over the
+    ## surrounding nights in ascending order and therefore reaches the earlier
+    ## linking night before the reference night itself. When it does, it submits
+    ## that earlier night's linkcal job, which can only pick up a cross-night
+    ## dependency if the reference night's bias job already exists.
+    ##
+    ## Passing only 'zero' keeps submit_necessary_biasnights_and_preproc_darks()
+    ## from looking at any night other than the reference night.
+    for night, needs_bias_first in refnights:
+        if not needs_bias_first:
+            continue
+        log.info(f"Submitting the biasnight for {night=} on its own before the "
+                 + "rest of its calibrations, since an earlier night links "
+                 + "biasnight from it.")
+        if dry_run_level >= 4:
+            log.info(f"{dry_run_level=} so not submitting the biasnight. "
+                     + f"Would have submitted it for {night=}")
+            continue
+        logfile = os.path.join(logpath, f'night-{night}-biasnight.log')
+        with stdouterr_redirected(logfile):
+            refnight_ptable = submit_necessary_biasnights_and_preproc_darks(
+                reference_night=night, proc_obstypes=['zero'],
+                ## camword/badcamword are re-derived from the exposure table,
+                ## these are only the fallback for a night with no exposures
+                camword='a0123456789', badcamword=None,
+                exp_table_pathname=findfile('exposure_table', night=night),
+                proc_table_pathname=findfile('processing_table', night=night),
+                specprod=specprod, dry_run_level=dry_run_level,
+                queue=queue, reservation=reservation)
+
+        ## Confirm a bias job actually landed. It won't if the reference night
+        ## has no zeros, in which case there is nothing for the earlier night to
+        ## link biasnight from and its linkcal would be submitted with no
+        ## dependency, linking against a biasnight that never gets made.
+        ## Check the returned table rather than re-reading it from disk: the
+        ## readonly path is a separate read-only mount that can lag behind a
+        ## write that just happened, and this table was only written moments ago.
+        bias_submitted = False
+        if refnight_ptable is not None and len(refnight_ptable) > 0:
+            jobdescs = refnight_ptable['JOBDESC']
+            bias_submitted = ('biasnight' in jobdescs or 'biaspdark' in jobdescs
+                              or 'linkcal' in jobdescs)
+        if bias_submitted:
+            log.info(f"Completed the biasnight submission for {night=}.")
+        else:
+            log.critical(f"No bias job was submitted for reference {night=}, so "
+                         + "the nights linking biasnight from it have nothing to "
+                         + "depend on. Check that it has valid zeros.")
+            raise RuntimeError("Failed to submit the biasnight for reference "
+                               + f"{night=} that an earlier night links biasnight from")
+
+    ## Stage B: submit the remaining calibrations for each reference night, in
+    ## dependency order.
+    submitted_nights = []
+    for night, _ in refnights:
+        log.info(f"Submitting calibrations for reference {night=}")
+        if dry_run_level >= 4:
+            log.info(f"{dry_run_level=} so not running desi_proc_night. "
+                     + f"Would have run calibrations for {night=}")
+            submitted_nights.append(night)
+            continue
+
+        ## Belt-and-suspenders: reset the processing table cache to force a re-read.
+        desispec.workflow.proctable.reset_tilenight_ptab_cache()
+
+        time.sleep(2)  # Sleep to ensure any file system changes have time to propagate
+        logfile = os.path.join(logpath, f'night-{night}-calibsonly.log')
+        with stdouterr_redirected(logfile):
+            proc_night(night=night, proc_obstypes=calib_obstypes,
+                       z_submit_types=None, no_redshifts=True,
+                       dry_run_level=dry_run_level,
+                       queue=queue, reservation=reservation)
+        submitted_nights.append(night)
+        log.info(f"Completed the calibration submission for {night=}.")
+
+    return submitted_nights
 
 
 def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False):
@@ -296,13 +553,28 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
     else:
         log.info(f"{dry_run_level=} so not creating {logpath}")
 
-    ## If in dryrun mode, get the number of jobs in the queue once to
-    ## properly simulate stopping if the queue is too full, but don't
-    ## keep rechecking since we're not submitting new jobs.
-    num_in_queue = 0
-    if dry_run_level >= 1:
-        num_in_queue = check_queue_count(user=user, include_scron=False,
-                                         dry_run_level=dry_run_level)
+    ## Get the number of jobs in the queue before submitting anything. In dryrun
+    ## mode this is the only time it is checked, to properly simulate stopping if
+    ## the queue is too full without rechecking for jobs we never submitted.
+    ## Otherwise the main loop below rechecks it before each night.
+    num_in_queue = check_queue_count(user=user, include_scron=False,
+                                     dry_run_level=dry_run_level)
+
+    ## Submit the calibrations for any reference night that an earlier night
+    ## links its calibrations from, so that they exist by the time that earlier
+    ## night is submitted below. These nights aren't removed from all_nights;
+    ## only their calibrations are submitted here, and they are submitted again
+    ## in the loop below for their science exposures, if they have any.
+    ## Checked once rather than per night so that a night can't be left with its
+    ## biasnight submitted but not the rest of its calibrations.
+    if num_in_queue > queue_threshold:
+        log.info(f"{num_in_queue} jobs in the queue > {queue_threshold}, so "
+                 + "not submitting any early reference night calibrations.")
+        early_calib_nights = []
+    else:
+        early_calib_nights = submit_early_refnight_calibrations(
+            nights=all_nights, logpath=logpath, specprod=specprod,
+            queue=queue, reservation=reservation, dry_run_level=dry_run_level)
 
     ## Do the main processing
     finished = False
@@ -380,6 +652,9 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
         else:
             log.info(f"{dry_run_level=} so not creating {sentinel_file}")
 
+    if len(early_calib_nights) > 0:
+        log.info(wrap_long_logs("Submitted calibrations ahead of the normal order"
+                                + f" for the following nights: {early_calib_nights}"))
     log.info(wrap_long_logs(f"Processed the following nights: {processed_nights}"))
     if finished:
         log.info('\n\n\n')

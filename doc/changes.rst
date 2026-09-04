@@ -15,6 +15,15 @@ These changes were not used in Matterhorn.
   A normal night now submits 3 calibration jobs instead of 22. Note this
   also lowers the ``ARC`` node cap in ``determine_resources()`` from 10 to 5;
   ``PSFNIGHT`` is raised to 15 so a bundle can run every arc at once.
+* Add ``desi_prod_dag``, which writes a navigable HTML view of an entire
+  production's job dependency graph. Complements ``desi_job_graph``,
+  which draws one night as a static mermaid diagram.
+* ``desi_submit_prod`` now scans the override files of the nights it will
+  process and, for any that link calibrations from a *later* reference night,
+  submits that reference night's calibrations before the earlier night. When
+  ``biasnight`` is linked, the reference night's bias is submitted on its own
+  first, since the subsequent darknight generation spans nights and would
+  otherwise reach the linking night before its bias dependency exists.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721

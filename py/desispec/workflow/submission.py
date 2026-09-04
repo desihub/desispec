@@ -468,7 +468,8 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
                                                   sub_wait_time=0.1, dry_run_level=0,
                                                   psf_linking_without_fflat=False,
                                                   n_nights_before=None, n_nights_after=None,
-                                                  queue=None, system_name=None):
+                                                  queue=None, reservation=None,
+                                                  system_name=None):
     """
     Submit biasnight and preproc_darks jobs for the given reference night.
     This function will read the override file, determine what calibrations
@@ -494,6 +495,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
         n_nights_before (int, optional): Number of nights before the reference night to process. Default is None.
         n_nights_after (int, optional): Number of nights after the reference night to process. Default is None.
         queue (str): Queue to be used.
+        reservation (str, optional): Slurm reservation to use. Default is None.
         system_name (str, optional): name of batch system, e.g. cori-haswell, perlmutter
 
     Returns:
@@ -536,7 +538,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
             specprod=specprod, path_to_data=path_to_data,
             sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
             psf_linking_without_fflat=psf_linking_without_fflat,
-            queue=queue, system_name=system_name)
+            queue=queue, reservation=reservation, system_name=system_name)
         if night == reference_night:
             refnight_ptable = ptable
 
