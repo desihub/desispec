@@ -13,6 +13,7 @@ import unittest
 from astropy.table import Table
 
 from desispec.scripts.proddag import (
+    find_proctables,
     read_production_dag,
     write_prod_dag_html,
     _elapsed_seconds,
@@ -167,6 +168,51 @@ class TestProdDag(unittest.TestCase):
                     (self.night2 - 20000000) * 1000 + 1,
                     (self.night2 - 20000000) * 1000 + 2}
         self.assertEqual(recovered, expected)
+
+    def test_reads_the_requested_production_not_the_environment(self):
+        """
+        specprod_dir must decide which production is read.
+
+        Resolving the processing table directory from $SPECPROD instead would
+        silently return the environment's production while labelling the result
+        as the requested one.
+        """
+        ## a second, deliberately different production alongside the first
+        other_specprod = 'dagtest_other'
+        other_proddir = os.path.join(self.reduxdir, other_specprod)
+        other_procdir = os.path.join(other_proddir, 'processing_tables')
+        os.makedirs(other_procdir, exist_ok=True)
+        night = 20240401
+        table = _proctable_rows(night, [
+            dict(seq=0, jobdesc='biasnight', expids=[900], qid=7001),
+        ])
+        table.write(os.path.join(
+            other_procdir, f'processing_table_{other_specprod}-{night}.csv'))
+
+        ## $SPECPROD still points at the first production
+        self.assertEqual(os.environ['SPECPROD'], self.specprod)
+
+        data = read_production_dag(other_proddir)
+        self.assertEqual(data['njobs'], 1)
+        self.assertEqual(data['nights'], [night])
+        self.assertEqual(data['specprod'], other_specprod)
+        ## and the original production is unaffected
+        self.assertEqual(read_production_dag(self.proddir)['njobs'], 5)
+
+        shutil.rmtree(other_proddir)
+
+    def test_find_proctables_honours_its_argument(self):
+        """find_proctables() must glob under the directory it is given"""
+        found = find_proctables(self.proddir)
+        self.assertEqual(len(found), 2)
+        for path in found:
+            self.assertTrue(path.startswith(self.proddir))
+        ## a directory with no processing tables yields nothing, rather than
+        ## falling back to the environment's production
+        empty = os.path.join(self.reduxdir, 'dagtest_empty')
+        os.makedirs(os.path.join(empty, 'processing_tables'), exist_ok=True)
+        self.assertEqual(find_proctables(empty), [])
+        shutil.rmtree(empty)
 
     def test_nights_restriction(self):
         """Passing nights restricts which processing tables are read"""

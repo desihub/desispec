@@ -29,7 +29,6 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from desispec.io.meta import specprod_root
-from desispec.workflow.proctable import get_processing_table_path
 
 
 ## Columns the page needs from a processing table
@@ -104,9 +103,11 @@ def find_proctables(specprod_dir):
     Returns:
         list: Sorted pathnames of the per-night processing tables.
     """
-    ## get_processing_table_path reads the environment, which the caller has
-    ## already pointed at specprod_dir
-    procdir = get_processing_table_path(None)
+    ## Anchor on the argument rather than the environment, so that reading a
+    ## production other than $SPECPROD returns that production's tables instead
+    ## of silently returning the environment's. This is the same layout
+    ## get_processing_table_path() builds, relative to the given directory.
+    procdir = os.path.join(specprod_dir, 'processing_tables')
     pattern = os.path.join(procdir, 'processing_table_*.csv')
     ## exclude the unprocessed tables, which live in the same directory
     return sorted(p for p in glob.glob(pattern)
@@ -435,7 +436,9 @@ def main(args=None):
     if not os.path.isdir(specprod_dir):
         raise IOError(f'Production directory not found: {specprod_dir}')
 
-    ## point the workflow path helpers at this production
+    ## Point the workflow path helpers at this production. find_proctables()
+    ## no longer needs this, but the log-path helpers reached via
+    ## specprod_root() still read the environment.
     os.environ['DESI_SPECTRO_REDUX'] = os.path.dirname(specprod_dir)
     os.environ['SPECPROD'] = os.path.basename(specprod_dir)
 

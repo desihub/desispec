@@ -21,7 +21,8 @@ from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.workflow.utils import verify_variable_with_environment, listpath, \
     remove_slurm_environment_variables, load_override_file
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
-from desispec.workflow.proctable import default_obstypes_for_proctable
+from desispec.workflow.proctable import default_obstypes_for_proctable, \
+    get_err_qid
 from desispec.workflow.submission import submit_necessary_biasnights_and_preproc_darks
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count
@@ -304,9 +305,17 @@ def get_refnights_needing_early_calibration(nights, verbose=False):
         if night in visited:
             return
         if night in in_progress:
-            log.error(f"Circular linkcal reference detected involving {night=}, "
-                      + "not following the chain any further.")
-            return
+            ## A cycle cannot be topologically ordered, so there is no correct
+            ## submission order to fall back on. Proceeding anyway would submit
+            ## one side of the cycle before the calibrations it links from,
+            ## which is the very failure this pre-pass exists to prevent, so
+            ## stop before anything is submitted.
+            msg = (f"Circular linkcal reference detected involving night "
+                   + f"{night}: its override chain returns to itself. A cyclic "
+                   + "linkcal configuration cannot be ordered, so no "
+                   + "calibrations can be submitted. Fix the override files.")
+            log.critical(msg)
+            raise ValueError(msg)
         in_progress.add(night)
         refnight, files_to_link = get_linkcal_refnight(night)
         if refnight is not None:
@@ -324,6 +333,66 @@ def get_refnights_needing_early_calibration(nights, verbose=False):
         walk(seed)
 
     return [(night, needs_bias_first.get(night, False)) for night in ordered]
+
+
+def bias_dependency_available(refnight_ptable, night):
+    """
+    Test whether a reference night has a job that provides a biasnight.
+
+    An earlier night that links 'biasnight' from this reference night needs
+    something on the reference night to depend on that actually produces or
+    provides that biasnight. A row merely being present is not enough: a job
+    whose submission failed is left in the table with LATEST_QID set to
+    get_err_qid() and STATUS 'UNSUBMITTED', and a linkcal row only supplies a
+    biasnight if this night's own override links biasnight rather than some
+    other calibration.
+
+    Args:
+        refnight_ptable (Table or None): The reference night's processing table,
+            as returned by submit_necessary_biasnights_and_preproc_darks().
+        night (int): The reference night, used to resolve its own override file
+            when judging whether a linkcal row supplies a biasnight.
+
+    Returns:
+        bool: True if a usable bias-providing job is present.
+    """
+    log = get_logger()
+
+    if refnight_ptable is None or len(refnight_ptable) == 0:
+        return False
+
+    err_qid = get_err_qid()
+    own_links = None
+    for row in refnight_ptable:
+        jobdesc = str(row['JOBDESC'])
+        if jobdesc not in ('biasnight', 'biaspdark', 'linkcal'):
+            continue
+
+        ## A job whose submission failed provides nothing to depend on. Note
+        ## LATEST_QID == get_default_qid() with STATUS 'COMPLETED' is fine: that
+        ## means the outputs already existed so no job needed submitting.
+        if str(row['STATUS']).upper() == 'UNSUBMITTED':
+            log.warning(f"Ignoring {jobdesc} job on {night} because it was "
+                        + "not successfully submitted.")
+            continue
+        if int(row['LATEST_QID']) == err_qid:
+            log.warning(f"Ignoring {jobdesc} job on {night} because its "
+                        + f"LATEST_QID is the error value {err_qid}.")
+            continue
+
+        if jobdesc in ('biasnight', 'biaspdark'):
+            return True
+
+        ## A linkcal only helps if this night links biasnight from elsewhere
+        if own_links is None:
+            own_links = get_linkcal_refnight(night)[1]
+        if 'biasnight' in own_links:
+            return True
+        log.warning(f"Ignoring linkcal job on {night} because that override "
+                    + f"links {sorted(own_links)}, which does not include "
+                    + "biasnight.")
+
+    return False
 
 
 def submit_early_refnight_calibrations(nights, logpath, specprod=None,
@@ -396,19 +465,15 @@ def submit_early_refnight_calibrations(nights, logpath, specprod=None,
                 specprod=specprod, dry_run_level=dry_run_level,
                 queue=queue, reservation=reservation)
 
-        ## Confirm a bias job actually landed. It won't if the reference night
-        ## has no zeros, in which case there is nothing for the earlier night to
-        ## link biasnight from and its linkcal would be submitted with no
-        ## dependency, linking against a biasnight that never gets made.
+        ## Confirm a usable bias dependency actually landed. It won't if the
+        ## reference night has no zeros, in which case there is nothing for the
+        ## earlier night to link biasnight from and its linkcal would be
+        ## submitted with no dependency, linking against a biasnight that never
+        ## gets made.
         ## Check the returned table rather than re-reading it from disk: the
         ## readonly path is a separate read-only mount that can lag behind a
         ## write that just happened, and this table was only written moments ago.
-        bias_submitted = False
-        if refnight_ptable is not None and len(refnight_ptable) > 0:
-            jobdescs = refnight_ptable['JOBDESC']
-            bias_submitted = ('biasnight' in jobdescs or 'biaspdark' in jobdescs
-                              or 'linkcal' in jobdescs)
-        if bias_submitted:
+        if bias_dependency_available(refnight_ptable, night):
             log.info(f"Completed the biasnight submission for {night=}.")
         else:
             log.critical(f"No bias job was submitted for reference {night=}, so "
