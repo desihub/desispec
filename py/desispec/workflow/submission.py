@@ -311,8 +311,14 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                         " will be linked to another night.")
             biaslinkcamword = cal_override['linkcal']['biaslink_camword']
             bias_all_cam_override=False
-        ## run linkcal if we haven't already
-        if 'linkcal' not in ptable['JOBDESC']:
+        ## Run linkcal if we haven't already, but only when the link is what
+        ## provides this night's bias, which is the only thing this function
+        ## needs it for (see bias_accounted_for below). Otherwise leave it to
+        ## this night's own proc_night, which submits it anyway and knows the
+        ## state of the night being linked from. This function is also called
+        ## for the nights surrounding a darknight reference night, and creating
+        ## their linkcal jobs here can precede the calibrations they link to.
+        if 'linkcal' not in ptable['JOBDESC'] and 'biasnight' in files_to_link:
             proccamword = difference_camwords(camword, badcamword)
             ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
                             proccamword=proccamword,

@@ -25,7 +25,7 @@ from desispec.workflow.proctable import default_obstypes_for_proctable, \
     get_err_qid
 from desispec.workflow.submission import submit_necessary_biasnights_and_preproc_darks
 from desispec.scripts.submit_night import submit_night
-from desispec.workflow.queue import check_queue_count
+from desispec.workflow.queue import check_queue_count, get_resubmission_states
 import desispec.workflow.proctable
 from desispec.util import wrap_long_logs
 
@@ -341,11 +341,15 @@ def bias_dependency_available(refnight_ptable, night):
 
     An earlier night that links 'biasnight' from this reference night needs
     something on the reference night to depend on that actually produces or
-    provides that biasnight. A row merely being present is not enough: a job
-    whose submission failed is left in the table with LATEST_QID set to
-    get_err_qid() and STATUS 'UNSUBMITTED', and a linkcal row only supplies a
-    biasnight if this night's own override links biasnight rather than some
-    other calibration.
+    provides that biasnight. A row merely being present is not enough:
+
+    * submit_biasnight_and_preproc_darks() returns the existing processing table
+      untouched when a bias row is already there, so a row left in any state
+      needing resubmission (FAILED, MAX_RESUB, DEP_NOT_SUBD, TIMEOUT, ...) by an
+      earlier run reaches here with a real queue id.
+    * a job whose submission failed is left with LATEST_QID set to get_err_qid().
+    * a linkcal row only supplies a biasnight if this night's own override links
+      biasnight rather than some other calibration.
 
     Args:
         refnight_ptable (Table or None): The reference night's processing table,
@@ -362,18 +366,22 @@ def bias_dependency_available(refnight_ptable, night):
         return False
 
     err_qid = get_err_qid()
+    ## Any state the pipeline would resubmit is a state we cannot depend on.
+    ## This list already includes 'UNSUBMITTED'.
+    unusable_states = set(get_resubmission_states())
     own_links = None
     for row in refnight_ptable:
         jobdesc = str(row['JOBDESC'])
         if jobdesc not in ('biasnight', 'biaspdark', 'linkcal'):
             continue
 
-        ## A job whose submission failed provides nothing to depend on. Note
+        ## A job that did not run provides nothing to depend on. Note
         ## LATEST_QID == get_default_qid() with STATUS 'COMPLETED' is fine: that
         ## means the outputs already existed so no job needed submitting.
-        if str(row['STATUS']).upper() == 'UNSUBMITTED':
-            log.warning(f"Ignoring {jobdesc} job on {night} because it was "
-                        + "not successfully submitted.")
+        status = str(row['STATUS']).upper()
+        if status in unusable_states:
+            log.warning(f"Ignoring {jobdesc} job on {night} because its state "
+                        + f"{status} means it did not successfully run.")
             continue
         if int(row['LATEST_QID']) == err_qid:
             log.warning(f"Ignoring {jobdesc} job on {night} because its "
@@ -397,7 +405,7 @@ def bias_dependency_available(refnight_ptable, night):
 
 def submit_early_refnight_calibrations(nights, logpath, specprod=None,
                                        queue=None, reservation=None,
-                                       dry_run_level=0):
+                                       dry_run_level=0, refnights=None):
     """
     Submit the calibrations for any reference night that an earlier night links
     its calibrations from, so that those calibrations exist before the earlier
@@ -410,13 +418,19 @@ def submit_early_refnight_calibrations(nights, logpath, specprod=None,
         queue (str, optional): The Slurm queue to submit the jobs to.
         reservation (str, optional): The reservation to submit jobs to.
         dry_run_level (int, optional): Default is 0. Passed to proc_night.
+        refnights (list, optional): The (night, needs_bias_first) tuples from
+            get_refnights_needing_early_calibration(). Pass the caller's already
+            computed list so that the caller and this function cannot disagree
+            about which nights need early calibration. Derived here if None.
 
     Returns:
         list: The nights whose calibrations were submitted, in submission order.
     """
     log = get_logger()
 
-    refnights = get_refnights_needing_early_calibration(nights, verbose=True)
+    if refnights is None:
+        refnights = get_refnights_needing_early_calibration(nights,
+                                                            verbose=True)
     if len(refnights) == 0:
         return []
 
@@ -430,62 +444,66 @@ def submit_early_refnight_calibrations(nights, logpath, specprod=None,
     calib_obstypes = [obstype for obstype in default_obstypes_for_proctable()
                       if obstype != 'science']
 
-    ## Stage A: for any reference night that an earlier night links 'biasnight'
-    ## from, submit that night's biasnight on its own first.
+    ## Each reference night is submitted in two stages, and the nights are
+    ## visited in the dependency order that discovery returned, so anything a
+    ## night links from has already been submitted by the time it is reached.
     ##
-    ## This has to happen before *any* of the stage B submissions below, because
-    ## the darknight generation in stage B spans nights: it calls
+    ## Stage A, for a night that an earlier night links 'biasnight' from, submits
+    ## that night's biasnight on its own. It has to precede stage B for the same
+    ## night, because the darknight generation in stage B spans nights: it calls
     ## submit_necessary_biasnights_and_preproc_darks(), which loops over the
-    ## surrounding nights in ascending order and therefore reaches the earlier
-    ## linking night before the reference night itself. When it does, it submits
-    ## that earlier night's linkcal job, which can only pick up a cross-night
-    ## dependency if the reference night's bias job already exists.
+    ## surrounding nights and can reach the earlier linking night, submitting
+    ## that night's linkcal job. That job can only pick up a cross-night
+    ## dependency if this night's bias already exists.
     ##
-    ## Passing only 'zero' keeps submit_necessary_biasnights_and_preproc_darks()
-    ## from looking at any night other than the reference night.
-    for night, needs_bias_first in refnights:
-        if not needs_bias_first:
-            continue
-        log.info(f"Submitting the biasnight for {night=} on its own before the "
-                 + "rest of its calibrations, since an earlier night links "
-                 + "biasnight from it.")
-        if dry_run_level >= 4:
-            log.info(f"{dry_run_level=} so not submitting the biasnight. "
-                     + f"Would have submitted it for {night=}")
-            continue
-        logfile = os.path.join(logpath, f'night-{night}-biasnight.log')
-        with stdouterr_redirected(logfile):
-            refnight_ptable = submit_necessary_biasnights_and_preproc_darks(
-                reference_night=night, proc_obstypes=['zero'],
-                ## camword/badcamword are re-derived from the exposure table,
-                ## these are only the fallback for a night with no exposures
-                camword='a0123456789', badcamword=None,
-                exp_table_pathname=findfile('exposure_table', night=night),
-                proc_table_pathname=findfile('processing_table', night=night),
-                specprod=specprod, dry_run_level=dry_run_level,
-                queue=queue, reservation=reservation)
-
-        ## Confirm a usable bias dependency actually landed. It won't if the
-        ## reference night has no zeros, in which case there is nothing for the
-        ## earlier night to link biasnight from and its linkcal would be
-        ## submitted with no dependency, linking against a biasnight that never
-        ## gets made.
-        ## Check the returned table rather than re-reading it from disk: the
-        ## readonly path is a separate read-only mount that can lag behind a
-        ## write that just happened, and this table was only written moments ago.
-        if bias_dependency_available(refnight_ptable, night):
-            log.info(f"Completed the biasnight submission for {night=}.")
-        else:
-            log.critical(f"No bias job was submitted for reference {night=}, so "
-                         + "the nights linking biasnight from it have nothing to "
-                         + "depend on. Check that it has valid zeros.")
-            raise RuntimeError("Failed to submit the biasnight for reference "
-                               + f"{night=} that an earlier night links biasnight from")
-
-    ## Stage B: submit the remaining calibrations for each reference night, in
-    ## dependency order.
+    ## Stage B submits the remaining calibrations for the night.
+    ##
+    ## Passing only 'zero' in stage A keeps
+    ## submit_necessary_biasnights_and_preproc_darks() from looking at any night
+    ## other than the reference night.
     submitted_nights = []
-    for night, _ in refnights:
+    for night, needs_bias_first in refnights:
+        if needs_bias_first:
+            log.info(f"Submitting the biasnight for {night=} on its own before "
+                     + "the rest of its calibrations, since an earlier night "
+                     + "links biasnight from it.")
+            if dry_run_level >= 4:
+                log.info(f"{dry_run_level=} so not submitting the biasnight. "
+                         + f"Would have submitted it for {night=}")
+            else:
+                logfile = os.path.join(logpath, f'night-{night}-biasnight.log')
+                with stdouterr_redirected(logfile):
+                    refnight_ptable = submit_necessary_biasnights_and_preproc_darks(
+                        reference_night=night, proc_obstypes=['zero'],
+                        ## camword/badcamword are re-derived from the exposure
+                        ## table, these are only the fallback for a night with
+                        ## no exposures
+                        camword='a0123456789', badcamword=None,
+                        exp_table_pathname=findfile('exposure_table', night=night),
+                        proc_table_pathname=findfile('processing_table', night=night),
+                        specprod=specprod, dry_run_level=dry_run_level,
+                        queue=queue, reservation=reservation)
+
+                ## Confirm a usable bias dependency actually landed. It won't if
+                ## the reference night has no zeros, in which case there is
+                ## nothing for the earlier night to link biasnight from and its
+                ## linkcal would be submitted with no dependency, linking
+                ## against a biasnight that never gets made.
+                ## Check the returned table rather than re-reading it from disk:
+                ## the readonly path is a separate read-only mount that can lag
+                ## behind a write that just happened, and this table was only
+                ## written moments ago.
+                if bias_dependency_available(refnight_ptable, night):
+                    log.info(f"Completed the biasnight submission for {night=}.")
+                else:
+                    log.critical(f"No bias job was submitted for reference "
+                                 + f"{night=}, so the nights linking biasnight "
+                                 + "from it have nothing to depend on. Check "
+                                 + "that it has valid zeros.")
+                    raise RuntimeError("Failed to submit the biasnight for "
+                                       + f"reference {night=} that an earlier "
+                                       + "night links biasnight from")
+
         log.info(f"Submitting calibrations for reference {night=}")
         if dry_run_level >= 4:
             log.info(f"{dry_run_level=} so not running desi_proc_night. "
@@ -630,16 +648,31 @@ def submit_production(production_yaml, queue_threshold=4500, dry_run_level=False
     ## night is submitted below. These nights aren't removed from all_nights;
     ## only their calibrations are submitted here, and they are submitted again
     ## in the loop below for their science exposures, if they have any.
-    ## Checked once rather than per night so that a night can't be left with its
-    ## biasnight submitted but not the rest of its calibrations.
-    if num_in_queue > queue_threshold:
-        log.info(f"{num_in_queue} jobs in the queue > {queue_threshold}, so "
-                 + "not submitting any early reference night calibrations.")
-        early_calib_nights = []
-    else:
-        early_calib_nights = submit_early_refnight_calibrations(
-            nights=all_nights, logpath=logpath, specprod=specprod,
-            queue=queue, reservation=reservation, dry_run_level=dry_run_level)
+    ##
+    ## Discover before testing the queue, so that a production with no
+    ## forward-pointing override is never held up by queue pressure it doesn't
+    ## care about.
+    refnights_needed = get_refnights_needing_early_calibration(all_nights,
+                                                               verbose=True)
+    if len(refnights_needed) > 0 and num_in_queue > queue_threshold:
+        ## These calibrations are a prerequisite for the chronological loop
+        ## below, and that loop re-checks the queue independently. If it were
+        ## allowed to run after this pre-pass was skipped, a queue that drained
+        ## in between would let an override night be submitted with no
+        ## reference night calibrations to link. Stop instead, leaving the
+        ## sentinel unwritten so a later invocation redoes this in order.
+        log.warning(wrap_long_logs(
+            f"{num_in_queue} jobs in the queue > {queue_threshold}, so the "
+            + "reference night calibrations that must be submitted before the "
+            + f"rest of the production ({refnights_needed}) cannot be "
+            + "submitted now. Stopping so that a later invocation can submit "
+            + "them in the correct order."))
+        return 0
+
+    early_calib_nights = submit_early_refnight_calibrations(
+        nights=all_nights, logpath=logpath, specprod=specprod,
+        queue=queue, reservation=reservation, dry_run_level=dry_run_level,
+        refnights=refnights_needed)
 
     ## Do the main processing
     finished = False

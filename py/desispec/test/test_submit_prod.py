@@ -20,11 +20,13 @@ from contextlib import contextmanager
 
 from desispec.io.meta import findfile
 from desispec.workflow.proctable import get_default_qid, get_err_qid
+from desispec.workflow.queue import get_resubmission_states
 from desispec.scripts.submit_prod import (
     bias_dependency_available,
     get_linkcal_refnight,
     get_refnights_needing_early_calibration,
     submit_early_refnight_calibrations,
+    submit_production,
 )
 
 
@@ -304,6 +306,25 @@ class TestBiasDependencyAvailable(unittest.TestCase):
         ptab = self._ptable([('biasnight', 'UNSUBMITTED', get_err_qid())])
         self.assertFalse(bias_dependency_available(ptab, 20230915))
 
+    def test_states_needing_resubmission_rejected(self):
+        """Any state the pipeline would resubmit cannot be depended on
+
+        submit_biasnight_and_preproc_darks() returns an existing processing
+        table untouched when a bias row is already present, so a row left in a
+        failed state by an earlier run arrives here with a real queue id.
+        """
+        for state in get_resubmission_states():
+            with self.subTest(state=state):
+                ptab = self._ptable([('biasnight', state, 5001)])
+                self.assertFalse(bias_dependency_available(ptab, 20230915))
+
+    def test_running_and_pending_accepted(self):
+        """In-flight jobs are fine to depend on; Slurm handles the ordering"""
+        for state in ('SUBMITTED', 'PENDING', 'RUNNING', 'COMPLETED'):
+            with self.subTest(state=state):
+                ptab = self._ptable([('biasnight', state, 5001)])
+                self.assertTrue(bias_dependency_available(ptab, 20230915))
+
     def test_error_qid_rejected(self):
         """The error qid means the job never made it into the queue"""
         ptab = self._ptable([('biasnight', 'SUBMITTED', get_err_qid())])
@@ -420,16 +441,63 @@ class TestSubmitEarlyRefnightCalibrations(unittest.TestCase):
     # ordering, which is the invariant the feature rests on
     # ==================================================================
 
-    def test_stage_a_precedes_stage_b(self):
-        """The bias-only submission must happen before any proc_night call"""
-        night, refnight = self._setup(include='biasnight')
+    def _record_calls(self):
+        """Record (stage, night) in call order across both stages"""
         calls = []
-        self.bias.side_effect = \
-            lambda *a, **k: (calls.append('stageA'), self._good_bias_table())[1]
-        self.pn.side_effect = lambda *a, **k: calls.append('stageB')
+
+        def bias(*args, **kwargs):
+            calls.append(('A', kwargs['reference_night']))
+            return self._good_bias_table()
+
+        def procnight(*args, **kwargs):
+            calls.append(('B', kwargs['night']))
+
+        self.bias.side_effect = bias
+        self.pn.side_effect = procnight
+        return calls
+
+    def test_stage_a_precedes_stage_b(self):
+        """The bias-only submission must happen before that night's proc_night"""
+        night, refnight = self._setup(include='biasnight')
+        calls = self._record_calls()
         submitted = self._run([night, refnight])
         self.assertEqual(submitted, [refnight])
-        self.assertEqual(calls, ['stageA', 'stageB'])
+        self.assertEqual(calls, [('A', refnight), ('B', refnight)])
+
+    def test_stages_are_paired_per_night(self):
+        """Two independent reference nights each get their own A then B
+
+        The pairing is what matters: a night's own bias must precede its own
+        darknight reach. A global 'all A then all B' split would instead give
+        A,A,B,B and break chains.
+        """
+        for night in (20230914, 20230915, 20230924, 20230925):
+            self._write_exptable(night)
+        self._write_override(20230914, 20230915, include='biasnight')
+        self._write_override(20230924, 20230925, include='biasnight')
+        calls = self._record_calls()
+        self._run([20230914, 20230915, 20230924, 20230925])
+        self.assertEqual(calls, [('A', 20230915), ('B', 20230915),
+                                 ('A', 20230925), ('B', 20230925)])
+
+    def test_chained_override_submits_prerequisite_first(self):
+        """A night's prerequisite is fully submitted before that night runs
+
+        A links biasnight from the later night B, and B itself links
+        fiberflatnight from the earlier night C. C must be submitted before
+        anything is done for B, or B's linkcal would be created before the
+        calibrations it links to exist.
+        """
+        for night in (20230910, 20230915, 20230920):
+            self._write_exptable(night)
+        self._write_override(20230915, 20230920, include='biasnight')
+        self._write_override(20230920, 20230910, include='fiberflatnight')
+        calls = self._record_calls()
+        submitted = self._run([20230915, 20230920])
+        ## C first (no bias needed of its own), then B's bias, then the rest of B
+        self.assertEqual(calls, [('B', 20230910),
+                                 ('A', 20230920), ('B', 20230920)])
+        self.assertEqual(submitted, [20230910, 20230920])
 
     def test_stage_a_skipped_when_biasnight_not_linked(self):
         """Only a linked biasnight needs the standalone bias submission"""
@@ -518,6 +586,138 @@ class TestSubmitEarlyRefnightCalibrations(unittest.TestCase):
         self.assertEqual(submitted, [])
         self.bias.assert_not_called()
         self.pn.assert_not_called()
+
+
+class TestQueueThresholdBlocksPrePass(unittest.TestCase):
+    """
+    Tests that a full queue cannot let submit_production() skip the pre-pass
+    and carry on.
+
+    The pre-pass is a prerequisite for the chronological loop, and that loop
+    polls the queue again independently. If the pre-pass were merely skipped, a
+    queue that drained between the two polls would let an override night be
+    submitted with no reference night calibrations to link.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reduxdir = tempfile.mkdtemp()
+        cls.specprod = 'test'
+        cls.proddir = os.path.join(cls.reduxdir, cls.specprod)
+        os.makedirs(os.path.join(cls.proddir, 'run'))
+        cls.origenv = os.environ.copy()
+        os.environ['DESI_SPECTRO_REDUX'] = cls.reduxdir
+        os.environ['SPECPROD'] = cls.specprod
+        cls.sentinel = os.path.join(cls.proddir, 'run',
+                                    'prod_submission_complete.txt')
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.reduxdir)
+        for key in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
+            if key in cls.origenv:
+                os.environ[key] = cls.origenv[key]
+            elif key in os.environ:
+                del os.environ[key]
+
+    def setUp(self):
+        patchers = [
+            patch('desispec.scripts.submit_prod.'
+                  'submit_necessary_biasnights_and_preproc_darks'),
+            patch('desispec.scripts.submit_prod.proc_night'),
+            patch('desispec.scripts.submit_prod.check_queue_count'),
+            patch('desispec.scripts.submit_prod.stdouterr_redirected',
+                  _null_redirect),
+        ]
+        self.bias = patchers[0].start()
+        self.pn = patchers[1].start()
+        self.queue = patchers[2].start()
+        patchers[3].start()
+        for patcher in patchers:
+            self.addCleanup(patcher.stop)
+        self.bias.return_value = Table({'JOBDESC': ['biasnight'],
+                                        'STATUS': ['SUBMITTED'],
+                                        'LATEST_QID': [5001]})
+
+    def tearDown(self):
+        for sub in ('exposure_tables', 'processing_tables'):
+            path = os.path.join(self.proddir, sub)
+            if os.path.exists(path):
+                shutil.rmtree(path)
+        if os.path.exists(self.sentinel):
+            os.remove(self.sentinel)
+
+    def _write_exptable(self, night):
+        pathname = findfile('exposure_table', night=night)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        open(pathname, 'w').close()
+
+    def _write_override(self, night, refnight, include):
+        pathname = findfile('override', night=night)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as fil:
+            fil.write('calibration:\n    linkcal:\n'
+                      + f'        refnight: {refnight}\n'
+                      + f'        include: {include}\n')
+
+    def _config(self, nights):
+        """Write a production yaml and return its pathname"""
+        pathname = os.path.join(self.reduxdir, 'prod_config.yaml')
+        with open(pathname, 'w') as fil:
+            fil.write(f"SPECPROD: '{self.specprod}'\n")
+            fil.write(f"NIGHTS: {list(nights)}\n")
+            fil.write(f"THRU_NIGHT: {max(nights)}\n")
+            fil.write("Z_SUBMIT_TYPES: 'false'\n")
+        return pathname
+
+    def test_queue_draining_after_a_skipped_pre_pass_must_not_proceed(self):
+        """The whole invocation must stop, not just skip the pre-pass
+
+        submit_production() polls the queue once before the pre-pass and again
+        inside the chronological loop. This simulates the queue being full for
+        the first poll and drained for the rest, which is the race that would
+        otherwise let the loop submit an override night with no reference
+        night calibrations to link.
+        """
+        self._write_exptable(20230914)
+        self._write_exptable(20230915)
+        self._write_override(20230914, 20230915, include='biasnight')
+        ## full at the pre-pass check, then drained for every later poll
+        self.queue.side_effect = [99999] + [0] * 20
+        submit_production(self._config([20230914, 20230915]), queue_threshold=10)
+        ## neither the pre-pass nor the chronological loop may have submitted
+        self.bias.assert_not_called()
+        self.pn.assert_not_called()
+        ## and the sentinel must not be written, so a later run retries
+        self.assertFalse(os.path.exists(self.sentinel))
+
+    def test_full_queue_without_pre_pass_still_reaches_main_loop(self):
+        """An ordinary production must not be newly blocked by a full queue
+
+        With no forward-pointing override there is no prerequisite, so the
+        existing per-night queue check in the main loop should decide, exactly
+        as it did before: a queue that drains lets the nights be submitted.
+        """
+        self._write_exptable(20230914)
+        self._write_exptable(20230915)
+        self.queue.side_effect = [99999] + [0] * 20
+        submit_production(self._config([20230914, 20230915]), queue_threshold=10)
+        self.bias.assert_not_called()
+        ## no prerequisite exists, so the drained queue is allowed to proceed
+        self.assertEqual(self.pn.call_count, 2)
+
+    def test_quiet_queue_runs_pre_pass_then_main_loop(self):
+        """With room in the queue both the pre-pass and the loop should run"""
+        self._write_exptable(20230914)
+        self._write_exptable(20230915)
+        self._write_override(20230914, 20230915, include='biasnight')
+        self.queue.return_value = 0
+        submit_production(self._config([20230914, 20230915]),
+                          queue_threshold=4500)
+        self.bias.assert_called_once()
+        ## stage B for the reference night, plus both nights in the main loop
+        self.assertEqual(self.pn.call_count, 3)
+        self.assertTrue(os.path.exists(self.sentinel))
 
 
 if __name__ == '__main__':
