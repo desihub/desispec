@@ -78,7 +78,8 @@ def determine_science_to_proc(etable=None, tiles=None, surveys=None, laststeps=N
         specstatus_path (str, optional): Location of the surveyops specstatus
             table.Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
         startnight (int, optional): Default is 20201214. Exposure table
-            entries for nights before this YYYYMMDD are removed.
+            entries for nights before this YYYYMMDD are removed. Use None or 0
+            to not filter by night.
         nproc (int, optional): Number of multiprocessing processes to use
             when etable is None and exposure tables need to be read from
             disk. Default is desispec.parallel.default_nproc.

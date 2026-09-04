@@ -945,6 +945,9 @@ def read_minimal_science_exptab_cols(nights=None, tileids=None,
 
     Note: the returned table is the full pipeline exposures table. It is trimmed
           to science exposures that have LASTSTEP=='all'
+
+    See :func:`read_all_exptables` for a related function that reads all columns
+    for all exposure tables in a production without filtering.
     """
     global _science_etab_cache
     log = get_logger()
@@ -1035,7 +1038,8 @@ def _read_one_exptable(etab_file):
     """
     Helper function for read_all_exptables() that reads a single exposure
     table file. Defined at module level so that it can be pickled for use
-    with multiprocessing.
+    with multiprocessing, but keep load_table import inside function to
+    avoid circular import issues.
     """
     from desispec.workflow.tableio import load_table
     return load_table(tablename=etab_file, tabletype='exptable', suppress_logging=True)
@@ -1056,6 +1060,10 @@ def read_all_exptables(nproc=default_nproc, specprod=None):
     Returns:
         astropy.table.Table: The exposure table entries from every exposure
         table file in the production, stacked into a single table.
+
+    See :func:`read_minimal_science_exptab_cols` for a related function that
+    filters to only science exposures and a minimal set of columns, including
+    using a cache to avoid re-reading every time.
     """
     log = get_logger()
     etab_path = findfile('exptable', night='99999999', readonly=True, specprod=specprod)
