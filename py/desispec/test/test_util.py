@@ -332,19 +332,66 @@ class TestRunCmd(unittest.TestCase):
 class TestUtil(unittest.TestCase):
 
     def test_utils_default_nproc(self):
-        n = 4
-        tmp = os.getenv('SLURM_CPUS_PER_TASK')
-        os.environ['SLURM_CPUS_PER_TASK'] = str(n)
-        importlib.reload(dpl)
-        self.assertEqual(dpl.default_nproc, n)
-        os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
-        importlib.reload(dpl)
-        self.assertEqual(dpl.default_nproc, 2*n)
-        del os.environ['SLURM_CPUS_PER_TASK']
-        importlib.reload(dpl)
-        import multiprocessing
+        """
+        default_nproc should honor $SLURM_CPUS_PER_TASK when set, and
+        otherwise should be capped small on a NERSC login node (outside
+        any Slurm allocation) to avoid overloading a shared login node,
+        vs. scaling with the core count elsewhere.
+        """
+        from unittest import mock
 
-        self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
+        #- Save/restore the env vars this test manipulates, and always
+        #- reload dpl back to a real (unmocked) state afterwards, even if
+        #- an assertion fails or an exception is raised.
+        env_keys = ('SLURM_CPUS_PER_TASK', 'NERSC_HOST', 'SLURM_JOB_NAME')
+        orig_env = {k: os.environ.get(k) for k in env_keys}
+        try:
+            #- SLURM_CPUS_PER_TASK always wins, login node or not
+            os.environ['SLURM_CPUS_PER_TASK'] = '4'
+            os.environ['NERSC_HOST'] = 'perlmutter'
+            os.environ.pop('SLURM_JOB_NAME', None)
+            importlib.reload(dpl)
+            self.assertEqual(dpl.default_nproc, 4)
+
+            os.environ['SLURM_CPUS_PER_TASK'] = '8'
+            importlib.reload(dpl)
+            self.assertEqual(dpl.default_nproc, 8)
+
+            #- Without SLURM_CPUS_PER_TASK, mock a large multi-core machine
+            #- so that this test doesn't depend on how many cores are
+            #- actually available on whatever machine runs it
+            del os.environ['SLURM_CPUS_PER_TASK']
+            with mock.patch('multiprocessing.cpu_count', return_value=256):
+                #- Simulate a NERSC login node (NERSC_HOST set, not in a
+                #- Slurm job): default_nproc should be capped small
+                os.environ['NERSC_HOST'] = 'perlmutter'
+                os.environ.pop('SLURM_JOB_NAME', None)
+                importlib.reload(dpl)
+                self.assertTrue(dpl.on_nersc_login_node())
+                login_node_nproc = dpl.default_nproc
+                self.assertEqual(login_node_nproc, 8)
+
+                #- Simulate being inside a Slurm job on that same NERSC
+                #- system: default_nproc should scale with core count
+                #- instead of being capped
+                os.environ['SLURM_JOB_NAME'] = 'interactive'
+                importlib.reload(dpl)
+                self.assertFalse(dpl.on_nersc_login_node())
+                self.assertGreater(dpl.default_nproc, login_node_nproc)
+
+                #- Simulate a non-NERSC machine: also should not be capped
+                os.environ.pop('NERSC_HOST', None)
+                os.environ.pop('SLURM_JOB_NAME', None)
+                importlib.reload(dpl)
+                self.assertFalse(dpl.on_nersc_login_node())
+                self.assertGreater(dpl.default_nproc, login_node_nproc)
+        finally:
+            for k, v in orig_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            importlib.reload(dpl)
 
     def test_header2night(self):
         from astropy.time import Time

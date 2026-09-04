@@ -26,22 +26,6 @@ jobs:
                     fitsio-version: ''
                     numba-version: ''
                   - os: ubuntu-latest
-                    python-version: '3.12'
-                    numpy-version: '<2.2'
-                    scipy-version: '<1.16'
-                    astropy-version: '<7.0'
-                    matplotlib-version: '<3.12'
-                    fitsio-version: ''
-                    numba-version: ''
-                  - os: ubuntu-latest
-                    python-version: '3.11'
-                    numpy-version: '<2.1'
-                    scipy-version: '<1.14'
-                    astropy-version: '<6.1'
-                    matplotlib-version: '<3.11'
-                    fitsio-version: ''
-                    numba-version: '<0.70'
-                  - os: ubuntu-latest
                     python-version: '3.10'
                     numpy-version: '<2.0'
                     scipy-version: '<1.14'
