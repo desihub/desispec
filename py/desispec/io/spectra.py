@@ -1008,7 +1008,8 @@ def read_spectra_parallel(targets, nproc=None, prefix='coadd',
     else:
         rank, size = 0, 1
         if nproc is None:
-            nproc = max(1, multiprocessing.cpu_count() // 2)
+            from desispec.parallel import default_nproc
+            nproc = default_nproc
 
     #- split targets into list of nproc subtables, such that targets in
     #- a file are only in a single subtable (i.e. it will be ready only once)

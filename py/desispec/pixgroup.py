@@ -22,7 +22,7 @@ import desiutil.healpix
 
 from . import io
 from .io.util import get_tempfilename, addkeys
-from .util import convert_to_pandas
+from .util import convert_to_pandas, ordered_unique_by_provenance
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
@@ -94,12 +94,13 @@ def get_exp2uniqpix_map(zcat, frames, nmax=5000, nside_max=None):
 
     #- Trim zcat to Pandas DataFrame with just the columns we need
     log.info(f'Converting zcat ({len(zcat)} rows) and frames ({len(frames)} rows) to pandas DataFrames')
+    _, ii = ordered_unique_by_provenance(zcat)
     zcat = convert_to_pandas(zcat, ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC'])
     frames = convert_to_pandas(frames, ['NIGHT', 'EXPID', 'TILEID', 'CAMERA'])
 
     #- Make a table with one row per unique TARGETID plus RA,DEC to calculate UNIQPIX
     log.info('Trimming zcat to unique TARGETID, RA, DEC')
-    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].drop_duplicates(subset='TARGETID')
+    targets = zcat[['TARGETID', 'TARGET_RA', 'TARGET_DEC']].iloc[ii].reset_index(drop=True)
     log.info(f'Calculating unique pixels from {len(targets)} unique targets')
     targets['UNIQPIX'] = desiutil.healpix.partition_radec(targets['TARGET_RA'], targets['TARGET_DEC'], nmax=nmax)
 
@@ -340,12 +341,12 @@ class FrameLite(object):
             scores = self.scores[index]
         else:
             scores = None
-            
+
         if self.redshifts is not None:
             redshifts = self.redshifts[index]
         else:
             redshifts = None
-            
+
         if self.model is not None:
             model = {}
             for b in self.flux.keys():
@@ -393,7 +394,7 @@ class FrameLite(object):
                 redshifts = Table(fx["REDSHIFTS"].read())
             else:
                 redshifts = None
-                
+
         #- Add extra fibermap columns NIGHT, EXPID, TILEID
         nspec = len(fibermap)
         night = np.tile(header['NIGHT'], nspec).astype('i4')
@@ -483,7 +484,7 @@ class SpectraLite(object):
             self.model = model.copy()
         else:
             self.model = None
-            
+
         #- optional tables
         if exp_fibermap is not None:
             self.exp_fibermap = Table(exp_fibermap)
@@ -499,7 +500,7 @@ class SpectraLite(object):
             self.redshifts = Table(redshifts)
         else:
             self.redshifts = None
-            
+
         #- for compatibility with full Spectra objects
         self.meta = None
         self.extra = None
@@ -563,7 +564,7 @@ class SpectraLite(object):
             model = {}
         else:
             model = None
-            
+
         for band in self.bands:
             flux[band] = np.vstack([self.flux[band], other.flux[band]])
             ivar[band] = np.vstack([self.ivar[band], other.ivar[band]])
@@ -890,16 +891,43 @@ def frames2spectra(frames, pix=None, nside=64, onetile=False):
         #  Sort them so we are ordered by spectrograph, then night, then exposure
         band_keys = sorted(allkeys[band])
 
+        # TODO: Better way to condense all of this?
+        if pix is not None:
+            # We will determine which of the spectra make it into this
+            # pix group based on their "canoncial" TARGET_RA/DEC
+            # in case a target has two different locations that might cause it
+            # to end up in two different heal/uniqpixels.
+            keep_cols = ['TARGETID', 'TARGET_RA', 'TARGET_DEC']
+            # We will assume that all the fibermaps have the same structure
+            # in so far as they have the same "flavor" of SCND_TARGET. Shoule
+            # be a safe assumption as long as this is only ever run
+            # on a single survey/program combination.
+            _, first_night, first_expid, first_cam  = band_keys[0]
+            scnd_targ_cols = [x for x in
+                            frames[(first_night, first_expid, first_cam)].fibermap.colnames
+                            if "SCND_TARGET" in x]
+
+            keep_cols += scnd_targ_cols
+            band_fmaps = [frames[(night,expid,cam)].fibermap[keep_cols]
+                        for _, night, expid, cam in band_keys]
+            all_fmaps = np.concatenate(band_fmaps)
+
+            tids, idcs = ordered_unique_by_provenance(all_fmaps)
+            ra, dec = all_fmaps['TARGET_RA'][idcs], all_fmaps['TARGET_DEC'][idcs]
+
+            ok = ~np.isnan(ra) & ~np.isnan(dec)
+            ra[~ok] = 0.0
+            dec[~ok] = 0.0
+            allpix = radec2pix(nside, ra, dec)
+            ii = (allpix == pix) & ok
+            kept_tids = tids[ii]
+
         #- Select flux, ivar, etc. for just the spectra on this healpix
         for spec,night,expid,cam in band_keys:
             bandframe = frames[(night,expid,cam)]
             if pix is not None:
-                ra, dec = bandframe.fibermap['TARGET_RA'], bandframe.fibermap['TARGET_DEC']
-                ok = ~np.isnan(ra) & ~np.isnan(dec)
-                ra[~ok] = 0.0
-                dec[~ok] = 0.0
-                allpix = radec2pix(nside, ra, dec)
-                ii = (allpix == pix) & ok
+                frame_tids = bandframe.fibermap['TARGETID']
+                ii = np.where(np.isin(frame_tids, kept_tids))[0]
             else:
                 ii = np.ones(bandframe.flux.shape[0]).astype(bool)
 
