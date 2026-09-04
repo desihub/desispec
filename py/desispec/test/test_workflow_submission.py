@@ -12,6 +12,7 @@ import tempfile
 import unittest
 
 import numpy as np
+from astropy.table import Table
 
 from desispec.io.meta import findfile
 from desispec.workflow.proctable import (
@@ -238,6 +239,84 @@ class TestLinkcalCrossNightDependencies(unittest.TestCase):
 
         self.assertEqual(len(linkcal['INT_DEP_IDS']), 0)
         self.assertEqual(len(linkcal['LATEST_DEP_QID']), 0)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+class TestReachOnlySubmitsBiasProvidingLinkcal(unittest.TestCase):
+    """
+    submit_biasnight_and_preproc_darks() is called for the nights surrounding a
+    darknight reference night, not just for that night. It must only create
+    those nights' linkcal jobs when the link is what provides their bias, which
+    is the only thing it needs a linkcal for. Creating one for any other
+    calibration type can precede the calibrations being linked to, leaving the
+    job with no dependency; that night's own proc_night submits it later, when
+    the state of the night being linked from is known.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.night = 20230914
+        cls.refnight = 20230913
+        cls.reduxdir = tempfile.mkdtemp()
+        cls.specprod = 'test'
+        cls.proddir = os.path.join(cls.reduxdir, cls.specprod)
+        os.makedirs(cls.proddir)
+        cls.origenv = os.environ.copy()
+        os.environ['DESI_SPECTRO_REDUX'] = cls.reduxdir
+        os.environ['SPECPROD'] = cls.specprod
+        os.environ['NERSC_HOST'] = 'perlmutter'
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.reduxdir)
+        for key in ('DESI_SPECTRO_REDUX', 'SPECPROD', 'NERSC_HOST'):
+            if key in cls.origenv:
+                os.environ[key] = cls.origenv[key]
+            elif key in os.environ:
+                del os.environ[key]
+
+    def _submitted_jobdescs(self, include):
+        """Run the reach for a night whose override links `include`"""
+        from desispec.workflow.submission import submit_biasnight_and_preproc_darks
+
+        exptab_path = findfile('exposure_table', night=self.night)
+        os.makedirs(os.path.dirname(exptab_path), exist_ok=True)
+        etable = Table({
+            'EXPID': [100, 101], 'OBSTYPE': ['zero', 'zero'],
+            'TILEID': [-99, -99], 'NIGHT': [self.night] * 2,
+            'CAMWORD': ['a0123456789'] * 2, 'BADCAMWORD': ['', ''],
+            'BADAMPS': ['', ''], 'LASTSTEP': ['all', 'all'],
+            'EXPFLAG': ['', ''], 'EXPTIME': [0.0, 0.0],
+        })
+        etable.write(exptab_path, overwrite=True)
+
+        override_path = findfile('override', night=self.night)
+        with open(override_path, 'w') as fil:
+            fil.write('calibration:\n    linkcal:\n'
+                      + f'        refnight: {self.refnight}\n'
+                      + f'        include: {include}\n')
+
+        ptable = submit_biasnight_and_preproc_darks(
+            night=self.night, dark_expids=[], proc_obstypes=['zero'],
+            camword='a0123456789', badcamword='',
+            dry_run_level=4, check_for_outputs=False)
+        os.remove(override_path)
+        return set(str(j) for j in ptable['JOBDESC'])
+
+    def test_linkcal_submitted_when_it_provides_the_bias(self):
+        """A biasnight link is what accounts for the bias, so it must be made"""
+        jobdescs = self._submitted_jobdescs('biasnight')
+        self.assertIn('linkcal', jobdescs)
+
+    def test_linkcal_not_submitted_for_other_calibration_types(self):
+        """A non-bias link is left to that night's own proc_night"""
+        jobdescs = self._submitted_jobdescs('fiberflatnight')
+        self.assertNotIn('linkcal', jobdescs)
+        ## and the night still computes its own bias, exactly as before
+        self.assertTrue('biasnight' in jobdescs or 'biaspdark' in jobdescs)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #d0d0d0;
+    --panel: #f6f6f6; --accent: #1f6feb; --hi: #ffd54f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 Helvetica, Arial, sans-serif;
+         color: var(--fg); background: var(--bg);
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header, #crumbs { flex: 0 0 auto; }
+  header { padding: 8px 14px; border-bottom: 1px solid var(--line);
+           display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; }
+  header .meta { color: var(--muted); font: 11px Menlo, monospace; }
+  #layout { display: flex; flex: 1 1 auto; min-height: 0; }
+  #side { width: 300px; min-width: 300px; border-right: 1px solid var(--line);
+          overflow-y: auto; background: var(--panel); padding: 10px; }
+  #main { flex: 1; position: relative; overflow: hidden; }
+  #canvaswrap { position: absolute; inset: 0; }
+  /* only the graph pane fills its container; the overview chart must keep the
+     explicit width/height it is given, or its bars collapse */
+  #svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  #svg.dragging { cursor: grabbing; }
+  #overview svg { display: block; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+       color: var(--muted); margin: 14px 0 6px; }
+  h2:first-child { margin-top: 0; }
+  input, select, button { font: 12px Helvetica, Arial, sans-serif; padding: 4px 6px; }
+  input[type=text] { width: 100%; }
+  button { cursor: pointer; background: #fff; border: 1px solid var(--line);
+           border-radius: 3px; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+  .legend div { display: flex; align-items: center; gap: 6px; font-size: 11px;
+                margin: 2px 0; cursor: pointer; }
+  .legend .sw { width: 12px; height: 12px; border: 1px solid #0003; }
+  .legend .off { opacity: .35; }
+  #nightlist { max-height: 240px; overflow-y: auto; border: 1px solid var(--line);
+               background: #fff; }
+  #nightlist div { padding: 2px 6px; cursor: pointer; font: 11px Menlo, monospace;
+                   display: flex; justify-content: space-between; }
+  #nightlist div:hover { background: #eef4ff; }
+  #nightlist div.sel { background: var(--accent); color: #fff; }
+  #results div { padding: 3px 6px; cursor: pointer; font: 11px Menlo, monospace;
+                 border-bottom: 1px solid #eee; }
+  #results div:hover { background: #eef4ff; }
+  #info { font: 11px Menlo, monospace; white-space: pre-wrap;
+          background: #fff; border: 1px solid var(--line); padding: 8px;
+          min-height: 40px; }
+  #info a { color: var(--accent); }
+  #crumbs { padding: 6px 14px; border-bottom: 1px solid var(--line);
+            font-size: 12px; color: var(--muted); }
+  #crumbs span.sep { margin: 0 6px; color: var(--line); }
+  #crumbs a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  #overview { position: absolute; inset: 0; overflow: auto; padding: 12px; }
+  #tip { position: absolute; pointer-events: none; background: #222; color: #fff;
+         padding: 4px 7px; border-radius: 3px; font: 11px Menlo, monospace;
+         opacity: 0; transition: opacity .08s; z-index: 10; max-width: 340px; }
+  .node rect { stroke: #0006; }
+  .node.focus rect { stroke: #000; stroke-width: 2.5px; }
+  .node text { pointer-events: none; font: 10px Menlo, monospace; }
+  .edge { fill: none; stroke: #999; stroke-width: 1px; }
+  .edge.xnight { stroke: var(--accent); stroke-dasharray: 4 3; stroke-width: 1.6px; }
+  .hint { color: var(--muted); font-size: 11px; margin: 4px 0; }
+  .statline { font: 11px Menlo, monospace; color: var(--muted); }
+  #controls { position: absolute; left: 10px; bottom: 10px; z-index: 5;
+              display: flex; gap: 6px; align-items: center;
+              background: #ffffffdd; border: 1px solid var(--line);
+              border-radius: 4px; padding: 4px 8px; }
+  #controls button { min-width: 26px; }
+  #zoomlabel { font: 11px Menlo, monospace; color: var(--muted);
+               min-width: 38px; text-align: center; }
+  #graphhint { font: 11px Menlo, monospace; color: var(--muted);
+               margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__HEADING__</h1>
+  <span class="meta" id="hdrmeta"></span>
+</header>
+<div id="crumbs"></div>
+<div id="layout">
+  <div id="side">
+    <h2>Find a job</h2>
+    <input type="text" id="q" placeholder="QID, INTID, tile, or jobdesc" autocomplete="off">
+    <div class="hint">Enter a queue id, internal id, tile, or job name.</div>
+    <div id="results"></div>
+
+    <h2>Nights</h2>
+    <div class="row">
+      <input type="text" id="nightfilter" placeholder="filter nights, e.g. 202601">
+    </div>
+    <div id="nightlist"></div>
+
+    <h2>Job states</h2>
+    <div class="legend" id="legend"></div>
+
+    <h2>Job types</h2>
+    <div class="legend" id="jdlegend"></div>
+
+    <h2>Focus depth</h2>
+    <div class="row">
+      <label>up <input type="number" id="depthUp" value="2" min="0" max="8" style="width:52px"></label>
+      <label>down <input type="number" id="depthDown" value="2" min="0" max="8" style="width:52px"></label>
+    </div>
+    <div class="hint">Hops of ancestors / descendants to show in focus view.</div>
+
+    <h2>Selected</h2>
+    <div id="info">Nothing selected.</div>
+  </div>
+  <div id="main">
+    <div id="overview"></div>
+    <div id="canvaswrap" style="display:none">
+      <svg id="svg"><g id="viewport"></g></svg>
+      <div id="controls">
+        <button id="zoomout" title="zoom out">&minus;</button>
+        <span id="zoomlabel">100%</span>
+        <button id="zoomin" title="zoom in">+</button>
+        <button id="zoomfit" title="fit the whole graph in the pane, however small">Fit</button>
+        <button id="zoom100" title="reset to full size">100%</button>
+        <span id="graphhint"></span>
+      </div>
+    </div>
+    <div id="tip"></div>
+  </div>
+</div>
+
+<script id="dagdata" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById('dagdata').textContent);
+const C = D.cols;
+const N = D.njobs;
+
+/* ---------- derived per-node values ---------- */
+const nightOf = i => D.nights[C.ni[i]];
+const intidOf = i => C.seq[i] < 0 ? -C.seq[i]
+                                  : (nightOf(i) - 20000000) * 1000 + C.seq[i];
+const jdOf = i => D.jobdescs[C.jd[i]];
+const stOf = i => D.statuses[C.st[i]];
+
+/* ---------- adjacency (CSR both directions) ---------- */
+function buildCSR(src, dst, n) {
+  const count = new Int32Array(n + 1);
+  for (let k = 0; k < src.length; k++) count[src[k] + 1]++;
+  for (let i = 0; i < n; i++) count[i + 1] += count[i];
+  const head = count.slice(0, n);
+  const list = new Int32Array(src.length);
+  const cur = Int32Array.from(head);
+  for (let k = 0; k < src.length; k++) list[cur[src[k]]++] = dst[k];
+  return { off: count, list };
+}
+const OUT = buildCSR(D.esrc, D.edst, N);
+const IN  = buildCSR(D.edst, D.esrc, N);
+const outOf = i => OUT.list.subarray(OUT.off[i], OUT.off[i + 1]);
+const inOf  = i =>  IN.list.subarray(IN.off[i],  IN.off[i + 1]);
+
+/* nodes grouped by night */
+const byNight = new Map();
+for (let i = 0; i < N; i++) {
+  const k = C.ni[i];
+  if (!byNight.has(k)) byNight.set(k, []);
+  byNight.get(k).push(i);
+}
+
+/* lookup tables */
+const byQid = new Map(), byIntid = new Map();
+for (let i = 0; i < N; i++) {
+  if (C.qid[i] > 1) byQid.set(C.qid[i], i);
+  byIntid.set(intidOf(i), i);
+}
+
+/* ---------- state ---------- */
+const hiddenStates = new Set();
+const hiddenJd = new Set();
+let view = { kind: 'overview' };
+let selected = -1;
+
+const stateColor = s => D.stateColors[s] || D.stateColors.UNKNOWN || '#ffffcc';
+const visible = i => !hiddenStates.has(stOf(i)) && !hiddenJd.has(jdOf(i));
+function fmtElapsed(sec) {
+  if (!(sec > 0)) return '';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}h${String(m).padStart(2,'0')}m` : (m ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`);
+}
+
+/* ---------- log file URL, mirroring the python path helpers ---------- */
+function logUrl(i) {
+  const night = nightOf(i), jd = jdOf(i), qid = C.qid[i];
+  const tile = C.tile[i], exp = C.exp[i], cw = D.camwords[C.cw[i]];
+  if (qid <= 1) return null;
+  const pad = n => String(n).padStart(8, '0');
+  const base = D.relprefix;
+  if (jd === 'tilenight')
+    return `${base}run/scripts/night/${night}/tilenight-${night}-${tile}-${qid}.log`;
+  if (jd === 'cumulative')
+    return `${base}run/scripts/tiles/cumulative/${tile}/${night}/ztile-${tile}-thru${night}-${qid}.log`;
+  if (jd === 'pernight')
+    return `${base}run/scripts/tiles/pernight/${tile}/${night}/ztile-${tile}-${night}-${qid}.log`;
+  if (jd === 'perexp')
+    return `${base}run/scripts/tiles/perexp/${tile}/${pad(exp)}/ztile-${tile}-exp${pad(exp)}-${qid}.log`;
+  /* mirrors get_desi_proc_batch_file_name(): linkcal carries no expid at all,
+     and a job with no exposures uses the literal 'none' */
+  let expstr;
+  if (jd === 'linkcal') expstr = '';
+  else if (exp < 0) expstr = '-none';
+  else expstr = '-' + pad(exp);
+  return `${base}run/scripts/night/${night}/${jd}-${night}${expstr}-${cw}-${qid}.log`;
+}
+
+/* ---------- layered layout ---------- */
+function layout(nodes) {
+  const set = new Set(nodes);
+  const layer = new Map();
+  /* longest path layering over the induced subgraph */
+  const indeg = new Map();
+  for (const v of nodes) {
+    let d = 0;
+    for (const u of inOf(v)) if (set.has(u)) d++;
+    indeg.set(v, d);
+    if (d === 0) layer.set(v, 0);
+  }
+  const queue = nodes.filter(v => indeg.get(v) === 0);
+  let qi = 0;
+  while (qi < queue.length) {
+    const v = queue[qi++];
+    for (const w of outOf(v)) {
+      if (!set.has(w)) continue;
+      layer.set(w, Math.max(layer.get(w) ?? 0, (layer.get(v) ?? 0) + 1));
+      const remaining = indeg.get(w) - 1;
+      indeg.set(w, remaining);
+      if (remaining === 0) queue.push(w);
+    }
+  }
+  /* any node left unlayered (cycle, which should not happen) goes to layer 0 */
+  for (const v of nodes) if (!layer.has(v)) layer.set(v, 0);
+
+  const rows = new Map();
+  for (const v of nodes) {
+    const L = layer.get(v);
+    if (!rows.has(L)) rows.set(L, []);
+    rows.get(L).push(v);
+  }
+  /* one barycenter pass to reduce crossings, then stable sort for determinism */
+  const order = new Map();
+  const Ls = [...rows.keys()].sort((a, b) => a - b);
+  for (const L of Ls) {
+    const row = rows.get(L);
+    row.sort((a, b) => {
+      const ba = bary(a, order), bb = bary(b, order);
+      if (ba !== bb) return ba - bb;
+      if (nightOf(a) !== nightOf(b)) return nightOf(a) - nightOf(b);
+      return intidOf(a) - intidOf(b);
+    });
+    row.forEach((v, k) => order.set(v, k));
+  }
+  function bary(v, ord) {
+    let s = 0, n = 0;
+    for (const u of inOf(v)) if (ord.has(u)) { s += ord.get(u); n++; }
+    return n ? s / n : 1e9;
+  }
+
+  const W = 168, H = 44, GAPX = 40, GAPY = 12;
+  const pos = new Map();
+  for (const L of Ls) {
+    const row = rows.get(L);
+    row.forEach((v, k) => pos.set(v, { x: L * (W + GAPX), y: k * (H + GAPY),
+                                       w: W, h: H, layer: L }));
+  }
+  /* centre each layer vertically */
+  const maxH = Math.max(...Ls.map(L => rows.get(L).length)) * (H + GAPY);
+  for (const L of Ls) {
+    const row = rows.get(L);
+    const off = (maxH - row.length * (H + GAPY)) / 2;
+    for (const v of row) pos.get(v).y += off;
+  }
+  return pos;
+}
+
+/* ---------- rendering ---------- */
+const svg = document.getElementById('svg');
+const viewport = document.getElementById('viewport');
+const tip = document.getElementById('tip');
+let tx = 20, ty = 20, scale = 1;
+let currentPos = null;
+
+function applyTransform() {
+  viewport.setAttribute('transform', `translate(${tx},${ty}) scale(${scale})`);
+}
+
+function drawGraph(nodes, focusNode) {
+  document.getElementById('overview').style.display = 'none';
+  document.getElementById('canvaswrap').style.display = '';
+  viewport.textContent = '';
+
+  const shown = nodes.filter(visible);
+  if (shown.length === 0) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', 10); t.setAttribute('y', 24);
+    t.textContent = 'Nothing to show: every job here is filtered out.';
+    viewport.appendChild(t);
+    return;
+  }
+  const pos = layout(shown);
+  currentPos = pos;
+  const set = new Set(shown);
+
+  const eg = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const ng = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  viewport.appendChild(eg); viewport.appendChild(ng);
+
+  for (const v of shown) {
+    for (const w of outOf(v)) {
+      if (!set.has(w)) continue;
+      const a = pos.get(v), b = pos.get(w);
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+      const mx = (x1 + x2) / 2;
+      p.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+      p.setAttribute('class', 'edge' + (nightOf(v) !== nightOf(w) ? ' xnight' : ''));
+      eg.appendChild(p);
+    }
+  }
+
+  for (const v of shown) {
+    const p = pos.get(v);
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'node' + (v === focusNode ? ' focus' : ''));
+    g.setAttribute('transform', `translate(${p.x},${p.y})`);
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('width', p.w); r.setAttribute('height', p.h);
+    r.setAttribute('rx', 4); r.setAttribute('fill', stateColor(stOf(v)));
+    g.appendChild(r);
+    const label = [jdOf(v) + (C.tile[v] > 0 ? ' ' + C.tile[v] : ''),
+                   `${nightOf(v)}  qid ${C.qid[v] > 1 ? C.qid[v] : '-'}`,
+                   stOf(v)];
+    label.forEach((line, k) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', 7); t.setAttribute('y', 14 + k * 12);
+      t.textContent = line;
+      g.appendChild(t);
+    });
+    g.addEventListener('click', ev => { ev.stopPropagation(); select(v); });
+    g.addEventListener('dblclick', ev => { ev.stopPropagation(); focusJob(v); });
+    g.addEventListener('mousemove', ev => showTip(ev, v));
+    g.addEventListener('mouseleave', hideTip);
+    ng.appendChild(g);
+  }
+  fitToView(pos, false);
+  const hint = document.getElementById('graphhint');
+  if (hint) {
+    const b = lastBounds;
+    const fits = scale <= MIN_LEGIBLE_SCALE + 1e-9 &&
+                 (b.x1 - b.x0) * scale > svg.getBoundingClientRect().width - 40;
+    hint.textContent = `${shown.length} jobs` +
+        (fits ? '  — wider than the pane, drag to pan or press Fit' : '');
+  }
+}
+
+/* Below this scale the 10px labels stop being readable, so a graph that is too
+   big to fit is shown at a legible size and panned instead of being shrunk
+   into an unreadable strip. */
+const MIN_LEGIBLE_SCALE = 0.75;
+let lastBounds = null;
+
+function contentBounds(pos) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pos.values()) {
+    x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x + p.w); y1 = Math.max(y1, p.y + p.h);
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function fitToView(pos, allowShrink) {
+  lastBounds = contentBounds(pos);
+  const { x0, y0, x1, y1 } = lastBounds;
+  const rect = svg.getBoundingClientRect();
+  const sx = (rect.width - 40) / Math.max(1, x1 - x0);
+  const sy = (rect.height - 40) / Math.max(1, y1 - y0);
+  scale = Math.min(1.1, Math.min(sx, sy));
+  if (!allowShrink && scale < MIN_LEGIBLE_SCALE) {
+    /* too big to fit legibly: keep it readable and start at the top left,
+       which is where a dependency chain begins */
+    scale = MIN_LEGIBLE_SCALE;
+    const cw = (x1 - x0) * scale, ch = (y1 - y0) * scale;
+    tx = 20 - x0 * scale + Math.max(0, (rect.width - 40 - cw) / 2);
+    ty = 20 - y0 * scale + Math.max(0, (rect.height - 40 - ch) / 2);
+  } else {
+    scale = Math.max(0.03, scale);
+    tx = 20 - x0 * scale + Math.max(0, (rect.width - 40 - (x1 - x0) * scale) / 2);
+    ty = 20 - y0 * scale + Math.max(0, (rect.height - 40 - (y1 - y0) * scale) / 2);
+  }
+  applyTransform();
+  updateZoomLabel();
+}
+
+function zoomBy(factor) {
+  const rect = svg.getBoundingClientRect();
+  const mx = rect.width / 2, my = rect.height / 2;
+  const ns = Math.min(4, Math.max(0.03, scale * factor));
+  tx = mx - (mx - tx) * (ns / scale);
+  ty = my - (my - ty) * (ns / scale);
+  scale = ns;
+  applyTransform();
+  updateZoomLabel();
+}
+
+function updateZoomLabel() {
+  const el = document.getElementById('zoomlabel');
+  if (el) el.textContent = Math.round(scale * 100) + '%';
+}
+
+function showTip(ev, v) {
+  const parts = [`${jdOf(v)}  ${stOf(v)}`,
+                 `night ${nightOf(v)}   intid ${intidOf(v)}`,
+                 `qid ${C.qid[v] > 1 ? C.qid[v] : 'not submitted'}`];
+  if (C.tile[v] > 0) parts.push(`tile ${C.tile[v]}`);
+  if (C.exp[v] >= 0) parts.push(`expid ${C.exp[v]}${C.nexp[v] > 1 ? ' (+' + (C.nexp[v]-1) + ' more)' : ''}`);
+  if (C.el && C.el[v] > 0) parts.push(`elapsed ${fmtElapsed(C.el[v])}`);
+  parts.push(`camword ${D.camwords[C.cw[v]]}`);
+  parts.push(`deps in ${inOf(v).length}  out ${outOf(v).length}`);
+  parts.push('double-click to focus');
+  tip.textContent = parts.join('\n');
+  tip.style.opacity = 1;
+  const box = document.getElementById('main').getBoundingClientRect();
+  tip.style.left = (ev.clientX - box.left + 12) + 'px';
+  tip.style.top = (ev.clientY - box.top + 12) + 'px';
+}
+const hideTip = () => { tip.style.opacity = 0; };
+
+/* ---------- selection / focus / navigation ---------- */
+function select(v) {
+  selected = v;
+  const url = logUrl(v);
+  const rows = [
+    `${jdOf(v)}   ${stOf(v)}`,
+    `night    ${nightOf(v)}`,
+    `intid    ${intidOf(v)}`,
+    `qid      ${C.qid[v] > 1 ? C.qid[v] : 'not submitted'}`,
+  ];
+  if (C.tile[v] > 0) rows.push(`tile     ${C.tile[v]}`);
+  if (C.exp[v] >= 0) rows.push(`expid    ${C.exp[v]}${C.nexp[v] > 1 ? '  (' + C.nexp[v] + ' total)' : ''}`);
+  if (C.el && C.el[v] > 0) rows.push(`elapsed  ${fmtElapsed(C.el[v])}`);
+  rows.push(`camword  ${D.camwords[C.cw[v]]}`);
+  const ins = [...inOf(v)], outs = [...outOf(v)];
+  const xin = ins.filter(u => nightOf(u) !== nightOf(v));
+  const xout = outs.filter(u => nightOf(u) !== nightOf(v));
+  rows.push(`depends  ${ins.length}${xin.length ? '  (' + xin.length + ' cross-night)' : ''}`);
+  rows.push(`feeds    ${outs.length}${xout.length ? '  (' + xout.length + ' cross-night)' : ''}`);
+  let html = rows.join('\n');
+  html += `\n\n<a href="#" onclick="focus_(${v});return false">focus this job</a>`;
+  html += `\n<a href="#" onclick="showNight(${C.ni[v]});return false">open night ${nightOf(v)}</a>`;
+  if (url) html += `\n<a href="${url}">slurm log</a>`;
+  document.getElementById('info').innerHTML = html;
+}
+window.focus_ = v => focusJob(v);
+
+function neighbourhood(v, up, down) {
+  const keep = new Set([v]);
+  let frontier = [v];
+  for (let d = 0; d < up; d++) {
+    const next = [];
+    for (const x of frontier) for (const u of inOf(x)) if (!keep.has(u)) { keep.add(u); next.push(u); }
+    frontier = next;
+  }
+  frontier = [v];
+  for (let d = 0; d < down; d++) {
+    const next = [];
+    for (const x of frontier) for (const w of outOf(x)) if (!keep.has(w)) { keep.add(w); next.push(w); }
+    frontier = next;
+  }
+  return [...keep];
+}
+
+function focusJob(v) {
+  const up = +document.getElementById('depthUp').value;
+  const down = +document.getElementById('depthDown').value;
+  view = { kind: 'focus', node: v, up, down };
+  const nodes = neighbourhood(v, up, down);
+  crumbs([['production', () => showOverview()],
+          [`night ${nightOf(v)}`, () => showNight(C.ni[v])],
+          [`focus ${jdOf(v)} ${intidOf(v)}  (${nodes.length} jobs, ${up} up / ${down} down)`, null]]);
+  drawGraph(nodes, v);
+  select(v);
+}
+
+function showNight(ni) {
+  view = { kind: 'night', ni };
+  const nodes = byNight.get(ni) || [];
+  crumbs([['production', () => showOverview()],
+          [`night ${D.nights[ni]}  (${nodes.length} jobs)`, null]]);
+  drawGraph(nodes, -1);
+  document.querySelectorAll('#nightlist div').forEach(d =>
+    d.classList.toggle('sel', +d.dataset.ni === ni));
+}
+window.showNight = showNight;
+
+function crumbs(items) {
+  const el = document.getElementById('crumbs');
+  el.textContent = '';
+  items.forEach(([label, fn], k) => {
+    if (k) { const s = document.createElement('span'); s.className = 'sep'; s.textContent = '/'; el.appendChild(s); }
+    if (fn) { const a = document.createElement('a'); a.textContent = label; a.onclick = fn; el.appendChild(a); }
+    else { const s = document.createElement('span'); s.textContent = label; el.appendChild(s); }
+  });
+}
+
+/* ---------- overview ---------- */
+function showOverview() {
+  view = { kind: 'overview' };
+  document.getElementById('canvaswrap').style.display = 'none';
+  const ov = document.getElementById('overview');
+  ov.style.display = '';
+  crumbs([['production', null]]);
+
+  const nights = D.nights;
+  const counts = nights.map((n, i) => (byNight.get(i) || []).filter(visible).length);
+  const maxc = Math.max(1, ...counts);
+  const BW = 9, BH = 150;
+  let svgs = '';
+  nights.forEach((n, i) => {
+    const nodes = (byNight.get(i) || []).filter(visible);
+    const tally = new Map();
+    for (const v of nodes) tally.set(stOf(v), (tally.get(stOf(v)) || 0) + 1);
+    let y = BH, seg = '';
+    for (const [st, c] of [...tally].sort()) {
+      const h = (c / maxc) * BH;
+      y -= h;
+      seg += `<rect x="${i * BW}" y="${y}" width="${BW - 1.5}" height="${h}"
+                fill="${stateColor(st)}" />`;
+    }
+    svgs += `<g class="nbar" data-ni="${i}" style="cursor:pointer">
+        <rect x="${i * BW}" y="0" width="${BW - 1.5}" height="${BH}" fill="#00000008"/>
+        ${seg}
+        <title>${n}\n${nodes.length} jobs\n${[...tally].map(([s, c]) => s + ' ' + c).join('\n')}</title>
+      </g>`;
+  });
+
+  const totals = new Map();
+  for (let i = 0; i < N; i++) if (visible(i)) totals.set(stOf(i), (totals.get(stOf(i)) || 0) + 1);
+  const shownTotal = [...totals.values()].reduce((a, b) => a + b, 0);
+  const jdTotals = new Map();
+  for (let i = 0; i < N; i++) if (visible(i)) jdTotals.set(jdOf(i), (jdTotals.get(jdOf(i)) || 0) + 1);
+
+  ov.innerHTML = `
+    <p class="statline">${shownTotal.toLocaleString()} of ${N.toLocaleString()} jobs shown
+       &middot; ${D.nedges.toLocaleString()} dependencies
+       &middot; ${nights.length.toLocaleString()} nights
+       &middot; ${D.xnight.toLocaleString()} cross-night dependencies
+       &middot; states ${C.el ? 'queried live from Slurm' : 'as recorded in the processing tables'}</p>
+    <h2>Jobs per night &mdash; click a night to open its graph</h2>
+    <div style="overflow-x:auto; border:1px solid var(--line); background:#fff; padding:6px">
+      <svg width="${Math.max(600, nights.length * BW + 10)}" height="${BH + 26}">
+        ${svgs}
+        <text x="0" y="${BH + 16}" style="font:10px Menlo,monospace; fill:#666">${nights[0]}</text>
+        <text x="${Math.max(0, nights.length * BW - 60)}" y="${BH + 16}"
+              style="font:10px Menlo,monospace; fill:#666">${nights[nights.length - 1]}</text>
+      </svg>
+    </div>
+    <h2>By state</h2>
+    <p class="statline">${[...totals].sort((a, b) => b[1] - a[1])
+        .map(([s, c]) => `${s} ${c.toLocaleString()}`).join(' &middot; ')}</p>
+    <h2>By job type</h2>
+    <p class="statline">${[...jdTotals].sort((a, b) => b[1] - a[1])
+        .map(([s, c]) => `${s} ${c.toLocaleString()}`).join(' &middot; ')}</p>
+    <h2>How to use this page</h2>
+    <p class="hint" style="max-width:70ch">
+      A production is one connected DAG, so it is too large to draw at once.
+      Click a night above (or in the sidebar) to lay out that night's jobs.
+      Click any job box to inspect it, and double-click it to re-centre the
+      view on its ancestors and descendants, which follows dependencies across
+      night boundaries. Cross-night edges are drawn as dashed blue curves.
+      Drag to pan and scroll to zoom.
+    </p>`;
+  ov.querySelectorAll('.nbar').forEach(g =>
+    g.addEventListener('click', () => showNight(+g.dataset.ni)));
+}
+
+/* ---------- sidebar ---------- */
+function buildLegend() {
+  const el = document.getElementById('legend');
+  el.textContent = '';
+  const present = [...new Set(D.statuses)];
+  for (const st of present) {
+    const d = document.createElement('div');
+    let n = 0; for (let i = 0; i < N; i++) if (stOf(i) === st) n++;
+    d.innerHTML = `<span class="sw" style="background:${stateColor(st)}"></span>
+                   <span>${st}</span><span style="margin-left:auto;color:#888">${n.toLocaleString()}</span>`;
+    d.onclick = () => {
+      hiddenStates.has(st) ? hiddenStates.delete(st) : hiddenStates.add(st);
+      d.classList.toggle('off');
+      redraw();
+    };
+    el.appendChild(d);
+  }
+  const jl = document.getElementById('jdlegend');
+  jl.textContent = '';
+  for (const jd of D.jobdescs) {
+    const d = document.createElement('div');
+    let n = 0; for (let i = 0; i < N; i++) if (jdOf(i) === jd) n++;
+    d.innerHTML = `<span>${jd}</span><span style="margin-left:auto;color:#888">${n.toLocaleString()}</span>`;
+    d.onclick = () => {
+      hiddenJd.has(jd) ? hiddenJd.delete(jd) : hiddenJd.add(jd);
+      d.classList.toggle('off');
+      redraw();
+    };
+    jl.appendChild(d);
+  }
+}
+
+function buildNightList(filter) {
+  const el = document.getElementById('nightlist');
+  el.textContent = '';
+  D.nights.forEach((n, i) => {
+    if (filter && !String(n).includes(filter)) return;
+    const d = document.createElement('div');
+    d.dataset.ni = i;
+    const cnt = (byNight.get(i) || []).length;
+    d.innerHTML = `<span>${n}</span><span style="color:#888">${cnt}</span>`;
+    d.onclick = () => showNight(i);
+    el.appendChild(d);
+  });
+}
+
+function search(term) {
+  const el = document.getElementById('results');
+  el.textContent = '';
+  term = term.trim();
+  if (!term) return;
+  const hits = [];
+  const num = Number(term);
+  if (Number.isInteger(num) && num > 0) {
+    if (byQid.has(num)) hits.push(byQid.get(num));
+    if (byIntid.has(num)) hits.push(byIntid.get(num));
+    for (let i = 0; i < N && hits.length < 60; i++) if (C.tile[i] === num) hits.push(i);
+    for (let i = 0; i < N && hits.length < 60; i++) if (C.exp[i] === num) hits.push(i);
+  }
+  const low = term.toLowerCase();
+  for (let i = 0; i < N && hits.length < 60; i++)
+    if (jdOf(i).includes(low) || stOf(i).toLowerCase().includes(low)) hits.push(i);
+  const seen = new Set();
+  for (const v of hits) {
+    if (seen.has(v)) continue;
+    seen.add(v);
+    const d = document.createElement('div');
+    d.textContent = `${jdOf(v)} ${nightOf(v)}${C.tile[v] > 0 ? ' tile ' + C.tile[v] : ''} qid ${C.qid[v] > 1 ? C.qid[v] : '-'} ${stOf(v)}`;
+    d.onclick = () => focusJob(v);
+    el.appendChild(d);
+  }
+  if (seen.size === 0) el.innerHTML = '<div style="color:#888">no match</div>';
+}
+
+function redraw() {
+  if (view.kind === 'overview') showOverview();
+  else if (view.kind === 'night') showNight(view.ni);
+  else focusJob(view.node);
+}
+
+/* ---------- pan / zoom ---------- */
+let drag = null;
+svg.addEventListener('mousedown', ev => {
+  drag = { x: ev.clientX, y: ev.clientY, tx, ty };
+  svg.classList.add('dragging');
+});
+window.addEventListener('mousemove', ev => {
+  if (!drag) return;
+  tx = drag.tx + (ev.clientX - drag.x);
+  ty = drag.ty + (ev.clientY - drag.y);
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { drag = null; svg.classList.remove('dragging'); });
+svg.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  const k = Math.exp(-ev.deltaY * 0.0015);
+  const ns = Math.min(4, Math.max(0.03, scale * k));
+  tx = mx - (mx - tx) * (ns / scale);
+  ty = my - (my - ty) * (ns / scale);
+  scale = ns;
+  applyTransform();
+  updateZoomLabel();
+}, { passive: false });
+
+document.getElementById('zoomin').onclick = () => zoomBy(1.25);
+document.getElementById('zoomout').onclick = () => zoomBy(1 / 1.25);
+document.getElementById('zoom100').onclick = () => { zoomBy(1 / scale); };
+document.getElementById('zoomfit').onclick = () => {
+  /* Fit deliberately allows shrinking below the legible floor, for when you
+     want the shape of a whole graph rather than its labels */
+  if (currentPos) fitToView(currentPos, true);
+};
+
+/* ---------- init ---------- */
+document.getElementById('hdrmeta').textContent =
+  `${D.specproddir}   ${N.toLocaleString()} jobs / ${D.nedges.toLocaleString()} deps / ${D.nights.length} nights   built ${D.generated}`;
+document.getElementById('q').addEventListener('input', ev => search(ev.target.value));
+document.getElementById('nightfilter').addEventListener('input',
+  ev => buildNightList(ev.target.value.trim()));
+document.getElementById('depthUp').addEventListener('change', () => { if (view.kind === 'focus') focusJob(view.node); });
+document.getElementById('depthDown').addEventListener('change', () => { if (view.kind === 'focus') focusJob(view.node); });
+buildLegend();
+buildNightList('');
+showOverview();
+</script>
+</body>
+</html>
