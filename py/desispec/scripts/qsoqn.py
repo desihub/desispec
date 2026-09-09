@@ -113,6 +113,7 @@ def extract_redshift_info_from_RR(filename_redrock, targetid):
 
     Returns:
         numpy.ndarray: REDSHIFTS HDU rows reordered to match input `targetid`.
+    """
     log = get_logger()
     with fitsio.FITS(filename_redrock) as redrock:
         # 9 July 2021:
