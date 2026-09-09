@@ -18,7 +18,7 @@ except ImportError:
     qsoqn_available = False
 
 
-@unittest.skipUnless(qsoqn_available, 'quasarnp not available')
+@unittest.skipUnless(qsoqn_available, 'qsoqn (or dependencies) not available')
 class TestQsoQN(unittest.TestCase):
     """Test desispec.scripts.qsoqn.
     """
