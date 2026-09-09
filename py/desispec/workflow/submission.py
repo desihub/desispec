@@ -15,7 +15,7 @@ from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_
 from desispec.workflow.proctable import default_prow, get_pdarks_from_ptable
 import numpy as np
 
-from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword, \
+from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, decode_camword, difference_camwords, erow_to_goodcamword, \
     camword_intersection, camword_union
 from desispec.scripts.link_calibnight import derive_include_exclude
 
@@ -24,6 +24,80 @@ from desispec.workflow.processing import create_and_submit, assign_dependency, d
     generate_calibration_dict, night_to_starting_iid, filename_to_jobname
 from desispec.workflow.utils import load_override_file, sleep_and_report
 from desiutil.log import get_logger
+
+
+## link_calibnight treats a missing ctecorrnight as a warning rather than an
+## error, so it must not count towards "the files being linked do not exist"
+OPTIONAL_LINK_PREFIXES = ('ctecorrnight',)
+
+
+def linked_calib_file_exists(refnight, prefix, camword):
+    """
+    Test whether one calibration prefix is already present on a night.
+
+    Args:
+        refnight (int): The night being linked from.
+        prefix (str): A calibnight filename prefix, e.g. 'biasnight'.
+        camword (str): Cameras the link covers, used to pick a representative
+            camera for the per-camera calibration files.
+
+    Returns:
+        bool: True if the file is on disk.
+    """
+    log = get_logger()
+
+    ## mirror link_calibnight: most prefixes are per-camera, a few are not
+    try:
+        if prefix == 'badfibers':
+            pathname = findfile(prefix, night=refnight)
+        else:
+            cameras = decode_camword(camword)
+            if len(cameras) == 0:
+                return False
+            pathname = findfile(prefix, night=refnight, camera=cameras[0])
+    except Exception as err:      # noqa: BLE001 - unknown prefix, be safe
+        log.warning(f"Could not resolve a pathname for {prefix} on {refnight}, "
+                    + f"treating it as missing: {err}")
+        return False
+    return os.path.exists(pathname)
+
+
+def unsatisfied_link_prefixes(refnight, files_to_link, camword, refptable=None):
+    """
+    Find calibrations a link needs that neither exist nor are being produced.
+
+    A linkcal is only safe if, for every prefix it links, the reference night
+    either already holds the file or has a job that will produce it to depend
+    on. Anything else links against a file that never appears.
+
+    Args:
+        refnight (int): The night being linked from.
+        files_to_link (set): Calibration filename prefixes to be linked.
+        camword (str): Cameras the link covers.
+        refptable (Table, optional): The reference night's processing table, if
+            it exists. None if the night has not been processed.
+
+    Returns:
+        list: The prefixes that are neither on disk nor scheduled, sorted.
+    """
+    jobdescs = set()
+    if refptable is not None and len(refptable) > 0:
+        jobdescs = set(str(j) for j in refptable['JOBDESC'])
+
+    unsatisfied = []
+    for prefix in sorted(files_to_link):
+        if prefix in OPTIONAL_LINK_PREFIXES:
+            continue
+        job = filename_to_jobname(prefix)
+        ## filename_to_jobname maps bias to 'biaspdark', but early nights and
+        ## those without preproc darks use 'biasnight' instead
+        has_job = job in jobdescs or ('bias' in job and 'biasnight' in jobdescs)
+        if has_job:
+            continue
+        if linked_calib_file_exists(refnight, prefix, camword):
+            continue
+        unsatisfied.append(prefix)
+    return unsatisfied
 
 
 def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None,
@@ -121,10 +195,12 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
 
         if 'refnight' in cal_override['linkcal']:
             refnight = int(cal_override['linkcal']['refnight'])
+            refptable = None
             ## For link cals only, enable cross-night dependencies if available
             refproctable = findfile('proctable', night=refnight)
             if os.path.exists(refproctable):
                 ptab = load_table(tablename=refproctable, tabletype='proctable')
+                refptable = ptab
                 ## This isn't perfect because we may depend on jobs that aren't
                 ## actually being linked
                 ## Also allows us to proceed even if jobs don't exist yet
@@ -153,6 +229,22 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
                     ## but restricting back to those requested for the current night, if fewer cameras are available
                     prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
                     prow = assign_dependency(prow, deps)
+
+            ## Every prefix being linked needs either a file already on the
+            ## reference night or a job there to depend on. Anything else links
+            ## against a file that never appears, which is how a mis-ordered
+            ## submission goes wrong silently, so refuse rather than proceed.
+            unsatisfied = unsatisfied_link_prefixes(
+                    refnight, files_to_link, prow['PROCCAMWORD'],
+                    refptable=refptable)
+            if len(unsatisfied) > 0:
+                msg = (f"The linkcal job for night {night} links {unsatisfied} "
+                       + f"from night {refnight}, but that night has neither "
+                       + "those calibration files on disk nor jobs to produce "
+                       + "them. Those links would dangle. Process "
+                       + f"{refnight} first, or fix the override file.")
+                log.critical(msg)
+                raise RuntimeError(msg)
 
         ## create dictionary to carry linking information
         linkcalargs = cal_override['linkcal']

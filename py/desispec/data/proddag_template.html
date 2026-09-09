@@ -185,6 +185,28 @@ let selected = -1;
 
 const stateColor = s => D.stateColors[s] || D.stateColors.UNKNOWN || '#ffffcc';
 const visible = i => !hiddenStates.has(stOf(i)) && !hiddenJd.has(jdOf(i));
+/* Graph data comes from processing tables, so build every element that shows
+   it with textContent and setAttribute rather than interpolating into
+   innerHTML, where a value containing markup would become active. */
+function mkEl(tag, text, style) {
+  const e = document.createElement(tag);
+  if (text !== undefined && text !== null) e.textContent = String(text);
+  if (style) e.setAttribute('style', style);
+  return e;
+}
+function labelCount(label, count, swatch) {
+  /* one legend row: optional colour swatch, a label, a right-aligned count */
+  const frag = document.createDocumentFragment();
+  if (swatch) {
+    const sw = mkEl('span', '', `background:${swatch}`);
+    sw.className = 'sw';
+    frag.appendChild(sw);
+  }
+  frag.appendChild(mkEl('span', label));
+  frag.appendChild(mkEl('span', count.toLocaleString(),
+                        'margin-left:auto;color:#888'));
+  return frag;
+}
 function fmtElapsed(sec) {
   if (!(sec > 0)) return '';
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
@@ -455,13 +477,23 @@ function select(v) {
   const xout = outs.filter(u => nightOf(u) !== nightOf(v));
   rows.push(`depends  ${ins.length}${xin.length ? '  (' + xin.length + ' cross-night)' : ''}`);
   rows.push(`feeds    ${outs.length}${xout.length ? '  (' + xout.length + ' cross-night)' : ''}`);
-  let html = rows.join('\n');
-  html += `\n\n<a href="#" onclick="focus_(${v});return false">focus this job</a>`;
-  html += `\n<a href="#" onclick="showNight(${C.ni[v]});return false">open night ${nightOf(v)}</a>`;
-  if (url) html += `\n<a href="${url}">slurm log</a>`;
-  document.getElementById('info').innerHTML = html;
+  const info = document.getElementById('info');
+  info.textContent = rows.join('\n') + '\n\n';
+
+  const addLink = (text, onClick, href) => {
+    const a = mkEl('a', text);
+    if (href) a.setAttribute('href', href);
+    else a.setAttribute('href', '#');
+    a.addEventListener('click', ev => {
+      if (onClick) { ev.preventDefault(); onClick(); }
+    });
+    info.appendChild(a);
+    info.appendChild(document.createTextNode('\n'));
+  };
+  addLink('focus this job', () => focusJob(v));
+  addLink(`open night ${nightOf(v)}`, () => showNight(C.ni[v]));
+  if (url) addLink('slurm log', null, url);
 }
-window.focus_ = v => focusJob(v);
 
 function neighbourhood(v, up, down) {
   const keep = new Set([v]);
@@ -526,6 +558,7 @@ function showOverview() {
   const maxc = Math.max(1, ...counts);
   const BW = 9, BH = 150;
   let svgs = '';
+  const barTips = [];
   nights.forEach((n, i) => {
     const nodes = (byNight.get(i) || []).filter(visible);
     const tally = new Map();
@@ -537,10 +570,14 @@ function showOverview() {
       seg += `<rect x="${i * BW}" y="${y}" width="${BW - 1.5}" height="${h}"
                 fill="${stateColor(st)}" />`;
     }
+    // the tooltip carries status names from the tables, so it is filled in
+    // with textContent once the skeleton is parsed rather than interpolated
+    barTips.push(`${n}\n${nodes.length} jobs\n`
+                 + [...tally].map(([st2, c]) => st2 + ' ' + c).join('\n'));
     svgs += `<g class="nbar" data-ni="${i}" style="cursor:pointer">
         <rect x="${i * BW}" y="0" width="${BW - 1.5}" height="${BH}" fill="#00000008"/>
         ${seg}
-        <title>${n}\n${nodes.length} jobs\n${[...tally].map(([s, c]) => s + ' ' + c).join('\n')}</title>
+        <title></title>
       </g>`;
   });
 
@@ -566,11 +603,9 @@ function showOverview() {
       </svg>
     </div>
     <h2>By state</h2>
-    <p class="statline">${[...totals].sort((a, b) => b[1] - a[1])
-        .map(([s, c]) => `${s} ${c.toLocaleString()}`).join(' &middot; ')}</p>
+    <p class="statline" id="bystate"></p>
     <h2>By job type</h2>
-    <p class="statline">${[...jdTotals].sort((a, b) => b[1] - a[1])
-        .map(([s, c]) => `${s} ${c.toLocaleString()}`).join(' &middot; ')}</p>
+    <p class="statline" id="byjobtype"></p>
     <h2>How to use this page</h2>
     <p class="hint" style="max-width:70ch">
       A production is one connected DAG, so it is too large to draw at once.
@@ -580,8 +615,18 @@ function showOverview() {
       night boundaries. Cross-night edges are drawn as dashed blue curves.
       Drag to pan and scroll to zoom.
     </p>`;
-  ov.querySelectorAll('.nbar').forEach(g =>
-    g.addEventListener('click', () => showNight(+g.dataset.ni)));
+  // Everything above is literal markup. The parts that carry values read from
+  // the processing tables are filled in here with textContent, so a value
+  // containing markup cannot become active.
+  const tally2line = m => [...m].sort((a, b) => b[1] - a[1])
+      .map(([k, c]) => `${k} ${c.toLocaleString()}`).join('  \u00b7  ');
+  ov.querySelector('#bystate').textContent = tally2line(totals);
+  ov.querySelector('#byjobtype').textContent = tally2line(jdTotals);
+  ov.querySelectorAll('.nbar').forEach((g, k) => {
+    const title = g.querySelector('title');
+    if (title) title.textContent = barTips[k];
+    g.addEventListener('click', () => showNight(+g.dataset.ni));
+  });
 }
 
 /* ---------- sidebar ---------- */
@@ -592,8 +637,7 @@ function buildLegend() {
   for (const st of present) {
     const d = document.createElement('div');
     let n = 0; for (let i = 0; i < N; i++) if (stOf(i) === st) n++;
-    d.innerHTML = `<span class="sw" style="background:${stateColor(st)}"></span>
-                   <span>${st}</span><span style="margin-left:auto;color:#888">${n.toLocaleString()}</span>`;
+    d.appendChild(labelCount(st, n, stateColor(st)));
     d.onclick = () => {
       hiddenStates.has(st) ? hiddenStates.delete(st) : hiddenStates.add(st);
       d.classList.toggle('off');
@@ -606,7 +650,7 @@ function buildLegend() {
   for (const jd of D.jobdescs) {
     const d = document.createElement('div');
     let n = 0; for (let i = 0; i < N; i++) if (jdOf(i) === jd) n++;
-    d.innerHTML = `<span>${jd}</span><span style="margin-left:auto;color:#888">${n.toLocaleString()}</span>`;
+    d.appendChild(labelCount(jd, n, null));
     d.onclick = () => {
       hiddenJd.has(jd) ? hiddenJd.delete(jd) : hiddenJd.add(jd);
       d.classList.toggle('off');
@@ -624,7 +668,8 @@ function buildNightList(filter) {
     const d = document.createElement('div');
     d.dataset.ni = i;
     const cnt = (byNight.get(i) || []).length;
-    d.innerHTML = `<span>${n}</span><span style="color:#888">${cnt}</span>`;
+    d.appendChild(mkEl('span', n));
+    d.appendChild(mkEl('span', cnt, 'color:#888'));
     d.onclick = () => showNight(i);
     el.appendChild(d);
   });
@@ -655,7 +700,7 @@ function search(term) {
     d.onclick = () => focusJob(v);
     el.appendChild(d);
   }
-  if (seen.size === 0) el.innerHTML = '<div style="color:#888">no match</div>';
+  if (seen.size === 0) el.appendChild(mkEl('div', 'no match', 'color:#888'));
 }
 
 function redraw() {

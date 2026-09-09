@@ -29,6 +29,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from desispec.io.meta import specprod_root
+from desispec.workflow.proctable import get_default_qid, get_err_qid
 
 
 ## Columns the page needs from a processing table
@@ -47,6 +48,10 @@ STATE_COLORS = {
     'CANCELLED': '#fed98e',
     'DEP_NOT_SUBD': '#e7a6c8',
     'MAX_RESUB': '#b07aa1',
+    ## processing tables record the native name UNSUBMITTED; NOTSUBMITTED is
+    ## the normalised name used for queue-updated data. Both must be coloured
+    ## or unsubmitted jobs fall through to UNKNOWN.
+    'UNSUBMITTED': '#fcae1e',
     'NOTSUBMITTED': '#fcae1e',
     'UNKNOWN': '#ffffcc',
 }
@@ -351,9 +356,16 @@ def update_states_from_queue(data, chunk=400, dry_run_level=0):
     old_statuses = data['statuses']
     new_st, new_el = [], []
     n_updated = 0
+    default_qid, err_qid = get_default_qid(), get_err_qid()
     for i, qid in enumerate(qids):
-        if qid <= 1:
-            state = 'NOTSUBMITTED'
+        if qid == err_qid:
+            state = 'UNSUBMITTED'
+        elif qid <= default_qid:
+            ## A synthetic queue id, so Slurm has nothing to say about it. Most
+            ## often it means the outputs were already on disk and the row was
+            ## recorded COMPLETED, so keep what the processing table recorded
+            ## rather than repainting it as never submitted.
+            state = old_statuses[data['cols']['st'][i]]
         elif qid in state_by_qid:
             state = state_by_qid[qid]
             n_updated += 1
@@ -396,9 +408,13 @@ def write_prod_dag_html(data, outfile, relprefix=None):
     template = resources.files('desispec').joinpath(
             'data/proddag_template.html').read_text()
 
-    ## the payload is embedded in a <script type="application/json"> block, so
-    ## the only sequence that has to be neutralised is a literal '</'
-    payload = json.dumps(data, separators=(',', ':')).replace('</', '<\\/')
+    ## The payload is embedded in a <script type="application/json"> block.
+    ## Escaping every '<' keeps the HTML tokenizer out of the JSON entirely:
+    ## it neutralises any case of '</script>' and also '<!--', which can push
+    ## the tokenizer into a state where the real closing tag stops terminating
+    ## the element. '\\u003c' is a valid JSON escape, so JSON.parse() returns
+    ## the original text.
+    payload = json.dumps(data, separators=(',', ':')).replace('<', '\\u003c')
     title = f"{data['specprod']} job DAG"
     heading = (f"{data['specprod']} &mdash; production job graph")
 

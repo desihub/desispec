@@ -9,11 +9,16 @@ import re
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from astropy.table import Table
 
+from desispec.workflow.proctable import get_default_qid, get_err_qid
+
 from desispec.scripts.proddag import (
+    STATE_COLORS,
     find_proctables,
+    update_states_from_queue,
     read_production_dag,
     write_prod_dag_html,
     _elapsed_seconds,
@@ -261,18 +266,64 @@ class TestProdDag(unittest.TestCase):
         self.assertTrue(os.path.isdir(
             os.path.join(outdir, payload['relprefix'])))
 
-    def test_embedded_json_has_no_script_terminator(self):
-        """A literal </ inside the payload would close the script block early"""
+    def test_embedded_json_cannot_break_out_of_the_script_block(self):
+        """No '<' may survive into the payload, in any case or form
+
+        The block is raw text, so a closing tag in any case, or a '<!--' that
+        pushes the tokenizer into an escaped state, would break the page.
+        """
         data = read_production_dag(self.proddir)
-        ## a camword-ish string containing the dangerous sequence
-        data['camwords'].append('</script>')
+        hostile = ['</script>', '</SCRIPT>', '</ScRiPt>', '<!--', '<img src=x>']
+        data['camwords'].extend(hostile)
         outfile = os.path.join(self.reduxdir, 'out2', 'dag.html')
         write_prod_dag_html(data, outfile)
         html = open(outfile).read()
+
         body = html.split('<script id="dagdata" type="application/json">')[1]
         payload_text = body.split('</script>')[0]
-        payload = json.loads(payload_text.replace('<\\/', '</'))
-        self.assertIn('</script>', payload['camwords'])
+        ## nothing that the HTML tokenizer can act on is left in the payload
+        self.assertNotIn('<', payload_text)
+        ## and it still round-trips to the original strings
+        payload = json.loads(payload_text)
+        for value in hostile:
+            self.assertIn(value, payload['camwords'])
+
+    def test_state_colors_cover_both_unsubmitted_spellings(self):
+        """Processing tables say UNSUBMITTED; queue-updated data says NOTSUBMITTED
+
+        Without both, jobs read straight from a processing table fall through to
+        the UNKNOWN colour instead of the intended one.
+        """
+        self.assertIn('UNSUBMITTED', STATE_COLORS)
+        self.assertIn('NOTSUBMITTED', STATE_COLORS)
+        self.assertEqual(STATE_COLORS['UNSUBMITTED'],
+                         STATE_COLORS['NOTSUBMITTED'])
+
+    def test_update_from_queue_keeps_completed_default_qid(self):
+        """A job completed on disk carries the default qid, not a real one
+
+        Slurm has nothing to say about it, so its recorded status must survive
+        rather than being repainted as never submitted.
+        """
+        data = read_production_dag(self.proddir)
+        cols = data['cols']
+        ## force one row to look like 'outputs already existed'
+        cols['qid'][0] = get_default_qid()
+        completed = data['statuses'].index('COMPLETED') \
+            if 'COMPLETED' in data['statuses'] else None
+        if completed is None:
+            data['statuses'].append('COMPLETED')
+            completed = len(data['statuses']) - 1
+        cols['st'][0] = completed
+        ## and another to look like a failed submission
+        cols['qid'][1] = get_err_qid()
+
+        with patch('desispec.workflow.queue.queue_info_from_qids') as qinfo:
+            qinfo.return_value = Table({'JOBID': [], 'STATE': [], 'ELAPSED': []})
+            update_states_from_queue(data)
+
+        self.assertEqual(data['statuses'][data['cols']['st'][0]], 'COMPLETED')
+        self.assertEqual(data['statuses'][data['cols']['st'][1]], 'UNSUBMITTED')
 
 
 if __name__ == '__main__':

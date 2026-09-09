@@ -123,6 +123,27 @@ class TestEarlyRefnightDiscovery(unittest.TestCase):
         with self.assertRaises(AttributeError):
             get_linkcal_refnight(20230914)
 
+    def test_empty_linkcal_mapping_raises_naming_the_file(self):
+        """A mis-indented override leaves linkcal empty and the link inert
+
+        This shape exists in the daily production
+        (override_20240130.yaml): refnight/include/biaslink_camword are
+        indented as siblings of linkcal rather than under it, so linkcal parses
+        as None and the intended link never happens. It must fail loudly and
+        name the file rather than raising a TypeError from deeper down.
+        """
+        pathname = findfile('override', night=20230914)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as fil:
+            fil.write('calibration:\n'
+                      + '    linkcal:\n'
+                      + '    biaslink_camword: z1\n'
+                      + '    include: biasnight\n'
+                      + '    refnight: 20230915\n')
+        with self.assertRaises(ValueError) as ctx:
+            get_linkcal_refnight(20230914)
+        self.assertIn('override_20230914.yaml', str(ctx.exception))
+
     def test_include_and_exclude_together_raises(self):
         """include and exclude are mutually exclusive"""
         self._write_override(20230914, 20230915, include='fiberflatnight',
@@ -175,12 +196,29 @@ class TestEarlyRefnightDiscovery(unittest.TestCase):
             get_refnights_needing_early_calibration([20230914, 20230915]),
             [(20230915, False)])
 
-    def test_refnight_without_exposure_table_is_skipped(self):
-        """A refnight with no exposure table can't be processed, so skip it"""
+    def test_refnight_without_exposure_table_raises(self):
+        """A reference night that cannot be calibrated must stop the run
+
+        Skipping it would leave the caller with nothing to do, and the
+        chronological loop would then submit the night that links from it with
+        no dependency, which is the failure the pre-pass exists to prevent.
+        """
         self._write_exptable(20230914)
         self._write_override(20230914, 20230915, include='biasnight')
+        with self.assertRaises(ValueError):
+            get_refnights_needing_early_calibration([20230914])
+
+    def test_linking_night_without_exposure_table_is_not_a_reference_night(self):
+        """Only reference nights need an exposure table here
+
+        The night doing the linking is submitted by the main loop, so its own
+        exposure table is not this function's concern.
+        """
+        self._write_exptable(20230915)
+        self._write_override(20230914, 20230915, include='biasnight')
         self.assertEqual(
-            get_refnights_needing_early_calibration([20230914]), [])
+            get_refnights_needing_early_calibration([20230914]),
+            [(20230915, True)])
 
     def test_chain_puts_dependencies_first(self):
         """A refnight that itself links from another night comes after it"""
@@ -464,21 +502,22 @@ class TestSubmitEarlyRefnightCalibrations(unittest.TestCase):
         self.assertEqual(submitted, [refnight])
         self.assertEqual(calls, [('A', refnight), ('B', refnight)])
 
-    def test_stages_are_paired_per_night(self):
-        """Two independent reference nights each get their own A then B
+    def test_all_stage_a_precedes_any_stage_b(self):
+        """Every stage A must run before any stage B, not just its own night's
 
-        The pairing is what matters: a night's own bias must precede its own
-        darknight reach. A global 'all A then all B' split would instead give
-        A,A,B,B and break chains.
+        Stage B runs proc_night, whose darknight reach can visit a night that
+        links biasnight from a reference night later in the list. Pairing the
+        stages per night would let that reach submit a linkcal before the bias
+        it depends on exists.
         """
-        for night in (20230914, 20230915, 20230924, 20230925):
+        for night in (20230905, 20230910, 20230915, 20230920):
             self._write_exptable(night)
-        self._write_override(20230914, 20230915, include='biasnight')
-        self._write_override(20230924, 20230925, include='biasnight')
+        self._write_override(20230905, 20230910, include='biasnight')
+        self._write_override(20230915, 20230920, include='biasnight')
         calls = self._record_calls()
-        self._run([20230914, 20230915, 20230924, 20230925])
-        self.assertEqual(calls, [('A', 20230915), ('B', 20230915),
-                                 ('A', 20230925), ('B', 20230925)])
+        self._run([20230905, 20230910, 20230915, 20230920])
+        self.assertEqual(calls, [('A', 20230910), ('A', 20230920),
+                                 ('B', 20230910), ('B', 20230920)])
 
     def test_chained_override_submits_prerequisite_first(self):
         """A night's prerequisite is fully submitted before that night runs
@@ -494,9 +533,10 @@ class TestSubmitEarlyRefnightCalibrations(unittest.TestCase):
         self._write_override(20230920, 20230910, include='fiberflatnight')
         calls = self._record_calls()
         submitted = self._run([20230915, 20230920])
-        ## C first (no bias needed of its own), then B's bias, then the rest of B
-        self.assertEqual(calls, [('B', 20230910),
-                                 ('A', 20230920), ('B', 20230920)])
+        ## B's bias first (stage A, and the gate keeps its non-bias linkcal
+        ## out of it), then stage B in dependency order so C precedes B
+        self.assertEqual(calls, [('A', 20230920),
+                                 ('B', 20230910), ('B', 20230920)])
         self.assertEqual(submitted, [20230910, 20230920])
 
     def test_stage_a_skipped_when_biasnight_not_linked(self):
