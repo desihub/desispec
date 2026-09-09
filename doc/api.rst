@@ -380,6 +380,9 @@ desispec API
 .. automodule:: desispec.scripts.procexp
     :members:
 
+.. automodule:: desispec.scripts.proddag
+    :members:
+
 .. automodule:: desispec.scripts.purge_night
     :members:
 

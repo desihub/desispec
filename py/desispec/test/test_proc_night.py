@@ -16,7 +16,10 @@ import numpy as np
 
 import desispec.workflow.exptable
 import desispec.workflow.proctable
-from desispec.workflow.processing import update_and_recursively_submit
+from desispec.workflow.processing import update_and_recursively_submit, \
+    night_to_starting_iid
+from desispec.workflow.proctable import default_prow, \
+    instantiate_processing_table
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.redshifts import get_ztile_script_pathname
 from desispec.workflow.batch_writer import \
@@ -563,6 +566,50 @@ class TestProcNight(unittest.TestCase):
         self.assertGreater(nsubmits, 0)
         self.assertNotIn('TIMEOUT', set(updated['STATUS']))
 
+    def _write_refnight_calibs(self, override_dict):
+        """Stand up the reference night's calibration jobs for a linking test
+
+        submit_linkcal_jobs refuses to link from a night that has neither the
+        calibration files on disk nor jobs producing them, since such a link
+        would dangle. A linking test therefore has to provide that state, which
+        in the real pipeline comes from the reference night having been
+        processed first.
+
+        Args:
+            override_dict (dict): The override about to be written.
+
+        Returns:
+            str or None: The processing table written, or None if the override
+                does not link from a reference night.
+        """
+        linkcal = (override_dict.get('calibration') or {}).get('linkcal')
+        if not isinstance(linkcal, dict) or 'refnight' not in linkcal:
+            return None
+        refnight = int(linkcal['refnight'])
+
+        ## one job per calibration a linkcal can name, via filename_to_jobname:
+        ## biasnight -> biasnight, badcolumns/ctecorrnight -> ccdcalib,
+        ## psfnight -> psfnight, fiberflatnight -> nightlyflat
+        ptable = instantiate_processing_table()
+        for offset, jobdesc in enumerate(('biasnight', 'ccdcalib', 'psfnight',
+                                          'nightlyflat')):
+            prow = default_prow()
+            prow['INTID'] = night_to_starting_iid(refnight) + offset
+            prow['JOBDESC'] = jobdesc
+            prow['OBSTYPE'] = 'dark'
+            prow['NIGHT'] = refnight
+            prow['CALIBRATOR'] = 1
+            prow['LATEST_QID'] = 90000 + offset
+            prow['STATUS'] = 'COMPLETED'
+            prow['EXPID'] = np.array([1], dtype=int)
+            prow['PROCCAMWORD'] = 'a0123456789'
+            ptable.add_row(prow)
+
+        pathname = findfile('processing_table', night=refnight)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        write_table(ptable, tablename=pathname, tabletype='proctable')
+        return pathname
+
     def _override_write_run_delete(self, override_dict, night=None, **kwargs):
         """Write override, run proc_night, remove override file, and return outputs"""
         desispec.workflow.proctable.reset_tilenight_ptab_cache()
@@ -571,11 +618,14 @@ class TestProcNight(unittest.TestCase):
             night = self.night
 
         override_file = findfile('override', night=night)
+        refptable = self._write_refnight_calibs(override_dict)
 
         with open(override_file, 'w') as fil:
             yaml.safe_dump(override_dict, fil)
         proctable, unproctable = proc_night(night, sub_wait_time=0.0, **kwargs)
         os.remove(override_file)
+        if refptable is not None and os.path.exists(refptable):
+            os.remove(refptable)
         return proctable, unproctable
 
     def test_proc_night_linking_and_ccdcalib_earlynight(self):
