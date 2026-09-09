@@ -102,6 +102,44 @@ def parse(options=None):
     return args
 
 
+def extract_redshift_info_from_RR(filename_redrock, targetid):
+    """
+    extract information of the redrock file from the new RR run
+
+    Args:
+       filename_redrock (str): Name of the redrock file from the new run of RR
+       targetid (int array): array of the targetid (contained in the spectra_name_file)
+            on which RR will be rerun with prior and qso template.
+
+    Returns:
+        numpy.ndarray: REDSHIFTS HDU rows reordered to match input `targetid`.
+    """
+    log = get_logger()
+    with fitsio.FITS(filename_redrock) as redrock:
+        # 9 July 2021:
+        # The new run of RR does not save the targetid in the correct order ...
+        # The TARGETID from REDSHIFTS HDU and FIBERMAP HDU are not the same
+        # To avoid any kind of problem in the future --> sort redrock
+
+        rr = redrock['REDSHIFTS'].read()
+        redrock_tgid = rr['TARGETID']
+
+        # targetid.size is the number of target in new-run redrock file
+        log.info('SANITY CHECK: Match the order of the REDSHIFTS HDU from new RR run with the original order of targetid')
+        correct_index = np.zeros(targetid.size, dtype=int)
+        for i, tgid in enumerate(targetid):
+            match = np.where(redrock_tgid == tgid)[0]
+            if match.size != 1:
+                msg = f'Expected exactly one match for targetid {tgid} in {filename_redrock}, found {match.size}'
+                log.critical(msg)
+                raise ValueError(msg)
+            correct_index[i] = match[0]
+
+        rr_reordered = rr[correct_index]
+
+    return rr_reordered
+
+
 def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, param_RR, comm=None):
     """
     Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
@@ -152,37 +190,6 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_qn, z_prior, para
         out.close()
         log.debug(f'Write prior file for RR with {z_prior.size} objects: {filename_priors}')
         return
-
-    def extract_redshift_info_from_RR(filename_redrock, targetid):
-        """
-        extract information of the redrock file from the new RR run
-
-        Args:
-           filename_redrock (str): Name of the redrock file from the new run of RR
-           targetid (int array): array of the targetid (contained in the spectra_name_file)
-                on which RR will be rerun with prior and qso template.
-
-        Returns:
-            Table of Redrock output ordered by input `targetid` list
-        """
-        with fitsio.FITS(filename_redrock) as redrock:
-            # 9 July 2021:
-            # The new run of RR does not save the targetid in the correct order ...
-            # The TARGETID from REDSHIFTS HDU and FIBERMAP HDU are not the same
-            # To avoid any kind of problem in the future --> sort redrock
-
-            rr = redrock['REDSHIFTS'].read()
-            redrock_tgid = rr['TARGETID']
-
-            # targetid.size is the number of target in new-run redrock file
-            log.info('SANITY CHECK: Match the order of the REDSHIFTS HDU from new RR run with the original order of targetid')
-            correct_index = np.zeros(targetid.size, dtype=int)
-            for i, tgid in enumerate(targetid):
-                correct_index[i] = int(np.where(redrock_tgid == tgid)[0])
-
-            rr_reordered = rr[correct_index]
-
-        return rr_reordered
 
     if len(param_RR['template_filenames']) == 0:
         msg = 'No Redrock templates provided'
