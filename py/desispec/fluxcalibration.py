@@ -725,7 +725,12 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     elif ncpu > 1:
         log.debug("Running pool(%d).map() for %d items", ncpu, len(func_args)); sys.stdout.flush()
         with NoGPU():
-            with multiprocessing.Pool(ncpu) as pool:
+            #- Use "fork" explicitly (not just the platform default) so that
+            #- worker processes inherit the NoGPU state set above; on Python
+            #- 3.14+ the default start method is "forkserver", whose workers
+            #- are forked from a separate persistent process and would not
+            #- see this process's NoGPU context.
+            with multiprocessing.get_context("fork").Pool(ncpu) as pool:
                 results  =  pool.map(_func, func_args)
         log.debug("Finished pool.map()"); sys.stdout.flush()
     else:
@@ -805,7 +810,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     elif ncpu > 1:
         log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d", ncpu)
         with NoGPU():
-            with multiprocessing.Pool(ncpu) as pool:
+            #- see the "fork" comment above in the first NoGPU/Pool block
+            with multiprocessing.get_context("fork").Pool(ncpu) as pool:
                 results  =  pool.map(_func2, func_args)
         log.debug("finished pool.map()"); sys.stdout.flush()
     else :
