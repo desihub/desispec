@@ -24,6 +24,17 @@ These changes were not used in Matterhorn.
   ``biasnight`` is linked, the reference night's bias is submitted on its own
   first, since the subsequent darknight generation spans nights and would
   otherwise reach the linking night before its bias dependency exists.
+* Support astropy 8.x.  No code changes were needed.  Add a python 3.14 /
+  astropy 8.x CI job approximately matching the current NERSC desiconda, move
+  the astropy 7.x coverage to the python 3.13 job, and drop the stale
+  ``numpy<2.3`` pin (numba has supported numpy 2.3 since 0.62.0).  Add tests
+  pinning the astropy behaviors that
+  desispec I/O depends upon: FITS string column stripping (astropy 8.0 changed
+  the ``Table.read`` ``strip_spaces`` default to True), the ``chararray``
+  return type of ``astropy.io.fits`` string columns, ``TUNITn``/``TTYPEn``
+  index correspondence in ``write_bintable``, and ``sigma_clip`` mask
+  semantics.  Also adds the first unit tests for
+  ``desispec.io.exposure_tile_qa``.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
