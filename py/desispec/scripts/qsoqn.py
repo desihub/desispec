@@ -112,8 +112,7 @@ def extract_redshift_info_from_RR(filename_redrock, targetid):
             on which RR will be rerun with prior and qso template.
 
     Returns:
-        Table of Redrock output ordered by input `targetid` list
-    """
+        numpy.ndarray: REDSHIFTS HDU rows reordered to match input `targetid`.
     log = get_logger()
     with fitsio.FITS(filename_redrock) as redrock:
         # 9 July 2021:
