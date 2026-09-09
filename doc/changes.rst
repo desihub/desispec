@@ -24,6 +24,8 @@ These changes were not used in Matterhorn.
   ``biasnight`` is linked, the reference night's bias is submitted on its own
   first, since the subsequent darknight generation spans nights and would
   otherwise reach the linking night before its bias dependency exists.
+* Add python/3.14 and astropy/8.x to CI test matrix.  Add tests checking the
+  astropy behaviors that desispec I/O depends upon.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
