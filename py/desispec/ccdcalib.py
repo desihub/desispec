@@ -59,10 +59,20 @@ def dark_preproc_bias_matches(header_or_filename, biasfile):
     """
     log = get_logger()
     if isinstance(header_or_filename, str):
-        try:
-            header = fitsio.read_header(header_or_filename, ext=0)
-        except Exception as err:
-            log.error(f'Unable to read the header of {header_or_filename}: {err}')
+        ## write_image puts the metadata on the IMAGE HDU, which astropy then
+        ## promotes to the primary HDU, so for the files desispec writes these
+        ## are the same HDU; read it by name like io.read_image does, and fall
+        ## back to the primary HDU for anything without that name
+        header, message = None, None
+        for ext in ('IMAGE', 0):
+            try:
+                header = fitsio.read_header(header_or_filename, ext=ext)
+                break
+            except Exception as err:
+                message = f'{type(err).__name__}: {err}'
+
+        if header is None:
+            log.error(f'Unable to read the header of {header_or_filename}: {message}')
             return False, None
     else:
         header = header_or_filename
