@@ -28,7 +28,7 @@ These changes were not used in Matterhorn.
   astropy behaviors that desispec I/O depends upon.
 * Require that preprocessed darks strictly use the nightly bias of their own
   night and camera instead of silently falling back to the default bias
-  (issue `#2741`_). ``desi_preproc_darks`` now exits non-zero without
+  (`issue #2741`_). ``desi_preproc_darks`` now exits non-zero without
   preprocessing anything if even one camera lacks a matching ``biasnight``,
   and ``desi_compute_dark`` skips ``dark_preproc`` files that used a different
   bias; both take ``--allow-default-bias`` to opt out. Relatedly,
@@ -37,7 +37,7 @@ These changes were not used in Matterhorn.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
-.. _`#2741`: https://github.com/desihub/desispec/issues/2741
+.. _`issue #2741`: https://github.com/desihub/desispec/issues/2741
 
 0.71.6 (2026-06-03)
 -------------------
