@@ -15,7 +15,9 @@ from astropy.table import vstack
 from desiutil.log import get_logger
 
 from desispec.io.util import decode_camword, difference_camwords
-from desispec.io import findfile
+from desispec.io import findfile, replace_prefix
+from desispec.util import header2night
+from desispec.ccdcalib import dark_preproc_bias_is_nightly
 from desispec.workflow.tableio import load_table
 from desispec.scripts.compute_dark import get_stacked_dark_exposure_table
 
@@ -45,10 +47,86 @@ def preproc_darks_parser():
                         help='Specify specprod containing the nightly bias files and the exposure tables. Default is $SPECPROD if it is defined, otherwise will use the bias in DESI_SPECTRO_CALIB and identify exposures from DESI_SPECTRO_DATA.')
     parser.add_argument('--preproc-dark-dir', type=str, default=None, required=False,
                         help='Specify alternate specprod where we will save the preprocessed dark frame images are saved. Default is same input specprod. Resulting exposures will be save under <preproc_dark_dir>/dark_preproc/<NIGHT>/<EXPID>')
+    parser.add_argument('--allow-default-bias', action='store_true',
+                        help='Allow preprocessing with the default bias in DESI_SPECTRO_CALIB when the nightly '
+                        'bias of a night and camera is missing. Default is to preprocess nothing and exit with '
+                        'an error instead (see desispec issue #2741).')
     parser.add_argument('--dry-run', action='store_true', help="Print which images would be used, but don't compute dark")
     parser.add_argument('--mpi', action='store_true', help="Run in MPI mode, distributing work across multiple processes.")
 
     return parser
+
+
+def check_matching_biasnights(expids, nights, camlists, preproc_dark_dir=None):
+    """Check that every camera can be preprocessed with its own nightly bias
+
+    Args:
+        expids (list of int): dark exposure ids to be preprocessed
+        nights (list of int): YEARMMDD night of each exposure
+        camlists (list of list of str): cameras to preprocess for each exposure
+
+    Options:
+        preproc_dark_dir (str): alternate specprod directory where the
+            preprocessed darks are saved
+
+    Returns:
+        list of str: one message per error found, empty if every camera either
+        already has a preprocessed dark that used its matching nightly bias or
+        has that nightly bias available to preprocess with
+
+    The preprocessed darks feed the nightly darks, so they must strictly use
+    the nightly bias of their own night and camera; preproc otherwise silently
+    falls back to the default bias in $DESI_SPECTRO_CALIB (desispec issue
+    #2741).  Pre-existing files are never overwritten, so a mismatched one is
+    reported for a human to purge (e.g. with desi_purge_night).
+    """
+    log = get_logger()
+    errors = []
+    bad_cameras = set()
+    ## the same biasnight is needed by every exposure of a night, so only stat it once
+    biasnight_exists = dict()
+
+    for expid, night, camlist in zip(expids, nights, camlists):
+        for camera in sorted(camlist):
+            biasnight = findfile('biasnight', night=night, camera=camera, readonly=True)
+
+            if preproc_dark_dir is not None:
+                preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+                                            specprod_dir=preproc_dark_dir, readonly=True)
+            else:
+                preproc_filename = findfile("preproc_for_dark", night=night, expid=expid, camera=camera,
+                                            readonly=True)
+
+            ## an existing preprocessed dark is all that matters for this camera,
+            ## whether or not the nightly bias it used is still on disk
+            if os.path.exists(preproc_filename):
+                is_nightly, biasused = dark_preproc_bias_is_nightly(preproc_filename, night, camera)
+                if not is_nightly:
+                    if biasused is None:
+                        biasused = 'an unrecorded bias (unreadable or missing CCD_CALIB_BIAS)'
+                    errors.append(f'Existing {preproc_filename} was preprocessed with {biasused} '
+                                  + f'instead of {os.path.basename(biasnight)}; purge it before rerunning')
+                    bad_cameras.add(camera)
+                continue
+
+            if (night, camera) not in biasnight_exists:
+                biasnight_exists[(night, camera)] = os.path.exists(biasnight)
+
+            if not biasnight_exists[(night, camera)]:
+                msg = f'Missing {os.path.basename(biasnight)} needed to preprocess {night} {expid} {camera}'
+                testbias = replace_prefix(biasnight, 'biasnight', 'biasnighttest')
+                if os.path.exists(testbias):
+                    msg += f'; {os.path.basename(testbias)} exists, so the nightly bias was rejected'
+                errors.append(msg)
+                bad_cameras.add(camera)
+
+    for msg in errors:
+        log.error(msg)
+
+    if len(errors) > 0:
+        log.error(f'{len(errors)} problem(s) affecting camera(s) {",".join(sorted(bad_cameras))}')
+
+    return errors
 
 
 def parse(options=None):
@@ -137,13 +215,39 @@ def main(args=None):
                     log.warning(f'No requested cameras found in {filename} for expid {row["EXPID"]}')
             else:
                 log.error(f'Skipping missing file {filename}')
-        data = (expids, nights, camlists, files)
+
+        ## The preprocessed darks are only usable for the nightly darks if they
+        ## strictly use the nightly bias of their own night and camera, so exit
+        ## without preprocessing anything if even one camera can't (issue #2741)
+        if args.allow_default_bias:
+            log.warning("--allow-default-bias set, so NOT requiring that every camera "
+                        + "has a matching nightly bias.")
+            errors = []
+        elif args.bias is not None:
+            log.warning(f"--bias {args.bias} set, so NOT requiring that every camera "
+                        + "has a matching nightly bias.")
+            errors = []
+        else:
+            errors = check_matching_biasnights(expids, nights, camlists,
+                                               preproc_dark_dir=args.preproc_dark_dir)
+
+        if len(errors) > 0:
+            log.critical(f"Not preprocessing any darks because {len(errors)} problem(s) "
+                         + "would keep a camera from using a matching nightly bias. "
+                         + "This job will keep failing until the nightly biases are "
+                         + "fixed and any mismatched files are purged.")
+            data = None
+        else:
+            data = (expids, nights, camlists, files)
     else:
         data = None
 
     # Broadcast data to all ranks if we're in MPI mode
     if comm is not None:
         data = comm.bcast(data, root=0)
+
+    if data is None:
+        return 1
 
     expids, nights, camlists, files = data
 
@@ -178,6 +282,10 @@ def main(args=None):
                                 log=log, split_comm=True)
     else:
         nblocks, block_size, block_rank, block_num, block_comm = 1, 1, 0, 0, None
+
+    ## number of cameras this rank refused to write because they wouldn't have
+    ## used a matching nightly bias
+    nfail = 0
 
     ## looping over all the exposures, each communicator gets a subset
     for expid, night, camlist, filename in zip(expids[block_num::nblocks], nights[block_num::nblocks],
@@ -259,12 +367,49 @@ def main(args=None):
                 img = process_raw(primary_header, rawimage, header, camera=camera, bias=thisbias, nocosmic=args.nocosmic,
                         mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
 
+            ## The nightly bias was checked before any preprocessing started, but
+            ## check what preproc actually used before writing anything (#2741)
+            if args.bias is None and not args.allow_default_bias:
+                ## compare against the night preproc itself used to look up the
+                ## bias, which can disagree with the exposure table (see the NIGHT
+                ## keyword comment in desispec.scripts.compute_dark) and is also
+                ## the night compute_dark_file will use to find this file later
+                try:
+                    biasnight_night = header2night(img.meta)
+                except (KeyError, ValueError, TypeError):
+                    biasnight_night = night
+
+                if int(biasnight_night) != int(night):
+                    log.warning(f"{filename} camera {camera} header NIGHT={biasnight_night} "
+                                + f"disagrees with exposure table NIGHT={night}; requiring "
+                                + f"the {biasnight_night} nightly bias")
+
+                is_nightly, biasused = dark_preproc_bias_is_nightly(img.meta, biasnight_night, camera)
+                if not is_nightly:
+                    log.error(f"Rank {rank} block_rank {block_rank} block_num {block_num}: "
+                              + f"NOT writing {preproc_filename} because preproc used {biasused} "
+                              + f"instead of the {biasnight_night} {camera} nightly bias")
+                    nfail += 1
+                    continue
+
             # is saved in preproc_dark_dir if not None
             write_image(preproc_filename,img)
             log.info(f"Wrote {preproc_filename}")
 
     if comm is not None:
         comm.barrier()
+        nfails = comm.gather(nfail, root=0)
+        if rank == 0:
+            nfail = int(np.sum(nfails))
+        nfail = comm.bcast(nfail, root=0)
+
+    if nfail > 0:
+        if rank == 0:
+            log.error(f"{nfail} preprocessed dark(s) were not written because they would "
+                      + "not have used a matching nightly bias. This job will keep failing "
+                      + "until the nightly biases are fixed.")
+        return 1
+
     if rank == 0:
         log.info("All ranks have completed preproc_darks_mpi.")
 

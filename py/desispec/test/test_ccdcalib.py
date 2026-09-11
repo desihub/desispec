@@ -193,3 +193,122 @@ class TestNightlyBiasRetryLoop(unittest.TestCase):
 
         mock_find.assert_called_once_with(
             self.night, cameras=self.cameras, nzeros=25, nskip=2)
+
+
+class TestDarkPreprocBias(unittest.TestCase):
+    """Test identifying which bias a preprocessed dark was created with"""
+
+    def setUp(self):
+        self.original_log_level = os.getenv('DESI_LOGLEVEL')
+        os.environ['DESI_LOGLEVEL'] = 'CRITICAL'
+        self.night = 20000101
+        self.camera = 'b0'
+        self.biasnight = f'/tmp/calibnight/{self.night}/biasnight-{self.camera}-{self.night}.fits.gz'
+
+    def tearDown(self):
+        if self.original_log_level is None:
+            os.environ.pop('DESI_LOGLEVEL', None)
+        else:
+            os.environ['DESI_LOGLEVEL'] = self.original_log_level
+
+    def _header(self, biasused):
+        from astropy.io.fits import Header
+        from desiutil.depend import setdep
+        header = Header()
+        if biasused is not None:
+            setdep(header, 'CCD_CALIB_BIAS', biasused)
+        return header
+
+    def _is_nightly(self, biasused, night=None, camera=None):
+        from ..ccdcalib import dark_preproc_bias_is_nightly
+        if night is None:
+            night = self.night
+        if camera is None:
+            camera = self.camera
+        with patch('desispec.ccdcalib.findfile', return_value=self.biasnight):
+            return dark_preproc_bias_is_nightly(self._header(biasused), night, camera)
+
+    def test_nightly_bias(self):
+        """The nightly bias of this night and camera is accepted"""
+        biasused = f'SPECPROD/calibnight/{self.night}/biasnight-{self.camera}-{self.night}.fits.gz'
+        is_nightly, found = self._is_nightly(biasused)
+        self.assertTrue(is_nightly)
+        self.assertEqual(found, biasused)
+
+    def test_uncompressed_nightly_bias(self):
+        """An uncompressed nightly bias is still recognized"""
+        biasused = f'SPECPROD/calibnight/{self.night}/biasnight-{self.camera}-{self.night}.fits'
+        is_nightly, found = self._is_nightly(biasused)
+        self.assertTrue(is_nightly)
+
+    def test_default_bias(self):
+        """The default bias in DESI_SPECTRO_CALIB is rejected"""
+        biasused = 'SPCALIB/ccd/bias-sm4-b-20191021.fits.gz'
+        is_nightly, found = self._is_nightly(biasused)
+        self.assertFalse(is_nightly)
+        self.assertEqual(found, biasused)
+
+    def test_other_night_and_camera(self):
+        """A nightly bias of another night or camera is rejected"""
+        biasused = f'SPECPROD/calibnight/{self.night}/biasnight-{self.camera}-{self.night}.fits.gz'
+        with patch('desispec.ccdcalib.findfile',
+                   return_value='/tmp/calibnight/20000102/biasnight-b0-20000102.fits.gz'):
+            from ..ccdcalib import dark_preproc_bias_is_nightly
+            is_nightly, found = dark_preproc_bias_is_nightly(
+                    self._header(biasused), 20000102, 'b0')
+        self.assertFalse(is_nightly)
+
+    def test_explicitly_requested_bias(self):
+        """An explicitly requested bias is matched by filename"""
+        from ..ccdcalib import dark_preproc_bias_matches
+        header = self._header('SPCALIB/ccd/bias-sm4-b-20191021.fits.gz')
+        is_match, found = dark_preproc_bias_matches(header, '/tmp/bias-sm4-b-20191021.fits.gz')
+        self.assertTrue(is_match)
+        is_match, found = dark_preproc_bias_matches(header, '/tmp/bias-sm4-b-20200401.fits.gz')
+        self.assertFalse(is_match)
+
+    def test_expected_bias_per_night(self):
+        """Each night of a multi-night dark expects its own nightly bias
+
+        desi_compute_dark_night spans ~45 nights around a reference night, so
+        expecting one night's bias for all of them would reject every exposure
+        except those of that night (desispec issue #2741).
+        """
+        from ..ccdcalib import expected_dark_preproc_bias
+
+        def findfile_side_effect(filetype, night=None, camera=None, **kwargs):
+            self.assertEqual(filetype, 'biasnight')
+            return f'/tmp/calibnight/{night}/biasnight-{camera}-{night}.fits.gz'
+
+        refnight = 20000131
+        othernight = 20000101
+        with patch('desispec.ccdcalib.findfile', side_effect=findfile_side_effect):
+            #- bias=True lets each exposure resolve its own night
+            refbias = expected_dark_preproc_bias(True, refnight, self.camera)
+            otherbias = expected_dark_preproc_bias(True, othernight, self.camera)
+            self.assertIn(f'biasnight-{self.camera}-{refnight}', refbias)
+            self.assertIn(f'biasnight-{self.camera}-{othernight}', otherbias)
+            self.assertNotEqual(refbias, otherbias)
+
+            #- a camera expects its own bias, not another camera's
+            othercam = expected_dark_preproc_bias(True, refnight, 'z9')
+            self.assertIn(f'biasnight-z9-{refnight}', othercam)
+
+            #- an explicitly requested bias is used as given for every night
+            custom = '/tmp/mybias.fits'
+            self.assertEqual(expected_dark_preproc_bias(custom, refnight, self.camera), custom)
+            self.assertEqual(expected_dark_preproc_bias(custom, othernight, self.camera), custom)
+
+    def test_no_bias_recorded(self):
+        """A header without CCD_CALIB_BIAS is rejected"""
+        is_nightly, found = self._is_nightly(None)
+        self.assertFalse(is_nightly)
+        self.assertIsNone(found)
+
+    def test_unreadable_file(self):
+        """An unreadable file is rejected instead of raising"""
+        from ..ccdcalib import dark_preproc_bias_is_nightly
+        is_nightly, found = dark_preproc_bias_is_nightly(
+                '/tmp/does-not-exist-dark_preproc-b0-00000001.fits', self.night, self.camera)
+        self.assertFalse(is_nightly)
+        self.assertIsNone(found)
