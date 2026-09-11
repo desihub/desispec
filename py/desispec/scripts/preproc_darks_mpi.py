@@ -57,21 +57,23 @@ def preproc_darks_parser():
     return parser
 
 
-def check_matching_biasnights(expids, nights, camlists, preproc_dark_dir=None):
+def check_matching_biasnights(expids, nights, camlists, rawfiles, preproc_dark_dir=None):
     """Check that every camera can be preprocessed with its own nightly bias
 
     Args:
         expids (list of int): dark exposure ids to be preprocessed
         nights (list of int): YEARMMDD night of each exposure
         camlists (list of list of str): cameras to preprocess for each exposure
+        rawfiles (list of str): raw data file of each exposure
 
     Options:
         preproc_dark_dir (str): alternate specprod directory where the preprocessed darks are saved
 
     Returns:
-        list of str: one message per error found, empty if every camera either
-        already has a preprocessed dark that used its matching nightly bias or
-        has that nightly bias available to preprocess with
+        list of str: one message per error found, empty if every exposure agrees
+        with its exposure table night and every camera either already has a
+        preprocessed dark that used its matching nightly bias or has that
+        nightly bias available to preprocess with
 
     The preprocessed darks feed the nightly darks, so they must strictly use
     the nightly bias of their own night and camera; preproc otherwise silently
@@ -85,7 +87,26 @@ def check_matching_biasnights(expids, nights, camlists, preproc_dark_dir=None):
     ## the same biasnight is needed by every exposure of a night, so only stat it once
     biasnight_exists = dict()
 
-    for expid, night, camlist in zip(expids, nights, camlists):
+    for expid, night, camlist, rawfile in zip(expids, nights, camlists, rawfiles):
+        ## preproc looks up the bias with the night in the raw header while the
+        ## preprocessed dark is written under the exposure table night, and
+        ## compute_dark_file later looks for it under the raw header night, so a
+        ## disagreement would write a file that the nightly dark never finds and
+        ## that a rerun of this job would reject as using the wrong night's bias
+        try:
+            header_night = header2night(read_raw_primary_header(rawfile))
+        except Exception as err:
+            errors.append(f'Unable to read the night from {rawfile}: {err}')
+            bad_cameras.update(camlist)
+            continue
+
+        if int(header_night) != int(night):
+            errors.append(f'{rawfile} header NIGHT={header_night} disagrees with exposure '
+                          + f'table NIGHT={night}, so its bias and its preprocessed dark '
+                          + 'would come from different nights')
+            bad_cameras.update(camlist)
+            continue
+
         for camera in sorted(camlist):
             biasnight = findfile('biasnight', night=night, camera=camera, readonly=True)
 
@@ -227,7 +248,7 @@ def main(args=None):
                         + "has a matching nightly bias.")
             errors = []
         else:
-            errors = check_matching_biasnights(expids, nights, camlists,
+            errors = check_matching_biasnights(expids, nights, camlists, files,
                                                preproc_dark_dir=args.preproc_dark_dir)
 
         if len(errors) > 0:

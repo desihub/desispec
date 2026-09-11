@@ -34,6 +34,12 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
         self.expids = [10, 11]
         self.nights = [self.night, self.night]
         self.camlists = [['b0', 'b1'], ['b0', 'b1']]
+        self.rawfiles = [_findfile('raw', night=self.night, expid=e) for e in self.expids]
+        #- by default the raw headers agree with the exposure table
+        header_patcher = patch('desispec.scripts.preproc_darks_mpi.read_raw_primary_header',
+                               return_value={'NIGHT': self.night})
+        header_patcher.start()
+        self.addCleanup(header_patcher.stop)
 
     def tearDown(self):
         if self.original_log_level is None:
@@ -47,7 +53,7 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
 
         with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
              patch('os.path.exists', side_effect=lambda p: 'biasnight-' in p):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(errors, [])
 
@@ -60,7 +66,7 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
 
         with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
              patch('os.path.exists', side_effect=exists):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(len(errors), len(self.expids))
         for msg in errors:
@@ -79,7 +85,7 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
 
         with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
              patch('os.path.exists', side_effect=exists):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(len(errors), len(self.expids))
         for msg in errors:
@@ -94,12 +100,47 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
              patch('os.path.exists', return_value=True), \
              patch('desispec.scripts.preproc_darks_mpi.dark_preproc_bias_is_nightly',
                    return_value=(False, 'SPCALIB/ccd/bias-sm4-b-20191021.fits.gz')):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(len(errors), 4)  #- 2 exposures x 2 cameras
         for msg in errors:
             self.assertIn('bias-sm4-b-20191021.fits.gz', msg)
             self.assertIn('purge', msg)
+
+    def test_raw_header_night_mismatch(self):
+        """A raw header night that disagrees with the exposure table is rejected
+
+        preproc would look up the bias with the header night while the file is
+        written under the exposure table night, so nothing should be written.
+        """
+        from ..scripts.preproc_darks_mpi import check_matching_biasnights
+
+        with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
+             patch('desispec.scripts.preproc_darks_mpi.read_raw_primary_header',
+                   return_value={'NIGHT': self.night - 1}), \
+             patch('os.path.exists', side_effect=lambda p: 'biasnight-' in p):
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists,
+                                               self.rawfiles)
+
+        self.assertEqual(len(errors), len(self.expids))
+        for msg in errors:
+            self.assertIn(f'NIGHT={self.night - 1}', msg)
+            self.assertIn(f'NIGHT={self.night}', msg)
+
+    def test_unreadable_raw_header(self):
+        """An unreadable raw header is an error rather than a crash"""
+        from ..scripts.preproc_darks_mpi import check_matching_biasnights
+
+        with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
+             patch('desispec.scripts.preproc_darks_mpi.read_raw_primary_header',
+                   side_effect=OSError('no such file')), \
+             patch('os.path.exists', side_effect=lambda p: 'biasnight-' in p):
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists,
+                                               self.rawfiles)
+
+        self.assertEqual(len(errors), len(self.expids))
+        for msg in errors:
+            self.assertIn('Unable to read the night', msg)
 
     def test_existing_preproc_without_biasnight(self):
         """An existing matching preproc is enough even if the biasnight is gone"""
@@ -109,7 +150,7 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
              patch('os.path.exists', side_effect=lambda p: 'dark_preproc-' in p), \
              patch('desispec.scripts.preproc_darks_mpi.dark_preproc_bias_is_nightly',
                    return_value=(True, 'SPECPROD/calibnight/20000101/biasnight-b0-20000101.fits.gz')):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(errors, [])
 
@@ -121,7 +162,7 @@ class TestCheckMatchingBiasnights(unittest.TestCase):
              patch('os.path.exists', return_value=True), \
              patch('desispec.scripts.preproc_darks_mpi.dark_preproc_bias_is_nightly',
                    return_value=(True, f'SPECPROD/calibnight/{20000101}/biasnight-b0-20000101.fits.gz')):
-            errors = check_matching_biasnights(self.expids, self.nights, self.camlists)
+            errors = check_matching_biasnights(self.expids, self.nights, self.camlists, self.rawfiles)
 
         self.assertEqual(errors, [])
 
@@ -159,7 +200,8 @@ class TestPreprocDarksMain(unittest.TestCase):
         with patch('desispec.scripts.preproc_darks_mpi.findfile', side_effect=_findfile), \
              patch('desispec.scripts.preproc_darks_mpi.load_table', return_value=self.exptable), \
              patch('os.path.exists', side_effect=exists), \
-             patch('desispec.scripts.preproc_darks_mpi.read_raw_primary_header'), \
+             patch('desispec.scripts.preproc_darks_mpi.read_raw_primary_header',
+                   return_value={'NIGHT': self.night}), \
              patch('desispec.scripts.preproc_darks_mpi.process_raw') as process_raw, \
              patch('desispec.scripts.preproc_darks_mpi.write_image') as write_image:
             exitcode = preproc_darks_mpi.main(preproc_darks_mpi.parse(options))

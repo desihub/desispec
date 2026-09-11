@@ -67,9 +67,10 @@ def compute_dark_baseparser():
                         help='Maximum number of dark exposures to use. Default is 50. If more than this number of exposures are found, ' \
                         'the script will downselect to the closest exposures in time up to this limit.')
     parser.add_argument('--allow-default-bias', action='store_true',
-                        help="If True, also use pre-existing preprocessed darks that were created with the "
-                        "default bias in DESI_SPECTRO_CALIB instead of the nightly bias of their own night "
-                        "and camera. Default is to skip them (see desispec issue #2741).")
+                        help="If True, don't require that preprocessed darks were created with the bias used "
+                        "here, i.e. also use ones created with the default bias in DESI_SPECTRO_CALIB rather "
+                        "than the nightly bias of their own night and camera, or with any other bias when "
+                        "--bias is given. Default is to skip them (see desispec issue #2741).")
     parser.add_argument('--skip-camera-check', action='store_true', help="If True, doesn't check if camera exists for an exposure ahead of time.")
     parser.add_argument('--dont-search-filesystem', action='store_true', help="If True, doesn't search filesystem for exposures.")
     return parser
