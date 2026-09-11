@@ -50,9 +50,12 @@ def dark_preproc_bias_matches(header_or_filename, biasfile):
 
     preproc records the bias it used in the CCD_CALIB_BIAS dependency keyword,
     e.g. SPECPROD/calibnight/20251217/biasnight-b0-20251217.fits.gz for a
-    nightly bias, or SPCALIB/ccd/bias-sm4-b-... for the default bias.  Only the
-    filename is compared, since the paths are shortened when written and since
-    for a biasnight the filename is what encodes the night and the camera.
+    nightly bias, or SPCALIB/ccd/bias-sm4-b-... for the default bias.  Those
+    paths are shortened when written, so full paths are only compared when both
+    sides are absolute, i.e. for a bias outside DESI_SPECTRO_CALIB and the
+    production directory, and then two spellings of the same file, e.g. through
+    the read-only mount, count as different.  Otherwise only the filename is
+    compared, which for a biasnight is what encodes the night and the camera.
     """
     log = get_logger()
     if isinstance(header_or_filename, str):
@@ -68,6 +71,9 @@ def dark_preproc_bias_matches(header_or_filename, biasfile):
         return False, None
 
     biasused = getdep(header, 'CCD_CALIB_BIAS')
+
+    if os.path.isabs(str(biasused)) and os.path.isabs(str(biasfile)):
+        return str(biasused) == str(biasfile), biasused
 
     #- compare without any .gz so that a bias is recognized whether or not it
     #- was compressed
@@ -101,24 +107,6 @@ def expected_dark_preproc_bias(bias, night, camera):
         return bias
 
     return findfile('biasnight', night=night, camera=camera, readonly=True)
-
-
-def dark_preproc_bias_is_nightly(header_or_filename, night, camera):
-    """Check that a preprocessed dark was created with a matching nightly bias
-
-    Args:
-        header_or_filename: header of a preproc_for_dark image, either of an
-            image in memory (e.g. ``img.meta``) or the path to a file on disk
-        night (int or str): YEARMMDD night of the dark exposure
-        camera (str): camera of the dark exposure, e.g. b0
-
-    Returns:
-        tuple (is_nightly, biasused) where is_nightly is True if the image was
-        preprocessed with the nightly bias of night and camera, and biasused is
-        the bias recorded in the header (None if none was recorded)
-    """
-    biasnight = findfile('biasnight', night=night, camera=camera, readonly=True)
-    return dark_preproc_bias_matches(header_or_filename, biasnight)
 
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,

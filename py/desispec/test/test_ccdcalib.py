@@ -223,14 +223,19 @@ class TestDarkPreprocBias(unittest.TestCase):
         return self._is_nightly_file(self._header(biasused), night=night, camera=camera)
 
     def _is_nightly_file(self, header_or_filename, night=None, camera=None):
-        """Call dark_preproc_bias_is_nightly without needing $SPECPROD set"""
-        from ..ccdcalib import dark_preproc_bias_is_nightly
+        """Check against the nightly bias the way production does, without $SPECPROD
+
+        This is the pair of calls both desi_preproc_darks and compute_dark_file
+        make, i.e. resolve the expected bias then compare it to what was used.
+        """
+        from ..ccdcalib import dark_preproc_bias_matches, expected_dark_preproc_bias
         if night is None:
             night = self.night
         if camera is None:
             camera = self.camera
         with patch('desispec.ccdcalib.findfile', return_value=self.biasnight):
-            return dark_preproc_bias_is_nightly(header_or_filename, night, camera)
+            expected_bias = expected_dark_preproc_bias(True, night, camera)
+            return dark_preproc_bias_matches(header_or_filename, expected_bias)
 
     def test_nightly_bias(self):
         """The nightly bias of this night and camera is accepted"""
@@ -255,11 +260,11 @@ class TestDarkPreprocBias(unittest.TestCase):
     def test_other_night_and_camera(self):
         """A nightly bias of another night or camera is rejected"""
         biasused = f'SPECPROD/calibnight/{self.night}/biasnight-{self.camera}-{self.night}.fits.gz'
+        from ..ccdcalib import dark_preproc_bias_matches, expected_dark_preproc_bias
         with patch('desispec.ccdcalib.findfile',
                    return_value='/tmp/calibnight/20000102/biasnight-b0-20000102.fits.gz'):
-            from ..ccdcalib import dark_preproc_bias_is_nightly
-            is_nightly, found = dark_preproc_bias_is_nightly(
-                    self._header(biasused), 20000102, 'b0')
+            expected_bias = expected_dark_preproc_bias(True, 20000102, 'b0')
+            is_nightly, found = dark_preproc_bias_matches(self._header(biasused), expected_bias)
         self.assertFalse(is_nightly)
 
     def test_explicitly_requested_bias(self):
@@ -269,6 +274,15 @@ class TestDarkPreprocBias(unittest.TestCase):
         is_match, found = dark_preproc_bias_matches(header, '/tmp/bias-sm4-b-20191021.fits.gz')
         self.assertTrue(is_match)
         is_match, found = dark_preproc_bias_matches(header, '/tmp/bias-sm4-b-20200401.fits.gz')
+        self.assertFalse(is_match)
+
+    def test_same_name_in_different_directories(self):
+        """Two absolute paths of the same name are told apart"""
+        from ..ccdcalib import dark_preproc_bias_matches
+        header = self._header('/run_a/bias.fits')
+        is_match, found = dark_preproc_bias_matches(header, '/run_a/bias.fits')
+        self.assertTrue(is_match)
+        is_match, found = dark_preproc_bias_matches(header, '/run_b/bias.fits')
         self.assertFalse(is_match)
 
     def test_expected_bias_per_night(self):
