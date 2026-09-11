@@ -70,7 +70,8 @@ def compute_dark_baseparser():
                         help="If True, don't require that preprocessed darks were created with the bias used "
                         "here, i.e. also use ones created with the default bias in DESI_SPECTRO_CALIB rather "
                         "than the nightly bias of their own night and camera, or with any other bias when "
-                        "--bias is given. Default is to skip them (see desispec issue #2741).")
+                        "--bias is given. In desi_compute_dark_night this also stops requiring that this "
+                        "night's bias exists. Default is to skip them (see desispec issue #2741).")
     parser.add_argument('--skip-camera-check', action='store_true', help="If True, doesn't check if camera exists for an exposure ahead of time.")
     parser.add_argument('--dont-search-filesystem', action='store_true', help="If True, doesn't search filesystem for exposures.")
     return parser

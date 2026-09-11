@@ -38,7 +38,20 @@ class TestComputeDarkNight(unittest.TestCase):
         else:
             raise ValueError(f'Unexpected {filetype=}')
 
-    def _run_main(self, cameras='b0b1'):
+    def test_allow_default_bias_drops_the_required_bias(self):
+        """--allow-default-bias also stops requiring this night's bias to exist
+
+        Otherwise runcmd would return before compute_dark ever runs, in exactly
+        the missing-bias case the option exists to allow.
+        """
+        exitcode, calls = self._run_main(extra_options=['--allow-default-bias'])
+
+        self.assertEqual(exitcode, 0)
+        for call in calls:
+            self.assertEqual(call['inputs'], [])
+            self.assertIsNone(call['bias'])
+
+    def _run_main(self, cameras='b0b1', extra_options=None):
         """Run main() with runcmd mocked, returning what it passed to compute_dark"""
         from ..scripts import compute_dark_night
 
@@ -51,6 +64,8 @@ class TestComputeDarkNight(unittest.TestCase):
             return None, True
 
         options = ['--reference-night', str(self.refnight), '-c', cameras]
+        if extra_options is not None:
+            options.extend(extra_options)
         with patch('desispec.scripts.compute_dark_night.runcmd', side_effect=fake_runcmd), \
              patch('desispec.scripts.compute_dark_night.compute_dark.get_stacked_dark_exposure_table',
                    return_value=self.exptable), \
