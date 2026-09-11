@@ -66,8 +66,7 @@ def check_matching_biasnights(expids, nights, camlists, preproc_dark_dir=None):
         camlists (list of list of str): cameras to preprocess for each exposure
 
     Options:
-        preproc_dark_dir (str): alternate specprod directory where the
-            preprocessed darks are saved
+        preproc_dark_dir (str): alternate specprod directory where the preprocessed darks are saved
 
     Returns:
         list of str: one message per error found, empty if every camera either

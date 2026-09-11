@@ -144,9 +144,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         preproc_dark_dir (str) : specify output directory used to save preproc images
         min_dark_exposures (int) : minimum number of dark exposures to use; if less are found to be valid code will raise an error and exit
         max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the nearest max_dark_exposures in mjd are used
-        require_nightlybias (bool) : skip pre-existing preprocessed darks that
-            were not created with the bias used here, i.e. the nightly bias of
-            their own night and camera unless bias is given explicitly
+        require_nightlybias (bool) : skip preprocessed darks made with a bias other than the one used here (see issue #2741)
 
 
     Note: if bias is None, the nightly bias of each exposure's own night is looked for in
