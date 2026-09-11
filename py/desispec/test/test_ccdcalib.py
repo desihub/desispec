@@ -220,13 +220,17 @@ class TestDarkPreprocBias(unittest.TestCase):
         return header
 
     def _is_nightly(self, biasused, night=None, camera=None):
+        return self._is_nightly_file(self._header(biasused), night=night, camera=camera)
+
+    def _is_nightly_file(self, header_or_filename, night=None, camera=None):
+        """Call dark_preproc_bias_is_nightly without needing $SPECPROD set"""
         from ..ccdcalib import dark_preproc_bias_is_nightly
         if night is None:
             night = self.night
         if camera is None:
             camera = self.camera
         with patch('desispec.ccdcalib.findfile', return_value=self.biasnight):
-            return dark_preproc_bias_is_nightly(self._header(biasused), night, camera)
+            return dark_preproc_bias_is_nightly(header_or_filename, night, camera)
 
     def test_nightly_bias(self):
         """The nightly bias of this night and camera is accepted"""
@@ -307,8 +311,7 @@ class TestDarkPreprocBias(unittest.TestCase):
 
     def test_unreadable_file(self):
         """An unreadable file is rejected instead of raising"""
-        from ..ccdcalib import dark_preproc_bias_is_nightly
-        is_nightly, found = dark_preproc_bias_is_nightly(
-                '/tmp/does-not-exist-dark_preproc-b0-00000001.fits', self.night, self.camera)
+        is_nightly, found = self._is_nightly_file(
+                '/tmp/does-not-exist-dark_preproc-b0-00000001.fits')
         self.assertFalse(is_nightly)
         self.assertIsNone(found)
