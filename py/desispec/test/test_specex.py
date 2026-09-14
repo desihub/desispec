@@ -149,9 +149,12 @@ class TestMergePSF(unittest.TestCase):
         _write_psf(reffile, ref_status, ref_bundle, ref_legcoeff,
                    ref_xtrace, ref_ytrace)
 
-        #- bundle 0 (fibers 0,1): fit succeeded
+        #- bundle 0 (fibers 0,1): fit succeeded.  Note that specex fills in
+        #- BUNDLE for every fiber of a per-bundle file, not just the fibers of
+        #- the bundle it fit, so out-of-bundle fibers keep their real bundle id
+        #- and are distinguished only by STATUS.
         b0_status = np.array([FIT_OK, FIT_OK, NOT_APPLICABLE, NOT_APPLICABLE])
-        b0_bundle = np.array([0, 0, -1, -1])
+        b0_bundle = np.array([0, 0, 1, 1])
         b0_legcoeff = np.full((nfibers, ncoeff), 1.0)
         b0_xtrace = np.full((nfibers, ncoeff), 11.0)
         b0_ytrace = np.full((nfibers, ncoeff), 12.0)
@@ -163,7 +166,7 @@ class TestMergePSF(unittest.TestCase):
         #- so there are no "selected" fibers for this input file
         b1_status = np.array([NOT_APPLICABLE, NOT_APPLICABLE,
                                FIT_FAILED, FIT_FAILED])
-        b1_bundle = np.array([-1, -1, 1, 1])
+        b1_bundle = np.array([0, 0, 1, 1])
         b1_legcoeff = np.full((nfibers, ncoeff), 99.0)
         b1_xtrace = np.full((nfibers, ncoeff), 99.0)
         b1_ytrace = np.full((nfibers, ncoeff), 99.0)
