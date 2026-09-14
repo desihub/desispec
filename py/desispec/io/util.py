@@ -10,6 +10,7 @@ import re
 import time
 import datetime
 import subprocess
+import warnings
 import fitsio
 import astropy.io
 import numpy as np
@@ -379,22 +380,23 @@ def _dict2ndarray(data, columns=None):
 
 
 def healpix_subdirectory(nside, pixel):
-    """
-    Return a fixed directory path for healpix grouped files.
+    warnings.warn(
+        'healpix_subdirectory is deprecated; use pix_subdirectory instead.',
+        DeprecationWarning, stacklevel=2)
+    return pix_subdirectory(pixel)
 
-    Given an NSIDE and NESTED pixel index, return a directory
-    named after a degraded NSIDE and pixel followed by the
-    original nside and pixel.  This function is just to ensure
-    that this subdirectory path is always created by the same
-    code.
+def pix_subdirectory(pixel):
+    """
+    Return a fixed directory path for healpix/uniqpix grouped files.
+
+    This function is just to ensure that this subdirectory path is
+    always created by the same code.
 
     Args:
-        nside (int): a valid NSIDE value.
-        pixel (int): the NESTED pixel index.
+        pixel (int): the NESTED healpixel or uniqpixel index.
 
     Returns (str):
-        a path containing the low and high resolution
-        directories.
+        a path containing the low and high resolution directories.
 
     """
     subdir = str(pixel//100)

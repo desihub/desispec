@@ -45,11 +45,19 @@ except:
 
 # Multiprocessing environment setup
 
+def on_nersc_login_node():
+    """Return True if running on a NERSC login node (NERSC_HOST is set but
+    we are not inside a Slurm job/allocation)."""
+    return ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ)
+
 default_nproc = None
 """Default number of multiprocessing processes. Set globally on first import."""
 
 if "SLURM_CPUS_PER_TASK" in os.environ:
     default_nproc = int(os.environ["SLURM_CPUS_PER_TASK"])
+elif on_nersc_login_node():
+    import multiprocessing as _mp
+    default_nproc = min(8, max(1, _mp.cpu_count() // 2))
 else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
@@ -57,7 +65,7 @@ else:
 # MPI environment availability
 def use_mpi():
     """Return whether we can use MPI."""
-    if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+    if on_nersc_login_node():
         return False
     else:
         try:

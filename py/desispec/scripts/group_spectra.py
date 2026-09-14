@@ -13,6 +13,7 @@ import argparse
 from astropy.table import Table
 
 from desiutil.log import get_logger
+import desiutil.healpix
 from desimodel.footprint import radec2pix
 
 from .. import io
@@ -36,8 +37,11 @@ def parse(options=None):
             help="filter by FAPRGRM.lower() (or FAFLAVOR mapped to a program for sv1")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
-    parser.add_argument("--healpix", type=int,
-            help="nested healpix to generate")
+    group = parser.add_mutually_exclusive_group()  # --healpix or --uniqpix but not both
+    group.add_argument("--healpix", type=int,
+            help="healpixel to generate")
+    group.add_argument("--uniqpix", type=int,
+            help="uniqpixel to generate (healpix + 4*nside^2); overrides --nside and --healpix")
     parser.add_argument("--header", type=str, nargs="*",
             help="KEYWORD=VALUE entries to add to the output header")
     parser.add_argument("--expfile", type=str,
@@ -57,6 +61,11 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
+
+    if args.uniqpix is not None:
+        args.nside, args.healpix = desiutil.healpix.upix2hpix(args.uniqpix)
+    elif args.healpix is not None:
+        args.uniqpix = desiutil.healpix.hpix2upix(args.nside, args.healpix)
 
     return args
 
@@ -140,7 +149,10 @@ def main(args=None, comm=None):
             log0.info(f'Filtering by FAPRGRM={args.faprogram}')
             keep &= nightexp['FAPRGRM'] == args.faprogram
 
-        if args.healpix is not None and 'HEALPIX' in nightexp.colnames:
+        if args.uniqpix is not None and 'UNIQPIX' in nightexp.colnames:
+            log0.info(f'Filtering by uniqpix={args.uniqpix}')
+            keep &= nightexp['UNIQPIX'] == args.uniqpix
+        elif args.healpix is not None and 'HEALPIX' in nightexp.colnames:
             log0.info(f'Filtering by healpix={args.healpix}')
             keep &= nightexp['HEALPIX'] == args.healpix
 
@@ -222,9 +234,10 @@ def main(args=None, comm=None):
             spectra.meta['INFILNUM'] = nframefiles
         
         #- Add healpix provenance keywords
-        if args.healpix is not None:
-            spectra.meta['SPGRP'] = 'healpix'
-            spectra.meta['SPGRPVAL'] = args.healpix
+        if args.uniqpix is not None:
+            spectra.meta['SPGRP'] = 'uniqpix'
+            spectra.meta['SPGRPVAL'] = args.uniqpix
+            spectra.meta['UNIQPIX'] = args.uniqpix
             spectra.meta['HPXPIXEL'] = args.healpix
             spectra.meta['HPXNSIDE'] = args.nside
             spectra.meta['HPXNEST'] = True

@@ -3,9 +3,23 @@ desispec.validredshifts
 =======================
 
 """
+# Functions to apply the LSS redshift quality cuts.
+#
 # Example usage:
-# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/guadalupe/tiles/cumulative/1392/20210517/redrock-5-1392-thru20210517.fits'
+#
+# from desispec import validredshifts
+# redrock_path = '/global/cfs/cdirs/desi/spectro/redux/matterhorn/tiles/cumulative/101151/20251019/redrock-0-101151-thru20251019.fits'
 # cat = validate(redrock_path, return_target_columns=True)
+#
+# This returns an astropy table with columns: TARGETID, Z, ZWARN, COADD_FIBERSTATUS,
+# target membership booleans (LRG, ELG, QSO, LGE, ELG_LOP, ELG_HIP, ELG_VLO, BGS_ANY, BGS_FAINT, BGS_BRIGHT),
+# and redshift quality booleans (GOOD_Z_BGS, GOOD_Z_LRG, GOOD_Z_ELG, GOOD_Z_QSO, GOOD_Z_LYA).
+#
+# Note 1: except for GOOD_Z_LYA, the redshift quality booleans do not check target membership.
+# Both the quality boolean and the membership boolean must be applied to obtain the LSS redshift quality
+# flag (e.g., for ELGs: GOOD_Z_ELG & ELG).
+#
+# Note 2: GOOD_Z_LRG includes both LRG and LGE (which share the same quality cuts).
 
 import os, warnings
 import numpy as np
@@ -13,6 +27,7 @@ from astropy.table import Table, hstack, join
 import fitsio
 
 from desispec.maskbits import fibermask
+
 
 def get_good_fiberstatus(cat):
     '''
@@ -25,8 +40,9 @@ def get_good_fiberstatus(cat):
         good_fiberstatus: boolean array
     '''
 
-    # allow bit 3 (restricted fiber reach)
-    good_fiberstatus = (cat['COADD_FIBERSTATUS']==0) | (cat['COADD_FIBERSTATUS']==fibermask.RESTRICTED)
+    # allow bit 3 (restricted fiber reach) and bit 20 (variable object or calibration)
+    okmask = fibermask.mask('RESTRICTED|VARIABLE')
+    good_fiberstatus = (cat['COADD_FIBERSTATUS'] & okmask) == cat['COADD_FIBERSTATUS']
     return good_fiberstatus
 
 
@@ -43,13 +59,13 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         extra_columns: list of str (default None), additional columns to include in the output
 
     Returns:
-        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_BGS)
+        cat: astropy table with basic columns such as TARGETID and boolean columns (e.g., GOOD_Z_BGS)
              that indicate if each object meets the redshift quality criteria of specific tracers
     '''
 
-    output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']
+    output_columns = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']
     if return_target_columns:
-        output_columns = ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT'] + output_columns
+        output_columns = ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT', 'WISE_VAR_QSO'] + output_columns
 
     if extra_columns is None:
         extra_columns = ['TARGETID', 'Z', 'ZWARN', 'COADD_FIBERSTATUS']
@@ -61,7 +77,7 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     columns_fibermap = ['TARGETID', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'OBJTYPE']
     columns_emline = ['TARGETID', 'OII_FLUX', 'OII_FLUX_IVAR']
     columns_qso_mgii = ['TARGETID', 'IS_QSO_MGII']
-    columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
+    columns_qso_qn = ['TARGETID', 'Z_NEW', 'ZERR_NEW', 'IS_QSO_QN_NEW_RR', 'DELTACHI2_NEW', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']
 
     dir_path = os.path.dirname(redrock_path)
     qso_mgii_path = os.path.join(dir_path, os.path.basename(redrock_path).replace('redrock-', 'qso_mgii-'))
@@ -74,12 +90,12 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     # read the full fibermap until we determine the targeting columns
     from desitarget.targets import main_cmx_or_sv
     tmp_fibermap = fitsio.read(redrock_path, ext='FIBERMAP')
-    surv_target, surv_mask, surv = main_cmx_or_sv(tmp_fibermap)
+    surv_target, surv_mask, surv = main_cmx_or_sv(tmp_fibermap, scnd=True)
     if surv.lower() == 'cmx':
         raise NotImplementedError('Determining valid redshifts for commissioning targets is not supported.')
 
-    desi_target_col, bgs_target_col, _ = surv_target
-    desi_mask, bgs_mask, _ = surv_mask
+    desi_target_col, bgs_target_col, _, scnd_target_col = surv_target
+    desi_mask, bgs_mask, _, scnd_mask = surv_mask
     tmp_fibermap = Table(tmp_fibermap[columns_fibermap + surv_target])
     assert np.all(tid==tmp_fibermap['TARGETID'])
     tmp_fibermap.remove_column('TARGETID')
@@ -104,6 +120,11 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         ignore_qso = True
 
     if os.path.isfile(qso_qn_path):
+        # DELTACHI2_NEW missing from iron; remove from column list if needed
+        with fitsio.FITS(qso_qn_path) as qso_qn:
+            qso_qn_colnames = qso_qn['QN_RR'].get_colnames()
+        if 'DELTACHI2_NEW' not in qso_qn_colnames:
+            columns_qso_qn.remove('DELTACHI2_NEW')
         tmp_qso_qn = Table(fitsio.read(qso_qn_path, columns=(columns_qso_qn)))
         assert np.all(tid==tmp_qso_qn['TARGETID'])
         tmp_qso_qn.remove_column('TARGETID')
@@ -118,9 +139,14 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         cat = hstack([cat, tmp_qso_mgii, tmp_qso_qn], join_type='exact')
 
     if return_target_columns:
-        for name in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT']:
+        for name in ['LRG', 'ELG', 'QSO', 'LGE', 'ELG_LOP', 'ELG_HIP', 'ELG_VLO', 'BGS_ANY', 'BGS_FAINT', 'BGS_BRIGHT', 'WISE_VAR_QSO']:
             if name in ['BGS_FAINT', 'BGS_BRIGHT']:
                 cat[name] = cat[bgs_target_col] & bgs_mask[name] > 0
+            elif name == 'WISE_VAR_QSO':
+                if name in scnd_mask.names():
+                    cat[name] = (cat[scnd_target_col] & scnd_mask[name]) > 0
+                else:
+                    cat[name] = np.zeros(len(cat), bool)
             else:
                 if name in desi_mask.names(): # not all bits were used in SV (e.g., ELG_LOP)
                     cat[name] = cat[desi_target_col] & desi_mask[name] > 0
@@ -130,14 +156,23 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
         # cat['LRG'] = cat['DESI_TARGET'] & 2**0 > 0
         # cat['ELG'] = cat['DESI_TARGET'] & 2**1 > 0
         # cat['QSO'] = cat['DESI_TARGET'] & 2**2 > 0
+        # cat['LGE'] = cat['DESI_TARGET'] & 2**3 > 0
         # cat['ELG_LOP'] = cat['DESI_TARGET'] & 2**5 > 0
         # cat['ELG_HIP'] = cat['DESI_TARGET'] & 2**6 > 0
         # cat['ELG_VLO'] = cat['DESI_TARGET'] & 2**7 > 0
         # cat['BGS_ANY'] = cat['DESI_TARGET'] & 2**60 > 0
         # cat['BGS_FAINT'] = cat['BGS_TARGET'] & 2**0 > 0
         # cat['BGS_BRIGHT'] = cat['BGS_TARGET'] & 2**1 > 0
+        # cat['WISE_VAR_QSO'] = cat['SCND_TARGET'] & 2**35 > 0
 
-    res = actually_validate(cat, fiberstatus_cut=fiberstatus_cut, ignore_emline=ignore_emline, ignore_qso=ignore_qso)
+    if surv.lower()!='main':
+        # only defined for main survey targets
+        ignore_lya = True
+    else:
+        ignore_lya = ignore_qso
+
+    res = actually_validate(cat, fiberstatus_cut=fiberstatus_cut, ignore_emline=ignore_emline, 
+                            ignore_qso=ignore_qso, ignore_lya=ignore_lya)
     cat = hstack([cat, res])
 
     output_columns = [col for col in output_columns if col in cat.colnames]
@@ -146,7 +181,8 @@ def validate(redrock_path, fiberstatus_cut=True, return_target_columns=False, ex
     return cat
 
 
-def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso=False):
+def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso=False, ignore_lya=False,
+                      populate_missing_columns=False):
     '''
     Apply redshift quality criteria
 
@@ -154,15 +190,14 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         cat: astropy table with the necessary columns for redshift quality determination
 
     Options:
-        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS and ZWARN
-        return_target_columns: bool (default False), if True, include columns that indicate if the object belongs to each class of DESI targets
-        extra_columns: list of str (default None), additional columns to include in the output
-        emline_path: str (default None), specify the location of the emline file; by default the emline file is in the same directory as the redrock file
-        ignore_emline: bool (default False), if True, ignore the emline file and do not validate the ELG redshift
-        ignore_qso: bool (default False), if True, do not validate the QSO redshift
+        fiberstatus_cut: bool (default True), if True, impose requirements on COADD_FIBERSTATUS
+        ignore_emline: bool (default False), if True, ignore the emline file and do not validate ELG redshifts
+        ignore_qso: bool (default False), if True, do not validate QSO redshifts
+        ignore_lya: bool (default False), if True, do not assess LyA WG's QSO quality cuts
+        populate_missing_columns: bool (default False), if True, populate the missing GOOD_Z_* columns with value=False
 
     Returns:
-        res: astropy table with boolean columns (e.g., GOOD_BGS)
+        res: astropy table with boolean columns (e.g., GOOD_Z_BGS)
     '''
 
     res = Table()
@@ -170,15 +205,12 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
     # BGS
     res['GOOD_Z_BGS'] = cat['ZWARN']==0
     res['GOOD_Z_BGS'] &= cat['DELTACHI2']>40
-    if fiberstatus_cut:
-        res['GOOD_Z_BGS'] &= get_good_fiberstatus(cat)
+    res['GOOD_Z_BGS'] &= cat['Z']<0.8  # RZ: few real BGS galaxies at z>0.8
 
-    # LRG
+    # LRG and LGE (which share the same cuts)
     res['GOOD_Z_LRG'] = cat['ZWARN']==0
     res['GOOD_Z_LRG'] &= cat['Z']<1.5
     res['GOOD_Z_LRG'] &= cat['DELTACHI2']>15
-    if fiberstatus_cut:
-        res['GOOD_Z_LRG'] &= get_good_fiberstatus(cat)
 
     # ELG
     if not ignore_emline:
@@ -186,8 +218,7 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
             warnings.simplefilter('ignore')
             res['GOOD_Z_ELG'] = (cat['OII_FLUX']>0) & (cat['OII_FLUX_IVAR']>0)
             res['GOOD_Z_ELG'] &= np.log10(cat['OII_FLUX'] * np.sqrt(cat['OII_FLUX_IVAR'])) > 0.9 - 0.2 * np.log10(cat['DELTACHI2'])
-        if fiberstatus_cut:
-            res['GOOD_Z_ELG'] &= get_good_fiberstatus(cat)
+            # RZ: The ELGs outside of 0.6<z<1.6 appear to all have good fits; so not redshift range cuts
 
     if not ignore_qso:
         # QSO - adopted from the code from Edmond
@@ -201,16 +232,80 @@ def actually_validate(cat, fiberstatus_cut=True, ignore_emline=False, ignore_qso
         res['QSO_MASKBITS'][res['IS_QSO_QN_NEW_RR']] += 2**4
         res['GOOD_Z_QSO'] = res['QSO_MASKBITS']>0
         res['GOOD_Z_QSO'] &= cat['OBJTYPE']=='TGT'
-        if fiberstatus_cut:
-            res['GOOD_Z_QSO'] &= get_good_fiberstatus(cat)
-        mask_new_z = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
+
+    # GOOD_Z_LYA from the LyA WG for the main survey
+    # It identifies good QSOs from non-QSO targets
+    if not ignore_lya:
+
+        if ignore_qso:
+            raise ValueError('QSO quality cannot be skipped (i.e., ignore_qso must be False) when assessing GOOD_Z_LYA')
+
+        spectype_qso = cat['SPECTYPE'] == 'QSO'
+        # Define relaxed QN criteria for ELG
+        is_qn6 = np.max(np.array([cat[name] for name in ['C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha']]), axis=0) > 0.6
+        
+        is_elg = (cat['DESI_TARGET'] & 2**1) != 0  # desi_mask.ELG
+        is_qso = (cat['DESI_TARGET'] & 2**2) != 0  # desi_mask.QSO
+        is_bgs = (cat['DESI_TARGET'] & 2**60) != 0  # desi_mask.BGS
+        is_wise_qso = (cat['SCND_TARGET'] & 2**35) != 0  # scnd_mask.WISE_VAR_QSO
+        
+        # Lya QSOs targeted as ELGs
+        is_ok_lya_elg = spectype_qso & is_qn6 & is_elg & ~is_qso
+
+        # WISE_VAR_QSO uses same cuts as main QSO
+        is_ok_lya_wise = res['GOOD_Z_QSO'] & is_wise_qso & ~is_qso & ~is_elg & ~is_bgs
+        
+        # GOOD_Z_LYA applies to Z_QSO column
+        res['GOOD_Z_LYA'] = res['GOOD_Z_QSO'] & is_qso
+        res['GOOD_Z_LYA'] |= is_ok_lya_elg | is_ok_lya_wise
+
+        # update new redshifts for elg qsos
+        # WISE QSOs already covered by IS_QSO_QN_NEW_RR since criteria matches main QSO
+        res['IS_QSO_QN_NEW_RR'] |= cat['IS_QSO_QN_NEW_RR'] & is_ok_lya_elg # QN a requirement for all detections
+
+    if not ignore_qso:
+
+        use_z_new = res['GOOD_Z_QSO'] & res['IS_QSO_QN_NEW_RR']
+        if not ignore_lya:
+            use_z_new |= res['GOOD_Z_LYA'] & res['IS_QSO_QN_NEW_RR']
         res['Z_QSO'] = cat['Z'].copy()
-        res['Z_QSO'][mask_new_z] = cat['Z_NEW'][mask_new_z].copy()
         res['ZERR_QSO'] = cat['ZERR'].copy()
-        res['ZERR_QSO'][mask_new_z] = cat['ZERR_NEW'][mask_new_z].copy()
+        res['DELTACHI2_QSO'] = cat['DELTACHI2'].copy()
+        res['Z_QSO'][use_z_new] = cat['Z_NEW'][use_z_new].copy()
+        res['ZERR_QSO'][use_z_new] = cat['ZERR_NEW'][use_z_new].copy()
+        if 'DELTACHI2_NEW' in cat.colnames:
+            res['DELTACHI2_QSO'][use_z_new] = cat['DELTACHI2_NEW'][use_z_new].copy()
+
+        # RZ: all the z>5.0 QSO redrock fits look bad
+        bad_qso = res['Z_QSO'] > 5.0
+        # RZ: Known failure mode of high-z QSOs misclassified as low-z QSOs; see DESI-doc-9981
+        bad_lowz = res['Z_QSO']<0.5
+        bad_lowz &= np.log10(res['DELTACHI2_QSO']+1e-6) < 3 - 3.5 * res['Z_QSO']  # 1e-6 to avoid log10(0)
+
+        res['GOOD_Z_QSO'][bad_qso|bad_lowz] = False
+        if not ignore_lya:
+            # do not apply z>5 flag to lya
+            res['GOOD_Z_LYA'][bad_lowz] = False
+
+    # reject stars
+    mask_nonstar = (cat['SPECTYPE']!='STAR') & (cat['Z']>0.001)
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG']:  # No GOOD_Z_QSO because QuasarNet does not fit below z=0.05
+        if col in res.colnames:
+            res[col] &= mask_nonstar
+
+    if fiberstatus_cut:
+        good_fiberstatus = get_good_fiberstatus(cat)
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
+            if col in res.colnames:
+                res[col] &= good_fiberstatus
+
+    if populate_missing_columns:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
+            if col not in res.colnames:
+                res[col] = False
 
     # Remove unnecessary columns
-    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'Z_QSO', 'ZERR_QSO']
+    columns_to_keep = ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA', 'Z_QSO', 'ZERR_QSO']
     columns_to_keep = [col for col in columns_to_keep if col in res.colnames]
     res = res[columns_to_keep]
 

@@ -326,9 +326,6 @@ desispec API
 .. automodule:: desispec.scripts.group_spectra
     :members:
 
-.. automodule:: desispec.scripts.healpix_redshifts
-    :members:
-
 .. automodule:: desispec.scripts.humidity_corrected_fiberflat
     :members:
 
@@ -381,6 +378,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.procexp
+    :members:
+
+.. automodule:: desispec.scripts.proddag
     :members:
 
 .. automodule:: desispec.scripts.purge_night
@@ -441,6 +441,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.scripts.trace_shifts
+    :members:
+
+.. automodule:: desispec.scripts.uniqpix_redshifts
     :members:
 
 .. automodule:: desispec.scripts.update_exptable

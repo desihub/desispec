@@ -15,7 +15,7 @@ from desispec.scripts.compute_dark import compute_dark_parser, get_stacked_dark_
 from desispec.workflow.proctable import default_prow, get_pdarks_from_ptable
 import numpy as np
 
-from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, difference_camwords, erow_to_goodcamword, \
+from desispec.io.util import all_impacted_cameras, columns_to_goodcamword, decode_camword, difference_camwords, erow_to_goodcamword, \
     camword_intersection, camword_union
 from desispec.scripts.link_calibnight import derive_include_exclude
 
@@ -24,6 +24,80 @@ from desispec.workflow.processing import create_and_submit, assign_dependency, d
     generate_calibration_dict, night_to_starting_iid, filename_to_jobname
 from desispec.workflow.utils import load_override_file, sleep_and_report
 from desiutil.log import get_logger
+
+
+## link_calibnight treats a missing ctecorrnight as a warning rather than an
+## error, so it must not count towards "the files being linked do not exist"
+OPTIONAL_LINK_PREFIXES = ('ctecorrnight',)
+
+
+def linked_calib_file_exists(refnight, prefix, camword):
+    """
+    Test whether one calibration prefix is already present on a night.
+
+    Args:
+        refnight (int): The night being linked from.
+        prefix (str): A calibnight filename prefix, e.g. 'biasnight'.
+        camword (str): Cameras the link covers, used to pick a representative
+            camera for the per-camera calibration files.
+
+    Returns:
+        bool: True if the file is on disk.
+    """
+    log = get_logger()
+
+    ## mirror link_calibnight: most prefixes are per-camera, a few are not
+    try:
+        if prefix == 'badfibers':
+            pathname = findfile(prefix, night=refnight)
+        else:
+            cameras = decode_camword(camword)
+            if len(cameras) == 0:
+                return False
+            pathname = findfile(prefix, night=refnight, camera=cameras[0])
+    except Exception as err:      # noqa: BLE001 - unknown prefix, be safe
+        log.warning(f"Could not resolve a pathname for {prefix} on {refnight}, "
+                    + f"treating it as missing: {err}")
+        return False
+    return os.path.exists(pathname)
+
+
+def unsatisfied_link_prefixes(refnight, files_to_link, camword, refptable=None):
+    """
+    Find calibrations a link needs that neither exist nor are being produced.
+
+    A linkcal is only safe if, for every prefix it links, the reference night
+    either already holds the file or has a job that will produce it to depend
+    on. Anything else links against a file that never appears.
+
+    Args:
+        refnight (int): The night being linked from.
+        files_to_link (set): Calibration filename prefixes to be linked.
+        camword (str): Cameras the link covers.
+        refptable (Table, optional): The reference night's processing table, if
+            it exists. None if the night has not been processed.
+
+    Returns:
+        list: The prefixes that are neither on disk nor scheduled, sorted.
+    """
+    jobdescs = set()
+    if refptable is not None and len(refptable) > 0:
+        jobdescs = set(str(j) for j in refptable['JOBDESC'])
+
+    unsatisfied = []
+    for prefix in sorted(files_to_link):
+        if prefix in OPTIONAL_LINK_PREFIXES:
+            continue
+        job = filename_to_jobname(prefix)
+        ## filename_to_jobname maps bias to 'biaspdark', but early nights and
+        ## those without preproc darks use 'biasnight' instead
+        has_job = job in jobdescs or ('bias' in job and 'biasnight' in jobdescs)
+        if has_job:
+            continue
+        if linked_calib_file_exists(refnight, prefix, camword):
+            continue
+        unsatisfied.append(prefix)
+    return unsatisfied
 
 
 def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None,
@@ -79,13 +153,15 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
 
     ## Determine calibrations that will be linked
     if 'linkcal' in cal_override:
-        files_to_link, files_not_linked = None, None
+        files_to_link, files_not_linked, biaslink_camword = None, None, None
         if 'include' in cal_override['linkcal']:
             files_to_link = cal_override['linkcal']['include']
         if 'exclude' in cal_override['linkcal']:
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
+        if 'biasnight' in files_to_link and 'biaslink_camword' in cal_override['linkcal']:
+            biaslink_camword = cal_override['linkcal']['biaslink_camword']
         ## Fiberflatnights need to be generated with psfs from same time, so
         ## can't link psfs without also linking fiberflatnight
         if 'psfnight' in files_to_link and not 'fiberflatnight' in files_to_link \
@@ -94,7 +170,7 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
             log.error(err)
             raise ValueError(err)
     else:
-        files_to_link = set()
+        files_to_link, biaslink_camword = set(), None
 
     submitted = False
     if 'linkcal' in cal_override and 'linkcal' not in ptable['JOBDESC']:
@@ -110,6 +186,8 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
 
         if 'camword' in cal_override['linkcal']:
             prow['PROCCAMWORD'] = cal_override['linkcal']['camword']
+        elif set(files_to_link) == set(['biasnight']) and biaslink_camword is not None:
+            prow['PROCCAMWORD'] = biaslink_camword
         else:
             ## If no camword is specified, use the provided camword,
             ## or if not provided, use default to all cameras
@@ -117,10 +195,12 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
 
         if 'refnight' in cal_override['linkcal']:
             refnight = int(cal_override['linkcal']['refnight'])
+            refptable = None
             ## For link cals only, enable cross-night dependencies if available
             refproctable = findfile('proctable', night=refnight)
             if os.path.exists(refproctable):
                 ptab = load_table(tablename=refproctable, tabletype='proctable')
+                refptable = ptab
                 ## This isn't perfect because we may depend on jobs that aren't
                 ## actually being linked
                 ## Also allows us to proceed even if jobs don't exist yet
@@ -149,6 +229,22 @@ def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None
                     ## but restricting back to those requested for the current night, if fewer cameras are available
                     prow['PROCCAMWORD'] = camword_intersection([prow['PROCCAMWORD'], camword_union(proccamwords)])
                     prow = assign_dependency(prow, deps)
+
+            ## Every prefix being linked needs either a file already on the
+            ## reference night or a job there to depend on. Anything else links
+            ## against a file that never appears, which is how a mis-ordered
+            ## submission goes wrong silently, so refuse rather than proceed.
+            unsatisfied = unsatisfied_link_prefixes(
+                    refnight, files_to_link, prow['PROCCAMWORD'],
+                    refptable=refptable)
+            if len(unsatisfied) > 0:
+                msg = (f"The linkcal job for night {night} links {unsatisfied} "
+                       + f"from night {refnight}, but that night has neither "
+                       + "those calibration files on disk nor jobs to produce "
+                       + "them. Those links would dangle. Process "
+                       + f"{refnight} first, or fix the override file.")
+                log.critical(msg)
+                raise RuntimeError(msg)
 
         ## create dictionary to carry linking information
         linkcalargs = cal_override['linkcal']
@@ -258,6 +354,20 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
 
     etable = etable[~bad]
 
+    ## HACK derive the camword from the exposure table and ignore the input
+    ## eventually we want to change this so that the input camword is None
+    ## except when we actually want to restrict the processing to a subset of cameras,
+    ## but for now this is easier and less error prone as a quick-fix
+    if len(etable) > 0:
+        ## camword is any camera that appears on that night
+        log.info(f"Deriving the CAMWORD for night {night} as union of CAMWORD's from the exposure table")
+        camword = camword_union(etable['CAMWORD'].data.astype(str))
+        ## badcamword is any camera that appears in all exposures for the night
+        log.info(f"Deriving the BADCAMWORD for night {night} as intersection of BADCAMWORD's from the exposure table")
+        badcamword = camword_intersection(etable['BADCAMWORD'].data.astype(str))
+    else:
+        log.error(f"No exposures for night {night}. Using provided camword and badcamword.")
+
     ## Require cal_override to exist if explcitly specified
     if override_path is None:
         override_pathname = findfile('override', night=night, readonly=True)
@@ -271,6 +381,10 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     ## Load calibration_override_file
     overrides = load_override_file(filepathname=override_pathname)
     cal_override = {}
+    ## bias_all_cam_override is True and only becomes False \
+    ## if there is an override and it doesn't involve all cameras
+    bias_all_cam_override = True
+    biaslinkcamword = None
     if 'calibration' in overrides:
         cal_override = overrides['calibration']
 
@@ -284,8 +398,19 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
             files_not_linked = cal_override['linkcal']['exclude']
         files_to_link, files_not_linked = derive_include_exclude(files_to_link,
                                                                  files_not_linked)
-        ## run linkcal if we haven't already
-        if 'linkcal' not in ptable['JOBDESC']:
+        if 'biaslink_camword' in cal_override['linkcal'] and 'biasnight' in files_to_link:
+            log.warning(f"Warning: a subset of cameras ({cal_override['linkcal']['biaslink_camword']}) "
+                        " will be linked to another night.")
+            biaslinkcamword = cal_override['linkcal']['biaslink_camword']
+            bias_all_cam_override=False
+        ## Run linkcal if we haven't already, but only when the link is what
+        ## provides this night's bias, which is the only thing this function
+        ## needs it for (see bias_accounted_for below). Otherwise leave it to
+        ## this night's own proc_night, which submits it anyway and knows the
+        ## state of the night being linked from. This function is also called
+        ## for the nights surrounding a darknight reference night, and creating
+        ## their linkcal jobs here can precede the calibrations they link to.
+        if 'linkcal' not in ptable['JOBDESC'] and 'biasnight' in files_to_link:
             proccamword = difference_camwords(camword, badcamword)
             ptable, files_to_link = submit_linkcal_jobs(night, ptable, cal_override=cal_override,
                             proccamword=proccamword,
@@ -304,9 +429,9 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     zero_expids = np.array(zeros['EXPID'].data, dtype=int)
     darks = etable[np.isin(etable['EXPID'].data, dark_expid_to_process)]
 
-    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC']) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
+    bias_accounted_for = ('biasnight' in files_to_link and 'linkcal' in ptable['JOBDESC'] and bias_all_cam_override) or ('biasnight' in ptable['JOBDESC']) or ('biaspdark' in ptable['JOBDESC'])
     dobias = (not bias_accounted_for) and 'zero' in proc_obstypes and len(zero_expids) > 0
-
+    log.info(f'bias_accounted_for: {bias_accounted_for}, dobias: {dobias}')
     # Only submit pdark if it is after 30 days before 20240509 (see desispec issue #2571)
     ## Technically this is no longer needed, but left for belt and suspenders
     dark_date=night>20240408
@@ -352,16 +477,26 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
                                                      suppress_logging=True, exclude_badamps=True)
 
     ## If submit bias and darks, submit joint job, otherwise submit one or the other
-    if dobias and dodarks:
+    ## If there is a linkcal job that targets one but not the other and only certain cameras \
+    ## Split the jobs into bias and darks
+    if dobias and dodarks and bias_all_cam_override:
         log.info(f"Submitting biaspdark for night {night}.")
         prow['JOBDESC'] = 'biaspdark'
         prow['OBSTYPE'] = 'dark'
         prow['EXPID'] = dark_expid_to_process
     elif dobias:
         log.info(f"Submitting biasnight for night {night}.")
+        if biaslinkcamword is not None:
+            biasproccamword = difference_camwords(camword, biaslinkcamword)
+        else:
+            biasproccamword = camword
+        prow['PROCCAMWORD'] = columns_to_goodcamword(biasproccamword, badcamword, badamps,
+                                                     suppress_logging=True, exclude_badamps=True)
         prow['JOBDESC'] = 'biasnight'
         prow['OBSTYPE'] = 'zero'
         prow['EXPID'] = zero_expids[:1] # set as first zero expid
+        ## the pdark half, if any, is submitted separately below over all cameras
+        extra_job_args['steps'] = ['biasnight']
     elif dodarks:
         log.info(f"Submitting pdark for night {night}.")
         prow['JOBDESC'] = 'pdark'
@@ -387,6 +522,39 @@ def submit_biasnight_and_preproc_darks(night, dark_expids, proc_obstypes,
     else:
         log.info(f"No biasnight or preproc_darks jobs submitted for night {night}.")
 
+    ## If bias and darks were both requested but the bias only covers a subset of
+    ## cameras, the two were split above: biasnight was submitted there, so the
+    ## pdark still needs its own job here.
+    if not bias_all_cam_override and dobias and dodarks:
+        prow = default_prow()
+        prow['INTID'] = int_id + 1
+        prow['CALIBRATOR'] = 1
+        prow['NIGHT'] = night
+        prow['PROCCAMWORD'] = columns_to_goodcamword(camword, badcamword, badamps,
+                                                     suppress_logging=True, exclude_badamps=True)
+        log.info(f"Submitting pdark for night {night}.")
+        prow['JOBDESC'] = 'pdark'
+        prow['OBSTYPE'] = 'dark'
+        prow['EXPID'] = dark_expid_to_process
+        extra_job_args['steps'] = ['pdark']
+        if prow is not None:
+            prow = define_and_assign_dependency(prow, ptable)
+            prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
+                                        reservation=reservation,
+                                        strictly_successful=True,
+                                        check_for_outputs=True,
+                                        system_name=system_name,
+                                        extra_job_args=extra_job_args)
+            ## Add the processing row to the processing table
+            ptable.add_row(prow)
+            if len(ptable) > 0 and dry_run_level < 3:
+                write_table(ptable, tablename=proc_table_pathname, tabletype='proctable')
+            sleep_and_report(sub_wait_time,
+                                message_suffix=f"to slow down the queue submission rate",
+                                dry_run=(dry_run_level>0), logfunc=log.info)
+            log.info(f"Successfully submitted {prow['JOBDESC']} job for night {night}.")
+        else:
+            log.info(f"No preproc_darks jobs submitted for night {night}.")
     return ptable
 
 
@@ -398,7 +566,8 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
                                                   sub_wait_time=0.1, dry_run_level=0,
                                                   psf_linking_without_fflat=False,
                                                   n_nights_before=None, n_nights_after=None,
-                                                  queue=None, system_name=None):
+                                                  queue=None, reservation=None,
+                                                  system_name=None):
     """
     Submit biasnight and preproc_darks jobs for the given reference night.
     This function will read the override file, determine what calibrations
@@ -424,6 +593,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
         n_nights_before (int, optional): Number of nights before the reference night to process. Default is None.
         n_nights_after (int, optional): Number of nights after the reference night to process. Default is None.
         queue (str): Queue to be used.
+        reservation (str, optional): Slurm reservation to use. Default is None.
         system_name (str, optional): name of batch system, e.g. cori-haswell, perlmutter
 
     Returns:
@@ -466,7 +636,7 @@ def submit_necessary_biasnights_and_preproc_darks(reference_night, proc_obstypes
             specprod=specprod, path_to_data=path_to_data,
             sub_wait_time=sub_wait_time, dry_run_level=dry_run_level,
             psf_linking_without_fflat=psf_linking_without_fflat,
-            queue=queue, system_name=system_name)
+            queue=queue, reservation=reservation, system_name=system_name)
         if night == reference_night:
             refnight_ptable = ptable
 

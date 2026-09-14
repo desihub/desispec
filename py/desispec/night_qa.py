@@ -35,6 +35,14 @@ from desispec.correct_cte import get_rowbyrow_image_model
 from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
+## Shouldn't need to try-except, but Sphinx must be mocking
+## this because it fails autodocs
+try:
+    matplotlib.rcParams["image.interpolation_stage"] = "data"
+except TypeError:
+    # likely mocked by Sphinx autodoc
+    pass
+
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
@@ -251,7 +259,7 @@ def get_morning_dark_night_expid(night, prod, exptime=1200):
 
 def get_ctedet_night_expid(night, prod):
     """
-    Returns the EXPID of the 1s FLAT exposure for a given night.
+    Returns the EXPID of the 1s/3s/10s FLAT exposure for a given night.
     If not present, takes the science exposure with the lowest sky counts.
 
     Args:
@@ -282,8 +290,9 @@ def get_ctedet_night_expid(night, prod):
             )
         ]
     )
-    ctedet_expid = None
-    # AR checking preproc-??-{EXPID}.fits
+    ctedet_expid, ctedet_reqt = None, None
+    ctedet_reqts_by_expid = dict()
+    # AR checking preproc-??-{EXPID}.fits, with early break on an optimal 1s FLAT
     for expid in expids:
         fns = sorted(
             glob(
@@ -299,20 +308,29 @@ def get_ctedet_night_expid(night, prod):
         # AR if some preproc files, just pick the first one
         if len(fns) > 0:
             hdr = fitsio.read_header(fns[0], "IMAGE")
-            if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
-                ctedet_expid = hdr["EXPID"]
+            if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] in [1, 3, 10]):
+                ctedet_reqts_by_expid[hdr["EXPID"]] = hdr["REQTIME"]
+                if hdr["REQTIME"] == 1:
+                    break
+    # AR prioritize 1s, then 3s, then 10s FLATs
+    for reqt in [1, 3, 10]:
+        for expid in expids:
+            if ctedet_reqts_by_expid.get(expid) == reqt:
+                ctedet_expid, ctedet_reqt = expid, reqt
                 break
+        if ctedet_expid is not None:
+            break
     if ctedet_expid is not None:
         log.info(
-            "found EXPID={} as the 1s FLAT for NIGHT={}".format(
-                expid, night,
+            "found EXPID={} as the {}s FLAT for NIGHT={}".format(
+                ctedet_expid, ctedet_reqt, night,
             )
         )
-    # AR if no 1s FLAT, go for the SCIENCE exposure with the lowest sky counts
+    # AR if no 1s/3s/10s FLAT, go for the SCIENCE exposure with the lowest sky counts
     # AR using the r-band sky
     else:
         log.warning(
-            "no EXPID found as the 1s FLAT for NIGHT={}; going for SCIENCE exposures".format(night)
+            "no EXPID found as the 1s/3s/10s FLAT for NIGHT={}; going for SCIENCE exposures".format(night)
         )
         minsky = 1e10
         # AR checking sky-r?-{EXPID}.fits
@@ -1681,9 +1699,6 @@ def create_petalnz_pdf(
           surveys other than main..
     """
 
-    # AR temporary output file
-    tmp_outpdf = get_tempfilename(outpdf)
-
     petals = np.arange(10, dtype=int)
     n_dark_passids = 9 # dark+dark1b
     # AR safe
@@ -1751,7 +1766,8 @@ def create_petalnz_pdf(
         if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
-        faprgrm = hdr["FAPRGRM"].lower().replace("1b", "") # AR merge bright+bright1b, dark+dark1b
+        faprgrm_orig = hdr["FAPRGRM"].lower()
+        faprgrm = faprgrm_orig.replace("1b", "") # AR merge bright+bright1b, dark+dark1b
         if faprgrm not in ["bright", "dark"]:
             log.warning("{} : FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn, faprgrm))
             continue
@@ -1787,6 +1803,7 @@ def create_petalnz_pdf(
                 d["SURVEY"] = np.array([survey for x in range(len(d))], dtype=object)
                 d["TILEID"] = np.array([tileid for x in range(len(d))], dtype=int)
                 d["PETAL_LOC"] = petal + np.zeros(len(d), dtype=int)
+                d["FAPRGRM"] = np.array([faprgrm_orig for x in range(len(d))], dtype=object)
                 sel = np.zeros(len(d), dtype=bool)
                 if faprgrm == "bright":
                     for msk in ["BGS_BRIGHT", "BGS_FAINT"]:
@@ -1896,9 +1913,18 @@ def create_petalnz_pdf(
         "ELG" : "b",
         "QSO" : "orange",
     }
-    with PdfPages(tmp_outpdf) as pdf:
-        # AR we need some tiles to plot!
-        if ntiles["bright"] + ntiles["dark"] > 0:
+
+    # SB cleanup from prior run; do this even if this run has no tiles to plot
+    if os.path.isfile(outpdf):
+        log.info(f"removing pre-existing {outpdf}")
+        os.remove(outpdf)
+
+    # AR temporary output file
+    tmp_outpdf = get_tempfilename(outpdf)
+
+    # AR we need some tiles to plot!
+    if ntiles["bright"] + ntiles["dark"] > 0:
+        with PdfPages(tmp_outpdf) as pdf:
             for survey in np.unique(surveys):
                 ntiles_surv = {
                     faprgrm : np.unique(
@@ -1907,6 +1933,7 @@ def create_petalnz_pdf(
                 }
                 # AR plotting only if some tiles
                 if np.sum([ntiles_surv[faprgrm] for faprgrm in faprgrms]) == 0:
+                    log.info(f"no SURVEY={survey} tiles with FAPRGRM in {faprgrms}, skipping plots")
                     continue
                 # AR three plots:
                 # AR - fraction of VALID fibers, bright+dark together
@@ -1949,6 +1976,10 @@ def create_petalnz_pdf(
                     faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
                     istracer = ds[faprgrm]["SURVEY"] == survey
                     istracer &= (ds[faprgrm][dtkey] & mask[tracer]) > 0
+                    if tracer == "LGE":
+                        istracer &= ds[faprgrm]["FAPRGRM"] == "dark1b"
+                    if tracer == "LGE" and istracer.sum() == 0:
+                        continue
                     istracer &= ds[faprgrm]["VALID"]
                     ys = np.nan + np.zeros(len(petals))
                     for petal in petals:
@@ -2033,6 +2064,10 @@ def create_petalnz_pdf(
                     faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
                     istracer = ds[faprgrm]["SURVEY"] == survey
                     istracer &= (ds[faprgrm][dtkey] & mask[tracer]) > 0
+                    if tracer == "LGE":
+                        istracer &= ds[faprgrm]["FAPRGRM"] == "dark1b"
+                    if tracer == "LGE" and istracer.sum() == 0:
+                        continue
                     istracer &= ds[faprgrm]["VALID"]
                     istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
                     bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
@@ -2088,8 +2123,17 @@ def create_petalnz_pdf(
                         pdf.savefig(fig, bbox_inches="tight")
                         plt.close()
 
-    # AR move to final location
-    os.rename(tmp_outpdf, outpdf)
+        # AR move to final location
+        if os.path.exists(tmp_outpdf) and os.path.getsize(tmp_outpdf) > 0:
+            os.rename(tmp_outpdf, outpdf)
+        else:
+            # could happen if no tiles pass within the pdf creation loop
+            if os.path.exists(tmp_outpdf):
+                os.remove(tmp_outpdf)
+            log.warning(f"{tmp_outpdf} not created (or empty); skipping {outpdf}")
+
+    else:
+        log.warning(f"no tiles to plot for night {night}")
 
 
 def path_full2web(fn):

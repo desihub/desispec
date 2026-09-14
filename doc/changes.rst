@@ -2,15 +2,176 @@
 desispec Change Log
 ===================
 
-0.71.1 (unreleased)
+0.72.0 (unreleased)
+-------------------
+
+Changes made for daily operations (daily branch) while Matterhorn was running.
+These changes were not used in Matterhorn.
+
+* Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
+* Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
+* Bundle the nightly arc, normal-flat, and CTE-flat calibrations into one
+  Slurm job each, replacing the previous one-job-per-exposure submissions.
+  A normal night now submits 3 calibration jobs instead of 22. Note this
+  also lowers the ``ARC`` node cap in ``determine_resources()`` from 10 to 5;
+  ``PSFNIGHT`` is raised to 15 so a bundle can run every arc at once.
+* Add ``desi_prod_dag``, which writes a navigable HTML view of an entire
+  production's job dependency graph. Complements ``desi_job_graph``,
+  which draws one night as a static mermaid diagram.
+* ``desi_submit_prod`` now scans the override files of the nights it will
+  process and, for any that link calibrations from a *later* reference night,
+  submits that reference night's calibrations before the earlier night. When
+  ``biasnight`` is linked, the reference night's bias is submitted on its own
+  first, since the subsequent darknight generation spans nights and would
+  otherwise reach the linking night before its bias dependency exists.
+* Add python/3.14 and astropy/8.x to CI test matrix.  Add tests checking the
+  astropy behaviors that desispec I/O depends upon.
+* Require that preprocessed darks strictly use the nightly bias of their own
+  night and camera instead of silently falling back to the default bias
+  (`issue #2741`_). ``desi_preproc_darks`` now exits non-zero without
+  preprocessing anything if even one camera lacks a matching ``biasnight``,
+  and ``desi_compute_dark`` skips ``dark_preproc`` files that used a different
+  bias; both take ``--allow-default-bias`` to opt out. Relatedly,
+  ``desi_compute_dark_night`` no longer hands the reference night's bias to
+  every night of darks it spans.
+* Only try make science based nightqa PDFs if the data exists. (PR `#2767`_).
+* Turn Coveralls reporting back on in CI. (PR `#2768`_).
+* Merge daily branch into main (PR `#2770`_).
+* Switch to DR11 layer in legacysurvey URLs. (PR `#2772`_).
+* Restrict LGE petal n(z) QA to dark1b tiles (PR `#2773`_).
+* night QA petalnz fix when there are no tiles to plot (PR `#2774`_).
+* Improve the redshift quality cuts outside LSS redshift ranges (PR `#2775`_).
+* add good_z_lya criteria (PR `#2780`_).
+* add wise_var_qso to validredshifts function (PR `#2786`_).
+* keep DESI_TARGET+ for zcat SURVEY=special (PR `#2787`_).
+* Propagate UNIQPIX into spectra/coadd FIBERMAP headers (PR `#2796`_).
+* Bundle arcs into a single psfnight job and do similar for flats and cteflats (PR `#2799`_).
+* Override On a Per Camera Basis - Biases (PR `#2801`_).
+* Handle discrepant RA,DEC,etc per TARGETID (attempt 2) (PR `#2804`_).
+* Add OIII and QAFIBERSTATUS columns (PR `#2806`_).
+* fix WISE_VAR_QSO redshift logic (PR `#2808`_).
+* update determine_science_to_proc (PR `#2809`_).
+* Update submit prod for linkcals and add production-level job graph (PR `#2810`_).
+* Use multiprocessing.Pool fork (not forkserver) to get NoGPU context (PR `#2812`_).
+* Fix qsoqn redrock-rerun targetid matching crash on NumPy 2.x (PR `#2814`_).
+* Add tests for python/3.14 and astropy/8.x (PR `#2815`_).
+* Prevent intermittent CI hangs by bounding bootcalib test data downloads (PR `#2816`_).
+* Require matching nightly biases for preprocessed darks (#2741) (PR `#2817`_).
+
+.. _`#2720`: https://github.com/desihub/desispec/pull/2720
+.. _`#2721`: https://github.com/desihub/desispec/pull/2721
+.. _`issue #2741`: https://github.com/desihub/desispec/issues/2741
+.. _`#2767`: https://github.com/desihub/desispec/pull/2767
+.. _`#2768`: https://github.com/desihub/desispec/pull/2768
+.. _`#2770`: https://github.com/desihub/desispec/pull/2770
+.. _`#2772`: https://github.com/desihub/desispec/pull/2772
+.. _`#2773`: https://github.com/desihub/desispec/pull/2773
+.. _`#2774`: https://github.com/desihub/desispec/pull/2774
+.. _`#2775`: https://github.com/desihub/desispec/pull/2775
+.. _`#2780`: https://github.com/desihub/desispec/pull/2780
+.. _`#2786`: https://github.com/desihub/desispec/pull/2786
+.. _`#2787`: https://github.com/desihub/desispec/pull/2787
+.. _`#2796`: https://github.com/desihub/desispec/pull/2796
+.. _`#2799`: https://github.com/desihub/desispec/pull/2799
+.. _`#2801`: https://github.com/desihub/desispec/pull/2801
+.. _`#2804`: https://github.com/desihub/desispec/pull/2804
+.. _`#2806`: https://github.com/desihub/desispec/pull/2806
+.. _`#2808`: https://github.com/desihub/desispec/pull/2808
+.. _`#2809`: https://github.com/desihub/desispec/pull/2809
+.. _`#2810`: https://github.com/desihub/desispec/pull/2810
+.. _`#2812`: https://github.com/desihub/desispec/pull/2812
+.. _`#2814`: https://github.com/desihub/desispec/pull/2814
+.. _`#2815`: https://github.com/desihub/desispec/pull/2815
+.. _`#2816`: https://github.com/desihub/desispec/pull/2816
+.. _`#2817`: https://github.com/desihub/desispec/pull/2817
+
+0.71.6 (2026-06-03)
+-------------------
+
+Last Matterhorn tag, used to generate final redshift catalogs.
+
+* Add LGE support to validredshifts and zcatalog (PR `#2765`_).
+
+.. _`#2765`: https://github.com/desihub/desispec/pull/2765
+
+0.71.5 (2026-06-02)
+-------------------
+
+Updated tag for Matterhorn zcatalogs.
+
+* Add uniqpix support to desi_zcatalog v2; allow COADD_FIBERSTATUS=VARIABLE as GOOD_SPEC. (PR `#2762`_).
+
+For daily ops:
+
+* Prioritize 3s/10s CTE flats before science fallback for CTE QA (PR `#2763`_).
+* Fix nightqa cterowbyrow plot range (PR `#2764`_).
+
+.. _`#2762`: https://github.com/desihub/desispec/pull/2762
+.. _`#2763`: https://github.com/desihub/desispec/pull/2763
+.. _`#2764`: https://github.com/desihub/desispec/pull/2764
+
+0.71.4 (2026-05-28)
+-------------------
+
+* Update to `desi_resubmit_zpix` bookkeeping for matterhorn (PR `#2759`_).
+
+.. _`#2759`: https://github.com/desihub/desispec/pull/2759
+
+0.71.3 (2026-05-21)
+-------------------
+
+Further updates for Matterhorn, tagged before running cross-tile spectra.
+
+Major data organization change:
+
+* Use adaptively-sized "uniqpix" instead of fixed-size healpix for cross tile coadds (PR `#2755`_, `#2758`_).
+
+Other changes
+
+* Fix program-to-efftime in zcatalog (PR `#2746`_).
+* Add CCD history script (PR `#2751`_).
+* Calculate ``SIGMA_COADD_NORM`` from final recomputed coadd norm (PR `#2753`_).
+* Add more TSNR afterburner information to exposure-qa files (PR `#2756`_).
+
+.. _`#2746`: https://github.com/desihub/desispec/pull/2746
+.. _`#2751`: https://github.com/desihub/desispec/pull/2751
+.. _`#2753`: https://github.com/desihub/desispec/pull/2753
+.. _`#2755`: https://github.com/desihub/desispec/pull/2755
+.. _`#2756`: https://github.com/desihub/desispec/pull/2756
+.. _`#2758`: https://github.com/desihub/desispec/pull/2758
+
+
+0.71.2 (2026-05-01)
 -------------------
 
 * Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
+* Don't drop first 2 calib zeros if they are needed to get to full 15 required (PR `#2743`_).
 
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
+.. _`#2743`: https://github.com/desihub/desispec/pull/2743
+
+0.71.1 (2026-04-27)
+-------------------
+
+This is the second tag used by Matterhorn.  One change is not backwards
+compatible with 0.71.0, impacting exactly which standard stars are selected.
+
+* Don't median-normalize flat-to-psf corr per petal when selecting standards (PR `#2724`_).
+
+Other changes are backwards compatible or otherwise consistent with how
+Matterhorn jobs were launched.
+
+* Correct POORPOSITION description (PR `#2719`_).
+* use_reservation add biasnight,biaspdark; handle DependencyNeverSatisfied (PR `#2722`_).
+* Fix to crossnight camword bug in submitting biasnight (PR `#2731`_).
+
+.. _`#2719`: https://github.com/desihub/desispec/pull/2719
+.. _`#2722`: https://github.com/desihub/desispec/pull/2722
+.. _`#2724`: https://github.com/desihub/desispec/pull/2724
+.. _`#2731`: https://github.com/desihub/desispec/pull/2731
 
 0.71.0 (2026-04-10)
 -------------------

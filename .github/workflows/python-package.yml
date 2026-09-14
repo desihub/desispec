@@ -17,30 +17,25 @@ jobs:
             fail-fast: true
             matrix:
                 include:
+                  # latest everything; approximately matches NERSC desiconda
+                  # 20260908-3.0.0 (python 3.14, numpy 2.5, astropy 8.0)
+                  - os: ubuntu-latest
+                    python-version: '3.14'
+                    numpy-version: ''
+                    scipy-version: ''
+                    astropy-version: '<9.0'
+                    matplotlib-version: ''
+                    fitsio-version: ''
+                    numba-version: ''
+                  # astropy 7.x with a somewhat older numpy
                   - os: ubuntu-latest
                     python-version: '3.13'
-                    numpy-version: '<2.3' # Numba does not yet support NumPy 2.3!
+                    numpy-version: '<2.4'
                     scipy-version: ''
                     astropy-version: '<8.0'
                     matplotlib-version: ''
                     fitsio-version: ''
                     numba-version: ''
-                  - os: ubuntu-latest
-                    python-version: '3.12'
-                    numpy-version: '<2.2'
-                    scipy-version: '<1.16'
-                    astropy-version: '<7.0'
-                    matplotlib-version: '<3.12'
-                    fitsio-version: ''
-                    numba-version: ''
-                  - os: ubuntu-latest
-                    python-version: '3.11'
-                    numpy-version: '<2.1'
-                    scipy-version: '<1.14'
-                    astropy-version: '<6.1'
-                    matplotlib-version: '<3.11'
-                    fitsio-version: ''
-                    numba-version: '<0.70'
                   - os: ubuntu-latest
                     python-version: '3.10'
                     numpy-version: '<2.0'
@@ -58,7 +53,9 @@ jobs:
 
         steps:
             - name: Install System Packages
-              run: sudo apt install libbz2-dev subversion
+              run: |
+                  sudo apt-get -y update
+                  sudo apt-get -y install libbz2-dev subversion
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Set up Python ${{ matrix.python-version }}
@@ -68,11 +65,15 @@ jobs:
             - name: Install Python dependencies
               run: |
                 python -m pip install --upgrade pip setuptools wheel
-                python -m pip install pytz healpy llvmlite speclite
-                python -m pip install 'numpy${{ matrix.numpy-version }}' 'scipy${{ matrix.scipy-version }}' 'astropy${{ matrix.astropy-version }}' 'matplotlib${{ matrix.matplotlib-version }}' specutils
+                python -m pip install pytz healpy llvmlite speclite pandas
+                #- numba is resolved together with numpy so that pip picks a
+                #- mutually consistent pair instead of silently ignoring
+                #- numba's numpy requirement
+                python -m pip install 'numpy${{ matrix.numpy-version }}' 'scipy${{ matrix.scipy-version }}' 'astropy${{ matrix.astropy-version }}' 'matplotlib${{ matrix.matplotlib-version }}' 'numba${{ matrix.numba-version }}' specutils
+                #- fitsio has no wheels, so force a source rebuild against the
+                #- numpy resolved above; a cached wheel may target another numpy
                 python -m pip cache remove fitsio
-                python -m pip cache remove numba
-                python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}' 'numba${{ matrix.numba-version }}'
+                python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
                 python -m pip install pytest
             - name: Install DESI dependencies
               env:
@@ -115,7 +116,9 @@ jobs:
 
         steps:
             - name: Install System Packages
-              run: sudo apt install libbz2-dev subversion
+              run: |
+                  sudo apt-get -y update
+                  sudo apt-get -y install libbz2-dev subversion
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Set up Python ${{ matrix.python-version }}
@@ -125,11 +128,11 @@ jobs:
             - name: Install Python dependencies
               run: |
                 python -m pip install --upgrade pip setuptools wheel
-                python -m pip install pytz healpy llvmlite speclite
-                python -m pip install 'numpy${{ matrix.numpy-version }}' 'scipy${{ matrix.scipy-version }}' 'astropy${{ matrix.astropy-version }}' 'matplotlib${{ matrix.matplotlib-version }}'
+                python -m pip install pytz healpy llvmlite speclite pandas
+                #- see the comments on the same commands in the tests job above
+                python -m pip install 'numpy${{ matrix.numpy-version }}' 'scipy${{ matrix.scipy-version }}' 'astropy${{ matrix.astropy-version }}' 'matplotlib${{ matrix.matplotlib-version }}' 'numba${{ matrix.numba-version }}'
                 python -m pip cache remove fitsio
-                python -m pip cache remove numba
-                python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}' 'numba${{ matrix.numba-version }}'
+                python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
                 python -m pip install pytest pytest-cov coveralls
             - name: Install DESI dependencies
               env:
@@ -154,12 +157,11 @@ jobs:
             - name: Run the test
               run: pytest --cov
 
-# 2026-02-27 : Coveralls is having a major outage; skip the coverage upload
-###            - name: Coveralls
-###              env:
-###                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-###                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-###              run: coveralls
+            - name: Coveralls
+              env:
+                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: coveralls
 
     desilite:
         name: Test minimal env

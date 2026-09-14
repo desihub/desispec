@@ -30,6 +30,7 @@ from desiutil.log import get_logger, DEBUG
 from desiutil.annotate import load_csv_units
 from desiutil.names import radec_to_desiname
 import desiutil.depend
+import desiutil.healpix
 
 from desitarget.targetmask import desi_mask
 
@@ -99,6 +100,40 @@ def _wrap_read_redrock(optdict):
     """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
 
+
+def _match_qa_targets(table, targetids, filename):
+    """Filter and reorder a QA table to match a Redrock TARGETID array."""
+    keep = np.isin(table['TARGETID'], targetids)
+    table = table[keep]
+
+    if len(table) != len(targetids) or not np.all(np.isin(targetids, table['TARGETID'])):
+        msg = f'{filename} does not contain exactly one row for every Redrock TARGETID'
+        raise ValueError(msg)
+
+    if not np.all(table['TARGETID'] == targetids):
+        ii = np.argsort(table['TARGETID'])
+        jj = np.searchsorted(table['TARGETID'][ii], targetids)
+        table = table[ii[jj]]
+
+    assert np.all(table['TARGETID'] == targetids)
+    return table
+
+
+def _read_qafiberstatus(rrfile, targetids):
+    """Read tile-qa QAFIBERSTATUS, matched to Redrock rows."""
+
+    # Map redrock -> tile-qa filepath, dropping petal N
+    # /path/to/redrock-N-TILEID-blat.fits -> /path/to/tile-qa-TILEID-blat.fits
+    dirname, basename = os.path.split(rrfile)
+    tmp = basename.split('-')
+    tileqa_file = os.path.join(dirname, '-'.join(['tile-qa'] + tmp[2:]))
+
+    tileqa = Table(fitsio.read(tileqa_file, 'FIBERQA',
+                              columns=['TARGETID', 'QAFIBERSTATUS']))
+    tileqa = _match_qa_targets(tileqa, targetids, tileqa_file)
+
+    return np.array(tileqa['QAFIBERSTATUS'])
+
 def read_redrock(rrfile, group=None, pertile=False, counter=None):
     """
     Read Redrock, emline, mgii, and qso_qn files, combining HDUs into single table
@@ -122,10 +157,8 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         log.info(f'Reading {rrfile}')
 
     with fitsio.FITS(rrfile) as fx:
-        hdr = fx[0].read_header()
 
-        # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-        program = hdr['PROGRAM']
+        hdr = fx[0].read_header()
 
         if group is not None and 'SPGRP' in hdr and \
                 hdr['SPGRP'] != group:
@@ -212,7 +245,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     fmcols = list(fibermap.dtype.names)
     fmcols.remove('TARGETID')
 
-    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
+    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR', 'OIII_FLUX', 'OIII_FLUX_IVAR']
     qso_mgii_cols = ['IS_QSO_MGII']
     qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW', 'ZWARN_NEW', 'SPECTYPE_NEW', 'SUBTYPE_NEW', 'CHI2_NEW', 'DELTACHI2_NEW', 'COEFF_NEW']
 
@@ -226,6 +259,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         qso_mgii[qso_mgii_cols],
         qso_qn[qso_qn_cols]
         ], join_type='exact')
+
+    if group == 'cumulative':
+        data['QAFIBERSTATUS'] = _read_qafiberstatus(rrfile, redshifts['TARGETID'])
 
     #
     # These old columns show up in zbest files. They have been replaced with
@@ -333,6 +369,16 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     elif group == 'healpix':
         data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
                 index=icol, name='HEALPIX')
+    elif group == 'uniqpix':
+        uniqpix = desiutil.healpix.hpix2upix(hdr['HPXNSIDE'], hdr['HPXPIXEL'])
+        data.add_column(np.full(nrows, uniqpix, dtype=np.int32),
+                index=icol, name='UNIQPIX')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['HPXNSIDE'], dtype=np.int32),
+                index=icol, name='NSIDE')
 
     icol += 1
 
@@ -358,9 +404,6 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     data.add_column(np.full(nrows, val, dtype=dtype),
             index=icol, name='SPGRPVAL')
 
-    # PROGRAM is needed for TSNR2 -> EFFTIME_SPEC conversion
-    data['PROGRAM'] = program
-
     return data, expfibermap
 
 
@@ -380,7 +423,7 @@ def parse(options=None):
 
     parser.add_argument("--survey", type=str, required=True,
             help="DESI survey, e.g. sv1, sv3, main")
-    parser.add_argument("--program", type=str,
+    parser.add_argument("--program", type=str, required=True,
             help="DESI program, e.g bright, dark")
 
     parser.add_argument("-g", "--group", type=str,
@@ -454,14 +497,28 @@ def main(args=None):
             return 1
 
     survey = args.survey
+    program = args.program
+
+    # Confirm valid survey and program before doing much work
+    # e.g. survey is used to know which target columns to keep
+    valid_programs = ['backup', 'bright', 'dark', 'other']
+    if program not in valid_programs:
+        msg = f'Invalid program={program}; it must be one of {valid_programs}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    valid_surveys = ['cmx', 'sv1', 'sv2', 'sv3', 'main', 'special']
+    if survey not in valid_surveys:
+        msg = f'Invalid survey={survey}; it must be one of {valid_surveys}'
+        log.critical(msg)
+        raise ValueError(msg)
 
     if args.indir is not None:
         indir = args.indir
         redrockfiles = sorted(io.iterfiles(f'{indir}', prefix='redrock', suffix='.fits'))
-        pertile = (args.group != 'healpix')  # assume tile-based input unless explicitely healpix
+        pertile = args.group not in ('healpix', 'uniqpix')
     elif args.group == 'healpix':
         pertile = False
-        program = args.program if args.program is not None else "*"
         indir = os.path.join(io.specprod_root(), 'healpix')
 
         # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
@@ -470,6 +527,17 @@ def main(args=None):
         # specprod/healpix/SURVEY/PROGRAM/HPIXGROUP/HPIX/redrock*.fits
         globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
         log.info(f'Looking for healpix redrock files in {globstr}')
+        redrockfiles = sorted(glob.glob(globstr))
+    elif args.group == 'uniqpix':
+        pertile = False
+        indir = os.path.join(io.specprod_root(), 'spectra')
+
+        # special case for NERSC; use read-only mount regardless of $DESI_SPECTRO_REDUX
+        indir = get_readonly_filepath(indir)
+
+        # specprod/spectra/SURVEY/PROGRAM/UPIXGROUP/UPIX/redrock*.fits
+        globstr = os.path.join(indir, survey, program, '*', '*', 'redrock*.fits')
+        log.info(f'Looking for uniqpix redrock files in {globstr}')
         redrockfiles = sorted(glob.glob(globstr))
     else:
         pertile = True
@@ -497,12 +565,13 @@ def main(args=None):
                 log.critical(f'No tiles kept after filtering by SURVEY={args.survey}')
                 return 1
 
-        if args.program is not None:
-            keep = tiles['PROGRAM'] == args.program
-            tiles = tiles[keep]
-            if len(tiles) == 0:
-                log.critical(f'No tiles kept after filtering by PROGRAM={args.program}')
-                return 1
+        # use startswith so that bright1b/dark1b are included in bright/dark
+        # need to convert bytes (from Table.read) to string
+        keep = np.char.startswith(np.array(tiles['PROGRAM'], dtype=str), program)
+        tiles = tiles[keep]
+        if len(tiles) == 0:
+            log.critical(f'No tiles kept after filtering by PROGRAM={program}')
+            return 1
 
         tileids = tiles['TILEID']
         log.info(f'Searching disk for redrock*.fits files from {len(tileids)} tiles')
@@ -605,13 +674,8 @@ def main(args=None):
             raise ValueError(f'FIRSTNIGHT not set for tiles {badtiles}')
 
     # Add EFFTIME_SPEC
-    zcat['EFFTIME_SPEC'] = np.full(len(zcat), -999., dtype=np.float32)
-    for program in np.unique(zcat['PROGRAM']):
-        mask = zcat['PROGRAM']==program
-        tsnr2_col = program_to_tsnr2_colname(program)
-        zcat['EFFTIME_SPEC'][mask] = tsnr2_to_efftime(zcat[tsnr2_col][mask], tsnr2_col[6:])
-    assert np.all(zcat['EFFTIME_SPEC']!=-999.)  # check that all objects are assigned a EFFTIME_SPEC value
-    zcat.remove_column('PROGRAM')
+    tsnr2_col = program_to_tsnr2_colname(program)
+    zcat['EFFTIME_SPEC'] = tsnr2_to_efftime(zcat[tsnr2_col], tsnr2_col[6:])
 
     log.info('Finding best spectrum for each target')
     nspec, primary = find_primary_spectra(zcat, sort_column='EFFTIME_SPEC')
@@ -652,21 +716,25 @@ def main(args=None):
                         log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
     ######
-    # Add GOOD_Z_{BGS,LRG,ELG,QSO} redshift quality flags
+    # Add GOOD_Z_{BGS,LRG,ELG,QSO,LYA} redshift quality flags
     # - passes LSS quality cuts from validredshifts.actually_validate
     # - science target with good hardware
     # - core DESI tracer target selection (and not e.g. secondary QSOs)
     # - SURVEY is main/sv1/sv2/sv3 (not special)
+    # - GOOD_Z_LYA is only available for main survey
 
-    # LSS cuts
-    zqual = validredshifts.actually_validate(zcat)
+    # LSS redshift quality cuts
+    if survey=='main':
+        zqual = validredshifts.actually_validate(zcat, populate_missing_columns=True)
+    else:
+        zqual = validredshifts.actually_validate(zcat, ignore_lya=True, populate_missing_columns=True)
 
     # GOOD_SPEC: true if it is a science spectrum with good hardware status
     good_spec = validredshifts.get_good_fiberstatus(zcat)
     good_spec &= zcat['OBJTYPE']=='TGT'    # not included in LSS BGS,LRG,ELG cuts
     zqual['GOOD_SPEC'] = good_spec.copy()  # GOOD_SPEC: true if it is a science spectrum with good hardware status
 
-    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+    for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
         zqual[col] &= zqual['GOOD_SPEC']  # require good hardware quality for GOOD_Z_TRACER
 
     # Require primary tracer targeting
@@ -676,9 +744,9 @@ def main(args=None):
         else:
             desi_target_col = survey.upper()+'_DESI_TARGET'
 
-        # The BGS_ANY, LRG, ELG and QSO target bits are the same in SV1 to main
+        # The BGS_ANY, LRG+LGE, ELG and QSO target bits are the same in SV1 to main
         is_bgs = (zcat[desi_target_col] & desi_mask.BGS_ANY) != 0
-        is_lrg = (zcat[desi_target_col] & desi_mask.LRG) != 0
+        is_lrg = (zcat[desi_target_col] & (desi_mask.LRG | desi_mask.LGE)) != 0
         is_elg = (zcat[desi_target_col] & desi_mask.ELG) != 0
         is_qso = (zcat[desi_target_col] & desi_mask.QSO) != 0
 
@@ -687,18 +755,20 @@ def main(args=None):
         # False if it is not a Tracer target or if it is a TRACER target but fails TRACER redshift quality cut;
         # They apply to the Z column
         zqual['GOOD_Z_BGS'] &= is_bgs
-        zqual['GOOD_Z_LRG'] &= is_lrg
+        zqual['GOOD_Z_LRG'] &= is_lrg  # GOOD_Z_LRG includes both LRG and LGE
         zqual['GOOD_Z_ELG'] &= is_elg
 
-        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to Z_QSO column, not Z column
+        # GOOD_Z_QSO: like GOOD_Z_{BGS,LRG,ELG}, but applies to the Z_QSO column, not the Z column
         # True if it is a QSO target AND passes the QSO redshift quality cut
         zqual['GOOD_Z_QSO'] &= is_qso
-        
-        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO} definitions are more restrictive than in desispec.validredshifts
-        # as the per-target class and GOOD_SPEC requirements are added here
+        # GOOD_Z_LYA (if available) also applies to the Z_QSO column
+        # For GOOD_Z_LYA we do not check for target membership here because it was done in desispec.validredshifts
+
+        # Note that the GOOD_Z_{BGS,LRG,ELG,QSO,LYA} definitions are more restrictive than in desispec.validredshifts
+        # as the target membership and GOOD_SPEC requirements are added here
 
     else:
-        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO']:
+        for col in ['GOOD_Z_BGS', 'GOOD_Z_LRG', 'GOOD_Z_ELG', 'GOOD_Z_QSO', 'GOOD_Z_LYA']:
             zqual[col] = False
 
     ######
@@ -717,7 +787,7 @@ def main(args=None):
     # Z_CONF=3: highly confident redshift
     # criteria: the object must belong to one of the DESI primary extragalactic target classes (BGS, LRG, ELG, QSO)
     # and pass the LSS redshift quality cuts
-    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO']
+    mask = zqual['GOOD_Z_BGS'] | zqual['GOOD_Z_LRG'] | zqual['GOOD_Z_ELG'] | zqual['GOOD_Z_QSO'] | zqual['GOOD_Z_LYA']
     zqual['Z_CONF'][mask] = 3
 
     zcat = hstack([zcat, zqual], join_type='exact')
@@ -730,7 +800,7 @@ def main(args=None):
     # Use Z_QSO if GOOD_Z_QSO==True and Z_QSO differs by more than 1000 km/s from Z
     c = astropy.constants.c.to('km/s').value
     dv = c*(zcat['Z']-zcat['Z_QSO'])/(1+zcat['Z_QSO'])
-    mask = zcat['GOOD_Z_QSO'] & (np.abs(dv) > 1000)
+    mask = (zcat['GOOD_Z_QSO'] | zcat['GOOD_Z_LYA']) & (np.abs(dv) > 1000)
     zcat['Z_BEST'][mask] = zcat['Z_QSO'][mask].copy()
     for col in z_cols:
         if col!='Z':
@@ -746,14 +816,22 @@ def main(args=None):
             zcat['OBSCONDITIONS'] = zcat['OBSCONDITIONS'].astype('int16')
 
     columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
+    if args.group == 'uniqpix':
+        columns_basic = ['UNIQPIX' if col == 'HEALPIX' else col for col in columns_basic]
     columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
-    # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
-    if survey!='main':
+    # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
+    if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
         for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
             if col in zcat.colnames:
                 zcat.remove_column(col)
+    elif survey not in ('main', 'special'):
+        # valid survey should already be checked at start, but belt-and-suspenders re-check here
+        # to avoid silently guessing what a new survey should do
+        msg = f'Unknown if SURVEY={survey} has valid DESI_TARGET, BGS_TARGET, MWS_TARGET, SCND_TARGET bits'
+        log.critical(msg)
+        raise ValueError(msg)
 
     # Remove the columns that do not exist
     columns_basic = [col for col in columns_basic if col in zcat.colnames]
@@ -774,7 +852,7 @@ def main(args=None):
     #- across multiple files
     header = fitsio.read_header(redrockfiles[0], 0)
     for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL',
-                'NAXIS', 'BITPIX', 'SIMPLE', 'EXTEND']:
+                'UNIQPIX', 'HPXNSIDE', 'NAXIS', 'BITPIX', 'SIMPLE', 'EXTEND']:
         if key in header:
             header.delete(key)
 
@@ -794,11 +872,8 @@ def main(args=None):
             key, value = parse_keyval(keyval)
             header[key] = value
 
-    if survey is not None:
-        header['SURVEY'] = survey
-
-    if args.program is not None:
-        header['PROGRAM'] = args.program
+    header['SURVEY'] = survey
+    header['PROGRAM'] = program
 
     #- Add units if requested
     if add_units:
@@ -848,4 +923,3 @@ def main(args=None):
     log.info("Successfully wrote {}".format(outfile_expfm))
 
     log.info(f'desi_zcatalog all done at {time.asctime()}')
-
