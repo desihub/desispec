@@ -5,7 +5,12 @@ desispec Change Log
 0.71.1 (unreleased)
 -------------------
 
-* no changes yet
+* Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
+  that ``psfnight`` only fails on real fit failures.  Requires the specex changes
+  in `specex#91`_, which must be installed first (PR `#2732`_).
+
+.. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`specex#91`: https://github.com/desihub/specex/pull/91
 
 0.71.0 (2026-04-10)
 -------------------

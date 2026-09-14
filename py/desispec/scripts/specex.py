@@ -290,7 +290,10 @@ def main(args=None, comm=None):
             try:
                 if args.dont_merge_with_input :
                     log.info("Do not include input PSF when merging bundles")
-                    merge_psf(bundlefiles[0], bundlefiles[1:], outfits)
+                    #- pass bundlefiles[0] as an input as well as the template;
+                    #- merge_psf resets the template's STATUS and B##RCHI2, so
+                    #- otherwise a fit failure in that first bundle is dropped
+                    merge_psf(bundlefiles[0], bundlefiles, outfits)
                 else :
                     merge_psf(inpsffile, bundlefiles, outfits)
             except Exception as e:
@@ -300,11 +303,21 @@ def main(args=None, comm=None):
 
             log.info('done merging')
 
+            #- a merge_psf exception is caught above, but that must not be
+            #- reported as success: without this check the camera is logged
+            #- SUCCESS with no merged PSF on disk.  Raise before removing the
+            #- per-bundle files so that they survive for debugging.
+            if not os.path.isfile(outfits) :
+                message = f"merging failed: {outfits} was not written"
+                log.critical(message)
+                raise RuntimeError(message)
+
             for f in bundlefiles :
                 if os.path.isfile(f):
                     os.remove(f)
 
-            log.warning(f"The fit of the following bundles failed: {failed_bundles}")
+            if len(failed_bundles) > 0 :
+                log.warning(f"The fit of the following bundles failed: {failed_bundles}")
 
     return
 
@@ -464,8 +477,6 @@ def merge_psf(inpsffile, inputs, output):
         i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
         status_of_fibers = \
             other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
-        # log.info("status of fibers in PSF {} = {}".format(input_filename,
-        #     status_of_fibers))
         selected_fibers = np.where(status_of_fibers==0)[0]
         failed_fibers=np.where(status_of_fibers>0)[0]
 
@@ -623,15 +634,46 @@ def mean_psf(inputs, output):
     bundle_of_fibers=tables[0]["COEFF"][i][:,0].astype(int)
     bundles=np.unique(bundle_of_fibers)
 
+    # the CAMERA header value keeps the quotes written by specex, e.g. "'z7      '"
+    camera = str(refhead["CAMERA"]).strip(" '")
+
     # Ignore bundles that were missing due to a bad amp in all of the exposures
     all_missing_bundles =np.unique(np.hstack(missing_bundles))
     for b in all_missing_bundles :
         if all(b in lst for lst in missing_bundles):
-            log.warning(f"Bundle {b} is missing in all input PSFs for camera {refhead['CAMERA']}, likely due to a bad amp. This bundle will be ignored in the merging.")
+            log.warning(f"Bundle {b} is missing in all input PSFs for camera {camera}, likely due to a bad amp. This bundle will be ignored in the merging.")
             bundles = bundles[bundles!=b]
 
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
+
+    # For each bundle, record which input PSFs actually contain it and which
+    # ones failed to fit it. A bundle is "missing" when every one of its fibers
+    # has STATUS<0 (masked out, e.g. by a bad amp) and "failed" when any fiber
+    # has STATUS>0; only the latter is a fit failure. Inputs where the bundle is
+    # missing are excluded from the count so that a bad amp in some but not all
+    # of the input exposures is not read as a cluster of fit failures.
+    # This does not depend on the entry (PARAM row) being averaged below, so it
+    # is checked once here, before doing any of the averaging work.
+    bundle_present={}
+    for bundle in fibers_in_bundle.keys() :
+        present = ~np.array([bundle in missing for missing in missing_bundles],
+            dtype=bool)
+        failed = np.array([bundle in f for f in failed_bundles_per_psf],
+            dtype=bool)
+        bundle_present[bundle] = present
+
+        npresent = int(np.sum(present))
+        if npresent != npsf :
+            log.warning(f"Bundle {bundle} is present in only {npresent} of {npsf} input PSFs for camera {camera}")
+
+        nfailed = int(np.sum(present & ((bundle_rchi2[:,bundle]==0) | failed)))
+        if nfailed > 1 :
+            message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF for camera {camera}."
+            log.critical(message)
+            raise RuntimeError(message)
+        elif nfailed == 1 :
+            log.warning(f"1 fit failure for bundle {bundle} so some fibers may be affected")
 
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
@@ -680,22 +722,6 @@ def mean_psf(inputs, output):
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
-                # Only count fit failures for exposures where this bundle is present.
-                # Exposures listed in missing_bundles are excluded so that bundles
-                # missing from only some input PSFs are not treated as failed fits.
-                mask=[bundle in missing for missing in missing_bundles]
-                masked_bundle_rchi2 = bundle_rchi2[~np.array(mask,dtype=bool)]
-                if len(masked_bundle_rchi2)!= len(bundle_rchi2) :
-                    log.warning(f"Bundle {bundle} is present in only {len(masked_bundle_rchi2)} of {len(bundle_rchi2)} input PSFs for camera {refhead['CAMERA']}")
-                present = ~np.array(mask, dtype=bool)
-                failed  = np.array([bundle in f for f in failed_bundles_per_psf], dtype=bool)
-                nfailed = np.sum(present & ((bundle_rchi2[:, bundle] == 0) | failed))
-                if nfailed > 1 :
-                    message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF for camera {refhead['CAMERA']}."
-                    log.critical(message)
-                    raise RuntimeError(message)
-                elif nfailed == 1 :
-                    log.warning(f"1 fit failure for bundle {bundle} so some fibers may be affected")
 
             # We finally resorted to use a mean instead of a median here for two reasons.
             # First, there is already a vetting of PSF bundles with good chi2 above
@@ -720,10 +746,15 @@ def mean_psf(inputs, output):
 
             else : # we have a problem here, take the smallest rchi2
                 log.debug("bundle #{} : take smallest non-zero chi2 ".format(bundle))
-                # Make sure the np.argmin is non-zero
-                col = bundle_rchi2[:,bundle]
+                # Only consider inputs that actually contain this bundle; a
+                # missing bundle has rchi2=0 and must never be selected here.
+                col = np.where(bundle_present[bundle], bundle_rchi2[:,bundle], 0.)
                 if np.all(col == 0):
-                    i = 0  # set it to the first element since all bundles are zero
+                    # nothing usable; fall back to an input that at least has
+                    # this bundle rather than blindly taking the first one
+                    candidates = np.where(bundle_present[bundle])[0]
+                    i = int(candidates[0]) if candidates.size > 0 else 0
+                    log.warning(f"no usable rchi2 for bundle {bundle} of camera {camera}; falling back to input PSF {i}")
                 else:
                     i = np.argmin(np.where(col == 0, np.inf, col))
                 for f in fibers_in_bundle[bundle]  :
