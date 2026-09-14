@@ -34,10 +34,56 @@ These changes were not used in Matterhorn.
   bias; both take ``--allow-default-bias`` to opt out. Relatedly,
   ``desi_compute_dark_night`` no longer hands the reference night's bias to
   every night of darks it spans.
+* Only try make science based nightqa PDFs if the data exists. (PR `#2767`_).
+* Turn Coveralls reporting back on in CI. (PR `#2768`_).
+* Merge daily branch into main (PR `#2770`_).
+* Switch to DR11 layer in legacysurvey URLs. (PR `#2772`_).
+* Restrict LGE petal n(z) QA to dark1b tiles (PR `#2773`_).
+* night QA petalnz fix when there are no tiles to plot (PR `#2774`_).
+* Improve the redshift quality cuts outside LSS redshift ranges (PR `#2775`_).
+* add good_z_lya criteria (PR `#2780`_).
+* add wise_var_qso to validredshifts function (PR `#2786`_).
+* keep DESI_TARGET+ for zcat SURVEY=special (PR `#2787`_).
+* Propagate UNIQPIX into spectra/coadd FIBERMAP headers (PR `#2796`_).
+* Bundle arcs into a single psfnight job and do similar for flats and cteflats (PR `#2799`_).
+* Override On a Per Camera Basis - Biases (PR `#2801`_).
+* Handle discrepant RA,DEC,etc per TARGETID (attempt 2) (PR `#2804`_).
+* Add OIII and QAFIBERSTATUS columns (PR `#2806`_).
+* fix WISE_VAR_QSO redshift logic (PR `#2808`_).
+* update determine_science_to_proc (PR `#2809`_).
+* Update submit prod for linkcals and add production-level job graph (PR `#2810`_).
+* Use multiprocessing.Pool fork (not forkserver) to get NoGPU context (PR `#2812`_).
+* Fix qsoqn redrock-rerun targetid matching crash on NumPy 2.x (PR `#2814`_).
+* Add tests for python/3.14 and astropy/8.x (PR `#2815`_).
+* Prevent intermittent CI hangs by bounding bootcalib test data downloads (PR `#2816`_).
+* Require matching nightly biases for preprocessed darks (#2741) (PR `#2817`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
 .. _`issue #2741`: https://github.com/desihub/desispec/issues/2741
+.. _`#2767`: https://github.com/desihub/desispec/pull/2767
+.. _`#2768`: https://github.com/desihub/desispec/pull/2768
+.. _`#2770`: https://github.com/desihub/desispec/pull/2770
+.. _`#2772`: https://github.com/desihub/desispec/pull/2772
+.. _`#2773`: https://github.com/desihub/desispec/pull/2773
+.. _`#2774`: https://github.com/desihub/desispec/pull/2774
+.. _`#2775`: https://github.com/desihub/desispec/pull/2775
+.. _`#2780`: https://github.com/desihub/desispec/pull/2780
+.. _`#2786`: https://github.com/desihub/desispec/pull/2786
+.. _`#2787`: https://github.com/desihub/desispec/pull/2787
+.. _`#2796`: https://github.com/desihub/desispec/pull/2796
+.. _`#2799`: https://github.com/desihub/desispec/pull/2799
+.. _`#2801`: https://github.com/desihub/desispec/pull/2801
+.. _`#2804`: https://github.com/desihub/desispec/pull/2804
+.. _`#2806`: https://github.com/desihub/desispec/pull/2806
+.. _`#2808`: https://github.com/desihub/desispec/pull/2808
+.. _`#2809`: https://github.com/desihub/desispec/pull/2809
+.. _`#2810`: https://github.com/desihub/desispec/pull/2810
+.. _`#2812`: https://github.com/desihub/desispec/pull/2812
+.. _`#2814`: https://github.com/desihub/desispec/pull/2814
+.. _`#2815`: https://github.com/desihub/desispec/pull/2815
+.. _`#2816`: https://github.com/desihub/desispec/pull/2816
+.. _`#2817`: https://github.com/desihub/desispec/pull/2817
 
 0.71.6 (2026-06-03)
 -------------------
