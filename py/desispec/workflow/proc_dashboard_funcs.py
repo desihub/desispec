@@ -792,17 +792,30 @@ def js_str(): # Used
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
+           function statusColumnIndex(table) {
+                /* The column count differs between dashboards and grows as
+                   columns are added, so find STATUS by its header instead */
+                var th = table.getElementsByTagName("th");
+                for (var k = 0; k < th.length; k++) {
+                    if (th[k].innerHTML.toUpperCase().trim() === "STATUS") {
+                        return k;
+                    }
+                }
+                return -1;
+           }
+
            function filterByStatus() {
-                var input, filter, table, tr, td, i;
+                var input, filter, table, tr, td, i, statuscol;
                 input = document.getElementById("statuslist");
                 filter = input.value.toUpperCase();
                 tables = document.getElementsByClassName("nightTable")
                 for (j = 0; j < tables.length; j++){
                  table = tables[j]
+                 statuscol = statusColumnIndex(table);
+                 if (statuscol < 0) { continue; }
                  tr = table.getElementsByTagName("tr");
                  for (i = 0; i < tr.length; i++) {
-                   td = tr[i].getElementsByTagName("td")[15];
-                   console.log(td)
+                   td = tr[i].getElementsByTagName("td")[statuscol];
                    if (td) {
                        if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
                            tr[i].style.display = "";

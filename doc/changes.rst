@@ -60,6 +60,10 @@ These changes were not used in Matterhorn.
 * Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
+* Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
+  processing dashboard, with a new ``BIAS`` column. Those jobs and ``ccdcalib``
+  are colored by Slurm status where their outputs can't be counted, instead of
+  always reading gray (`issue #2802`_, `issue #2677`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -88,6 +92,8 @@ These changes were not used in Matterhorn.
 .. _`#2816`: https://github.com/desihub/desispec/pull/2816
 .. _`#2817`: https://github.com/desihub/desispec/pull/2817
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`issue #2677`: https://github.com/desihub/desispec/issues/2677
+.. _`issue #2802`: https://github.com/desihub/desispec/issues/2802
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 
 0.71.6 (2026-06-03)
