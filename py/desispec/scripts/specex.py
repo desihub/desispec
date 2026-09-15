@@ -417,19 +417,29 @@ def run(comm,cmds,cameras):
 def run_gpu(comm, cmds, cameras):
     """
     Run PSF fits with the GPU-native Python/JAX specex port (specex's
-    python-gpu-port branch), one camera at a time, instead of the C++/MPI
+    python-gpu-port branch), using the same persistent-worker/pool-reuse
+    machinery as specex's own run_night.py --worker-mode persistent
+    (specex.specex.fit_cameras_persistent()), instead of the C++/MPI
     bundle-split path used by run() above.
 
-    The parallelism model is entirely different from run(): specex's own
-    fit_ccd_native() manages a multi-GPU multiprocessing.Pool internally
-    per camera (spreading that one camera's 20 bundles across every GPU on
-    the node), so there is no need to split bundles across MPI ranks the
-    way the C++ path does. Only rank 0 of `comm` does any real work here,
-    looping over every camera in `cameras` sequentially; other ranks
-    return immediately. This mirrors desispec.scripts.proc's existing
-    `use_gpu` precedent for gpu_specter extraction, where GPU work gets
-    one small group processing every camera one at a time rather than
-    many small CPU-style MPI groups (see specex's own
+    The parallelism model is entirely different from run(): fit_cameras_
+    persistent() manages a multi-GPU pool of long-lived worker processes
+    internally, each pulling cameras off a shared queue and reusing one
+    bundle-fit Pool across cameras -- so there is no need to split bundles
+    across MPI ranks the way the C++ path does, and no need for THIS
+    function to loop over cameras sequentially itself (that was this
+    function's own 2026-09-14 first-cut design; replaced 2026-09-14 once
+    it was clear a sequential per-camera loop here meant a real desispec
+    night took ~20-45min through this path vs. run_night.py's own
+    validated ~8min for the same 30 cameras -- see
+    docs/python-port/porting-notes.md, same date). Only rank 0 of `comm`
+    does any real work; fit_cameras_persistent() itself handles the
+    rank-gating (and the Cray MPICH/PALS bootstrap-env stripping needed
+    before it spawns any multiprocessing worker) when given a communicator
+    -- see its own docstring in specex.specex. This mirrors
+    desispec.scripts.proc's existing `use_gpu` precedent for gpu_specter
+    extraction, where GPU work gets one small group processing cameras
+    rather than many small CPU-style MPI groups (see specex's own
     docs/python-port/desispec-integration-plan.md for the full comparison).
 
     Args:
@@ -441,40 +451,34 @@ def run_gpu(comm, cmds, cameras):
             run()/main() -- reused here (via parse()) purely to extract
             input-image/input-psf/output-psf/broken-fibers; the bundle-
             split arguments desi_psf_fit itself would need (--first-bundle
-            etc.) are not relevant to fit_ccd_native(), which always does
-            the whole camera in one call.
+            etc.) are not relevant to fit_cameras_persistent(), which
+            always does each whole camera in one call.
         cameras: list of camera strings identifying entries in cmds to
             process; cameras not in cmds are skipped (matches run()).
 
     Returns:
         int: total failure count (0 = every requested camera succeeded).
+            Every rank returns 0 -- callers that need MPI ranks
+            synchronized after this call (desispec.scripts.proc does, via
+            its own comm.barrier() right after calling this) must add
+            their own barrier; this function does not call one itself (see
+            fit_cameras_persistent's own comm= docstring for why).
 
     Status: EXPERIMENTAL -- new GPU-native integration path, not yet the
     production default. Gated behind desi_proc's --specex-backend python
-    flag (default remains 'cpp'). Not yet validated at production scale
-    through this desispec/MPI entry point -- specex's own 20-night
-    correctness/timing campaigns validated fit_ccd_native() through its
-    own run_night.py harness, not through this call path; see
-    docs/python-port/desispec-integration-plan.md's Phase 2 for why that
-    distinction matters (rank-to-GPU affinity under a real desi_proc SLURM
-    GPU allocation is one of its explicitly still-open questions).
+    flag (default remains 'cpp'). Validated 2026-09-14 through this exact
+    desispec/MPI entry point with a real 4-rank srun launch (the Cray
+    MPICH/PALS crash this function used to hit -- see
+    docs/python-port/porting-notes.md 2026-09-14 -- is now fixed inside
+    fit_cameras_persistent()/fit_ccd_native()); rank-to-GPU affinity under
+    a real desi_proc SLURM GPU allocation is still an open question (see
+    docs/python-port/desispec-integration-plan.md's Phase 2).
     """
     log = get_logger()
 
-    rank = comm.rank if comm is not None else 0
-    if rank != 0:
-        # All the real work happens on rank 0 -- fit_ccd_native() manages
-        # its own GPU parallelism internally via multiprocessing, so there
-        # is nothing useful for other ranks to do here. (A future version
-        # could split *cameras* -- not bundles -- across a small number of
-        # ranks, one per node's worth of GPUs, if wall time across many
-        # cameras at once becomes the bottleneck; not needed for this
-        # first integration.)
-        return 0
-
     #- only import when running, to avoid requiring specex/JAX install for
     #- import -- same convention as run_specex()'s own lazy imports
-    from specex.specex import fit_ccd_native
+    from specex.specex import CameraTask, fit_cameras_persistent, detect_gpus_per_node
 
     #- Locate the lamp line list the same way main()/run_specex()'s own
     #- CLI does.
@@ -485,48 +489,48 @@ def run_gpu(comm, cmds, cameras):
         specexdata = resources.files('specex').joinpath('data')
     lamp_lines_file = os.path.join(specexdata, 'specex_linelist_desi.txt')
 
-    error_count = 0
+    tasks = []
     for camera in cameras:
         if camera not in cmds:
             log.info(f'nothing to do for camera {camera}')
             continue
-
         #- Reuse parse() purely to extract the handful of fields
-        #- fit_ccd_native() actually needs, from the same command string
-        #- run()/main() would otherwise hand to desi_psf_fit -- not to
-        #- build a bundle-split argument list, which fit_ccd_native()
-        #- doesn't use at all.
+        #- fit_cameras_persistent() actually needs, from the same command
+        #- string run()/main() would otherwise hand to desi_psf_fit -- not
+        #- to build a bundle-split argument list, which the GPU-native
+        #- path doesn't use at all.
         cmdargs = cmds[camera].split()[1:]
         args = parse(cmdargs)
+        tasks.append(CameraTask(name=camera, arc_file=args.input_image,
+                                 in_psf_file=args.input_psf, out_psf_file=args.output_psf,
+                                 broken_fibers=args.broken_fibers))
 
-        log.info(f'GPU-native specex fit for {camera}: '
-                 f'{args.input_image} + {args.input_psf} -> {args.output_psf}')
-        t0 = time.time()
-        try:
-            #- fit_ccd_native() writes one complete, already-merged output
-            #- file directly (write_python_psf) -- no per-bundle files, no
-            #- merge_psf() step needed here, unlike the C++ path above.
-            #- legendre_deg_wave/fit_continuum are deliberately left at
-            #- their own per-band auto-detected defaults (z: deg=3+
-            #- continuum, b/r: deg=1+no-continuum) rather than replicated
-            #- here, matching main()'s own band-conditional logic above --
-            #- see specex.specex's own docstrings for that auto-detection.
-            failed_bundles = fit_ccd_native(
-                arc_file=args.input_image,
-                in_psf_file=args.input_psf,
-                out_psf_file=args.output_psf,
-                lamp_lines_file=lamp_lines_file,
-                broken_fibers=args.broken_fibers,
-            )
-            if failed_bundles:
-                log.error(f'FAILED: {camera} lost bundles {sorted(failed_bundles)}')
-                error_count += 1
-            else:
-                log.info(f'SUCCESS: {camera} ({time.time()-t0:.1f}s)')
-        except Exception as e:
-            log.error(f'FAILED: GPU-native specex fit for {camera}: {e}')
-            error_count += 1
+    if not tasks:
+        return 0
 
+    def _on_result(result):
+        if result.rc == "SKIPPED":
+            log.error(f'FAILED: {result.name} {result.err_tail}')
+        elif result.rc != 0:
+            log.error(f'FAILED: {result.name} lost {result.n_bundle_fail} bundle(s) '
+                       f'({result.dt:.1f}s)')
+        else:
+            log.info(f'SUCCESS: {result.name} ({result.dt:.1f}s)')
+
+    #- legendre_deg_wave/fit_continuum are deliberately left at their own
+    #- per-band auto-detected defaults (z: deg=3+continuum, b/r: deg=1+no-
+    #- continuum) rather than replicated here, matching main()'s own
+    #- band-conditional logic -- see specex.specex's own docstrings for
+    #- that auto-detection.
+    results = fit_cameras_persistent(
+        tasks, n_gpus=detect_gpus_per_node(), comm=comm,
+        lamp_lines_file=lamp_lines_file, on_result=_on_result,
+    )
+
+    if comm is not None and comm.rank != 0:
+        return 0
+
+    error_count = sum(1 for r in results if r.rc != 0)
     return error_count
 
 def compatible(head1, head2) :
