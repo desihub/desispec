@@ -629,13 +629,12 @@ def fit_trace_shifts(image, args):
                 tset.y_vs_wave_traceset._coeff = new_ycoeff
                 ycoef = tset.y_vs_wave_traceset._coeff
 
-                if maxdy<0.001 :
-                    break
-
                 internal_offset_info = dict(wave=wave_for_dy,
                                             fiber=fiber_for_dy,
                                             dwave=dwave,
                                             dwave_err=dwave_err)
+                if maxdy<0.001 :
+                    break
         else :
             # duplicate dx results with zero shift to avoid write special case code below
             x_for_dy = x_for_dx.copy()
