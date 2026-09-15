@@ -228,7 +228,7 @@ def fit_xcoeff(dx,ex,x_for_dx,y_for_dx,degxx,degxy,tset,max_error) :
     '''
     log     = get_logger()
     xcoef   = tset.x_vs_wave_traceset._coeff
-    ycoef   = tset.x_vs_wave_traceset._coeff
+    ycoef   = tset.y_vs_wave_traceset._coeff
     nfibers = xcoef.shape[0]
 
     n = 0
