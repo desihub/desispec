@@ -208,6 +208,15 @@ def main(args=None, comm=None):
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
 
+        #- A bundle file can survive an earlier attempt, since they are now
+        #- kept when a merge fails so that they can be inspected. Remove any
+        #- stale one now, so that afterwards its existence means that this
+        #- invocation produced it.
+        if os.path.isfile(outbundlefits) :
+            log.info("removing stale {} from a previous attempt".format(
+                outbundlefits))
+            os.remove(outbundlefits)
+
         if skip_this_bundle :
             log.info("rank #{}, do not fit bundle {} {}".format(rank,cam,b))
             retval = 12
@@ -280,6 +289,11 @@ def main(args=None, comm=None):
 
             log.info("will merge the following {} bundle files {}".format(cam, bundlefiles))
 
+            #- report this before merging, so that it is still logged if the
+            #- merge below raises
+            if len(failed_bundles) > 0 :
+                log.warning(f"The fit of the following bundles failed: {failed_bundles}")
+
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
@@ -297,16 +311,21 @@ def main(args=None, comm=None):
                 else :
                     merge_psf(inpsffile, bundlefiles, outfits)
             except Exception as e:
+                #- Re-raise rather than carrying on: on a rerun an outfits
+                #- from an earlier attempt can still be on disk, and it must
+                #- not be mistaken for this merge having succeeded. Raising
+                #- here also keeps the per-bundle files below for inspection.
+                #- failcount is deliberately not incremented; it is only
+                #- returned by the --disable-merge path above, which never
+                #- reaches this code.
                 log.error(e)
-                log.error("merging failed for {}".format(outfits))
-                failcount += 1
+                log.critical("merging failed for {}".format(outfits))
+                raise
 
             log.info('done merging')
 
-            #- a merge_psf exception is caught above, but that must not be
-            #- reported as success: without this check the camera is logged
-            #- SUCCESS with no merged PSF on disk.  Raise before removing the
-            #- per-bundle files so that they survive for debugging.
+            #- merge_psf can also return without writing anything, which would
+            #- otherwise be reported as SUCCESS with no merged PSF on disk
             if not os.path.isfile(outfits) :
                 message = f"merging failed: {outfits} was not written"
                 log.critical(message)
@@ -315,9 +334,6 @@ def main(args=None, comm=None):
             for f in bundlefiles :
                 if os.path.isfile(f):
                     os.remove(f)
-
-            if len(failed_bundles) > 0 :
-                log.warning(f"The fit of the following bundles failed: {failed_bundles}")
 
     return
 
