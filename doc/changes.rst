@@ -57,6 +57,9 @@ These changes were not used in Matterhorn.
 * Add tests for python/3.14 and astropy/8.x (PR `#2815`_).
 * Prevent intermittent CI hangs by bounding bootcalib test data downloads (PR `#2816`_).
 * Require matching nightly biases for preprocessed darks (#2741) (PR `#2817`_).
+* Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
+  that ``psfnight`` only fails on real fit failures.  Requires the specex changes
+  in `specex#91`_, which must be installed first (PR `#2732`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -84,6 +87,8 @@ These changes were not used in Matterhorn.
 .. _`#2815`: https://github.com/desihub/desispec/pull/2815
 .. _`#2816`: https://github.com/desihub/desispec/pull/2816
 .. _`#2817`: https://github.com/desihub/desispec/pull/2817
+.. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`specex#91`: https://github.com/desihub/specex/pull/91
 
 0.71.6 (2026-06-03)
 -------------------
