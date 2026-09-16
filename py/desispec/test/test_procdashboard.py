@@ -117,6 +117,19 @@ class TestProcDashboard(unittest.TestCase):
         open(os.path.join(logdir, f'{basename}.slurm'), 'w').close()
         return logname
 
+    def _link_biasnight(self, cameras):
+        """Create relative bias links to files on a reference night."""
+        refnight = self.night - 1
+        refdir = os.path.join(self.proddir, 'calibnight', str(refnight))
+        caldir = os.path.join(self.proddir, 'calibnight', str(self.night))
+        os.makedirs(refdir, exist_ok=True)
+        os.makedirs(caldir, exist_ok=True)
+        for camera in cameras:
+            reffile = os.path.join(refdir, f'biasnight-{camera}-{refnight}.fits.gz')
+            newfile = os.path.join(caldir, f'biasnight-{camera}-{self.night}.fits.gz')
+            open(reffile, 'w').close()
+            os.symlink(os.path.relpath(reffile, caldir), newfile)
+
     def _run_dashboard(self, **kwargs):
         """Run populate_exp_night_info without querying Slurm"""
         with patch('desispec.scripts.procdashboard.update_from_queue',
@@ -173,7 +186,7 @@ class TestProcDashboard(unittest.TestCase):
         self.assertEqual(row['COLOR'], 'BAD')
 
     def test_status_only_jobs_follow_the_queue(self):
-        """linkcal, ccdcalib and pdark are judged by their Slurm status alone"""
+        """A linkcal without biases, ccdcalib and pdark follow Slurm status."""
         for status, color in [('COMPLETED', 'GOOD'), ('FAILED', 'BAD'),
                               ('TIMEOUT', 'BAD'), ('RUNNING', 'RUNNING'),
                               ('PENDING', 'PENDING')]:
@@ -186,16 +199,106 @@ class TestProcDashboard(unittest.TestCase):
                     self._prow('pdark', self.darks, status=status,
                                obstype='dark', intid=3),
                     ])
-                output = self._run_dashboard()
+                with patch('desispec.scripts.procdashboard.load_override_file',
+                           return_value={'calibration': {'linkcal': {'exclude': 'biasnight'}}}):
+                    output = self._run_dashboard()
                 for jobdesc in ['linkcal', 'ccdcalib', 'pdark']:
                     row = self._get_row(output, jobdesc)
                     self.assertEqual(row['COLOR'], color,
                                      f'{jobdesc} with status {status}')
                     self.assertEqual(row['STATUS'], status)
-                    ## no counts are implied for jobs whose outputs are unknown
-                    self.assertEqual(row['BIAS'], '----')
+                    ## No bias links are expected when biases are excluded.
+                    expected_bias = '0/0' if jobdesc == 'linkcal' else '----'
+                    self.assertEqual(row['BIAS'], expected_bias)
                     self.assertEqual(row['PSF'], '----')
                 self.tearDown()
+
+    def test_bias_files_and_links_are_counted_separately(self):
+        """Linked biases must not inflate counts for bias-producing jobs."""
+        for jobdesc in ['biasnight', 'biaspdark']:
+            with self.subTest(jobdesc=jobdesc):
+                expids = self.zeros[:1] if jobdesc == 'biasnight' else self.darks
+                bias = self._prow(jobdesc, expids)
+                bias['PROCCAMWORD'] = 'a123456789'
+                link = self._prow('linkcal', [], obstype='link', intid=2)
+                link['PROCCAMWORD'] = 'a0'
+                self._write_proctable([bias, link])
+                self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a123456789'))
+                self._link_biasnight(decode_camword('a0'))
+
+                output = self._run_dashboard()
+                row = self._get_row(output, jobdesc)
+                self.assertEqual(row['BIAS'], '27/27')
+                self.assertEqual(row['COLOR'], 'GOOD')
+                self.assertEqual(self._get_row(output, 'linkcal')['BIAS'], '3/3')
+                self.tearDown()
+
+    def test_extra_bias_files_and_links_remain_visible(self):
+        """Do not filter either count to the job's expected camera set."""
+        bias = self._prow('biasnight', self.zeros[:1], obstype='zero')
+        bias['PROCCAMWORD'] = 'a1'
+        link = self._prow('linkcal', [], obstype='link', intid=2)
+        link['PROCCAMWORD'] = 'a0'
+        self._write_proctable([bias, link])
+        self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a12'))
+        self._link_biasnight(decode_camword('a03'))
+
+        output = self._run_dashboard()
+        row = self._get_row(output, 'biasnight')
+        self.assertEqual(row['BIAS'], '6/3')
+        self.assertEqual(row['COLOR'], 'OVERFULL')
+        self.assertEqual(self._get_row(output, 'linkcal')['BIAS'], '6/3')
+        self.assertEqual(self._get_row(output, 'linkcal')['COLOR'], 'OVERFULL')
+
+    def test_linkcal_bias_counts_affect_color(self):
+        """Missing links affect completed jobs without masking queue status."""
+        for nlinks, status, color in [
+                (0, 'COMPLETED', 'BAD'), (1, 'COMPLETED', 'INCOMPLETE'),
+                (3, 'COMPLETED', 'GOOD'), (4, 'COMPLETED', 'OVERFULL'),
+                (0, 'PENDING', 'PENDING'), (1, 'RUNNING', 'RUNNING'),
+                (3, 'FAILED', 'BAD')]:
+            with self.subTest(nlinks=nlinks, status=status):
+                link = self._prow('linkcal', [], status=status, obstype='link')
+                link['PROCCAMWORD'] = 'a0'
+                self._write_proctable([link])
+                self._link_biasnight(['b0', 'r0', 'z0', 'b1'][:nlinks])
+                row = self._get_row(self._run_dashboard(), 'linkcal')
+                self.assertEqual(row['BIAS'], f'{nlinks}/3')
+                self.assertEqual(row['COLOR'], color)
+                self.tearDown()
+
+    def test_linkcal_bias_expectations(self):
+        """Bias overrides can differ from the linkcal's other products."""
+        self._write_proctable([self._prow('linkcal', [], obstype='link')])
+        self._link_biasnight(decode_camword('a0'))
+        for settings, expected in [
+                ({'include': 'biasnight,psfnight', 'biaslink_camword': 'a0'}, '3/3'),
+                ({'include': 'psfnight,fiberflatnight'}, '3/0'),
+                ({'exclude': 'biasnight'}, '3/0'),
+                ({'exclude': 'psfnight'}, f'3/{_ncams}'),
+                ({}, f'3/{_ncams}')]:
+            with self.subTest(settings=settings):
+                with patch('desispec.scripts.procdashboard.load_override_file',
+                           return_value={'calibration': {'linkcal': settings}}):
+                    row = self._get_row(self._run_dashboard(), 'linkcal')
+                self.assertEqual(row['BIAS'], expected)
+
+    def test_cached_bias_counts_are_refreshed(self):
+        """Cached rows must not retain counts that used to include links."""
+        bias = self._prow('biasnight', self.zeros[:1], obstype='zero')
+        bias['PROCCAMWORD'] = 'a0'
+        link = self._prow('linkcal', [], obstype='link', intid=2)
+        link['PROCCAMWORD'] = 'a1'
+        self._write_proctable([bias, link])
+        self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a0'))
+        self._link_biasnight(decode_camword('a1'))
+        cached = self._run_dashboard()
+        self._get_row(cached, 'biasnight')['BIAS'] = '6/3'
+        self._get_row(cached, 'linkcal')['BIAS'] = '----'
+
+        output = self._run_dashboard(night_json_info=cached)
+        self.assertEqual(self._get_row(output, 'biasnight')['BIAS'], '3/3')
+        self.assertEqual(self._get_row(output, 'linkcal')['BIAS'], '3/3')
 
     def test_linkcal_row_without_exposures(self):
         """A linkcal has no exposure of the night, but still gets a row"""

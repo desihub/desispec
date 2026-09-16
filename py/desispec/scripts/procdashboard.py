@@ -8,6 +8,7 @@ import os, glob
 from astropy.table import Table
 import numpy as np
 
+from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.workflow.exptable import get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     _hyperlink, _str_frac, \
@@ -33,8 +34,8 @@ CALIB_JOBDESCS = ('linkcal', 'biasnight', 'biaspdark', 'pdark', 'ccdcalib',
 ## they belong chronologically. The rest are named after the first.
 CALIB_JOBDESCS_ANCHORED_ON_LAST_EXPID = ('psfnight', 'nightlyflat', 'cteflat')
 
-## Jobs with no output the dashboard can count, so their rows are colored from
-## the Slurm status alone and their file count columns are left blank:
+## Jobs whose full output set cannot be counted. Use Slurm status, supplemented
+## by a bias-link count for linkcal:
 ##  - a linkcal links whichever calibnight prefixes the night's override file
 ##    asks for, possibly psfnight and fiberflatnight rather than bias or dark,
 ##    and which those are isn't recorded in the processing table
@@ -213,6 +214,41 @@ def _standalone_calib_erow(exptab, night):
     return erow
 
 
+def _linkcal_override(night):
+    """Read a night's linkcal override, returning an empty dict if unavailable.
+
+    Args:
+        night (int): the night the linkcal ran for.
+
+    Returns:
+        dict: the linkcal settings, or an empty dictionary.
+    """
+    try:
+        overrides = load_override_file(night=night)
+        return overrides.get('calibration', {}).get('linkcal', {})
+    except Exception as err:      # noqa: BLE001 - informational only
+        get_logger().warning(f"Could not read the override file of {night}: {err}")
+        return {}
+
+
+def _linkcal_bias_camword(night, proccamword):
+    """Get the cameras whose biases a linkcal is expected to link.
+
+    Args:
+        night (int): the night the linkcal ran for.
+        proccamword (str): the linkcal job's processing camera word; also the
+            fallback when the override is unavailable.
+
+    Returns:
+        str: the bias camera word, or an empty string if biases are excluded.
+    """
+    linkcal = _linkcal_override(night)
+    include, exclude = derive_include_exclude(linkcal.get('include'), linkcal.get('exclude'))
+    if 'biasnight' not in include:
+        return ''
+    return linkcal.get('biaslink_camword', proccamword)
+
+
 def _linkcal_comment(night):
     """
     Describe what a night's linkcal job links, for the dashboard COMMENTS column.
@@ -226,12 +262,7 @@ def _linkcal_comment(night):
     Returns:
         str: a short description of the link.
     """
-    try:
-        overrides = load_override_file(night=night)
-        linkcal = overrides.get('calibration', {}).get('linkcal', {})
-    except Exception as err:      # noqa: BLE001 - informational only
-        get_logger().warning(f"Could not read the override file of {night}: {err}")
-        linkcal = {}
+    linkcal = _linkcal_override(night)
 
     described = ''
     if 'include' in linkcal:
@@ -297,7 +328,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
     ## a biaspdark writes the nightly bias and then preprocesses the darks; only
     ## the bias half leaves a durable product to check
     expected_by_type['biaspdark'] = expected_by_type['biasnight']
-    ## pdark, ccdcalib and linkcal have nothing countable, see STATUS_ONLY_JOBDESCS
+    ## pdark and ccdcalib have nothing countable. linkcal's bias expectation is
+    ## determined separately from its override, see STATUS_ONLY_JOBDESCS.
     expected_by_type['pdark'] = expected_by_type['zero']
     expected_by_type['ccdcalib'] = expected_by_type['zero']
     expected_by_type['linkcal'] = expected_by_type['zero']
@@ -465,7 +497,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
     fileglob_calib_template = os.path.join(readonly_specproddir, 'calibnight', str(night),
                                            '{ftype}-{cam}[0-9]-{night}.{ext}')
 
-    def count_num_files(ftype, expid=None):
+    def count_num_files(ftype, expid=None, links=None):
+        """Count matching products, optionally selecting links or non-links."""
         if ftype == 'stdstars':
             cam = ''
         else:
@@ -483,7 +516,10 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             zfild_expid = str(expid).zfill(8)
             fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
                                                 cam=cam, ext=ext)
-        return len(glob.glob(fileglob))
+        filenames = glob.glob(fileglob)
+        if links is not None:
+            filenames = [filename for filename in filenames if os.path.islink(filename) == links]
+        return len(filenames)
 
     output = dict()
     lasttile, first_exp_of_tile = None, None
@@ -496,9 +532,12 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         ## For those already marked as GOOD or NULL in cached rows, take that and move on.
         ## A row cached by an older version of this code can have a different set
         ## of columns, which would misalign the html table, so regenerate those.
+        ## Refresh bias jobs and linkcal because cached counts may predate the
+        ## distinction between regular files and links, or the override changed.
         if night_json_info is not None and key in night_json_info \
                 and night_json_info[key]["COLOR"] in ['GOOD', 'NULL'] \
-                and list(night_json_info[key].keys()) == DASHBOARD_COLNAMES:
+                and list(night_json_info[key].keys()) == DASHBOARD_COLNAMES \
+                and obstype not in ['biasnight', 'biaspdark', 'linkcal']:
             output[key] = night_json_info[key]
             continue
 
@@ -589,10 +628,16 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
 
         nfiles = {step:0 for step in ['bias','psf','frame','ff','sky','sframe',
                                       'std','cframe']}
+        nbias_expected = ncams * expected['bias']
         if obstype in ['biasnight', 'biaspdark']:
             ## These write one nightly bias per camera and nothing else that the
-            ## other columns track
-            nfiles['bias'] = count_num_files(ftype='biasnight')
+            ## other columns track. Count all non-links so extra files are still
+            ## flagged, while biases supplied by linkcal are counted separately.
+            nfiles['bias'] = count_num_files(ftype='biasnight', links=False)
+        elif obstype == 'linkcal':
+            nfiles['bias'] = count_num_files(ftype='biasnight', links=True)
+            bias_camword = _linkcal_bias_camword(night, proccamword)
+            nbias_expected = len(decode_camword(bias_camword))
         elif obstype in STATUS_ONLY_JOBDESCS:
             ## Nothing countable, the coloring below falls back on the status
             pass
@@ -630,15 +675,20 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         else:
             status = 'unprocessed'
 
-        ## Jobs whose outputs the dashboard can't enumerate leave the queue
-        ## status as the only evidence that they did what they were asked to
+        ## Use queue status where the full output set cannot be enumerated,
+        ## but a completed linkcal must also have the expected bias-link count.
         if obstype in STATUS_ONLY_JOBDESCS:
             if status in non_final_states:
                 row_color = status
             elif status in failed_states:
                 row_color = 'BAD'
             elif status == 'COMPLETED':
-                row_color = 'GOOD'
+                if obstype == 'linkcal' and nfiles['bias'] > nbias_expected:
+                    row_color = 'OVERFULL'
+                elif obstype == 'linkcal' and nfiles['bias'] < nbias_expected:
+                    row_color = 'BAD' if nfiles['bias'] == 0 else 'INCOMPLETE'
+                else:
+                    row_color = 'GOOD'
             else:
                 row_color = 'NULL'
         elif terminal_step is None:
@@ -747,6 +797,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             for col in ['BIAS', 'PSF', 'FRAME', 'FFLAT', 'SFRAME', 'SKY',
                         'STD', 'CFRAME']:
                 rd[col] = '----'
+            if obstype == 'linkcal':
+                rd['BIAS'] = _str_frac(nfiles['bias'], nbias_expected)
         else:
             rd["BIAS"] = _str_frac(nfiles['bias'], ncams * expected['bias'])
             rd["PSF"] = _str_frac(nfiles['psf'], ncams * expected['psf'])

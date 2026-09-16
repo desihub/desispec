@@ -63,7 +63,10 @@ These changes were not used in Matterhorn.
 * Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
   processing dashboard, with a new ``BIAS`` column. Those jobs and ``ccdcalib``
   are colored by Slurm status where their outputs can't be counted, instead of
-  always reading gray (`issue #2802`_, `issue #2677`_).
+  always reading gray. Bias counts distinguish non-link files for ``biasnight``
+  and ``biaspdark`` from symbolic links for ``linkcal``, retaining counts of
+  extra files. Missing or extra bias links also affect completed ``linkcal``
+  row colors (`issue #2802`_, `issue #2677`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
