@@ -66,7 +66,10 @@ These changes were not used in Matterhorn.
   always reading gray. Bias counts distinguish non-link files for ``biasnight``
   and ``biaspdark`` from symbolic links for ``linkcal``, retaining counts of
   extra files. Missing or extra bias links also affect completed ``linkcal``
-  row colors (`issue #2802`_, `issue #2677`_).
+  row colors. Both compressed and uncompressed bias files are counted.
+  Pipeline submission/dependency failures are flagged, and status-based
+  calibration rows are refreshed instead of reusing stale cached states
+  (`issue #2802`_, `issue #2677`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721

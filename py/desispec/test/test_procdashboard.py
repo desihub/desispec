@@ -117,7 +117,7 @@ class TestProcDashboard(unittest.TestCase):
         open(os.path.join(logdir, f'{basename}.slurm'), 'w').close()
         return logname
 
-    def _link_biasnight(self, cameras):
+    def _link_biasnight(self, cameras, ext='fits.gz'):
         """Create relative bias links to files on a reference night."""
         refnight = self.night - 1
         refdir = os.path.join(self.proddir, 'calibnight', str(refnight))
@@ -125,8 +125,8 @@ class TestProcDashboard(unittest.TestCase):
         os.makedirs(refdir, exist_ok=True)
         os.makedirs(caldir, exist_ok=True)
         for camera in cameras:
-            reffile = os.path.join(refdir, f'biasnight-{camera}-{refnight}.fits.gz')
-            newfile = os.path.join(caldir, f'biasnight-{camera}-{self.night}.fits.gz')
+            reffile = os.path.join(refdir, f'biasnight-{camera}-{refnight}.{ext}')
+            newfile = os.path.join(caldir, f'biasnight-{camera}-{self.night}.{ext}')
             open(reffile, 'w').close()
             os.symlink(os.path.relpath(reffile, caldir), newfile)
 
@@ -189,7 +189,9 @@ class TestProcDashboard(unittest.TestCase):
         """A linkcal without biases, ccdcalib and pdark follow Slurm status."""
         for status, color in [('COMPLETED', 'GOOD'), ('FAILED', 'BAD'),
                               ('TIMEOUT', 'BAD'), ('RUNNING', 'RUNNING'),
-                              ('PENDING', 'PENDING')]:
+                              ('PENDING', 'PENDING'), ('UNSUBMITTED', 'BAD'),
+                              ('DEP_NOT_SUBD', 'BAD'), ('MAX_RESUB', 'BAD'),
+                              ('UNKNOWN', 'INCOMPLETE')]:
             with self.subTest(status=status):
                 self._write_proctable([
                     self._prow('linkcal', [], status=status, obstype='link',
@@ -211,7 +213,62 @@ class TestProcDashboard(unittest.TestCase):
                     expected_bias = '0/0' if jobdesc == 'linkcal' else '----'
                     self.assertEqual(row['BIAS'], expected_bias)
                     self.assertEqual(row['PSF'], '----')
+                if color == 'BAD':
+                    calib_rows = {key: dict(row) for key, row in output.items()
+                                  if row['OBSTYPE'] in ['linkcal', 'ccdcalib', 'pdark']}
+                    html, night_status = generate_nightly_table_html(calib_rows, self.night, show_null=True)
+                    self.assertEqual(night_status, 'BAD')
                 self.tearDown()
+
+    def test_status_only_cached_rows_follow_current_status(self):
+        """Old NULL rows and previously completed jobs must not freeze status."""
+        for cached_color in ['NULL', 'GOOD']:
+            for status, color in [('FAILED', 'BAD'), ('RUNNING', 'RUNNING'), ('COMPLETED', 'GOOD')]:
+                with self.subTest(cached_color=cached_color, status=status):
+                    prows = [self._prow('linkcal', [], obstype='link', intid=1),
+                             self._prow('ccdcalib', self.darks[:1], intid=2),
+                             self._prow('pdark', self.darks, intid=3)]
+                    self._write_proctable(prows)
+                    with patch('desispec.scripts.procdashboard.load_override_file',
+                               return_value={'calibration': {'linkcal': {'exclude': 'biasnight'}}}):
+                        cached = self._run_dashboard()
+                        for prow in prows:
+                            row = self._get_row(cached, prow['JOBDESC'])
+                            row['COLOR'] = cached_color
+                            row['STATUS'] = 'MAX_RESUB' if cached_color == 'NULL' else 'COMPLETED'
+                            prow['STATUS'] = status
+                        self._write_proctable(prows)
+                        output = self._run_dashboard(night_json_info=cached)
+                    for prow in prows:
+                        row = self._get_row(output, prow['JOBDESC'])
+                        self.assertEqual(row['STATUS'], status)
+                        self.assertEqual(row['COLOR'], color)
+                    self.tearDown()
+
+    def test_bias_compression_formats(self):
+        """Count compressed and uncompressed biases while separating links."""
+        for jobdesc in ['biasnight', 'biaspdark']:
+            for file_ext, link_ext in [('fits', 'fits'), ('fits', 'fits.gz'), ('fits.gz', 'fits')]:
+                with self.subTest(jobdesc=jobdesc, file_ext=file_ext, link_ext=link_ext):
+                    expids = self.zeros[:1] if jobdesc == 'biasnight' else self.darks
+                    bias = self._prow(jobdesc, expids)
+                    bias['PROCCAMWORD'] = 'a1'
+                    link = self._prow('linkcal', [], obstype='link', intid=2)
+                    link['PROCCAMWORD'] = 'a0'
+                    self._write_proctable([bias, link])
+                    self._touch_calibnight('biasnight', ext=file_ext, cameras=decode_camword('a1'))
+                    self._link_biasnight(decode_camword('a0'), ext=link_ext)
+                    self._touch_calibnight('biasnight', ext='fits.bak', cameras=['b1'])
+
+                    ## Detect either format even when it differs from the current
+                    ## writing preference, as it can for linked reference files.
+                    with patch.dict(os.environ, {'DESI_COMPRESSION': 'NONE'}):
+                        output = self._run_dashboard()
+                    for desc in [jobdesc, 'linkcal']:
+                        row = self._get_row(output, desc)
+                        self.assertEqual(row['BIAS'], '3/3')
+                        self.assertEqual(row['COLOR'], 'GOOD')
+                    self.tearDown()
 
     def test_bias_files_and_links_are_counted_separately(self):
         """Linked biases must not inflate counts for bias-producing jobs."""

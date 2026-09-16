@@ -16,7 +16,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     get_terminal_steps, get_tables, populate_monthly_tables, get_nights
 from desispec.workflow.proctable import table_row_to_dict
 from desispec.workflow.queue import update_from_queue, get_non_final_states, \
-    get_failed_states
+    get_resubmission_states
 from desispec.workflow.utils import load_override_file
 from desispec.io.meta import specprod_root, get_readonly_filepath
 from desispec.io.util import decode_camword, camword_to_spectros, \
@@ -342,7 +342,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
 
     ## Get non final Slurm states
     non_final_states = get_non_final_states()
-    failed_states = get_failed_states()
+    ## Include pipeline submission/dependency failures as well as Slurm failures.
+    failed_states = get_resubmission_states()
 
     specproddir = specprod_root()
     webpage = os.environ['DESI_DASHBOARD']
@@ -505,8 +506,6 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             cam = '[brz]'
         if ftype == 'badcolumns':
             ext = 'csv'
-        elif ftype == 'biasnight':
-            ext = 'fits.gz'
         else:
             ext = 'fits*'  # - .fits or .fits.gz
         if expid is None:
@@ -517,6 +516,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
                                                 cam=cam, ext=ext)
         filenames = glob.glob(fileglob)
+        if ftype == 'biasnight':
+            filenames = [filename for filename in filenames if filename.endswith(('.fits', '.fits.gz'))]
         if links is not None:
             filenames = [filename for filename in filenames if os.path.islink(filename) == links]
         return len(filenames)
@@ -534,10 +535,12 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         ## of columns, which would misalign the html table, so regenerate those.
         ## Refresh bias jobs and linkcal because cached counts may predate the
         ## distinction between regular files and links, or the override changed.
+        ## Status-based jobs must reflect the current queue state, including
+        ## jobs that older dashboard versions incorrectly cached as NULL.
         if night_json_info is not None and key in night_json_info \
                 and night_json_info[key]["COLOR"] in ['GOOD', 'NULL'] \
                 and list(night_json_info[key].keys()) == DASHBOARD_COLNAMES \
-                and obstype not in ['biasnight', 'biaspdark', 'linkcal']:
+                and obstype not in ('biasnight', 'biaspdark') + STATUS_ONLY_JOBDESCS:
             output[key] = night_json_info[key]
             continue
 
@@ -690,7 +693,8 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
                 else:
                     row_color = 'GOOD'
             else:
-                row_color = 'NULL'
+                ## A job with unresolved status is not an intentional no-op.
+                row_color = 'INCOMPLETE'
         elif terminal_step is None:
             row_color = 'NULL'
         elif expected[terminal_step] == 0:
