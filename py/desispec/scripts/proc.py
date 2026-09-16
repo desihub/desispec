@@ -685,16 +685,30 @@ def main(args=None, comm=None):
         if comm is not None:
             cmds = comm.bcast(cmds, root=0)
             if len(cmds) > 0:
-                err = desispec.scripts.specex.run(comm,cmds,args.cameras)
+                if args.specex_backend == "python":
+                    #- GPU-native Python/JAX specex port (experimental) --
+                    #- one camera at a time, no bundle-split-across-ranks;
+                    #- see desispec.scripts.specex.run_gpu()'s own docstring
+                    #- and specex's docs/python-port/desispec-integration-plan.md.
+                    err = desispec.scripts.specex.run_gpu(comm,cmds,args.cameras)
+                else:
+                    err = desispec.scripts.specex.run(comm,cmds,args.cameras)
                 if err != 0:
                     error_count += 1
         else:
             log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
-            for camera in args.cameras:
-                if camera in cmds:
-                    result, success = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
-                    if not success:
-                        error_count += 1
+            if args.specex_backend == "python":
+                #- run_gpu() only needs a rank/comm to decide who does the
+                #- work; None behaves like rank 0 (see its own docstring).
+                err = desispec.scripts.specex.run_gpu(None,cmds,args.cameras)
+                if err != 0:
+                    error_count += 1
+            else:
+                for camera in args.cameras:
+                    if camera in cmds:
+                        result, success = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+                        if not success:
+                            error_count += 1
 
         timer.stop('psf')
         if comm is not None:
