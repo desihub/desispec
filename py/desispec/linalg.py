@@ -106,7 +106,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     w=mins<res
     knots = knots[w]
     try :
-        toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
+        toto=scipy.interpolate.splrep(input_wave,input_flux,w=np.sqrt(input_ivar),k=order,task=-1,t=knots)
         output_flux = scipy.interpolate.splev(output_wave,toto)
     except ValueError as err :
         log=get_logger()
