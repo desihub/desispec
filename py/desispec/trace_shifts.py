@@ -1537,7 +1537,7 @@ def compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fib
         end=begin+bandwidth
 
         sw=np.sum(ivar[begin:end,:],axis=0)
-        swf=np.sum(image.pix[begin:end,:]*ivar[begin:end,:])
+        swf=np.sum(image.pix[begin:end,:]*ivar[begin:end,:],axis=0)
         prof=(swf/(sw+(sw==0)))
         y=int(n0//2+b*bandwidth)
         xc=np.array([tset.x_vs_y(fiber,y) for fiber in fibers])
