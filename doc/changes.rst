@@ -58,6 +58,7 @@ desispec Change Log
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
 * Bugfix for ``fit_trace_shifts`` iteration output (Commig `#a5705a9`_).
+* Fix weighted spline fit bug (PR `#2822`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -88,6 +89,7 @@ desispec Change Log
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
+.. _`#2822`: https://github.com/desihub/desispec/pull/2822
 
 0.71.6 (2026-06-03)
 -------------------
