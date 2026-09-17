@@ -910,7 +910,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                         a[np.isin(idx,k)] = np.sum(numerator)/np.sum(denominator)
                         scalar = a[np.isin(idx,k)]
                         # compute error on scalar
-                        var_a[np.isin(idx,k)] = scalar**2 / np.sum(w * crude_coadd[mask]**2)
+                        var_a[np.isin(idx,k)] = scalar**4 / np.sum(w * crude_coadd[mask]**2)
                     else:
                         log.warning(f'coadd*exposure product is not finite for an exposure of {tgt}')
                         good_fiberstatus[k] = False
