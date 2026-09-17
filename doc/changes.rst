@@ -5,9 +5,6 @@ desispec Change Log
 0.72.0 (unreleased)
 -------------------
 
-Changes made for daily operations (daily branch) while Matterhorn was running.
-These changes were not used in Matterhorn.
-
 * Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
 * Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
 * Bundle the nightly arc, normal-flat, and CTE-flat calibrations into one
@@ -60,6 +57,7 @@ These changes were not used in Matterhorn.
 * Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
+* Bugfix for ``fit_trace_shifts`` iteration output (Commig `#a5705a9`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -89,6 +87,7 @@ These changes were not used in Matterhorn.
 .. _`#2817`: https://github.com/desihub/desispec/pull/2817
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
+.. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
 
 0.71.6 (2026-06-03)
 -------------------
