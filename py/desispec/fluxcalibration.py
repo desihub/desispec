@@ -1311,6 +1311,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # NOTE: this copies the fitting code above in the iteration fit+clip loop
     current_ivar=stdstars.ivar*(current_ivar>0)
     sqrtw=np.sqrt(current_ivar)
+    A *= 0.
     for star in range(nstds) :
         if badfiber[star] : continue
         R = stdstars.R[star]

@@ -5,9 +5,6 @@ desispec Change Log
 0.72.0 (unreleased)
 -------------------
 
-Changes made for daily operations (daily branch) while Matterhorn was running.
-These changes were not used in Matterhorn.
-
 * Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
 * Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
 * Bundle the nightly arc, normal-flat, and CTE-flat calibrations into one
@@ -60,6 +57,8 @@ These changes were not used in Matterhorn.
 * Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
+* Bugfix for ``fit_trace_shifts`` iteration output (Commit `#a5705a9`_).
+* Fix weighted spline fit bug (PR `#2822`_).
 * Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
   processing dashboard, with a new ``BIAS`` column. 
   (`issue #2802`_, `issue #2677`_).
@@ -96,6 +95,8 @@ These changes were not used in Matterhorn.
 .. _`issue #2677`: https://github.com/desihub/desispec/issues/2677
 .. _`issue #2802`: https://github.com/desihub/desispec/issues/2802
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
+.. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
+.. _`#2822`: https://github.com/desihub/desispec/pull/2822
 
 0.71.6 (2026-06-03)
 -------------------

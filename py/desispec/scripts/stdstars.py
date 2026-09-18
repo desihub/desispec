@@ -388,15 +388,17 @@ def main(args=None, comm=None) :
             log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
             sw=np.zeros(frames[cam][0].flux.shape)
+            sw2=np.zeros(frames[cam][0].flux.shape)
             swf=np.zeros(frames[cam][0].flux.shape)
             swr=np.zeros(frames[cam][0].resolution_data.shape)
 
             for i,frame in enumerate(frames[cam]) :
                 sw  += weights[i]*frame.ivar
+                sw2  += weights[i]**2*frame.ivar
                 swf += weights[i]*frame.ivar*frame.flux
                 swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
             coadded_frame = frames[cam][0]
-            coadded_frame.ivar = sw
+            coadded_frame.ivar = sw**2/(sw2+(sw2==0))
             coadded_frame.flux = swf/(sw+(sw==0))
             coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
             frames[cam] = [ coadded_frame ]
