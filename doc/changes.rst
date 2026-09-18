@@ -59,6 +59,13 @@ desispec Change Log
   in `specex#91`_, which must be installed first (PR `#2732`_).
 * Bugfix for ``fit_trace_shifts`` iteration output (Commig `#a5705a9`_).
 * Fix weighted spline fit bug (PR `#2822`_).
+* Apply the same per-bundle input selection to ``XTRACE``/``YTRACE`` in
+  ``psfnight`` that was already applied to the PSF coefficients, so a fiber
+  bundle masked out or fit badly in only some of the input arcs no longer has
+  its traces blended with exposures that never fit it. Where no arc passes the
+  rchi2 cut the traces are still averaged over every arc that has the bundle,
+  because that cut is relative and so identifies no outlier in that case
+  (`issue #2819`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -87,6 +94,7 @@ desispec Change Log
 .. _`#2816`: https://github.com/desihub/desispec/pull/2816
 .. _`#2817`: https://github.com/desihub/desispec/pull/2817
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`issue #2819`: https://github.com/desihub/desispec/issues/2819
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
 .. _`#2822`: https://github.com/desihub/desispec/pull/2822
