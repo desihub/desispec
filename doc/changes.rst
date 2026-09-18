@@ -63,6 +63,8 @@ These changes were not used in Matterhorn.
 * Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
   processing dashboard, with a new ``BIAS`` column. 
   (`issue #2802`_, `issue #2677`_).
+* Preserve ``biaspdark`` failure status in the processing dashboard when all
+  nightly biases are linked, so dark preprocessing failures remain visible.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721

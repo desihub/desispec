@@ -744,7 +744,9 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
 
         ## Use queue status where the full output set cannot be enumerated,
         ## but a completed linkcal must also have the expected bias-link count.
-        if obstype in STATUS_ONLY_JOBDESCS:
+        ## A biaspdark still preprocesses darks when all its biases are linked.
+        if obstype in STATUS_ONLY_JOBDESCS \
+                or (obstype == 'biaspdark' and nbias_expected == 0):
             if status in non_final_states:
                 row_color = status
             elif status in TRANSIENT_SLURM_STATES:

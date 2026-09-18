@@ -414,6 +414,25 @@ class TestProcDashboard(unittest.TestCase):
                          f'{_ncams}/{_ncams}')
         self.assertEqual(self._get_row(output, 'linkcal')['COLOR'], 'GOOD')
 
+    def test_failed_biaspdark_with_linked_biases(self):
+        """Linked biases must not hide a failure in dark preprocessing."""
+        bias = self._prow('biaspdark', self.darks, status='FAILED', obstype='dark')
+        link = self._prow('linkcal', [], obstype='link', intid=2)
+        self._write_proctable([bias, link])
+        self._write_override(include='biasnight')
+        self._link_biasnight(decode_camword(_camword))
+
+        output = self._run_dashboard()
+        row = self._get_row(output, 'biaspdark')
+        self.assertEqual(row['BIAS'], '0/0')
+        self.assertEqual(row['COLOR'], 'BAD')
+
+        calib_rows = {key: dict(row) for key, row in output.items()
+                      if row['OBSTYPE'] in ['biaspdark', 'linkcal']}
+        _, night_status = generate_nightly_table_html(calib_rows, self.night,
+                                                      show_null=True)
+        self.assertEqual(night_status, 'BAD')
+
     def test_dangling_links_do_not_count(self):
         """A link whose target is gone is the failure this should catch"""
         link = self._prow('linkcal', [], obstype='link')
