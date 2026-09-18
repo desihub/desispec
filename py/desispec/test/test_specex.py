@@ -827,14 +827,16 @@ class TestMeanPSF(unittest.TestCase):
             evaluate(fits.getdata(inputs[1], 'XTRACE'), ranges[1])))
 
     @patch('desispec.scripts.specex.get_logger')
-    def test_traces_fall_back_to_plain_mean_without_trace_hdus(self, mock_log):
+    def test_inputs_without_trace_hdus_are_dropped_per_bundle(self, mock_log):
         """
-        Inputs lacking trace HDUs disable the per-bundle trace selection.
+        An input lacking trace HDUs is left out without disabling selection.
 
-        XTRACE/YTRACE are only read when the HDUs are present, so an input
-        without them would leave the trace list shorter than the input list and
-        make an input index mean the wrong exposure. Rather than silently
-        average the wrong arcs, fall back to the old plain mean and say so.
+        XTRACE/YTRACE are only read where the HDUs exist, but the None
+        placeholders keep the trace lists indexed by input, so such an input can
+        simply be dropped from each bundle's selection. Disabling selection for
+        the whole camera instead would reintroduce #2819 for bundles whose
+        correct selection is perfectly well known, which is what input 1 would
+        otherwise do to bundle 0 here.
         """
         inputs = self._write_inputs(
             [self._status(), self._status(missing_bundles=[0]),
@@ -844,13 +846,60 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        #- mean of inputs 0 and 2 everywhere, with no bundle selection
-        self._assert_traces({b: 35. for b in range(self.NBUNDLES)})
-        #- the coefficients are unaffected and still select per bundle
+        #- bundle 0 was fit only by input 0, which does have traces, so it is
+        #- used alone rather than averaged with input 2's reference trace
+        self._assert_traces({0: 10., 1: 35., 2: 35., 3: 35.})
+        #- and the traces now agree with the coefficients for that bundle
         coeff = self._read_output()[0]
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(0)], 10.)
-        self.assertTrue(any('have both XTRACE and YTRACE' in msg
+        self.assertTrue(any('have both' in msg
                             for msg in _warning_messages(mock_log)))
+
+    @patch('desispec.scripts.specex.get_logger')
+    def test_fallback_traces_exclude_inputs_that_never_fit_the_bundle(self, mock_log):
+        """
+        The averaging fallback uses fitted inputs, not merely present ones.
+
+        A bundle that failed outright is still "present": every fiber has
+        STATUS>0 rather than <0. But merge_psf only copies XTRACE/YTRACE for
+        STATUS==0 fibers, so such an input carries the reference traces, and
+        averaging it in is exactly the contamination #2819 is about. Input 0
+        here failed the bundle outright while 1 and 2 fit it but land above the
+        cut, so the traces must average 1 and 2 only.
+        """
+        inputs = self._write_inputs(
+            [self._status(failed_bundles=[1]), self._status(), self._status()],
+            [self._rchi2(b1=0.), self._rchi2(b1=5.0), self._rchi2(b1=3.7)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- mean of 20 and 60, not of 10, 20 and 60
+        self._assert_traces({0: 30., 1: 40., 2: 30., 3: 30.})
+        #- the coefficients still take the smallest non-zero rchi2, input 2
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 60.)
+        mock_log().critical.assert_not_called()
+
+    def test_fallback_traces_drop_an_outlier_among_the_fitted_inputs(self):
+        """
+        The fallback compares inputs against this bundle's own rchi2.
+
+        rchi2_threshold is built from the median over every bundle of the
+        camera, so a bundle can sit entirely above it while still containing a
+        clear outlier. Averaging is only defensible where the inputs really are
+        comparable, so the fallback applies the same median+1 rule to the
+        bundle's own values, which keeps near-equal inputs and drops a lone bad
+        one instead of blending it in.
+        """
+        inputs = self._write_inputs(
+            [self._status()] * 3,
+            [self._rchi2(b1=4.6), self._rchi2(b1=5.0), self._rchi2(b1=100.)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- bundle 1's own threshold is median(4.6, 5.0, 100) + 1 = 6.0, so the
+        #- rchi2=100 input is excluded and the other two are averaged
+        self._assert_traces({0: 30., 1: 15., 2: 30., 3: 30.})
 
 
 if __name__ == '__main__':

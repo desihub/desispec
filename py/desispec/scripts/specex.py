@@ -640,6 +640,7 @@ def mean_psf(inputs, output):
     nfibers_per_bundle=None
     missing_bundles=[]
     failed_bundles_per_psf=[]
+    fitted_bundles_per_psf=[]
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -696,8 +697,16 @@ def mean_psf(inputs, output):
         failed_mask=np.array(
             [np.any(status[bundles == bundle] > 0) for bundle in unique_bundles],
             dtype=bool)
+        # A bundle only has traces of its own where at least one of its fibers
+        # was fit: merge_psf copies XTRACE/YTRACE for the STATUS==0 fibers only,
+        # so a bundle that was masked out *or* that failed outright still holds
+        # the input PSF's traces rather than anything measured from this arc.
+        fitted_mask=np.array(
+            [np.any(status[bundles == bundle] == 0) for bundle in unique_bundles],
+            dtype=bool)
         missing_bundles.append(unique_bundles[missing_mask])
         failed_bundles_per_psf.append(unique_bundles[failed_mask])
+        fitted_bundles_per_psf.append(unique_bundles[fitted_mask])
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
@@ -739,12 +748,15 @@ def mean_psf(inputs, output):
     # This does not depend on the entry (PARAM row) being averaged below, so it
     # is checked once here, before doing any of the averaging work.
     bundle_present={}
+    bundle_fitted={}
     for bundle in fibers_in_bundle.keys() :
         present = ~np.array([bundle in missing for missing in missing_bundles],
             dtype=bool)
         failed = np.array([bundle in f for f in failed_bundles_per_psf],
             dtype=bool)
         bundle_present[bundle] = present
+        bundle_fitted[bundle] = np.array(
+            [bundle in f for f in fitted_bundles_per_psf], dtype=bool)
 
         npresent = int(np.sum(present))
         if npresent != npsf :
@@ -774,21 +786,42 @@ def mean_psf(inputs, output):
         log.info("for fiber bundle {}, {} valid PSFs".format(bundle, nvalid))
 
         # The traces normally use the same inputs as the coefficients, but not
-        # in the fallback case above. rchi2_threshold is a relative cut, the
-        # median plus one, meant to spot an input that fits this bundle worse
-        # than the others do; when no input passes it there is no outlier to
-        # reject, only a bundle that every exposure fits badly, and the
-        # smallest of a set of near-equal bad rchi2 is a noisy choice. The
-        # coefficients have to pick one input regardless, but the traces do
-        # not, so average them over every exposure that has the bundle and
-        # keep the noise averaging where the cut carries no information.
+        # in the fallback case above, where the coefficients have to settle for
+        # the least bad input and the traces do not.
+        #
+        # rchi2_threshold is computed once for the whole camera, from the median
+        # of every positive bundle rchi2, so a bundle can fall entirely above it
+        # without any of its inputs being an outlier among the others. When that
+        # happens, averaging keeps the noise averaging that picking one input
+        # would throw away. That is a deliberate policy rather than something
+        # the camera-wide threshold guarantees, so the inputs are compared here
+        # against a threshold built from this bundle alone, which still drops a
+        # genuine outlier (say a lone rchi2 of 100) instead of averaging it in.
+        #
+        # Only inputs that actually fit the bundle can contribute: one that was
+        # masked out or that failed outright still carries the input PSF's
+        # traces, and averaging those back in is the very contamination this is
+        # meant to remove. If nothing fit the bundle, leave it out entirely so
+        # it keeps the reference traces, as a bundle missing everywhere does.
         if nvalid > 0 :
+            # An input with rchi2>0 necessarily fit the bundle, because
+            # merge_psf zeroes every bundle rchi2 and copies one back only for
+            # a bundle with a STATUS==0 fiber, so these all have real traces.
             bundle_trace_inputs[bundle] = selected
         else :
-            present = np.where(bundle_present[bundle])[0]
-            bundle_trace_inputs[bundle] = present if present.size>0 else selected
-            log.info(f"no input PSF passes the rchi2 cut for bundle {bundle} of camera {camera};"
-                     +f" averaging its traces over the {bundle_trace_inputs[bundle].size} input(s) that have it")
+            usable = np.where(bundle_fitted[bundle])[0]
+            if usable.size == 0 :
+                log.warning(f"no input PSF has a fitted trace for bundle {bundle} of camera {camera};"
+                            +" keeping the reference traces")
+            else :
+                own = bundle_rchi2[usable,bundle]
+                # by the same token these are all positive; a zero would pass
+                # the cut below anyway, having no quality information to fail on
+                own_threshold = np.median(own[own>0])+1. if np.any(own>0) else np.inf
+                keep = usable[own<own_threshold]
+                bundle_trace_inputs[bundle] = keep
+                log.info(f"no input PSF passes the rchi2 cut for bundle {bundle} of camera {camera};"
+                         +f" averaging its traces over {keep.size} of the {usable.size} input(s) that fit it")
 
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
@@ -875,28 +908,32 @@ def mean_psf(inputs, output):
                 ytrace[p][f] = legfit(ou,val,deg=npar-1)
 
         if trace_inputs.size<npsf :
-            # Without a trace for every input the per-bundle selection below
-            # cannot be trusted to name the right exposures, so keep the
-            # historical behavior of averaging whatever traces are available.
-            log.warning(f"only {trace_inputs.size} of {npsf} input PSFs for camera {camera} have both XTRACE and YTRACE;"
-                        +" averaging the traces over those inputs without per-bundle selection")
-            output_xtrace = np.mean([xtrace[p] for p in trace_inputs], axis=0)
-            output_ytrace = np.mean([ytrace[p] for p in trace_inputs], axis=0)
-        else :
-            # Select the inputs per bundle as the PSF coefficients were
-            # selected above, so that the traces and the coefficients of a
-            # bundle come from the same exposures, except in the fallback case
-            # noted where bundle_trace_inputs is built. Copy the reference PSF
-            # first so that bundles missing from every input keep its traces
-            # instead of an average polluted by exposures that never fit them.
-            output_xtrace = np.array(xtrace[0], copy=True)
-            output_ytrace = np.array(ytrace[0], copy=True)
-            for bundle, selected in bundle_trace_inputs.items() :
-                fibers = fibers_in_bundle[bundle]
-                output_xtrace[fibers] = np.mean(
-                    [xtrace[p][fibers] for p in selected], axis=0)
-                output_ytrace[fibers] = np.mean(
-                    [ytrace[p][fibers] for p in selected], axis=0)
+            log.warning(f"only {trace_inputs.size} of {npsf} input PSFs for camera {camera} have both"
+                        +" XTRACE and YTRACE; the others are left out of the trace averages")
+
+        # Select the inputs per bundle as the PSF coefficients were selected
+        # above, so that the traces and the coefficients of a bundle come from
+        # the same exposures, except in the fallback case noted where
+        # bundle_trace_inputs is built. Inputs without trace HDUs are dropped
+        # per bundle rather than disabling the selection for the whole camera:
+        # the None placeholders keep these lists indexed by input, so the
+        # remaining bundles are still selected correctly. Copy the reference
+        # PSF first so that a bundle with nothing left to average, like one
+        # missing from every input, keeps its traces.
+        reference = trace_inputs[0]
+        output_xtrace = np.array(xtrace[reference], copy=True)
+        output_ytrace = np.array(ytrace[reference], copy=True)
+        for bundle, selected in bundle_trace_inputs.items() :
+            usable = np.intersect1d(selected, trace_inputs)
+            if usable.size == 0 :
+                log.warning(f"no input PSF with trace HDUs was selected for bundle {bundle}"
+                            +f" of camera {camera}; keeping the reference traces")
+                continue
+            fibers = fibers_in_bundle[bundle]
+            output_xtrace[fibers] = np.mean(
+                [xtrace[p][fibers] for p in usable], axis=0)
+            output_ytrace[fibers] = np.mean(
+                [ytrace[p][fibers] for p in usable], axis=0)
 
         hdulist["XTRACE"].data = output_xtrace
         hdulist["YTRACE"].data = output_ytrace

@@ -62,9 +62,10 @@ desispec Change Log
 * Apply the same per-bundle input selection to ``XTRACE``/``YTRACE`` in
   ``psfnight`` that was already applied to the PSF coefficients, so a fiber
   bundle masked out or fit badly in only some of the input arcs no longer has
-  its traces blended with exposures that never fit it. Where no arc passes the
-  rchi2 cut the traces are still averaged over every arc that has the bundle,
-  because that cut is relative and so identifies no outlier in that case
+  its traces blended with arcs that never fit it and so carry only the input
+  PSF's traces. Where no arc passes the camera-wide rchi2 cut the traces are
+  still averaged, over the arcs that fit the bundle and are comparable by that
+  bundle's own rchi2, rather than following the coefficients onto a single arc
   (`issue #2819`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
