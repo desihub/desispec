@@ -60,10 +60,11 @@ desispec Change Log
 * Bugfix for ``fit_trace_shifts`` iteration output (Commit `#a5705a9`_).
 * Fix weighted spline fit bug (PR `#2822`_).
 * Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
-  processing dashboard, with a new ``BIAS`` column. 
+  processing dashboard, with a new ``BIAS`` column
   (`issue #2802`_, `issue #2677`_).
-* Preserve ``biaspdark`` failure status in the processing dashboard when all
-  nightly biases are linked, so dark preprocessing failures remain visible.
+* Write both dashboards as one page per year plus a master page keeping the
+  old filename, which frames the selected year and offers a link per year, so
+  only the year being looked at is downloaded and cached.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721

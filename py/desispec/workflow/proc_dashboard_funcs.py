@@ -499,7 +499,13 @@ def _master_page(color_profile, titlefill, years, outfile):
     ## downloaded, which is the point of splitting them up
     yearfiles = {year: os.path.basename(year_page_pathname(outfile, year))
                  for year in years}
-    html_page += '<iframe id="yearframe" title="Dashboard for one year"></iframe>\n'
+    ## Framing the newest year here rather than leaving it to showYear() means
+    ## the page still shows a year without javascript. data-year is set to match
+    ## so that showYear() doesn't fetch the same file a second time on load.
+    newest = years[0]
+    html_page += (f'<iframe id="yearframe" data-year="{newest}"'
+                  + f' src="{yearfiles[newest]}"'
+                  + ' title="Dashboard for one year"></iframe>\n')
     html_page += f'<script >\n{_master_js(years, yearfiles)}\n</script>\n'
     html_page += _closing_str()
     return html_page

@@ -20,7 +20,7 @@ from desispec.scripts.procdashboard import DASHBOARD_COLNAMES, \
 from desispec.workflow.proc_dashboard_funcs import generate_nightly_table_html
 from desispec.workflow.proctable import default_prow, \
     instantiate_processing_table
-from desispec.workflow.tableio import write_table
+from desispec.workflow.tableio import load_table, write_table
 
 ## night of the canned exposure table used here, which has zeros, darks, arcs,
 ## flats, and science exposures, all with camword a0123456789
@@ -146,6 +146,21 @@ class TestProcDashboard(unittest.TestCase):
                 fil.write(f'    {key}: {value}\n')
         self.addCleanup(lambda: os.path.exists(pathname) and os.remove(pathname))
         return pathname
+
+    def _set_exposure_comments(self, comments_by_expid):
+        """Put comments on exposures of the night's exposure table.
+
+        The original table is restored afterwards, since it is shared by every
+        test in the class.
+        """
+        pathname = findfile('exposure_table', night=self.night)
+        table = load_table(pathname, tabletype='exptable')
+        self.addCleanup(write_table, table.copy(), tablename=pathname,
+                        tabletype='exptable')
+        for expid, comments in comments_by_expid.items():
+            index = np.where(table['EXPID'] == expid)[0][0]
+            table['COMMENTS'][index] = np.array(comments)
+        write_table(table, tablename=pathname, tabletype='exptable')
 
     def _run_dashboard(self, **kwargs):
         """Run populate_exp_night_info without querying Slurm"""
@@ -414,24 +429,49 @@ class TestProcDashboard(unittest.TestCase):
                          f'{_ncams}/{_ncams}')
         self.assertEqual(self._get_row(output, 'linkcal')['COLOR'], 'GOOD')
 
-    def test_failed_biaspdark_with_linked_biases(self):
-        """Linked biases must not hide a failure in dark preprocessing."""
-        bias = self._prow('biaspdark', self.darks, status='FAILED', obstype='dark')
+    def test_failed_bias_job_with_linked_biases(self):
+        """Linked biases leave a bias job nothing to count, not nothing to say
+
+        A biaspdark goes on to preprocess the darks, and either way a job that
+        ran and failed must not be left reading as an intentional no-op.
+        """
+        for jobdesc, obstype, expids in [('biaspdark', 'dark', self.darks),
+                                         ('biasnight', 'zero', self.zeros[:1])]:
+            with self.subTest(jobdesc=jobdesc):
+                bias = self._prow(jobdesc, expids, status='FAILED',
+                                  obstype=obstype)
+                link = self._prow('linkcal', [], obstype='link', intid=2)
+                self._write_proctable([bias, link])
+                self._write_override(include='biasnight')
+                self._link_biasnight(decode_camword(_camword))
+
+                output = self._run_dashboard()
+                row = self._get_row(output, jobdesc)
+                self.assertEqual(row['BIAS'], '0/0')
+                self.assertEqual(row['COLOR'], 'BAD')
+
+                calib_rows = {key: dict(row) for key, row in output.items()
+                              if row['OBSTYPE'] in [jobdesc, 'linkcal']}
+                _, night_status = generate_nightly_table_html(
+                        calib_rows, self.night, show_null=True)
+                self.assertEqual(night_status, 'BAD')
+                self.tearDown()
+
+    def test_completed_bias_job_with_linked_biases_is_not_flagged(self):
+        """The same shape when nothing went wrong must stay quiet
+
+        daily 20260130 carries leftover biasnight rows for cameras that ended
+        up linked; they never ran and there is nothing to report.
+        """
+        bias = self._prow('biasnight', self.zeros[:1], obstype='zero')
         link = self._prow('linkcal', [], obstype='link', intid=2)
         self._write_proctable([bias, link])
         self._write_override(include='biasnight')
         self._link_biasnight(decode_camword(_camword))
 
-        output = self._run_dashboard()
-        row = self._get_row(output, 'biaspdark')
+        row = self._get_row(self._run_dashboard(), 'biasnight')
         self.assertEqual(row['BIAS'], '0/0')
-        self.assertEqual(row['COLOR'], 'BAD')
-
-        calib_rows = {key: dict(row) for key, row in output.items()
-                      if row['OBSTYPE'] in ['biaspdark', 'linkcal']}
-        _, night_status = generate_nightly_table_html(calib_rows, self.night,
-                                                      show_null=True)
-        self.assertEqual(night_status, 'BAD')
+        self.assertNotIn(row['COLOR'], ['BAD', 'INCOMPLETE', 'OVERFULL'])
 
     def test_dangling_links_do_not_count(self):
         """A link whose target is gone is the failure this should catch"""
@@ -513,6 +553,89 @@ class TestProcDashboard(unittest.TestCase):
         self.assertIn(os.path.basename(newest), row['LOG FILE'])
         self.assertIn(f'biaspdark-{self.night}-{zexpid}-{_camword}.slurm',
                       row['SLURM FILE'])
+
+    def test_bare_zeros_and_darks_get_no_rows(self):
+        """Exposures with nothing the columns track shouldn't add empty rows
+
+        The jobs built from them must survive, since they are anchored on a zero
+        or a dark and only stop reading as one when the row builder replaces
+        OBSTYPE with the job description.
+        """
+        self._write_proctable([
+            self._prow('biasnight', self.zeros[:1], obstype='zero', intid=1),
+            self._prow('biaspdark', self.darks[:2], obstype='dark', intid=2),
+            self._prow('pdark', self.darks, obstype='dark', intid=3),
+            self._prow('ccdcalib', [self.darks[0]], obstype='dark', intid=4),
+            ])
+        self._touch_calibnight('biasnight', ext='fits.gz')
+
+        counts = collections.Counter(key.split('_')[0]
+                                     for key in self._run_dashboard())
+        self.assertEqual(counts['zero'], 0)
+        self.assertEqual(counts['dark'], 0)
+        for jobdesc in ['biasnight', 'biaspdark', 'pdark', 'ccdcalib']:
+            self.assertEqual(counts[jobdesc], 1, f'lost the {jobdesc} row')
+
+    def test_cached_dark_rows_are_not_restored(self):
+        """An archive written before darks were dropped must not resurrect them
+
+        The archive is keyed by row, so the skip has to precede the lookup.
+        """
+        self._write_proctable([self._prow('pdark', self.darks, obstype='dark')])
+        output = self._run_dashboard()
+        jobkey = f'pdark_{self.darks[0]}'
+
+        stale = {key: dict(row) for key, row in output.items()}
+        stale[f'dark_{self.darks[0]}'] = dict(output[jobkey], OBSTYPE='dark',
+                                              COLOR='NULL')
+
+        refreshed = self._run_dashboard(night_json_info=stale)
+        self.assertNotIn(f'dark_{self.darks[0]}', refreshed)
+        self.assertIn(jobkey, refreshed)
+
+    def test_job_rows_repeat_their_exposure_comments(self):
+        """Why a calibration went wrong is recorded against its exposures"""
+        shared, lone = 'bad temperature control', 'z3 failed psf fit'
+        comments = {expid: [shared] for expid in self.arcs[:5]}
+        comments[self.arcs[2]] = [shared, lone]
+        self._set_exposure_comments(comments)
+
+        self._write_proctable([self._prow('psfnight', self.arcs[:5],
+                                          obstype='arc')])
+        comment = self._get_row(self._run_dashboard(), 'psfnight')['COMMENTS']
+
+        ## shared by every exposure, so said once and unattributed
+        self.assertEqual(comment.count(shared), 1)
+        ## the one that isn't shared names the exposure it came from
+        self.assertIn(f'{self.arcs[2]}: {lone}', comment)
+        ## semicolons between comments, since a comment can itself hold a comma
+        ## separated list of exposures
+        self.assertIn(f'{shared}; ', comment)
+        self.assertNotIn(f'{shared}, ', comment)
+
+    def test_comments_of_several_exposures_are_listed_together(self):
+        """One comment shared by some but not all names each of them"""
+        note = 'residual patterns z7'
+        self._set_exposure_comments({expid: [note] for expid in self.darks[:2]})
+
+        self._write_proctable([self._prow('pdark', self.darks, obstype='dark')])
+        comment = self._get_row(self._run_dashboard(), 'pdark')['COMMENTS']
+
+        expids = ','.join(str(expid) for expid in self.darks[:2])
+        self.assertIn(f'{expids}: {note}', comment)
+
+    def test_job_rows_skip_comments_for_many_exposures(self):
+        """Above a handful of exposures there is no room to repeat them"""
+        note = 'bad temperature control'
+        self._set_exposure_comments({expid: [note] for expid in self.arcs})
+
+        self._write_proctable([self._prow('psfnight', self.arcs,
+                                          obstype='arc')])
+        comment = self._get_row(self._run_dashboard(), 'psfnight')['COMMENTS']
+
+        self.assertGreater(len(self.arcs), 5)
+        self.assertNotIn(note, comment)
+        self.assertIn(f'Exposures {self.arcs[0]}-{self.arcs[-1]}', comment)
 
     def test_duplicate_calib_rows_are_collapsed(self):
         """Repeated rows for one job shouldn't become repeated dashboard rows"""
