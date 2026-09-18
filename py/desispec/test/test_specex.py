@@ -638,9 +638,17 @@ class TestMeanPSF(unittest.TestCase):
         """
         With nothing wrong, the traces are the mean of every input as before.
 
-        This is night 20230829, and it is the case that must not change: the
-        per-bundle selection keeps all of the inputs, so psfnight for a normal
-        night comes out exactly as it did before #2819 was fixed.
+        This is the case that must not change: where every input passes the cut
+        the selection keeps them all, so the result is the plain mean psfnight
+        produced before #2819 was fixed. Most bundles of most cameras are like
+        this, and on daily nights 20260805-09 whole cameras came out unchanged
+        to the last bit.
+
+        A real night is not uniformly this case, which is why it is stated as a
+        property of the inputs rather than named after one: 20230829 is the
+        nominal night of the classification cases above, yet two of its r5
+        bundles do change, one of them because a single arc sits just past the
+        threshold.
         """
         inputs = self._write_inputs([self._status()] * 3,
                                     [self._rchi2()] * 3)
@@ -720,21 +728,30 @@ class TestMeanPSF(unittest.TestCase):
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 35.)
         self.assertAlmostEqual(rchi2[1], self.NOMINAL_RCHI2)
 
-    def test_traces_average_present_inputs_when_no_rchi2_passes(self):
+    def test_traces_average_fitted_inputs_when_no_rchi2_passes(self):
         """
         With no acceptable rchi2 the traces average instead of picking one.
 
         Bundle 1 is masked out of the first input and fit badly by the other
-        two. The coefficients have to choose an input and take the least bad
-        one, but rchi2_threshold is a relative cut: when nothing passes it,
-        nothing is an outlier and the ranking among near-equal bad values is
-        noise. The traces therefore keep averaging over the inputs that have
-        the bundle rather than inheriting that arbitrary choice, which is the
-        one place the traces deliberately diverge from the coefficients.
+        two. The coefficients have to choose one input and take the least bad,
+        but the traces do not, so they average instead of inheriting that
+        choice. This is the one place the traces deliberately diverge from the
+        coefficients.
 
-        Measured on real arcs, this is the common case: on loa nights 20230829,
-        20211028 and 20221121 about 15 of 600 camera-bundles have no input
-        passing the cut, against about 10 where the cut rejects a real outlier.
+        Averaging is only defensible where the inputs are comparable, and
+        nothing passing rchi2_threshold does not establish that: the threshold
+        is built from the median over every bundle of the camera, so a bundle
+        can sit wholly above it and still contain an outlier. The inputs are
+        therefore compared again here against a threshold from this bundle
+        alone, which keeps both of these (median 4.35 plus one, so 5.35) and
+        would drop a genuinely discrepant one, as the next test shows.
+
+        Only the two inputs that fit the bundle are eligible; the masked one
+        carries the input PSF's traces, not anything measured from that arc.
+
+        Measured on daily nights 20260805-09, about 20 of 600 camera-bundles
+        per night have no input passing the camera-wide cut, against 5 to 14
+        where that cut rejects an outlier.
         """
         inputs = self._write_inputs(
             [self._status(missing_bundles=[1]), self._status(), self._status()],
@@ -742,7 +759,7 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        #- mean of inputs 1 and 2, the ones that have the bundle
+        #- mean of inputs 1 and 2, the ones that fit the bundle
         self._assert_traces({0: 30., 1: 40., 2: 30., 3: 30.})
         #- while the coefficients still take input 2, the smallest non-zero
         coeff = self._read_output()[0]
@@ -753,10 +770,11 @@ class TestMeanPSF(unittest.TestCase):
         A bundle every arc fits badly keeps its traces averaged over them all.
 
         This is b8 bundle 10 of night 20221121, where the five arcs fit at
-        rchi2 4.95, 4.62, 4.81, 5.03 and 4.61: all bad, none an outlier. The
-        coefficients take the 4.61 arc, but preferring it for the traces over
-        the 5.03 one would trade the averaging of five exposures for an 8%
-        difference in rchi2 that carries no real information.
+        rchi2 4.95, 4.62, 4.81, 5.03 and 4.61: all bad, and near enough to
+        each other that the bundle's own median+1 threshold keeps every one.
+        The coefficients take the 4.61 arc, but preferring it for the traces
+        over the 5.03 one would trade the averaging of five exposures for an
+        8% difference in rchi2 that carries no real information.
         """
         inputs = self._write_inputs(
             [self._status()] * 3,
