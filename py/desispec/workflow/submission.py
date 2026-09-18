@@ -100,6 +100,69 @@ def unsatisfied_link_prefixes(refnight, files_to_link, camword, refptable=None):
     return unsatisfied
 
 
+def get_linkcal_refnight(night):
+    """
+    Return the reference night that the given night links calibrations from,
+    based on that night's override file, if any.
+
+    Args:
+        night (int): The night to inspect, in YYYYMMDD format.
+
+    Returns:
+        tuple: (refnight, files_to_link, linkcal). refnight is an int night, or
+            None if the night has no override file or no linkcal refnight.
+            files_to_link is the set of calibration filename prefixes that would
+            be linked (an empty set when refnight is None). linkcal is the
+            override's linkcal dictionary itself, which carries the settings
+            that don't apply to every prefix, e.g. 'biaslink_camword' (an empty
+            dictionary when refnight is None).
+
+    Raises:
+        Exception: If the override file exists but its linkcal entry can't be
+            interpreted. The pathname is logged before the error propagates.
+    """
+    log = get_logger()
+
+    override_pathname = findfile('override', night=night, readonly=True)
+    if not os.path.exists(override_pathname):
+        return None, set(), dict()
+
+    overrides = load_override_file(filepathname=override_pathname)
+    if not overrides or 'calibration' not in overrides:
+        return None, set(), dict()
+
+    cal_override = overrides['calibration']
+    if not isinstance(cal_override, dict) or 'linkcal' not in cal_override:
+        return None, set(), dict()
+
+    linkcal = cal_override['linkcal']
+    if not isinstance(linkcal, dict):
+        ## Usually a mis-indented file whose refnight/include ended up as
+        ## siblings of linkcal rather than children, leaving linkcal empty. The
+        ## link silently does not happen, so say which file rather than letting
+        ## a TypeError surface from somewhere deeper.
+        msg = (f"The 'linkcal' entry in {override_pathname} is empty or is not "
+               + f"a mapping (got {linkcal!r}). Its keys are probably indented "
+               + "as siblings of 'linkcal' rather than under it, which means "
+               + "the link is not in effect. Fix the override file.")
+        log.critical(msg)
+        raise ValueError(msg)
+    if 'refnight' not in linkcal:
+        return None, set(), dict()
+    ## Resolve include/exclude exactly as submit_linkcal_jobs() does. A
+    ## malformed override file is fatal, but this inspects the override file of
+    ## every night in the production, so name the offending file rather than
+    ## leaving a bare error from deep inside derive_include_exclude.
+    try:
+        files_to_link, _ = derive_include_exclude(linkcal.get('include', None),
+                                                 linkcal.get('exclude', None))
+        refnight = int(linkcal['refnight'])
+    except Exception as err:
+        log.critical(f"Could not interpret the linkcal entry in {override_pathname}")
+        raise
+    return refnight, files_to_link, linkcal
+
+
 def submit_linkcal_jobs(night, ptable, cal_override=None, override_pathname=None,
                         psf_linking_without_fflat=False, proccamword='a0123456789',
                         dry_run_level=0, queue=None, reservation=None,
