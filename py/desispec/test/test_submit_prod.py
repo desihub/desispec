@@ -21,9 +21,9 @@ from contextlib import contextmanager
 from desispec.io.meta import findfile
 from desispec.workflow.proctable import get_default_qid, get_err_qid
 from desispec.workflow.queue import get_resubmission_states
+from desispec.workflow.submission import get_linkcal_refnight
 from desispec.scripts.submit_prod import (
     bias_dependency_available,
-    get_linkcal_refnight,
     get_refnights_needing_early_calibration,
     submit_early_refnight_calibrations,
     submit_production,
@@ -96,7 +96,7 @@ class TestEarlyRefnightDiscovery(unittest.TestCase):
 
     def test_no_override_file(self):
         """A night without an override file links nothing"""
-        self.assertEqual(get_linkcal_refnight(20230914), (None, set()))
+        self.assertEqual(get_linkcal_refnight(20230914), (None, set(), dict()))
 
     def test_override_without_linkcal(self):
         """An override file that doesn't link calibrations returns None"""
@@ -105,7 +105,7 @@ class TestEarlyRefnightDiscovery(unittest.TestCase):
         with open(pathname, 'w') as fil:
             fil.write('calibration:\n  nightlyflat:\n'
                       + '    extra_cmd_args: [--autocal-ff-solve-grad]\n')
-        self.assertEqual(get_linkcal_refnight(20230914), (None, set()))
+        self.assertEqual(get_linkcal_refnight(20230914), (None, set(), dict()))
 
     def test_malformed_include_raises(self):
         """A yaml list include is not supported and must not pass silently
@@ -154,17 +154,35 @@ class TestEarlyRefnightDiscovery(unittest.TestCase):
     def test_include_is_resolved(self):
         """An explicit include list is returned as the set of linked files"""
         self._write_override(20230914, 20230913, include='biasnight')
-        refnight, files_to_link = get_linkcal_refnight(20230914)
+        refnight, files_to_link, linkcal = get_linkcal_refnight(20230914)
         self.assertEqual(refnight, 20230913)
         self.assertEqual(files_to_link, {'biasnight'})
 
     def test_exclude_is_resolved(self):
         """An exclude list resolves to everything else, including biasnight"""
         self._write_override(20230914, 20230913, exclude='fiberflatnight')
-        refnight, files_to_link = get_linkcal_refnight(20230914)
+        refnight, files_to_link, linkcal = get_linkcal_refnight(20230914)
         self.assertEqual(refnight, 20230913)
         self.assertIn('biasnight', files_to_link)
         self.assertNotIn('fiberflatnight', files_to_link)
+
+    def test_linkcal_settings_are_returned(self):
+        """Settings that don't apply to every prefix come back to the caller
+
+        biaslink_camword restricts the bias link to a subset of cameras, which
+        files_to_link alone can't express.
+        """
+        pathname = findfile('override', night=20230914)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as fil:
+            fil.write('calibration:\n  linkcal:\n'
+                      + '    refnight: 20230913\n'
+                      + '    include: biasnight\n'
+                      + '    biaslink_camword: z1\n')
+        refnight, files_to_link, linkcal = get_linkcal_refnight(20230914)
+        self.assertEqual(refnight, 20230913)
+        self.assertEqual(files_to_link, {'biasnight'})
+        self.assertEqual(linkcal['biaslink_camword'], 'z1')
 
     # ==================================================================
     # get_refnights_needing_early_calibration

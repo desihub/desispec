@@ -16,14 +16,14 @@ from desispec.parallel import stdouterr_redirected
 from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.scripts.proc_night import proc_night
-from desispec.scripts.link_calibnight import derive_include_exclude
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import verify_variable_with_environment, listpath, \
-    remove_slurm_environment_variables, load_override_file
+    remove_slurm_environment_variables
 from desispec.workflow.exptable import read_minimal_science_exptab_cols
 from desispec.workflow.proctable import default_obstypes_for_proctable, \
     get_err_qid
-from desispec.workflow.submission import submit_necessary_biasnights_and_preproc_darks
+from desispec.workflow.submission import get_linkcal_refnight, \
+    submit_necessary_biasnights_and_preproc_darks
 from desispec.scripts.submit_night import submit_night
 from desispec.workflow.queue import check_queue_count, get_resubmission_states
 import desispec.workflow.proctable
@@ -197,66 +197,6 @@ def get_nights_to_process(production_yaml, verbose=False):
     return sorted(nights_to_process)
 
 
-def get_linkcal_refnight(night):
-    """
-    Return the reference night that the given night links calibrations from,
-    based on that night's override file, if any.
-
-    Args:
-        night (int): The night to inspect, in YYYYMMDD format.
-
-    Returns:
-        tuple: (refnight, files_to_link) where refnight is an int night or None
-            if the night has no override file or no linkcal refnight, and
-            files_to_link is the set of calibration filename prefixes that would
-            be linked (an empty set when refnight is None).
-
-    Raises:
-        Exception: If the override file exists but its linkcal entry can't be
-            interpreted. The pathname is logged before the error propagates.
-    """
-    log = get_logger()
-
-    override_pathname = findfile('override', night=night, readonly=True)
-    if not os.path.exists(override_pathname):
-        return None, set()
-
-    overrides = load_override_file(filepathname=override_pathname)
-    if not overrides or 'calibration' not in overrides:
-        return None, set()
-
-    cal_override = overrides['calibration']
-    if not isinstance(cal_override, dict) or 'linkcal' not in cal_override:
-        return None, set()
-
-    linkcal = cal_override['linkcal']
-    if not isinstance(linkcal, dict):
-        ## Usually a mis-indented file whose refnight/include ended up as
-        ## siblings of linkcal rather than children, leaving linkcal empty. The
-        ## link silently does not happen, so say which file rather than letting
-        ## a TypeError surface from somewhere deeper.
-        msg = (f"The 'linkcal' entry in {override_pathname} is empty or is not "
-               + f"a mapping (got {linkcal!r}). Its keys are probably indented "
-               + "as siblings of 'linkcal' rather than under it, which means "
-               + "the link is not in effect. Fix the override file.")
-        log.critical(msg)
-        raise ValueError(msg)
-    if 'refnight' not in linkcal:
-        return None, set()
-    ## Resolve include/exclude exactly as submit_linkcal_jobs() does. A
-    ## malformed override file is fatal, but this inspects the override file of
-    ## every night in the production, so name the offending file rather than
-    ## leaving a bare error from deep inside derive_include_exclude.
-    try:
-        files_to_link, _ = derive_include_exclude(linkcal.get('include', None),
-                                                 linkcal.get('exclude', None))
-        refnight = int(linkcal['refnight'])
-    except Exception as err:
-        log.critical(f"Could not interpret the linkcal entry in {override_pathname}")
-        raise
-    return refnight, files_to_link
-
-
 def get_refnights_needing_early_calibration(nights, verbose=False):
     """
     Identify reference nights that must have their calibrations submitted before
@@ -293,7 +233,7 @@ def get_refnights_needing_early_calibration(nights, verbose=False):
     ## Seed with the reference nights that are later than the night linking to them
     seeds = []
     for night in sorted(nights):
-        refnight, files_to_link = get_linkcal_refnight(night)
+        refnight, files_to_link, _ = get_linkcal_refnight(night)
         if refnight is None or refnight <= night:
             continue
         log.info(f"Night {night} links calibrations {sorted(files_to_link)} from "
@@ -330,7 +270,7 @@ def get_refnights_needing_early_calibration(nights, verbose=False):
             log.critical(msg)
             raise ValueError(msg)
         in_progress.add(night)
-        refnight, files_to_link = get_linkcal_refnight(night)
+        refnight, files_to_link, _ = get_linkcal_refnight(night)
         if refnight is not None:
             note_edge(refnight, files_to_link)
             walk(refnight)

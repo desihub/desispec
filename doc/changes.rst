@@ -57,8 +57,14 @@ desispec Change Log
 * Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
   that ``psfnight`` only fails on real fit failures.  Requires the specex changes
   in `specex#91`_, which must be installed first (PR `#2732`_).
-* Bugfix for ``fit_trace_shifts`` iteration output (Commig `#a5705a9`_).
+* Bugfix for ``fit_trace_shifts`` iteration output (Commit `#a5705a9`_).
 * Fix weighted spline fit bug (PR `#2822`_).
+* Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
+  processing dashboard, with a new ``BIAS`` column
+  (`issue #2802`_, `issue #2677`_).
+* Write both dashboards as one page per year plus a master page keeping the
+  old filename, which frames the selected year and offers a link per year, so
+  only the year being looked at is downloaded and cached.
 * Apply the same per-bundle input selection to ``XTRACE``/``YTRACE`` in
   ``psfnight`` that was already applied to the PSF coefficients, so a fiber
   bundle masked out or fit badly in only some of the input arcs no longer has
@@ -95,6 +101,8 @@ desispec Change Log
 .. _`#2816`: https://github.com/desihub/desispec/pull/2816
 .. _`#2817`: https://github.com/desihub/desispec/pull/2817
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`issue #2677`: https://github.com/desihub/desispec/issues/2677
+.. _`issue #2802`: https://github.com/desihub/desispec/issues/2802
 .. _`issue #2819`: https://github.com/desihub/desispec/issues/2819
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
