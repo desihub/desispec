@@ -8,7 +8,6 @@ import os, glob
 from astropy.table import Table
 import numpy as np
 
-from desispec.scripts.link_calibnight import derive_include_exclude
 from desispec.workflow.exptable import get_exposure_table_column_defaults
 from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
     _hyperlink, _str_frac, \
@@ -17,7 +16,7 @@ from desispec.workflow.proc_dashboard_funcs import get_skipped_ids, \
 from desispec.workflow.proctable import table_row_to_dict
 from desispec.workflow.queue import update_from_queue, get_non_final_states, \
     get_resubmission_states
-from desispec.workflow.utils import load_override_file
+from desispec.workflow.submission import get_linkcal_refnight
 from desispec.io.meta import specprod_root, get_readonly_filepath
 from desispec.io.util import decode_camword, camword_to_spectros, \
     difference_camwords, erow_to_goodcamword
@@ -43,7 +42,14 @@ CALIB_JOBDESCS_ANCHORED_ON_LAST_EXPID = ('psfnight', 'nightlyflat', 'cteflat')
 ##    recorded, so which of their outputs to expect is unknowable
 ##  - the dark preprocs a pdark writes are large intermediates that productions
 ##    delete once the darknight is built, so their absence proves nothing
+## Their count columns read 0/0, the same as any other job that skips a step.
 STATUS_ONLY_JOBDESCS = ('linkcal', 'ccdcalib', 'pdark')
+
+## Slurm states that mean a job is still on its way but that
+## get_non_final_states() doesn't list, because the pipeline never has to act on
+## them. A status-only row would otherwise read as a failure for the few seconds
+## a job spends tearing down, which also turns the whole night's header orange.
+TRANSIENT_SLURM_STATES = ('COMPLETING', 'CONFIGURING', 'SIGNALING', 'STAGE_OUT')
 
 ## Columns of the per-exposure dashboard table, in the order they are written.
 ## Used to detect json archive entries written by an older version of this code,
@@ -214,64 +220,83 @@ def _standalone_calib_erow(exptab, night):
     return erow
 
 
-def _linkcal_override(night):
-    """Read a night's linkcal override, returning an empty dict if unavailable.
+def _exposure_comments(exptab, expids):
+    """
+    Collect what the exposure table says about a job's exposures.
+
+    A calibration that went wrong usually has its reason recorded against the
+    exposures rather than the job, so a job row is worth repeating them on.
+    Exposures of a set normally share their comments, so each distinct comment
+    is listed once, named by exposure only when it doesn't apply to all of them.
+
+    Args:
+        exptab (Table): the night's exposure table.
+        expids (np.array): the exposures the job processed.
+
+    Returns:
+        list of str: the comments, in the order they were first seen.
+    """
+    owners_by_comment = dict()
+    for expid in expids:
+        match = exptab[exptab['EXPID'] == expid]
+        if len(match) == 0:
+            ## a job can span nights, so not every exposure is in this table
+            continue
+        for comment in match['COMMENTS'][0]:
+            comment = str(comment).strip()
+            if comment:
+                owners_by_comment.setdefault(comment, []).append(int(expid))
+
+    comments = []
+    for comment, owners in owners_by_comment.items():
+        if len(owners) == len(expids):
+            comments.append(comment)
+        else:
+            comments.append(f"{','.join(str(e) for e in owners)}: {comment}")
+    return comments
+
+
+def _linkcal_link_info(night, proccamword):
+    """
+    Work out what a night's linkcal job links, from the override that drove it.
+
+    The processing table records neither which calibrations a linkcal links nor
+    which cameras its bias link covers, so the override file is the only source.
+    get_linkcal_refnight() raises on an override it can't interpret, which is
+    right for submission but not here: the dashboard reads whatever a production
+    happens to hold and covers every night in one process, so one malformed file
+    must not take the whole run down with it.
 
     Args:
         night (int): the night the linkcal ran for.
+        proccamword (str): the linkcal job's processing camera word, which is
+            the bias link's camera set unless the override narrows it.
 
     Returns:
-        dict: the linkcal settings, or an empty dictionary.
+        tuple: (comment, bias_camword) where comment describes the link for the
+            dashboard COMMENTS column and bias_camword is the cameras whose
+            biases the link supplies: a camword, '' when it links no biases, or
+            None when the override doesn't say and it can't be known. None is
+            distinct from '' on purpose, since the night's own bias job is only
+            excused from the cameras a link is known to cover.
     """
     try:
-        overrides = load_override_file(night=night)
-        return overrides.get('calibration', {}).get('linkcal', {})
-    except Exception as err:      # noqa: BLE001 - informational only
-        get_logger().warning(f"Could not read the override file of {night}: {err}")
-        return {}
+        refnight, files_to_link, linkcal = get_linkcal_refnight(night)
+    except Exception as err:      # noqa: BLE001 - one night shouldn't break the rest
+        get_logger().warning(f"Could not interpret the linkcal override of "
+                             + f"{night}, so reporting the link as unknown: {err}")
+        return "Links unknown calibrations from another night", None
 
+    ## get_linkcal_refnight gives a refnight for every override it could read,
+    ## so the absence of one means there was nothing to read
+    if refnight is None:
+        return "Links unknown calibrations from another night", None
 
-def _linkcal_bias_camword(night, proccamword):
-    """Get the cameras whose biases a linkcal is expected to link.
-
-    Args:
-        night (int): the night the linkcal ran for.
-        proccamword (str): the linkcal job's processing camera word; also the
-            fallback when the override is unavailable.
-
-    Returns:
-        str: the bias camera word, or an empty string if biases are excluded.
-    """
-    linkcal = _linkcal_override(night)
-    include, exclude = derive_include_exclude(linkcal.get('include'), linkcal.get('exclude'))
-    if 'biasnight' not in include:
-        return ''
-    return linkcal.get('biaslink_camword', proccamword)
-
-
-def _linkcal_comment(night):
-    """
-    Describe what a night's linkcal job links, for the dashboard COMMENTS column.
-
-    The processing table doesn't record it, so read the override file that drove
-    the linking. Falls back to a generic description if that can't be read.
-
-    Args:
-        night (int): the night the linkcal ran for.
-
-    Returns:
-        str: a short description of the link.
-    """
-    linkcal = _linkcal_override(night)
-
-    described = ''
-    if 'include' in linkcal:
-        described = f" {linkcal['include']}"
-    elif 'exclude' in linkcal:
-        described = f" all but {linkcal['exclude']}"
-    if 'refnight' in linkcal:
-        return f"Links{described} from night {linkcal['refnight']}"
-    return f"Links{described} from another night"
+    bias_camword = ''
+    if 'biasnight' in files_to_link:
+        bias_camword = linkcal.get('biaslink_camword', proccamword)
+    described = ', '.join(sorted(files_to_link))
+    return f"Links {described} from night {refnight}", bias_camword
 
 
 def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, skipd_expids=None):
@@ -369,6 +394,10 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
     ## while the row itself may be anchored on the last
     exptab.add_column(Table.Column(data=_empty_expid_lists(len(exptab)),
                                    name="PTAB_EXPIDS"))
+    ## Cameras whose nightly biases the night's linkcal supplies, which the
+    ## night's own bias job is therefore not responsible for producing. None
+    ## until a linkcal row says otherwise, meaning nothing is known to be linked.
+    linkcal_bias_camword = None
     if proctab is not None and len(proctab) > 0:
         ## Update the STATUS of the
         proctab = update_from_queue(proctab)
@@ -430,13 +459,21 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             if jobdesc == 'linkcal':
                 ## the exposures a linkcal lists are those of the reference
                 ## night it depends on, which would be confusing here
-                joint_erow['COMMENTS'] = [_linkcal_comment(night)]
+                comment, linkcal_bias_camword = _linkcal_link_info(
+                        night, str(prow['PROCCAMWORD']))
+                joint_erow['COMMENTS'] = [comment]
             elif len(expids) == 0:
                 joint_erow['COMMENTS'] = []
-            elif len(expids) < 5:
-                joint_erow['COMMENTS'] = [f"Exposure(s) {','.join(expids.astype(str))}"]
             else:
-                joint_erow['COMMENTS'] = [f"Exposures {expids[0]}-{expids[-1]}"]
+                if len(expids) < 5:
+                    described = [f"Exposure(s) {','.join(expids.astype(str))}"]
+                else:
+                    described = [f"Exposures {expids[0]}-{expids[-1]}"]
+                ## For a handful of exposures there is room to say what the
+                ## exposure table records about them as well
+                if len(expids) <= 5:
+                    described += _exposure_comments(exptab, expids)
+                joint_erow['COMMENTS'] = described
             # ## Derive the appropriate PROCCAMWORD from the exposure table
             # pcamwords = []
             # for expid in expids:
@@ -519,7 +556,12 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         if ftype == 'biasnight':
             filenames = [filename for filename in filenames if filename.endswith(('.fits', '.fits.gz'))]
         if links is not None:
-            filenames = [filename for filename in filenames if os.path.islink(filename) == links]
+            ## glob lists a symlink whose target is gone, and islink() is True
+            ## for it, so require that a link actually resolves. A linkcal that
+            ## leaves dangling links is the failure this is meant to catch.
+            filenames = [filename for filename in filenames
+                         if os.path.islink(filename) == links
+                         and os.path.exists(filename)]
         return len(filenames)
 
     output = dict()
@@ -529,6 +571,14 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         if expid in skipd_expids:
             continue
         obstype = str(row['OBSTYPE']).lower().strip()
+        ## Zeros and darks produce nothing any of the columns track, so a row of
+        ## their own is always an empty gray one. What is made from them is
+        ## reported by the biasnight, biaspdark, pdark and ccdcalib rows, which
+        ## reach here carrying their job description rather than 'zero'/'dark'.
+        ## This has to precede the archive lookup below, or rows cached before
+        ## darks were dropped would be restored from it.
+        if obstype in ('zero', 'dark'):
+            continue
         key = f'{obstype}_{expid}'
         ## For those already marked as GOOD or NULL in cached rows, take that and move on.
         ## A row cached by an older version of this code can have a different set
@@ -554,8 +604,6 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             if lasttile != tileid:
                 first_exp_of_tile = zfild_expid
                 lasttile = tileid
-        elif obstype == 'zero':  # or obstype == 'other':
-            continue
         else:
             tileid_str = '----'
 
@@ -585,7 +633,9 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
                 bad_ind = ii
         if bad_ind is not None:
             comments.pop(bad_ind)
-        comments = ', '.join(comments)
+        ## semicolons, not commas: a comment can itself hold a comma separated
+        ## list of exposures, which a comma here would read as part of
+        comments = '; '.join(comments)
 
         if 'FA_SURV' in row.colnames and row['FA_SURV'] != 'unknown':
             fasurv = row['FA_SURV']
@@ -637,10 +687,21 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
             ## other columns track. Count all non-links so extra files are still
             ## flagged, while biases supplied by linkcal are counted separately.
             nfiles['bias'] = count_num_files(ftype='biasnight', links=False)
+            ## Cameras the night's linkcal supplies aren't this job's to write.
+            ## Usually there is no overlap, since a bias job is only submitted
+            ## for the cameras a link doesn't cover, but a night can still carry
+            ## a leftover bias row for cameras that ended up linked instead.
+            nbias_expected = len(decode_camword(difference_camwords(
+                    proccamword, linkcal_bias_camword or '',
+                    suppress_logging=True)))
         elif obstype == 'linkcal':
-            nfiles['bias'] = count_num_files(ftype='biasnight', links=True)
-            bias_camword = _linkcal_bias_camword(night, proccamword)
-            nbias_expected = len(decode_camword(bias_camword))
+            if linkcal_bias_camword is None:
+                ## nothing readable says what was linked, so leave the count
+                ## blank rather than guess, and judge the row by its status
+                pass
+            else:
+                nfiles['bias'] = count_num_files(ftype='biasnight', links=True)
+                nbias_expected = len(decode_camword(linkcal_bias_camword))
         elif obstype in STATUS_ONLY_JOBDESCS:
             ## Nothing countable, the coloring below falls back on the status
             pass
@@ -666,6 +727,9 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
 
         if terminal_step == 'std':
             nexpected = nspecs
+        elif terminal_step == 'bias':
+            ## not simply ncams: a linkcal can supply some of the cameras
+            nexpected = nbias_expected
         else:
             nexpected = ncams
 
@@ -683,12 +747,18 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         if obstype in STATUS_ONLY_JOBDESCS:
             if status in non_final_states:
                 row_color = status
+            elif status in TRANSIENT_SLURM_STATES:
+                ## on its way, not a failure, but with no color of its own, so
+                ## show it like any other job that hasn't finished
+                row_color = 'PENDING'
             elif status in failed_states:
                 row_color = 'BAD'
             elif status == 'COMPLETED':
-                if obstype == 'linkcal' and nfiles['bias'] > nbias_expected:
+                known_bias_link = (obstype == 'linkcal'
+                                   and linkcal_bias_camword is not None)
+                if known_bias_link and nfiles['bias'] > nbias_expected:
                     row_color = 'OVERFULL'
-                elif obstype == 'linkcal' and nfiles['bias'] < nbias_expected:
+                elif known_bias_link and nfiles['bias'] < nbias_expected:
                     row_color = 'BAD' if nfiles['bias'] == 0 else 'INCOMPLETE'
                 else:
                     row_color = 'GOOD'
@@ -697,7 +767,9 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
                 row_color = 'INCOMPLETE'
         elif terminal_step is None:
             row_color = 'NULL'
-        elif expected[terminal_step] == 0:
+        elif expected[terminal_step] == 0 or nexpected == 0:
+            ## nothing was expected of this job, e.g. a bias job for a night
+            ## whose biases all came from a link instead
             row_color = 'NULL'
         elif status in non_final_states:
             row_color = status
@@ -795,23 +867,17 @@ def populate_exp_night_info(night, night_json_info=None, check_on_disk=False, sk
         rd["LAST STEP"] = laststep
         rd["EXP TIME"] = str(exptime)
         rd["PROC CAMWORD"] = proccamword
-        if obstype in STATUS_ONLY_JOBDESCS:
-            ## Which files these jobs produce isn't recorded anywhere the
-            ## dashboard can read, so don't imply a count of zero
-            for col in ['BIAS', 'PSF', 'FRAME', 'FFLAT', 'SFRAME', 'SKY',
-                        'STD', 'CFRAME']:
-                rd[col] = '----'
-            if obstype == 'linkcal':
-                rd['BIAS'] = _str_frac(nfiles['bias'], nbias_expected)
-        else:
-            rd["BIAS"] = _str_frac(nfiles['bias'], ncams * expected['bias'])
-            rd["PSF"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
-            rd["FRAME"] = _str_frac(nfiles['frame'], ncams * expected['frame'])
-            rd["FFLAT"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
-            rd["SFRAME"] = _str_frac(nfiles['sframe'], ncams * expected['sframe'])
-            rd["SKY"] = _str_frac(nfiles['sky'], ncams * expected['sframe'])
-            rd["STD"] = _str_frac(nfiles['std'], nspecs * expected['std'])
-            rd["CFRAME"] = _str_frac(nfiles['cframe'], ncams * expected['cframe'])
+        ## A step a job doesn't produce reads 0/0, the same as for every other
+        ## job that skips a step. The status-only jobs expect nothing anywhere,
+        ## except a linkcal's bias count once its override says what was linked.
+        rd["BIAS"] = _str_frac(nfiles['bias'], nbias_expected)
+        rd["PSF"] = _str_frac(nfiles['psf'], ncams * expected['psf'])
+        rd["FRAME"] = _str_frac(nfiles['frame'], ncams * expected['frame'])
+        rd["FFLAT"] = _str_frac(nfiles['ff'], ncams * expected['ff'])
+        rd["SFRAME"] = _str_frac(nfiles['sframe'], ncams * expected['sframe'])
+        rd["SKY"] = _str_frac(nfiles['sky'], ncams * expected['sframe'])
+        rd["STD"] = _str_frac(nfiles['std'], nspecs * expected['std'])
+        rd["CFRAME"] = _str_frac(nfiles['cframe'], ncams * expected['cframe'])
         rd["SLURM FILE"] = slurm_hlink
         rd["LOG FILE"] = log_hlink
         rd["COMMENTS"] = comments

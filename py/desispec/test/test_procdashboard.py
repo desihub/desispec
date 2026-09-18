@@ -3,6 +3,7 @@
 """Test desispec.scripts.procdashboard
 """
 
+import collections
 import os
 import importlib
 import shutil
@@ -130,6 +131,22 @@ class TestProcDashboard(unittest.TestCase):
             open(reffile, 'w').close()
             os.symlink(os.path.relpath(reffile, caldir), newfile)
 
+    def _write_override(self, **settings):
+        """Write the night's linkcal override, as the real thing would look.
+
+        Defaults to a refnight, since without one there is nothing to read and
+        the dashboard treats what was linked as unknown.
+        """
+        settings = {'refnight': self.night - 1, **settings}
+        pathname = findfile('override', night=self.night)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as fil:
+            fil.write('calibration:\n  linkcal:\n')
+            for key, value in settings.items():
+                fil.write(f'    {key}: {value}\n')
+        self.addCleanup(lambda: os.path.exists(pathname) and os.remove(pathname))
+        return pathname
+
     def _run_dashboard(self, **kwargs):
         """Run populate_exp_night_info without querying Slurm"""
         with patch('desispec.scripts.procdashboard.update_from_queue',
@@ -201,18 +218,17 @@ class TestProcDashboard(unittest.TestCase):
                     self._prow('pdark', self.darks, status=status,
                                obstype='dark', intid=3),
                     ])
-                with patch('desispec.scripts.procdashboard.load_override_file',
-                           return_value={'calibration': {'linkcal': {'exclude': 'biasnight'}}}):
-                    output = self._run_dashboard()
+                self._write_override(exclude='biasnight')
+                output = self._run_dashboard()
                 for jobdesc in ['linkcal', 'ccdcalib', 'pdark']:
                     row = self._get_row(output, jobdesc)
                     self.assertEqual(row['COLOR'], color,
                                      f'{jobdesc} with status {status}')
                     self.assertEqual(row['STATUS'], status)
-                    ## No bias links are expected when biases are excluded.
-                    expected_bias = '0/0' if jobdesc == 'linkcal' else '----'
-                    self.assertEqual(row['BIAS'], expected_bias)
-                    self.assertEqual(row['PSF'], '----')
+                    ## Nothing is expected of these jobs in any column, which
+                    ## reads the same 0/0 as any other job that skips a step.
+                    self.assertEqual(row['BIAS'], '0/0')
+                    self.assertEqual(row['PSF'], '0/0')
                 if color == 'BAD':
                     calib_rows = {key: dict(row) for key, row in output.items()
                                   if row['OBSTYPE'] in ['linkcal', 'ccdcalib', 'pdark']}
@@ -229,16 +245,15 @@ class TestProcDashboard(unittest.TestCase):
                              self._prow('ccdcalib', self.darks[:1], intid=2),
                              self._prow('pdark', self.darks, intid=3)]
                     self._write_proctable(prows)
-                    with patch('desispec.scripts.procdashboard.load_override_file',
-                               return_value={'calibration': {'linkcal': {'exclude': 'biasnight'}}}):
-                        cached = self._run_dashboard()
-                        for prow in prows:
-                            row = self._get_row(cached, prow['JOBDESC'])
-                            row['COLOR'] = cached_color
-                            row['STATUS'] = 'MAX_RESUB' if cached_color == 'NULL' else 'COMPLETED'
-                            prow['STATUS'] = status
-                        self._write_proctable(prows)
-                        output = self._run_dashboard(night_json_info=cached)
+                    self._write_override(exclude='biasnight')
+                    cached = self._run_dashboard()
+                    for prow in prows:
+                        row = self._get_row(cached, prow['JOBDESC'])
+                        row['COLOR'] = cached_color
+                        row['STATUS'] = 'MAX_RESUB' if cached_color == 'NULL' else 'COMPLETED'
+                        prow['STATUS'] = status
+                    self._write_proctable(prows)
+                    output = self._run_dashboard(night_json_info=cached)
                     for prow in prows:
                         row = self._get_row(output, prow['JOBDESC'])
                         self.assertEqual(row['STATUS'], status)
@@ -256,6 +271,7 @@ class TestProcDashboard(unittest.TestCase):
                     link = self._prow('linkcal', [], obstype='link', intid=2)
                     link['PROCCAMWORD'] = 'a0'
                     self._write_proctable([bias, link])
+                    self._write_override(include='biasnight', biaslink_camword='a0')
                     self._touch_calibnight('biasnight', ext=file_ext, cameras=decode_camword('a1'))
                     self._link_biasnight(decode_camword('a0'), ext=link_ext)
                     self._touch_calibnight('biasnight', ext='fits.bak', cameras=['b1'])
@@ -280,6 +296,7 @@ class TestProcDashboard(unittest.TestCase):
                 link = self._prow('linkcal', [], obstype='link', intid=2)
                 link['PROCCAMWORD'] = 'a0'
                 self._write_proctable([bias, link])
+                self._write_override(include='biasnight', biaslink_camword='a0')
                 self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a123456789'))
                 self._link_biasnight(decode_camword('a0'))
 
@@ -297,6 +314,7 @@ class TestProcDashboard(unittest.TestCase):
         link = self._prow('linkcal', [], obstype='link', intid=2)
         link['PROCCAMWORD'] = 'a0'
         self._write_proctable([bias, link])
+        self._write_override(include='biasnight', biaslink_camword='a0')
         self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a12'))
         self._link_biasnight(decode_camword('a03'))
 
@@ -318,6 +336,7 @@ class TestProcDashboard(unittest.TestCase):
                 link = self._prow('linkcal', [], status=status, obstype='link')
                 link['PROCCAMWORD'] = 'a0'
                 self._write_proctable([link])
+                self._write_override(include='biasnight', biaslink_camword='a0')
                 self._link_biasnight(['b0', 'r0', 'z0', 'b1'][:nlinks])
                 row = self._get_row(self._run_dashboard(), 'linkcal')
                 self.assertEqual(row['BIAS'], f'{nlinks}/3')
@@ -330,15 +349,85 @@ class TestProcDashboard(unittest.TestCase):
         self._link_biasnight(decode_camword('a0'))
         for settings, expected in [
                 ({'include': 'biasnight,psfnight', 'biaslink_camword': 'a0'}, '3/3'),
+                ## links on disk that the override says weren't linked stay visible
                 ({'include': 'psfnight,fiberflatnight'}, '3/0'),
                 ({'exclude': 'biasnight'}, '3/0'),
-                ({'exclude': 'psfnight'}, f'3/{_ncams}'),
-                ({}, f'3/{_ncams}')]:
+                ({'exclude': 'psfnight'}, f'3/{_ncams}')]:
             with self.subTest(settings=settings):
-                with patch('desispec.scripts.procdashboard.load_override_file',
-                           return_value={'calibration': {'linkcal': settings}}):
-                    row = self._get_row(self._run_dashboard(), 'linkcal')
+                self._write_override(**settings)
+                row = self._get_row(self._run_dashboard(), 'linkcal')
                 self.assertEqual(row['BIAS'], expected)
+
+    def test_unreadable_linkcal_override_is_not_guessed(self):
+        """With nothing to read, say nothing rather than invent an expectation
+
+        Assuming a linkcal linked everything would also wrongly excuse the
+        night's own bias job from writing anything.
+        """
+        bias = self._prow('biasnight', self.zeros[:1], obstype='zero')
+        link = self._prow('linkcal', [], obstype='link', intid=2)
+        self._write_proctable([bias, link])
+        self._touch_calibnight('biasnight', ext='fits.gz')
+
+        ## no override file at all
+        output = self._run_dashboard()
+        self.assertEqual(self._get_row(output, 'linkcal')['BIAS'], '0/0')
+        self.assertEqual(self._get_row(output, 'linkcal')['COLOR'], 'GOOD')
+        self.assertEqual(self._get_row(output, 'biasnight')['BIAS'],
+                         f'{_ncams}/{_ncams}')
+
+        ## an override whose linkcal entry can't be interpreted
+        pathname = findfile('override', night=self.night)
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as fil:
+            fil.write('calibration:\n  linkcal:\n    refnight: 20250317\n'
+                      + '    include: biasnight\n    exclude: psfnight\n')
+        self.addCleanup(lambda: os.path.exists(pathname) and os.remove(pathname))
+
+        output = self._run_dashboard()
+        row = self._get_row(output, 'linkcal')
+        self.assertEqual(row['BIAS'], '0/0')
+        self.assertEqual(row['COLOR'], 'GOOD')
+        self.assertIn('unknown', row['COMMENTS'])
+        ## and the bias job is still held to its full camera set
+        self.assertEqual(self._get_row(output, 'biasnight')['BIAS'],
+                         f'{_ncams}/{_ncams}')
+
+    def test_linked_cameras_are_not_the_bias_jobs_to_write(self):
+        """A leftover bias row for cameras that got linked must not read BAD
+
+        daily 20260130 has this shape: the override links biasnight for every
+        camera, the files on disk are all symlinks, and the processing table
+        still carries biasnight rows that never ran.
+        """
+        bias = self._prow('biasnight', self.zeros[:1], obstype='zero')
+        link = self._prow('linkcal', [], obstype='link', intid=2)
+        self._write_proctable([bias, link])
+        self._write_override(include='biasnight')
+        self._link_biasnight(decode_camword(_camword))
+
+        output = self._run_dashboard()
+        ## the link supplied every camera, so the bias job owed nothing
+        self.assertEqual(self._get_row(output, 'biasnight')['BIAS'], '0/0')
+        self.assertNotEqual(self._get_row(output, 'biasnight')['COLOR'], 'BAD')
+        self.assertEqual(self._get_row(output, 'linkcal')['BIAS'],
+                         f'{_ncams}/{_ncams}')
+        self.assertEqual(self._get_row(output, 'linkcal')['COLOR'], 'GOOD')
+
+    def test_dangling_links_do_not_count(self):
+        """A link whose target is gone is the failure this should catch"""
+        link = self._prow('linkcal', [], obstype='link')
+        link['PROCCAMWORD'] = 'a0'
+        self._write_proctable([link])
+        self._write_override(include='biasnight', biaslink_camword='a0')
+        self._link_biasnight(decode_camword('a0'))
+        ## delete what the links point at
+        refdir = os.path.join(self.proddir, 'calibnight', str(self.night - 1))
+        shutil.rmtree(refdir)
+
+        row = self._get_row(self._run_dashboard(), 'linkcal')
+        self.assertEqual(row['BIAS'], '0/3')
+        self.assertEqual(row['COLOR'], 'BAD')
 
     def test_cached_bias_counts_are_refreshed(self):
         """Cached rows must not retain counts that used to include links."""
@@ -347,11 +436,12 @@ class TestProcDashboard(unittest.TestCase):
         link = self._prow('linkcal', [], obstype='link', intid=2)
         link['PROCCAMWORD'] = 'a1'
         self._write_proctable([bias, link])
+        self._write_override(include='biasnight', biaslink_camword='a1')
         self._touch_calibnight('biasnight', ext='fits.gz', cameras=decode_camword('a0'))
         self._link_biasnight(decode_camword('a1'))
         cached = self._run_dashboard()
         self._get_row(cached, 'biasnight')['BIAS'] = '6/3'
-        self._get_row(cached, 'linkcal')['BIAS'] = '----'
+        self._get_row(cached, 'linkcal')['BIAS'] = '9/9'
 
         output = self._run_dashboard(night_json_info=cached)
         self.assertEqual(self._get_row(output, 'biasnight')['BIAS'], '3/3')
@@ -385,7 +475,8 @@ class TestProcDashboard(unittest.TestCase):
                                           obstype='link')])
 
         comment = self._get_row(self._run_dashboard(), 'linkcal')['COMMENTS']
-        self.assertIn('biasnight,psfnight', comment)
+        self.assertIn('biasnight', comment)
+        self.assertIn('psfnight', comment)
         self.assertIn('20250317', comment)
         self.assertNotIn('123456', comment)
 
