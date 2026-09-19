@@ -65,6 +65,14 @@ desispec Change Log
 * Write both dashboards as one page per year plus a master page keeping the
   old filename, which frames the selected year and offers a link per year, so
   only the year being looked at is downloaded and cached.
+* Apply the same per-bundle input selection to ``XTRACE``/``YTRACE`` in
+  ``psfnight`` that was already applied to the PSF coefficients, so a fiber
+  bundle masked out or fit badly in only some of the input arcs no longer has
+  its traces blended with arcs that never fit it and so carry only the input
+  PSF's traces. Where no arc passes the camera-wide rchi2 cut the traces are
+  still averaged, over the arcs that fit the bundle and are comparable by that
+  bundle's own rchi2, rather than following the coefficients onto a single arc
+  (`issue #2819`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -95,6 +103,7 @@ desispec Change Log
 .. _`#2732`: https://github.com/desihub/desispec/pull/2732
 .. _`issue #2677`: https://github.com/desihub/desispec/issues/2677
 .. _`issue #2802`: https://github.com/desihub/desispec/issues/2802
+.. _`issue #2819`: https://github.com/desihub/desispec/issues/2819
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
 .. _`#2822`: https://github.com/desihub/desispec/pull/2822

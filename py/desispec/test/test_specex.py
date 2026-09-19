@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
+from numpy.polynomial.legendre import legval
 from astropy.io import fits
 
 from desispec.scripts.specex import merge_psf, mean_psf
@@ -27,7 +28,7 @@ CROSSED_TRACES = 4
 
 def _write_psf(filename, status, bundle, legcoeff, xtrace, ytrace,
                fit_bundles=(), param_order=('STATUS', 'BUNDLE', 'LEGCOEFF'),
-               rchi2=None, header=None):
+               rchi2=None, header=None, write_traces=True):
     """
     Write a minimal specex-like PSF fits file for testing merge_psf/mean_psf.
 
@@ -48,6 +49,8 @@ def _write_psf(filename, status, bundle, legcoeff, xtrace, ytrace,
             mean_psf counts bundles by scanning B00RCHI2, B01RCHI2, ... and
             stops at the first missing key.
         header: optional dict of extra PSF header keywords
+        write_traces: if False, omit the XTRACE and YTRACE HDUs entirely, as a
+            PSF written by something other than specex might
     """
     nfibers = len(status)
     ncoeff = legcoeff.shape[1]
@@ -81,15 +84,29 @@ def _write_psf(filename, status, bundle, legcoeff, xtrace, ytrace,
         for key, value in header.items():
             psf_hdu.header[key] = value
 
-    xtrace_hdu = fits.ImageHDU(xtrace, name='XTRACE')
-    ytrace_hdu = fits.ImageHDU(ytrace, name='YTRACE')
+    hdus = [fits.PrimaryHDU(), psf_hdu]
+    if write_traces:
+        hdus.append(fits.ImageHDU(xtrace, name='XTRACE'))
+        hdus.append(fits.ImageHDU(ytrace, name='YTRACE'))
 
-    hdulist = fits.HDUList([fits.PrimaryHDU(), psf_hdu, xtrace_hdu, ytrace_hdu])
+    hdulist = fits.HDUList(hdus)
     hdulist.writeto(filename, overwrite=True)
 
 
+#- offset added to YTRACE so that a test can tell the two trace HDUs apart and
+#- catch an x/y mixup; means are linear, so mean(y) == mean(x) + YTRACE_OFFSET
+YTRACE_OFFSET = 1000.
+
+
+def _legcoeff(filename):
+    """Return the LEGCOEFF row of a PSF file, shaped (nfibers, ncoeff)"""
+    data = fits.getdata(filename, 'PSF')
+    return np.array(data['COEFF'][np.where(data['PARAM'] == 'LEGCOEFF')[0][0]])
+
+
 def _write_mean_psf_input(filename, status, bundle, rchi2, value, ncoeff=2,
-                          param_order=('LEGCOEFF', 'BUNDLE', 'STATUS')):
+                          param_order=('LEGCOEFF', 'BUNDLE', 'STATUS'),
+                          write_traces=True, wavemin=3526.0, wavemax=6055.0):
     """
     Write a merged per-exposure PSF (fit-psf-CAM-EXPID.fits) for mean_psf.
 
@@ -98,11 +115,16 @@ def _write_mean_psf_input(filename, status, bundle, rchi2, value, ncoeff=2,
         status: per-fiber STATUS values, 1D array of length nfibers
         bundle: per-fiber BUNDLE values, 1D array of length nfibers
         rchi2: per-bundle rchi2, 0.0 for bundles that are missing or failed
-        value: scalar filled into LEGCOEFF/XTRACE/YTRACE so that which input
-            was averaged or selected can be read straight off the output
+        value: scalar filled into LEGCOEFF/XTRACE so that which input was
+            averaged or selected can be read straight off the output. YTRACE
+            gets value+YTRACE_OFFSET so the two trace HDUs are distinguishable.
         ncoeff: number of legendre coefficients per fiber
         param_order: see _write_psf; the default puts STATUS last as real
             specex files do
+        write_traces: see _write_psf
+        wavemin, wavemax: the wavelength range the legendre coefficients are
+            defined over. compatible() does not compare these, so inputs may
+            disagree and mean_psf then refits them onto the first input's range.
 
     The header keywords are the ones mean_psf reads directly (PSFVER, CAMERA,
     WAVEMIN, WAVEMAX) plus those compared by specex.compatible(), which must
@@ -110,13 +132,15 @@ def _write_mean_psf_input(filename, status, bundle, rchi2, value, ncoeff=2,
     """
     nfibers = len(status)
     payload = np.full((nfibers, ncoeff), float(value))
+    ypayload = payload + YTRACE_OFFSET
     header = dict(PSFVER='3', CAMERA="'z7      '",
-                  WAVEMIN=3526.0, WAVEMAX=6055.0,
+                  WAVEMIN=wavemin, WAVEMAX=wavemax,
                   PSFTYPE='GAUSS-HERMITE', NPIX_X=4096, NPIX_Y=4096,
                   HSIZEX=8, HSIZEY=5, NPARAMS=57, LEGDEG=ncoeff - 1,
                   GHDEGX=6, GHDEGY=6)
-    _write_psf(filename, status, bundle, payload, payload, payload,
-               param_order=param_order, rchi2=rchi2, header=header)
+    _write_psf(filename, status, bundle, payload, payload, ypayload,
+               param_order=param_order, rchi2=rchi2,
+               header=header, write_traces=write_traces)
 
 
 class TestMergePSF(unittest.TestCase):
@@ -288,18 +312,39 @@ class TestMeanPSF(unittest.TestCase):
             rchi2[int(bundle.lstrip('b'))] = value
         return rchi2
 
-    def _write_inputs(self, statuses, rchi2s, **kwargs):
-        """Write one input PSF per (status, rchi2) pair; return the filenames"""
+    def _write_inputs(self, statuses, rchi2s, no_traces=(), wave_ranges=None,
+                      **kwargs):
+        """
+        Write one input PSF per (status, rchi2) pair; return the filenames
+
+        Args:
+            statuses, rchi2s: one per input, see _status and _rchi2
+            no_traces: indices of inputs to write without XTRACE/YTRACE HDUs
+            wave_ranges: optional (wavemin, wavemax) per input, to make some of
+                them disagree about the range their coefficients cover
+            kwargs: passed to _write_mean_psf_input for every input
+        """
         filenames = list()
         for i, (status, rchi2) in enumerate(zip(statuses, rchi2s)):
             filename = os.path.join(self.testdir, 'psf-in-{}.fits'.format(i))
+            wave = dict()
+            if wave_ranges is not None:
+                wave = dict(zip(('wavemin', 'wavemax'), wave_ranges[i]))
             _write_mean_psf_input(filename, status, self.bundle, rchi2,
-                                  self.VALUES[i], **kwargs)
+                                  self.VALUES[i],
+                                  write_traces=(i not in no_traces),
+                                  **wave, **kwargs)
             filenames.append(filename)
         return filenames
 
     def _read_output(self):
-        """Return (dict of PARAM name -> coefficients, per-bundle rchi2)"""
+        """
+        Return the merged output
+
+        Returns:
+            (coeff, rchi2, xtrace, ytrace) where coeff maps a PARAM name to its
+            coefficients and rchi2 is the per-bundle B{bb}RCHI2 of the header
+        """
         with fits.open(self.outfile) as hdulist:
             data = hdulist['PSF'].data
             coeff = dict()
@@ -308,7 +353,25 @@ class TestMeanPSF(unittest.TestCase):
             rchi2 = np.array([hdulist['PSF'].header['B{:02d}RCHI2'.format(b)]
                               for b in range(self.NBUNDLES)])
             xtrace = np.array(hdulist['XTRACE'].data)
-        return coeff, rchi2, xtrace
+            ytrace = np.array(hdulist['YTRACE'].data)
+        return coeff, rchi2, xtrace, ytrace
+
+    def _assert_traces(self, expected_per_bundle):
+        """
+        Assert the merged XTRACE/YTRACE of each bundle
+
+        Args:
+            expected_per_bundle: dict of bundle id -> expected XTRACE value.
+                YTRACE is checked at that value plus YTRACE_OFFSET, so an x/y
+                mixup in mean_psf cannot pass.
+        """
+        xtrace, ytrace = self._read_output()[2:]
+        for bundle, expected in expected_per_bundle.items():
+            fibers = self._fibers(bundle)
+            np.testing.assert_allclose(xtrace[fibers], expected,
+                err_msg='XTRACE of bundle {}'.format(bundle))
+            np.testing.assert_allclose(ytrace[fibers], expected + YTRACE_OFFSET,
+                err_msg='YTRACE of bundle {}'.format(bundle))
 
     @patch('desispec.scripts.specex.get_logger')
     def test_bundle_missing_in_some_inputs_averages_over_the_rest(self, mock_log):
@@ -326,7 +389,7 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        coeff, rchi2, _ = self._read_output()
+        coeff, rchi2 = self._read_output()[:2]
         #- bundle 0 comes from the one input that has it, not from a mean that
         #- would have been dragged towards the two inputs missing it
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(0)], 10.)
@@ -359,7 +422,7 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        coeff, rchi2, _ = self._read_output()
+        coeff, rchi2 = self._read_output()[:2]
         #- averaged over all three inputs, i.e. the bundle was not dropped
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(0)], 30.)
         np.testing.assert_allclose(rchi2, self.NOMINAL_RCHI2)
@@ -380,7 +443,7 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        coeff, rchi2, _ = self._read_output()
+        coeff, rchi2 = self._read_output()[:2]
         #- the dropped bundle keeps the reference PSF coefficients and is
         #- flagged as not applicable rather than being averaged
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(3)], 10.)
@@ -451,7 +514,7 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        coeff, rchi2, _ = self._read_output()
+        coeff, rchi2 = self._read_output()[:2]
         #- the failed input is excluded, leaving the mean of the other two
         np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 40.)
         for b in (0, 2, 3):
@@ -564,15 +627,64 @@ class TestMeanPSF(unittest.TestCase):
         for first, second in zip(results[0], results[1]):
             np.testing.assert_allclose(first, second)
 
-    def test_traces_are_averaged_over_all_inputs(self):
-        """
-        Document that XTRACE/YTRACE are averaged without any bundle selection.
+    #- The tests below cover desihub/desispec#2819: XTRACE/YTRACE used to be
+    #- averaged with a bare np.mean over every input, with none of the
+    #- per-bundle selection applied to the PSF coefficients, so a bundle that
+    #- some arcs never fit still had their unfitted reference traces blended
+    #- into its own. specex fits the traces as free parameters of the same
+    #- per-bundle fit that produces the rchi2, so the two must agree.
 
-        Unlike the PSF coefficients, the traces are averaged over every input
-        regardless of which bundles were masked out or failed, so a bundle
-        dropped from the merge still gets a trace contaminated by the exposure
-        that was missing it. This is pre-existing behavior, recorded here so
-        that a change to it is a deliberate one.
+    def test_traces_are_averaged_over_all_inputs_on_a_nominal_night(self):
+        """
+        With nothing wrong, the traces are the mean of every input as before.
+
+        This is the case that must not change: where every input passes the cut
+        the selection keeps them all, so the result is the plain mean psfnight
+        produced before #2819 was fixed. Most bundles of most cameras are like
+        this, and on daily nights 20260805-09 whole cameras came out unchanged
+        to the last bit.
+
+        A real night is not uniformly this case, which is why it is stated as a
+        property of the inputs rather than named after one: 20230829 is the
+        nominal night of the classification cases above, yet two of its r5
+        bundles do change, one of them because a single arc sits just past the
+        threshold.
+        """
+        inputs = self._write_inputs([self._status()] * 3,
+                                    [self._rchi2()] * 3)
+
+        mean_psf(inputs, self.outfile)
+
+        self._assert_traces({b: 30. for b in range(self.NBUNDLES)})
+
+    def test_traces_use_the_same_bundle_selection_as_the_coefficients(self):
+        """
+        A bundle masked out of some inputs takes its traces from the rest.
+
+        This is night 20211028. Bundle 0 was fit by one arc only, so both its
+        coefficients and its traces must come from that arc; averaging in the
+        two arcs that never fit it is what #2819 reported.
+        """
+        inputs = self._write_inputs(
+            [self._status(), self._status(missing_bundles=[0]),
+             self._status(missing_bundles=[0])],
+            [self._rchi2(), self._rchi2(b0=0.), self._rchi2(b0=0.)])
+
+        mean_psf(inputs, self.outfile)
+
+        self._assert_traces({0: 10., 1: 30., 2: 30., 3: 30.})
+        #- the traces now agree with the coefficients for every bundle
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(0)], 10.)
+
+    def test_dropped_bundle_keeps_the_reference_traces(self):
+        """
+        A bundle masked out of every input keeps the reference PSF's traces.
+
+        This is night 20221121, where b8B was missing from all five arcs. The
+        coefficients of such a bundle already fall back to the reference PSF,
+        and the traces have to do the same rather than average three exposures
+        that never fit it.
         """
         inputs = self._write_inputs(
             [self._status(missing_bundles=[3])] * 3,
@@ -580,8 +692,232 @@ class TestMeanPSF(unittest.TestCase):
 
         mean_psf(inputs, self.outfile)
 
-        xtrace = self._read_output()[2]
-        np.testing.assert_allclose(xtrace, 30.)
+        #- 10. is the reference, i.e. the first input, not the mean of 30.
+        self._assert_traces({0: 30., 1: 30., 2: 30., 3: 10.})
+
+    def test_traces_exclude_a_bundle_that_failed_to_fit(self):
+        """A bundle that failed to fit in one arc is excluded from its traces"""
+        inputs = self._write_inputs(
+            [self._status(failed_bundles=[1]), self._status(), self._status()],
+            [self._rchi2(b1=0.), self._rchi2(), self._rchi2()])
+
+        mean_psf(inputs, self.outfile)
+
+        #- mean of the two good inputs, 20. and 60.
+        self._assert_traces({0: 30., 1: 40., 2: 30., 3: 30.})
+
+    def test_traces_reject_an_input_above_the_rchi2_threshold(self):
+        """
+        An arc rejected by the rchi2 cut is excluded from the traces too.
+
+        This is the case that distinguishes reusing the whole coefficient
+        selection from merely skipping bundles nothing fit. specex fits the
+        traces in the same least-squares whose final chi2 becomes B{bb}RCHI2
+        (the fit_trace stages of FitEverything), so a bundle whose rchi2 says
+        the model fit the arc badly has a suspect trace solution as well.
+        """
+        inputs = self._write_inputs(
+            [self._status()] * 3,
+            [self._rchi2(), self._rchi2(b1=5.0), self._rchi2()])
+
+        mean_psf(inputs, self.outfile)
+
+        #- 5.0 is above the 2.25 threshold, leaving the mean of 10. and 60.
+        self._assert_traces({0: 30., 1: 35., 2: 30., 3: 30.})
+        coeff, rchi2 = self._read_output()[:2]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 35.)
+        self.assertAlmostEqual(rchi2[1], self.NOMINAL_RCHI2)
+
+    def test_traces_average_fitted_inputs_when_no_rchi2_passes(self):
+        """
+        With no acceptable rchi2 the traces average instead of picking one.
+
+        Bundle 1 is masked out of the first input and fit badly by the other
+        two. The coefficients have to choose one input and take the least bad,
+        but the traces do not, so they average instead of inheriting that
+        choice. This is the one place the traces deliberately diverge from the
+        coefficients.
+
+        Averaging is only defensible where the inputs are comparable, and
+        nothing passing rchi2_threshold does not establish that: the threshold
+        is built from the median over every bundle of the camera, so a bundle
+        can sit wholly above it and still contain an outlier. The inputs are
+        therefore compared again here against a threshold from this bundle
+        alone, which keeps both of these (median 4.35 plus one, so 5.35) and
+        would drop a genuinely discrepant one, as the next test shows.
+
+        Only the two inputs that fit the bundle are eligible; the masked one
+        carries the input PSF's traces, not anything measured from that arc.
+
+        Measured on daily nights 20260805-09, about 20 of 600 camera-bundles
+        per night have no input passing the camera-wide cut, against 5 to 14
+        where that cut rejects an outlier.
+        """
+        inputs = self._write_inputs(
+            [self._status(missing_bundles=[1]), self._status(), self._status()],
+            [self._rchi2(b1=0.), self._rchi2(b1=5.0), self._rchi2(b1=3.7)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- mean of inputs 1 and 2, the ones that fit the bundle
+        self._assert_traces({0: 30., 1: 40., 2: 30., 3: 30.})
+        #- while the coefficients still take input 2, the smallest non-zero
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 60.)
+
+    def test_traces_average_all_inputs_when_every_rchi2_is_equally_bad(self):
+        """
+        A bundle every arc fits badly keeps its traces averaged over them all.
+
+        This is b8 bundle 10 of night 20221121, where the five arcs fit at
+        rchi2 4.95, 4.62, 4.81, 5.03 and 4.61: all bad, and near enough to
+        each other that the bundle's own median+1 threshold keeps every one.
+        The coefficients take the 4.61 arc, but preferring it for the traces
+        over the 5.03 one would trade the averaging of five exposures for an
+        8% difference in rchi2 that carries no real information.
+        """
+        inputs = self._write_inputs(
+            [self._status()] * 3,
+            [self._rchi2(b1=4.9), self._rchi2(b1=5.0), self._rchi2(b1=4.6)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- unchanged from the pre-#2819 behavior for this bundle
+        self._assert_traces({b: 30. for b in range(self.NBUNDLES)})
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 60.)
+
+    def test_inputs_on_another_wavelength_range_are_refit_before_averaging(self):
+        """
+        Coefficients and traces are refit when an input uses another range.
+
+        compatible() does not compare WAVEMIN/WAVEMAX, so mean_psf accepts
+        inputs whose legendre coefficients cover a different wavelength range
+        and re-expresses them on the first input's range before averaging.
+
+        The traces are left non-constant on purpose. A constant is the same
+        constant in any parametrization, so it would refit to itself and this
+        test would pass even if the refit never ran. Checking instead that the
+        merged trace evaluated at a wavelength equals the mean of the inputs
+        evaluated at that same wavelength tests the refit for real, and does so
+        without reimplementing its algebra here.
+
+        This path had no coverage at all, which is how the reference to the
+        unrelated icoeff of the coefficient loop survived in it for so long.
+        """
+        ranges = [(3526.0, 6055.0), (3600.0, 5900.0), (3526.0, 6055.0)]
+        inputs = self._write_inputs(
+            [self._status()] * 3, [self._rchi2()] * 3,
+            #- the first input defines the output range
+            wave_ranges=ranges)
+
+        mean_psf(inputs, self.outfile)
+
+        #- sample the merged traces and the inputs on the same wavelengths
+        wavemin, wavemax = ranges[0]
+        wave = np.linspace(wavemin, wavemax, 9)
+
+        def evaluate(coefficients, wave_range):
+            """Legendre series of each fiber, evaluated at wave"""
+            lo, hi = wave_range
+            u = (wave - lo) / (hi - lo) * 2. - 1.
+            return np.array([legval(u, c) for c in coefficients])
+
+        expected_x = np.mean(
+            [evaluate(fits.getdata(f, 'XTRACE'), r)
+             for f, r in zip(inputs, ranges)], axis=0)
+        expected_y = np.mean(
+            [evaluate(fits.getdata(f, 'YTRACE'), r)
+             for f, r in zip(inputs, ranges)], axis=0)
+        expected_c = np.mean(
+            [evaluate(_legcoeff(f), r) for f, r in zip(inputs, ranges)], axis=0)
+
+        coeff, _, xtrace, ytrace = self._read_output()
+        np.testing.assert_allclose(evaluate(xtrace, ranges[0]), expected_x,
+                                   atol=1e-8)
+        np.testing.assert_allclose(evaluate(ytrace, ranges[0]), expected_y,
+                                   atol=1e-8)
+        np.testing.assert_allclose(evaluate(coeff['LEGCOEFF'], ranges[0]),
+                                   expected_c, atol=1e-8)
+        #- and the refit really was needed, i.e. input 1 was not already equal
+        self.assertFalse(np.allclose(
+            evaluate(fits.getdata(inputs[1], 'XTRACE'), ranges[0]),
+            evaluate(fits.getdata(inputs[1], 'XTRACE'), ranges[1])))
+
+    @patch('desispec.scripts.specex.get_logger')
+    def test_inputs_without_trace_hdus_are_dropped_per_bundle(self, mock_log):
+        """
+        An input lacking trace HDUs is left out without disabling selection.
+
+        XTRACE/YTRACE are only read where the HDUs exist, but the None
+        placeholders keep the trace lists indexed by input, so such an input can
+        simply be dropped from each bundle's selection. Disabling selection for
+        the whole camera instead would reintroduce #2819 for bundles whose
+        correct selection is perfectly well known, which is what input 1 would
+        otherwise do to bundle 0 here.
+        """
+        inputs = self._write_inputs(
+            [self._status(), self._status(missing_bundles=[0]),
+             self._status(missing_bundles=[0])],
+            [self._rchi2(), self._rchi2(b0=0.), self._rchi2(b0=0.)],
+            no_traces=(1,))
+
+        mean_psf(inputs, self.outfile)
+
+        #- bundle 0 was fit only by input 0, which does have traces, so it is
+        #- used alone rather than averaged with input 2's reference trace
+        self._assert_traces({0: 10., 1: 35., 2: 35., 3: 35.})
+        #- and the traces now agree with the coefficients for that bundle
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(0)], 10.)
+        self.assertTrue(any('have both' in msg
+                            for msg in _warning_messages(mock_log)))
+
+    @patch('desispec.scripts.specex.get_logger')
+    def test_fallback_traces_exclude_inputs_that_never_fit_the_bundle(self, mock_log):
+        """
+        The averaging fallback uses fitted inputs, not merely present ones.
+
+        A bundle that failed outright is still "present": every fiber has
+        STATUS>0 rather than <0. But merge_psf only copies XTRACE/YTRACE for
+        STATUS==0 fibers, so such an input carries the reference traces, and
+        averaging it in is exactly the contamination #2819 is about. Input 0
+        here failed the bundle outright while 1 and 2 fit it but land above the
+        cut, so the traces must average 1 and 2 only.
+        """
+        inputs = self._write_inputs(
+            [self._status(failed_bundles=[1]), self._status(), self._status()],
+            [self._rchi2(b1=0.), self._rchi2(b1=5.0), self._rchi2(b1=3.7)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- mean of 20 and 60, not of 10, 20 and 60
+        self._assert_traces({0: 30., 1: 40., 2: 30., 3: 30.})
+        #- the coefficients still take the smallest non-zero rchi2, input 2
+        coeff = self._read_output()[0]
+        np.testing.assert_allclose(coeff['LEGCOEFF'][self._fibers(1)], 60.)
+        mock_log().critical.assert_not_called()
+
+    def test_fallback_traces_drop_an_outlier_among_the_fitted_inputs(self):
+        """
+        The fallback compares inputs against this bundle's own rchi2.
+
+        rchi2_threshold is built from the median over every bundle of the
+        camera, so a bundle can sit entirely above it while still containing a
+        clear outlier. Averaging is only defensible where the inputs really are
+        comparable, so the fallback applies the same median+1 rule to the
+        bundle's own values, which keeps near-equal inputs and drops a lone bad
+        one instead of blending it in.
+        """
+        inputs = self._write_inputs(
+            [self._status()] * 3,
+            [self._rchi2(b1=4.6), self._rchi2(b1=5.0), self._rchi2(b1=100.)])
+
+        mean_psf(inputs, self.outfile)
+
+        #- bundle 1's own threshold is median(4.6, 5.0, 100) + 1 = 6.0, so the
+        #- rchi2=100 input is excluded and the other two are averaged
+        self._assert_traces({0: 30., 1: 15., 2: 30., 3: 30.})
 
 
 if __name__ == '__main__':
