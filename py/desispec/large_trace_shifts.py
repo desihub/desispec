@@ -40,8 +40,17 @@ def detect_spots_in_image(image) :
     kernel = np.exp(-(x**2+y**2)/2/sigma**2)
     kernel /= np.sum(kernel)
     simg  = fftconvolve(image.pix,kernel,mode='same')
-    sivar = fftconvolve(image.ivar,kernel**2,mode='same')
-    sivar *= (sivar>0)
+
+    good_ivar = image.ivar > 0
+    var = good_ivar / (image.ivar + ~good_ivar)
+    # 1/ivar where good, 0 where not
+    k2 = kernel ** 2
+    var_conv = np.maximum(fftconvolve(var, k2, mode='same'), 0)
+
+    # a bad input pixel poisons every output pixel its kernel reaches
+    bad_frac = fftconvolve((~good).astype(float), k2, mode='same') / k2.sum()
+    ok = (bad_frac < 0.01) & (var_conv > 0)
+    sivar = ok / (var_conv + ~ok)
 
     log.info("detections")
     nsig = 6
