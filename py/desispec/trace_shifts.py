@@ -557,10 +557,14 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     # image rebinning to got faster !!!
     if image_rebin>1 :
-        pix=image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1).sum(1)
-        ivar=image_ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1)
-        hasnozero=(np.sum(ivar==0,axis=1)==0)
-        ivar=ivar.sum(1)*hasnozero
+        pix = image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin, n1).sum(axis=1)
+        ivar = image_ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin, image_rebin,n1)
+        good = ivar > 0
+        var = good / (ivar + ~good)
+        # 1/ivar where good, 0 where not
+        var_sum = var.sum(axis=1)
+        ivar_ok = good.all(axis=1)
+        ivar = ivar_ok / (var_sum + ~ivar_ok)
         n0   = pix.shape[0]
     else :
         pix  = image.pix
