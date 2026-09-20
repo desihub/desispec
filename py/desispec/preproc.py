@@ -466,7 +466,7 @@ def compute_background_between_fiber_blocks(image,xyset) :
         if block==0 : image_xb =  xyset.x_vs_y(0,image_yy)-7.5
         elif block==20 : image_xb =  xyset.x_vs_y(499,image_yy)+7.5
         else : image_xb = (xyset.x_vs_y(block*25-1,image_yy)+xyset.x_vs_y(block*25,image_yy))/2.
-        scattered_light[block] = np.median(numba_mean(cimg,ivar[yb:ye],image_xb[yb:ye]))
+        scattered_light[block] = np.median(numba_mean(cimg,ivar[yb:ye],image_xb[yb:ye])[0])
 
     # remove median across interblocks
     scattered_light -= np.median(scattered_light)
