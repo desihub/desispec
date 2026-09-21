@@ -6,4 +6,5 @@ Preprocess a DESI raw data exposure, outputing individual pix files
 
 import sys
 from desispec.scripts import preproc
-sys.exit(preproc.main(preproc.parse()))
+if __name__ == '__main__':
+    sys.exit(preproc.main(preproc.parse()))
