@@ -1073,7 +1073,7 @@ def get_quantz_cmap(name, n, cmin=0, cmax=1):
     Notes:
         https://matplotlib.org/examples/api/colorbar_only.html
     """
-    cmaporig = matplotlib.cm.get_cmap(name)
+    cmaporig = matplotlib.colormaps.get_cmap(name)
     mycol = cmaporig(np.linspace(cmin, cmax, n))
     cmap = matplotlib.colors.ListedColormap(mycol)
     cmap.set_under(mycol[0])
