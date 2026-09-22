@@ -988,7 +988,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         num_ok = np.sum(ok)
         log.info(f'Keeping {num_ok}/{num_stucksky} SKY on stuck positioners')
 
-        fibermap['FIBERSTATUS'][stucksky][~ok] |= fibermask.BADPOSITION
+        fibermap['FIBERSTATUS'][np.nonzero(stucksky)[0][~ok]] |= fibermask.BADPOSITION
 
         fibermap.remove_column('_GOODMATCH')
 
