@@ -73,6 +73,8 @@ desispec Change Log
   still averaged, over the arcs that fit the bundle and are comparable by that
   bundle's own rchi2, rather than following the coefficients onto a single arc
   (`issue #2819`_).
+* Wrap scripts with ``if __name__ == "__main__"`` for multiprocessing robustness
+  (PR `#2837`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -107,6 +109,7 @@ desispec Change Log
 .. _`specex#91`: https://github.com/desihub/specex/pull/91
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
 .. _`#2822`: https://github.com/desihub/desispec/pull/2822
+.. _`#2837`: https://github.com/desihub/desispec/pull/2837
 
 0.71.6 (2026-06-03)
 -------------------
