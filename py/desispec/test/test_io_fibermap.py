@@ -333,7 +333,7 @@ class TestIOFibermap(unittest.TestCase):
 
         def nanequal(a, b):
             """Compare two arrays treating NaN==NaN"""
-            return np.equal(a, b, where=~np.isnan(a))
+            return (a == b) | (np.isnan(a) & np.isnan(b))
 
         assert np.all(nanequal(fm1['FIBER_X'], fm2['FIBER_X']))
         assert np.all(nanequal(fm1['FIBER_Y'], fm2['FIBER_Y']))
