@@ -19,6 +19,7 @@ from desiutil.annotate import check_comment_length
 from ..io.fibermap import (fibermap_columns, empty_fibermap, write_fibermap, read_fibermap,
                            find_fiberassign_file, update_survey_keywords,
                            assemble_fibermap, annotate_fibermap)
+from ..maskbits import fibermask
 
 
 standard_nersc_environment = ('NERSC_HOST' in os.environ and
@@ -254,7 +255,7 @@ class TestIOFibermap(unittest.TestCase):
         """Test creation of fibermaps from raw inputs"""
         for night, expid in [
             (20200219, 51039),  #- old SPS header
-            (20200315, 55611),  #- new SPEC header
+            (20210517, 89031),  #- new SPEC header, with SKY on stuck positioners
             ]:
             print(f'Creating fibermap for {night}/{expid}')
             fm = assemble_fibermap(night, expid)['FIBERMAP'].data
@@ -278,6 +279,14 @@ class TestIOFibermap(unittest.TestCase):
                 'PLATE_RA', 'PLATE_DEC',
                 ):
                 self.assertIn(col, fm.columns.names)
+
+            #- some, but not all, SKY on stuck positioners should be flagged BADPOSITION
+            #- (i.e. those not on blank sky given the actual fiber location)
+            stucksky = (fm['TARGETID'] < 0) & (fm['OBJTYPE'] == 'SKY')
+            if np.any(stucksky):
+                badpos = (fm['FIBERSTATUS'][stucksky] & fibermask.BADPOSITION) != 0
+                self.assertTrue(np.any(badpos))
+                self.assertFalse(np.all(badpos))
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_compare_empty_to_assemble(self):
