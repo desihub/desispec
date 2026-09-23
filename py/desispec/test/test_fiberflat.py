@@ -486,6 +486,48 @@ class TestFiberFlatObject(unittest.TestCase):
 
         ff = autocalib_fiberflat(fiberflats)
 
+    def test_autocalib_fiberflat_ivar_rescaling(self):
+        """autocalib rescales fiberflat by meanspec/<meanspec>; ivar must follow
+
+        The split of the signal between meanspec and fiberflat is arbitrary:
+        scaling petal p's meanspec by s_p while dividing its fiberflat by s_p
+        (and scaling its ivar by s_p**2, keeping the relative error fixed)
+        describes the same data, so autocalib_fiberflat must return the same
+        fiberflat *and* ivar.  Uses <s_p> = 1 so that the mean spectrum, and
+        hence the rest of the pipeline, is unchanged.
+        """
+        #- per-petal rescaling factors, with mean exactly 1
+        scales = np.linspace(0.8, 1.2, 10)
+        self.assertAlmostEqual(np.mean(scales), 1.0)
+
+        fibermaps = [self._get_fibermap(petal, self.nspec) for petal in range(10)]
+
+        def _make_inputs(rescale):
+            """3 exposures x 10 petals; rescale=False is the reference case"""
+            fiberflats = list()
+            for i in range(3):
+                for petal in range(10):
+                    ff = copy.deepcopy(self.ff)
+                    ff.header['EXPID'] = 1000+i   #- shared across petals
+                    ff.header['CAMERA'] = f'r{petal}'
+                    ff.fibermap = fibermaps[petal]
+                    if rescale:
+                        ff.meanspec = ff.meanspec * scales[petal]
+                        ff.fiberflat = ff.fiberflat / scales[petal]
+                        ff.ivar = ff.ivar * scales[petal]**2
+                    fiberflats.append(ff)
+            return fiberflats
+
+        #- note: autocalib_fiberflat modifies its inputs, so use fresh copies
+        ref = autocalib_fiberflat(_make_inputs(False))
+        alt = autocalib_fiberflat(_make_inputs(True))
+
+        for spectro in ref:
+            self.assertTrue(np.allclose(alt[spectro].fiberflat, ref[spectro].fiberflat),
+                            f'fiberflat differs for spectrograph {spectro}')
+            self.assertTrue(np.allclose(alt[spectro].ivar, ref[spectro].ivar),
+                            f'ivar differs for spectrograph {spectro}')
+
     def test_gradient_correction(self):
         ref_fiberflats = dict()
         tilted_fiberflats = dict()
