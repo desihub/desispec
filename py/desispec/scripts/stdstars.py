@@ -238,9 +238,9 @@ def main(args=None, comm=None) :
                 raise ValueError("incompatible fibermap")
 
             if not camera in frames :
-                frames[camera]=[]
+                frames[camera]={}
 
-            frames[camera].append(frame)
+            frames[camera][expid]=frame
 
     # possibly cleanup memory
     del frames_by_expid
@@ -254,9 +254,10 @@ def main(args=None, comm=None) :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
         camera=safe_read_key(sky.header,"CAMERA").strip().lower()
+        expid=safe_read_key(sky.header,"EXPID")
         if not camera in skies :
-            skies[camera]=[]
-        skies[camera].append(sky[starfibers%500])
+            skies[camera]={}
+        skies[camera][expid]=sky[starfibers%500]
 
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
@@ -350,9 +351,9 @@ def main(args=None, comm=None) :
 
         flat = flats[cam][keep_stds]
 
-        for i in range(len(frames[cam])):
-            frame = frames[cam][i][keep_stds]
-            sky = skies[cam][i][keep_stds]
+        for expid, frame_data in frames[cam].items():
+            frame = frame_data[keep_stds]
+            sky = skies[cam][expid][keep_stds]
 
             #- don't use masked or ivar=0 data
             frame.ivar *= (frame.mask == 0)
@@ -365,9 +366,10 @@ def main(args=None, comm=None) :
             apply_fiberflat(frame, flat)
             subtract_sky(frame, sky, apply_throughput_correction = args.apply_sky_throughput_correction)
 
-            #- keep newly flat-fielded sky-subtracted frame
-            frames[cam][i] = frame
+            frames[cam][expid] = frame
 
+        #- Convert to list for coadding (expid ordering no longer needed)
+        frames[cam] = list(frames[cam].values())
         nframes=len(frames[cam])
         if nframes>1 :
             # optimal weights for the coaddition = ivar*throughput, not directly ivar,
