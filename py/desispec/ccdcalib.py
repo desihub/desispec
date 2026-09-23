@@ -1145,8 +1145,8 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     d2 = median_diff2
 
     if readout_mode == '4Amp':
-        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
-        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[1]])])
+        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[1]])])
     elif readout_mode == '2AmpLeftRight':
         mdiff1 = np.hstack([d1[0], d1[1]])
         mdiff2 = np.hstack([d2[0], d2[1]])
