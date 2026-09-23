@@ -879,8 +879,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     wave_for_dy = np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
-    n_fibers_for_psf = 20
-    fibers_for_psf_evaluation = np.linspace(0, flux.shape[0]-1, n_fibers_for_psf).astype(int) # flux.shape[0] //2
+    n_fibers_for_psf = min(20, flux.shape[0])
+    fibers_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))  # flux.shape[0] // 2
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
