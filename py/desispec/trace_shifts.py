@@ -860,7 +860,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     log.info("rextract spectra with boxcar")
 
     # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=width)
 
     # resampling on common finer wavelength grid
     oversampling = 2 #
