@@ -81,25 +81,29 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
         e=peak+dpix+1
         b2=peak-dpix2
         e2=peak+dpix2+1
-        mchi2  = np.mean(chi2[b:e]) # mean reduced chi2 around peak
-        mndata = np.mean(ndata[b:e]) # mean number of fibers contributing
 
         # sky model variance = sigma_flat * msky  + sigma_wave * dmskydw
         sigma_flat=0.005 # the fiber flat error is already included in the flux ivar, but empirical evidence we need an extra term
         sigma_wave=0.005 # A, minimum value
         res2=(frame.flux[skyfibers,b:e]-cskyflux[skyfibers,b:e])**2
         var=1./(tivar[:,b:e]+(tivar[:,b:e]==0))
-        nd=np.sum(tivar[:,b:e]>0)
         sigma_wave = np.arange(0.005, 2, 0.005)
 
         #- pivar has shape (nskyfibers, npix, nsigma_wave)
         pivar = (tivar[:, b:e, np.newaxis]>0)/((var+(sigma_flat*msky[b:e])**2)[..., np.newaxis] + ((sigma_wave[np.newaxis,:]*dskydw[b:e, np.newaxis])**2)[np.newaxis, ...])
-        #- chi2_of_sky_fibers has shape (nskyfibers, nsigma_wave)
-        chi2_of_sky_fibers = np.sum(pivar*res2[..., np.newaxis],axis=1)/np.sum(tivar[:,b:e]>0,axis=1)[:, np.newaxis]
+        #- only use sky fibers with at least one valid pixel in [b:e] (avoid 0/0=NaN)
+        nvalid = np.sum(tivar[:,b:e]>0,axis=1)
+        okfib = nvalid>0
         #- normalization from median to mean for chi2 with 3 d.o.f.
         norm = 0.7888
-        #- median_chi2 has shape (nsigma_wave,)
-        median_chi2 = np.median(chi2_of_sky_fibers, axis=0)/norm
+        if np.any(okfib):
+            #- chi2_of_sky_fibers has shape (nokfibers, nsigma_wave)
+            chi2_of_sky_fibers = np.sum(pivar[okfib]*res2[okfib, :, np.newaxis],axis=1)/nvalid[okfib, np.newaxis]
+            #- median_chi2 has shape (nsigma_wave,)
+            median_chi2 = np.median(chi2_of_sky_fibers, axis=0)/norm
+        else:
+            #- no valid data; fall back to maximum sigma_wave below
+            median_chi2 = np.full(sigma_wave.size, np.inf)
         if np.any(median_chi2 <= 1):
             #- first sigma_wave with median_chi2 <= 1 is the peak
             sigma_wave_peak = sigma_wave[np.where(median_chi2 <= 1)[0][0]]
