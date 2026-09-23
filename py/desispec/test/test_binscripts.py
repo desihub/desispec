@@ -173,15 +173,18 @@ class TestBinScripts(unittest.TestCase):
         fibermap = self._get_fibermap()
         io.write_fibermap(self.fibermapfile, fibermap)
 
-    def _write_skymodel(self, camera=None):
+    def _write_skymodel(self, camera=None, expid=None):
         """Write a fake SkyModel"""
         skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
         ivar = 1000*np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         sky = SkyModel(self.wave, skyflux, ivar, mask, nrej=1)
-        if camera is not None:
+        if camera is not None or expid is not None:
             hdr=fits.Header()
-            hdr['CAMERA']=camera
+            if camera is not None:
+                hdr['CAMERA']=camera
+            if expid is not None:
+                hdr['EXPID']=expid
         else:
             hdr=None
         io.write_sky(self.skyfile, sky, hdr)
@@ -259,7 +262,7 @@ for legacy standards
         """
         self._write_frame(flavor='science', camera='b3')
         self._write_fiberflat(camera='b3')
-        self._write_skymodel(camera='b3')
+        self._write_skymodel(camera='b3', expid=1)
         self._write_models()
         for opt in ['','--color=R-Z', '--std-targetids 0 1 2 3 4 5']:
             cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
@@ -285,7 +288,7 @@ for legacy standards
         """
         self._write_frame(flavor='science', camera='b3', gaia_only=True)
         self._write_fiberflat(camera='b3')
-        self._write_skymodel(camera='b3')
+        self._write_skymodel(camera='b3', expid=1)
         self._write_models()
         for opt in ['', '--color=GAIA-BP-RP']:
             cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
