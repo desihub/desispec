@@ -1002,9 +1002,7 @@ def correct_image_via_model(image, niter=5, cte_params_filename=None):
 
             need_to_reverse = ampreg[1].stop == image.pix.shape[1]
             if need_to_reverse:
-                # stop-1 because reversing the amp maps absolute column c to
-                # local index ampreg[1].stop - 1 - c, not ampreg[1].stop - c
-                field, offset, sign = 'stop', ampreg[1].stop-1, -1
+                field, offset, sign = 'stop', ampreg[1].stop, -1
             else:
                 field, offset, sign = 'start', 0, 1
 
