@@ -484,7 +484,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
 
 @numba.jit
-def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
+def numba_cross_profile(image_flux, image_ivar, y, x, wave, hw=3) :
     n0=image_flux.shape[0]
     swdx=np.zeros(n0)
     sw=np.zeros(n0)
@@ -501,7 +501,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
             swdx[j]    += (i-x[j])*image_flux[j,i]
             sw[j]      += image_flux[j,i]
             svar[j]    += 1./image_ivar[j,i]
-        swy[j] = sw[j]*j
+        swy[j] = sw[j]*y[j]
         swx[j] = sw[j]*x[j]
         swl[j] = sw[j]*wave[j]
 
@@ -570,17 +570,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         pix  = image.pix
         ivar = image_ivar
 
-    # Two y units are used below:
-    #  - CCD rows: the unit of the trace coefficients ycoef and of the returned y.
-    #    The center of CCD row j is at y=j (row j spans [j-0.5,j+0.5]), the
-    #    convention of specex, specter and the rest of desispec.
-    #  - rebinned rows: the row index J of the rebinned image pix, where rebinned
-    #    row J is the sum of CCD rows image_rebin*J ... image_rebin*J+image_rebin-1.
-    # numba_cross_profile works in rebinned rows, and the trace y is converted to
-    # rebinned rows (ty below) to be compared to it.
-    # The center of rebinned row J is at CCD row image_rebin*J+(image_rebin-1)/2,
-    # i.e. at J+0.5-0.5/image_rebin in rebinned rows (this is J for image_rebin=1).
-    y  = np.arange(n0) + 0.5 - 0.5/image_rebin # center of each rebinned row, in rebinned rows
+    y  = image_rebin * (np.arange(n0) + 0.5) - 0.5
+    # center of each "enlarged" pixel 
+    # Example: if center of pixel 0 is zero, pixel 1 is 1
+    # and we are using image_rebin=2
+    # then the center of the first combined big pixel should
+    # have y = (1.5 + (-0.5))/2 = 0.5
+
     xx = np.tile(np.arange(n1),(n0,1))
     hw = width//2
 
@@ -604,12 +600,12 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         # log.info("computing dx for fiber #%03d"%fiber)
 
         # the following 5 lines take 0.25 sec for all 500 fibers
-        ty = legval(rwave, ycoef[fiber])/image_rebin
+        ty = legval(rwave, ycoef[fiber])
         tx = legval(rwave, xcoef[fiber])
         wave_of_y  = np.interp(y,ty,twave)
         x_of_y     = np.interp(y,ty,tx)
 
-        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
+        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix, ivar, y, x_of_y, wave_of_y, hw=hw)
 
         # rebin
         tn0   = sw.size
@@ -626,9 +622,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
-        # swy/sw is the flux-weighted mean rebinned row J; convert to CCD rows
-        # using the center of the rebinned row (see the definition of y above)
-        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin + (image_rebin-1)/2.
+        # swy/sw is the flux-weighted mean row
+        fy             = (swy/(sw+(sw==0)))[ok]
         fl             = (swl/(sw+(sw==0)))[ok]
 
         good_fiber=True
