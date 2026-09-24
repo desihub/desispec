@@ -631,7 +631,8 @@ def fit_cte(images):
         step = 1
         if need_to_reverse:
             step = -1
-            start, stop = stop, start
+            # convert [start, stop) to the equivalent reversed slice bounds
+            start, stop = stop - 1, (start - 1 if start > 0 else None)
         scte = np.s_[ampbd:ampbd+npix, start:stop:step]
         sclean = np.s_[ampbd-npix:ampbd, start:stop:step]
 
@@ -1001,7 +1002,9 @@ def correct_image_via_model(image, niter=5, cte_params_filename=None):
 
             need_to_reverse = ampreg[1].stop == image.pix.shape[1]
             if need_to_reverse:
-                field, offset, sign = 'stop', ampreg[1].stop, -1
+                # stop-1 because reversing the amp maps absolute column c to
+                # local index ampreg[1].stop - 1 - c, not ampreg[1].stop - c
+                field, offset, sign = 'stop', ampreg[1].stop-1, -1
             else:
                 field, offset, sign = 'start', 0, 1
 
