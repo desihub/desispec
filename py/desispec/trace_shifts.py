@@ -570,7 +570,17 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         pix  = image.pix
         ivar = image_ivar
 
-    y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
+    # Two y units are used below:
+    #  - CCD rows: the unit of the trace coefficients ycoef and of the returned y.
+    #    The center of CCD row j is at y=j (row j spans [j-0.5,j+0.5]), the
+    #    convention of specex, specter and the rest of desispec.
+    #  - rebinned rows: the row index J of the rebinned image pix, where rebinned
+    #    row J is the sum of CCD rows image_rebin*J ... image_rebin*J+image_rebin-1.
+    # numba_cross_profile works in rebinned rows, and the trace y is converted to
+    # rebinned rows (ty below) to be compared to it.
+    # The center of rebinned row J is at CCD row image_rebin*J+(image_rebin-1)/2,
+    # i.e. at J+0.5-0.5/image_rebin in rebinned rows (this is J for image_rebin=1).
+    y  = np.arange(n0) + 0.5 - 0.5/image_rebin # center of each rebinned row, in rebinned rows
     xx = np.tile(np.arange(n1),(n0,1))
     hw = width//2
 
@@ -616,7 +626,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
-        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
+        # swy/sw is the flux-weighted mean rebinned row J; convert to CCD rows
+        # using the center of the rebinned row (see the definition of y above)
+        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin + (image_rebin-1)/2.
         fl             = (swl/(sw+(sw==0)))[ok]
 
         good_fiber=True

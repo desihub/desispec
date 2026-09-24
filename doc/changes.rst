@@ -75,6 +75,12 @@ desispec Change Log
   (`issue #2819`_).
 * Wrap scripts with ``if __name__ == "__main__"`` for multiprocessing robustness
   (PR `#2837`_).
+* Fix half-pixel and rebin-dependent y offsets in
+  ``compute_dx_from_cross_dispersion_profiles``: the trace was sampled half a
+  CCD row from the center of each rebinned row, and the returned y coordinates
+  were low by ``rebin/2`` rows and inconsistent with the returned wavelengths.
+  The effect on the fitted x shifts is half the trace tilt dx/dy, i.e. at most
+  about 0.01 pixel.
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
