@@ -646,7 +646,7 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     return cosmic_mask
 
 
-def _resolution_coadd(resolution, pix_weights):
+def _resolution_coadd(resolution, pix_weights, zero_offband=False):
     """
     Given the resolution matrices for set of spectra, and
     inverse variances (or generally weights) for fluxes return the
@@ -657,6 +657,11 @@ def _resolution_coadd(resolution, pix_weights):
     resolution (ndarray): (nspec, nres, npix) array of resolution matrices
     pix_weights (ndarray): (nspec, npix) array of ivars or weights
 
+    Options:
+    zero_offband (bool): if True, give zero weight to resolution entries
+        whose row is off the ends of the spectrum; otherwise use the weight
+        of the nearest pixel within the spectrum
+
     Returns resolution matrix (nres, npix),
     and the weight (nres, npix)
     """
@@ -666,8 +671,12 @@ def _resolution_coadd(resolution, pix_weights):
     # indices of the corresponding variance point
     # that needs to be used for ivar weights
     res_indices = (np.arange(npix)[None, :] +
-                   np.arange(-ww, ww + 1)[:, None]) % npix
+                   np.arange(-ww, ww + 1)[:, None])
+    valid = (res_indices >= 0) & (res_indices < npix)
+    res_indices = np.clip(res_indices, 0, npix - 1)
     res_whts = np.array([_[res_indices] for _ in pix_weights])
+    if zero_offband:
+        res_whts *= valid
     res = np.sum(res_whts * resolution, axis=0)
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
@@ -1290,7 +1299,8 @@ def coadd_cameras(spectra):
             if has_res:
                 res = spectra.resolution_data[b][i][np.newaxis, :, :]
                 iv_i = iv[i:i+1]
-                raccum, rnorm_i = _resolution_coadd(res, iv_i)
+                raccum, rnorm_i = _resolution_coadd(res, iv_i,
+                                                    zero_offband=True)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
 

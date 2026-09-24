@@ -496,8 +496,8 @@ class TestCoadd(unittest.TestCase):
         i.e. if all input spectra were D_i = R_i * M
         coadd must satisfy the same condition
         protection against #2372
-        Here we just ignore the pixels touched by the spectrum edges from either
-        arm.
+        Here we just ignore the first/last pixels of each arm, whose rows
+        are truncated by the arm edge.
         """
         nspec, nwave = 20, 100
         bands = ['b', 'r', 'z']
@@ -506,7 +506,7 @@ class TestCoadd(unittest.TestCase):
         s1.fibermap['TARGETID'] = [10] * nspec
         s2 = coadd_cameras(s1)
         model0_brz = rng.uniform(1, 2, size=s2.wave['brz'].size)
-        edge_nmask = 2
+        edge_nmask = 0
         # we will ignore pixels next to the edges of spectrum
         edge_mask = np.zeros(len(model0_brz), dtype=bool)
         step = s2.wave['brz'][1] - s2.wave['brz'][0]
