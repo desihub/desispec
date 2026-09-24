@@ -485,6 +485,35 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
 
 @numba.jit
 def numba_cross_profile(image_flux, image_ivar, y, x, wave, hw=3) :
+    """
+    Compute per-row flux-weighted sums of the cross-dispersion profile of a trace.
+
+    For each CCD row j, sums the flux in columns int(x[j]-hw) to int(x[j]+hw)
+    inclusive around the trace position x[j]. The returned sums can be combined
+    over rows and divided by sw to get the flux-weighted mean offset of the
+    profile from the trace (swdx/sw), and the flux-weighted mean y, x and
+    wavelength (swy/sw, swx/sw, swl/sw) of those rows.
+
+    If any pixel in the window of row j has image_ivar==0, swdx[j] and sw[j]
+    are set to 0 so that the row is ignored (and so are swy[j], swx[j], swl[j]).
+
+    Args:
+        image_flux: 2D array [nrows, ncols] of pixel values
+        image_ivar: 2D array [nrows, ncols] of pixel inverse variances
+        y: 1D array [nrows] of the CCD y coordinate of each row of image_flux
+        x: 1D array [nrows] of the trace x coordinate (column) in each row
+        wave: 1D array [nrows] of the trace wavelength in each row
+
+    Optional:
+        hw: half width of the column window, in pixels (default 3)
+
+    Returns:
+        tuple of 1D arrays [nrows] (swdx, sw, svar, swy, swx, swl) where
+        swdx is sum of flux*(column - x), sw is sum of flux, svar is sum of
+        variance, and swy, swx, swl are sw times y, x, and wave respectively.
+
+    Note: no bounds checking is done; the window around x must be within the image.
+    """
     n0=image_flux.shape[0]
     swdx=np.zeros(n0)
     sw=np.zeros(n0)
