@@ -459,7 +459,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     log=get_logger()
 
     # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=width)
 
     # resampling on common finer wavelength grid
     oversampling = 4
@@ -493,7 +493,8 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
     swx=np.zeros(n0)
     swl=np.zeros(n0)
     for j in range(n0) :
-        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+        cur_x = round(x[j])
+        for i in range(cur_x - hw, cur_x + hw + 1) :
             if image_ivar[j,i]==0 :
                swdx[j]=0
                sw[j]=0
@@ -674,6 +675,8 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, wid
     Prepare the reference spectrum to be used for wavelength offset
     determination. Here we convolve it to the right LSF and rescale it
     to match the measured flux.
+    The reference spectrum is convolved with an average PSF across a number
+    of representative fibers.
 
     Arguments:
         ref_wave: np.array of wavelengths
@@ -730,7 +733,9 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, wid
             x, y = psf.xy(fiber, wave_range)
 
             # Evaluate the 2D PSF over the cross-dispersion integration window [-hw_x, hw_x]
-            x = x[:,None] + np.linspace(-hw_x, hw_x, 2*hw_x+1)[None,:]
+            # note that the logic here should match the one in qextract
+            x = np.round(x[:, None]) + np.arange(-hw_x, hw_x+1)[None,:]
+
             y = np.tile(y, (2 * hw_x + 1, 1)).T
 
             kernel2d = psf._value(x, y, fiber, central_wave)

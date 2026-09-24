@@ -40,8 +40,8 @@ def numba_proj(image,x,sigma,flux) :
     prof=np.zeros(2*hw+1)
     for j in range(n0) :
         sumprof=0.
-        b=max(0,int(x[j]-hw))
-        e=min(n1,int(x[j]+hw+1))
+        b=max(0,round(x[j])-hw)
+        e=min(n1,round(x[j])+hw+1)
         for i in range(b,e) :
             prof[i-b]=np.exp(-(i-x[j])**2/2./sigma[j]**2)
             sumprof += prof[i-b]
