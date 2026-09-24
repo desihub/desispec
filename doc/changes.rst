@@ -7,6 +7,7 @@ desispec Change Log
 
 * Fix half-pixel and rebin-dependent y offsets in
   ``compute_dx_from_cross_dispersion_profiles`` (PR `#2850`_).
+* Fix output ivar of ``fast_resample_spectra`` (not used by core production).
 
 .. _`#2850`: https://github.com/desihub/desispec/pull/2850
 
