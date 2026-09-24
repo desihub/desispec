@@ -2,8 +2,18 @@
 desispec Change Log
 ===================
 
-0.72.0 (unreleased)
+0.72.1 (unreleased)
 -------------------
+
+* Fix half-pixel and rebin-dependent y offsets in
+  ``compute_dx_from_cross_dispersion_profiles`` (PR `#2850`_).
+
+.. _`#2850`: https://github.com/desihub/desispec/pull/2850
+
+0.72.0 (2026-09-23)
+-------------------
+
+Mega update reference tag for pre-Nevis testing.
 
 * Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
 * Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
@@ -75,12 +85,28 @@ desispec Change Log
   (`issue #2819`_).
 * Wrap scripts with ``if __name__ == "__main__"`` for multiprocessing robustness
   (PR `#2837`_).
-* Fix half-pixel and rebin-dependent y offsets in
-  ``compute_dx_from_cross_dispersion_profiles``: the trace was sampled half a
-  CCD row from the center of each rebinned row, and the returned y coordinates
-  were low by ``rebin/2`` rows and inconsistent with the returned wavelengths.
-  The effect on the fitted x shifts is half the trace tilt dx/dy, i.e. at most
-  about 0.01 pixel.
+* Error propagation fixes
+
+  * Fix incorrect variance in stdstars (PR `#2823`_).
+  * Fix incorrect equation for sigma_coadd_norm (PR `#2824`_).
+  * Fix fiberflat ivar rescaling (PR `#2843`_).
+  * Fix NaN in sky _model_variance when no valid pixels near a peak (PR `#2844`_).
+  * ivar of rebinned spectra was incorrect (PR `#2831`_).
+  * Fix uncorrect variance calculation when convolving (PR `#2832`_).
+  * Bug fix in the calculation of the uncertainties of the flux calibration vectors (PR `#2827`_).
+
+* Trace shift fixes
+
+  * correctly compute the profile by summing along one of the axes (PR `#2826`_).
+  * fix trace shift ycoeff typo (PR `#2845`_).
+
+* PSF fit only use good fits for XTRACE and YTRACE means (PR `#2828`_).
+* Update dashboards to show one year at a time and add calibration rows (PR `#2829`_).
+* Scattered light calculates the median over data  combined with ivar (PR `#2835`_).
+* get_quantz_cmap(): fix deprecated matplotlib.cm.get_cmap() (PR `#2838`_).
+* Fix assemble_fibermap flagging of stuck positions with BADPOSITION (PR `#2840`_).
+* Fix compare_bias amp stacking bug (PR `#2846`_).
+* Fix frame/sky mismatch in stdstars when b-arm missing for lowest expid (PR `#2847`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
@@ -116,6 +142,23 @@ desispec Change Log
 .. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
 .. _`#2822`: https://github.com/desihub/desispec/pull/2822
 .. _`#2837`: https://github.com/desihub/desispec/pull/2837
+.. _`#2823`: https://github.com/desihub/desispec/pull/2823
+.. _`#2824`: https://github.com/desihub/desispec/pull/2824
+.. _`#2826`: https://github.com/desihub/desispec/pull/2826
+.. _`#2827`: https://github.com/desihub/desispec/pull/2827
+.. _`#2828`: https://github.com/desihub/desispec/pull/2828
+.. _`#2829`: https://github.com/desihub/desispec/pull/2829
+.. _`#2831`: https://github.com/desihub/desispec/pull/2831
+.. _`#2832`: https://github.com/desihub/desispec/pull/2832
+.. _`#2835`: https://github.com/desihub/desispec/pull/2835
+.. _`#2838`: https://github.com/desihub/desispec/pull/2838
+.. _`#2840`: https://github.com/desihub/desispec/pull/2840
+.. _`#2843`: https://github.com/desihub/desispec/pull/2843
+.. _`#2844`: https://github.com/desihub/desispec/pull/2844
+.. _`#2845`: https://github.com/desihub/desispec/pull/2845
+.. _`#2846`: https://github.com/desihub/desispec/pull/2846
+.. _`#2847`: https://github.com/desihub/desispec/pull/2847
+
 
 0.71.6 (2026-06-03)
 -------------------
