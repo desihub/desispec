@@ -484,7 +484,36 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
 
 @numba.jit
-def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
+def numba_cross_profile(image_flux, image_ivar, y, x, wave, hw=3) :
+    """
+    Compute per-row flux-weighted sums of the cross-dispersion profile of a trace.
+
+    For each CCD row j, sums the flux in columns int(x[j]-hw) to int(x[j]+hw)
+    inclusive around the trace position x[j]. The returned sums can be combined
+    over rows and divided by sw to get the flux-weighted mean offset of the
+    profile from the trace (swdx/sw), and the flux-weighted mean y, x and
+    wavelength (swy/sw, swx/sw, swl/sw) of those rows.
+
+    If any pixel in the window of row j has image_ivar==0, swdx[j] and sw[j]
+    are set to 0 so that the row is ignored (and so are swy[j], swx[j], swl[j]).
+
+    Args:
+        image_flux: 2D array [nrows, ncols] of pixel values
+        image_ivar: 2D array [nrows, ncols] of pixel inverse variances
+        y: 1D array [nrows] of the CCD y coordinate of each row of image_flux
+        x: 1D array [nrows] of the trace x coordinate (column) in each row
+        wave: 1D array [nrows] of the trace wavelength in each row
+
+    Optional:
+        hw: half width of the column window, in pixels (default 3)
+
+    Returns:
+        tuple of 1D arrays [nrows] (swdx, sw, svar, swy, swx, swl) where
+        swdx is sum of flux*(column - x), sw is sum of flux, svar is sum of
+        variance, and swy, swx, swl are sw times y, x, and wave respectively.
+
+    Note: no bounds checking is done; the window around x must be within the image.
+    """
     n0=image_flux.shape[0]
     swdx=np.zeros(n0)
     sw=np.zeros(n0)
@@ -501,7 +530,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
             swdx[j]    += (i-x[j])*image_flux[j,i]
             sw[j]      += image_flux[j,i]
             svar[j]    += 1./image_ivar[j,i]
-        swy[j] = sw[j]*j
+        swy[j] = sw[j]*y[j]
         swx[j] = sw[j]*x[j]
         swl[j] = sw[j]*wave[j]
 
@@ -570,7 +599,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         pix  = image.pix
         ivar = image_ivar
 
-    y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
+    y  = image_rebin * (np.arange(n0) + 0.5) - 0.5
+    # center of each "enlarged" pixel 
+    # Example: if center of pixel 0 is zero, pixel 1 is 1
+    # and we are using image_rebin=2
+    # then the center of the first combined big pixel should
+    # have y = (1.5 + (-0.5))/2 = 0.5
+
     xx = np.tile(np.arange(n1),(n0,1))
     hw = width//2
 
@@ -594,12 +629,12 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         # log.info("computing dx for fiber #%03d"%fiber)
 
         # the following 5 lines take 0.25 sec for all 500 fibers
-        ty = legval(rwave, ycoef[fiber])/image_rebin
+        ty = legval(rwave, ycoef[fiber])
         tx = legval(rwave, xcoef[fiber])
         wave_of_y  = np.interp(y,ty,twave)
         x_of_y     = np.interp(y,ty,tx)
 
-        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
+        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix, ivar, y, x_of_y, wave_of_y, hw=hw)
 
         # rebin
         tn0   = sw.size
@@ -616,7 +651,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
-        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
+        # swy/sw is the flux-weighted mean row
+        fy             = (swy/(sw+(sw==0)))[ok]
         fl             = (swl/(sw+(sw==0)))[ok]
 
         good_fiber=True

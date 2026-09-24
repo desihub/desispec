@@ -5,7 +5,10 @@ desispec Change Log
 0.72.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix half-pixel and rebin-dependent y offsets in
+  ``compute_dx_from_cross_dispersion_profiles`` (PR `#2850`_).
+
+.. _`#2850`: https://github.com/desihub/desispec/pull/2850
 
 0.72.0 (2026-09-23)
 -------------------
