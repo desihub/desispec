@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.72.1 (unreleased)
+0.72.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.72.1 (2026-09-25)
 -------------------
 
 * Fix half-pixel and rebin-dependent y offsets in
