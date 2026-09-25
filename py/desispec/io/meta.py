@@ -858,6 +858,8 @@ def get_nights_up_to_date(date, specprod_dir=None):
             except IndexError:
                 continue
 
+    return sorted(nights)
+
 def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     """ Generate a list of nights in a given folder (default is exposures/)
     Demands an 8 digit name beginning with 20
