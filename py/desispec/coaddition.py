@@ -672,6 +672,28 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
+
+def coadd_frame_resolution(resolution, pix_weights):
+    """
+    Coadd the resolution matrices of several frames fiber by fiber,
+    weighting each row of the resolution matrix by the weight of the
+    corresponding pixel (see _resolution_coadd and #2372).
+
+    Args:
+        resolution (ndarray): (nframe, nfiber, nres, npix) resolution data
+        pix_weights (ndarray): (nframe, nfiber, npix) weights (e.g. ivar)
+            used for the flux coaddition
+
+    Returns:
+        ndarray (nfiber, nres, npix) of normalized coadded resolution data
+    """
+    nfiber = resolution.shape[1]
+    out = np.zeros(resolution.shape[1:], dtype=resolution.dtype)
+    for j in range(nfiber):
+        res, norm = _resolution_coadd(resolution[:, j], pix_weights[:, j])
+        out[j] = res / (norm + (norm == 0))
+    return out
+
 def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     """
     Coadd spectra across exposures, returning new Spectra object without changing original.

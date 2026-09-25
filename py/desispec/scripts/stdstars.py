@@ -27,6 +27,7 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
+from desispec.coaddition import coadd_frame_resolution
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
@@ -392,17 +393,17 @@ def main(args=None, comm=None) :
             sw=np.zeros(frames[cam][0].flux.shape)
             sw2=np.zeros(frames[cam][0].flux.shape)
             swf=np.zeros(frames[cam][0].flux.shape)
-            swr=np.zeros(frames[cam][0].resolution_data.shape)
 
             for i,frame in enumerate(frames[cam]) :
                 sw  += weights[i]*frame.ivar
                 sw2  += weights[i]**2*frame.ivar
                 swf += weights[i]*frame.ivar*frame.flux
-                swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
+            rdata = np.array([frame.resolution_data for frame in frames[cam]])
+            pix_weights = np.array([weights[i]*frame.ivar for i,frame in enumerate(frames[cam])])
             coadded_frame = frames[cam][0]
             coadded_frame.ivar = sw**2/(sw2+(sw2==0))
             coadded_frame.flux = swf/(sw+(sw==0))
-            coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
+            coadded_frame.resolution_data = coadd_frame_resolution(rdata, pix_weights)
             frames[cam] = [ coadded_frame ]
 
     # We're done with skies and flats dict; remove them to possibly save memory
