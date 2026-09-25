@@ -9,10 +9,12 @@ desispec Change Log
   ``compute_dx_from_cross_dispersion_profiles`` (PR `#2850`_).
 * Use consistent binning for boxcar extraction and trace shifts (PR `#2852`_).
 * Fix off-by-one in reversed-amp column indexing in correct_cte.py (PR `#2854`_).
-* fix incorrect addition of resolution matrices in a couple of places (PR `#2855`_).
+* Fix incorrect addition of resolution matrices in a couple of places (PR `#2855`_).
+* Fix output ivar of ``fast_resample_spectra`` (not used by core production) (PR `#2853`_).
 
 .. _`#2850`: https://github.com/desihub/desispec/pull/2850
 .. _`#2852`: https://github.com/desihub/desispec/pull/2852
+.. _`#2853`: https://github.com/desihub/desispec/pull/2853
 .. _`#2854`: https://github.com/desihub/desispec/pull/2854
 .. _`#2855`: https://github.com/desihub/desispec/pull/2855
 

@@ -1691,6 +1691,15 @@ def fast_resample_spectra(spectra, wave) :
 
     Returns:
        desispec.spectra.Spectra object, resolution data=Id
+
+    The output flux is the inverse variance weighted mean of the input flux
+    over each output bin, and the output ivar is the sum of the input ivar
+    over that bin, summed over bands. resample_flux conserves flux density,
+    i.e. it returns the *mean* of its input over each output bin, so ivar is
+    resampled as a density (ivar/dwave) and multiplied back by the output bin
+    size, as done in resample_flux itself for its ivar option. Because the
+    neighboring output flux bins are correlated and that covariance is not
+    tracked here, the output ivar is slightly conservative.
     """
 
     log = get_logger()
@@ -1700,23 +1709,26 @@ def fast_resample_spectra(spectra, wave) :
     nwave=wave.size
     b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
-    nres=spectra.resolution_data[b].shape[1]
-    ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
-    flux=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    ivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    flux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
     if spectra.mask is not None :
         mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
         mask = None
     rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
     bands=""
+    out_dwave=np.gradient(wave)
     for b in spectra.bands :
         if spectra.mask is not None :
             tivar=spectra.ivar[b]*(spectra.mask[b]==0)
         else :
             tivar=spectra.ivar[b]
+        # resample ivar (and the ivar-weighted flux) as densities so that the
+        # output ivar is the sum, not the mean, of the input ivar in each bin
+        in_dwave=np.gradient(spectra.wave[b])
         for i in range(ntarget) :
-            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i])
-            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i])
+            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i]/in_dwave)*out_dwave
+            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i]/in_dwave)*out_dwave
         bands += b
     for i in range(ntarget) :
         ok=(ivar[i]>0)
