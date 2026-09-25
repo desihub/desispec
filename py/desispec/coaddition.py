@@ -1338,6 +1338,26 @@ def coadd_cameras(spectra):
         # we need to the same procedure for the resolution matrices
         # as we did for fluxes
         rdata_norm_pixels = normalize_mask[0] # all rows of normalize mask are basically same
+
+        # for resolution entries in overlapping regions where no camera has
+        # weight (e.g. all ivar=0), fall back to the unweighted mean of the
+        # cameras whose band covers that row
+        normcols = np.where(rdata_norm_pixels)[0]
+        noweight = (rnorm[:, :, normcols] == 0)
+        if np.any(noweight):
+            for b in bands:
+                bres = spectra.resolution_data[b]
+                ndiag = bres.shape[1]
+                offset = (max_ndiag - ndiag) // 2
+                bcols = np.where(overlap_flag[b] == 1)[0]
+                ccols = windict[b].start + bcols
+                icols = np.searchsorted(normcols, ccols)
+                _, valid = _resolution_coadd(bres[0:1], np.ones((1, bres.shape[2])),
+                                             zero_offband=True)
+                nw = noweight[:, offset:offset+ndiag, icols]
+                rdata[:, offset:offset+ndiag, ccols] += bres[:, :, bcols] * valid[:, bcols] * nw
+                rnorm[:, offset:offset+ndiag, ccols] += valid[:, bcols] * nw
+
         rdata[:, :, rdata_norm_pixels] /= rnorm[:, :, rdata_norm_pixels] + (rnorm[:, :, rdata_norm_pixels] == 0)
         rdict = {wavebands: rdata}
     else:

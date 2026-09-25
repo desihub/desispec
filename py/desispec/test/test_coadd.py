@@ -541,6 +541,24 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(resmod[~edge_mask],
                         s2.flux['brz'][0][~edge_mask]))
 
+    def test_coadd_cameras_resolution_noweight(self):
+        """Test that coadd_cameras resolution in overlap regions falls back
+        to an unweighted mean when all inputs have ivar=0
+        """
+        nspec, nwave = 3, 100
+        bands = ['b', 'r', 'z']
+        s1 = self._random_spectra(nspec, nwave, bands=bands)
+        s1.fibermap['TARGETID'] = np.arange(nspec)
+        # same kernel for every pixel of every band
+        kernel = np.array([0.2, 0.6, 0.2])
+        for band in bands:
+            s1.ivar[band][:] = 0.0
+            s1.resolution_data[band][:] = kernel[None, :, None]
+
+        s2 = coadd_cameras(s1)
+        rdata = s2.resolution_data['brz']
+        self.assertTrue(np.allclose(rdata, kernel[None, :, None]))
+
     def test_coadd_cameras_model(self):
         """
         Check if models are properly coadded by coadd_cameras
