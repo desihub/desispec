@@ -12,7 +12,7 @@ from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, coadd_exposures, fast_resample_spectra,
                                  spectroperf_resample_spectra,
                                  coadd_fibermap, coadd_cameras,
-                                 _mask_cosmics)
+                                 _mask_cosmics, coadd_frame_resolution)
 from desispec.specscore import compute_coadd_scores
 from desispec.resolution import Resolution
 from desispec.maskbits import fibermask
@@ -482,6 +482,26 @@ class TestCoadd(unittest.TestCase):
         resmat2 = Resolution(s1.resolution_data['b'][0])
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
+
+    def test_coadd_frame_resolution(self):
+        """Test that coadd_frame_resolution weights rows by the pixel weights
+        i.e. if input spectra are D_ij = R_ij * M_j, the weighted coadd
+        of D_ij must be equal to R_j * M_j with the coadded R_j"""
+        nframe, nfiber, nres, nwave = 4, 3, 11, 50
+        rng = np.random.default_rng(4344)
+        resol = rng.uniform(size=(nframe, nfiber, nres, nwave))
+        weights = rng.uniform(size=(nframe, nfiber, nwave))
+        # completely mask some fraction of pixels
+        weights[rng.uniform(size=weights.shape) < 0.05] = 0
+        models = rng.uniform(size=(nfiber, nwave))
+        flux = np.array([[Resolution(resol[i, j]) @ models[j]
+                          for j in range(nfiber)] for i in range(nframe)])
+        sw = weights.sum(axis=0)
+        cflux = (weights * flux).sum(axis=0) / (sw + (sw == 0))
+        cres = coadd_frame_resolution(resol, weights)
+        self.assertEqual(cres.shape, (nfiber, nres, nwave))
+        for j in range(nfiber):
+            self.assertTrue(np.allclose(Resolution(cres[j]) @ models[j], cflux[j]))
 
     def test_coadd_no_resolution(self):
         """Test coaddition when there is no resolution data"""
