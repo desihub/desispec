@@ -256,6 +256,9 @@ class TestIOFibermap(unittest.TestCase):
         for night, expid in [
             (20200219, 51039),  #- old SPS header
             (20210517, 89031),  #- new SPEC header, with SKY on stuck positioners
+            (20251209, 325956), #- LKSKYSRC=gaia tile (122934); regression test for
+                                 #- stuck-sky recheck wrongly using Skybricks instead
+                                 #- of Skyhealpixs when fiberassign used gaia lookup
             ]:
             print(f'Creating fibermap for {night}/{expid}')
             fm = assemble_fibermap(night, expid)['FIBERMAP'].data
