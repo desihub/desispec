@@ -20,6 +20,7 @@ from astropy.io import fits
 
 from desitarget.targetmask import desi_mask
 from desitarget.skybricks import Skybricks
+from desitarget.skyhealpixs import Skyhealpixs
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
 from desiutil.names import radec_to_desiname
@@ -978,15 +979,33 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         #- for SKY on stuck positioners, recheck if they are on a blank sky
         #- (e.g. they might be "off" target but still ok for sky)
         log.info('Checking if SKY on stuck positioners are still on SKY locations')
-        tilera = fa.meta['TILERA']
-        tiledec = fa.meta['TILEDEC']
-        tileradius = get_tile_radius_deg()
-        skybricks = Skybricks()
-        ok = skybricks.lookup_tile(tilera, tiledec, tileradius,
-                fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+
+        #- Use whichever sky-quality lookup fiberassign itself used for this tile
+        #-   ls = Legacy Survey = SkyBricks
+        #-   gaia = Gaia DR2 = SkyHealpix
+        #-   not set = default to Legacy Survey SkyBricks
+        if 'LKSKYSRC' not in fa_header:
+            log.info('LKSKYSRC not set in fiberassign file; defaulting to "ls"')
+        lookup_sky_source = fa_header.get('LKSKYSRC', 'ls')
+        if lookup_sky_source == 'gaia':
+            log.info(f'Using LKSKYSRC={lookup_sky_source} (Skyhealpixs) to recheck stuck-sky positioners')
+            skyhealpixs = Skyhealpixs()
+            ok = skyhealpixs.lookup_position(
+                    fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+        else:
+            log.info(f'Using LKSKYSRC={lookup_sky_source} (Legacy Survey Skybricks) to recheck stuck-sky positioners')
+            tilera = fa.meta['TILERA']
+            tiledec = fa.meta['TILEDEC']
+            tileradius = get_tile_radius_deg()
+            skybricks = Skybricks()
+            ok = skybricks.lookup_tile(tilera, tiledec, tileradius,
+                    fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+
         num_stucksky = len(ok)
         num_ok = np.sum(ok)
         log.info(f'Keeping {num_ok}/{num_stucksky} SKY on stuck positioners')
+        if num_ok == 0:
+            log.error(f'Rejecting all stuck sky fibers; check LKSKYSRC in fiberassign file')
 
         fibermap['FIBERSTATUS'][np.nonzero(stucksky)[0][~ok]] |= fibermask.BADPOSITION
 
