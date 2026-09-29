@@ -10,7 +10,8 @@ import unittest
 from collections import OrderedDict
 
 from desispec.workflow.proc_dashboard_funcs import make_html_page, \
-    year_page_pathname
+    year_page_pathname, generate_nightly_table_html, \
+    generate_monthly_table_html, _combine_banner_statuses
 
 
 def _night_info(expid):
@@ -145,3 +146,56 @@ class TestDashboardPages(unittest.TestCase):
 
         self.assertFalse(os.path.exists(year_page_pathname(self.outfile, '2024')))
         self.assertNotIn('#2024', open(self.outfile).read())
+
+
+def _row(expid, color, status):
+    """One dashboard row with a given color and status"""
+    return {'COLOR': color, 'EXPID': str(expid), 'OBSTYPE': 'science',
+            'STATUS': status}
+
+
+class TestBannerStatuses(unittest.TestCase):
+    """Night and month banners combine what they hold, with problems first"""
+
+    def test_combine_precedence(self):
+        """A problem outranks pending work, which outranks being done"""
+        for statuses, expected in [
+                (['GOOD', 'GOOD'], 'GOOD'),
+                ([], 'GOOD'),
+                (['GOOD', 'PENDING'], 'PENDING'),
+                (['PENDING', 'BAD'], 'BAD'),
+                (['PENDING', 'INCOMPLETE'], 'INCOMPLETE'),
+                (['PENDING', 'OVERFULL'], 'OVERFULL'),
+                (['INCOMPLETE', 'BAD'], 'BAD'),
+                (['OVERFULL', 'INCOMPLETE'], 'INCOMPLETE'),
+                (['GOOD', 'DEFAULT'], 'DEFAULT'),
+                (['DEFAULT', 'PENDING'], 'PENDING')]:
+            with self.subTest(statuses=statuses):
+                self.assertEqual(_combine_banner_statuses(statuses), expected)
+
+    def test_night_with_pending_jobs_is_pending(self):
+        """Unfinished jobs on an otherwise good night read as pending"""
+        for color in ['PENDING', 'RUNNING']:
+            with self.subTest(color=color):
+                night_info = {'a': _row(1, 'GOOD', 'COMPLETED'),
+                              'b': _row(2, color, color)}
+                _, status = generate_nightly_table_html(night_info, 20260115,
+                                                        show_null=True)
+                self.assertEqual(status, 'PENDING')
+
+    def test_night_with_bad_and_pending_jobs_is_bad(self):
+        """A failure isn't hidden behind jobs that haven't finished"""
+        night_info = {'a': _row(1, 'BAD', 'FAILED'),
+                      'b': _row(2, 'PENDING', 'PENDING')}
+        _, status = generate_nightly_table_html(night_info, 20260115,
+                                                show_null=True)
+        self.assertEqual(status, 'BAD')
+
+    def test_month_with_a_pending_night_is_pending(self):
+        """The month banner follows its nights"""
+        html = generate_monthly_table_html(['', ''], ['GOOD', 'PENDING'],
+                                           '202601')
+        self.assertIn('<button class="collapsible" id="PENDING">', html)
+        html = generate_monthly_table_html(['', ''], ['BAD', 'PENDING'],
+                                           '202601')
+        self.assertIn('<button class="collapsible" id="BAD">', html)

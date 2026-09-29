@@ -561,6 +561,31 @@ def _master_js(years, yearfiles):
     sizeFrame();
     """
 
+def _combine_banner_statuses(statuses):
+    """
+    Combine the statuses of the nights in a month, or the months in a year,
+    into the status of the banner that holds them.
+
+    A problem anywhere outranks work still pending, so that a failure is never
+    hidden behind jobs that haven't finished.
+
+    Args:
+        statuses (list of str): the statuses to combine, e.g. 'GOOD' or 'BAD'.
+
+    Returns:
+        str: 'GOOD' if every status is GOOD (including when there are none),
+            otherwise the first of 'BAD', 'INCOMPLETE', 'OVERFULL' and
+            'PENDING' that is present, otherwise 'DEFAULT'.
+    """
+    statuses = list(statuses)
+    if all(status == 'GOOD' for status in statuses):
+        return 'GOOD'
+    for status in ['BAD', 'INCOMPLETE', 'OVERFULL', 'PENDING']:
+        if status in statuses:
+            return status
+    return 'DEFAULT'
+
+
 def generate_monthly_table_html(tables, statuses, month):
     """
     Add a collapsible and extendable table to the html file for a specific month
@@ -575,16 +600,7 @@ def generate_monthly_table_html(tables, statuses, month):
     heading = f"{month_dict[month[4:]]} {month[:4]} ({month})"
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
 
-    statuses = np.array(statuses)
-    monthlystatus = 'DEFAULT'
-    if np.all(statuses == 'GOOD'):
-        monthlystatus = 'GOOD'
-    elif np.any(statuses == 'BAD'):
-        monthlystatus = 'BAD'
-    elif np.any(statuses == 'INCOMPLETE'):
-        monthlystatus = 'INCOMPLETE'
-    elif np.any(statuses == 'OVERFULL'):
-        monthlystatus = 'OVERFULL'
+    monthlystatus = _combine_banner_statuses(statuses)
     month_table_str += f'<button class="collapsible" id="{monthlystatus}">' \
                        + heading + '</button>'
 
@@ -668,6 +684,9 @@ def generate_nightly_table_html(night_info, night, show_null):
         night_status = "BAD"
     elif nover > 0:
         night_status = "OVERFULL"
+    elif npending + nrunning > 0:
+        ## nothing has gone wrong yet, but the night isn't done either
+        night_status = "PENDING"
     nightly_table_str = '<!--Begin {}-->\n'.format(night)
     nightly_table_str += f'<button class="collapsible" id="{night_status}">{heading}</button>'
     nightly_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
