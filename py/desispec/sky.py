@@ -681,10 +681,11 @@ def compute_sky(
             dsigma_bin = dsigma_A/dwave # consider this extra width for the PSF (sigma' = sqrt(sigma**2+dsigma**2))
             hw=int(4*dsigma_bin)+1
             x=np.arange(-hw,hw+1)
-            k=np.zeros((3,x.size)) # a Gaussian kernel
-            k[1]=np.exp(-x**2/dsigma_bin**2/2.)
+            k=np.exp(-x**2/dsigma_bin**2/2.) # a Gaussian kernel
             k/=np.sum(k)
-            tmp = fftconvolve(cskyflux,k,mode="same")
+            # convolve each fiber independently along the wavelength axis;
+            # a 2D FFT over all fibers would spread a NaN in one fiber to all
+            tmp = fftconvolve(cskyflux,k[None,:],mode="same",axes=1)
             dskydlsf = (tmp-cskyflux)/dsigma_A # variation of line shape with width
         else :
             dskydlsf = None
