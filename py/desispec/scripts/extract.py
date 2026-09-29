@@ -222,7 +222,7 @@ def get_spectrum_mask(chi2pix, pixmask_fraction):
     return mask
 
 
-def check_extraction_output(flux, ivar, resolution_data):
+def check_extraction_output(flux, ivar, resolution_data=None, chi2pix=None):
     """
     Raise RuntimeError if extraction output can't be written as valid float32
 
@@ -234,17 +234,23 @@ def check_extraction_output(flux, ivar, resolution_data):
     Args:
         flux: 2D[nspec,nwave] extracted flux
         ivar: 2D[nspec,nwave] inverse variance
+
+    Options:
         resolution_data: 3D[nspec,ndiag,nwave] resolution matrix diagonals
+        chi2pix: 2D[nspec,nwave] chi2 per pixel
 
     Raises:
-        RuntimeError if any flux, ivar, or resolution_data value is NaN, Inf,
-        or larger in magnitude than the maximum float32 value
+        RuntimeError if any flux, ivar, resolution_data, or chi2pix value is
+        NaN, Inf, or larger in magnitude than the maximum float32 value
     """
     maxval = np.finfo(np.float32).max
     #- "not <=" is True for NaN as well as for too-large values
     bad = ~(np.abs(flux) <= maxval)
     bad |= ~(np.abs(ivar) <= maxval)
-    bad |= np.any(~(np.abs(resolution_data) <= maxval), axis=1)
+    if resolution_data is not None:
+        bad |= np.any(~(np.abs(resolution_data) <= maxval), axis=1)
+    if chi2pix is not None:
+        bad |= ~(np.abs(chi2pix) <= maxval)
 
     if np.any(bad):
         badspec = np.where(np.any(bad, axis=1))[0]
@@ -459,7 +465,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         #- Compute the output mask
         mask = get_spectrum_mask(chi2pix, pixmask_fraction)
 
-        check_extraction_output(flux, ivar, Rdiags)
+        check_extraction_output(flux, ivar, Rdiags, chi2pix)
 
         #- TODO: compare with cpu-specter
         if fibermap is not None:
@@ -820,7 +826,7 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
 
     mask = get_spectrum_mask(chi2pix, pixmask_fraction)
 
-    check_extraction_output(flux, ivar, Rdata)
+    check_extraction_output(flux, ivar, Rdata, chi2pix)
 
     if fibermap is not None:
         bfibermap = fibermap[bspecmin-specmin:bspecmin+bnspec-specmin]
