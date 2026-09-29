@@ -31,8 +31,45 @@ def get_parser():
     parser.add_argument("--not-dry-run", action="store_true",
             help="set to actually perform action rather than print actions")
     parser.add_argument("--no-attic", action="store_true",
-            help="delete files directly and do not copy them to attic")
+            help="delete files directly and do not move them to attic")
     return parser
+
+def move_to_attic(srcdir, atticdir):
+    """
+    Move the contents of srcdir into atticdir, merging with any existing
+    contents of atticdir.
+
+    Uses renames where possible so that no file data is copied when srcdir
+    and atticdir are on the same filesystem. Files already in atticdir are
+    overwritten by files of the same name from srcdir. Symlinks are moved
+    as symlinks. Any empty directories left behind in srcdir are not removed.
+
+    Args:
+        srcdir, str. Directory whose contents should be moved.
+        atticdir, str. Destination directory, created if needed.
+    """
+    if not os.path.lexists(atticdir):
+        os.makedirs(os.path.dirname(os.path.abspath(atticdir)), exist_ok=True)
+        ## shutil.move is a single rename on the same filesystem and falls
+        ## back to a copy + delete across filesystems
+        shutil.move(srcdir, atticdir)
+        return
+
+    ## atticdir already exists, e.g. from an earlier purge of the same
+    ## night, so merge entry by entry
+    for entry in os.listdir(srcdir):
+        src = os.path.join(srcdir, entry)
+        dest = os.path.join(atticdir, entry)
+        if os.path.isdir(src) and not os.path.islink(src) \
+                and os.path.isdir(dest) and not os.path.islink(dest):
+            move_to_attic(src, dest)
+        else:
+            ## newer entry replaces the older attic entry
+            if os.path.isdir(dest) and not os.path.islink(dest):
+                shutil.rmtree(dest)
+            elif os.path.lexists(dest):
+                os.remove(dest)
+            shutil.move(src, dest)
 
 def remove_directory(dirname, dry_run=True, no_attic=False):
     """
@@ -42,7 +79,7 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
         dirname, str. Full pathname to the directory you want to remove
         dru_run, bool. True if you want to print actions instead of performing them.
                        False to actually perform them.
-        no_attic, bool. If True, delete files directly and do not copy them to attic
+        no_attic, bool. If True, delete files directly and do not move them to attic
     """
     log = get_logger()
     if os.path.exists(dirname):
@@ -59,10 +96,19 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
                     attic_dir = os.path.join('attic', dirname)
                     # use absolute path for symlinks
                     dirname = os.path.join(os.getcwd(), dirname)
-                log.info(f"Copying {dirname} to attic")
-                shutil.copytree(dirname, attic_dir, dirs_exist_ok=True, symlinks=True)
-            log.info(f"Removing: {dirname}")
-            shutil.rmtree(dirname)
+                ## if dirname isn't under specprod_root the attic path is
+                ## unchanged, and moving then removing would lose the data
+                if os.path.abspath(attic_dir) == os.path.abspath(dirname):
+                    msg = f"{dirname} is not under {specprod_root()}, can't determine attic location"
+                    log.critical(msg)
+                    raise ValueError(msg)
+                log.info(f"Moving {dirname} to {attic_dir}")
+                move_to_attic(dirname, attic_dir)
+            ## After a merge into an existing attic dir, empty
+            ## subdirectories may be left behind, so clean those up too
+            if os.path.lexists(dirname):
+                log.info(f"Removing: {dirname}")
+                shutil.rmtree(dirname)
     else:
         log.info(f"Directory {dirname} doesn't exist, so no action required.")
 
@@ -80,7 +126,7 @@ def purge_tilenight(tiles, night, dry_run=True, no_attic=False):
         tiles, list of int. Tile to remove from current prod.
         night, int. Night that tiles were observed.
         dry_run, bool. If True, only prints actions it would take
-        no_attic, bool. If True, delete files directly and do not copy them to attic
+        no_attic, bool. If True, delete files directly and do not move them to attic
 
     Note: does not yet remove healpix redshifts touching this tile
     """
