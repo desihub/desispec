@@ -173,6 +173,30 @@ class TestDashboardPages(unittest.TestCase):
         self.assertIn("classList.toggle('active'", master)
         self.assertNotIn('link.className =', master)
 
+    def test_header_is_compact(self):
+        """The run time and the legend share a single line"""
+        make_html_page(self.monthly_tables, self.outfile, show_null=True)
+        for page in [open(self.outfile).read(),
+                     open(year_page_pathname(self.outfile, '2026')).read()]:
+            self.assertNotIn('running at:', page)
+            ## both inside the one row, the run time first
+            row = page.split('<div class="pageinfo">', 1)[1].split('</div>', 1)[0]
+            self.assertIn('<span class="runtime">Run at: ', row)
+            self.assertIn('<span class="legend">Color Legend:', row)
+            self.assertLess(row.index('Run at:'), row.index('Color Legend:'))
+            self.assertIn(' <span id="GOOD">GOOD</span>', row)
+            self.assertIn('.pageinfo {display: flex; flex-wrap: wrap;', page)
+            self.assertEqual(page.count('Color Legend:'), 1)
+
+    def test_year_links_sit_above_the_frame(self):
+        """The year links come after the header, directly above the year"""
+        make_html_page(self.monthly_tables, self.outfile, show_null=True)
+        master = open(self.outfile).read()
+        self.assertLess(master.index('<div class="pageinfo">'),
+                        master.index('<nav class="yearnav">'))
+        self.assertLess(master.index('</nav>'),
+                        master.index('<iframe id="yearframe"'))
+
     def test_empty_months_do_not_make_a_year(self):
         """A month with no nights shouldn't put an empty year in the nav"""
         tables = OrderedDict([('202601', {20260115: _night_info(3001)}),

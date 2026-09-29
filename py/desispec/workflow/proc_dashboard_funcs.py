@@ -6,7 +6,6 @@ desispec.workflow.proc_dashboard_funcs
 import multiprocessing
 import os,glob
 import json
-import sys
 import re
 import time,datetime
 import numpy as np
@@ -496,16 +495,15 @@ def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     if year_statuses is None:
         year_statuses = dict()
     html_page = _page_head(color_profile)
-    html_page += _page_title(titlefill=titlefill)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
 
+    ## the year links sit directly above the year they switch
     html_page += '<nav class="yearnav">Year:\n'
     for year in years:
         status = year_statuses.get(year, 'DEFAULT')
         html_page += (f'  <a href="#{year}" id="yearlink-{year}"'
                       + f' class="{status}">{year}</a>\n')
     html_page += '</nav>\n'
-
-    html_page += _color_legend(color_profile)
 
     ## Each year is its own page so that only the year being looked at is ever
     ## downloaded, which is the point of splitting them up
@@ -856,6 +854,14 @@ def _page_head(color_profile):
     /* marked by an outline rather than a fill, so its status color still shows */
     .yearnav a.active {font-weight: bold; box-shadow: inset 0 0 0 3px #34495e;}
     #yearframe {width: 100%; border: none;}
+    /* the build time and the color legend, sharing one line */
+    .pageinfo {display: flex; flex-wrap: wrap; align-items: center;
+               column-gap: 32px; row-gap: 8px; margin-bottom: 20px;}
+    /* dark enough to read comfortably on white (about 5:1 contrast) */
+    .runtime {color: #2e7d32;}
+    .legend {display: flex; flex-wrap: wrap; align-items: center; gap: 4px;}
+    /* the border keeps the white PENDING box visible on the white page */
+    .legend span {padding: 4px 8px; border: 1px solid #ccc;}
 
     """
 
@@ -888,9 +894,18 @@ def _page_head(color_profile):
     return html_page
 
 
-def _page_title(titlefill='Processing'):
+def _page_title(titlefill='Processing', color_profile=None):
     """
-    Return the page heading and the line saying when the dashboard was built.
+    Return the page heading and the line below it, which says when the
+    dashboard was built and, if given colors, explains them.
+
+    Args:
+        titlefill (str): describes the dashboard in the page title.
+        color_profile (dict, optional): row colors, to show a legend of on the
+            same line as the build time. No legend if None.
+
+    Returns:
+        str: the html for the heading and the line below it.
     """
     title = f"<h1>DESI '{os.environ['SPECPROD']}' {titlefill} Status Monitor</h1>\n"
 
@@ -899,21 +914,27 @@ def _page_title(titlefill='Processing'):
     # if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
     #     running='Yes'
     #     strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
-    script = os.path.basename(sys.argv[0])
-    title += f'<div style="color:#00FF00;margin-bottom:20px"> {script} running at: {timestamp}</div>\n'
+    ## One line, wrapping onto a second only when the window is too narrow.
+    ## The build time comes first since it is what changes from run to run.
+    title += '<div class="pageinfo">\n'
+    title += f'<span class="runtime">Run at: {timestamp}</span>\n'
+    if color_profile is not None:
+        title += _color_legend(color_profile)
+    title += '</div>\n'
 
     return title
 
 
 def _color_legend(color_profile):
     """
-    Return the html table that explains what each row color means.
+    Return the html that explains what each row color means.
     """
-    legend = 'Color Legend:\n'
-    legend += '<table style="margin-bottom:20px;margin-left:20px"><tr>\n'
+    ## Each color is its own box rather than a table cell, so that on a narrow
+    ## window the colors wrap onto another line instead of running off the page
+    legend = '<span class="legend">Color Legend:\n'
     for ctype in color_profile.keys():
-        legend += f' <td id="{ctype}">{ctype}</td>\n'
-    legend += '</tr></table>\n'
+        legend += f' <span id="{ctype}">{ctype}</span>\n'
+    legend += '</span>\n'
     return legend
 
 
@@ -925,8 +946,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
     ## this page is framed and kept for when it is opened on its own
     html_page = _page_head(color_profile)
     html_page += '<div id="pageheader">\n'
-    html_page += _page_title(titlefill=titlefill)
-    html_page += _color_legend(color_profile)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
     html_page += '</div>\n'
 
     html_page += '\n\n'
