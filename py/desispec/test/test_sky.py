@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 from astropy.table import Table
-from desispec.sky import compute_sky, subtract_sky, SkyModel, get_sky_fibers, _model_variance
+from desispec.sky import compute_sky, subtract_sky, SkyModel, get_sky_fibers, _model_variance, fftconvolve
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.maskbits import fibermask
@@ -89,6 +89,41 @@ class TestSky(unittest.TestCase):
         delta=spectra.flux[-1]-sky.flux[-1]
         d=np.inner(delta,delta)
         self.assertAlmostEqual(d,0.)
+
+    def test_compute_sky_adjust_lsf(self):
+        """compute_sky with adjust_lsf=True should run and return finite results"""
+        spectra = self._get_spectra()
+        sky = compute_sky(spectra, add_variance=self.add_variance, adjust_lsf=True)
+        self.assertEqual(sky.flux.shape, spectra.flux.shape)
+        self.assertTrue(np.all(np.isfinite(sky.flux)))
+        self.assertTrue(np.all(np.isfinite(sky.ivar)))
+
+    def test_adjust_lsf_nan_isolation(self):
+        """A NaN in one fiber's sky model shouldn't spread to other fibers
+        when convolving to derive the LSF adjustment (fftconvolve axes=1)"""
+        nfiber, nwave = 5, 60
+        wave = np.linspace(8000, 8100, nwave)
+        x = np.arange(nwave)
+        #- fake per-fiber sky spectra, each with a shifted Gaussian line
+        cskyflux = np.array([np.exp(-(x - 30. - 2*i)**2/20.) for i in range(nfiber)])
+
+        badfiber = 2
+        cskyflux[badfiber, 10] = np.nan
+
+        #- same kernel construction as desispec.sky.compute_sky adjust_lsf branch
+        dwave = np.mean(np.gradient(wave))
+        dsigma_A = 0.3
+        dsigma_bin = dsigma_A/dwave
+        hw = int(4*dsigma_bin)+1
+        xk = np.arange(-hw, hw+1)
+        k = np.exp(-xk**2/dsigma_bin**2/2.)
+        k /= np.sum(k)
+
+        tmp = fftconvolve(cskyflux, k[None,:], mode="same", axes=1)
+
+        goodfibers = np.arange(nfiber) != badfiber
+        self.assertTrue(np.all(np.isfinite(tmp[goodfibers])))
+        self.assertTrue(np.any(~np.isfinite(tmp[badfiber])))
 
     def test_subtract_sky(self):
         spectra = self._get_spectra()
