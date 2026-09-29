@@ -6,7 +6,6 @@ desispec.workflow.proc_dashboard_funcs
 import multiprocessing
 import os,glob
 import json
-import sys
 import re
 import time,datetime
 import numpy as np
@@ -414,8 +413,11 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
             continue
         months_by_year.setdefault(month[:4], OrderedDict())[month] = nightly_tables
 
+    ## The status of each year, for coloring its link on the master page
+    year_statuses = dict()
     for year, months in months_by_year.items():
         html_page = _initialize_page(color_profile, titlefill=titlefill)
+        month_statuses = list()
         for month, nightly_tables in months.items():
             print("Month: {}, nights: {}".format(month,
                                                  list(nightly_tables.keys())))
@@ -432,6 +434,8 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
                 statuses.append(status)
             html_page += generate_monthly_table_html(nightly_table_htmls,
                                                      statuses, month)
+            month_statuses.append(_combine_banner_statuses(statuses))
+        year_statuses[year] = _combine_banner_statuses(month_statuses)
 
         # html_page += js_import_str(os.environ['DESI_DASHBOARD'])
         html_page += js_str()
@@ -445,7 +449,7 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
 
     with open(outfile, 'w') as hs:
         hs.write(_master_page(color_profile, titlefill, months_by_year.keys(),
-                              outfile))
+                              outfile, year_statuses=year_statuses))
         print(f"Write to {outfile} complete.")
 
     if 'NERSC_HOST' in os.environ and outfile.startswith(
@@ -471,7 +475,7 @@ def _remove_stale_year_pages(outfile, years):
             print(f"Removed {pathname}, which this run has no data for.")
 
 
-def _master_page(color_profile, titlefill, years, outfile):
+def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     """
     Build the master page: the header, the year links, and the framed year.
 
@@ -480,20 +484,26 @@ def _master_page(color_profile, titlefill, years, outfile):
         titlefill (str): describes the dashboard in the page title.
         years (iterable of str): the years that have a page, newest first.
         outfile (str): pathname of the master page, used to name the year pages.
+        year_statuses (dict, optional): year to the status its link is colored
+            by, combined from its months the same way a month banner combines
+            its nights. Years not in it are colored as DEFAULT.
 
     Returns:
         str: the complete html page.
     """
     years = list(years)
+    if year_statuses is None:
+        year_statuses = dict()
     html_page = _page_head(color_profile)
-    html_page += _page_title(titlefill=titlefill)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
 
+    ## the year links sit directly above the year they switch
     html_page += '<nav class="yearnav">Year:\n'
     for year in years:
-        html_page += f'  <a href="#{year}" id="yearlink-{year}">{year}</a>\n'
+        status = year_statuses.get(year, 'DEFAULT')
+        html_page += (f'  <a href="#{year}" id="yearlink-{year}"'
+                      + f' class="{status}">{year}</a>\n')
     html_page += '</nav>\n'
-
-    html_page += _color_legend(color_profile)
 
     ## Each year is its own page so that only the year being looked at is ever
     ## downloaded, which is the point of splitting them up
@@ -541,7 +551,9 @@ def _master_js(years, yearfiles):
         }
         for (var i = 0; i < years.length; i++) {
             var link = document.getElementById('yearlink-' + years[i]);
-            if (link) { link.className = (years[i] === year) ? 'active' : ''; }
+            /* toggle rather than assign, which would wipe the status class
+               that colors the link */
+            if (link) { link.classList.toggle('active', years[i] === year); }
         }
     }
 
@@ -561,6 +573,31 @@ def _master_js(years, yearfiles):
     sizeFrame();
     """
 
+def _combine_banner_statuses(statuses):
+    """
+    Combine the statuses of the nights in a month, or the months in a year,
+    into the status of the banner that holds them.
+
+    A problem anywhere outranks work still pending, so that a failure is never
+    hidden behind jobs that haven't finished.
+
+    Args:
+        statuses (list of str): the statuses to combine, e.g. 'GOOD' or 'BAD'.
+
+    Returns:
+        str: 'GOOD' if every status is GOOD (including when there are none),
+            otherwise the first of 'BAD', 'INCOMPLETE', 'OVERFULL' and
+            'PENDING' that is present, otherwise 'DEFAULT'.
+    """
+    statuses = list(statuses)
+    if all(status == 'GOOD' for status in statuses):
+        return 'GOOD'
+    for status in ['BAD', 'INCOMPLETE', 'OVERFULL', 'PENDING']:
+        if status in statuses:
+            return status
+    return 'DEFAULT'
+
+
 def generate_monthly_table_html(tables, statuses, month):
     """
     Add a collapsible and extendable table to the html file for a specific month
@@ -574,18 +611,12 @@ def generate_monthly_table_html(tables, statuses, month):
 
     heading = f"{month_dict[month[4:]]} {month[:4]} ({month})"
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
+    ## The section bounds the sticky banner, so that it scrolls away with the
+    ## last of its nights rather than staying at the top of the page
+    month_table_str += '<section class="month">\n'
 
-    statuses = np.array(statuses)
-    monthlystatus = 'DEFAULT'
-    if np.all(statuses == 'GOOD'):
-        monthlystatus = 'GOOD'
-    elif np.any(statuses == 'BAD'):
-        monthlystatus = 'BAD'
-    elif np.any(statuses == 'INCOMPLETE'):
-        monthlystatus = 'INCOMPLETE'
-    elif np.any(statuses == 'OVERFULL'):
-        monthlystatus = 'OVERFULL'
-    month_table_str += f'<button class="collapsible" id="{monthlystatus}">' \
+    monthlystatus = _combine_banner_statuses(statuses)
+    month_table_str += f'<button class="collapsible monthbanner" id="{monthlystatus}">' \
                        + heading + '</button>'
 
     month_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
@@ -595,6 +626,7 @@ def generate_monthly_table_html(tables, statuses, month):
 
     #month_table_str += "</table></div>\n"
     month_table_str += "</div>\n"
+    month_table_str += "</section>\n"
     month_table_str += '<!--End {}-->\n\n'.format(month)
 
     return month_table_str
@@ -631,11 +663,13 @@ def generate_nightly_table_html(night_info, night, show_null):
             elif color == 'OVERFULL':
                 nover += 1
                 n_notnull += 1
-            elif color == 'PENDING':
-                npending += 1
-                n_notnull += 1
             elif color == 'RUNNING':
                 nrunning += 1
+                n_notnull += 1
+            elif color == 'PENDING' or color in non_final_q_states:
+                ## rows of unfinished jobs are colored by their queue state,
+                ## e.g. SUBMITTED or REQUEUED, and are all still to come
+                npending += 1
                 n_notnull += 1
             else:
                 nnull += 1
@@ -659,17 +693,24 @@ def generate_nightly_table_html(night_info, night, show_null):
                + f"Other: {nnull}"
                )
 
+    ## Same precedence as _combine_banner_statuses, so that a failure is never
+    ## shown as anything milder
     night_status = 'DEFAULT'
     if ngood == n_notnull:
         night_status = "GOOD"
-    elif ninter > 0:
-        night_status = "INCOMPLETE"
     elif nbad > 0:
         night_status = "BAD"
+    elif ninter > 0:
+        night_status = "INCOMPLETE"
     elif nover > 0:
         night_status = "OVERFULL"
+    elif npending + nrunning > 0:
+        ## nothing has gone wrong yet, but the night isn't done either
+        night_status = "PENDING"
     nightly_table_str = '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += f'<button class="collapsible" id="{night_status}">{heading}</button>'
+    ## As for the month, the section bounds the sticky banner to its own rows
+    nightly_table_str += '<section class="night">\n'
+    nightly_table_str += f'<button class="collapsible nightbanner" id="{night_status}">{heading}</button>'
     nightly_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
     nightly_table_str += "<table id='c' class='nightTable'><tbody>\n\t<tr>"
@@ -684,6 +725,7 @@ def generate_nightly_table_html(night_info, night, show_null):
 
     # End table
     nightly_table_str += "</tbody></table></div>\n"
+    nightly_table_str += "</section>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str, night_status
 
@@ -729,7 +771,20 @@ def _page_head(color_profile):
     .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 18px;width: 100%;border: none;text-align: left;outline: none;font-size: 25px;}
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
     .active, .collapsible:hover { background-color: #ccc;}
-    .content {padding: 0 18px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
+    /* clip rather than hidden: hidden makes each content block a scroll
+       container of its own, which stops the banners inside it from sticking.
+       hidden comes first for browsers that don't know clip, which ignore it
+       and would otherwise show collapsed content rather than hide it. */
+    .content {padding: 0 18px;display: table;overflow: hidden;overflow: clip;background-color: #f1f1f1;}
+    /* While its rows are in view, a night's banner stays at the top of the
+       page under its month's. Each is bounded by its own section, so it
+       leaves once the last of its rows has scrolled past. */
+    .monthbanner {position: sticky; top: 0; z-index: 3;}
+    .nightbanner {position: sticky; top: var(--month-banner-height, 66px); z-index: 2;}
+    /* The column names stay just below the night's banner. A header cell is
+       bounded by its own table, so it leaves along with the night's rows. */
+    .nightTable th {position: sticky; z-index: 1;
+                    top: calc(var(--month-banner-height, 66px) + var(--night-banner-height, 66px));}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
@@ -795,16 +850,31 @@ def _page_head(color_profile):
     .yearnav a {color: #34495e; padding: 6px 14px; margin-right: 4px;
                 text-decoration: none; border: 1px solid #ddd;
                 background-color: #eee;}
-    .yearnav a:hover {background-color: #ccc;}
-    .yearnav a.active {background-color: #34495e; color: white;
-                       border-color: #34495e;}
+    .yearnav a:hover {background-color: #ccc; filter: brightness(90%);}
+    /* marked by an outline rather than a fill, so its status color still shows */
+    .yearnav a.active {font-weight: bold; box-shadow: inset 0 0 0 3px #34495e;}
     #yearframe {width: 100%; border: none;}
+    /* the build time and the color legend, sharing one line */
+    .pageinfo {display: flex; flex-wrap: wrap; align-items: center;
+               column-gap: 32px; row-gap: 8px; margin-bottom: 20px;}
+    /* dark enough to read comfortably on white (about 5:1 contrast) */
+    .runtime {color: #2e7d32;}
+    .legend {display: flex; flex-wrap: wrap; align-items: center; gap: 4px;}
+    /* the border keeps the white PENDING box visible on the white page */
+    .legend span {padding: 4px 8px; border: 1px solid #ccc;}
 
     """
 
     for ctype,cdict in color_profile.items():
         background = cdict['background']
         html_page += f'\t#{ctype} ' + '{background-color:' + f'{background}' + ';}\n'
+
+    html_page += "\n"
+    ## Year links are colored by the status of their year. These come after the
+    ## .yearnav a:hover rule above, which has the same precedence, so they win.
+    for ctype,cdict in color_profile.items():
+        html_page += (f'\t.yearnav a.{ctype} {{background-color:{cdict["background"]};'
+                      + f' color:{cdict["font"]};}}\n')
 
     html_page += "\n"
     ## Table rows shouldn't do the default background because of cell coloring
@@ -824,9 +894,18 @@ def _page_head(color_profile):
     return html_page
 
 
-def _page_title(titlefill='Processing'):
+def _page_title(titlefill='Processing', color_profile=None):
     """
-    Return the page heading and the line saying when the dashboard was built.
+    Return the page heading and the line below it, which says when the
+    dashboard was built and, if given colors, explains them.
+
+    Args:
+        titlefill (str): describes the dashboard in the page title.
+        color_profile (dict, optional): row colors, to show a legend of on the
+            same line as the build time. No legend if None.
+
+    Returns:
+        str: the html for the heading and the line below it.
     """
     title = f"<h1>DESI '{os.environ['SPECPROD']}' {titlefill} Status Monitor</h1>\n"
 
@@ -835,21 +914,27 @@ def _page_title(titlefill='Processing'):
     # if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
     #     running='Yes'
     #     strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
-    script = os.path.basename(sys.argv[0])
-    title += f'<div style="color:#00FF00;margin-bottom:20px"> {script} running at: {timestamp}</div>\n'
+    ## One line, wrapping onto a second only when the window is too narrow.
+    ## The build time comes first since it is what changes from run to run.
+    title += '<div class="pageinfo">\n'
+    title += f'<span class="runtime">Run at: {timestamp}</span>\n'
+    if color_profile is not None:
+        title += _color_legend(color_profile)
+    title += '</div>\n'
 
     return title
 
 
 def _color_legend(color_profile):
     """
-    Return the html table that explains what each row color means.
+    Return the html that explains what each row color means.
     """
-    legend = 'Color Legend:\n'
-    legend += '<table style="margin-bottom:20px;margin-left:20px"><tr>\n'
+    ## Each color is its own box rather than a table cell, so that on a narrow
+    ## window the colors wrap onto another line instead of running off the page
+    legend = '<span class="legend">Color Legend:\n'
     for ctype in color_profile.keys():
-        legend += f' <td id="{ctype}">{ctype}</td>\n'
-    legend += '</tr></table>\n'
+        legend += f' <span id="{ctype}">{ctype}</span>\n'
+    legend += '</span>\n'
     return legend
 
 
@@ -861,8 +946,7 @@ def _initialize_page(color_profile, titlefill='Processing'):
     ## this page is framed and kept for when it is opened on its own
     html_page = _page_head(color_profile)
     html_page += '<div id="pageheader">\n'
-    html_page += _page_title(titlefill=titlefill)
-    html_page += _color_legend(color_profile)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
     html_page += '</div>\n'
 
     html_page += '\n\n'
@@ -996,6 +1080,25 @@ def js_str(): # Used
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
              }
+             /* Night banners stick just below their month's banner, and the
+                column names just below their night's banner. Banner heights
+                depend on the font and on whether the heading wraps, so each
+                banner is measured separately and its height set on its own
+                section, which everything inside it inherits. */
+             function setBannerHeights() {
+                 var kinds = [['.monthbanner', '--month-banner-height'],
+                              ['.nightbanner', '--night-banner-height']];
+                 for (var j = 0; j < kinds.length; j++) {
+                     var banners = document.querySelectorAll(kinds[j][0]);
+                     for (var k = 0; k < banners.length; k++) {
+                         banners[k].parentElement.style.setProperty(
+                             kinds[j][1], banners[k].offsetHeight + 'px');
+                     }
+                 }
+             }
+             setBannerHeights();
+             window.addEventListener('resize', setBannerHeights);
+
            function statusColumnIndex(table) {
                 /* The column count differs between dashboards and grows as
                    columns are added, so find STATUS by its header instead */
