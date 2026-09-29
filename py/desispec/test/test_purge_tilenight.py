@@ -155,6 +155,15 @@ class TestPurgeTileNight(unittest.TestCase):
         remove_directory(self.nightdir, dry_run=False)
         self._check_moved_to_attic()
 
+    def test_merge_link_keeps_attic_dir(self):
+        """A nested link doesn't replace an existing real attic directory"""
+        os.symlink('00001234', os.path.join(self.nightdir, '00001236'))
+        _write(os.path.join(self.atticdir, '00001236', 'd.fits'), 'old_d')
+        remove_directory(self.nightdir, dry_run=False)
+        self._check_moved_to_attic()
+        self.assertFalse(os.path.islink(os.path.join(self.atticdir, '00001236')))
+        self.assertEqual(_read(os.path.join(self.atticdir, '00001236', 'd.fits')), 'old_d')
+
     def test_repeated_purge(self):
         """Purging, recreating, and purging again keeps the latest version"""
         remove_directory(self.nightdir, dry_run=False)
@@ -225,6 +234,43 @@ class TestPurgeTileNight(unittest.TestCase):
         self.assertFalse(os.path.lexists(self.linkdir))
         self.assertEqual(os.readlink(self.atticlink), self.archivedir)
         self._check_archive_intact()
+
+    def test_link_symlinked_parent(self):
+        """A relative link reached through a symlinked parent dir still resolves in the attic"""
+        #- tiles/cumulative is a link to external storage holding the archive link and archive
+        externaldir = os.path.join(self.reduxdir, 'external', 'tiles')
+        os.makedirs(externaldir)
+        cumulativedir = os.path.join(self.prodroot, 'tiles', 'cumulative')
+        os.rename(cumulativedir, os.path.join(externaldir, 'cumulative'))
+        os.rename(os.path.join(self.prodroot, 'tiles', 'archive'), os.path.join(externaldir, 'archive'))
+        os.symlink(os.path.join(externaldir, 'cumulative'), cumulativedir)
+        realtarget = os.path.realpath(self.linkdir)
+        self.assertEqual(realtarget, os.path.realpath(os.path.join(externaldir, 'archive', '1000', '20250105')))
+
+        remove_directory(self.linkdir, dry_run=False)
+        self.assertFalse(os.path.lexists(self.linkdir))
+        self.assertTrue(os.path.islink(self.atticlink))
+        self.assertEqual(os.path.realpath(self.atticlink), realtarget)
+        self.assertEqual(_read(os.path.join(self.atticlink, os.path.basename(self.archivefile))),
+                         'archived')
+
+    def test_link_absolute_with_symlink(self):
+        """An absolute target through a symlink followed by '..' is copied unchanged"""
+        currentdir = os.path.join(self.prodroot, 'tiles', 'archive', 'current')
+        os.makedirs(currentdir)
+        aliasdir = os.path.join(self.reduxdir, 'alias')
+        os.symlink(currentdir, aliasdir)
+        linktarget = os.path.join(aliasdir, '..', '1000', '20250105')
+        os.remove(self.linkdir)
+        os.symlink(linktarget, self.linkdir)
+        realtarget = os.path.realpath(self.linkdir)
+        self.assertEqual(realtarget, os.path.realpath(self.archivedir))
+
+        remove_directory(self.linkdir, dry_run=False)
+        self.assertFalse(os.path.lexists(self.linkdir))
+        self.assertEqual(os.readlink(self.atticlink), linktarget)
+        self.assertEqual(os.path.realpath(self.atticlink), realtarget)
+        self.assertEqual(_read(self.archivefile), 'archived')
 
     def test_link_no_attic(self):
         """no_attic removes just the link"""

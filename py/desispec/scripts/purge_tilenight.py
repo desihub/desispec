@@ -38,13 +38,15 @@ def move_link_to_attic(srclink, atticlink):
     """
     Move a directory symlink to the attic without touching its target.
 
-    The attic link points at the same target as srclink. If srclink is a
-    relative link, the attic link is also relative but recomputed for its
-    new location so that it still resolves, e.g. the
-    tiles/cumulative/TILEID/NIGHT -> ../../archive/TILEID/DATE links left
-    by desi_archive_tilenight. An existing link or file at atticlink is
-    replaced. An existing real directory at atticlink, e.g. from an earlier
-    purge, is kept and no attic link is made. In all cases srclink is removed.
+    An absolute srclink target is copied unchanged. A relative target is
+    recomputed for the new location so that the attic link resolves to the
+    same directory, e.g. the tiles/cumulative/TILEID/NIGHT ->
+    ../../archive/TILEID/DATE links left by desi_archive_tilenight. The
+    recomputed target is relative to the fully resolved (realpath) directory,
+    so any symlinks in the original path are followed rather than preserved.
+    An existing link or file at atticlink is replaced. An existing real
+    directory at atticlink, e.g. from an earlier purge, is kept and no attic
+    link is made. In all cases srclink is removed.
 
     Args:
         srclink, str. Symlink to move.
@@ -54,21 +56,20 @@ def move_link_to_attic(srclink, atticlink):
     srclink = os.path.normpath(srclink)
     atticlink = os.path.normpath(atticlink)
     linktarget = os.readlink(srclink)
-    ## normpath rather than realpath so that any other symlinks in the
-    ## target path are not resolved
-    abstarget = os.path.normpath(os.path.join(
-        os.path.dirname(os.path.abspath(srclink)), linktarget))
-    atticparent = os.path.dirname(os.path.abspath(atticlink))
-    if os.path.isabs(linktarget):
-        newtarget = abstarget
-    else:
-        newtarget = os.path.relpath(abstarget, atticparent)
 
     if os.path.isdir(atticlink) and not os.path.islink(atticlink):
         log.warning(f"{atticlink} already exists as a directory, so keeping it "
-                    + f"rather than replacing it with a link to {abstarget}")
+                    + f"rather than replacing it with a link to {linktarget}")
     else:
+        atticparent = os.path.dirname(os.path.abspath(atticlink))
         os.makedirs(atticparent, exist_ok=True)
+        if os.path.isabs(linktarget):
+            newtarget = linktarget
+        else:
+            ## Use fully resolved paths since normpath and relpath treat '..'
+            ## lexically, which is wrong if a path component is a symlink
+            newtarget = os.path.relpath(os.path.realpath(srclink),
+                                        os.path.realpath(atticparent))
         if os.path.lexists(atticlink):
             os.remove(atticlink)
         log.info(f"Linking {atticlink} -> {newtarget}")
@@ -119,6 +120,13 @@ def move_to_attic(srcdir, atticdir):
         if os.path.isdir(src) and not os.path.islink(src) \
                 and os.path.isdir(dest) and not os.path.islink(dest):
             move_to_attic(src, dest)
+        elif os.path.islink(src) and os.path.isdir(dest) and not os.path.islink(dest):
+            ## as in move_link_to_attic, keep an existing real attic directory
+            ## rather than replacing it with a link
+            log = get_logger()
+            log.warning(f"{dest} already exists as a directory, so keeping it "
+                        + f"rather than replacing it with a link to {os.readlink(src)}")
+            os.unlink(src)
         else:
             ## newer entry replaces the older attic entry
             if os.path.isdir(dest) and not os.path.islink(dest):
@@ -143,7 +151,11 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
     if os.path.lexists(dirname):
         log.info(f"Identified directory {dirname} as existing.")
         if os.path.islink(dirname):
-            log.info(f"{dirname} is a symlink to {os.readlink(dirname)}")
+            ## e.g. tiles/cumulative/TILEID/NIGHT links to tiles/archive
+            ## left by desi_archive_tilenight
+            log.warning(f"{dirname} is a symlink to {os.readlink(dirname)}, "
+                        + "possibly an archived tile; only the link itself will be "
+                        + "purged and its target will not be modified")
         if os.path.isdir(dirname):
             log.info(f"Dir has contents: {os.listdir(dirname)}")
         if dry_run:
