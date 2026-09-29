@@ -232,8 +232,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 dark_reset_end = calib.data['DATE-OBS-BEGIN']
             log.info(f"skip {filename} because it has a dark reset and is later than the reference calib")
             continue
-        # If the new calib is after dark_reset_end, skip it
-        elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
+        # If the new calib is after dark_reset_end, skip it but only if dark_reset_end is not zero
+        elif calib.data['DATE-OBS-BEGIN']>dark_reset_end and dark_reset_end!=0:
             log.info(f"skip {filename} because it is after a dark reset at {dark_reset_end}")
             continue
         # If the new calib is before dark_reset_begin, skip it
