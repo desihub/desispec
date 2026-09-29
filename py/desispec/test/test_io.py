@@ -1385,6 +1385,31 @@ class TestIO(unittest.TestCase):
         nights = get_nights(sub_folder='calibnight')
         self.assertTrue('20150102' in nights)
 
+    def test_get_nights_up_to_date(self):
+        """ Test desispec.io.meta.get_nights_up_to_date
+        """
+        from ..io.meta import get_nights_up_to_date
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        for night in [20150101, 20150102, 20150201]:
+            filename = findfile('exposure_table', night=night)
+            makepath(filename)
+            open(filename, 'w').close()
+        # override file for one night must not cause that night to be listed twice
+        filename = findfile('override', night=20150102)
+        makepath(filename)
+        open(filename, 'w').close()
+        # override file without an exposure table is not a night with an exposure table
+        filename = findfile('override', night=20150103)
+        makepath(filename)
+        open(filename, 'w').close()
+
+        self.assertEqual(get_nights_up_to_date(20150201), [20150101, 20150102, 20150201])
+        self.assertEqual(get_nights_up_to_date(20150102), [20150101, 20150102])
+        self.assertEqual(get_nights_up_to_date(20141231), [])
+
     def test_search_framefile(self):
         """ Test desispec.io.frame.search_for_framefile
         """

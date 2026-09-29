@@ -851,12 +851,13 @@ def get_nights_up_to_date(date, specprod_dir=None):
             continue
         exptabmonthdir = os.path.join(exptabdir, yearmonth)
         for exptabname in os.listdir(exptabmonthdir):
-            try:
-                night = int(re.findall(r'[0-9]{8}', exptabname)[0])
-                if night <= date:
-                    nights.append(night)
-            except IndexError:
+            # only exposure tables; the month directories also contain override_NIGHT.yaml files
+            match = re.fullmatch(r'exposure_table_([0-9]{8})\.csv', exptabname)
+            if match is None:
                 continue
+            night = int(match.group(1))
+            if night <= date:
+                nights.append(night)
 
     return sorted(nights)
 
