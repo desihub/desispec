@@ -43,3 +43,9 @@ test_redux-*
 
 # Mac OSX
 .DS_Store
+
+# python refactor (machine-local, not for upstream)
+.venv/
+requirements-dev.in
+requirements-dev.txt
+requirements-editable.txt

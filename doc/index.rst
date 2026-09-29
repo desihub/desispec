@@ -13,6 +13,7 @@ Contents
     dev.rst
     coadd.rst
     cte-correction.rst
+    tsnr-afterburner.rst
     changes.rst
     api.rst
 
