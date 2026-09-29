@@ -2,10 +2,27 @@
 desispec Change Log
 ===================
 
-0.72.2 (unreleased)
+0.72.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.72.2 (2026-09-29)
+-------------------
+
+* Fix get_nights_up_to_date return value (PR `#2860`_).
+* Use fiberassign's LKSKYSRC when rechecking stuck-sky positioners (PR `#2862`_).
+* Remove abs() on QSO MgII sigma/deltachi2 (PR `#2863`_).
+* Speed up tilenight and night purge scripts (PR `#2865`_).
+* Extract fail fast when outputs are corrupted (PR `#2866`_).
+* Improve the layout and rendering of the processing dashboards (PR `#2868`_).
+
+.. _`#2860`: https://github.com/desihub/desispec/pull/2860
+.. _`#2862`: https://github.com/desihub/desispec/pull/2862
+.. _`#2863`: https://github.com/desihub/desispec/pull/2863
+.. _`#2865`: https://github.com/desihub/desispec/pull/2865
+.. _`#2866`: https://github.com/desihub/desispec/pull/2866
+.. _`#2868`: https://github.com/desihub/desispec/pull/2868
 
 0.72.1 (2026-09-25)
 -------------------
